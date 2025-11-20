@@ -14,7 +14,7 @@ logger = logging.getLogger("uvicorn")
 GHL_API_KEY = os.getenv("GHL_API_KEY")
 GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")  # MUST be set in Render!
 GHL_CONTACTS_URL = "https://services.leadconnectorhq.com"
-LC_SMS_URL = "https://public-api.leadconnectorhq.com/conversations/messages/send"
+LC_SMS_URL = "https://services.leadconnectorhq.com/conversations/messages/send"
 
 
 @app.get("/")
