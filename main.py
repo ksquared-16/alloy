@@ -110,41 +110,39 @@ def fetch_contractors_from_ghl():
 
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",
-        "Version": "2021-07-28",  # required for Public API
         "Accept": "application/json",
+        "Version": "2021-07-28",
     }
 
     params = {
-        "limit": 200,
-        "locationId": GHL_LOCATION_ID,
+        "limit": 100,                           # 👈 was 200, must be ≤ 100
+        "locationId": GHL_LOCATION_ID,          # 👈 scope to Alloy - Cleaning
     }
 
-    resp = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params)
 
-    if resp.status_code != 200:
-        logger.error(f"GHL contact fetch failed ({resp.status_code}): {resp.text}")
+    if response.status_code != 200:
+        logger.error(
+            f"GHL contact fetch failed ({response.status_code}): {response.text}"
+        )
         return []
 
-    data = resp.json()
+    data = response.json()
     contacts = data.get("contacts", [])
 
     contractors = []
 
     for c in contacts:
-        # From your curl: 'source' and 'tags' look like this:
-        # "source": "contractor-cleaning"
-        # "tags": ["available_today","contractor_cleaning",...]
-        source = (c.get("source") or "").lower()
+        source = (c.get("source") or "").lower()           # note: 'source' field
         tags = normalize_tags(c.get("tags"))
         phone = c.get("phone")
-        name = (c.get("contactName") or "").strip()
+        name = f"{c.get('firstName','')} {c.get('lastName','')}".strip()
 
         if not phone:
-            # Can't text them, skip
             continue
 
         is_source = source == "contractor-cleaning"
-        has_tag = "contractor_cleaning" in tags or "contractor-cleaning" in tags
+        has_tag = any("contractor" in t for t in tags)
 
         if is_source or has_tag:
             contractors.append(
@@ -153,13 +151,12 @@ def fetch_contractors_from_ghl():
                     "name": name,
                     "phone": phone,
                     "tags": tags,
-                    "source": source,
-                    "locationId": c.get("locationId"),
+                    "contact_source": source,
                 }
             )
 
     logger.info(f"Fetched {len(contractors)} contractors from GHL")
-    return contractors
+    return contractors  
 
 
 @app.get("/contractors")
