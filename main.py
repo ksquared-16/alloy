@@ -12,9 +12,19 @@ logger = logging.getLogger("uvicorn")
 # ENV VARIABLES
 # ---------------------------
 GHL_API_KEY = os.getenv("GHL_API_KEY")
-GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")  # MUST be set in Render!
-GHL_CONTACTS_URL = "https://services.leadconnectorhq.com"
-LC_SMS_URL = "https://public-api.leadconnectorhq.com/conversations/messages/"
+GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID", "ZO1DxVJw65kU2EbHpHLq")
+
+# All working calls should use the same base:
+# This is what your successful curl used.
+GHL_BASE_URL = "https://services.leadconnectorhq.com"
+
+# Contacts:  https://services.leadconnectorhq.com/contacts
+GHL_CONTACTS_URL = f"{GHL_BASE_URL}/contacts"
+
+# SMS / Conversations API:
+# Docs + examples show this endpoint:
+#   POST https://services.leadconnectorhq.com/conversations/messages
+LC_SMS_URL = f"{GHL_BASE_URL}/conversations/messages"
 
 
 @app.get("/")
@@ -38,7 +48,7 @@ def to_number(value):
         return None
     try:
         return float(cleaned)
-    except:
+    except Exception:
         return None
 
 
@@ -54,19 +64,21 @@ def extract_estimated_price(payload: dict) -> float:
     breakdown = payload.get("Price Breakdown (Contact)") or payload.get("Price Breakdown") or ""
     match = re.search(r"Total:\s*\$?([0-9]+(?:\.[0-9]+)?)", breakdown)
     if match:
-        return float(match.group(1))
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return 0.0
 
     return 0.0
 
 
 # ---------------------------
-# Normalize tags (GHL returns in different formats)
+# Normalize tags (string/list/list-of-dicts)
 # ---------------------------
 def normalize_tags(raw_tags):
     if raw_tags is None:
         return []
 
-    # List of strings
     if isinstance(raw_tags, list):
         cleaned = []
         for t in raw_tags:
@@ -76,7 +88,6 @@ def normalize_tags(raw_tags):
                 cleaned.append(t["name"].lower())
         return cleaned
 
-    # Comma-separated string
     if isinstance(raw_tags, str):
         return [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
 
@@ -84,14 +95,17 @@ def normalize_tags(raw_tags):
 
 
 # ---------------------------
-# Fetch contractors from GHL Contacts API
+# Fetch contractors from GHL
 # ---------------------------
 def fetch_contractors_from_ghl():
     if not GHL_API_KEY:
         logger.error("GHL_API_KEY missing — contractors cannot be fetched")
         return []
 
-    url = f"{GHL_CONTACTS_URL}/contacts/"
+    params = {
+        "limit": 100,  # 100 max per the API
+        "locationId": GHL_LOCATION_ID,
+    }
 
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",
@@ -99,18 +113,17 @@ def fetch_contractors_from_ghl():
         "Accept": "application/json",
     }
 
-    params = {
-        "limit": 100,
-        "locationId": GHL_LOCATION_ID,
-    }
-
-    response = requests.get(url, headers=headers, params=params)
-
-    if response.status_code != 200:
-        logger.error(f"GHL contact fetch failed ({response.status_code}): {response.text}")
+    try:
+        resp = requests.get(GHL_CONTACTS_URL, headers=headers, params=params, timeout=10)
+    except Exception as e:
+        logger.error(f"GHL contact fetch exception: {e}")
         return []
 
-    data = response.json()
+    if resp.status_code != 200:
+        logger.error(f"GHL contact fetch failed ({resp.status_code}): {resp.text}")
+        return []
+
+    data = resp.json()
     contacts = data.get("contacts", [])
 
     contractors = []
@@ -119,7 +132,7 @@ def fetch_contractors_from_ghl():
         source = (c.get("source") or "").lower()
         tags = normalize_tags(c.get("tags"))
         phone = c.get("phone")
-        name = f"{c.get('firstName','')} {c.get('lastName','')}".strip()
+        name = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip() or c.get("contactName", "")
 
         if not phone:
             continue
@@ -128,13 +141,15 @@ def fetch_contractors_from_ghl():
         has_tag = any("contractor" in t for t in tags)
 
         if is_source or has_tag:
-            contractors.append({
-                "id": c.get("id"),
-                "name": name,
-                "phone": phone,
-                "tags": tags,
-                "contact_source": source,
-            })
+            contractors.append(
+                {
+                    "id": c.get("id"),
+                    "name": name,
+                    "phone": phone,
+                    "tags": tags,
+                    "contact_source": source,
+                }
+            )
 
     logger.info(f"Fetched {len(contractors)} contractors from GHL")
     return contractors
@@ -151,31 +166,24 @@ async def contractors_probe():
 
 
 # ---------------------------
-# SEND SMS VIA LEADCONNECTOR
+# Send SMS via Conversations API
 # ---------------------------
-LC_SMS_URL = "https://public-api.leadconnectorhq.com/conversations/messages/"
-
 def send_sms_to_contractor(contact_id: str, message: str):
-    """
-    Fire an outbound SMS using the LeadConnector Conversations API.
-    """
-    location_id = "ZO1DxVJw65kU2EbHpHLq"  # Alloy - Cleaning
-
     if not GHL_API_KEY:
         logger.error("GHL_API_KEY missing — cannot send SMS")
         return False
-
-    payload = {
-        "locationId": location_id,
-        "contactId": contact_id,
-        "type": "SMS",
-        "message": message,
-    }
 
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",
         "Version": "2021-07-28",
         "Content-Type": "application/json",
+    }
+
+    payload = {
+        "locationId": GHL_LOCATION_ID,
+        "contactId": contact_id,
+        "type": "SMS",
+        "message": message,
     }
 
     logger.info(f"Sending SMS via LC: {payload}")
@@ -189,9 +197,9 @@ def send_sms_to_contractor(contact_id: str, message: str):
     if resp.status_code >= 200 and resp.status_code < 300:
         logger.info(f"SMS send success ({resp.status_code}): {resp.text}")
         return True
-    else:
-        logger.error(f"SMS send failed ({resp.status_code}): {resp.text}")
-        return False
+
+    logger.error(f"SMS send failed ({resp.status_code}): {resp.text}")
+    return False
 
 
 # ---------------------------
@@ -202,38 +210,57 @@ async def dispatch(request: Request):
     payload = await request.json()
     logger.info(f"Received payload from GHL: {payload}")
 
-    # Dummy job summary for now
+    # Extract a minimal job summary (works for test payloads too)
+    calendar = payload.get("calendar", {}) or {}
+    job_id = calendar.get("appointmentId") or calendar.get("id")
+
+    first_name = (payload.get("first_name") or "").strip()
+    last_name = (payload.get("last_name") or "").strip()
+    full_name = payload.get("full_name") or f"{first_name} {last_name}".strip()
+    customer_name = full_name or "Unknown"
+
+    service_type = (
+        payload.get("Service Type")
+        or payload.get("Service Needed")
+        or "Standard Home Cleaning"
+    )
+
+    estimated_price = extract_estimated_price(payload)
+
     job_summary = {
-        "job_id": payload.get("appointmentId"),
-        "customer_name": payload.get("full_name", "Unknown"),
-        "service_type": "Standard Home Cleaning",
-        "estimated_price": 0.0,
+        "job_id": job_id,
+        "customer_name": customer_name,
+        "service_type": service_type,
+        "estimated_price": estimated_price,
     }
 
     logger.info(f"Job summary: {job_summary}")
 
+    # Fetch contractors
     contractors = fetch_contractors_from_ghl()
     logger.info(f"Contractors found: {contractors}")
 
-    notified = []
+    # Build the SMS text
+    sms_text = (
+        "New cleaning job available:\n"
+        f"Customer: {job_summary['customer_name']}\n"
+        f"Service: {job_summary['service_type']}\n"
+        f"When: TBD\n"
+        f"Address: TBD\n"
+        f"Est. price: ${job_summary['estimated_price']:.2f}\n\n"
+        "Reply YES to accept."
+    )
 
-    # Send SMS to each contractor
+    notified_ids = []
     for c in contractors:
-        message = (
-            "New cleaning job available:\n"
-            f"Customer: {job_summary['customer_name']}\n"
-            f"Service: {job_summary['service_type']}\n"
-            "When: TBD\n"
-            "Address: TBD\n"
-            f"Est. price: ${job_summary['estimated_price']:.2f}\n\n"
-            "Reply YES to accept."
-        )
+        ok = send_sms_to_contractor(c["id"], sms_text)
+        if ok:
+            notified_ids.append(c["id"])
 
-        send_sms_to_contractor(c["id"], message)
-        notified.append(c["id"])
-
-    return JSONResponse({
-        "ok": True,
-        "job": job_summary,
-        "contractors_notified": notified,
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "job": job_summary,
+            "contractors_notified": notified_ids,
+        }
+    )
