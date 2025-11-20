@@ -164,18 +164,15 @@ async def contractors_probe():
 # ---------------------------
 # SEND SMS VIA LEADCONNECTOR
 # ---------------------------
-def send_sms_to_contractor(contact_id: str, to_phone: str, message: str):
+def send_sms_to_contractor(contact_id: str, message: str):
     """
-    Sends an SMS via LeadConnector "conversations/messages" API.
-    This uses:
-    - GHL_API_KEY (PIT)
-    - GHL_LOCATION_ID
+    Sends SMS via LeadConnector Conversations API (correct v1 format).
     """
     if not GHL_API_KEY or not GHL_LOCATION_ID:
         logger.error("Missing GHL_API_KEY or GHL_LOCATION_ID; cannot send SMS.")
         return
 
-    url = f"{GHL_BASE_URL}/conversations/messages"
+    url = f"{GHL_BASE_URL}/conversations/messages/send"
 
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",
@@ -187,23 +184,18 @@ def send_sms_to_contractor(contact_id: str, to_phone: str, message: str):
     payload = {
         "locationId": GHL_LOCATION_ID,
         "contactId": contact_id,
-        "channel": "sms",
-        "direction": "outbound",
         "type": "SMS",
-        "message": {
-            "text": message
-        }
+        "message": message
     }
 
-    logger.info(f"Sending SMS via LC to {to_phone} (contact {contact_id}) with payload: {payload}")
+    logger.info(f"Sending SMS via LC: {payload}")
 
     resp = requests.post(url, headers=headers, json=payload)
 
     if resp.status_code not in (200, 201, 202):
-        logger.error(f"Failed to send SMS via LC ({resp.status_code}): {resp.text}")
+        logger.error(f"SMS send failed ({resp.status_code}): {resp.text}")
     else:
-        logger.info(f"SMS sent successfully via LC: {resp.text}")
-
+        logger.info(f"SMS delivered successfully: {resp.text}")
 
 # ---------------------------
 # Dispatch endpoint
@@ -304,7 +296,7 @@ async def dispatch(request: Request):
         )
 
         logger.info(f"Attempting to send SMS to contractor {c_name} at {c_phone}")
-        send_sms_to_contractor(contact_id=c_id, to_phone=c_phone, message=msg)
+        send_sms_to_contractor(contact_id=c_id, message=msg)
     else:
         logger.warning("No contractors found to dispatch to.")
 
