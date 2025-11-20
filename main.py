@@ -14,7 +14,7 @@ logger = logging.getLogger("uvicorn")
 GHL_API_KEY = os.getenv("GHL_API_KEY")
 GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")
 
-# Private Integration base URL (NOT rest.gohighlevel.com)
+# Public API base for PIT tokens
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
@@ -65,13 +65,19 @@ def extract_estimated_price(payload: dict) -> float:
 
 
 # ---------------------------
-# Normalize tags from GHL
+# Normalize GHL tags reliably
 # ---------------------------
 def normalize_tags(raw_tags):
+    """
+    GHL can return tags as:
+    - list of strings
+    - comma-separated string
+    - list of dicts: [{"name": "available_today"}, ...]
+    """
     if raw_tags is None:
         return []
 
-    # list of strings or list of dicts
+    # list
     if isinstance(raw_tags, list):
         cleaned = []
         for t in raw_tags:
@@ -89,7 +95,7 @@ def normalize_tags(raw_tags):
 
 
 # ---------------------------
-# FETCH CONTRACTORS FROM GHL
+# FETCH CONTRACTORS FROM GHL (PUBLIC API)
 # ---------------------------
 def fetch_contractors_from_ghl():
     if not GHL_API_KEY:
@@ -103,47 +109,42 @@ def fetch_contractors_from_ghl():
     url = f"{GHL_BASE_URL}/contacts/"
 
     headers = {
-        # IMPORTANT: for Private Integrations we send the token directly,
-        # not "Bearer <token>"
-        "Authorization": GHL_API_KEY,
-        "Version": "2021-07-28",
+        "Authorization": f"Bearer {GHL_API_KEY}",
+        "Version": "2021-07-28",  # required for Public API
         "Accept": "application/json",
     }
 
     params = {
-        "locationId": GHL_LOCATION_ID,
         "limit": 200,
+        "locationId": GHL_LOCATION_ID,
     }
 
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-    except Exception as e:
-        logger.error(f"Error calling GHL contacts API: {e}")
+    resp = requests.get(url, headers=headers, params=params)
+
+    if resp.status_code != 200:
+        logger.error(f"GHL contact fetch failed ({resp.status_code}): {resp.text}")
         return []
 
-    if response.status_code != 200:
-        logger.error(
-            f"GHL contact fetch failed "
-            f"(status {response.status_code}): {response.text}"
-        )
-        return []
-
-    data = response.json()
+    data = resp.json()
     contacts = data.get("contacts", [])
 
     contractors = []
 
     for c in contacts:
-        source = (c.get("contactSource") or "").lower()
+        # From your curl: 'source' and 'tags' look like this:
+        # "source": "contractor-cleaning"
+        # "tags": ["available_today","contractor_cleaning",...]
+        source = (c.get("source") or "").lower()
         tags = normalize_tags(c.get("tags"))
         phone = c.get("phone")
-        name = f"{c.get('firstName', '')} {c.get('lastName', '')}".strip()
+        name = (c.get("contactName") or "").strip()
 
         if not phone:
+            # Can't text them, skip
             continue
 
         is_source = source == "contractor-cleaning"
-        has_tag = any("contractor" in t for t in tags)
+        has_tag = "contractor_cleaning" in tags or "contractor-cleaning" in tags
 
         if is_source or has_tag:
             contractors.append(
@@ -152,7 +153,8 @@ def fetch_contractors_from_ghl():
                     "name": name,
                     "phone": phone,
                     "tags": tags,
-                    "contact_source": source,
+                    "source": source,
+                    "locationId": c.get("locationId"),
                 }
             )
 
@@ -178,7 +180,7 @@ async def dispatch(request: Request):
     payload = await request.json()
     logger.info(f"Received payload from GHL: {payload}")
 
-    # Calendar / appointment info
+    # Calendar
     calendar = payload.get("calendar", {})
     job_id = calendar.get("appointmentId") or calendar.get("id")
     start_time = calendar.get("startTime")
@@ -195,6 +197,7 @@ async def dispatch(request: Request):
     phone = payload.get("phone")
     tags = payload.get("tags", "")
     contact_source = payload.get("contact_source")
+
     location = payload.get("location") or {}
 
     full_address = (
@@ -217,7 +220,9 @@ async def dispatch(request: Request):
     )
 
     estimated_price = extract_estimated_price(payload)
-    price_breakdown = payload.get("Price Breakdown (Contact)") or ""
+    price_breakdown = (
+        payload.get("Price Breakdown (Contact)") or payload.get("Price Breakdown") or ""
+    )
 
     job_summary = {
         "job_id": job_id,
