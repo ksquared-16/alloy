@@ -14,7 +14,7 @@ logger = logging.getLogger("uvicorn")
 GHL_API_KEY = os.getenv("GHL_API_KEY")
 GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")  # MUST be set in Render!
 GHL_CONTACTS_URL = "https://services.leadconnectorhq.com"
-LC_SMS_URL = "https://services.leadconnectorhq.com/conversations/messages/send"
+LC_SMS_URL = "https://public-api.leadconnectorhq.com/conversations/messages/"
 
 
 @app.get("/")
@@ -151,41 +151,49 @@ async def contractors_probe():
 
 
 # ---------------------------
-# Send SMS via LeadConnector Conversations API
+# SEND SMS VIA LEADCONNECTOR
 # ---------------------------
+LC_SMS_URL = "https://public-api.leadconnectorhq.com/conversations/messages/"
+
 def send_sms_to_contractor(contact_id: str, message: str):
     """
-    Sends SMS using LeadConnector Conversations API.
-    This WILL send real texts.
+    Fire an outbound SMS using the LeadConnector Conversations API.
     """
+    location_id = "ZO1DxVJw65kU2EbHpHLq"  # Alloy - Cleaning
 
-    if not GHL_API_KEY or not GHL_LOCATION_ID:
-        logger.error("Missing GHL_API_KEY or GHL_LOCATION_ID — cannot send SMS.")
-        return
-
-    headers = {
-        "Authorization": f"Bearer {GHL_API_KEY}",
-        "Version": "2021-07-28",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    if not GHL_API_KEY:
+        logger.error("GHL_API_KEY missing — cannot send SMS")
+        return False
 
     payload = {
-        "locationId": GHL_LOCATION_ID,
+        "locationId": location_id,
         "contactId": contact_id,
         "type": "SMS",
         "message": message,
     }
 
+    headers = {
+        "Authorization": f"Bearer {GHL_API_KEY}",
+        "Version": "2021-07-28",
+        "Content-Type": "application/json",
+    }
+
     logger.info(f"Sending SMS via LC: {payload}")
 
-    resp = requests.post(LC_SMS_URL, headers=headers, json=payload)
+    try:
+        resp = requests.post(LC_SMS_URL, headers=headers, json=payload, timeout=10)
+    except Exception as e:
+        logger.error(f"SMS send exception: {e}")
+        return False
 
-    if resp.status_code not in (200, 201, 202):
-        logger.error(f"SMS send failed ({resp.status_code}): {resp.text}")
+    if resp.status_code >= 200 and resp.status_code < 300:
+        logger.info(f"SMS send success ({resp.status_code}): {resp.text}")
+        return True
     else:
-        logger.info(f"SMS delivered successfully: {resp.text}")
+        logger.error(f"SMS send failed ({resp.status_code}): {resp.text}")
+        return False
 
+ 
 
 # ---------------------------
 # Dispatch endpoint
