@@ -297,7 +297,7 @@ async def contractor_reply(request: Request):
         f"Customer: {job['customer_name']}\n"
         f"When: {job['start_time']}\n"
         f"Est. price: ${job['estimated_price']:.2f}\n\n"
-        f\"We'll share final details in your Alloy dashboard.\"
+        "We'll share final details in your Alloy dashboard."
     )
     if contact_id:
         send_conversation_sms(contact_id, confirm_msg)
