@@ -91,6 +91,7 @@ def fetch_contractors() -> List[Dict[str, Any]]:
 def send_conversation_sms(contact_id: str, message: str) -> None:
     """
     Send an SMS via GHL Conversations API.
+    NOTE: Caller should ensure the contact has a phone number; otherwise GHL returns 422.
     """
     payload = {
         "locationId": GHL_LOCATION_ID,
@@ -152,15 +153,14 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
     """
     Upsert assignment details into the Jobs custom object in GHL,
     keyed by external_job_id (which we're using as the unique job_id from the calendar).
+
+    IMPORTANT: This endpoint should NOT include locationId as a query param or body field.
+    Location is inferred from the API key.
     """
     if not job_id or not contractor_id:
         logger.warning("upsert_job_assignment_to_ghl: missing job_id or contractor_id, skipping")
         return
 
-    # We know from the schema + GET/PUT calls that:
-    # - schemaKey is `custom_objects.jobs`
-    # - the short property keys are:
-    #   external_job_id, contractor_assigned_id, contractor_assigned_name, job_status
     payload = {
         "uniqueField": "external_job_id",
         "uniqueValue": job_id,
@@ -180,10 +180,10 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
     )
 
     try:
+        # NOTE: no params={"locationId": ...} here to avoid 422 "property locationId should not exist"
         resp = requests.post(
             JOBS_RECORDS_URL,
             headers=_ghl_headers(),
-            params={"locationId": GHL_LOCATION_ID},
             json=payload,
             timeout=10,
         )
@@ -243,7 +243,7 @@ async def dispatch(request: Request):
     # enrich with dispatch metadata
     job_summary.setdefault("notified_contractors", [])
     job_summary["assigned_contractor_id"] = None
-    job_summary["assigned_contractor_name"] = None
+    job_summary["assigned_contractor_name"] = None    # noqa: E501
     job_summary["dispatched_at"] = datetime.utcnow().isoformat()
 
     # Cache the job in memory so /contractor-reply can find it
@@ -279,8 +279,15 @@ async def dispatch(request: Request):
 
     notified_ids: List[str] = []
     for c in contractors:
-        if not c.get("id"):
+        # Skip contractors without id or phone to avoid 422 "Missing phone number"
+        if not c.get("id") or not c.get("phone"):
+            logger.info(
+                "Skipping contractor without valid id/phone: id=%s phone=%s",
+                c.get("id"),
+                c.get("phone"),
+            )
             continue
+
         send_conversation_sms(c["id"], msg)
         notified_ids.append(c["id"])
         job_summary["notified_contractors"].append(c["id"])
@@ -412,7 +419,7 @@ async def contractor_reply(request: Request):
     # 2) Notify all other contractors that the job was claimed
     for c in contractors:
         cid = c.get("id")
-        if not cid or cid == contact_id:
+        if not cid or cid == contact_id or not c.get("phone"):
             continue
         send_conversation_sms(
             cid,
