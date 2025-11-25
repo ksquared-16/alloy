@@ -187,19 +187,23 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
 
     try:
         logger.info("Searching job record id for external_job_id=%s", external_job_id)
-        resp = requests.post(JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10)
+        resp = requests.post(
+            JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+        )
     except Exception as e:
         logger.error("find_job_record_id: exception: %s", e)
         return None
 
     if not resp.ok:
         logger.error(
-            "find_job_record_id: search failed (%s): %s", resp.status_code, resp.text
+            "find_job_record_id: search failed (%s): %s",
+            resp.status_code,
+            resp.text,
         )
         return None
 
     data = resp.json()
-    # Your actual response has "records"
+    # Your env returns "records"
     records = data.get("records") or data.get("customObjectRecords") or []
     if not records:
         logger.error(
@@ -547,7 +551,7 @@ async def contractor_reply(request: Request):
         )
         send_conversation_sms(customer_contact_id, customer_msg)
 
-    # 4) Push assignment into Jobs object (custom_objects.jobs)
+        # 4) Push assignment into Jobs object (custom_objects.jobs)
     upsert_job_assignment_to_ghl(job_id, contact_id or "", contractor_name or "")
 
     logger.info(
