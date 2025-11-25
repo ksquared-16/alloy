@@ -233,7 +233,7 @@ async def dispatch(request: Request):
     Webhook from GHL when an appointment is booked.
     1. Build a job summary and cache it in JOB_STORE (keyed by job_id / appointmentId).
     2. Fetch eligible contractors.
-    3. Send SMS to each contractor with "Reply YES <job_id> to accept."
+    3. Send SMS to each contractor with "Reply YES to accept."
     """
     payload = await request.json()
     logger.info("Received payload from GHL: %s", payload)
@@ -274,7 +274,7 @@ async def dispatch(request: Request):
         f"Service: {job_summary['service_type']}\n"
         f"When: {job_summary['start_time'] or 'TBD'}\n"
         f"Est. price: ${job_summary['estimated_price']:.2f}\n\n"
-        f"Reply YES {job_summary['job_id']} to accept."
+        f"Reply YES to accept."
     )
 
     notified_ids: List[str] = []
@@ -300,7 +300,7 @@ async def contractor_reply(request: Request):
     Webhook from GHL when a *contractor* replies to the dispatch SMS.
 
     Supports:
-      - "YES <job_id>"  (explicit job)
+      - "YES <job_id>"  (explicit job, still supported)
       - "Yes" / "Y" / "Yeah" etc. (we infer latest job sent to that contractor)
     """
     payload = await request.json()
@@ -336,7 +336,8 @@ async def contractor_reply(request: Request):
     if isinstance(job_id, str):
         job_id = job_id.strip() or None
 
-    # If not provided, try to parse "YES <job_id>" pattern
+    # If not provided, try to parse "YES <job_id>" pattern (still allowed,
+    # but not required anymore)
     if not job_id and len(parts) >= 2 and parts[0].upper() == "YES":
         job_id = parts[1].strip() or None
 
