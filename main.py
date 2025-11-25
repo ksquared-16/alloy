@@ -15,12 +15,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("alloy-dispatcher")
 
 GHL_API_KEY = os.getenv("GHL_API_KEY")
-GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID", "ZO1DxVJw65kU2EbHpHLq")
+GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")
+
+if not GHL_API_KEY:
+    raise RuntimeError("GHL_API_KEY environment variable must be set")
+
+if not GHL_LOCATION_ID:
+    raise RuntimeError("GHL_LOCATION_ID environment variable must be set")
 
 LC_BASE_URL = "https://services.leadconnectorhq.com"
 CONTACTS_URL = f"{LC_BASE_URL}/contacts/"
 CONVERSATIONS_URL = f"{LC_BASE_URL}/conversations/messages"
-JOBS_RECORDS_URL = f"{LC_BASE_URL}/objects/jobs/records"
+
+# IMPORTANT: use the full schema key for the Jobs custom object
+JOBS_RECORDS_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records"
 
 # In-memory job store: { job_id (appointmentId): job_summary_dict }
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
@@ -127,7 +135,8 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
         service_type = "Deep Cleaning"
 
     job_summary = {
-        "job_id": calendar.get("appointmentId"),  # this is what we send in SMS & expect back
+        # This is the external job id we use everywhere (calendar appointmentId)
+        "job_id": calendar.get("appointmentId"),
         "customer_name": full_name or "Unknown",
         "contact_id": contact_id,
         "service_type": service_type,
@@ -141,27 +150,35 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_name: str) -> None:
     """
-    Upsert assignment details into the Jobs custom object in GHL.
+    Upsert assignment details into the Jobs custom object in GHL,
+    keyed by external_job_id (which we're using as the unique job_id from the calendar).
     """
     if not job_id or not contractor_id:
         logger.warning("upsert_job_assignment_to_ghl: missing job_id or contractor_id, skipping")
         return
 
+    # We know from the schema + GET/PUT calls that:
+    # - schemaKey is `custom_objects.jobs`
+    # - the short property keys are:
+    #   external_job_id, contractor_assigned_id, contractor_assigned_name, job_status
     payload = {
         "uniqueField": "external_job_id",
         "uniqueValue": job_id,
-        "fields": {
+        "properties": {
             "external_job_id": job_id,
             "contractor_assigned_id": contractor_id,
             "contractor_assigned_name": contractor_name,
-            "job_status": "assigned",
+            # Must be one of: pending_assignment, assigned, contractor_assigned, in_progress, completed, cancelled
+            "job_status": "contractor_assigned",
         },
     }
+
     logger.info(
         "Updating Jobs object on assignment via %s with payload: %s",
         JOBS_RECORDS_URL,
         payload,
     )
+
     try:
         resp = requests.post(
             JOBS_RECORDS_URL,
