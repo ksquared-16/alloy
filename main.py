@@ -116,6 +116,8 @@ def send_conversation_sms(contact_id: str, message: str) -> None:
 def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build a normalized job summary dict from the GHL appointment / calendar payload.
+    - Primary source for price: "Estimated Price (Contact)"
+    - Fallback: parse from "Price Breakdown (Contact)" lines (Total: $XXX).
     """
     calendar = payload.get("calendar") or {}
     contact_id = payload.get("contact_id")
@@ -124,22 +126,35 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     ).strip()
 
     price_breakdown = payload.get("Price Breakdown (Contact)") or ""
+
+    # 1) Try direct numeric value from "Estimated Price (Contact)"
     estimated_price = 0.0
-    # Very simple parse: look for 'Total: $99' or 'Total: 99'
-    for line in price_breakdown.splitlines():
-        if "Total:" in line:
-            try:
-                part = line.split("Total:")[-1].strip().replace("$", "")
-                estimated_price = float(part)
-            except Exception:
-                pass
+    est_raw = payload.get("Estimated Price (Contact)") or payload.get("Estimated Price")
+    if est_raw:
+        try:
+            # handle "$249.00", "249", "249.0", etc
+            est_str = str(est_raw).replace("$", "").replace(",", "").strip()
+            estimated_price = float(est_str)
+        except Exception as e:
+            logger.warning("Failed to parse 'Estimated Price (Contact)'='%s': %s", est_raw, e)
+
+    # 2) Fallback: parse from breakdown text if still zero
+    if estimated_price <= 0 and price_breakdown:
+        for line in price_breakdown.splitlines():
+            if "Total" in line:
+                try:
+                    part = line.split(":", 1)[-1].strip().replace("$", "")
+                    estimated_price = float(part)
+                    break
+                except Exception:
+                    pass
 
     service_type = "Standard Home Cleaning"
     if "Deep" in price_breakdown:
         service_type = "Deep Cleaning"
 
     job_summary = {
-        "job_id": calendar.get("appointmentId"),  # this is what we send in SMS & expect back
+        "job_id": calendar.get("appointmentId"),
         "customer_name": full_name or "Unknown",
         "contact_id": contact_id,
         "service_type": service_type,
