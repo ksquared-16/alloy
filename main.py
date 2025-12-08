@@ -118,6 +118,7 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     Build a normalized job summary dict from the GHL appointment / calendar payload.
     - Primary source for price: "Estimated Price (Contact)"
     - Fallback: parse from "Price Breakdown (Contact)" lines (Total: $XXX).
+    Also includes home access info for the cleaner.
     """
     calendar = payload.get("calendar") or {}
     contact_id = payload.get("contact_id")
@@ -132,7 +133,6 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     est_raw = payload.get("Estimated Price (Contact)") or payload.get("Estimated Price")
     if est_raw:
         try:
-            # handle "$249.00", "249", "249.0", etc
             est_str = str(est_raw).replace("$", "").replace(",", "").strip()
             estimated_price = float(est_str)
         except Exception as e:
@@ -153,6 +153,22 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     if "Deep" in price_breakdown:
         service_type = "Deep Cleaning"
 
+    # Home access fields – try multiple possible label variants, fall back to ""
+    access_method = (
+        payload.get("How Will Your Cleaner Get Into Your Home")
+        or payload.get("How will your cleaner get into your home")
+        or payload.get("How Will Your Cleaner Get Into Your Home?")
+        or payload.get("How will your cleaner get into your home?")
+        or ""
+    )
+
+    access_notes = (
+        payload.get("Access Notes For Your Cleaner")
+        or payload.get("Access notes for your cleaner")
+        or payload.get("Access notes for your cleaner?")
+        or ""
+    )
+
     job_summary = {
         "job_id": calendar.get("appointmentId"),
         "customer_name": full_name or "Unknown",
@@ -161,6 +177,8 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
         "estimated_price": estimated_price,
         "start_time": calendar.get("startTime"),
         "end_time": calendar.get("endTime"),
+        "access_method": access_method,
+        "access_notes": access_notes,
     }
     logger.info("Job summary: %s", job_summary)
     return job_summary
@@ -218,7 +236,6 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
         return None
 
     data = resp.json()
-    # Your env returns "records"
     records = data.get("records") or data.get("customObjectRecords") or []
     if not records:
         logger.error(
@@ -242,7 +259,13 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
 
     1. Find record id via /objects/custom_objects.jobs/records/search using external_job_id.
     2. PUT /objects/custom_objects.jobs/records/{id}?locationId=...
-       with properties { contractor_assigned_id, contractor_assigned_name, job_status }.
+       with properties {
+         contractor_assigned_id,
+         contractor_assigned_name,
+         job_status,
+         how_will_your_cleaner_get_into_your_home,
+         access_notes_for_your_cleaner
+       }.
     """
     if not job_id or not contractor_id:
         logger.warning(
@@ -264,12 +287,18 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
         )
         return
 
+    # Pull the in-memory job to get access info (if available)
+    job = JOB_STORE.get(job_id, {})
+
     payload = {
         "properties": {
             "external_job_id": job_id,
             "contractor_assigned_id": contractor_id,
             "contractor_assigned_name": contractor_name,
             "job_status": "contractor_assigned",
+            # These keys must match the Unique Key of your Job custom fields in GHL
+            "how_will_your_cleaner_get_into_your_home": job.get("access_method", ""),
+            "access_notes_for_your_cleaner": job.get("access_notes", ""),
         }
     }
     params = {"locationId": GHL_LOCATION_ID}
@@ -376,7 +405,7 @@ async def dispatch(request: Request):
             }
         )
 
-    # Build contractor SMS message
+    # Build contractor SMS message (NO access info yet – only broadcast)
     msg = (
         f"New cleaning job available:\n"
         f"Customer: {job_summary['customer_name']}\n"
@@ -529,14 +558,23 @@ async def contractor_reply(request: Request):
     job["assigned_contractor_id"] = contact_id
     job["assigned_contractor_name"] = contractor_name
 
-    # 1) Confirm to the accepting contractor
+    # 1) Confirm to the accepting contractor — NOW including access info
+    access_method = job.get("access_method") or "Not specified"
+    access_notes = job.get("access_notes") or ""
+
     confirm_msg = (
         f"You accepted this job:\n"
         f"Customer: {job['customer_name']}\n"
         f"When: {job['start_time']}\n"
-        f"Est. price: ${job['estimated_price']:.2f}\n\n"
-        "We'll share final details in your Alloy dashboard."
+        f"Est. price: ${job['estimated_price']:.2f}\n"
+        f"Entry: {access_method}\n"
     )
+
+    if access_notes:
+        confirm_msg += f"Notes: {access_notes}\n"
+
+    confirm_msg += "\nWe'll share final details in your Alloy dashboard."
+
     if contact_id:
         send_conversation_sms(contact_id, confirm_msg)
 
@@ -566,7 +604,7 @@ async def contractor_reply(request: Request):
         )
         send_conversation_sms(customer_contact_id, customer_msg)
 
-        # 4) Push assignment into Jobs object (custom_objects.jobs)
+    # 4) Push assignment into Jobs object (custom_objects.jobs)
     upsert_job_assignment_to_ghl(job_id, contact_id or "", contractor_name or "")
 
     logger.info(
