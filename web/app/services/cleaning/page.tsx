@@ -188,8 +188,7 @@ export default function CleaningPage() {
                   <GhlEmbed
                     src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
                     title="Lead Form"
-                    height={1470}
-                    className="!min-h-[1200px] md:!min-h-[1470px]"
+                    className=""
                   />
                 )}
               </div>
