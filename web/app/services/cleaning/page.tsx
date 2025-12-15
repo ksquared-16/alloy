@@ -2,7 +2,7 @@ import Link from "next/link";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
-import GhlEmbed from "@/components/GhlEmbed";
+import CollapsibleQuoteForm from "@/components/CollapsibleQuoteForm";
 
 export default function CleaningPage() {
   const cleaningOptions = [
@@ -92,7 +92,7 @@ export default function CleaningPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <Section className="py-12 md:py-20">
+      <Section className="py-12 md:py-16">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
             Home cleaning in Bend, no guesswork.
@@ -104,16 +104,9 @@ export default function CleaningPage() {
       </Section>
 
       {/* Quote Form */}
-      <Section id="quote-form" className="py-12 bg-white">
+      <Section id="quote-form" className="py-6 md:py-8 bg-white">
         <div className="max-w-2xl mx-auto">
-          <h2 className="text-2xl font-bold text-alloy-midnight mb-6">
-            Get a quote
-          </h2>
-          <GhlEmbed
-            src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
-            title="Lead Form"
-            height={1470}
-          />
+          <CollapsibleQuoteForm />
         </div>
       </Section>
 
