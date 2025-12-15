@@ -92,7 +92,7 @@ export default function CleaningPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <Section className="py-12 md:py-16">
+      <Section className="py-10 md:py-14">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
             Home cleaning in Bend, no guesswork.
@@ -104,14 +104,14 @@ export default function CleaningPage() {
       </Section>
 
       {/* Quote Form */}
-      <Section id="quote-form" className="py-6 md:py-8 bg-white">
+      <Section id="quote-form" className="py-8 md:py-10 bg-white">
         <div className="max-w-2xl md:max-w-4xl mx-auto">
           <CollapsibleQuoteForm />
         </div>
       </Section>
 
       {/* Why Book Through Alloy */}
-      <Section className="py-16">
+      <Section className="py-12 md:py-16">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
           Why book through Alloy
         </h2>
