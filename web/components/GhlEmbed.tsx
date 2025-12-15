@@ -24,13 +24,17 @@ export default function GhlEmbed({
     }
   }, []);
 
+  // If className contains height classes, don't set inline style (let Tailwind handle it)
+  const hasHeightClass = className.includes("min-h-") || className.includes("h-");
+  const style = hasHeightClass ? undefined : { minHeight: `${height}px` };
+
   return (
     <iframe
       id={id}
       src={src}
       title={title}
       className={`w-full border-none rounded-xl ${className}`}
-      style={{ minHeight: `${height}px` }}
+      style={style}
       loading="lazy"
     />
   );

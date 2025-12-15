@@ -105,7 +105,7 @@ export default function CleaningPage() {
 
       {/* Quote Form */}
       <Section id="quote-form" className="py-6 md:py-8 bg-white">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl md:max-w-4xl mx-auto">
           <CollapsibleQuoteForm />
         </div>
       </Section>

@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
 import PrimaryButton from "./PrimaryButton";
-import SecondaryButton from "./SecondaryButton";
 import GhlEmbed from "./GhlEmbed";
 
 export default function CollapsibleQuoteForm() {
@@ -57,22 +55,14 @@ export default function CollapsibleQuoteForm() {
           <p className="text-alloy-midnight/70 mb-6">
             Takes about a minute. We'll text to confirm details and scheduling.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={handleExpand}
-              className="flex-1"
-              aria-expanded="false"
-              aria-controls="quote-form-content"
-              aria-label="Expand quote form"
-            >
-              <PrimaryButton className="w-full">Get a quote</PrimaryButton>
-            </button>
-            <Link href="/book" className="flex-1">
-              <SecondaryButton className="w-full">
-                Prefer to book now?
-              </SecondaryButton>
-            </Link>
-          </div>
+          <button
+            onClick={handleExpand}
+            aria-expanded="false"
+            aria-controls="quote-form-content"
+            aria-label="Expand quote form"
+          >
+            <PrimaryButton className="w-full">Get a quote</PrimaryButton>
+          </button>
         </div>
       )}
 
