@@ -1,10 +1,17 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
-import CollapsibleQuoteForm from "@/components/CollapsibleQuoteForm";
+import GhlEmbed from "@/components/GhlEmbed";
 
 export default function CleaningPage() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [hasRendered, setHasRendered] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
   const cleaningOptions = [
     {
       type: "Standard",
@@ -89,26 +96,107 @@ export default function CleaningPage() {
     },
   ];
 
+  const handleToggle = () => {
+    if (!isOpen) {
+      setIsOpen(true);
+      setHasRendered(true);
+      // Smooth scroll to form after a brief delay
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    } else {
+      setIsOpen(false);
+      // Smooth scroll back to hero
+      setTimeout(() => {
+        heroRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    }
+  };
+
+  // Handle hash-based expansion
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === "#quote-form" && !isOpen) {
+        setIsOpen(true);
+        setHasRendered(true);
+        setTimeout(() => {
+          formRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }, 100);
+      }
+    };
+
+    checkHash();
+    window.addEventListener("hashchange", checkHash);
+    return () => window.removeEventListener("hashchange", checkHash);
+  }, [isOpen]);
+
   return (
-    <div className="min-h-screen">
+    <div>
       {/* Hero */}
-      <Section className="py-10 md:py-14">
+      <Section ref={heroRef} className="py-10 md:py-14">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
             Home cleaning in Bend, no guesswork.
           </h1>
-          <p className="text-lg text-alloy-midnight/80 mb-8">
+          <p className="text-lg text-alloy-midnight/80 mb-6">
             We match you with vetted, insured cleaners in Bend. One-time, weekly, bi-weekly, or monthly—your choice. Clear expectations, fair pricing, real results.
           </p>
+          <button
+            onClick={handleToggle}
+            aria-expanded={isOpen}
+            aria-controls="quote-form-content"
+            aria-label={isOpen ? "Hide form" : "Get a quote"}
+            className="w-full md:w-auto"
+          >
+            <PrimaryButton className="w-full md:w-auto">
+              {isOpen ? "Hide form" : "Get a quote"}
+            </PrimaryButton>
+          </button>
         </div>
       </Section>
 
       {/* Quote Form */}
-      <Section id="quote-form" className="py-8 md:py-10 bg-white">
-        <div className="max-w-2xl md:max-w-4xl mx-auto">
-          <CollapsibleQuoteForm />
-        </div>
-      </Section>
+      {isOpen && (
+        <Section id="quote-form" ref={formRef} className="pt-6 pb-0 bg-white">
+          <div className="max-w-2xl md:max-w-4xl mx-auto">
+            <div className="rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm bg-white">
+              <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20">
+                <h2 className="text-xl font-bold text-alloy-midnight">
+                  Get a quote
+                </h2>
+                <button
+                  onClick={handleToggle}
+                  className="text-sm text-alloy-juniper hover:text-alloy-juniper/80 font-medium transition-colors"
+                  aria-label="Hide form"
+                  aria-expanded="true"
+                  aria-controls="quote-form-content"
+                >
+                  Hide form
+                </button>
+              </div>
+              <div id="quote-form-content" className="p-4 md:p-6">
+                {hasRendered && (
+                  <GhlEmbed
+                    src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
+                    title="Lead Form"
+                    height={1470}
+                    className="!min-h-[1200px] md:!min-h-[1470px]"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </Section>
+      )}
 
       {/* Why Book Through Alloy */}
       <Section className="py-12 md:py-16">
@@ -250,11 +338,22 @@ export default function CleaningPage() {
           <p className="text-lg mb-6 opacity-90">
             Submit your quote request above. We'll text you shortly to confirm details.
           </p>
-          <a href="#quote-form">
+          <button
+            onClick={() => {
+              if (!isOpen) {
+                handleToggle();
+              } else {
+                formRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }
+            }}
+          >
             <PrimaryButton className="bg-white text-alloy-pine hover:bg-alloy-stone">
               Start my quote
             </PrimaryButton>
-          </a>
+          </button>
         </div>
       </Section>
     </div>
