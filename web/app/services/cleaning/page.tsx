@@ -148,7 +148,7 @@ export default function CleaningPage() {
             Home Cleaning You Can Actually Rely On
           </h1>
           <p className="text-lg text-alloy-midnight/80 mb-6">
-            Alloy connects you with vetted, insured local cleaners in Bend — without the guesswork. We don't sell your request to dozens of companies. Every match is reviewed by real people, confirmed by text, and backed by Alloy from start to finish.
+            Alloy provides home cleaning in Bend through trusted local professionals — without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. You always have one point of contact.
           </p>
           <button
             onClick={handleToggle}
@@ -207,12 +207,12 @@ export default function CleaningPage() {
             {
               title: "We don't sell leads",
               description:
-                "Your information stays with us. We match you directly with a pro we know and trust. No lead blasting, no spam calls, no middleman chaos.",
+                "Your information stays with us. We coordinate directly with a pro we know and trust. No lead blasting, no spam calls, no middleman chaos.",
             },
             {
               title: "We stay involved",
               description:
-                "Alloy doesn't disappear after the match. We coordinate scheduling, handle communication, and make sure everything goes smoothly. If something's not right, we fix it.",
+                "Alloy doesn't disappear after booking. We coordinate scheduling, handle communication, and make sure everything goes smoothly. If something's not right, we fix it.",
             },
             {
               title: "Fair pricing, transparent costs",

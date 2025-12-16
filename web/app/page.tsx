@@ -14,24 +14,24 @@ export default function Home() {
     {
       number: "1",
       title: "Tell us what you need — nothing more",
-      description: "Share your home size and schedule. We don't blast your info to dozens of companies. Just what we need to match you right.",
+      description: "Share your home size and schedule. No endless back-and-forth — just enough detail for us to handle the rest.",
     },
     {
       number: "2",
-      title: "Matched by people, backed by tech",
-      description: "Real humans review every match. We know our pros personally. Technology speeds things up — people make the call.",
+      title: "Coordinated by people, backed by tech",
+      description: "Real humans review every job. Technology speeds things up — people make the call and keep things on track.",
     },
     {
       number: "3",
       title: "Confirmed by text. Covered by Alloy.",
-      description: "We text you the details. You confirm. That's it. And we stay involved — if something's not right, we make it right. No disappearing act.",
+      description: "We text the details. You confirm. And we stay involved — if something's not right, we make it right.",
     },
   ];
 
   const whyAlloyIsDifferent = [
     {
       title: "Trust First",
-      description: "Every pro is vetted, insured, and background-checked. We stand behind every match. If something's not right, we fix it.",
+      description: "Every pro is vetted, insured, and background-checked. We stand behind every job. If something's not right, we fix it.",
       accentColor: "juniper" as const,
     },
     {
@@ -41,7 +41,7 @@ export default function Home() {
     },
     {
       title: "Human + Smart",
-      description: "Real people who know Bend and care about getting it right, supported by technology that makes matching faster and more reliable.",
+      description: "Real people who know Bend and care about getting it right, supported by technology that makes coordination faster and more reliable.",
       accentColor: "ember" as const,
     },
     {
@@ -55,12 +55,12 @@ export default function Home() {
     {
       question: "How does Alloy work?",
       answer:
-        "You tell us what you need, we match you with a vetted local pro, and you confirm by text. No apps, no complicated booking. We handle the rest.",
+        "You tell us what you need, we coordinate with a vetted local pro, and you confirm by text. No apps, no complicated booking. We handle the rest.",
     },
     {
       question: "Are the professionals insured?",
       answer:
-        "Yes. Every pro is insured, background-checked, and verified before they can accept jobs. We stand behind every match.",
+        "Yes. Every pro is insured, background-checked, and verified before they can accept jobs. We stand behind every job.",
     },
     {
       question: "What areas do you serve?",
@@ -105,15 +105,10 @@ export default function Home() {
                   Born in Bend. Built for trust.
                 </p>
                 <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
-                  Find trusted local pros,{" "}
-                  <span className="relative inline-block">
-                    <span className="text-white">no guesswork</span>
-                    <span className="absolute bottom-0 left-0 right-0 h-1 bg-alloy-juniper/60 -z-10"></span>
-                  </span>
-                  .
+                  Trusted home services, without the runaround.
                 </h1>
                 <p className="text-lg text-white/90">
-                  We match you with vetted, insured local professionals in Bend — starting with home cleaning. Real people. Real results.
+                  Alloy handles everything — scheduling, confirmation, and follow-up — using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Link href="/services/cleaning">
@@ -150,6 +145,13 @@ export default function Home() {
               <p className="text-alloy-midnight/80">{step.description}</p>
             </div>
           ))}
+        </div>
+        <div className="max-w-3xl mx-auto mt-12 text-center">
+          <div className="bg-white/80 rounded-lg p-6 border border-alloy-stone/30">
+            <p className="text-lg text-alloy-midnight font-medium">
+              Alloy isn't a lead marketplace. We're your point of contact before, during, and after the job.
+            </p>
+          </div>
         </div>
       </Section>
 
@@ -219,11 +221,6 @@ export default function Home() {
 
       {/* FAQ */}
       <Section className="py-20 bg-white">
-        <div className="max-w-3xl mx-auto mb-8 text-center">
-          <p className="text-lg text-alloy-midnight/80 font-medium">
-            Alloy isn't a lead marketplace. We're your point of contact before, during, and after the job.
-          </p>
-        </div>
         <h2 className="text-3xl font-bold text-alloy-midnight text-center mb-12">
           Frequently Asked Questions
         </h2>
