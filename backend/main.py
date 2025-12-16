@@ -458,7 +458,7 @@ def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
     Search for contacts by phone using POST /contacts/search endpoint.
 
     Args:
-        phone: Phone number to search for
+        phone: Phone number to search for (will be trimmed)
 
     Returns:
         List of contact dicts found, empty list if none found or error occurred.
@@ -467,18 +467,19 @@ def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
         logger.error("_search_contact_by_phone_via_api: GHL_LOCATION_ID not set")
         return []
 
-    # Build request body with query wrapper and integer page/pageLimit
+    # Trim phone string
+    phone_trimmed = phone.strip()
+
+    # Build request body with query as string and integer page/pageLimit
     body = {
-        "query": {
-            "phone": phone,
-        },
+        "query": phone_trimmed,
         "page": 1,
         "pageLimit": 20,
     }
 
-    # Add locationId as query parameter
+    # Add locationId as query parameter (must be string)
     params = {
-        "locationId": GHL_LOCATION_ID,
+        "locationId": str(GHL_LOCATION_ID),
     }
 
     try:
@@ -817,18 +818,19 @@ def debug_search_contact_by_phone(phone: str):
             status_code=500,
         )
 
-    # Build request body with query wrapper and integer page/pageLimit
+    # Trim phone string
+    phone_trimmed = phone.strip()
+
+    # Build request body with query as string and integer page/pageLimit
     body = {
-        "query": {
-            "phone": phone,
-        },
+        "query": phone_trimmed,
         "page": 1,
         "pageLimit": 20,
     }
 
-    # Add locationId as query parameter
+    # Add locationId as query parameter (must be string)
     params = {
-        "locationId": GHL_LOCATION_ID,
+        "locationId": str(GHL_LOCATION_ID),
     }
 
     status_code = 0
