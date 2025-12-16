@@ -455,10 +455,10 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
 
 def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
     """
-    Search for contacts by phone using POST /contacts/search endpoint.
+    Search for contacts by phone using POST /contacts/search endpoint with filters.
 
     Args:
-        phone: Phone number to search for (will be trimmed)
+        phone: Phone number to search for (will be trimmed and normalized)
 
     Returns:
         List of contact dicts found, empty list if none found or error occurred.
@@ -469,43 +469,71 @@ def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
 
     # Trim phone string
     phone_trimmed = phone.strip()
-
-    # Build request body with query as string and integer page/pageLimit
-    body = {
-        "query": phone_trimmed,
-        "page": 1,
-        "pageLimit": 20,
-    }
-
-    # Add locationId as query parameter (must be string)
-    params = {
-        "locationId": str(GHL_LOCATION_ID),
-    }
-
-    try:
-        resp = requests.post(
-            CONTACTS_SEARCH_URL, headers=_ghl_headers(), params=params, json=body, timeout=10
-        )
-    except Exception as e:
-        logger.error("_search_contact_by_phone_via_api: exception for phone=%s: %s", phone, e)
+    
+    # Normalize to digits only for candidate generation
+    digits = re.sub(r"\D", "", phone_trimmed)
+    
+    if not digits:
+        logger.debug("_search_contact_by_phone_via_api: no digits found in phone=%s", phone)
         return []
 
-    if not resp.ok:
-        logger.debug("_search_contact_by_phone_via_api: search failed for phone=%s (%s): %s", phone, resp.status_code, resp.text)
-        return []
+    # Generate phone candidates in order of preference
+    candidates = []
+    
+    # 1. Prefer "+<digits>" format (e.g., +16022904816)
+    if not phone_trimmed.startswith("+"):
+        candidates.append("+" + digits)
+    else:
+        candidates.append(phone_trimmed)
+    
+    # 2. Try raw digits as fallback
+    candidates.append(digits)
+    
+    # 3. If 10 digits, also try +1<digits>
+    if len(digits) == 10:
+        candidates.append("+1" + digits)
 
-    try:
-        data = resp.json()
-    except Exception:
-        logger.error("_search_contact_by_phone_via_api: failed to parse JSON response for phone=%s", phone)
-        return []
+    # Try each candidate until one matches
+    for candidate in candidates:
+        # Build request body with locationId in body and filters array
+        body = {
+            "locationId": GHL_LOCATION_ID.strip(),
+            "page": 1,
+            "pageLimit": 20,
+            "filters": [
+                {"field": "phone", "operator": "eq", "value": candidate}
+            ],
+        }
 
-    # Extract contacts from response (handle different possible response structures)
-    contacts = data.get("contacts", [])
-    if not contacts and isinstance(data, list):
-        contacts = data
+        try:
+            resp = requests.post(
+                CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+            )
+        except Exception as e:
+            logger.error("_search_contact_by_phone_via_api: exception for candidate=%s: %s", candidate, e)
+            continue
 
-    return contacts
+        if not resp.ok:
+            logger.debug("_search_contact_by_phone_via_api: search failed for candidate=%s (%s): %s", candidate, resp.status_code, resp.text)
+            continue
+
+        try:
+            data = resp.json()
+        except Exception:
+            logger.error("_search_contact_by_phone_via_api: failed to parse JSON response for candidate=%s", candidate)
+            continue
+
+        # Extract contacts from response
+        contacts = data.get("contacts", [])
+        if not contacts and isinstance(data, list):
+            contacts = data
+
+        if contacts:
+            logger.info("_search_contact_by_phone_via_api: found %d contacts using candidate=%s", len(contacts), candidate)
+            return contacts
+
+    logger.debug("_search_contact_by_phone_via_api: no contacts found for phone=%s after trying %d candidates", phone, len(candidates))
+    return []
 
 
 def find_contact_by_phone(phone: str) -> Optional[str]:
@@ -520,72 +548,27 @@ def find_contact_by_phone(phone: str) -> Optional[str]:
         If multiple contacts found, returns the most recently updated one.
 
     Process:
-        1. Normalize input to digits only
-        2. Generate multiple search candidates with different formats
-        3. Try each candidate until one matches
-        4. Return the most recently updated contact when found
+        1. Calls _search_contact_by_phone_via_api which handles candidate generation
+        2. Returns the most recently updated contact when found
     """
     if not GHL_LOCATION_ID:
         logger.error("find_contact_by_phone: GHL_LOCATION_ID not set")
         return None
 
-    # Normalize input to digits only
-    phone_trimmed = phone.strip()
-    digits = re.sub(r"\D", "", phone_trimmed)
+    # _search_contact_by_phone_via_api handles candidate generation internally
+    contacts = _search_contact_by_phone_via_api(phone)
 
-    if not digits:
-        logger.info("find_contact_by_phone: no digits found in phone=%s", phone)
-        return None
+    if contacts:
+        # If multiple, pick the most recently updated
+        if len(contacts) > 1:
+            contacts.sort(key=lambda c: c.get("updatedAt", ""), reverse=True)
+            logger.info("find_contact_by_phone: found %d contacts, using most recent", len(contacts))
 
-    # Generate search candidates in order of preference
-    candidates = []
-    
-    # 1. Original trimmed phone
-    candidates.append(phone_trimmed)
-    
-    # 2. "+" + digits (if not already starts with "+")
-    if not phone_trimmed.startswith("+"):
-        candidates.append("+" + digits)
-    
-    # 3. Just digits
-    candidates.append(digits)
-    
-    # 4. Handle 11-digit numbers starting with 1 (US country code)
-    if len(digits) == 11 and digits.startswith("1"):
-        candidates.append("+" + digits)
-        candidates.append(digits[1:])  # Remove leading 1
-        candidates.append("+1" + digits[1:])
-    
-    # 5. Handle 10-digit numbers (assume US)
-    if len(digits) == 10:
-        candidates.append("+1" + digits)
-        candidates.append(digits)
+        contact_id = contacts[0].get("id")
+        logger.info("find_contact_by_phone: found contact_id=%s for phone=%s", contact_id, phone)
+        return contact_id
 
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_candidates = []
-    for candidate in candidates:
-        if candidate not in seen:
-            seen.add(candidate)
-            unique_candidates.append(candidate)
-
-    logger.info("find_contact_by_phone: trying %d candidates for phone=%s", len(unique_candidates), phone)
-
-    # Try each candidate until one matches using POST /contacts/search
-    for candidate in unique_candidates:
-        contacts = _search_contact_by_phone_via_api(candidate)
-
-        if contacts:
-            # If multiple, pick the most recently updated
-            if len(contacts) > 1:
-                contacts.sort(key=lambda c: c.get("updatedAt", ""), reverse=True)
-                logger.info("find_contact_by_phone: found %d contacts for candidate=%s, using most recent", len(contacts), candidate)
-
-            contact_id = contacts[0].get("id")
-            logger.info("find_contact_by_phone: found contact_id=%s for phone=%s using candidate=%s", contact_id, phone, candidate)
-            return contact_id
-
-    logger.info("find_contact_by_phone: no contacts found for phone=%s after trying %d candidates", phone, len(unique_candidates))
+    logger.info("find_contact_by_phone: no contacts found for phone=%s", phone)
     return None
 
 
@@ -820,37 +803,37 @@ def debug_search_contact_by_phone(phone: str):
 
     # Trim phone string
     phone_trimmed = phone.strip()
+    
+    # Normalize to digits only for candidate generation
+    digits = re.sub(r"\D", "", phone_trimmed)
 
-    # Ensure GHL_LOCATION_ID is present and is a string
-    if not GHL_LOCATION_ID:
-        return JSONResponse(
-            {
-                "input_phone": phone,
-                "status_code": 500,
-                "count": 0,
-                "top_matches": [],
-                "raw": "GHL_LOCATION_ID is not set",
-                "error": "GHL_LOCATION_ID not configured",
-                "location_id_present": False,
-                "location_id_last4": "",
-                "contacts_search_url": CONTACTS_SEARCH_URL,
-                "locationId_param_sent": False,
-                "locationId_value_type": "None",
-            },
-            status_code=500,
-        )
+    # Generate phone candidates in order of preference
+    candidates = []
+    
+    # 1. Prefer "+<digits>" format (e.g., +16022904816)
+    if not phone_trimmed.startswith("+"):
+        candidates.append("+" + digits)
+    else:
+        candidates.append(phone_trimmed)
+    
+    # 2. Try raw digits as fallback
+    candidates.append(digits)
+    
+    # 3. If 10 digits, also try +1<digits>
+    if len(digits) == 10:
+        candidates.append("+1" + digits)
 
-    # Build request body - ONLY query, page, pageLimit (NO locationId in body)
+    # Build request body with locationId in body and filters array
+    # Use the first candidate for the debug endpoint
+    candidate = candidates[0] if candidates else phone_trimmed
+    
     body = {
-        "query": phone_trimmed,
+        "locationId": GHL_LOCATION_ID.strip(),
         "page": 1,
         "pageLimit": 20,
-    }
-
-    # Add locationId ONLY as URL query parameter (not in body)
-    # GHL_LOCATION_ID is already a string from os.getenv(...).strip()
-    params = {
-        "locationId": GHL_LOCATION_ID,
+        "filters": [
+            {"field": "phone", "operator": "eq", "value": candidate}
+        ],
     }
 
     status_code = 0
@@ -858,8 +841,9 @@ def debug_search_contact_by_phone(phone: str):
     contacts = []
 
     try:
+        # Do NOT send locationId in query params or Location-Id header
         resp = requests.post(
-            CONTACTS_SEARCH_URL, headers=_ghl_headers(), params=params, json=body, timeout=10
+            CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
         )
         status_code = resp.status_code
         raw_response = resp.text
