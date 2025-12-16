@@ -254,7 +254,6 @@ export default function Home() {
             <GhlEmbed
               src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
               title="Lead Form"
-              height={1470}
             />
           </div>
         </div>
