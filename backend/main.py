@@ -572,6 +572,39 @@ def find_contact_by_phone(phone: str) -> Optional[str]:
     return None
 
 
+def find_contact_record_by_phone(phone: str) -> Optional[Dict[str, Any]]:
+    """
+    Find a GHL contact record by phone number, returning the full contact dict.
+
+    Args:
+        phone: Phone number (may include +, spaces, dashes, parentheses, etc.)
+
+    Returns:
+        Full contact dict if found, None otherwise.
+        If multiple contacts found, returns the most recently updated one.
+        The contact dict includes opportunities[] and customFields.
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("find_contact_record_by_phone: GHL_LOCATION_ID not set")
+        return None
+
+    # _search_contact_by_phone_via_api returns full contact objects
+    contacts = _search_contact_by_phone_via_api(phone)
+
+    if contacts:
+        # If multiple, pick the most recently updated
+        if len(contacts) > 1:
+            contacts.sort(key=lambda c: c.get("updatedAt", ""), reverse=True)
+            logger.info("find_contact_record_by_phone: found %d contacts, using most recent", len(contacts))
+
+        contact = contacts[0]
+        logger.info("find_contact_record_by_phone: found contact_id=%s for phone=%s", contact.get("id"), phone)
+        return contact
+
+    logger.info("find_contact_record_by_phone: no contacts found for phone=%s", phone)
+    return None
+
+
 def find_latest_opportunity_for_contact(contact_id: str) -> Optional[Dict[str, Any]]:
     """
     Find the most recent opportunity for a contact.
@@ -1155,15 +1188,15 @@ async def get_cleaning_quote(phone: str):
 
     Returns:
         JSON with one of:
-        - { status: "ready", estimated_price: number, price_breakdown?: string }
-        - { status: "pending" } if opportunity exists but estimated_price not populated
-        - { status: "not_found" } if no contact/opportunity found
+        - { status: "ready", estimated_price: number, price_breakdown?: string, source: "contact_search" }
+        - { status: "pending" } if contact found but no opportunities or no monetaryValue
+        - { status: "not_found" } if no contact found
 
     Process:
         1. Normalize phone number (preserve +, trim whitespace)
-        2. Find contact by phone in GHL
-        3. Find most recent opportunity for that contact
-        4. Extract estimated_price and price_breakdown
+        2. Find full contact record by phone (includes opportunities and customFields)
+        3. Extract estimated_price from most recent open opportunity (or most recent overall)
+        4. Extract price_breakdown from customFields
         5. Return appropriate status based on data availability
     """
     logger.info("get_cleaning_quote: received phone=%s", phone)
@@ -1173,48 +1206,69 @@ async def get_cleaning_quote(phone: str):
     if not phone_normalized:
         return JSONResponse({"status": "not_found"}, status_code=200)
 
-    # Find contact
-    contact_id = find_contact_by_phone(phone_normalized)
-    if not contact_id:
+    # Find full contact record (includes opportunities and customFields)
+    contact = find_contact_record_by_phone(phone_normalized)
+    if not contact:
         logger.info("get_cleaning_quote: no contact found for phone=%s", phone_normalized)
         return JSONResponse({"status": "not_found"}, status_code=200)
 
-    # Find opportunity
-    opportunity = find_latest_opportunity_for_contact(contact_id)
-    if not opportunity:
-        logger.info("get_cleaning_quote: no opportunity found for contact_id=%s", contact_id)
-        return JSONResponse({"status": "not_found"}, status_code=200)
+    # Extract opportunities from contact record
+    opportunities = contact.get("opportunities", [])
+    
+    if not opportunities:
+        logger.info("get_cleaning_quote: contact found but no opportunities for phone=%s", phone_normalized)
+        return JSONResponse({"status": "pending"}, status_code=200)
 
-    # Extract estimated_price
-    estimated_price = opportunity.get("estimatedPrice") or opportunity.get("estimated_price")
+    # Sort opportunities by updatedAt descending (most recent first)
+    opportunities.sort(key=lambda o: o.get("updatedAt", ""), reverse=True)
+
+    # Prefer open opportunities, but fall back to most recent overall
+    open_opps = [o for o in opportunities if o.get("status") not in ["won", "lost", "abandoned"]]
+    if open_opps:
+        opportunity = open_opps[0]
+    else:
+        opportunity = opportunities[0]
+
+    # Extract monetaryValue from opportunity
+    monetary_value = opportunity.get("monetaryValue")
     
     # Try to parse as float if it's a string
-    if isinstance(estimated_price, str):
+    if isinstance(monetary_value, str):
         try:
-            estimated_price = float(estimated_price.replace("$", "").replace(",", "").strip())
+            monetary_value = float(monetary_value.replace("$", "").replace(",", "").strip())
         except (ValueError, AttributeError):
-            estimated_price = None
+            monetary_value = None
 
-    # If still not a number, check if it's 0 or None
-    if estimated_price is None or (isinstance(estimated_price, (int, float)) and estimated_price <= 0):
+    # If monetaryValue is missing, null, or 0, return pending
+    if monetary_value is None or (isinstance(monetary_value, (int, float)) and monetary_value <= 0):
         logger.info(
-            "get_cleaning_quote: opportunity found but estimated_price not populated. opportunity_id=%s",
+            "get_cleaning_quote: opportunity found but monetaryValue not populated. opportunity_id=%s",
             opportunity.get("id"),
         )
         return JSONResponse({"status": "pending"}, status_code=200)
 
-    # Extract price_breakdown if available
-    price_breakdown = opportunity.get("priceBreakdown") or opportunity.get("price_breakdown") or None
+    # Extract price_breakdown from customFields
+    custom_fields = contact.get("customFields", {})
+    price_breakdown = None
+    
+    # Look for custom field containing "First clean:" or "Recurring price"
+    for field_key, field_value in custom_fields.items():
+        if isinstance(field_value, str):
+            field_value_lower = field_value.lower()
+            if "first clean:" in field_value_lower or "recurring price" in field_value_lower:
+                price_breakdown = field_value
+                break
 
     logger.info(
-        "get_cleaning_quote: found quote. estimated_price=%s, price_breakdown=%s",
-        estimated_price,
+        "get_cleaning_quote: found quote. monetary_value=%s, price_breakdown=%s",
+        monetary_value,
         price_breakdown,
     )
 
     response = {
         "status": "ready",
-        "estimated_price": float(estimated_price),
+        "estimated_price": float(monetary_value),
+        "source": "contact_search",
     }
     if price_breakdown:
         response["price_breakdown"] = str(price_breakdown)
