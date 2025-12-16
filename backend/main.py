@@ -32,6 +32,7 @@ Environment Variables Required:
 """
 
 import os
+import re
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -447,59 +448,100 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
 
 def find_contact_by_phone(phone: str) -> Optional[str]:
     """
-    Find a GHL contact by phone number.
+    Find a GHL contact by phone number, trying multiple format variations.
 
     Args:
-        phone: Phone number (may include +, spaces, etc.)
+        phone: Phone number (may include +, spaces, dashes, parentheses, etc.)
 
     Returns:
         GHL contact ID if found, None otherwise.
         If multiple contacts found, returns the most recently updated one.
+
+    Process:
+        1. Normalize input to digits only
+        2. Generate multiple search candidates with different formats
+        3. Try each candidate until one matches
+        4. Return the most recently updated contact when found
     """
     if not GHL_LOCATION_ID:
         logger.error("find_contact_by_phone: GHL_LOCATION_ID not set")
         return None
 
-    # Normalize phone: preserve +, trim whitespace
-    phone_normalized = phone.strip()
-    if not phone_normalized.startswith("+"):
-        # If no +, try to add it (assume US if starts with 1)
-        if phone_normalized.startswith("1") and len(phone_normalized) == 11:
-            phone_normalized = "+" + phone_normalized
-        elif len(phone_normalized) == 10:
-            phone_normalized = "+1" + phone_normalized
+    # Normalize input to digits only
+    phone_trimmed = phone.strip()
+    digits = re.sub(r"\D", "", phone_trimmed)
 
-    params = {
-        "locationId": GHL_LOCATION_ID,
-        "phone": phone_normalized,
-        "limit": 50,
-    }
-
-    try:
-        resp = requests.get(CONTACTS_URL, headers=_ghl_headers(), params=params, timeout=10)
-    except Exception as e:
-        logger.error("find_contact_by_phone: exception: %s", e)
+    if not digits:
+        logger.info("find_contact_by_phone: no digits found in phone=%s", phone)
         return None
 
-    if not resp.ok:
-        logger.error("find_contact_by_phone: search failed (%s): %s", resp.status_code, resp.text)
-        return None
+    # Generate search candidates in order of preference
+    candidates = []
+    
+    # 1. Original trimmed phone
+    candidates.append(phone_trimmed)
+    
+    # 2. "+" + digits (if not already starts with "+")
+    if not phone_trimmed.startswith("+"):
+        candidates.append("+" + digits)
+    
+    # 3. Just digits
+    candidates.append(digits)
+    
+    # 4. Handle 11-digit numbers starting with 1 (US country code)
+    if len(digits) == 11 and digits.startswith("1"):
+        candidates.append("+" + digits)
+        candidates.append(digits[1:])  # Remove leading 1
+        candidates.append("+1" + digits[1:])
+    
+    # 5. Handle 10-digit numbers (assume US)
+    if len(digits) == 10:
+        candidates.append("+1" + digits)
+        candidates.append(digits)
 
-    data = resp.json()
-    contacts = data.get("contacts", [])
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_candidates = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique_candidates.append(candidate)
 
-    if not contacts:
-        logger.info("find_contact_by_phone: no contacts found for phone=%s", phone_normalized)
-        return None
+    logger.info("find_contact_by_phone: trying %d candidates for phone=%s", len(unique_candidates), phone)
 
-    # If multiple, pick the most recently updated
-    if len(contacts) > 1:
-        contacts.sort(key=lambda c: c.get("updatedAt", ""), reverse=True)
-        logger.info("find_contact_by_phone: found %d contacts, using most recent", len(contacts))
+    # Try each candidate until one matches
+    for candidate in unique_candidates:
+        params = {
+            "locationId": GHL_LOCATION_ID,
+            "phone": candidate,
+            "limit": 50,
+        }
 
-    contact_id = contacts[0].get("id")
-    logger.info("find_contact_by_phone: found contact_id=%s for phone=%s", contact_id, phone_normalized)
-    return contact_id
+        try:
+            resp = requests.get(CONTACTS_URL, headers=_ghl_headers(), params=params, timeout=10)
+        except Exception as e:
+            logger.error("find_contact_by_phone: exception for candidate=%s: %s", candidate, e)
+            continue
+
+        if not resp.ok:
+            logger.debug("find_contact_by_phone: search failed for candidate=%s (%s): %s", candidate, resp.status_code, resp.text)
+            continue
+
+        data = resp.json()
+        contacts = data.get("contacts", [])
+
+        if contacts:
+            # If multiple, pick the most recently updated
+            if len(contacts) > 1:
+                contacts.sort(key=lambda c: c.get("updatedAt", ""), reverse=True)
+                logger.info("find_contact_by_phone: found %d contacts for candidate=%s, using most recent", len(contacts), candidate)
+
+            contact_id = contacts[0].get("id")
+            logger.info("find_contact_by_phone: found contact_id=%s for phone=%s using candidate=%s", contact_id, phone, candidate)
+            return contact_id
+
+    logger.info("find_contact_by_phone: no contacts found for phone=%s after trying %d candidates", phone, len(unique_candidates))
+    return None
 
 
 def find_latest_opportunity_for_contact(contact_id: str) -> Optional[Dict[str, Any]]:
