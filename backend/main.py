@@ -57,6 +57,7 @@ GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")
 # GHL API endpoints
 LC_BASE_URL = "https://services.leadconnectorhq.com"
 CONTACTS_URL = f"{LC_BASE_URL}/contacts/"
+CONTACTS_SEARCH_URL = f"{LC_BASE_URL}/contacts/search"
 CONVERSATIONS_URL = f"{LC_BASE_URL}/conversations/messages"
 JOBS_RECORDS_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records"
 JOBS_SEARCH_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records/search"
@@ -733,6 +734,118 @@ def debug_jobs():
         "job_ids": list(JOB_STORE.keys()),
         "jobs": JOB_STORE,
     }
+
+
+@app.get("/debug/search_contact_by_phone")
+def debug_search_contact_by_phone(phone: str):
+    """
+    Debug endpoint to search GHL contacts by phone using the official Search Contacts endpoint.
+
+    Args (query param):
+        phone: Phone number to search for
+
+    Returns:
+        JSON with:
+        - input_phone: The phone number that was searched
+        - status_code: HTTP status code from GHL API
+        - count: Number of contacts found
+        - top_matches: Array of contact objects (id, name, phone, email, dateUpdated)
+        - raw: First 2-3kb of raw response for debugging
+
+    Uses POST /contacts/search endpoint with phone query.
+    """
+    if not GHL_LOCATION_ID:
+        return JSONResponse(
+            {
+                "input_phone": phone,
+                "status_code": 500,
+                "count": 0,
+                "top_matches": [],
+                "raw": "GHL_LOCATION_ID not set",
+                "error": "GHL_LOCATION_ID not configured",
+            },
+            status_code=500,
+        )
+
+    # Build request body - try direct phone field first, then query wrapper if needed
+    body = {
+        "locationId": GHL_LOCATION_ID,
+        "phone": phone,
+    }
+
+    try:
+        resp = requests.post(
+            CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+        )
+    except Exception as e:
+        error_msg = str(e)
+        logger.error("debug_search_contact_by_phone: exception: %s", error_msg)
+        return JSONResponse(
+            {
+                "input_phone": phone,
+                "status_code": 0,
+                "count": 0,
+                "top_matches": [],
+                "raw": error_msg[:3000] if len(error_msg) > 3000 else error_msg,
+                "error": "Request exception",
+            },
+            status_code=500,
+        )
+
+    status_code = resp.status_code
+    raw_response = resp.text
+
+    # Try to parse JSON response
+    try:
+        data = resp.json()
+    except Exception:
+        # If JSON parsing fails, return raw text
+        return JSONResponse(
+            {
+                "input_phone": phone,
+                "status_code": status_code,
+                "count": 0,
+                "top_matches": [],
+                "raw": raw_response[:3000] if len(raw_response) > 3000 else raw_response,
+                "error": "Failed to parse JSON response",
+            },
+            status_code=200 if resp.ok else status_code,
+        )
+
+    # Extract contacts from response (handle different possible response structures)
+    contacts = data.get("contacts", [])
+    if not contacts and isinstance(data, list):
+        contacts = data
+
+    # Build top_matches array with relevant fields
+    top_matches = []
+    for contact in contacts[:10]:  # Limit to top 10
+        match = {
+            "id": contact.get("id", ""),
+            "name": (
+                contact.get("contactName")
+                or f"{contact.get('firstName', '')} {contact.get('lastName', '')}".strip()
+                or "Unknown"
+            ),
+            "phone": contact.get("phone", ""),
+            "email": contact.get("email", ""),
+            "dateUpdated": contact.get("updatedAt", contact.get("dateUpdated", "")),
+        }
+        top_matches.append(match)
+
+    # Truncate raw response to 2-3kb
+    raw_truncated = raw_response[:3000] if len(raw_response) > 3000 else raw_response
+
+    return JSONResponse(
+        {
+            "input_phone": phone,
+            "status_code": status_code,
+            "count": len(contacts),
+            "top_matches": top_matches,
+            "raw": raw_truncated,
+        },
+        status_code=200,
+    )
 
 
 @app.post("/leads/cleaning")
