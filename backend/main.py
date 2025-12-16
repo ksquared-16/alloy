@@ -821,16 +821,33 @@ def debug_search_contact_by_phone(phone: str):
     # Trim phone string
     phone_trimmed = phone.strip()
 
-    # Build request body with query as string and integer page/pageLimit
+    # Ensure GHL_LOCATION_ID is a non-empty string
+    location_id_str = str(GHL_LOCATION_ID).strip()
+    if not location_id_str:
+        return JSONResponse(
+            {
+                "input_phone": phone,
+                "status_code": 500,
+                "count": 0,
+                "top_matches": [],
+                "raw": "GHL_LOCATION_ID is empty after conversion to string",
+                "error": "GHL_LOCATION_ID not configured",
+                "location_id_present": False,
+                "location_id_last4": "",
+            },
+            status_code=500,
+        )
+
+    # Build request body - ONLY query, page, pageLimit (NO locationId in body)
     body = {
         "query": phone_trimmed,
         "page": 1,
         "pageLimit": 20,
     }
 
-    # Add locationId as query parameter (must be string)
+    # Add locationId ONLY as URL query parameter (not in body)
     params = {
-        "locationId": str(GHL_LOCATION_ID),
+        "locationId": location_id_str,
     }
 
     status_code = 0
