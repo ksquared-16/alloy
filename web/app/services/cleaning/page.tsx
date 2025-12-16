@@ -148,7 +148,7 @@ export default function CleaningPage() {
             Home Cleaning You Can Actually Rely On
           </h1>
           <p className="text-lg text-alloy-midnight/80 mb-6">
-            We match you with vetted, insured cleaners in Bend. Alloy stays involved from start to finish—we don't disappear after the match. If something's not right, we make it right. That's the difference.
+            Alloy connects you with vetted, insured local cleaners in Bend — without the guesswork. We don't sell your request to dozens of companies. Every match is reviewed by real people, confirmed by text, and backed by Alloy from start to finish.
           </p>
           <button
             onClick={handleToggle}

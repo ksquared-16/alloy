@@ -19,56 +19,34 @@ export default function Home() {
     {
       number: "2",
       title: "Matched by people, backed by tech",
-      description: "Real humans review every match. We know our pros personally. Technology helps us find the right fit faster, but people make the call.",
+      description: "Real humans review every match. We know our pros personally. Technology speeds things up — people make the call.",
     },
     {
       number: "3",
       title: "Confirmed by text. Covered by Alloy.",
-      description: "We text you the details. You confirm. That's it. And we stay involved—if something's not right, we make it right. No disappearing act.",
+      description: "We text you the details. You confirm. That's it. And we stay involved — if something's not right, we make it right. No disappearing act.",
     },
   ];
 
-  const whyChooseAlloy = [
+  const whyAlloyIsDifferent = [
     {
       title: "Trust First",
-      description: "Every pro is vetted, insured, and background-checked. We stand behind every match. If something's not right, we fix it. No questions, no runaround.",
+      description: "Every pro is vetted, insured, and background-checked. We stand behind every match. If something's not right, we fix it.",
       accentColor: "juniper" as const,
     },
     {
       title: "Dead-Simple",
-      description: "No apps to download. No complicated booking systems. Just tell us what you need, confirm by text, and you're done. Life's complicated enough.",
+      description: "No apps. No endless forms. No confusing booking systems. Tell us what you need, confirm by text, and you're done.",
       accentColor: "blue" as const,
     },
     {
       title: "Human + Smart",
-      description: "Real people who know Bend and care about getting it right. Smart technology that makes matching faster and more reliable. Never one without the other.",
+      description: "Real people who know Bend and care about getting it right, supported by technology that makes matching faster and more reliable.",
       accentColor: "ember" as const,
-    },
-  ];
-
-  const brandValues = [
-    {
-      title: "Trust First",
-      description:
-        "We vet every pro, guarantee quality, and stand behind every match. Trust is non-negotiable.",
-      accentColor: "juniper" as const,
     },
     {
       title: "Fair for Everyone",
-      description:
-        "Customers pay fair prices. Pros keep more of what they earn. Win-win is the only way.",
-      accentColor: "ember" as const,
-    },
-    {
-      title: "Human + Smart",
-      description:
-        "We combine real people who care with powerful technology - never one without the other.",
-      accentColor: "blue" as const,
-    },
-    {
-      title: "Dead-Simple",
-      description:
-        "Life's complicated enough. Booking help or getting jobs should feel instant and effortless.",
+      description: "Customers pay fair prices. Pros keep more of what they earn. Win-win is the only way this works.",
       accentColor: "juniper" as const,
     },
   ];
@@ -135,7 +113,7 @@ export default function Home() {
                   .
                 </h1>
                 <p className="text-lg text-white/90">
-                  We match you with vetted, insured professionals in Bend. Starting with home cleaning. Real people, real results.
+                  We match you with vetted, insured local professionals in Bend — starting with home cleaning. Real people. Real results.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Link href="/services/cleaning">
@@ -175,41 +153,6 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Why Customers Choose Alloy */}
-      <Section className="py-16 bg-white">
-        <h2 className="text-3xl font-bold text-alloy-pine text-center mb-4">
-          Why Customers Choose Alloy
-        </h2>
-        <p className="text-center text-alloy-midnight/80 mb-12 max-w-2xl mx-auto">
-          We built Alloy because the current way of finding home services doesn't work. Here's what makes us different.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {whyChooseAlloy.map((value) => (
-            <BrandValueCard
-              key={value.title}
-              title={value.title}
-              description={value.description}
-              accentColor={value.accentColor}
-              icon={
-                <svg
-                  className="w-8 h-8"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              }
-            />
-          ))}
-        </div>
-      </Section>
-
       {/* Current Services */}
       <Section className="py-20">
         <h2 className="text-3xl font-bold text-alloy-pine text-center mb-4">
@@ -225,16 +168,13 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Brand Values */}
+      {/* Why Alloy Is Different */}
       <Section className="py-20 bg-white">
         <h2 className="text-3xl font-bold text-alloy-pine text-center mb-4">
-          Why Alloy Exists
+          Why Alloy Is Different
         </h2>
-        <p className="text-center text-alloy-midnight/80 mb-12 max-w-2xl mx-auto">
-          These principles guide how we vet pros, set prices, and build technology. No shortcuts.
-        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-          {brandValues.map((value) => (
+          {whyAlloyIsDifferent.map((value) => (
             <BrandValueCard
               key={value.title}
               title={value.title}
@@ -265,25 +205,25 @@ export default function Home() {
         <h2 className="text-3xl font-bold text-alloy-pine text-center mb-12">
           What our customers say
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="bg-white rounded-2xl shadow-md p-6 border border-alloy-stone/50"
-            >
-              <p className="text-alloy-midnight/80 mb-4">
-                "Finally, a cleaner I can trust. The whole process was simple, and the work was exactly what I needed."
-              </p>
-              <p className="font-semibold text-alloy-pine">
-                — Sarah M., Bend
-              </p>
-            </div>
-          ))}
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-md p-6 border border-alloy-stone/50">
+            <p className="text-alloy-midnight/80 mb-4">
+              "Finally, a cleaner I can trust. The whole process was simple, and the work was exactly what I needed."
+            </p>
+            <p className="font-semibold text-alloy-pine">
+              — Sarah M., Bend
+            </p>
+          </div>
         </div>
       </Section>
 
       {/* FAQ */}
       <Section className="py-20 bg-white">
+        <div className="max-w-3xl mx-auto mb-8 text-center">
+          <p className="text-lg text-alloy-midnight/80 font-medium">
+            Alloy isn't a lead marketplace. We're your point of contact before, during, and after the job.
+          </p>
+        </div>
         <h2 className="text-3xl font-bold text-alloy-midnight text-center mb-12">
           Frequently Asked Questions
         </h2>

@@ -13,7 +13,7 @@ export const SERVICES: Service[] = [
   {
     id: "cleaning",
     name: "Home Cleaning",
-    description: "Vetted, insured cleaners in Bend. No guesswork, just results.",
+    description: "Vetted, insured cleaners in Bend. Clear expectations, fair pricing, real results — without the guesswork.",
     status: "available",
     href: "/services/cleaning",
   },
