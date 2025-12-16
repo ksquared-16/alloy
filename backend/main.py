@@ -51,8 +51,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("alloy-dispatcher")
 
 # Environment variables
-GHL_API_KEY = os.getenv("GHL_API_KEY")
-GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")
+GHL_API_KEY = os.getenv("GHL_API_KEY", "").strip()
+GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID", "").strip()
+
+# Fail fast if required env vars are missing
+if not GHL_API_KEY:
+    raise ValueError("GHL_API_KEY environment variable is required but not set")
+if not GHL_LOCATION_ID:
+    raise ValueError("GHL_LOCATION_ID environment variable is required but not set")
 
 # GHL API endpoints
 LC_BASE_URL = "https://services.leadconnectorhq.com"
@@ -470,9 +476,14 @@ def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
         "pageLimit": 20,
     }
 
+    # Add locationId as query parameter
+    params = {
+        "locationId": GHL_LOCATION_ID,
+    }
+
     try:
         resp = requests.post(
-            CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+            CONTACTS_SEARCH_URL, headers=_ghl_headers(), params=params, json=body, timeout=10
         )
     except Exception as e:
         logger.error("_search_contact_by_phone_via_api: exception for phone=%s: %s", phone, e)
@@ -783,9 +794,14 @@ def debug_search_contact_by_phone(phone: str):
         - count: Number of contacts found
         - top_matches: Array of contact objects (id, name, phone, email, dateUpdated)
         - raw: First 2-3kb of raw response for debugging
+        - location_id_present: Boolean indicating if locationId is configured
+        - location_id_last4: Last 4 characters of locationId (for debugging, no full secrets)
 
     Uses POST /contacts/search endpoint with phone query.
     """
+    location_id_present = bool(GHL_LOCATION_ID)
+    location_id_last4 = GHL_LOCATION_ID[-4:] if GHL_LOCATION_ID and len(GHL_LOCATION_ID) >= 4 else ""
+
     if not GHL_LOCATION_ID:
         return JSONResponse(
             {
@@ -795,6 +811,8 @@ def debug_search_contact_by_phone(phone: str):
                 "top_matches": [],
                 "raw": "GHL_LOCATION_ID not set",
                 "error": "GHL_LOCATION_ID not configured",
+                "location_id_present": False,
+                "location_id_last4": "",
             },
             status_code=500,
         )
@@ -808,13 +826,18 @@ def debug_search_contact_by_phone(phone: str):
         "pageLimit": 20,
     }
 
+    # Add locationId as query parameter
+    params = {
+        "locationId": GHL_LOCATION_ID,
+    }
+
     status_code = 0
     raw_response = ""
     contacts = []
 
     try:
         resp = requests.post(
-            CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+            CONTACTS_SEARCH_URL, headers=_ghl_headers(), params=params, json=body, timeout=10
         )
         status_code = resp.status_code
         raw_response = resp.text
@@ -836,6 +859,8 @@ def debug_search_contact_by_phone(phone: str):
                     "top_matches": [],
                     "raw": raw_response[:3000] if len(raw_response) > 3000 else raw_response,
                     "error": "Failed to parse JSON response",
+                    "location_id_present": location_id_present,
+                    "location_id_last4": location_id_last4,
                 },
                 status_code=200 if resp.ok else status_code,
             )
@@ -850,6 +875,8 @@ def debug_search_contact_by_phone(phone: str):
                 "top_matches": [],
                 "raw": error_msg[:3000] if len(error_msg) > 3000 else error_msg,
                 "error": "Request exception",
+                "location_id_present": location_id_present,
+                "location_id_last4": location_id_last4,
             },
             status_code=500,
         )
@@ -880,6 +907,8 @@ def debug_search_contact_by_phone(phone: str):
             "count": len(contacts),
             "top_matches": top_matches,
             "raw": raw_truncated,
+            "location_id_present": location_id_present,
+            "location_id_last4": location_id_last4,
         },
         status_code=200,
     )
