@@ -244,13 +244,13 @@ export default function Home() {
       </Section>
 
       {/* Final CTA */}
-      <Section className="py-16">
-        <div className="bg-alloy-blue rounded-lg p-8 md:p-12 text-center text-white">
+      <Section className="py-12 md:py-16">
+        <div className="bg-alloy-blue rounded-lg p-6 md:p-8 text-center text-white">
           <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
           <p className="text-lg mb-6 opacity-90">
             Get a quote. We'll text you to confirm details. No pressure, no hassle.
           </p>
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-3xl mx-auto">
             <GhlEmbed
               src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
               title="Lead Form"
