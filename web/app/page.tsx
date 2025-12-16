@@ -13,18 +13,36 @@ export default function Home() {
   const howItWorksSteps = [
     {
       number: "1",
-      title: "Tell us what you need",
-      description: "Share your home size and schedule. No complicated forms.",
+      title: "Tell us what you need — nothing more",
+      description: "Share your home size and schedule. We don't blast your info to dozens of companies. Just what we need to match you right.",
     },
     {
       number: "2",
-      title: "We match you with someone you can trust",
-      description: "Every pro is vetted, insured, and background-checked. We stand behind every match.",
+      title: "Matched by people, backed by tech",
+      description: "Real humans review every match. We know our pros personally. Technology helps us find the right fit faster, but people make the call.",
     },
     {
       number: "3",
-      title: "Confirm by text",
-      description: "We text you the details. You confirm. That's it. No apps, no hassle.",
+      title: "Confirmed by text. Covered by Alloy.",
+      description: "We text you the details. You confirm. That's it. And we stay involved—if something's not right, we make it right. No disappearing act.",
+    },
+  ];
+
+  const whyChooseAlloy = [
+    {
+      title: "Trust First",
+      description: "Every pro is vetted, insured, and background-checked. We stand behind every match. If something's not right, we fix it. No questions, no runaround.",
+      accentColor: "juniper" as const,
+    },
+    {
+      title: "Dead-Simple",
+      description: "No apps to download. No complicated booking systems. Just tell us what you need, confirm by text, and you're done. Life's complicated enough.",
+      accentColor: "blue" as const,
+    },
+    {
+      title: "Human + Smart",
+      description: "Real people who know Bend and care about getting it right. Smart technology that makes matching faster and more reliable. Never one without the other.",
+      accentColor: "ember" as const,
     },
   ];
 
@@ -137,10 +155,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How Alloy Works */}
+      {/* How Alloy Makes It Easy */}
       <Section id="how-it-works" className="py-10 bg-alloy-stone">
         <h2 className="text-3xl font-bold text-alloy-pine text-center mb-12">
-          How Alloy Works
+          How Alloy Makes It Easy
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {howItWorksSteps.map((step) => (
@@ -153,6 +171,41 @@ export default function Home() {
               </h3>
               <p className="text-alloy-midnight/80">{step.description}</p>
             </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* Why Customers Choose Alloy */}
+      <Section className="py-16 bg-white">
+        <h2 className="text-3xl font-bold text-alloy-pine text-center mb-4">
+          Why Customers Choose Alloy
+        </h2>
+        <p className="text-center text-alloy-midnight/80 mb-12 max-w-2xl mx-auto">
+          We built Alloy because the current way of finding home services doesn't work. Here's what makes us different.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          {whyChooseAlloy.map((value) => (
+            <BrandValueCard
+              key={value.title}
+              title={value.title}
+              description={value.description}
+              accentColor={value.accentColor}
+              icon={
+                <svg
+                  className="w-8 h-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            />
           ))}
         </div>
       </Section>

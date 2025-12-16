@@ -145,10 +145,10 @@ export default function CleaningPage() {
       <Section ref={heroRef} className="py-10 md:py-14">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
-            Home cleaning in Bend, no guesswork.
+            Home Cleaning You Can Actually Rely On
           </h1>
           <p className="text-lg text-alloy-midnight/80 mb-6">
-            We match you with vetted, insured cleaners in Bend. One-time, weekly, bi-weekly, or monthly—your choice. Clear expectations, fair pricing, real results.
+            We match you with vetted, insured cleaners in Bend. Alloy stays involved from start to finish—we don't disappear after the match. If something's not right, we make it right. That's the difference.
           </p>
           <button
             onClick={handleToggle}
@@ -197,42 +197,32 @@ export default function CleaningPage() {
         </Section>
       )}
 
-      {/* Why Book Through Alloy */}
+      {/* What Makes Alloy Different */}
       <Section className="py-12 md:py-16">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
-          Why book through Alloy
+          What Makes Alloy Different
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {[
             {
-              title: "Vetted, insured pros",
+              title: "We don't sell leads",
               description:
-                "Every cleaner is background-checked and verified. We stand behind every match.",
+                "Your information stays with us. We match you directly with a pro we know and trust. No lead blasting, no spam calls, no middleman chaos.",
             },
             {
-              title: "Confirm by text",
+              title: "We stay involved",
               description:
-                "No apps to download. We text you the details, you confirm. Simple.",
+                "Alloy doesn't disappear after the match. We coordinate scheduling, handle communication, and make sure everything goes smoothly. If something's not right, we fix it.",
             },
             {
-              title: "Fair pricing",
+              title: "Fair pricing, transparent costs",
               description:
-                "Transparent pricing, no hidden fees. Pros get fair pay, you get fair prices.",
+                "You pay fair prices. Pros get fair pay. No hidden fees, no surprise charges. We're transparent about costs because trust requires honesty.",
             },
             {
-              title: "Local to Bend",
+              title: "Local pros, backed by Alloy",
               description:
-                "Supporting neighborhood businesses and the people who run them.",
-            },
-            {
-              title: "We make it right",
-              description:
-                "If something's not up to your standards, let us know within 24 hours and we'll fix it.",
-            },
-            {
-              title: "Your schedule, your way",
-              description:
-                "Choose your frequency. Change it anytime. No contracts, no hassle.",
+                "Every cleaner is local to Bend, vetted, insured, and background-checked. We know them personally. When you book through Alloy, you're covered by Alloy.",
             },
           ].map((point) => (
             <div
@@ -245,6 +235,23 @@ export default function CleaningPage() {
               <p className="text-gray-600">{point.description}</p>
             </div>
           ))}
+        </div>
+      </Section>
+
+      {/* Pricing Transparency */}
+      <Section className="py-12 md:py-16 bg-alloy-stone">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-alloy-midnight mb-4">
+            Predictable Pricing
+          </h2>
+          <p className="text-lg text-alloy-midnight/80 mb-6">
+            We believe pricing should be clear and fair. Your quote reflects your home size, frequency, and specific needs. No surprises, no hidden fees.
+          </p>
+          <div className="bg-white rounded-lg p-6 border border-alloy-stone/50 max-w-2xl mx-auto">
+            <p className="text-alloy-midnight/80">
+              <strong className="text-alloy-midnight">Recurring service discounts:</strong> Weekly and bi-weekly cleanings qualify for preferred pricing. The more consistent your schedule, the better the rate. Monthly cleanings are priced individually based on your home size.
+            </p>
+          </div>
         </div>
       </Section>
 
