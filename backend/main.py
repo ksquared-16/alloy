@@ -59,6 +59,7 @@ CONTACTS_URL = f"{LC_BASE_URL}/contacts/"
 CONVERSATIONS_URL = f"{LC_BASE_URL}/conversations/messages"
 JOBS_RECORDS_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records"
 JOBS_SEARCH_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records/search"
+OPPORTUNITIES_URL = f"{LC_BASE_URL}/opportunities/"
 
 # GHL API version header
 GHL_API_VERSION = "2021-07-28"
@@ -444,6 +445,123 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
     return record_id
 
 
+def find_contact_by_phone(phone: str) -> Optional[str]:
+    """
+    Find a GHL contact by phone number.
+
+    Args:
+        phone: Phone number (may include +, spaces, etc.)
+
+    Returns:
+        GHL contact ID if found, None otherwise.
+        If multiple contacts found, returns the most recently updated one.
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("find_contact_by_phone: GHL_LOCATION_ID not set")
+        return None
+
+    # Normalize phone: preserve +, trim whitespace
+    phone_normalized = phone.strip()
+    if not phone_normalized.startswith("+"):
+        # If no +, try to add it (assume US if starts with 1)
+        if phone_normalized.startswith("1") and len(phone_normalized) == 11:
+            phone_normalized = "+" + phone_normalized
+        elif len(phone_normalized) == 10:
+            phone_normalized = "+1" + phone_normalized
+
+    params = {
+        "locationId": GHL_LOCATION_ID,
+        "phone": phone_normalized,
+        "limit": 50,
+    }
+
+    try:
+        resp = requests.get(CONTACTS_URL, headers=_ghl_headers(), params=params, timeout=10)
+    except Exception as e:
+        logger.error("find_contact_by_phone: exception: %s", e)
+        return None
+
+    if not resp.ok:
+        logger.error("find_contact_by_phone: search failed (%s): %s", resp.status_code, resp.text)
+        return None
+
+    data = resp.json()
+    contacts = data.get("contacts", [])
+
+    if not contacts:
+        logger.info("find_contact_by_phone: no contacts found for phone=%s", phone_normalized)
+        return None
+
+    # If multiple, pick the most recently updated
+    if len(contacts) > 1:
+        contacts.sort(key=lambda c: c.get("updatedAt", ""), reverse=True)
+        logger.info("find_contact_by_phone: found %d contacts, using most recent", len(contacts))
+
+    contact_id = contacts[0].get("id")
+    logger.info("find_contact_by_phone: found contact_id=%s for phone=%s", contact_id, phone_normalized)
+    return contact_id
+
+
+def find_latest_opportunity_for_contact(contact_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Find the most recent opportunity for a contact.
+
+    Args:
+        contact_id: GHL contact ID
+
+    Returns:
+        Opportunity dict with estimated_price and price_breakdown if found, None otherwise.
+        Returns the most recent open opportunity, or most recent overall if none open.
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("find_latest_opportunity_for_contact: GHL_LOCATION_ID not set")
+        return None
+
+    params = {
+        "locationId": GHL_LOCATION_ID,
+        "contactId": contact_id,
+        "limit": 50,
+    }
+
+    try:
+        resp = requests.get(OPPORTUNITIES_URL, headers=_ghl_headers(), params=params, timeout=10)
+    except Exception as e:
+        logger.error("find_latest_opportunity_for_contact: exception: %s", e)
+        return None
+
+    if not resp.ok:
+        logger.error(
+            "find_latest_opportunity_for_contact: search failed (%s): %s",
+            resp.status_code,
+            resp.text,
+        )
+        return None
+
+    data = resp.json()
+    opportunities = data.get("opportunities", [])
+
+    if not opportunities:
+        logger.info("find_latest_opportunity_for_contact: no opportunities found for contact_id=%s", contact_id)
+        return None
+
+    # Sort by updatedAt descending (most recent first)
+    opportunities.sort(key=lambda o: o.get("updatedAt", ""), reverse=True)
+
+    # Prefer open opportunities, but fall back to most recent overall
+    open_opps = [o for o in opportunities if o.get("status") not in ["won", "lost", "abandoned"]]
+    if open_opps:
+        opportunity = open_opps[0]
+    else:
+        opportunity = opportunities[0]
+
+    logger.info(
+        "find_latest_opportunity_for_contact: found opportunity id=%s for contact_id=%s",
+        opportunity.get("id"),
+        contact_id,
+    )
+    return opportunity
+
+
 def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_name: str) -> None:
     """
     Update assignment details into the Jobs custom object in GHL.
@@ -789,6 +907,83 @@ async def dispatch(request: Request):
             "contractors_notified": notified_ids,
         }
     )
+
+
+@app.get("/quote/cleaning")
+async def get_cleaning_quote(phone: str):
+    """
+    Get cleaning quote (estimated price) for a contact by phone number.
+
+    Args (query param):
+        phone: Phone number (may include +, will be normalized)
+
+    Returns:
+        JSON with one of:
+        - { status: "ready", estimated_price: number, price_breakdown?: string }
+        - { status: "pending" } if opportunity exists but estimated_price not populated
+        - { status: "not_found" } if no contact/opportunity found
+
+    Process:
+        1. Normalize phone number (preserve +, trim whitespace)
+        2. Find contact by phone in GHL
+        3. Find most recent opportunity for that contact
+        4. Extract estimated_price and price_breakdown
+        5. Return appropriate status based on data availability
+    """
+    logger.info("get_cleaning_quote: received phone=%s", phone)
+
+    # Normalize phone
+    phone_normalized = phone.strip()
+    if not phone_normalized:
+        return JSONResponse({"status": "not_found"}, status_code=200)
+
+    # Find contact
+    contact_id = find_contact_by_phone(phone_normalized)
+    if not contact_id:
+        logger.info("get_cleaning_quote: no contact found for phone=%s", phone_normalized)
+        return JSONResponse({"status": "not_found"}, status_code=200)
+
+    # Find opportunity
+    opportunity = find_latest_opportunity_for_contact(contact_id)
+    if not opportunity:
+        logger.info("get_cleaning_quote: no opportunity found for contact_id=%s", contact_id)
+        return JSONResponse({"status": "not_found"}, status_code=200)
+
+    # Extract estimated_price
+    estimated_price = opportunity.get("estimatedPrice") or opportunity.get("estimated_price")
+    
+    # Try to parse as float if it's a string
+    if isinstance(estimated_price, str):
+        try:
+            estimated_price = float(estimated_price.replace("$", "").replace(",", "").strip())
+        except (ValueError, AttributeError):
+            estimated_price = None
+
+    # If still not a number, check if it's 0 or None
+    if estimated_price is None or (isinstance(estimated_price, (int, float)) and estimated_price <= 0):
+        logger.info(
+            "get_cleaning_quote: opportunity found but estimated_price not populated. opportunity_id=%s",
+            opportunity.get("id"),
+        )
+        return JSONResponse({"status": "pending"}, status_code=200)
+
+    # Extract price_breakdown if available
+    price_breakdown = opportunity.get("priceBreakdown") or opportunity.get("price_breakdown") or None
+
+    logger.info(
+        "get_cleaning_quote: found quote. estimated_price=%s, price_breakdown=%s",
+        estimated_price,
+        price_breakdown,
+    )
+
+    response = {
+        "status": "ready",
+        "estimated_price": float(estimated_price),
+    }
+    if price_breakdown:
+        response["price_breakdown"] = str(price_breakdown)
+
+    return JSONResponse(response, status_code=200)
 
 
 @app.post("/contractor-reply")
