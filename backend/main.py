@@ -821,19 +821,21 @@ def debug_search_contact_by_phone(phone: str):
     # Trim phone string
     phone_trimmed = phone.strip()
 
-    # Ensure GHL_LOCATION_ID is a non-empty string
-    location_id_str = str(GHL_LOCATION_ID).strip()
-    if not location_id_str:
+    # Ensure GHL_LOCATION_ID is present and is a string
+    if not GHL_LOCATION_ID:
         return JSONResponse(
             {
                 "input_phone": phone,
                 "status_code": 500,
                 "count": 0,
                 "top_matches": [],
-                "raw": "GHL_LOCATION_ID is empty after conversion to string",
+                "raw": "GHL_LOCATION_ID is not set",
                 "error": "GHL_LOCATION_ID not configured",
                 "location_id_present": False,
                 "location_id_last4": "",
+                "contacts_search_url": CONTACTS_SEARCH_URL,
+                "locationId_param_sent": False,
+                "locationId_value_type": "None",
             },
             status_code=500,
         )
@@ -846,8 +848,9 @@ def debug_search_contact_by_phone(phone: str):
     }
 
     # Add locationId ONLY as URL query parameter (not in body)
+    # GHL_LOCATION_ID is already a string from os.getenv(...).strip()
     params = {
-        "locationId": location_id_str,
+        "locationId": GHL_LOCATION_ID,
     }
 
     status_code = 0
@@ -880,6 +883,9 @@ def debug_search_contact_by_phone(phone: str):
                     "error": "Failed to parse JSON response",
                     "location_id_present": location_id_present,
                     "location_id_last4": location_id_last4,
+                    "contacts_search_url": CONTACTS_SEARCH_URL,
+                    "locationId_param_sent": True,
+                    "locationId_value_type": type(GHL_LOCATION_ID).__name__,
                 },
                 status_code=200 if resp.ok else status_code,
             )
@@ -896,6 +902,9 @@ def debug_search_contact_by_phone(phone: str):
                 "error": "Request exception",
                 "location_id_present": location_id_present,
                 "location_id_last4": location_id_last4,
+                "contacts_search_url": CONTACTS_SEARCH_URL,
+                "locationId_param_sent": True,
+                "locationId_value_type": type(GHL_LOCATION_ID).__name__,
             },
             status_code=500,
         )
@@ -928,6 +937,9 @@ def debug_search_contact_by_phone(phone: str):
             "raw": raw_truncated,
             "location_id_present": location_id_present,
             "location_id_last4": location_id_last4,
+            "contacts_search_url": CONTACTS_SEARCH_URL,
+            "locationId_param_sent": True,
+            "locationId_value_type": type(GHL_LOCATION_ID).__name__,
         },
         status_code=200,
     )
