@@ -447,6 +447,55 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
     return record_id
 
 
+def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
+    """
+    Search for contacts by phone using POST /contacts/search endpoint.
+
+    Args:
+        phone: Phone number to search for
+
+    Returns:
+        List of contact dicts found, empty list if none found or error occurred.
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("_search_contact_by_phone_via_api: GHL_LOCATION_ID not set")
+        return []
+
+    # Build request body with query wrapper and integer page/pageLimit
+    body = {
+        "query": {
+            "phone": phone,
+        },
+        "page": 1,
+        "pageLimit": 20,
+    }
+
+    try:
+        resp = requests.post(
+            CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+        )
+    except Exception as e:
+        logger.error("_search_contact_by_phone_via_api: exception for phone=%s: %s", phone, e)
+        return []
+
+    if not resp.ok:
+        logger.debug("_search_contact_by_phone_via_api: search failed for phone=%s (%s): %s", phone, resp.status_code, resp.text)
+        return []
+
+    try:
+        data = resp.json()
+    except Exception:
+        logger.error("_search_contact_by_phone_via_api: failed to parse JSON response for phone=%s", phone)
+        return []
+
+    # Extract contacts from response (handle different possible response structures)
+    contacts = data.get("contacts", [])
+    if not contacts and isinstance(data, list):
+        contacts = data
+
+    return contacts
+
+
 def find_contact_by_phone(phone: str) -> Optional[str]:
     """
     Find a GHL contact by phone number, trying multiple format variations.
@@ -510,26 +559,9 @@ def find_contact_by_phone(phone: str) -> Optional[str]:
 
     logger.info("find_contact_by_phone: trying %d candidates for phone=%s", len(unique_candidates), phone)
 
-    # Try each candidate until one matches
+    # Try each candidate until one matches using POST /contacts/search
     for candidate in unique_candidates:
-        params = {
-            "locationId": GHL_LOCATION_ID,
-            "phone": candidate,
-            "limit": 50,
-        }
-
-        try:
-            resp = requests.get(CONTACTS_URL, headers=_ghl_headers(), params=params, timeout=10)
-        except Exception as e:
-            logger.error("find_contact_by_phone: exception for candidate=%s: %s", candidate, e)
-            continue
-
-        if not resp.ok:
-            logger.debug("find_contact_by_phone: search failed for candidate=%s (%s): %s", candidate, resp.status_code, resp.text)
-            continue
-
-        data = resp.json()
-        contacts = data.get("contacts", [])
+        contacts = _search_contact_by_phone_via_api(candidate)
 
         if contacts:
             # If multiple, pick the most recently updated
@@ -767,16 +799,46 @@ def debug_search_contact_by_phone(phone: str):
             status_code=500,
         )
 
-    # Build request body - try direct phone field first, then query wrapper if needed
+    # Build request body with query wrapper and integer page/pageLimit
     body = {
-        "locationId": GHL_LOCATION_ID,
-        "phone": phone,
+        "query": {
+            "phone": phone,
+        },
+        "page": 1,
+        "pageLimit": 20,
     }
+
+    status_code = 0
+    raw_response = ""
+    contacts = []
 
     try:
         resp = requests.post(
             CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
         )
+        status_code = resp.status_code
+        raw_response = resp.text
+
+        # Try to parse JSON response
+        try:
+            data = resp.json()
+            # Extract contacts from response (handle different possible response structures)
+            contacts = data.get("contacts", [])
+            if not contacts and isinstance(data, list):
+                contacts = data
+        except Exception:
+            # If JSON parsing fails, return raw text
+            return JSONResponse(
+                {
+                    "input_phone": phone,
+                    "status_code": status_code,
+                    "count": 0,
+                    "top_matches": [],
+                    "raw": raw_response[:3000] if len(raw_response) > 3000 else raw_response,
+                    "error": "Failed to parse JSON response",
+                },
+                status_code=200 if resp.ok else status_code,
+            )
     except Exception as e:
         error_msg = str(e)
         logger.error("debug_search_contact_by_phone: exception: %s", error_msg)
@@ -791,31 +853,6 @@ def debug_search_contact_by_phone(phone: str):
             },
             status_code=500,
         )
-
-    status_code = resp.status_code
-    raw_response = resp.text
-
-    # Try to parse JSON response
-    try:
-        data = resp.json()
-    except Exception:
-        # If JSON parsing fails, return raw text
-        return JSONResponse(
-            {
-                "input_phone": phone,
-                "status_code": status_code,
-                "count": 0,
-                "top_matches": [],
-                "raw": raw_response[:3000] if len(raw_response) > 3000 else raw_response,
-                "error": "Failed to parse JSON response",
-            },
-            status_code=200 if resp.ok else status_code,
-        )
-
-    # Extract contacts from response (handle different possible response structures)
-    contacts = data.get("contacts", [])
-    if not contacts and isinstance(data, list):
-        contacts = data
 
     # Build top_matches array with relevant fields
     top_matches = []
