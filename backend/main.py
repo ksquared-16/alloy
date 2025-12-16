@@ -34,6 +34,7 @@ Environment Variables Required:
 import os
 import re
 import logging
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -796,6 +797,76 @@ def debug_jobs():
     }
 
 
+@app.get("/debug/quote_crash")
+def debug_quote_crash(phone: str):
+    """
+    Debug endpoint to inspect intermediate values in quote lookup.
+    
+    Args (query param):
+        phone: Phone number to search for
+    
+    Returns:
+        JSON with intermediate debugging values:
+        - contact_id: Contact ID if found
+        - opp_count: Number of opportunities found
+        - selected_opp: Selected opportunity dict (or null)
+        - raw_keys_present: List of top-level keys in contact dict
+        - opportunities_type: Type of opportunities field
+        - custom_fields_type: Type of customFields field
+    """
+    try:
+        phone_normalized = phone.strip() if phone else ""
+        
+        # Find contact using same logic as /quote/cleaning
+        contact = find_contact_record_by_phone(phone_normalized)
+        
+        if not contact:
+            return JSONResponse({
+                "contact_id": None,
+                "opp_count": 0,
+                "selected_opp": None,
+                "raw_keys_present": [],
+                "opportunities_type": "None",
+                "custom_fields_type": "None",
+            }, status_code=200)
+        
+        contact_id = contact.get("id")
+        opportunities_raw = contact.get("opportunities")
+        opportunities = []
+        
+        if isinstance(opportunities_raw, list):
+            opportunities = opportunities_raw
+        elif opportunities_raw is not None:
+            opportunities = [opportunities_raw]  # Single dict, wrap in list
+        
+        # Try to select opportunity (same logic as /quote/cleaning)
+        selected_opp = None
+        if opportunities:
+            try:
+                opportunities.sort(key=lambda o: o.get("updatedAt", "") or "", reverse=True)
+                open_opps = [o for o in opportunities if isinstance(o, dict) and o.get("status") not in ["won", "lost", "abandoned"]]
+                if open_opps:
+                    selected_opp = open_opps[0]
+                else:
+                    selected_opp = opportunities[0] if opportunities else None
+            except Exception as e:
+                selected_opp = {"error": str(e)}
+        
+        return JSONResponse({
+            "contact_id": contact_id,
+            "opp_count": len(opportunities) if isinstance(opportunities, list) else 0,
+            "selected_opp": selected_opp,
+            "raw_keys_present": list(contact.keys()) if isinstance(contact, dict) else [],
+            "opportunities_type": type(opportunities_raw).__name__ if opportunities_raw is not None else "None",
+            "custom_fields_type": type(contact.get("customFields")).__name__ if contact.get("customFields") is not None else "None",
+        }, status_code=200)
+    except Exception as e:
+        return JSONResponse({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }, status_code=200)
+
+
 @app.get("/debug/search_contact_by_phone")
 def debug_search_contact_by_phone(phone: str):
     """
@@ -960,6 +1031,76 @@ def debug_search_contact_by_phone(phone: str):
         },
         status_code=200,
     )
+
+
+@app.get("/debug/quote_crash")
+def debug_quote_crash(phone: str):
+    """
+    Debug endpoint to inspect intermediate values in quote lookup.
+    
+    Args (query param):
+        phone: Phone number to search for
+    
+    Returns:
+        JSON with intermediate debugging values:
+        - contact_id: Contact ID if found
+        - opp_count: Number of opportunities found
+        - selected_opp: Selected opportunity dict (or null)
+        - raw_keys_present: List of top-level keys in contact dict
+        - opportunities_type: Type of opportunities field
+        - custom_fields_type: Type of customFields field
+    """
+    try:
+        phone_normalized = phone.strip() if phone else ""
+        
+        # Find contact using same logic as /quote/cleaning
+        contact = find_contact_record_by_phone(phone_normalized)
+        
+        if not contact:
+            return JSONResponse({
+                "contact_id": None,
+                "opp_count": 0,
+                "selected_opp": None,
+                "raw_keys_present": [],
+                "opportunities_type": "None",
+                "custom_fields_type": "None",
+            }, status_code=200)
+        
+        contact_id = contact.get("id")
+        opportunities_raw = contact.get("opportunities")
+        opportunities = []
+        
+        if isinstance(opportunities_raw, list):
+            opportunities = opportunities_raw
+        elif opportunities_raw is not None:
+            opportunities = [opportunities_raw]  # Single dict, wrap in list
+        
+        # Try to select opportunity (same logic as /quote/cleaning)
+        selected_opp = None
+        if opportunities:
+            try:
+                opportunities.sort(key=lambda o: o.get("updatedAt", "") or "", reverse=True)
+                open_opps = [o for o in opportunities if isinstance(o, dict) and o.get("status") not in ["won", "lost", "abandoned"]]
+                if open_opps:
+                    selected_opp = open_opps[0]
+                else:
+                    selected_opp = opportunities[0] if opportunities else None
+            except Exception as e:
+                selected_opp = {"error": str(e)}
+        
+        return JSONResponse({
+            "contact_id": contact_id,
+            "opp_count": len(opportunities) if isinstance(opportunities, list) else 0,
+            "selected_opp": selected_opp,
+            "raw_keys_present": list(contact.keys()) if isinstance(contact, dict) else [],
+            "opportunities_type": type(opportunities_raw).__name__ if opportunities_raw is not None else "None",
+            "custom_fields_type": type(contact.get("customFields")).__name__ if contact.get("customFields") is not None else "None",
+        }, status_code=200)
+    except Exception as e:
+        return JSONResponse({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }, status_code=200)
 
 
 @app.post("/leads/cleaning")
@@ -1191,6 +1332,7 @@ async def get_cleaning_quote(phone: str):
         - { status: "ready", estimated_price: number, price_breakdown?: string, source: "contact_search" }
         - { status: "pending" } if contact found but no opportunities or no monetaryValue
         - { status: "not_found" } if no contact found
+        - { status: "error", error: "quote_failed" } if an exception occurs
 
     Process:
         1. Normalize phone number (preserve +, trim whitespace)
@@ -1199,81 +1341,144 @@ async def get_cleaning_quote(phone: str):
         4. Extract price_breakdown from customFields
         5. Return appropriate status based on data availability
     """
-    logger.info("get_cleaning_quote: received phone=%s", phone)
+    try:
+        logger.info("get_cleaning_quote: received phone=%s", phone)
 
-    # Normalize phone
-    phone_normalized = phone.strip()
-    if not phone_normalized:
-        return JSONResponse({"status": "not_found"}, status_code=200)
+        # Normalize phone
+        phone_normalized = phone.strip() if phone else ""
+        if not phone_normalized:
+            logger.info("get_cleaning_quote: empty phone, returning not_found")
+            return JSONResponse({"status": "not_found"}, status_code=200)
 
-    # Find full contact record (includes opportunities and customFields)
-    contact = find_contact_record_by_phone(phone_normalized)
-    if not contact:
-        logger.info("get_cleaning_quote: no contact found for phone=%s", phone_normalized)
-        return JSONResponse({"status": "not_found"}, status_code=200)
+        # Find full contact record (includes opportunities and customFields)
+        # Uses the same search logic as /debug/search_contact_by_phone
+        contact = find_contact_record_by_phone(phone_normalized)
+        contact_id = contact.get("id") if contact else None
+        logger.info("get_cleaning_quote: contact_id=%s for phone=%s", contact_id, phone_normalized)
+        
+        if not contact:
+            logger.info("get_cleaning_quote: no contact found for phone=%s", phone_normalized)
+            return JSONResponse({"status": "not_found"}, status_code=200)
 
-    # Extract opportunities from contact record
-    opportunities = contact.get("opportunities", [])
-    
-    if not opportunities:
-        logger.info("get_cleaning_quote: contact found but no opportunities for phone=%s", phone_normalized)
-        return JSONResponse({"status": "pending"}, status_code=200)
+        # Extract opportunities from contact record (safely)
+        opportunities_raw = contact.get("opportunities")
+        opportunities = []
+        
+        if isinstance(opportunities_raw, list):
+            opportunities = opportunities_raw
+        elif opportunities_raw is not None:
+            logger.warning("get_cleaning_quote: opportunities is not a list, got type=%s", type(opportunities_raw).__name__)
+        
+        logger.info("get_cleaning_quote: found %d opportunities for contact_id=%s", len(opportunities), contact_id)
+        
+        if not opportunities:
+            logger.info("get_cleaning_quote: contact found but no opportunities for phone=%s", phone_normalized)
+            return JSONResponse({"status": "pending"}, status_code=200)
 
-    # Sort opportunities by updatedAt descending (most recent first)
-    opportunities.sort(key=lambda o: o.get("updatedAt", ""), reverse=True)
-
-    # Prefer open opportunities, but fall back to most recent overall
-    open_opps = [o for o in opportunities if o.get("status") not in ["won", "lost", "abandoned"]]
-    if open_opps:
-        opportunity = open_opps[0]
-    else:
-        opportunity = opportunities[0]
-
-    # Extract monetaryValue from opportunity
-    monetary_value = opportunity.get("monetaryValue")
-    
-    # Try to parse as float if it's a string
-    if isinstance(monetary_value, str):
+        # Sort opportunities by updatedAt descending (most recent first)
+        # Use safe key extraction with fallback
         try:
-            monetary_value = float(monetary_value.replace("$", "").replace(",", "").strip())
-        except (ValueError, AttributeError):
-            monetary_value = None
+            opportunities.sort(key=lambda o: o.get("updatedAt", "") or "", reverse=True)
+        except Exception as e:
+            logger.error("get_cleaning_quote: failed to sort opportunities: %s", e)
+            # Continue with unsorted list
 
-    # If monetaryValue is missing, null, or 0, return pending
-    if monetary_value is None or (isinstance(monetary_value, (int, float)) and monetary_value <= 0):
+        # Prefer open opportunities, but fall back to most recent overall
+        open_opps = []
+        try:
+            open_opps = [o for o in opportunities if isinstance(o, dict) and o.get("status") not in ["won", "lost", "abandoned"]]
+        except Exception as e:
+            logger.error("get_cleaning_quote: failed to filter open opportunities: %s", e)
+        
+        if open_opps:
+            opportunity = open_opps[0]
+        elif opportunities:
+            opportunity = opportunities[0]
+        else:
+            logger.warning("get_cleaning_quote: opportunities list became empty after filtering")
+            return JSONResponse({"status": "pending"}, status_code=200)
+
+        if not isinstance(opportunity, dict):
+            logger.error("get_cleaning_quote: opportunity is not a dict, got type=%s", type(opportunity).__name__)
+            return JSONResponse({"status": "pending"}, status_code=200)
+
+        opportunity_id = opportunity.get("id")
+        logger.info("get_cleaning_quote: selected opportunity_id=%s", opportunity_id)
+
+        # Extract monetaryValue from opportunity
+        monetary_value = opportunity.get("monetaryValue")
+        logger.info("get_cleaning_quote: opportunity monetaryValue raw=%s (type=%s)", monetary_value, type(monetary_value).__name__ if monetary_value is not None else "None")
+        
+        # Try to parse as float if it's a string
+        if isinstance(monetary_value, str):
+            try:
+                monetary_value = float(monetary_value.replace("$", "").replace(",", "").strip())
+            except (ValueError, AttributeError) as e:
+                logger.warning("get_cleaning_quote: failed to parse monetaryValue string '%s': %s", monetary_value, e)
+                monetary_value = None
+
+        # If monetaryValue is missing, null, or 0, return pending
+        if monetary_value is None or (isinstance(monetary_value, (int, float)) and monetary_value <= 0):
+            logger.info(
+                "get_cleaning_quote: opportunity found but monetaryValue not populated. opportunity_id=%s, monetary_value=%s",
+                opportunity_id,
+                monetary_value,
+            )
+            return JSONResponse({"status": "pending"}, status_code=200)
+
+        # Extract price_breakdown from customFields
+        custom_fields = contact.get("customFields", {})
+        if not isinstance(custom_fields, dict):
+            logger.warning("get_cleaning_quote: customFields is not a dict, got type=%s", type(custom_fields).__name__)
+            custom_fields = {}
+        
+        price_breakdown = None
+        
+        # Look for custom field containing "First clean:" or "Recurring price"
+        try:
+            for field_key, field_value in custom_fields.items():
+                if isinstance(field_value, str):
+                    field_value_lower = field_value.lower()
+                    if "first clean:" in field_value_lower or "recurring price" in field_value_lower:
+                        price_breakdown = field_value
+                        break
+        except Exception as e:
+            logger.error("get_cleaning_quote: error iterating customFields: %s", e)
+
         logger.info(
-            "get_cleaning_quote: opportunity found but monetaryValue not populated. opportunity_id=%s",
-            opportunity.get("id"),
+            "get_cleaning_quote: found quote. monetary_value=%s, price_breakdown=%s, has_breakdown=%s",
+            monetary_value,
+            price_breakdown[:50] + "..." if price_breakdown and len(price_breakdown) > 50 else price_breakdown,
+            bool(price_breakdown),
         )
-        return JSONResponse({"status": "pending"}, status_code=200)
 
-    # Extract price_breakdown from customFields
-    custom_fields = contact.get("customFields", {})
-    price_breakdown = None
-    
-    # Look for custom field containing "First clean:" or "Recurring price"
-    for field_key, field_value in custom_fields.items():
-        if isinstance(field_value, str):
-            field_value_lower = field_value.lower()
-            if "first clean:" in field_value_lower or "recurring price" in field_value_lower:
-                price_breakdown = field_value
-                break
+        # Safely convert to float
+        try:
+            estimated_price_float = float(monetary_value)
+        except (ValueError, TypeError) as e:
+            logger.error("get_cleaning_quote: failed to convert monetary_value to float: %s", e)
+            return JSONResponse({"status": "pending"}, status_code=200)
 
-    logger.info(
-        "get_cleaning_quote: found quote. monetary_value=%s, price_breakdown=%s",
-        monetary_value,
-        price_breakdown,
-    )
+        response = {
+            "status": "ready",
+            "estimated_price": estimated_price_float,
+            "source": "contact_search",
+        }
+        if price_breakdown:
+            response["price_breakdown"] = str(price_breakdown)
 
-    response = {
-        "status": "ready",
-        "estimated_price": float(monetary_value),
-        "source": "contact_search",
-    }
-    if price_breakdown:
-        response["price_breakdown"] = str(price_breakdown)
+        return JSONResponse(response, status_code=200)
 
-    return JSONResponse(response, status_code=200)
+    except Exception as e:
+        # Log full traceback for debugging
+        error_traceback = traceback.format_exc()
+        logger.error("get_cleaning_quote: unhandled exception for phone=%s: %s\n%s", phone, e, error_traceback)
+        
+        # Always return HTTP 200 with error status (never 500)
+        return JSONResponse(
+            {"status": "error", "error": "quote_failed"},
+            status_code=200,
+        )
 
 
 @app.post("/contractor-reply")
