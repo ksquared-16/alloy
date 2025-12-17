@@ -11,7 +11,7 @@ interface QuoteResponse {
     estimated_price?: number;
     first_clean_price?: number;
     recurring_price?: number;
-    recurring_label?: string;
+    frequency_label?: string;
     price_breakdown?: string;
     addons?: Array<{ name: string; price: number }>;
 }
@@ -134,45 +134,43 @@ function BookPageContent() {
                         </h2>
 
                         <div className="space-y-6">
-                            {/* Pricing Display */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* First Cleaning Price */}
-                                {quote.first_clean_price !== undefined ? (
-                                    <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
-                                        <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                                            First cleaning
-                                        </p>
-                                        <p className="text-3xl font-bold text-alloy-blue">
-                                            ${quote.first_clean_price.toFixed(2)}
-                                        </p>
-                                        <p className="text-xs text-alloy-midnight/60 mt-1">One-time</p>
-                                    </div>
-                                ) : quote.estimated_price !== undefined ? (
-                                    <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
-                                        <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                                            Estimated price
-                                        </p>
-                                        <p className="text-3xl font-bold text-alloy-blue">
-                                            ${quote.estimated_price.toFixed(2)}
-                                        </p>
-                                    </div>
-                                ) : null}
+                            {/* First Cleaning Price */}
+                            {quote.first_clean_price !== undefined ? (
+                                <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
+                                    <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                        First cleaning
+                                    </p>
+                                    <p className="text-3xl font-bold text-alloy-blue">
+                                        ${quote.first_clean_price.toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-alloy-midnight/60 mt-1">One-time</p>
+                                </div>
+                            ) : quote.estimated_price !== undefined ? (
+                                <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
+                                    <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                        Estimated price
+                                    </p>
+                                    <p className="text-3xl font-bold text-alloy-blue">
+                                        ${quote.estimated_price.toFixed(2)}
+                                    </p>
+                                </div>
+                            ) : null}
 
-                                {/* Recurring Price */}
-                                {quote.recurring_price !== undefined && (
-                                    <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
-                                        <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                                            Recurring
-                                        </p>
-                                        <p className="text-3xl font-bold text-alloy-juniper">
-                                            ${quote.recurring_price.toFixed(2)}
-                                        </p>
-                                        <p className="text-xs text-alloy-midnight/60 mt-1">
-                                            {quote.recurring_label ? `/${quote.recurring_label.toLowerCase()}` : "/visit"}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            {/* Recurring Rate Sentence */}
+                            {quote.recurring_price !== undefined && quote.frequency_label ? (
+                                <div className="p-4 bg-alloy-pine/5 rounded-lg border border-alloy-pine/20">
+                                    <p className="text-base text-alloy-midnight">
+                                        Your <span className="font-semibold">{quote.frequency_label}</span> rate is{" "}
+                                        <span className="font-bold text-alloy-juniper">${quote.recurring_price.toFixed(2)}</span> per visit.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="p-4 bg-alloy-stone/50 rounded-lg border border-alloy-stone/20">
+                                    <p className="text-sm text-alloy-midnight/70">
+                                        Finalizing your recurring rate…
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Add-ons */}
                             {quote.addons && quote.addons.length > 0 && (

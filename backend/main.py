@@ -1470,7 +1470,7 @@ async def get_cleaning_quote(phone: str):
         # Parse pricing from price_breakdown string
         first_clean_price = None
         recurring_price = None
-        recurring_label = None
+        frequency_label = None
         addons = []
 
         if price_breakdown:
@@ -1485,20 +1485,36 @@ async def get_cleaning_quote(phone: str):
                 if recurring_selected_match:
                     recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
                 
-                # If we have preferred_frequency from custom fields, use it; otherwise infer from breakdown
+                # Determine frequency_label:
+                # 1. First try preferred_frequency from custom fields (may include discount info like "Weekly (15% Off)")
                 if preferred_frequency:
-                    recurring_label = preferred_frequency.capitalize()
+                    # Clean up the frequency label - remove extra whitespace, capitalize first letter
+                    frequency_label = preferred_frequency.strip()
+                    # Capitalize first letter only (preserve rest like "(15% Off)")
+                    if frequency_label:
+                        frequency_label = frequency_label[0].upper() + frequency_label[1:] if len(frequency_label) > 1 else frequency_label.upper()
                 else:
-                    # Try to infer from breakdown text (look for "Weekly:", "Biweekly:", "Monthly:")
+                    # 2. Infer from breakdown text by matching recurring_price to frequency lines
                     if recurring_price:
-                        if re.search(r"weekly:\s*\$?" + re.escape(str(int(recurring_price))), price_breakdown, re.IGNORECASE):
-                            recurring_label = "Weekly"
-                        elif re.search(r"biweekly:\s*\$?" + re.escape(str(int(recurring_price))), price_breakdown, re.IGNORECASE):
-                            recurring_label = "Biweekly"
-                        elif re.search(r"monthly:\s*\$?" + re.escape(str(int(recurring_price))), price_breakdown, re.IGNORECASE):
-                            recurring_label = "Monthly"
-                        else:
-                            recurring_label = "Recurring"
+                        # Try to match the recurring_price to one of the frequency lines
+                        # Look for patterns like "Weekly: $144" or "Biweekly: $168" or "Monthly: $192"
+                        weekly_match = re.search(r"weekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        biweekly_match = re.search(r"biweekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        monthly_match = re.search(r"monthly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        
+                        # Compare prices (allowing for small floating point differences)
+                        if weekly_match:
+                            weekly_price = float(weekly_match.group(1).replace(",", ""))
+                            if abs(weekly_price - recurring_price) < 0.01:
+                                frequency_label = "Weekly"
+                        if not frequency_label and biweekly_match:
+                            biweekly_price = float(biweekly_match.group(1).replace(",", ""))
+                            if abs(biweekly_price - recurring_price) < 0.01:
+                                frequency_label = "Biweekly"
+                        if not frequency_label and monthly_match:
+                            monthly_price = float(monthly_match.group(1).replace(",", ""))
+                            if abs(monthly_price - recurring_price) < 0.01:
+                                frequency_label = "Monthly"
                 
                 # Parse add-ons from breakdown (look for lines like "Inside Fridge: $25.00" or similar)
                 # This is a simple heuristic - adjust based on actual format
@@ -1521,7 +1537,7 @@ async def get_cleaning_quote(phone: str):
             monetary_value,
             first_clean_price,
             recurring_price,
-            recurring_label,
+            frequency_label,
             bool(price_breakdown),
         )
 
@@ -1544,8 +1560,8 @@ async def get_cleaning_quote(phone: str):
             response["first_clean_price"] = first_clean_price
         if recurring_price is not None:
             response["recurring_price"] = recurring_price
-        if recurring_label:
-            response["recurring_label"] = recurring_label
+        if frequency_label:
+            response["frequency_label"] = frequency_label
         if price_breakdown:
             response["price_breakdown"] = str(price_breakdown)
         if addons:
