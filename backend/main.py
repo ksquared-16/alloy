@@ -1444,29 +1444,84 @@ async def get_cleaning_quote(phone: str):
             )
             return JSONResponse({"status": "pending"}, status_code=200)
 
-        # Extract price_breakdown from customFields
+        # Extract price_breakdown and other pricing info from customFields
         custom_fields = contact.get("customFields", {})
         if not isinstance(custom_fields, dict):
             logger.warning("get_cleaning_quote: customFields is not a dict, got type=%s", type(custom_fields).__name__)
             custom_fields = {}
         
         price_breakdown = None
+        preferred_frequency = None
         
-        # Look for custom field containing "First clean:" or "Recurring price"
+        # Look for custom field containing price breakdown (long multi-line summary)
         try:
             for field_key, field_value in custom_fields.items():
                 if isinstance(field_value, str):
                     field_value_lower = field_value.lower()
-                    if "first clean:" in field_value_lower or "recurring price" in field_value_lower:
+                    # Look for price breakdown field (contains "first clean:" or "recurring price" or multiple lines)
+                    if "first clean:" in field_value_lower or "recurring price" in field_value_lower or "\n" in field_value:
                         price_breakdown = field_value
-                        break
+                    # Also check for preferred frequency
+                    if field_key.lower() in ["preferred_frequency", "frequency", "cleaning_frequency"]:
+                        preferred_frequency = field_value
         except Exception as e:
             logger.error("get_cleaning_quote: error iterating customFields: %s", e)
 
+        # Parse pricing from price_breakdown string
+        first_clean_price = None
+        recurring_price = None
+        recurring_label = None
+        addons = []
+
+        if price_breakdown:
+            try:
+                # Parse "First clean: $X" or "First clean: $X.XX"
+                first_clean_match = re.search(r"first clean:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                if first_clean_match:
+                    first_clean_price = float(first_clean_match.group(1).replace(",", ""))
+                
+                # Parse "Recurring price (selected): $X" - this is the selected frequency price
+                recurring_selected_match = re.search(r"recurring price\s*\(selected\):\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                if recurring_selected_match:
+                    recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
+                
+                # If we have preferred_frequency from custom fields, use it; otherwise infer from breakdown
+                if preferred_frequency:
+                    recurring_label = preferred_frequency.capitalize()
+                else:
+                    # Try to infer from breakdown text (look for "Weekly:", "Biweekly:", "Monthly:")
+                    if recurring_price:
+                        if re.search(r"weekly:\s*\$?" + re.escape(str(int(recurring_price))), price_breakdown, re.IGNORECASE):
+                            recurring_label = "Weekly"
+                        elif re.search(r"biweekly:\s*\$?" + re.escape(str(int(recurring_price))), price_breakdown, re.IGNORECASE):
+                            recurring_label = "Biweekly"
+                        elif re.search(r"monthly:\s*\$?" + re.escape(str(int(recurring_price))), price_breakdown, re.IGNORECASE):
+                            recurring_label = "Monthly"
+                        else:
+                            recurring_label = "Recurring"
+                
+                # Parse add-ons from breakdown (look for lines like "Inside Fridge: $25.00" or similar)
+                # This is a simple heuristic - adjust based on actual format
+                addon_pattern = re.compile(r"^([^:]+):\s*\$?([\d,]+\.?\d*)$", re.MULTILINE | re.IGNORECASE)
+                addon_matches = addon_pattern.findall(price_breakdown)
+                for addon_name, addon_price_str in addon_matches:
+                    addon_name_clean = addon_name.strip()
+                    # Skip if it's already a main price line
+                    if addon_name_clean.lower() not in ["first clean", "weekly", "biweekly", "monthly", "recurring price (selected)", "recurring price"]:
+                        try:
+                            addon_price = float(addon_price_str.replace(",", ""))
+                            addons.append({"name": addon_name_clean, "price": addon_price})
+                        except ValueError:
+                            pass
+            except Exception as e:
+                logger.warning("get_cleaning_quote: failed to parse price breakdown: %s", e)
+
         logger.info(
-            "get_cleaning_quote: found quote. monetary_value=%s, price_breakdown=%s, has_breakdown=%s",
+            "get_cleaning_quote: found quote. monetary_value=%s, first_clean=%s, recurring=%s (%s), has_breakdown=%s",
             monetary_value,
-            price_breakdown[:50] + "..." if price_breakdown and len(price_breakdown) > 50 else price_breakdown,
+            first_clean_price,
+            recurring_price,
+            recurring_label,
             bool(price_breakdown),
         )
 
@@ -1477,13 +1532,24 @@ async def get_cleaning_quote(phone: str):
             logger.error("get_cleaning_quote: failed to convert monetary_value to float: %s", e)
             return JSONResponse({"status": "pending"}, status_code=200)
 
+        # Build response with all pricing details
         response = {
             "status": "ready",
             "estimated_price": estimated_price_float,
             "source": "contact_search",
         }
+        
+        # Add parsed pricing if available
+        if first_clean_price is not None:
+            response["first_clean_price"] = first_clean_price
+        if recurring_price is not None:
+            response["recurring_price"] = recurring_price
+        if recurring_label:
+            response["recurring_label"] = recurring_label
         if price_breakdown:
             response["price_breakdown"] = str(price_breakdown)
+        if addons:
+            response["addons"] = addons
 
         return JSONResponse(response, status_code=200)
 
