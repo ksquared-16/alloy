@@ -96,19 +96,21 @@ app = FastAPI(
 )
 
 # CORS configuration for Next.js frontend
-# In production, replace with actual frontend domain
 allowed_origins = [
+    "https://www.workwithalloy.com",  # Production domain (www)
+    "https://workwithalloy.com",  # Production domain (non-www)
+    "https://workwithalloy.vercel.app",  # Vercel production deployment
     "http://localhost:3000",  # Next.js dev server
-    # Add production domain here when deployed
-    # "https://alloy.example.com",
+    "http://127.0.0.1:3000",  # Alternative localhost
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",  # Vercel preview deployments
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 
@@ -795,6 +797,22 @@ def debug_jobs():
         "job_ids": list(JOB_STORE.keys()),
         "jobs": JOB_STORE,
     }
+
+
+@app.get("/debug/cors")
+def debug_cors(request: Request):
+    """
+    Debug endpoint to verify CORS configuration.
+    
+    Returns:
+        JSON with origin_received (from request headers) and allowed status.
+        Useful for troubleshooting CORS issues.
+    """
+    origin = request.headers.get("origin")
+    return JSONResponse({
+        "origin_received": origin,
+        "allowed": True,
+    }, status_code=200)
 
 
 @app.get("/debug/quote_crash")
