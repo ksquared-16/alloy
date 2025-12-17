@@ -1051,6 +1051,119 @@ def debug_search_contact_by_phone(phone: str):
     )
 
 
+@app.get("/debug/quote_source")
+def debug_quote_source(phone: str):
+    """
+    Debug endpoint to inspect quote parsing source data.
+    
+    Args (query param):
+        phone: Phone number to search for
+    
+    Returns:
+        JSON with:
+        - contact_id: Contact ID if found
+        - price_breakdown_field: The matched custom field string used as price_breakdown
+        - parsed_values: Object with first_clean_price, recurring_price, frequency_label
+        - custom_fields_keys: List of all custom field keys found
+    """
+    try:
+        phone_normalized = phone.strip() if phone else ""
+        
+        # Find contact using same logic as /quote/cleaning
+        contact = find_contact_record_by_phone(phone_normalized)
+        
+        if not contact:
+            return JSONResponse({
+                "contact_id": None,
+                "price_breakdown_field": None,
+                "parsed_values": {
+                    "first_clean_price": None,
+                    "recurring_price": None,
+                    "frequency_label": None,
+                },
+                "custom_fields_keys": [],
+            }, status_code=200)
+        
+        contact_id = contact.get("id")
+        custom_fields = contact.get("customFields", {})
+        if not isinstance(custom_fields, dict):
+            custom_fields = {}
+        
+        # Find price breakdown field (same logic as /quote/cleaning)
+        price_breakdown = None
+        preferred_frequency = None
+        
+        try:
+            for field_key, field_value in custom_fields.items():
+                if isinstance(field_value, str):
+                    field_value_lower = field_value.lower()
+                    if "first clean:" in field_value_lower or "recurring price" in field_value_lower or "\n" in field_value:
+                        price_breakdown = field_value
+                    if field_key.lower() in ["preferred_frequency", "frequency", "cleaning_frequency"]:
+                        preferred_frequency = field_value
+        except Exception as e:
+            logger.error("debug_quote_source: error iterating customFields: %s", e)
+        
+        # Parse values (same logic as /quote/cleaning)
+        first_clean_price = None
+        recurring_price = None
+        frequency_label = None
+        
+        if price_breakdown:
+            try:
+                # Parse "First clean: $X"
+                first_clean_match = re.search(r"first clean:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                if first_clean_match:
+                    first_clean_price = float(first_clean_match.group(1).replace(",", ""))
+                
+                # Parse "Recurring price (selected): $X"
+                recurring_selected_match = re.search(r"recurring price\s*\(selected\):\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                if recurring_selected_match:
+                    recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
+                
+                # Determine frequency_label
+                if preferred_frequency:
+                    frequency_label = preferred_frequency.strip()
+                    if frequency_label:
+                        frequency_label = frequency_label[0].upper() + frequency_label[1:] if len(frequency_label) > 1 else frequency_label.upper()
+                else:
+                    if recurring_price:
+                        weekly_match = re.search(r"weekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        biweekly_match = re.search(r"biweekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        monthly_match = re.search(r"monthly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        
+                        if weekly_match:
+                            weekly_price = float(weekly_match.group(1).replace(",", ""))
+                            if abs(weekly_price - recurring_price) < 0.01:
+                                frequency_label = "Weekly"
+                        if not frequency_label and biweekly_match:
+                            biweekly_price = float(biweekly_match.group(1).replace(",", ""))
+                            if abs(biweekly_price - recurring_price) < 0.01:
+                                frequency_label = "Biweekly"
+                        if not frequency_label and monthly_match:
+                            monthly_price = float(monthly_match.group(1).replace(",", ""))
+                            if abs(monthly_price - recurring_price) < 0.01:
+                                frequency_label = "Monthly"
+            except Exception as e:
+                logger.warning("debug_quote_source: failed to parse price breakdown: %s", e)
+        
+        return JSONResponse({
+            "contact_id": contact_id,
+            "price_breakdown_field": price_breakdown[:500] + "..." if price_breakdown and len(price_breakdown) > 500 else price_breakdown,
+            "parsed_values": {
+                "first_clean_price": first_clean_price,
+                "recurring_price": recurring_price,
+                "frequency_label": frequency_label,
+            },
+            "custom_fields_keys": list(custom_fields.keys()) if isinstance(custom_fields, dict) else [],
+        }, status_code=200)
+    except Exception as e:
+        return JSONResponse({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }, status_code=200)
+
+
 @app.get("/debug/quote_crash")
 def debug_quote_crash(phone: str):
     """
@@ -1548,26 +1661,39 @@ async def get_cleaning_quote(phone: str):
             logger.error("get_cleaning_quote: failed to convert monetary_value to float: %s", e)
             return JSONResponse({"status": "pending"}, status_code=200)
 
-        # Build response with all pricing details
-        response = {
-            "status": "ready",
-            "estimated_price": estimated_price_float,
-            "source": "contact_search",
-        }
-        
-        # Add parsed pricing if available
-        if first_clean_price is not None:
-            response["first_clean_price"] = first_clean_price
+        # Only return status "ready" if recurring_price is present
+        # Otherwise return "pending" with estimated_price
         if recurring_price is not None:
+            # Build response with all pricing details
+            response = {
+                "status": "ready",
+                "estimated_price": estimated_price_float,
+                "source": "contact_search",
+            }
+            
+            # Always include parsed pricing when ready
+            if first_clean_price is not None:
+                response["first_clean_price"] = first_clean_price
             response["recurring_price"] = recurring_price
-        if frequency_label:
-            response["frequency_label"] = frequency_label
-        if price_breakdown:
-            response["price_breakdown"] = str(price_breakdown)
-        if addons:
-            response["addons"] = addons
+            if frequency_label:
+                response["frequency_label"] = frequency_label
+            if price_breakdown:
+                response["price_breakdown"] = str(price_breakdown)
+            if addons:
+                response["addons"] = addons
 
-        return JSONResponse(response, status_code=200)
+            return JSONResponse(response, status_code=200)
+        else:
+            # Recurring price not found - return pending
+            logger.info(
+                "get_cleaning_quote: recurring_price not found, returning pending. estimated_price=%s",
+                estimated_price_float,
+            )
+            return JSONResponse({
+                "status": "pending",
+                "estimated_price": estimated_price_float,
+                "source": "contact_search",
+            }, status_code=200)
 
     except Exception as e:
         # Log full traceback for debugging
