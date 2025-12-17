@@ -1085,24 +1085,51 @@ def debug_quote_source(phone: str):
             }, status_code=200)
         
         contact_id = contact.get("id")
-        custom_fields = contact.get("customFields", {})
-        if not isinstance(custom_fields, dict):
-            custom_fields = {}
+        custom_fields_raw = contact.get("customFields", [])
+        custom_field_map = {}
+        all_values_text = ""
+        custom_field_ids = []
         
-        # Find price breakdown field (same logic as /quote/cleaning)
+        # Convert customFields array to a map and build all_values_text
+        if isinstance(custom_fields_raw, list):
+            for cf in custom_fields_raw:
+                if isinstance(cf, dict):
+                    cf_id = cf.get("id")
+                    cf_value = cf.get("value")
+                    if cf_id:
+                        custom_field_map[cf_id] = cf_value
+                        custom_field_ids.append(cf_id)
+                    if cf_value is not None:
+                        all_values_text += str(cf_value) + "\n"
+        elif isinstance(custom_fields_raw, dict):
+            # Fallback: handle as dict (legacy format)
+            custom_field_map = custom_fields_raw
+            custom_field_ids = list(custom_fields_raw.keys())
+            all_values_text = "\n".join(str(v) for v in custom_fields_raw.values() if v is not None)
+        
+        # Find price_breakdown field (contains "Recurring price (selected)" or "First clean:")
         price_breakdown = None
         preferred_frequency = None
         
         try:
-            for field_key, field_value in custom_fields.items():
-                if isinstance(field_value, str):
-                    field_value_lower = field_value.lower()
-                    if "first clean:" in field_value_lower or "recurring price" in field_value_lower or "\n" in field_value:
-                        price_breakdown = field_value
-                    if field_key.lower() in ["preferred_frequency", "frequency", "cleaning_frequency"]:
-                        preferred_frequency = field_value
+            # Search through all custom field values
+            for cf_id, cf_value in custom_field_map.items():
+                if isinstance(cf_value, str):
+                    cf_value_lower = cf_value.lower()
+                    # Look for price breakdown field
+                    if "recurring price (selected)" in cf_value_lower or "first clean" in cf_value_lower:
+                        price_breakdown = cf_value
+                    # Look for frequency field (contains Weekly/Biweekly/Monthly)
+                    if any(freq in cf_value_lower for freq in ["weekly", "biweekly", "monthly"]):
+                        if not preferred_frequency or "(" in cf_value:  # Prefer fields with discount info
+                            preferred_frequency = cf_value
         except Exception as e:
             logger.error("debug_quote_source: error iterating customFields: %s", e)
+        
+        # If price_breakdown not found in individual fields, use all_values_text
+        if not price_breakdown and all_values_text:
+            if "recurring price (selected)" in all_values_text.lower() or "first clean" in all_values_text.lower():
+                price_breakdown = all_values_text.strip()
         
         # Parse values (same logic as /quote/cleaning)
         first_clean_price = None
@@ -1111,13 +1138,13 @@ def debug_quote_source(phone: str):
         
         if price_breakdown:
             try:
-                # Parse "First clean: $X"
-                first_clean_match = re.search(r"first clean:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                # Parse "First clean: $X" or "First cleaning: $X" - more robust regex
+                first_clean_match = re.search(r"(?:First clean|First cleaning)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
                 if first_clean_match:
                     first_clean_price = float(first_clean_match.group(1).replace(",", ""))
                 
-                # Parse "Recurring price (selected): $X"
-                recurring_selected_match = re.search(r"recurring price\s*\(selected\):\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                # Parse "Recurring price (selected): $X" - more robust regex
+                recurring_selected_match = re.search(r"Recurring price\s*\(selected\)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
                 if recurring_selected_match:
                     recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
                 
@@ -1128,9 +1155,9 @@ def debug_quote_source(phone: str):
                         frequency_label = frequency_label[0].upper() + frequency_label[1:] if len(frequency_label) > 1 else frequency_label.upper()
                 else:
                     if recurring_price:
-                        weekly_match = re.search(r"weekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
-                        biweekly_match = re.search(r"biweekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
-                        monthly_match = re.search(r"monthly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        weekly_match = re.search(r"weekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
+                        biweekly_match = re.search(r"biweekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
+                        monthly_match = re.search(r"monthly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
                         
                         if weekly_match:
                             weekly_price = float(weekly_match.group(1).replace(",", ""))
@@ -1155,7 +1182,8 @@ def debug_quote_source(phone: str):
                 "recurring_price": recurring_price,
                 "frequency_label": frequency_label,
             },
-            "custom_fields_keys": list(custom_fields.keys()) if isinstance(custom_fields, dict) else [],
+            "custom_fields_keys": custom_field_ids,
+            "custom_fields_count": len(custom_field_ids),
         }, status_code=200)
     except Exception as e:
         return JSONResponse({
@@ -1558,27 +1586,51 @@ async def get_cleaning_quote(phone: str):
             return JSONResponse({"status": "pending"}, status_code=200)
 
         # Extract price_breakdown and other pricing info from customFields
-        custom_fields = contact.get("customFields", {})
-        if not isinstance(custom_fields, dict):
-            logger.warning("get_cleaning_quote: customFields is not a dict, got type=%s", type(custom_fields).__name__)
-            custom_fields = {}
+        # GHL returns customFields as an array: [{id:"...", value:"..."}, ...]
+        custom_fields_raw = contact.get("customFields", [])
+        custom_field_map = {}
+        all_values_text = ""
         
+        # Convert customFields array to a map and build all_values_text
+        if isinstance(custom_fields_raw, list):
+            for cf in custom_fields_raw:
+                if isinstance(cf, dict):
+                    cf_id = cf.get("id")
+                    cf_value = cf.get("value")
+                    if cf_id:
+                        custom_field_map[cf_id] = cf_value
+                    if cf_value is not None:
+                        all_values_text += str(cf_value) + "\n"
+        elif isinstance(custom_fields_raw, dict):
+            # Fallback: handle as dict (legacy format)
+            custom_field_map = custom_fields_raw
+            all_values_text = "\n".join(str(v) for v in custom_fields_raw.values() if v is not None)
+        else:
+            logger.warning("get_cleaning_quote: customFields is not a list or dict, got type=%s", type(custom_fields_raw).__name__)
+        
+        # Find price_breakdown field (contains "Recurring price (selected)" or "First clean:")
         price_breakdown = None
         preferred_frequency = None
         
-        # Look for custom field containing price breakdown (long multi-line summary)
         try:
-            for field_key, field_value in custom_fields.items():
-                if isinstance(field_value, str):
-                    field_value_lower = field_value.lower()
-                    # Look for price breakdown field (contains "first clean:" or "recurring price" or multiple lines)
-                    if "first clean:" in field_value_lower or "recurring price" in field_value_lower or "\n" in field_value:
-                        price_breakdown = field_value
-                    # Also check for preferred frequency
-                    if field_key.lower() in ["preferred_frequency", "frequency", "cleaning_frequency"]:
-                        preferred_frequency = field_value
+            # Search through all custom field values
+            for cf_id, cf_value in custom_field_map.items():
+                if isinstance(cf_value, str):
+                    cf_value_lower = cf_value.lower()
+                    # Look for price breakdown field
+                    if "recurring price (selected)" in cf_value_lower or "first clean" in cf_value_lower:
+                        price_breakdown = cf_value
+                    # Look for frequency field (contains Weekly/Biweekly/Monthly)
+                    if any(freq in cf_value_lower for freq in ["weekly", "biweekly", "monthly"]):
+                        if not preferred_frequency or "(" in cf_value:  # Prefer fields with discount info
+                            preferred_frequency = cf_value
         except Exception as e:
             logger.error("get_cleaning_quote: error iterating customFields: %s", e)
+        
+        # If price_breakdown not found in individual fields, use all_values_text
+        if not price_breakdown and all_values_text:
+            if "recurring price (selected)" in all_values_text.lower() or "first clean" in all_values_text.lower():
+                price_breakdown = all_values_text.strip()
 
         # Parse pricing from price_breakdown string
         first_clean_price = None
@@ -1588,20 +1640,20 @@ async def get_cleaning_quote(phone: str):
 
         if price_breakdown:
             try:
-                # Parse "First clean: $X" or "First clean: $X.XX"
-                first_clean_match = re.search(r"first clean:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                # Parse "First clean: $X" or "First cleaning: $X" - more robust regex
+                first_clean_match = re.search(r"(?:First clean|First cleaning)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
                 if first_clean_match:
                     first_clean_price = float(first_clean_match.group(1).replace(",", ""))
                 
-                # Parse "Recurring price (selected): $X" - this is the selected frequency price
-                recurring_selected_match = re.search(r"recurring price\s*\(selected\):\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                # Parse "Recurring price (selected): $X" - more robust regex
+                recurring_selected_match = re.search(r"Recurring price\s*\(selected\)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
                 if recurring_selected_match:
                     recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
                 
                 # Determine frequency_label:
                 # 1. First try preferred_frequency from custom fields (may include discount info like "Weekly (15% Off)")
                 if preferred_frequency:
-                    # Clean up the frequency label - remove extra whitespace, capitalize first letter
+                    # Extract frequency from the value (e.g., "Weekly (15% Off)" -> "Weekly (15% Off)")
                     frequency_label = preferred_frequency.strip()
                     # Capitalize first letter only (preserve rest like "(15% Off)")
                     if frequency_label:
@@ -1610,10 +1662,9 @@ async def get_cleaning_quote(phone: str):
                     # 2. Infer from breakdown text by matching recurring_price to frequency lines
                     if recurring_price:
                         # Try to match the recurring_price to one of the frequency lines
-                        # Look for patterns like "Weekly: $144" or "Biweekly: $168" or "Monthly: $192"
-                        weekly_match = re.search(r"weekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
-                        biweekly_match = re.search(r"biweekly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
-                        monthly_match = re.search(r"monthly:\s*\$?([\d,]+\.?\d*)", price_breakdown, re.IGNORECASE)
+                        weekly_match = re.search(r"weekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
+                        biweekly_match = re.search(r"biweekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
+                        monthly_match = re.search(r"monthly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
                         
                         # Compare prices (allowing for small floating point differences)
                         if weekly_match:
@@ -1630,13 +1681,12 @@ async def get_cleaning_quote(phone: str):
                                 frequency_label = "Monthly"
                 
                 # Parse add-ons from breakdown (look for lines like "Inside Fridge: $25.00" or similar)
-                # This is a simple heuristic - adjust based on actual format
                 addon_pattern = re.compile(r"^([^:]+):\s*\$?([\d,]+\.?\d*)$", re.MULTILINE | re.IGNORECASE)
                 addon_matches = addon_pattern.findall(price_breakdown)
                 for addon_name, addon_price_str in addon_matches:
                     addon_name_clean = addon_name.strip()
                     # Skip if it's already a main price line
-                    if addon_name_clean.lower() not in ["first clean", "weekly", "biweekly", "monthly", "recurring price (selected)", "recurring price"]:
+                    if addon_name_clean.lower() not in ["first clean", "first cleaning", "weekly", "biweekly", "monthly", "recurring price (selected)", "recurring price"]:
                         try:
                             addon_price = float(addon_price_str.replace(",", ""))
                             addons.append({"name": addon_name_clean, "price": addon_price})
@@ -1661,9 +1711,9 @@ async def get_cleaning_quote(phone: str):
             logger.error("get_cleaning_quote: failed to convert monetary_value to float: %s", e)
             return JSONResponse({"status": "pending"}, status_code=200)
 
-        # Only return status "ready" if recurring_price is present
+        # Return status "ready" if both estimated_price and recurring_price are present
         # Otherwise return "pending" with estimated_price
-        if recurring_price is not None:
+        if recurring_price is not None and estimated_price_float is not None:
             # Build response with all pricing details
             response = {
                 "status": "ready",
