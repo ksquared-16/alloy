@@ -111,7 +111,7 @@ export default function Home() {
                   Alloy handles everything — scheduling, confirmation, and follow-up — using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link href="/services/cleaning">
+                  <Link href="/services/cleaning?open=1#quote-form">
                     <PrimaryButton className="w-full sm:w-auto">
                       Get a cleaning quote
                     </PrimaryButton>

@@ -119,19 +119,26 @@ export default function CleaningPage() {
     }
   };
 
-  // Handle hash-based expansion
+  // Handle hash-based expansion and ?open=1 param from CTA
   useEffect(() => {
     const checkHash = () => {
-      if (window.location.hash === "#quote-form" && !isOpen) {
-        setIsOpen(true);
-        setHasRendered(true);
-        setTimeout(() => {
-          formRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 100);
-      }
+      if (isOpen) return;
+
+      const { hash, search } = window.location;
+      const params = new URLSearchParams(search);
+      const shouldOpen =
+        hash === "#quote-form" || params.get("open") === "1";
+
+      if (!shouldOpen) return;
+
+      setIsOpen(true);
+      setHasRendered(true);
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
     };
 
     checkHash();
