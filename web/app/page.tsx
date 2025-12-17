@@ -86,11 +86,11 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-10 md:py-8">
           <div className="relative h-[340px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             {/* Background Image */}
-            <Image
+        <Image
               src="/hero/cleaning-hero.jpg"
               alt="Clean modern home interior"
               fill
-              priority
+          priority
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
@@ -106,7 +106,7 @@ export default function Home() {
                 </p>
                 <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
                   Trusted home services, without the runaround.
-                </h1>
+          </h1>
                 <p className="text-lg text-white/90">
                   Alloy handles everything — scheduling, confirmation, and follow-up — using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
