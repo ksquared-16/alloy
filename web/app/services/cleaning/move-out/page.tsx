@@ -1,5 +1,5 @@
 import Section from "@/components/Section";
-import GhlEmbed from "@/components/GhlEmbed";
+import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 
 export default function MoveOutPage() {
   return (
@@ -13,11 +13,7 @@ export default function MoveOutPage() {
             Tell us about your space and timeline. We'll provide a transparent estimate.
           </p>
           <div className="bg-white rounded-xl p-4 md:p-6 border border-alloy-stone/50">
-            <GhlEmbed
-              src="https://api.leadconnectorhq.com/widget/form/L8JC9XCbA0miUG3D7zIT"
-              title="Move-Out / Heavy Clean Estimate"
-              height={792}
-            />
+            <CleaningQuoteForm />
           </div>
         </div>
       </Section>

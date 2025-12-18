@@ -2,10 +2,10 @@ import Link from "next/link";
 import Image from "next/image";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
+import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import SecondaryButton from "@/components/SecondaryButton";
 import ServiceCard from "@/components/ServiceCard";
 import Accordion from "@/components/Accordion";
-import GhlEmbed from "@/components/GhlEmbed";
 import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
 
@@ -233,18 +233,16 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Final CTA */}
+      {/* Final CTA – Cleaning quote form (Phase 1: frontend-only) */}
       <Section className="py-12 md:py-16">
         <div className="bg-alloy-blue rounded-lg p-6 md:p-8 text-center text-white">
           <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
           <p className="text-lg mb-6 opacity-90">
-            Get a quote. We'll text you to confirm details. No pressure, no hassle.
+            Tell us about your home and schedule. We&apos;ll calculate a transparent quote and text
+            you to confirm details.
           </p>
-          <div className="max-w-3xl mx-auto">
-            <GhlEmbed
-              src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
-              title="Lead Form"
-            />
+          <div className="max-w-3xl mx-auto text-left">
+            <CleaningQuoteForm />
           </div>
         </div>
       </Section>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
-import GhlEmbed from "@/components/GhlEmbed";
+import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 
 export default function CleaningPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -171,7 +171,7 @@ export default function CleaningPage() {
         </div>
       </Section>
 
-      {/* Quote Form */}
+      {/* Quote Form (custom Alloy form, replaces embedded GHL form) */}
       {isOpen && (
         <Section id="quote-form" ref={formRef} className="pt-6 pb-0 bg-white">
           <div className="max-w-2xl md:max-w-4xl mx-auto">
@@ -191,13 +191,7 @@ export default function CleaningPage() {
                 </button>
               </div>
               <div id="quote-form-content" className="p-4 md:p-6">
-                {hasRendered && (
-                  <GhlEmbed
-                    src="https://api.leadconnectorhq.com/widget/form/JBZiHlFyWKli2GnSwivI"
-                    title="Lead Form"
-                    className=""
-                  />
-                )}
+                {hasRendered && <CleaningQuoteForm />}
               </div>
             </div>
           </div>
