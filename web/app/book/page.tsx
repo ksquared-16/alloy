@@ -244,86 +244,76 @@ function BookPageContent() {
 
         {/* Quote details once we have any quote data */}
         {quote && hasQuote && (
-          <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 mb-6">
-            <h2 className="text-2xl font-bold text-alloy-midnight mb-6">
-              Here&apos;s your quote details:
-            </h2>
-
-            <div className="space-y-6">
-              {/* Service */}
-              {quote.service && (
-                <div>
-                  <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                    Service
+          <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-5 md:p-6 mb-6">
+            <div className="space-y-5">
+              {/* Compact 2-column pricing summary */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* First Cleaning */}
+                <div className="rounded-xl border border-alloy-stone/40 bg-alloy-stone/30 px-4 py-4 md:px-5 md:py-4">
+                  <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
+                    First Cleaning
                   </p>
-                  <p className="text-base font-medium text-alloy-midnight">
-                    {quote.service}
+                  <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
+                    $
+                    {(
+                      (typeof quote.first_clean_price === "number" &&
+                      quote.first_clean_price > 0
+                        ? quote.first_clean_price
+                        : typeof quote.estimated_price === "number" &&
+                          quote.estimated_price > 0
+                        ? quote.estimated_price
+                        : 0)
+                    ).toFixed(2)}
                   </p>
                 </div>
-              )}
 
-              {/* First cleaning (primary price) */}
-              <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
-                <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                  First cleaning
-                </p>
-                <p className="text-3xl font-bold text-alloy-blue">
-                  $
-                  {(
-                    (typeof quote.first_clean_price === "number" &&
-                    quote.first_clean_price > 0
-                      ? quote.first_clean_price
-                      : typeof quote.estimated_price === "number" &&
-                        quote.estimated_price > 0
-                      ? quote.estimated_price
-                      : 0)
-                  ).toFixed(2)}
-                </p>
-              </div>
-
-              {/* Recurring rate or pending message */}
-              {quote.recurring_price !== undefined &&
-              quote.recurring_price !== null &&
-              quote.frequency_label ? (
-                <div className="p-4 bg-alloy-pine/5 rounded-xl border border-alloy-pine/30">
-                  <p className="text-sm text-alloy-midnight">
-                    Your{" "}
-                    <span className="font-semibold">
-                      {quote.frequency_label}
-                    </span>{" "}
-                    rate is{" "}
-                    <span className="font-bold text-alloy-juniper">
-                      ${quote.recurring_price.toFixed(2)}
-                    </span>{" "}
-                    per visit.
-                  </p>
-                  {quote.discount_label && (
-                    <p className="text-xs text-alloy-midnight/70 mt-1">
-                      {quote.discount_label}
-                    </p>
+                {/* Recurring Cleaning */}
+                <div className="rounded-xl border border-alloy-stone/40 bg-white px-4 py-4 md:px-5 md:py-4">
+                  {quote.recurring_price !== undefined &&
+                  quote.recurring_price !== null &&
+                  quote.frequency_label ? (
+                    <>
+                      <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
+                        {quote.frequency_label} Cleaning
+                        {quote.discount_label && (
+                          <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
+                            ({quote.discount_label})
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-2xl md:text-3xl font-bold text-alloy-juniper leading-tight">
+                        ${quote.recurring_price.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-alloy-midnight/60 mt-0.5">
+                        per visit
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
+                        Recurring Cleaning
+                      </p>
+                      <p className="text-sm text-alloy-midnight/80">
+                        Calculating…
+                      </p>
+                    </>
                   )}
                 </div>
-              ) : quote?.status === "ready" ? null : (
-                <div className="p-4 bg-alloy-stone/40 rounded-xl border border-alloy-stone/60">
-                  <p className="text-sm text-alloy-midnight/80">
-                    Finalizing your recurring rate…
-                  </p>
-                </div>
-              )}
+              </div>
 
-              {/* Add-ons */}
+              {/* Add-ons below pricing summary */}
               {quote.addons && quote.addons.length > 0 && (
                 <div>
-                  <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-3">
+                  <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
                     Add-ons
                   </p>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {quote.addons.map((addon, idx) => (
                       <div
                         key={idx}
-                        className="flex justify-between items-center py-2 border-b border-alloy-stone/20"
+                        className="flex justify-between items-center py-1.5 border-b border-alloy-stone/15 last:border-b-0"
                       >
-                        <span className="text-sm text-alloy-midnight/80">
+                        <span className="text-sm text-alloy-midnight/85">
                           {addon.name}
                         </span>
                         <span className="text-sm font-semibold text-alloy-midnight">
@@ -337,7 +327,7 @@ function BookPageContent() {
                 </div>
               )}
 
-              {/* Price Breakdown Accordion */}
+              {/* Price Breakdown Accordion (optional, compact) */}
               {quote.price_breakdown && (
                 <div>
                   <Accordion title="See full price breakdown">
