@@ -25,9 +25,9 @@ export default function Navbar() {
             <Image
               src="/brand/alloy-wordmark-blue.svg"
               alt="Alloy logo"
-              width={180}
-              height={48}
-              className="h-12 w-auto"
+              width={360}
+              height={96}
+              className="h-24 w-auto"
               priority
             />
           </Link>
@@ -61,9 +61,9 @@ export default function Navbar() {
             <Image
               src="/brand/alloy-wordmark-blue.svg"
               alt="Alloy logo"
-              width={140}
-              height={36}
-              className="h-9 w-auto"
+              width={280}
+              height={72}
+              className="h-[4.5rem] w-auto"
               priority
             />
           </Link>

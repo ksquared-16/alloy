@@ -177,23 +177,48 @@ def parse_simplified_price_breakdown(text: str) -> Dict[str, Any]:
             pass
 
     # Recurring frequency, price, and optional discount label
-    m = re.search(
-        r"^Recurring\s*\(([^)]+)\):\s*\$([0-9][0-9,]*(?:\.[0-9]{2})?)\s*/\s*visit\s*(?:\(([^)]+)\))?\s*$",
-        normalized_block,
-        re.MULTILINE | re.IGNORECASE,
-    )
-    if m:
-        freq = m.group(1).strip()
-        price_str = m.group(2)
-        discount = m.group(3).strip() if m.group(3) else None
+    # We parse line-by-line to clearly separate:
+    #   Recurring (Weekly): $144.00 / visit (40% off)
+    # where:
+    #   - "Weekly" is the frequency_label (from the first (...) after "Recurring")
+    #   - 144.00 is recurring_price (first dollar amount after colon)
+    #   - "40% off" is discount_label (any later (...) that includes "% off")
+    for line in non_empty_lines:
+        if not line.lower().startswith("recurring"):
+            continue
+
+        # 1) Frequency + price
+        m_rec = re.search(
+            r"^Recurring\s*\((?P<freq>[^)]+)\)\s*:\s*\$?\s*(?P<price>[0-9][0-9,]*(?:\.[0-9]{1,2})?)",
+            line,
+            re.IGNORECASE,
+        )
+        if not m_rec:
+            continue
+
+        freq = m_rec.group("freq").strip()
+        price_str = m_rec.group("price")
         try:
             result["recurring_price"] = float(price_str.replace(",", ""))
         except Exception:
-            pass
+            result["recurring_price"] = None
+
         if freq:
             result["frequency_label"] = freq
+
+        # 2) Optional discount anywhere later in the line, distinct from the (Weekly) group
+        #    We look for any (...) that contains "% off".
+        discount = None
+        paren_contents = re.findall(r"\(([^)]+)\)", line)
+        for content in paren_contents:
+            if "% off" in content.lower():
+                discount = content.strip()
+
         if discount:
             result["discount_label"] = discount
+
+        # Only parse the first matching "Recurring" line
+        break
 
     # Add-ons
     addons: List[Dict[str, Any]] = []
@@ -235,6 +260,25 @@ def parse_simplified_price_breakdown(text: str) -> Dict[str, Any]:
         deduped_addons.append(addon)
 
     result["addons"] = deduped_addons
+
+    # Debug-style log to verify parser behavior in logs (truncated preview)
+    try:
+        preview = normalized_block.replace("\n", "\\n")
+        if len(preview) > 200:
+            preview = preview[:200] + "..."
+        logger.info(
+            "parse_simplified_price_breakdown: preview=%s parsed={service=%s, first_clean=%s, recurring=%s, freq=%s, discount=%s}",
+            preview,
+            result["service"],
+            result["first_clean_price"],
+            result["recurring_price"],
+            result["frequency_label"],
+            result["discount_label"],
+        )
+    except Exception:
+        # Avoid breaking quote flow if logging fails for any reason
+        pass
+
     return result
 
 
