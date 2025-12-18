@@ -1531,35 +1531,55 @@ async def get_cleaning_quote(phone: str):
         logger.info("get_cleaning_quote: found %d opportunities for contact_id=%s", len(opportunities), contact_id)
         
         if not opportunities:
-            logger.info("get_cleaning_quote: contact found but no opportunities for phone=%s", phone_normalized)
-            return JSONResponse({"status": "pending"}, status_code=200)
+            logger.info(
+                "get_cleaning_quote: contact found but no opportunities for phone=%s",
+                phone_normalized,
+            )
+            return JSONResponse({"status": "not_found"}, status_code=200)
 
-        # Sort opportunities by updatedAt descending (most recent first)
-        # Use safe key extraction with fallback
+        # Sort opportunities by updatedAt / createdAt descending (most recent first)
+        def _opp_sort_key(o: Dict[str, Any]) -> str:
+            if not isinstance(o, dict):
+                return ""
+            return (
+                o.get("updatedAt")
+                or o.get("dateUpdated")
+                or o.get("createdAt")
+                or ""
+            )
+
         try:
-            opportunities.sort(key=lambda o: o.get("updatedAt", "") or "", reverse=True)
+            opportunities.sort(key=_opp_sort_key, reverse=True)
         except Exception as e:
             logger.error("get_cleaning_quote: failed to sort opportunities: %s", e)
             # Continue with unsorted list
 
-        # Prefer open opportunities, but fall back to most recent overall
-        open_opps = []
-        try:
-            open_opps = [o for o in opportunities if isinstance(o, dict) and o.get("status") not in ["won", "lost", "abandoned"]]
-        except Exception as e:
-            logger.error("get_cleaning_quote: failed to filter open opportunities: %s", e)
-        
-        if open_opps:
-            opportunity = open_opps[0]
-        elif opportunities:
-            opportunity = opportunities[0]
-        else:
-            logger.warning("get_cleaning_quote: opportunities list became empty after filtering")
-            return JSONResponse({"status": "pending"}, status_code=200)
+        # Select the most recent opportunity that has any quote-related fields populated
+        opportunity: Optional[Dict[str, Any]] = None
+        for o in opportunities:
+            if not isinstance(o, dict):
+                continue
 
-        if not isinstance(opportunity, dict):
-            logger.error("get_cleaning_quote: opportunity is not a dict, got type=%s", type(opportunity).__name__)
-            return JSONResponse({"status": "pending"}, status_code=200)
+            est_candidate = o.get("estimated_price") or o.get("monetaryValue")
+            rec_candidate = o.get("recurring_price")
+            pb_candidate = o.get("price_breakdown")
+
+            has_any_pricing = (
+                est_candidate is not None
+                or rec_candidate is not None
+                or (isinstance(pb_candidate, str) and pb_candidate.strip() != "")
+            )
+
+            if has_any_pricing:
+                opportunity = o
+                break
+
+        if not opportunity:
+            logger.info(
+                "get_cleaning_quote: no opportunities with pricing fields found for contact_id=%s",
+                contact_id,
+            )
+            return JSONResponse({"status": "not_found"}, status_code=200)
 
         opportunity_id = opportunity.get("id")
         logger.info("get_cleaning_quote: selected opportunity_id=%s", opportunity_id)
