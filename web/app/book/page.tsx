@@ -35,16 +35,23 @@ function BookPageContent() {
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasTimedOut, setHasTimedOut] = useState(false);
+  const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
+  const [lastRequestUrl, setLastRequestUrl] = useState<string | null>(null);
   const phone = searchParams?.get("phone");
 
-  const fetchQuote = async (phoneNumber: string) => {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  const fetchQuote = async (phoneNumber: string, baseUrl: string) => {
     try {
-      const url = `${apiBaseUrl}/quote/cleaning?phone=${encodeURIComponent(phoneNumber)}`;
+      const url = `${baseUrl}/quote/cleaning?phone=${encodeURIComponent(phoneNumber)}`;
+      setLastRequestUrl(url);
       console.log("Fetching quote from:", url);
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const text = await response.text();
+        throw new Error(
+          `HTTP ${response.status}: ${response.statusText}${
+            text ? ` - ${text}` : ""
+          }`,
+        );
       }
       const data: QuoteResponse = await response.json();
       console.log("Quote response:", data);
@@ -58,11 +65,36 @@ function BookPageContent() {
   };
 
   useEffect(() => {
-    if (!phone) {
+    const rawPhone = (phone || "").trim();
+    const digits = rawPhone.replace(/\D/g, "");
+
+    const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+    const isProd = process.env.NODE_ENV === "production";
+
+    // Validate phone param early
+    if (!rawPhone || digits.length < 7) {
       setFetchStatus("error");
-      setErrorMessage("Missing phone param");
+      setErrorMessage(
+        "Missing/invalid phone param in URL. Expected /book?phone=…",
+      );
+      setApiBaseUrl(envBase || null);
+      setLastRequestUrl(null);
       return;
     }
+
+    // In production, require NEXT_PUBLIC_API_BASE_URL
+    if (isProd && !envBase) {
+      setFetchStatus("error");
+      setErrorMessage(
+        "Missing NEXT_PUBLIC_API_BASE_URL. Booking page cannot fetch quote.",
+      );
+      setApiBaseUrl(null);
+      setLastRequestUrl(null);
+      return;
+    }
+
+    const baseUrlToUse = envBase || "http://localhost:8000";
+    setApiBaseUrl(baseUrlToUse);
 
     setFetchStatus("loading");
     setErrorMessage(null);
@@ -86,13 +118,13 @@ function BookPageContent() {
     };
 
     const startPolling = async () => {
-      const initialQuote = await fetchQuote(phone);
+      const initialQuote = await fetchQuote(rawPhone, baseUrlToUse);
       processQuote(initialQuote);
 
       if (!initialQuote || !isQuoteReady(initialQuote)) {
         pollInterval = setInterval(async () => {
           pollCount += 1;
-          const updatedQuote = await fetchQuote(phone);
+          const updatedQuote = await fetchQuote(rawPhone, baseUrlToUse);
           processQuote(updatedQuote);
 
           if ((updatedQuote && isQuoteReady(updatedQuote)) || pollCount >= MAX_POLLS) {
@@ -120,6 +152,10 @@ function BookPageContent() {
   }, [phone]);
 
   const isReady = isQuoteReady(quote) && fetchStatus === "ready";
+  const shouldShowDebug =
+    fetchStatus === "loading" ||
+    fetchStatus === "timeout" ||
+    fetchStatus === "error";
 
   return (
     <div className="min-h-screen py-6 md:py-10">
@@ -174,6 +210,26 @@ function BookPageContent() {
               confirm your pricing manually.
             </p>
             <p className="text-xs text-alloy-ember font-mono break-all">{errorMessage}</p>
+          </div>
+        )}
+
+        {/* Debug info for API calls (visible in loading/timeout/error) */}
+        {shouldShowDebug && (
+          <div className="mb-4 p-3 bg-alloy-stone/60 rounded-lg border border-alloy-stone/80">
+            <p className="text-xs font-mono text-alloy-midnight break-all">
+              <strong>API Base URL:</strong> {apiBaseUrl ?? "(unset)"}
+            </p>
+            <p className="text-xs font-mono text-alloy-midnight break-all mt-1">
+              <strong>Request URL:</strong> {lastRequestUrl ?? "(none yet)"}
+            </p>
+            <p className="text-xs font-mono text-alloy-midnight mt-1">
+              <strong>Phone param:</strong> {phone ?? "(missing)"}
+            </p>
+            {errorMessage && (
+              <p className="text-xs font-mono text-alloy-ember break-all mt-1">
+                <strong>Error:</strong> {errorMessage}
+              </p>
+            )}
           </div>
         )}
 
