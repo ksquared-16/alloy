@@ -47,19 +47,18 @@ function validate(form: FormState): ValidationErrors {
 
   if (!form.email.trim()) {
     errors.email = "Email is required.";
-  } else if (!/^[^@\s]+@\S+\.\S+$/.test(form.email.trim())) {
+  } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
     errors.email = "Please enter a valid email address.";
   }
 
   if (!form.postalCode.trim()) {
-    errors.postalCode = "Please enter your postal code.";
+    errors.postalCode = "Postal code is required.";
   }
 
   if (!form.homeType) errors.homeType = "Home type is required.";
   if (!form.serviceType) errors.serviceType = "Service type is required.";
-  if (!form.squareFootage) errors squareFootage = "Approximate size is required.";
-  if (!form.cleaningFrequency)
-    errors.cleaningFrequency = "Cleaning frequency is required.";
+  if (!form.squareFootage) errors.squareFootage = "Approximate size is required.";
+  if (!form.cleaningFrequency) errors.cleaningFrequency = "Cleaning frequency is required.";
 
   if (form.serviceType === "Move-Out / Heavy Clean" && !form.preferredServiceDate?.trim()) {
     errors.preferredServiceDate = "Please provide a preferred service date.";
@@ -91,7 +90,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
   const toggleAddOn = (id: AddOnId) => {
     setForm((prev) => {
       const exists = prev.addOns.includes(id);
-      const next = exists ? prev.addOns.conჍce(a) => a !== id) : [...prev.addOns, id];
+      const next = exists ? prev.addOns.filter((a) => a !== id) : [...prev.addOns, id];
       return {
         ...prev,
         addOns: next,
@@ -118,7 +117,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
       const cleanInput: CleaningQuoteInput = {
         ...form,
         preferredServiceDate: form.preferredServiceDate?.trim() || undefined,
-        addOnFrequency: form.addOnFrequency || (undefined as AddOnFrequencyOption | undefined),
+        addOnFrequency: form.addOnFrequency || undefined,
       };
 
       const result = calculateCleaningQuote(cleanInput);
@@ -126,13 +125,19 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
       onQuoteCalculated?.(result, cleanInput);
 
       // TODO(Phase 2): POST cleanInput + result to backend `/leads/cleaning` for logging / storage.
-      // TODO(Phase 3): Backend should upsert contact + create/update GHL opportunity + store pricing.
+      // TODO(Phase 3): Backend should upsert GHL contact + create/update opportunity and store pricing.
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
+
+  const hasReadyQuote =
+    quote &&
+    quote.status === "ready" &&
+    typeof quote.first_clean_price === "number" &&
+    quote.first_clean_price > 0;
 
   return (
     <div className="space-y-4">
@@ -212,7 +217,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               type="text"
               value={form.postalCode}
               onChange={(e) => handleChange("postalCode", e.target.value)}
-              className="w-full rounded-md border	border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
             />
             {errors.postalCode && (
               <p className="mt-1 text-xs text-alloy-ember">{errors.postalCode}</p>
@@ -236,7 +241,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               <option value="Other">Other</option>
             </select>
             {errors.homeType && (
-              <p className="mt-1 text-xs text-alloy-midnight/70">{errors.homeType}</p>
+              <p className="mt-1 text-xs text-alloy-ember">{errors.homeType}</p>
             )}
           </div>
         </div>
@@ -250,14 +255,14 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
             <select
               value={form.serviceType}
               onChange={(e) => handleChange("serviceType", e.target.value as ServiceType)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg white"
+              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
             >
               <option value="">Select a service</option>
               <option value="Standard Cleaning">Standard Cleaning</option>
               <option value="Move-Out / Heavy Clean">Move-Out / Heavy Clean</option>
             </select>
             {errors.serviceType && (
-              <p className="mt-1 text-xs text-alloy-midnight/70">{errors.serviceType}</p>
+              <p className="mt-1 text-xs text-alloy-ember">{errors.serviceType}</p>
             )}
           </div>
 
@@ -270,7 +275,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               onChange={(e) =>
                 handleChange("squareFootage", e.target.value as SquareFootageOption)
               }
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg white"
+              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
             >
               <option value="">Select an option</option>
               <option value="Under 1500 sq ft">Under 1500 sq ft</option>
@@ -279,6 +284,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               <option value="2,601-3,200 sq ft">2,601-3,200 sq ft</option>
               <option value="3,201-4,000 sq ft">3,201-4,000 sq ft</option>
               <option value="4,0001-5,500 sq ft">4,0001-5,500 sq ft</option>
+              <option value="Over 5,500 sq ft">Over 5,500 sq ft</option>
             </select>
             {errors.squareFootage && (
               <p className="mt-1 text-xs text-alloy-ember">{errors.squareFootage}</p>
@@ -322,7 +328,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
             />
             {errors.preferredServiceDate && (
-              <p className="mt-1 text-xs text-alloy-ember">{errors.preferredэвэр}</p>
+              <p className="mt-1 text-xs text-alloy-ember">{errors.preferredServiceDate}</p>
             )}
           </div>
         )}
@@ -419,7 +425,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
       {/* Quote summary (local, instant) */}
       {quote && (
         <div className="mt-4 rounded-xl border border-alloy-stone/30 bg-white p-4 shadow-sm">
-          {quote.status === "ready" && quote.first_clean_price != null ? (
+          {hasReadyQuote && quote.first_clean_price != null ? (
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* First cleaning or one-time */}
@@ -435,7 +441,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
                 {/* Recurring (if any) */}
                 {quote.recurring_price != null && quote.frequency_label && (
                   <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-3">
-                    <p className="text-xs fontsemibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
                       {quote.frequency_label} cleaning
                       {quote.discount_label && (
                         <span className="ml-1 text-[11px] text-alloy-midnight/70">
