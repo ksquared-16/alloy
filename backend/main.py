@@ -1564,186 +1564,154 @@ async def get_cleaning_quote(phone: str):
         opportunity_id = opportunity.get("id")
         logger.info("get_cleaning_quote: selected opportunity_id=%s", opportunity_id)
 
-        # Extract monetaryValue from opportunity
-        monetary_value = opportunity.get("monetaryValue")
-        logger.info("get_cleaning_quote: opportunity monetaryValue raw=%s (type=%s)", monetary_value, type(monetary_value).__name__ if monetary_value is not None else "None")
-        
-        # Try to parse as float if it's a string
-        if isinstance(monetary_value, str):
-            try:
-                monetary_value = float(monetary_value.replace("$", "").replace(",", "").strip())
-            except (ValueError, AttributeError) as e:
-                logger.warning("get_cleaning_quote: failed to parse monetaryValue string '%s': %s", monetary_value, e)
-                monetary_value = None
-
-        # If monetaryValue is missing, null, or 0, return pending
-        if monetary_value is None or (isinstance(monetary_value, (int, float)) and monetary_value <= 0):
-            logger.info(
-                "get_cleaning_quote: opportunity found but monetaryValue not populated. opportunity_id=%s, monetary_value=%s",
-                opportunity_id,
-                monetary_value,
-            )
-            return JSONResponse({"status": "pending"}, status_code=200)
-
-        # Extract price_breakdown and other pricing info from customFields
-        # GHL returns customFields as an array: [{id:"...", value:"..."}, ...]
-        custom_fields_raw = contact.get("customFields", [])
-        custom_field_map = {}
-        all_values_text = ""
-        
-        # Convert customFields array to a map and build all_values_text
-        if isinstance(custom_fields_raw, list):
-            for cf in custom_fields_raw:
-                if isinstance(cf, dict):
-                    cf_id = cf.get("id")
-                    cf_value = cf.get("value")
-                    if cf_id:
-                        custom_field_map[cf_id] = cf_value
-                    if cf_value is not None:
-                        all_values_text += str(cf_value) + "\n"
-        elif isinstance(custom_fields_raw, dict):
-            # Fallback: handle as dict (legacy format)
-            custom_field_map = custom_fields_raw
-            all_values_text = "\n".join(str(v) for v in custom_fields_raw.values() if v is not None)
-        else:
-            logger.warning("get_cleaning_quote: customFields is not a list or dict, got type=%s", type(custom_fields_raw).__name__)
-        
-        # Find price_breakdown field (contains "Recurring price (selected)" or "First clean:")
-        price_breakdown = None
-        preferred_frequency = None
-        
-        try:
-            # Search through all custom field values
-            for cf_id, cf_value in custom_field_map.items():
-                if isinstance(cf_value, str):
-                    cf_value_lower = cf_value.lower()
-                    # Look for price breakdown field
-                    if "recurring price (selected)" in cf_value_lower or "first clean" in cf_value_lower:
-                        price_breakdown = cf_value
-                    # Look for frequency field (contains Weekly/Biweekly/Monthly)
-                    if any(freq in cf_value_lower for freq in ["weekly", "biweekly", "monthly"]):
-                        if not preferred_frequency or "(" in cf_value:  # Prefer fields with discount info
-                            preferred_frequency = cf_value
-        except Exception as e:
-            logger.error("get_cleaning_quote: error iterating customFields: %s", e)
-        
-        # If price_breakdown not found in individual fields, use all_values_text
-        if not price_breakdown and all_values_text:
-            if "recurring price (selected)" in all_values_text.lower() or "first clean" in all_values_text.lower():
-                price_breakdown = all_values_text.strip()
-
-        # Parse pricing from price_breakdown string
-        first_clean_price = None
-        recurring_price = None
-        frequency_label = None
-        addons = []
-
-        if price_breakdown:
-            try:
-                # Parse "First clean: $X" or "First cleaning: $X" - more robust regex
-                first_clean_match = re.search(r"(?:First clean|First cleaning)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                if first_clean_match:
-                    first_clean_price = float(first_clean_match.group(1).replace(",", ""))
-                
-                # Parse "Recurring price (selected): $X" - more robust regex
-                recurring_selected_match = re.search(r"Recurring price\s*\(selected\)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                if recurring_selected_match:
-                    recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
-                
-                # Determine frequency_label:
-                # 1. First try preferred_frequency from custom fields (may include discount info like "Weekly (15% Off)")
-                if preferred_frequency:
-                    # Extract frequency from the value (e.g., "Weekly (15% Off)" -> "Weekly (15% Off)")
-                    frequency_label = preferred_frequency.strip()
-                    # Capitalize first letter only (preserve rest like "(15% Off)")
-                    if frequency_label:
-                        frequency_label = frequency_label[0].upper() + frequency_label[1:] if len(frequency_label) > 1 else frequency_label.upper()
-                else:
-                    # 2. Infer from breakdown text by matching recurring_price to frequency lines
-                    if recurring_price:
-                        # Try to match the recurring_price to one of the frequency lines
-                        weekly_match = re.search(r"weekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                        biweekly_match = re.search(r"biweekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                        monthly_match = re.search(r"monthly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                        
-                        # Compare prices (allowing for small floating point differences)
-                        if weekly_match:
-                            weekly_price = float(weekly_match.group(1).replace(",", ""))
-                            if abs(weekly_price - recurring_price) < 0.01:
-                                frequency_label = "Weekly"
-                        if not frequency_label and biweekly_match:
-                            biweekly_price = float(biweekly_match.group(1).replace(",", ""))
-                            if abs(biweekly_price - recurring_price) < 0.01:
-                                frequency_label = "Biweekly"
-                        if not frequency_label and monthly_match:
-                            monthly_price = float(monthly_match.group(1).replace(",", ""))
-                            if abs(monthly_price - recurring_price) < 0.01:
-                                frequency_label = "Monthly"
-                
-                # Parse add-ons from breakdown (look for lines like "Inside Fridge: $25.00" or similar)
-                addon_pattern = re.compile(r"^([^:]+):\s*\$?([\d,]+\.?\d*)$", re.MULTILINE | re.IGNORECASE)
-                addon_matches = addon_pattern.findall(price_breakdown)
-                for addon_name, addon_price_str in addon_matches:
-                    addon_name_clean = addon_name.strip()
-                    # Skip if it's already a main price line
-                    if addon_name_clean.lower() not in ["first clean", "first cleaning", "weekly", "biweekly", "monthly", "recurring price (selected)", "recurring price"]:
-                        try:
-                            addon_price = float(addon_price_str.replace(",", ""))
-                            addons.append({"name": addon_name_clean, "price": addon_price})
-                        except ValueError:
-                            pass
-            except Exception as e:
-                logger.warning("get_cleaning_quote: failed to parse price breakdown: %s", e)
+        # Extract quote fields from the selected opportunity (source of truth)
+        estimated_raw = opportunity.get("estimated_price")
+        recurring_raw = opportunity.get("recurring_price")
+        addons_raw = opportunity.get("addons")
+        price_breakdown = opportunity.get("price_breakdown")
+        cleaning_frequency = opportunity.get("cleaning_frequency")
 
         logger.info(
-            "get_cleaning_quote: found quote. monetary_value=%s, first_clean=%s, recurring=%s (%s), has_breakdown=%s",
-            monetary_value,
-            first_clean_price,
-            recurring_price,
-            frequency_label,
+            "get_cleaning_quote: opportunity pricing fields: estimated_price=%s, recurring_price=%s, cleaning_frequency=%s, has_price_breakdown=%s, addons_type=%s",
+            estimated_raw,
+            recurring_raw,
+            cleaning_frequency,
             bool(price_breakdown),
+            type(addons_raw).__name__,
         )
 
-        # Safely convert to float
-        try:
-            estimated_price_float = float(monetary_value)
-        except (ValueError, TypeError) as e:
-            logger.error("get_cleaning_quote: failed to convert monetary_value to float: %s", e)
+        # Fallback for legacy opportunities where estimated_price is not set
+        if estimated_raw is None:
+            estimated_raw = opportunity.get("monetaryValue")
+
+        # Parse estimated_price
+        estimated_price = None
+        if isinstance(estimated_raw, (int, float)):
+            estimated_price = float(estimated_raw)
+        elif isinstance(estimated_raw, str):
+            try:
+                estimated_price = float(estimated_raw.replace("$", "").replace(",", "").strip())
+            except Exception as e:
+                logger.warning(
+                    "get_cleaning_quote: failed to parse estimated_price '%s': %s",
+                    estimated_raw,
+                    e,
+                )
+
+        if estimated_price is None or estimated_price <= 0:
+            logger.info(
+                "get_cleaning_quote: estimated_price not populated yet for opportunity_id=%s, estimated_raw=%s",
+                opportunity_id,
+                estimated_raw,
+            )
             return JSONResponse({"status": "pending"}, status_code=200)
 
-        # Return status "ready" if both estimated_price and recurring_price are present
-        # Otherwise return "pending" with estimated_price
-        if recurring_price is not None and estimated_price_float is not None:
-            # Build response with all pricing details
-            response = {
-                "status": "ready",
-                "estimated_price": estimated_price_float,
-                "source": "contact_search",
-            }
-            
-            # Always include parsed pricing when ready
-            if first_clean_price is not None:
-                response["first_clean_price"] = first_clean_price
-            response["recurring_price"] = recurring_price
-            if frequency_label:
-                response["frequency_label"] = frequency_label
-            if price_breakdown:
-                response["price_breakdown"] = str(price_breakdown)
-            if addons:
-                response["addons"] = addons
+        # Parse recurring_price
+        recurring_price = None
+        if isinstance(recurring_raw, (int, float)):
+            recurring_price = float(recurring_raw)
+        elif isinstance(recurring_raw, str):
+            try:
+                recurring_price = float(recurring_raw.replace("$", "").replace(",", "").strip())
+            except Exception as e:
+                logger.warning(
+                    "get_cleaning_quote: failed to parse recurring_price '%s': %s",
+                    recurring_raw,
+                    e,
+                )
 
-            return JSONResponse(response, status_code=200)
-        else:
-            # Recurring price not found - return pending
-            logger.info(
-                "get_cleaning_quote: recurring_price not found, returning pending. estimated_price=%s",
-                estimated_price_float,
-            )
-            return JSONResponse({
-                "status": "pending",
-                "estimated_price": estimated_price_float,
-                "source": "contact_search",
-            }, status_code=200)
+        # Normalize frequency label from cleaning_frequency
+        frequency_label = None
+        if isinstance(cleaning_frequency, str) and cleaning_frequency.strip():
+            frequency_label = cleaning_frequency.strip()
+
+        # Parse add-ons from opportunity.addons (expected to be a list or JSON string)
+        addons: List[Dict[str, Any]] = []
+        if addons_raw:
+            try:
+                parsed_addons = addons_raw
+                # If it's a JSON string, try to decode
+                if isinstance(addons_raw, str):
+                    try:
+                        import json
+
+                        parsed_addons = json.loads(addons_raw)
+                    except Exception:
+                        parsed_addons = addons_raw
+
+                if isinstance(parsed_addons, list):
+                    for item in parsed_addons:
+                        # Support both dict and simple string formats
+                        if isinstance(item, dict):
+                            name = item.get("name") or item.get("label") or ""
+                            price_val = item.get("price") or item.get("amount")
+                            if not name or price_val is None:
+                                continue
+                            try:
+                                price_float = float(str(price_val).replace("$", "").replace(",", "").strip())
+                                addons.append({"name": str(name), "price": price_float})
+                            except Exception:
+                                continue
+                        elif isinstance(item, str):
+                            # Try to parse "Name: $X.XX"
+                            m = re.match(r"^([^:]+):\s*\$?([\d,]+\.?\d*)$", item.strip())
+                            if m:
+                                name = m.group(1).strip()
+                                try:
+                                    price_float = float(m.group(2).replace(",", ""))
+                                    addons.append({"name": name, "price": price_float})
+                                except Exception:
+                                    continue
+                elif isinstance(parsed_addons, dict):
+                    # Single dict case
+                    name = parsed_addons.get("name") or parsed_addons.get("label") or ""
+                    price_val = parsed_addons.get("price") or parsed_addons.get("amount")
+                    if name and price_val is not None:
+                        try:
+                            price_float = float(str(price_val).replace("$", "").replace(",", "").strip())
+                            addons.append({"name": str(name), "price": price_float})
+                        except Exception:
+                            pass
+            except Exception as e:
+                logger.warning("get_cleaning_quote: failed to parse addons: %s", e)
+
+        # Determine if quote is ready based on opportunity fields
+        has_price_breakdown = isinstance(price_breakdown, str) and bool(price_breakdown.strip())
+        quote_ready = estimated_price is not None and (has_price_breakdown or recurring_price is not None)
+
+        logger.info(
+            "get_cleaning_quote: evaluated quote readiness. estimated_price=%s, has_price_breakdown=%s, recurring_price=%s, ready=%s",
+            estimated_price,
+            has_price_breakdown,
+            recurring_price,
+            quote_ready,
+        )
+
+        if not quote_ready:
+            # Quote fields on the opportunity are not fully populated yet
+            return JSONResponse({"status": "pending"}, status_code=200)
+
+        # When ready, treat the estimated_price as the first cleaning amount for display
+        first_clean_price = estimated_price
+
+        response: Dict[str, Any] = {
+            "status": "ready",
+            "estimated_price": estimated_price,
+            "source": "opportunity",
+        }
+
+        if first_clean_price is not None:
+            response["first_clean_price"] = first_clean_price
+        if recurring_price is not None:
+            response["recurring_price"] = recurring_price
+        if frequency_label:
+            response["frequency_label"] = frequency_label
+        if has_price_breakdown:
+            response["price_breakdown"] = str(price_breakdown)
+        if addons:
+            response["addons"] = addons
+
+        return JSONResponse(response, status_code=200)
 
     except Exception as e:
         # Log full traceback for debugging

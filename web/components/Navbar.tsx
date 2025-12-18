@@ -9,6 +9,7 @@ import PrimaryButton from "./PrimaryButton";
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const isBookingFlow = pathname === "/book" || pathname?.startsWith("/book/");
 
   const navLinks = [
     { href: "/services", label: "Services" },
@@ -51,11 +52,13 @@ export default function Navbar() {
                 </Link>
               );
             })}
-            <Link href="/services/cleaning">
-              <PrimaryButton className="!px-5 !py-2 text-sm">
-                Get a Quote
-              </PrimaryButton>
-            </Link>
+            {!isBookingFlow && (
+              <Link href="/services/cleaning">
+                <PrimaryButton className="!px-5 !py-2 text-sm">
+                  Get a Quote
+                </PrimaryButton>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -118,9 +121,11 @@ export default function Navbar() {
                   </Link>
                 );
               })}
-              <Link href="/services/cleaning" onClick={() => setMobileMenuOpen(false)}>
-                <PrimaryButton className="w-full mt-2">Get a Quote</PrimaryButton>
-              </Link>
+              {!isBookingFlow && (
+                <Link href="/services/cleaning" onClick={() => setMobileMenuOpen(false)}>
+                  <PrimaryButton className="w-full mt-2">Get a Quote</PrimaryButton>
+                </Link>
+              )}
             </div>
           </div>
         )}
