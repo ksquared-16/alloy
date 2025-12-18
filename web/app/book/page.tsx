@@ -157,8 +157,10 @@ function BookPageContent() {
   const isReady = isQuoteReady(quote) && fetchStatus === "ready";
   const hasQuote =
     !!quote &&
-    (typeof quote.estimated_price === "number" ||
-      typeof quote.first_clean_price === "number");
+    ((typeof quote.first_clean_price === "number" &&
+      quote.first_clean_price > 0) ||
+      (typeof quote.estimated_price === "number" &&
+        quote.estimated_price > 0));
   const shouldShowDebug =
     fetchStatus === "loading" ||
     fetchStatus === "timeout" ||
@@ -268,7 +270,13 @@ function BookPageContent() {
                 <p className="text-3xl font-bold text-alloy-blue">
                   $
                   {(
-                    quote.first_clean_price ?? quote.estimated_price ?? 0
+                    (typeof quote.first_clean_price === "number" &&
+                    quote.first_clean_price > 0
+                      ? quote.first_clean_price
+                      : typeof quote.estimated_price === "number" &&
+                        quote.estimated_price > 0
+                      ? quote.estimated_price
+                      : 0)
                   ).toFixed(2)}
                 </p>
               </div>
@@ -295,7 +303,7 @@ function BookPageContent() {
                     </p>
                   )}
                 </div>
-              ) : (
+              ) : quote?.status === "ready" ? null : (
                 <div className="p-4 bg-alloy-stone/40 rounded-xl border border-alloy-stone/60">
                   <p className="text-sm text-alloy-midnight/80">
                     Finalizing your recurring rate…

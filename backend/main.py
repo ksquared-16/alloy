@@ -282,6 +282,61 @@ def parse_simplified_price_breakdown(text: str) -> Dict[str, Any]:
     return result
 
 
+def build_contact_price_breakdown(contact: Dict[str, Any]) -> Optional[str]:
+    """
+    Build a pricing breakdown text block from contact.customFields.
+
+    We look for custom field values that contain any of:
+      - "First cleaning:"
+      - "Recurring ("
+      - "Service:"
+      - "Add-ons:" / "Addons:"
+      - "Add-on" / "Addon"
+    and join them with newlines.
+    """
+    custom_fields_raw = contact.get("customFields", [])
+    if not custom_fields_raw:
+        return None
+
+    tokens = [
+        "first cleaning:",
+        "recurring (",
+        "service:",
+        "add-ons:",
+        "addons:",
+        "add-on",
+        "addon",
+    ]
+
+    blocks: List[str] = []
+    seen: set[str] = set()
+
+    def _maybe_add_block(value: Any) -> None:
+        if not isinstance(value, str):
+            return
+        val = value.strip()
+        if not val:
+            return
+        lower = val.lower()
+        if any(token in lower for token in tokens):
+            if val not in seen:
+                seen.add(val)
+                blocks.append(val)
+
+    if isinstance(custom_fields_raw, list):
+        for cf in custom_fields_raw:
+            if isinstance(cf, dict):
+                _maybe_add_block(cf.get("value"))
+    elif isinstance(custom_fields_raw, dict):
+        for _field_id, value in custom_fields_raw.items():
+            _maybe_add_block(value)
+
+    if not blocks:
+        return None
+
+    return "\n".join(blocks)
+
+
 def extract_contact_pricing_from_custom_fields(contact: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extract recurring_price and frequency_label from contact.customFields.
@@ -1430,75 +1485,23 @@ def debug_quote_source(phone: str):
         
         contact_id = contact.get("id")
 
-        # Try to find price_breakdown on opportunities first (same selection logic as /quote/cleaning)
-        opportunities_raw = contact.get("opportunities")
-        opportunities: List[Dict[str, Any]] = []
-        if isinstance(opportunities_raw, list):
-            opportunities = opportunities_raw
-        elif opportunities_raw is not None:
-            opportunities = [opportunities_raw]
+        # Build breakdown text exactly like /quote/cleaning V1
+        price_breakdown_text = build_contact_price_breakdown(contact)
 
-        price_breakdown = None
-
-        def _opp_sort_key(o: Dict[str, Any]) -> str:
-            if not isinstance(o, dict):
-                return ""
-            return (
-                o.get("updatedAt")
-                or o.get("dateUpdated")
-                or o.get("createdAt")
-                or ""
-            )
-
-        if opportunities:
-            try:
-                opportunities.sort(key=_opp_sort_key, reverse=True)
-            except Exception as e:
-                logger.error("debug_quote_source: failed to sort opportunities: %s", e)
-
-            for o in opportunities:
-                if not isinstance(o, dict):
-                    continue
-                est_candidate = o.get("estimated_price") or o.get("monetaryValue")
-                rec_candidate = o.get("recurring_price")
-                pb_candidate = o.get("price_breakdown")
-                has_any_pricing = (
-                    est_candidate is not None
-                    or rec_candidate is not None
-                    or (isinstance(pb_candidate, str) and pb_candidate.strip() != "")
-                )
-                if has_any_pricing:
-                    price_breakdown = pb_candidate
-                    break
-
-        # Fallback: look in customFields for any legacy price breakdown text
+        # Collect custom field ids for debugging
         custom_fields_raw = contact.get("customFields", [])
         custom_field_ids: List[str] = []
-        all_values_text = ""
-
-        if not price_breakdown:
-            if isinstance(custom_fields_raw, list):
-                for cf in custom_fields_raw:
-                    if isinstance(cf, dict):
-                        cf_id = cf.get("id")
-                        cf_value = cf.get("value")
-                        if cf_id:
-                            custom_field_ids.append(cf_id)
-                        if isinstance(cf_value, str):
-                            all_values_text += cf_value + "\n"
-            elif isinstance(custom_fields_raw, dict):
-                custom_field_ids = list(custom_fields_raw.keys())
-                all_values_text = "\n".join(
-                    str(v) for v in custom_fields_raw.values() if v is not None
-                )
-
-            if all_values_text and not price_breakdown:
-                price_breakdown = all_values_text.strip()
+        if isinstance(custom_fields_raw, list):
+            for cf in custom_fields_raw:
+                if isinstance(cf, dict) and cf.get("id"):
+                    custom_field_ids.append(str(cf.get("id")))
+        elif isinstance(custom_fields_raw, dict):
+            custom_field_ids = [str(k) for k in custom_fields_raw.keys()]
 
         # Parse using the same simplified breakdown parser as /quote/cleaning
         parsed = (
-            parse_simplified_price_breakdown(price_breakdown)
-            if isinstance(price_breakdown, str)
+            parse_simplified_price_breakdown(price_breakdown_text)
+            if isinstance(price_breakdown_text, str)
             else {
                 "service": None,
                 "first_clean_price": None,
@@ -1514,7 +1517,7 @@ def debug_quote_source(phone: str):
 
         return JSONResponse({
             "contact_id": contact_id,
-            "price_breakdown_field": price_breakdown[:500] + "..." if price_breakdown and len(price_breakdown) > 500 else price_breakdown,
+            "price_breakdown_field": price_breakdown_text[:500] + "..." if price_breakdown_text and len(price_breakdown_text) > 500 else price_breakdown_text,
             "parsed_values": {
                 "service": parsed.get("service"),
                 "first_clean_price": parsed.get("first_clean_price"),
@@ -1861,6 +1864,74 @@ async def get_cleaning_quote(phone: str):
             logger.info("get_cleaning_quote: no contact found for phone=%s", phone_normalized)
             return JSONResponse({"status": "not_found"}, status_code=200)
 
+        # -----------------------------------------------------
+        # V1: Prefer contact customFields as pricing source
+        # -----------------------------------------------------
+        price_breakdown_from_contact = build_contact_price_breakdown(contact)
+        if price_breakdown_from_contact:
+            parsed = parse_simplified_price_breakdown(price_breakdown_from_contact)
+
+            service = parsed.get("service")
+            first_clean_price = parsed.get("first_clean_price")
+            recurring_price = parsed.get("recurring_price")
+            frequency_label = parsed.get("frequency_label")
+            discount_label = parsed.get("discount_label")
+            addons = parsed.get("addons") or []
+
+            # For booking UI, treat first_clean as estimated as well
+            estimated_price = first_clean_price if isinstance(first_clean_price, (int, float)) else None
+
+            quote_ready = (
+                first_clean_price is not None
+                and recurring_price is not None
+                and bool(frequency_label)
+            )
+
+            response: Dict[str, Any] = {
+                "source": "contact_custom_fields",
+            }
+            if service:
+                response["service"] = service
+            if estimated_price is not None:
+                response["estimated_price"] = float(estimated_price)
+            if first_clean_price is not None:
+                response["first_clean_price"] = first_clean_price
+            response["recurring_price"] = recurring_price
+            response["frequency_label"] = frequency_label
+            if discount_label:
+                response["discount_label"] = discount_label
+            response["price_breakdown"] = price_breakdown_from_contact
+            if addons:
+                response["addons"] = addons
+
+            # Debug log for contact-based pricing
+            logger.info(
+                "get_cleaning_quote: contact_pricing_debug={phone=%s, contact_id=%s, price_breakdown_preview=%s, parsed=%s}",
+                phone_normalized,
+                contact_id,
+                price_breakdown_from_contact[:400] + "..."
+                if len(price_breakdown_from_contact) > 400
+                else price_breakdown_from_contact,
+                {
+                    "service": service,
+                    "first_clean_price": first_clean_price,
+                    "recurring_price": recurring_price,
+                    "frequency_label": frequency_label,
+                    "discount_label": discount_label,
+                },
+            )
+
+            if quote_ready:
+                response["status"] = "ready"
+                return JSONResponse(response, status_code=200)
+
+            # Parsing present but recurring/frequency not fully ready
+            response["status"] = "pending"
+            return JSONResponse(response, status_code=200)
+
+        # -----------------------------------------------------
+        # Fallback: existing opportunity-based logic
+        # -----------------------------------------------------
         # Extract opportunities from contact record (safely)
         opportunities_raw = contact.get("opportunities")
         opportunities = []
