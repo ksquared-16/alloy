@@ -238,6 +238,86 @@ def parse_simplified_price_breakdown(text: str) -> Dict[str, Any]:
     return result
 
 
+def extract_contact_pricing_from_custom_fields(contact: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract recurring_price and frequency_label from contact.customFields.
+
+    Expects GHL contact.customFields in the array form:
+        [{ "id": "recurring_price", "value": "144.00" }, ...]
+
+    We match on the custom field id/key, not the human label:
+        - ids containing "recurring_price" -> recurring price
+        - ids containing "cleaning_frequency" or exactly "frequency" -> frequency label
+    """
+    custom_fields_raw = contact.get("customFields", [])
+    recurring_price: Optional[float] = None
+    frequency_label: Optional[str] = None
+
+    if isinstance(custom_fields_raw, list):
+        for cf in custom_fields_raw:
+            if not isinstance(cf, dict):
+                continue
+            field_id = str(cf.get("id") or "")
+            field_id_lower = field_id.lower()
+            value = cf.get("value")
+
+            # Recurring price field
+            if "recurring_price" in field_id_lower and recurring_price is None:
+                if isinstance(value, (int, float)):
+                    recurring_price = float(value)
+                elif isinstance(value, str):
+                    m = re.search(
+                        r"\$?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)",
+                        value.strip(),
+                    )
+                    if m:
+                        try:
+                            recurring_price = float(m.group(1).replace(",", ""))
+                        except Exception:
+                            pass
+
+            # Cleaning frequency / frequency label field
+            if (
+                ("cleaning_frequency" in field_id_lower or field_id_lower == "frequency")
+                and frequency_label is None
+                and isinstance(value, str)
+                and value.strip()
+            ):
+                frequency_label = value.strip()
+
+    elif isinstance(custom_fields_raw, dict):
+        # Legacy dict-style custom fields
+        for field_id, value in custom_fields_raw.items():
+            field_id_lower = str(field_id).lower()
+
+            if "recurring_price" in field_id_lower and recurring_price is None:
+                if isinstance(value, (int, float)):
+                    recurring_price = float(value)
+                elif isinstance(value, str):
+                    m = re.search(
+                        r"\$?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)",
+                        value.strip(),
+                    )
+                    if m:
+                        try:
+                            recurring_price = float(m.group(1).replace(",", ""))
+                        except Exception:
+                            pass
+
+            if (
+                ("cleaning_frequency" in field_id_lower or field_id_lower == "frequency")
+                and frequency_label is None
+                and isinstance(value, str)
+                and value.strip()
+            ):
+                frequency_label = value.strip()
+
+    return {
+        "recurring_price": recurring_price,
+        "frequency_label": frequency_label,
+    }
+
+
 # FastAPI app instance
 app = FastAPI(
     title="Alloy Dispatcher API",
@@ -1201,6 +1281,76 @@ def debug_search_contact_by_phone(phone: str):
     )
 
 
+@app.get("/debug/contact_pricing")
+def debug_contact_pricing(phone: str):
+    """
+    Debug endpoint to inspect contact-level pricing fields.
+
+    Args (query param):
+        phone: Phone number to search for
+
+    Returns:
+        JSON with:
+        - phone_normalized
+        - contact_id
+        - custom_fields: [{id, value}]
+        - recurring_price: float or null (from contact.customFields)
+        - frequency_label: string or null (from contact.customFields)
+    """
+    try:
+        phone_normalized = phone.strip() if phone else ""
+        contact = find_contact_record_by_phone(phone_normalized)
+
+        if not contact:
+            return JSONResponse(
+                {
+                    "phone_normalized": phone_normalized,
+                    "contact_id": None,
+                    "custom_fields": [],
+                    "recurring_price": None,
+                    "frequency_label": None,
+                },
+                status_code=200,
+            )
+
+        contact_id = contact.get("id")
+        custom_fields_raw = contact.get("customFields", [])
+        fields_out: List[Dict[str, Any]] = []
+
+        if isinstance(custom_fields_raw, list):
+            for cf in custom_fields_raw:
+                if isinstance(cf, dict):
+                    fields_out.append(
+                        {
+                            "id": cf.get("id"),
+                            "value": cf.get("value"),
+                        }
+                    )
+        elif isinstance(custom_fields_raw, dict):
+            for field_id, value in custom_fields_raw.items():
+                fields_out.append({"id": field_id, "value": value})
+
+        pricing = extract_contact_pricing_from_custom_fields(contact)
+
+        return JSONResponse(
+            {
+                "phone_normalized": phone_normalized,
+                "contact_id": contact_id,
+                "custom_fields": fields_out,
+                "recurring_price": pricing.get("recurring_price"),
+                "frequency_label": pricing.get("frequency_label"),
+            },
+            status_code=200,
+        )
+    except Exception as e:
+        return JSONResponse(
+            {
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            },
+            status_code=200,
+        )
+
 @app.get("/debug/quote_source")
 def debug_quote_source(phone: str):
     """
@@ -1315,6 +1465,9 @@ def debug_quote_source(phone: str):
             }
         )
 
+        # Also compute contact-level pricing fallbacks for debugging
+        contact_pricing = extract_contact_pricing_from_custom_fields(contact)
+
         return JSONResponse({
             "contact_id": contact_id,
             "price_breakdown_field": price_breakdown[:500] + "..." if price_breakdown and len(price_breakdown) > 500 else price_breakdown,
@@ -1328,6 +1481,7 @@ def debug_quote_source(phone: str):
             "addons": parsed.get("addons") or [],
             "custom_fields_keys": custom_field_ids,
             "custom_fields_count": len(custom_field_ids),
+            "contact_pricing_from_custom_fields": contact_pricing,
         }, status_code=200)
     except Exception as e:
         return JSONResponse({
@@ -1879,6 +2033,14 @@ async def get_cleaning_quote(phone: str):
         elif isinstance(frequency_from_field, str) and frequency_from_field.strip():
             frequency_label = frequency_from_field.strip()
 
+        # Fallback: use contact-level custom fields for recurring + frequency if still missing
+        if recurring_price is None or not frequency_label:
+            contact_pricing = extract_contact_pricing_from_custom_fields(contact)
+            if recurring_price is None and contact_pricing.get("recurring_price") is not None:
+                recurring_price = contact_pricing["recurring_price"]
+            if not frequency_label and contact_pricing.get("frequency_label"):
+                frequency_label = contact_pricing["frequency_label"]
+
         # If estimated_price missing but we have first_clean_price, use that
         if estimated_price is None and first_clean_price is not None:
             estimated_price = first_clean_price
@@ -1932,14 +2094,38 @@ async def get_cleaning_quote(phone: str):
             base_response["price_breakdown"] = str(price_breakdown)
         if addons:
             base_response["addons"] = addons
+        # Truncated breakdown for logs
+        price_breakdown_preview = None
+        if isinstance(price_breakdown, str):
+            pb_str = price_breakdown
+            price_breakdown_preview = (
+                pb_str[:400] + "..." if len(pb_str) > 400 else pb_str
+            )
+
+        debug_payload = {
+            "phone_normalized": phone_normalized,
+            "contact_id": contact_id,
+            "opportunity_id": opportunity_id,
+            "price_breakdown_preview": price_breakdown_preview,
+            "parsed_values": {
+                "service": service,
+                "first_clean_price": first_clean_price,
+                "recurring_price": recurring_price,
+                "frequency_label": frequency_label,
+                "discount_label": discount_label,
+            },
+            "response": base_response,
+        }
 
         if not quote_ready:
             # Quote fields on the opportunity are not fully populated yet
             base_response["status"] = "pending"
+            logger.info("get_cleaning_quote: debug_quote_output=%s", debug_payload)
             return JSONResponse(base_response, status_code=200)
 
         # When ready, return full quote details
         base_response["status"] = "ready"
+        logger.info("get_cleaning_quote: debug_quote_output=%s", debug_payload)
         return JSONResponse(base_response, status_code=200)
 
     except Exception as e:

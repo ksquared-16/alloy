@@ -57,7 +57,7 @@ function BookPageContent() {
         );
       }
       const data: QuoteResponse = await response.json();
-      console.log("Quote response:", data);
+      console.log("QUOTE RESPONSE", data);
       return data;
     } catch (error) {
       console.error("Error fetching quote:", error);
@@ -340,6 +340,18 @@ function BookPageContent() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Frontend debug block (non-production only) */}
+        {process.env.NODE_ENV !== "production" && quote && (
+          <div className="mb-4 p-3 bg-alloy-stone rounded-lg border border-alloy-stone/60">
+            <p className="text-xs font-semibold text-alloy-midnight mb-1">
+              Quote JSON (debug):
+            </p>
+            <pre className="text-[11px] font-mono whitespace-pre-wrap break-all text-alloy-midnight/90">
+              {JSON.stringify(quote, null, 2)}
+            </pre>
           </div>
         )}
 
