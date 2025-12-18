@@ -242,7 +242,7 @@ export default function Home() {
             you to confirm details.
           </p>
           <div className="max-w-3xl mx-auto text-left">
-            <CleaningQuoteForm />
+            <CleaningQuoteForm variant="dark" />
           </div>
         </div>
       </Section>

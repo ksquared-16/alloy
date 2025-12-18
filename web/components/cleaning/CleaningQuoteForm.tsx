@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   calculateCleaningQuote,
   type CleaningQuoteInput,
@@ -73,14 +74,43 @@ function validate(form: FormState): ValidationErrors {
 
 interface CleaningQuoteFormProps {
   onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
+  variant?: "light" | "dark";
 }
 
-export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFormProps) {
+export default function CleaningQuoteForm({
+  onQuoteCalculated,
+  variant = "light",
+}: CleaningQuoteFormProps) {
+  const router = useRouter();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [quote, setQuote] = useState<CleaningQuoteResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isDark = variant === "dark";
+
+  const labelClass =
+    "block text-xs font-semibold uppercase tracking-wide mb-1 " +
+    (isDark ? "text-white/80" : "text-alloy-midnight/70");
+  const consentLabelClass =
+    "flex items-start gap-2 text-xs " +
+    (isDark ? "text-white/85" : "text-alloy-midnight/80");
+
+  const inputBase =
+    "w-full rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2";
+  const inputClass =
+    inputBase +
+    (isDark
+      ? " border border-white/70 bg-white/10 text-white placeholder-white/70 focus:ring-alloy-juniper focus:border-alloy-juniper"
+      : " border border-alloy-stone/80 bg-white focus:ring-alloy-blue focus:border-alloy-blue");
+  const selectClass = inputClass;
+  const textInputClass = inputClass;
+  const checkboxClass =
+    (isDark
+      ? "mt-0.5 h-4 w-4 rounded border-white/70 bg-transparent"
+      : "mt-0.5 h-4 w-4 rounded border-alloy-stone/70") +
+    " text-alloy-juniper focus:ring-alloy-juniper";
 
   const handleChange = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -109,6 +139,12 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
+      return;
+    }
+
+    // If this is a move-out / heavy clean request, route to the dedicated estimate page
+    if (form.serviceType === "Move-Out / Heavy Clean") {
+      router.push("/services/cleaning/move-out");
       return;
     }
 
@@ -146,14 +182,14 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* First Name */}
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               First Name<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <input
               type="text"
               value={form.firstName}
               onChange={(e) => handleChange("firstName", e.target.value)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue bg-white"
+              className={textInputClass}
             />
             {errors.firstName && (
               <p className="mt-1 text-xs text-alloy-ember">{errors.firstName}</p>
@@ -162,14 +198,14 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
 
           {/* Last Name */}
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Last Name<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <input
               type="text"
               value={form.lastName}
               onChange={(e) => handleChange("lastName", e.target.value)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue bg-white"
+              className={textInputClass}
             />
             {errors.lastName && (
               <p className="mt-1 text-xs text-alloy-ember">{errors.lastName}</p>
@@ -180,28 +216,28 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Phone */}
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Phone<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <input
               type="tel"
               value={form.phone}
               onChange={(e) => handleChange("phone", e.target.value)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue bg-white"
+              className={textInputClass}
             />
             {errors.phone && <p className="mt-1 text-xs text-alloy-ember">{errors.phone}</p>}
           </div>
 
           {/* Email */}
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Email<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => handleChange("email", e.target.value)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={textInputClass}
             />
             {errors.email && <p className="mt-1 text-xs text-alloy-ember">{errors.email}</p>}
           </div>
@@ -210,14 +246,14 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Postal Code */}
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Postal Code<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <input
               type="text"
               value={form.postalCode}
               onChange={(e) => handleChange("postalCode", e.target.value)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={textInputClass}
             />
             {errors.postalCode && (
               <p className="mt-1 text-xs text-alloy-ember">{errors.postalCode}</p>
@@ -226,13 +262,13 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
 
           {/* Home Type */}
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Home Type<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <select
               value={form.homeType}
               onChange={(e) => handleChange("homeType", e.target.value as ServiceHomeType)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={selectClass}
             >
               <option value="">Select an option</option>
               <option value="Apartment / Condo">Apartment / Condo</option>
@@ -249,13 +285,13 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
         {/* Service Type & Square Footage */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Service Type<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <select
               value={form.serviceType}
               onChange={(e) => handleChange("serviceType", e.target.value as ServiceType)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={selectClass}
             >
               <option value="">Select a service</option>
               <option value="Standard Cleaning">Standard Cleaning</option>
@@ -267,7 +303,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Approximate Square Footage<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <select
@@ -275,7 +311,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               onChange={(e) =>
                 handleChange("squareFootage", e.target.value as SquareFootageOption)
               }
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={selectClass}
             >
               <option value="">Select an option</option>
               <option value="Under 1500 sq ft">Under 1500 sq ft</option>
@@ -294,7 +330,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
 
         {/* Cleaning Frequency */}
         <div>
-          <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+          <label className={labelClass}>
             Cleaning Frequency<span className="text-alloy-ember ml-0.5">*</span>
           </label>
           <select
@@ -302,7 +338,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
             onChange={(e) =>
               handleChange("cleaningFrequency", e.target.value as CleaningFrequencyOption)
             }
-            className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+            className={selectClass}
           >
             <option value="">Select a frequency</option>
             <option value="One-time">One-time</option>
@@ -318,14 +354,14 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
         {/* Preferred Service Date – only for Move-Out / Heavy Clean */}
         {isMoveOut && (
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Preferred Service Date<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <input
               type="date"
               value={form.preferredServiceDate || ""}
               onChange={(e) => handleChange("preferredServiceDate", e.target.value)}
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={textInputClass}
             />
             {errors.preferredServiceDate && (
               <p className="mt-1 text-xs text-alloy-ember">{errors.preferredServiceDate}</p>
@@ -335,7 +371,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
 
         {/* Add-ons */}
         <div>
-          <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+          <label className={labelClass}>
             Add-ons
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -355,7 +391,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleAddOn(id)}
-                      className="h-4 w-4 rounded border-alloy-stone/60 text-alloy-juniper focus:ring-alloy-juniper"
+                      className={checkboxClass}
                     />
                     <span className="text-alloy-midnight">{id}</span>
                   </label>
@@ -368,7 +404,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
         {/* Add-on Frequency – only when add-ons selected */}
         {form.addOns.length > 0 && (
           <div>
-            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">
+            <label className={labelClass}>
               Add-ons Frequency<span className="text-alloy-ember ml-0.5">*</span>
             </label>
             <select
@@ -376,7 +412,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
               onChange={(e) =>
                 handleChange("addOnFrequency", e.target.value as AddOnFrequencyOption | "")
               }
-              className="w-full rounded-md border border-alloy-stone/60 px-3 py-2 text-sm bg-white"
+              className={selectClass}
             >
               <option value="">Select an option</option>
               <option value="First cleaning only">First cleaning only</option>
@@ -393,7 +429,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
 
         {/* Consent */}
         <div className="pt-1">
-          <label className="flex items-start gap-2 text-xs text-alloy-midnight/80">
+          <label className={consentLabelClass}>
             <input
               type="checkbox"
               checked={consent}
@@ -401,7 +437,7 @@ export default function CleaningQuoteForm({ onQuoteCalculated }: CleaningQuoteFo
                 setConsent(e.target.checked);
                 setErrors((prev) => ({ ...prev, consent: undefined }));
               }}
-              className="mt-0.5 h-4 w-4 rounded border-alloy-stone/60 text-alloy-juniper focus:ring-alloy-juniper"
+              className={checkboxClass}
             />
             <span>
               By providing my phone number, I agree to receive SMS messages from Alloy regarding my
