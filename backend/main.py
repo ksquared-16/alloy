@@ -88,6 +88,156 @@ SERVICE_TYPE_DEEP = "Deep Cleaning"
 # Note: In production, consider using Redis or a database for persistence
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 
+
+def _parse_addon_part(text: str) -> Dict[str, Any]:
+    """
+    Parse a single add-on fragment into {name, price}.
+
+    Supports formats like:
+        "Fridge ($40.00)"
+        "Fridge - $40.00"
+        "Fridge"
+    """
+    name = text.strip()
+    price_val: Optional[float] = None
+
+    # Pattern: "Name ($40.00)"
+    m = re.match(
+        r"^(?P<name>.+?)\s*\(\s*\$?(?P<price>[\d,]+(?:\.\d{1,2})?)\s*\)$",
+        text.strip(),
+    )
+    if not m:
+        # Pattern: "Name - $40.00"
+        m = re.match(
+            r"^(?P<name>.+?)\s*-\s*\$?(?P<price>[\d,]+(?:\.\d{1,2})?)$",
+            text.strip(),
+        )
+
+    if m:
+        name = m.group("name").strip()
+        price_str = m.group("price")
+        try:
+            price_val = float(price_str.replace(",", ""))
+        except Exception:
+            price_val = None
+
+    return {"name": name, "price": price_val}
+
+
+def parse_simplified_price_breakdown(text: str) -> Dict[str, Any]:
+    """
+    Parse the simplified price_breakdown string into structured fields.
+
+    Expected core format:
+        Price Breakdown:
+        Service: Standard Cleaning
+        First cleaning: $240.00
+        Recurring (Weekly): $144.00 / visit (40% off)
+
+    May also contain add-ons in formats like:
+        - "Add-ons: Fridge ($40.00), Oven ($25.00)"
+        - "Add-ons: Fridge - $40.00, Oven - $25.00"
+        - "Add-ons: Fridge, Oven"
+        - "Add-on: Fridge - $40.00"
+    """
+    result: Dict[str, Any] = {
+        "service": None,
+        "first_clean_price": None,
+        "recurring_price": None,
+        "frequency_label": None,
+        "discount_label": None,
+        "addons": [],
+    }
+
+    if not text:
+        return result
+
+    # Normalize newlines and trim lines
+    normalized_text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.strip() for line in normalized_text.split("\n")]
+    # Drop completely empty lines for regex convenience
+    non_empty_lines = [line for line in lines if line]
+    normalized_block = "\n".join(non_empty_lines)
+
+    # Service
+    m = re.search(r"^Service:\s*(.+)$", normalized_block, re.MULTILINE | re.IGNORECASE)
+    if m:
+        result["service"] = m.group(1).strip()
+
+    # First cleaning price
+    m = re.search(
+        r"^First cleaning:\s*\$([0-9][0-9,]*(?:\.[0-9]{2})?)\s*$",
+        normalized_block,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if m:
+        try:
+            result["first_clean_price"] = float(m.group(1).replace(",", ""))
+        except Exception:
+            pass
+
+    # Recurring frequency, price, and optional discount label
+    m = re.search(
+        r"^Recurring\s*\(([^)]+)\):\s*\$([0-9][0-9,]*(?:\.[0-9]{2})?)\s*/\s*visit\s*(?:\(([^)]+)\))?\s*$",
+        normalized_block,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if m:
+        freq = m.group(1).strip()
+        price_str = m.group(2)
+        discount = m.group(3).strip() if m.group(3) else None
+        try:
+            result["recurring_price"] = float(price_str.replace(",", ""))
+        except Exception:
+            pass
+        if freq:
+            result["frequency_label"] = freq
+        if discount:
+            result["discount_label"] = discount
+
+    # Add-ons
+    addons: List[Dict[str, Any]] = []
+    for line in non_empty_lines:
+        lower = line.lower()
+        if lower.startswith("add-ons:") or lower.startswith("addons:"):
+            # Combined add-ons line
+            try:
+                rest = line.split(":", 1)[1].strip()
+            except Exception:
+                continue
+            if not rest:
+                continue
+            parts = [p.strip() for p in rest.split(",") if p.strip()]
+            for part in parts:
+                parsed = _parse_addon_part(part)
+                if parsed["name"]:
+                    addons.append(parsed)
+        elif lower.startswith("add-on:") or lower.startswith("addon:"):
+            # Individual add-on line
+            try:
+                rest = line.split(":", 1)[1].strip()
+            except Exception:
+                continue
+            if not rest:
+                continue
+            parsed = _parse_addon_part(rest)
+            if parsed["name"]:
+                addons.append(parsed)
+
+    # Deduplicate by (name, price) to avoid duplicates if multiple formats present
+    seen_addons = set()
+    deduped_addons: List[Dict[str, Any]] = []
+    for addon in addons:
+        key = (addon["name"], addon["price"])
+        if key in seen_addons:
+            continue
+        seen_addons.add(key)
+        deduped_addons.append(addon)
+
+    result["addons"] = deduped_addons
+    return result
+
+
 # FastAPI app instance
 app = FastAPI(
     title="Alloy Dispatcher API",
@@ -1085,103 +1235,97 @@ def debug_quote_source(phone: str):
             }, status_code=200)
         
         contact_id = contact.get("id")
-        custom_fields_raw = contact.get("customFields", [])
-        custom_field_map = {}
-        all_values_text = ""
-        custom_field_ids = []
-        
-        # Convert customFields array to a map and build all_values_text
-        if isinstance(custom_fields_raw, list):
-            for cf in custom_fields_raw:
-                if isinstance(cf, dict):
-                    cf_id = cf.get("id")
-                    cf_value = cf.get("value")
-                    if cf_id:
-                        custom_field_map[cf_id] = cf_value
-                        custom_field_ids.append(cf_id)
-                    if cf_value is not None:
-                        all_values_text += str(cf_value) + "\n"
-        elif isinstance(custom_fields_raw, dict):
-            # Fallback: handle as dict (legacy format)
-            custom_field_map = custom_fields_raw
-            custom_field_ids = list(custom_fields_raw.keys())
-            all_values_text = "\n".join(str(v) for v in custom_fields_raw.values() if v is not None)
-        
-        # Find price_breakdown field (contains "Recurring price (selected)" or "First clean:")
+
+        # Try to find price_breakdown on opportunities first (same selection logic as /quote/cleaning)
+        opportunities_raw = contact.get("opportunities")
+        opportunities: List[Dict[str, Any]] = []
+        if isinstance(opportunities_raw, list):
+            opportunities = opportunities_raw
+        elif opportunities_raw is not None:
+            opportunities = [opportunities_raw]
+
         price_breakdown = None
-        preferred_frequency = None
-        
-        try:
-            # Search through all custom field values
-            for cf_id, cf_value in custom_field_map.items():
-                if isinstance(cf_value, str):
-                    cf_value_lower = cf_value.lower()
-                    # Look for price breakdown field
-                    if "recurring price (selected)" in cf_value_lower or "first clean" in cf_value_lower:
-                        price_breakdown = cf_value
-                    # Look for frequency field (contains Weekly/Biweekly/Monthly)
-                    if any(freq in cf_value_lower for freq in ["weekly", "biweekly", "monthly"]):
-                        if not preferred_frequency or "(" in cf_value:  # Prefer fields with discount info
-                            preferred_frequency = cf_value
-        except Exception as e:
-            logger.error("debug_quote_source: error iterating customFields: %s", e)
-        
-        # If price_breakdown not found in individual fields, use all_values_text
-        if not price_breakdown and all_values_text:
-            if "recurring price (selected)" in all_values_text.lower() or "first clean" in all_values_text.lower():
-                price_breakdown = all_values_text.strip()
-        
-        # Parse values (same logic as /quote/cleaning)
-        first_clean_price = None
-        recurring_price = None
-        frequency_label = None
-        
-        if price_breakdown:
+
+        def _opp_sort_key(o: Dict[str, Any]) -> str:
+            if not isinstance(o, dict):
+                return ""
+            return (
+                o.get("updatedAt")
+                or o.get("dateUpdated")
+                or o.get("createdAt")
+                or ""
+            )
+
+        if opportunities:
             try:
-                # Parse "First clean: $X" or "First cleaning: $X" - more robust regex
-                first_clean_match = re.search(r"(?:First clean|First cleaning)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                if first_clean_match:
-                    first_clean_price = float(first_clean_match.group(1).replace(",", ""))
-                
-                # Parse "Recurring price (selected): $X" - more robust regex
-                recurring_selected_match = re.search(r"Recurring price\s*\(selected\)\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                if recurring_selected_match:
-                    recurring_price = float(recurring_selected_match.group(1).replace(",", ""))
-                
-                # Determine frequency_label
-                if preferred_frequency:
-                    frequency_label = preferred_frequency.strip()
-                    if frequency_label:
-                        frequency_label = frequency_label[0].upper() + frequency_label[1:] if len(frequency_label) > 1 else frequency_label.upper()
-                else:
-                    if recurring_price:
-                        weekly_match = re.search(r"weekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                        biweekly_match = re.search(r"biweekly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                        monthly_match = re.search(r"monthly\s*:\s*\$?([0-9][0-9,]*(?:\.[0-9]{1,2})?)", price_breakdown, re.IGNORECASE)
-                        
-                        if weekly_match:
-                            weekly_price = float(weekly_match.group(1).replace(",", ""))
-                            if abs(weekly_price - recurring_price) < 0.01:
-                                frequency_label = "Weekly"
-                        if not frequency_label and biweekly_match:
-                            biweekly_price = float(biweekly_match.group(1).replace(",", ""))
-                            if abs(biweekly_price - recurring_price) < 0.01:
-                                frequency_label = "Biweekly"
-                        if not frequency_label and monthly_match:
-                            monthly_price = float(monthly_match.group(1).replace(",", ""))
-                            if abs(monthly_price - recurring_price) < 0.01:
-                                frequency_label = "Monthly"
+                opportunities.sort(key=_opp_sort_key, reverse=True)
             except Exception as e:
-                logger.warning("debug_quote_source: failed to parse price breakdown: %s", e)
-        
+                logger.error("debug_quote_source: failed to sort opportunities: %s", e)
+
+            for o in opportunities:
+                if not isinstance(o, dict):
+                    continue
+                est_candidate = o.get("estimated_price") or o.get("monetaryValue")
+                rec_candidate = o.get("recurring_price")
+                pb_candidate = o.get("price_breakdown")
+                has_any_pricing = (
+                    est_candidate is not None
+                    or rec_candidate is not None
+                    or (isinstance(pb_candidate, str) and pb_candidate.strip() != "")
+                )
+                if has_any_pricing:
+                    price_breakdown = pb_candidate
+                    break
+
+        # Fallback: look in customFields for any legacy price breakdown text
+        custom_fields_raw = contact.get("customFields", [])
+        custom_field_ids: List[str] = []
+        all_values_text = ""
+
+        if not price_breakdown:
+            if isinstance(custom_fields_raw, list):
+                for cf in custom_fields_raw:
+                    if isinstance(cf, dict):
+                        cf_id = cf.get("id")
+                        cf_value = cf.get("value")
+                        if cf_id:
+                            custom_field_ids.append(cf_id)
+                        if isinstance(cf_value, str):
+                            all_values_text += cf_value + "\n"
+            elif isinstance(custom_fields_raw, dict):
+                custom_field_ids = list(custom_fields_raw.keys())
+                all_values_text = "\n".join(
+                    str(v) for v in custom_fields_raw.values() if v is not None
+                )
+
+            if all_values_text and not price_breakdown:
+                price_breakdown = all_values_text.strip()
+
+        # Parse using the same simplified breakdown parser as /quote/cleaning
+        parsed = (
+            parse_simplified_price_breakdown(price_breakdown)
+            if isinstance(price_breakdown, str)
+            else {
+                "service": None,
+                "first_clean_price": None,
+                "recurring_price": None,
+                "frequency_label": None,
+                "discount_label": None,
+                "addons": [],
+            }
+        )
+
         return JSONResponse({
             "contact_id": contact_id,
             "price_breakdown_field": price_breakdown[:500] + "..." if price_breakdown and len(price_breakdown) > 500 else price_breakdown,
             "parsed_values": {
-                "first_clean_price": first_clean_price,
-                "recurring_price": recurring_price,
-                "frequency_label": frequency_label,
+                "service": parsed.get("service"),
+                "first_clean_price": parsed.get("first_clean_price"),
+                "recurring_price": parsed.get("recurring_price"),
+                "frequency_label": parsed.get("frequency_label"),
+                "discount_label": parsed.get("discount_label"),
             },
+            "addons": parsed.get("addons") or [],
             "custom_fields_keys": custom_field_ids,
             "custom_fields_count": len(custom_field_ids),
         }, status_code=200)
@@ -1590,6 +1734,7 @@ async def get_cleaning_quote(phone: str):
         addons_raw = opportunity.get("addons")
         price_breakdown = opportunity.get("price_breakdown")
         cleaning_frequency = opportunity.get("cleaning_frequency")
+        service_raw = opportunity.get("service") or opportunity.get("service_type")
 
         logger.info(
             "get_cleaning_quote: opportunity pricing fields: estimated_price=%s, recurring_price=%s, cleaning_frequency=%s, has_price_breakdown=%s, addons_type=%s",
@@ -1618,21 +1763,13 @@ async def get_cleaning_quote(phone: str):
                     e,
                 )
 
-        if estimated_price is None or estimated_price <= 0:
-            logger.info(
-                "get_cleaning_quote: estimated_price not populated yet for opportunity_id=%s, estimated_raw=%s",
-                opportunity_id,
-                estimated_raw,
-            )
-            return JSONResponse({"status": "pending"}, status_code=200)
-
-        # Parse recurring_price
-        recurring_price = None
+        # Parse recurring_price from raw opportunity field
+        recurring_from_field = None
         if isinstance(recurring_raw, (int, float)):
-            recurring_price = float(recurring_raw)
+            recurring_from_field = float(recurring_raw)
         elif isinstance(recurring_raw, str):
             try:
-                recurring_price = float(recurring_raw.replace("$", "").replace(",", "").strip())
+                recurring_from_field = float(recurring_raw.replace("$", "").replace(",", "").strip())
             except Exception as e:
                 logger.warning(
                     "get_cleaning_quote: failed to parse recurring_price '%s': %s",
@@ -1640,13 +1777,13 @@ async def get_cleaning_quote(phone: str):
                     e,
                 )
 
-        # Normalize frequency label from cleaning_frequency
-        frequency_label = None
+        # Normalize frequency label from cleaning_frequency field
+        frequency_from_field = None
         if isinstance(cleaning_frequency, str) and cleaning_frequency.strip():
-            frequency_label = cleaning_frequency.strip()
+            frequency_from_field = cleaning_frequency.strip()
 
         # Parse add-ons from opportunity.addons (expected to be a list or JSON string)
-        addons: List[Dict[str, Any]] = []
+        addons_from_field: List[Dict[str, Any]] = []
         if addons_raw:
             try:
                 parsed_addons = addons_raw
@@ -1665,73 +1802,145 @@ async def get_cleaning_quote(phone: str):
                         if isinstance(item, dict):
                             name = item.get("name") or item.get("label") or ""
                             price_val = item.get("price") or item.get("amount")
-                            if not name or price_val is None:
+                            if not name:
                                 continue
-                            try:
-                                price_float = float(str(price_val).replace("$", "").replace(",", "").strip())
-                                addons.append({"name": str(name), "price": price_float})
-                            except Exception:
-                                continue
+                            price_float_val: Optional[float] = None
+                            if price_val is not None:
+                                try:
+                                    price_float_val = float(
+                                        str(price_val).replace("$", "").replace(",", "").strip()
+                                    )
+                                except Exception:
+                                    price_float_val = None
+                            addons_from_field.append({"name": str(name), "price": price_float_val})
                         elif isinstance(item, str):
                             # Try to parse "Name: $X.XX"
                             m = re.match(r"^([^:]+):\s*\$?([\d,]+\.?\d*)$", item.strip())
                             if m:
                                 name = m.group(1).strip()
+                                price_float_val: Optional[float] = None
                                 try:
-                                    price_float = float(m.group(2).replace(",", ""))
-                                    addons.append({"name": name, "price": price_float})
+                                    price_float_val = float(m.group(2).replace(",", ""))
                                 except Exception:
-                                    continue
+                                    price_float_val = None
+                                addons_from_field.append({"name": name, "price": price_float_val})
                 elif isinstance(parsed_addons, dict):
                     # Single dict case
                     name = parsed_addons.get("name") or parsed_addons.get("label") or ""
                     price_val = parsed_addons.get("price") or parsed_addons.get("amount")
-                    if name and price_val is not None:
-                        try:
-                            price_float = float(str(price_val).replace("$", "").replace(",", "").strip())
-                            addons.append({"name": str(name), "price": price_float})
-                        except Exception:
-                            pass
+                    if name:
+                        price_float_val: Optional[float] = None
+                        if price_val is not None:
+                            try:
+                                price_float_val = float(
+                                    str(price_val).replace("$", "").replace(",", "").strip()
+                                )
+                            except Exception:
+                                price_float_val = None
+                        addons_from_field.append({"name": str(name), "price": price_float_val})
             except Exception as e:
                 logger.warning("get_cleaning_quote: failed to parse addons: %s", e)
 
-        # Determine if quote is ready based on opportunity fields
-        has_price_breakdown = isinstance(price_breakdown, str) and bool(price_breakdown.strip())
-        quote_ready = estimated_price is not None and (has_price_breakdown or recurring_price is not None)
+        # Parse simplified price_breakdown string (single source of truth for display)
+        parsed_breakdown = (
+            parse_simplified_price_breakdown(str(price_breakdown))
+            if isinstance(price_breakdown, str)
+            else {
+                "service": None,
+                "first_clean_price": None,
+                "recurring_price": None,
+                "frequency_label": None,
+                "discount_label": None,
+                "addons": [],
+            }
+        )
+
+        service = parsed_breakdown.get("service") or service_raw
+        first_clean_from_breakdown = parsed_breakdown.get("first_clean_price")
+        recurring_from_breakdown = parsed_breakdown.get("recurring_price")
+        frequency_from_breakdown = parsed_breakdown.get("frequency_label")
+        discount_label = parsed_breakdown.get("discount_label")
+        addons_from_breakdown: List[Dict[str, Any]] = parsed_breakdown.get("addons") or []
+
+        # Decide final values, preferring parsed breakdown where possible
+        first_clean_price = first_clean_from_breakdown
+        if first_clean_price is None:
+            first_clean_price = estimated_price
+
+        recurring_price = None
+        if recurring_from_breakdown is not None:
+            recurring_price = recurring_from_breakdown
+        elif recurring_from_field is not None:
+            recurring_price = recurring_from_field
+
+        frequency_label = None
+        if isinstance(frequency_from_breakdown, str) and frequency_from_breakdown.strip():
+            frequency_label = frequency_from_breakdown.strip()
+        elif isinstance(frequency_from_field, str) and frequency_from_field.strip():
+            frequency_label = frequency_from_field.strip()
+
+        # If estimated_price missing but we have first_clean_price, use that
+        if estimated_price is None and first_clean_price is not None:
+            estimated_price = first_clean_price
+
+        # Determine if quote is ready based on parsed fields:
+        # ready when we have: first_clean_price AND recurring_price AND frequency_label
+        quote_ready = (
+            first_clean_price is not None
+            and recurring_price is not None
+            and bool(frequency_label)
+        )
 
         logger.info(
-            "get_cleaning_quote: evaluated quote readiness. estimated_price=%s, has_price_breakdown=%s, recurring_price=%s, ready=%s",
+            "get_cleaning_quote: evaluated quote readiness. estimated_price=%s, first_clean=%s, recurring_price=%s, frequency_label=%s, ready=%s",
             estimated_price,
-            has_price_breakdown,
+            first_clean_price,
             recurring_price,
+            frequency_label,
             quote_ready,
         )
 
-        if not quote_ready:
-            # Quote fields on the opportunity are not fully populated yet
-            return JSONResponse({"status": "pending"}, status_code=200)
+        # Merge add-ons from breakdown and opportunity.addons, preferring breakdown
+        addons: List[Dict[str, Any]] = []
+        seen_addons = set()
+        for addon in addons_from_breakdown + addons_from_field:
+            name = addon.get("name")
+            price_val = addon.get("price")
+            if not name:
+                continue
+            key = (str(name), price_val)
+            if key in seen_addons:
+                continue
+            seen_addons.add(key)
+            addons.append({"name": str(name), "price": price_val})
 
-        # When ready, treat the estimated_price as the first cleaning amount for display
-        first_clean_price = estimated_price
-
-        response: Dict[str, Any] = {
-            "status": "ready",
-            "estimated_price": estimated_price,
+        # Build base response shared by ready/pending
+        base_response: Dict[str, Any] = {
             "source": "opportunity",
         }
-
+        if service:
+            base_response["service"] = service
+        if isinstance(estimated_price, (int, float)):
+            base_response["estimated_price"] = float(estimated_price)
         if first_clean_price is not None:
-            response["first_clean_price"] = first_clean_price
-        if recurring_price is not None:
-            response["recurring_price"] = recurring_price
-        if frequency_label:
-            response["frequency_label"] = frequency_label
-        if has_price_breakdown:
-            response["price_breakdown"] = str(price_breakdown)
+            base_response["first_clean_price"] = first_clean_price
+        base_response["recurring_price"] = recurring_price
+        base_response["frequency_label"] = frequency_label
+        if discount_label:
+            base_response["discount_label"] = discount_label
+        if isinstance(price_breakdown, str) and price_breakdown.strip():
+            base_response["price_breakdown"] = str(price_breakdown)
         if addons:
-            response["addons"] = addons
+            base_response["addons"] = addons
 
-        return JSONResponse(response, status_code=200)
+        if not quote_ready:
+            # Quote fields on the opportunity are not fully populated yet
+            base_response["status"] = "pending"
+            return JSONResponse(base_response, status_code=200)
+
+        # When ready, return full quote details
+        base_response["status"] = "ready"
+        return JSONResponse(base_response, status_code=200)
 
     except Exception as e:
         # Log full traceback for debugging

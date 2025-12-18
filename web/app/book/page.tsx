@@ -12,21 +12,24 @@ interface QuoteResponse {
   first_clean_price?: number;
   recurring_price?: number;
   frequency_label?: string;
+  service?: string;
+  discount_label?: string;
   price_breakdown?: string;
-  addons?: Array<{ name: string; price: number }>;
+  addons?: Array<{ name: string; price: number | null }>;
 }
 
 type FetchStatus = "idle" | "loading" | "ready" | "timeout" | "error";
 
-// Quote is considered "ready" when:
-// - estimated_price exists AND
-// - EITHER price_breakdown exists OR recurring_price exists
 function isQuoteReady(data: QuoteResponse | null): boolean {
   if (!data) return false;
-  const hasEstimated = typeof data.estimated_price === "number";
-  const hasBreakdown = Boolean(data.price_breakdown);
+  const hasFirst =
+    typeof data.first_clean_price === "number" ||
+    typeof data.estimated_price === "number";
   const hasRecurring = typeof data.recurring_price === "number";
-  return hasEstimated && (hasBreakdown || hasRecurring);
+  const hasFrequency =
+    typeof data.frequency_label === "string" &&
+    data.frequency_label.trim().length > 0;
+  return hasFirst && hasRecurring && hasFrequency;
 }
 
 function BookPageContent() {
@@ -152,6 +155,10 @@ function BookPageContent() {
   }, [phone]);
 
   const isReady = isQuoteReady(quote) && fetchStatus === "ready";
+  const hasQuote =
+    !!quote &&
+    (typeof quote.estimated_price === "number" ||
+      typeof quote.first_clean_price === "number");
   const shouldShowDebug =
     fetchStatus === "loading" ||
     fetchStatus === "timeout" ||
@@ -174,7 +181,7 @@ function BookPageContent() {
         )}
 
         {/* Loading / timeout states */}
-        {!isReady && !errorMessage && (
+        {!hasQuote && !errorMessage && (
           <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 mb-6">
             <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
               Generating your quote…
@@ -233,57 +240,65 @@ function BookPageContent() {
           </div>
         )}
 
-        {/* Quote details once ready */}
-        {isReady && quote && quote.estimated_price !== undefined && (
+        {/* Quote details once we have any quote data */}
+        {quote && hasQuote && (
           <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 mb-6">
             <h2 className="text-2xl font-bold text-alloy-midnight mb-6">
               Here&apos;s your quote details:
             </h2>
 
             <div className="space-y-6">
-              {/* Estimated Price (always) */}
+              {/* Service */}
+              {quote.service && (
+                <div>
+                  <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                    Service
+                  </p>
+                  <p className="text-base font-medium text-alloy-midnight">
+                    {quote.service}
+                  </p>
+                </div>
+              )}
+
+              {/* First cleaning (primary price) */}
               <div className="border border-alloy-stone/40 rounded-xl p-5 bg-alloy-stone/30">
                 <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                  Estimated price
+                  First cleaning
                 </p>
                 <p className="text-3xl font-bold text-alloy-blue">
-                  ${quote.estimated_price.toFixed(2)}
+                  $
+                  {(
+                    quote.first_clean_price ?? quote.estimated_price ?? 0
+                  ).toFixed(2)}
                 </p>
               </div>
 
-              {/* First vs ongoing logic */}
-              {quote.recurring_price !== undefined ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-alloy-stone/40 rounded-xl p-4 bg-white">
-                    <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                      First cleaning
+              {/* Recurring rate or pending message */}
+              {quote.recurring_price !== undefined &&
+              quote.recurring_price !== null &&
+              quote.frequency_label ? (
+                <div className="p-4 bg-alloy-pine/5 rounded-xl border border-alloy-pine/30">
+                  <p className="text-sm text-alloy-midnight">
+                    Your{" "}
+                    <span className="font-semibold">
+                      {quote.frequency_label}
+                    </span>{" "}
+                    rate is{" "}
+                    <span className="font-bold text-alloy-juniper">
+                      ${quote.recurring_price.toFixed(2)}
+                    </span>{" "}
+                    per visit.
+                  </p>
+                  {quote.discount_label && (
+                    <p className="text-xs text-alloy-midnight/70 mt-1">
+                      {quote.discount_label}
                     </p>
-                    <p className="text-2xl font-bold text-alloy-midnight">
-                      ${(quote.first_clean_price ?? quote.estimated_price).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="border border-alloy-stone/40 rounded-xl p-4 bg-alloy-pine/5">
-                    <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                      Ongoing cleaning
-                    </p>
-                    <p className="text-lg font-bold text-alloy-juniper">
-                      ${quote.recurring_price.toFixed(2)}{" "}
-                      <span className="font-normal text-alloy-midnight/70">per visit</span>
-                    </p>
-                    {quote.frequency_label && (
-                      <p className="text-xs text-alloy-midnight/70 mt-1">
-                        {quote.frequency_label}
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
               ) : (
-                <div className="border border-alloy-stone/40 rounded-xl p-4 bg-white">
-                  <p className="text-sm font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                    One-time cleaning
-                  </p>
-                  <p className="text-2xl font-bold text-alloy-midnight">
-                    ${quote.estimated_price.toFixed(2)}
+                <div className="p-4 bg-alloy-stone/40 rounded-xl border border-alloy-stone/60">
+                  <p className="text-sm text-alloy-midnight/80">
+                    Finalizing your recurring rate…
                   </p>
                 </div>
               )}
@@ -300,9 +315,13 @@ function BookPageContent() {
                         key={idx}
                         className="flex justify-between items-center py-2 border-b border-alloy-stone/20"
                       >
-                        <span className="text-sm text-alloy-midnight/80">{addon.name}</span>
+                        <span className="text-sm text-alloy-midnight/80">
+                          {addon.name}
+                        </span>
                         <span className="text-sm font-semibold text-alloy-midnight">
-                          ${addon.price.toFixed(2)}
+                          {addon.price === null || addon.price === undefined
+                            ? "added (price included in quote)"
+                            : `$${addon.price.toFixed(2)}`}
                         </span>
                       </div>
                     ))}
