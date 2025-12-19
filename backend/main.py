@@ -70,8 +70,19 @@ CUSTOM_FIELD_IDS = {
     "cleaning_frequency": os.getenv("GHL_CF_CLEANING_FREQUENCY", "").strip(),
     "extras_add_ons": os.getenv("GHL_CF_EXTRAS_ADD_ONS", "").strip(),
     "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
-    "approximate_square_footage": os.getenv("GHL_CF_APPROX_SQFT", "").strip(),
+    "approximate_square_footage": os.getenv("GHL_CF_SQUARE_FOOTAGE", "").strip() or os.getenv("GHL_CF_APPROX_SQFT", "").strip(),  # Support both names
 }
+
+# Log missing custom field IDs at startup
+missing_cf_ids = [key for key, value in CUSTOM_FIELD_IDS.items() if not value]
+if missing_cf_ids:
+    logger.warning(
+        "Missing GHL custom field ID environment variables: %s. "
+        "Custom fields for these keys will be skipped. "
+        "Set: %s",
+        ", ".join(missing_cf_ids),
+        ", ".join(f"GHL_CF_{key.upper().replace('__', '_')}" for key in missing_cf_ids)
+    )
 
 # GHL API endpoints
 LC_BASE_URL = "https://services.leadconnectorhq.com"
@@ -725,6 +736,7 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
         Only includes fields where the custom field ID is configured (non-empty).
     """
     custom_fields: List[Dict[str, Any]] = []
+    missing_fields = []
     
     for field_key, field_value in field_mapping.items():
         if field_value is None or field_value == "":
@@ -732,9 +744,12 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
             
         field_id = CUSTOM_FIELD_IDS.get(field_key)
         if not field_id:
+            missing_fields.append(field_key)
             logger.warning(
-                "build_custom_fields_array: custom field ID not configured for key=%s, skipping",
-                field_key
+                "build_custom_fields_array: custom field ID not configured for key=%s. "
+                "Set environment variable: GHL_CF_%s",
+                field_key,
+                field_key.upper().replace("__", "_")
             )
             continue
         
@@ -746,6 +761,14 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
             "id": field_id,
             "value": str(field_value)
         })
+    
+    if missing_fields:
+        logger.info(
+            "build_custom_fields_array: missing custom field IDs for: %s. "
+            "To configure, set these environment variables: %s",
+            ", ".join(missing_fields),
+            ", ".join(f"GHL_CF_{key.upper().replace('__', '_')}" for key in missing_fields)
+        )
     
     return custom_fields
 
@@ -906,6 +929,23 @@ def upsert_contact(
             }
 
 
+def strip_update_disallowed_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove fields that are not allowed in PUT /contacts/{id} update requests.
+    
+    Args:
+        payload: Update payload dict
+    
+    Returns:
+        Payload with disallowed fields removed
+    """
+    cleaned = dict(payload)
+    # locationId is not allowed in PUT requests (only in POST create/search)
+    cleaned.pop("locationId", None)
+    cleaned.pop("location_id", None)
+    return cleaned
+
+
 def update_contact_in_ghl(
     contact_id: str,
     first_name: Optional[str] = None,
@@ -919,6 +959,7 @@ def update_contact_in_ghl(
     Update an existing contact in GHL.
     
     Only includes fields in the payload if they are non-empty (does not wipe fields with blanks).
+    Does NOT include locationId in the update payload (not allowed in PUT requests).
 
     Args:
         contact_id: GHL contact ID to update
@@ -932,13 +973,7 @@ def update_contact_in_ghl(
     Returns:
         GHL contact ID if successful, None otherwise
     """
-    if not GHL_LOCATION_ID:
-        logger.error("update_contact_in_ghl: GHL_LOCATION_ID not set")
-        return None
-
-    payload: Dict[str, Any] = {
-        "locationId": GHL_LOCATION_ID,
-    }
+    payload: Dict[str, Any] = {}
     
     # Only include non-empty fields (don't wipe existing data)
     if first_name and first_name.strip():
@@ -957,6 +992,14 @@ def update_contact_in_ghl(
         custom_fields = build_custom_fields_array(custom_field_mapping)
         if custom_fields:
             payload["customFields"] = custom_fields
+    
+    # Remove any disallowed fields (e.g., locationId)
+    payload = strip_update_disallowed_fields(payload)
+    
+    # If payload is empty after stripping, nothing to update
+    if not payload:
+        logger.warning("update_contact_in_ghl: no fields to update for contact_id=%s", contact_id)
+        return contact_id  # Return existing ID if nothing to update
 
     try:
         resp = requests.put(
