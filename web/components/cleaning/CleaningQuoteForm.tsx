@@ -189,11 +189,17 @@ export default function CleaningQuoteForm({
             const backendResult = await response.json();
             console.log("Backend lead submission result:", backendResult);
 
-            const result = calculateCleaningQuote(cleanInput);
-            setQuote(result);
-            onQuoteCalculated?.(result, cleanInput);
+            // Normalize phone for URL (ensure +1 format)
+            let normalizedPhone = cleanInput.phone.trim();
+            const digits = normalizedPhone.replace(/\D/g, "");
+            if (digits.length === 10) {
+                normalizedPhone = "+1" + digits;
+            } else if (!normalizedPhone.startsWith("+")) {
+                normalizedPhone = "+" + digits;
+            }
 
-            // TODO(Phase 3): Backend should create/update opportunity and store pricing.
+            // Redirect to booking page with quote
+            router.push(`/book?phone=${encodeURIComponent(normalizedPhone)}`);
         } catch (error) {
             console.error("Error submitting lead:", error);
             setErrors((prev) => ({ ...prev, submit: (error as Error).message }));
@@ -427,7 +433,7 @@ export default function CleaningQuoteForm({
                                             onChange={() => toggleAddOn(id)}
                                             className={checkboxClass}
                                         />
-                                        <span className="text-alloy-midnight">{id}</span>
+                                        <span className={isDark ? "text-white" : "text-alloy-midnight"}>{id}</span>
                                     </label>
                                 );
                             },

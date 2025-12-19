@@ -1802,75 +1802,128 @@ def debug_quote_crash(phone: str):
 
 
 @app.post("/leads/cleaning")
-async def submit_cleaning_lead(payload: CleaningLeadPayload):
+async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
     """
-    Submit a cleaning lead from the frontend website.
+    Submit a cleaning lead from the new custom cleaning quote form (Phase 2).
+    
+    Upserts a contact in GHL: creates if new, updates if exists (matched by phone).
 
     Args (request body):
-        - name: Customer full name
-        - email: Customer email
-        - phone: Customer phone number
-        - address: Optional street address
-        - city: Optional city (defaults to "Bend" if not provided)
-        - zip: Optional ZIP code
-        - home_size: Optional home size description
-        - bedrooms: Optional number of bedrooms
-        - bathrooms: Optional number of bathrooms
-        - preferred_frequency: Optional cleaning frequency preference
-        - notes: Optional additional notes
+        - first_name, last_name, phone, email, postal_code
+        - service_type, preferred_service_date, home_type
+        - cleaning_frequency, extras_add_ons, addons__frequency, approximate_square_footage
 
     Returns:
-        JSON with ok=True and contact_id if successful.
+        JSON: { "status": "ok", "action": "created|updated", "contact_id": "...", "matched_by": "phone" }
 
     Side effects:
-        - Creates or updates a contact in GHL with the provided information
-        - Sets custom fields for cleaning-specific data (home size, frequency, etc.)
+        - Creates or updates a contact in GHL with standard and custom fields
+        - Maps form fields to GHL custom fields using CUSTOM_FIELD_IDS
     """
-    logger.info("Received cleaning lead submission: %s", payload.dict())
-
-    # Build custom fields dict for GHL
-    custom_fields = {}
-    if payload.address:
-        custom_fields["address"] = payload.address
-    if payload.city:
-        custom_fields["city"] = payload.city
+    # Redact sensitive data for logging
+    def _redact_payload(p: dict) -> dict:
+        redacted = p.copy()
+        if "email" in redacted:
+            email = redacted["email"]
+            if "@" in email:
+                parts = email.split("@")
+                redacted["email"] = f"{parts[0][:2]}***@{parts[1]}" if len(parts) == 2 else "***"
+        if "phone" in redacted:
+            phone = redacted["phone"]
+            if len(phone) > 4:
+                redacted["phone"] = f"{phone[:2]}***{phone[-2:]}"
+        return redacted
+    
+    logger.info("leads_cleaning: received payload: %s", _redact_payload(payload.dict()))
+    
+    # Normalize phone: ensure +1 format (same logic as quote endpoint)
+    phone_normalized = payload.phone.strip()
+    digits = re.sub(r"\D", "", phone_normalized)
+    if digits:
+        if len(digits) == 10:
+            phone_normalized = "+1" + digits
+        elif not phone_normalized.startswith("+"):
+            phone_normalized = "+" + digits
+    
+    # Search for existing contact by phone
+    existing_contacts = _search_contact_by_phone_via_api(phone_normalized)
+    contact_id = None
+    action = "created"
+    matched_by = None
+    
+    if existing_contacts:
+        contact_id = existing_contacts[0].get("id")
+        action = "updated"
+        matched_by = "phone"
+        logger.info("leads_cleaning: found existing contact_id=%s for phone=%s, will update", 
+                   contact_id, _redact_payload({"phone": phone_normalized})["phone"])
     else:
-        custom_fields["city"] = "Bend"  # Default to Bend
-    if payload.zip:
-        custom_fields["zip"] = payload.zip
-    if payload.home_size:
-        custom_fields["home_size"] = payload.home_size
-    if payload.bedrooms is not None:
-        custom_fields["bedrooms"] = str(payload.bedrooms)
-    if payload.bathrooms is not None:
-        custom_fields["bathrooms"] = str(payload.bathrooms)
-    if payload.preferred_frequency:
-        custom_fields["preferred_frequency"] = payload.preferred_frequency
-    if payload.notes:
-        custom_fields["notes"] = payload.notes
-
-    # Add tag to indicate this is a cleaning lead
-    custom_fields["tags"] = ["cleaning_lead", "website_lead"]
-
-    contact_id = create_or_update_contact_in_ghl(
-        name=payload.name,
-        email=payload.email,
-        phone=payload.phone,
-        custom_fields=custom_fields,
-    )
-
-    if not contact_id:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to create contact in GHL. Please try again or contact support.",
+        logger.info("leads_cleaning: no existing contact found for phone=%s, will create",
+                   _redact_payload({"phone": phone_normalized})["phone"])
+    
+    # Build custom field mapping
+    custom_field_mapping = {}
+    if payload.service_type:
+        custom_field_mapping["service_type"] = payload.service_type
+    if payload.preferred_service_date:
+        custom_field_mapping["preferred_service_date"] = payload.preferred_service_date
+    if payload.home_type:
+        custom_field_mapping["home_type"] = payload.home_type
+    if payload.cleaning_frequency:
+        custom_field_mapping["cleaning_frequency"] = payload.cleaning_frequency
+    if payload.extras_add_ons:
+        custom_field_mapping["extras_add_ons"] = payload.extras_add_ons  # Will be converted to comma-separated in build_custom_fields_array
+    if payload.addons__frequency:
+        custom_field_mapping["addons__frequency"] = payload.addons__frequency
+    if payload.approximate_square_footage:
+        custom_field_mapping["approximate_square_footage"] = payload.approximate_square_footage
+    
+    # Upsert contact
+    if contact_id:
+        # Update existing contact
+        success = update_contact_in_ghl(
+            contact_id=contact_id,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            email=payload.email,
+            phone=phone_normalized,
+            postal_code=payload.postal_code,
+            custom_field_mapping=custom_field_mapping,
         )
-
+        if not success:
+            logger.error("leads_cleaning: failed to update contact_id=%s", contact_id)
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to update contact. Please try again or contact support.",
+            )
+    else:
+        # Create new contact
+        contact_id = create_contact_in_ghl(
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            email=payload.email,
+            phone=phone_normalized,
+            postal_code=payload.postal_code,
+            custom_field_mapping=custom_field_mapping,
+        )
+        if not contact_id:
+            logger.error("leads_cleaning: failed to create contact for phone=%s", 
+                       _redact_payload({"phone": phone_normalized})["phone"])
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create contact. Please try again or contact support.",
+            )
+    
+    logger.info("leads_cleaning: action=%s contact_id=%s", action, contact_id)
+    
     return JSONResponse(
         {
-            "ok": True,
+            "status": "ok",
+            "action": action,
             "contact_id": contact_id,
-            "message": "Lead submitted successfully. We'll contact you shortly.",
-        }
+            "matched_by": matched_by,
+        },
+        status_code=200,
     )
 
 
