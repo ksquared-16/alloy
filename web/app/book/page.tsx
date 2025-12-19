@@ -67,7 +67,7 @@ function BookPageContent() {
 
     return (
         <div className="min-h-screen py-6 md:py-10">
-            <Section className="max-w-5xl">
+            <Section className="max-w-7xl">
                 {/* Debug strip - only in development */}
                 {process.env.NODE_ENV !== "production" && (
                     <div className="mb-4 p-4 bg-alloy-stone rounded-lg border border-alloy-stone/40">
@@ -99,116 +99,137 @@ function BookPageContent() {
                     </div>
                 )}
 
-                {/* Quote details once we have any quote data */}
-                {quote && hasQuote && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-3 md:p-4 mb-5">
-                        <div className="space-y-2.5">
-                            {/* Compact 2-column pricing summary */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {/* First Cleaning */}
-                                <div className="rounded-lg border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                        First Cleaning
-                                    </p>
-                                    {(() => {
-                                        const price =
-                                            (typeof quote.first_clean_price === "number" &&
-                                                quote.first_clean_price > 0
-                                                ? quote.first_clean_price
-                                                : typeof quote.estimated_price === "number" &&
-                                                    quote.estimated_price > 0
-                                                    ? quote.estimated_price
-                                                    : null);
-                                        return price != null && price > 0 ? (
-                                            <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
-                                                ${price.toFixed(2)}
-                                            </p>
-                                        ) : (
-                                            <p className="text-sm text-alloy-midnight/70">Calculating…</p>
-                                        );
-                                    })()}
-                                </div>
+                {/* Two-column layout: Quote (1/4) + Calendar (3/4) */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+                    {/* Left column: Quote panel (1/4 width) */}
+                    {quote && hasQuote && (
+                        <div className="lg:col-span-1">
+                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6">
+                                <div className="space-y-4 text-left">
+                                    <h2 className="text-lg font-bold text-alloy-midnight mb-3">
+                                        Your Quote
+                                    </h2>
 
-                                {/* Recurring Cleaning */}
-                                <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                    {quote.recurring_price !== undefined &&
-                                        quote.recurring_price !== null &&
-                                        quote.recurring_price > 0 &&
-                                        quote.frequency_label ? (
-                                        <>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                                {quote.frequency_label} Cleaning
-                                                {quote.discount_label && (
-                                                    <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
-                                                        ({quote.discount_label})
-                                                    </span>
-                                                )}
-                                            </p>
-                                            <div className="flex items-baseline gap-1">
-                                                <p className="text-2xl md:text-3xl font-bold text-alloy-juniper leading-tight">
-                                                    ${quote.recurring_price.toFixed(2)}
+                                    {/* First Cleaning - stacked vertically */}
+                                    <div>
+                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                            First Cleaning
+                                        </p>
+                                        {(() => {
+                                            const price =
+                                                (typeof quote.first_clean_price === "number" &&
+                                                    quote.first_clean_price > 0
+                                                    ? quote.first_clean_price
+                                                    : typeof quote.estimated_price === "number" &&
+                                                        quote.estimated_price > 0
+                                                        ? quote.estimated_price
+                                                        : null);
+                                            return price != null && price > 0 ? (
+                                                <p className="text-2xl font-bold text-alloy-blue leading-tight">
+                                                    ${price.toFixed(2)}
                                                 </p>
-                                                <span className="text-[11px] text-alloy-midnight/60">
-                                                    per visit
-                                                </span>
+                                            ) : (
+                                                <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Recurring Cleaning - stacked vertically */}
+                                    <div>
+                                        {quote.recurring_price !== undefined &&
+                                            quote.recurring_price !== null &&
+                                            quote.recurring_price > 0 &&
+                                            quote.frequency_label ? (
+                                            <>
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                    {quote.frequency_label} Cleaning
+                                                    {quote.discount_label && (
+                                                        <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
+                                                            ({quote.discount_label})
+                                                        </span>
+                                                    )}
+                                                </p>
+                                                <div className="flex items-baseline gap-1">
+                                                    <p className="text-2xl font-bold text-alloy-juniper leading-tight">
+                                                        ${quote.recurring_price.toFixed(2)}
+                                                    </p>
+                                                    <span className="text-xs text-alloy-midnight/60">
+                                                        per visit
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                    Recurring Cleaning
+                                                </p>
+                                                <p className="text-sm text-alloy-midnight/70">
+                                                    One-time service
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Add-ons - stacked vertically */}
+                                    {quote.addons && quote.addons.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                                Add-ons
+                                            </p>
+                                            <div className="space-y-1.5">
+                                                {quote.addons.map((addon, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="flex justify-between items-center py-1 border-b border-alloy-stone/15 last:border-b-0"
+                                                    >
+                                                        <span className="text-xs text-alloy-midnight/85">
+                                                            {addon.name}
+                                                        </span>
+                                                        <span className="text-xs font-semibold text-alloy-midnight">
+                                                            {addon.price === null || addon.price === undefined
+                                                                ? "included"
+                                                                : `$${addon.price.toFixed(2)}`}
+                                                        </span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                                Recurring Cleaning
-                                            </p>
-                                            <p className="text-sm text-alloy-midnight/70">
-                                                One-time service
-                                            </p>
-                                        </>
+                                        </div>
+                                    )}
+
+                                    {/* Price Breakdown Accordion */}
+                                    {quote.price_breakdown && (
+                                        <div>
+                                            <Accordion title="See full price breakdown">
+                                                <div className="text-xs text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
+                                                    {quote.price_breakdown}
+                                                </div>
+                                            </Accordion>
+                                        </div>
                                     )}
                                 </div>
                             </div>
+                        </div>
+                    )}
 
-                            {/* Add-ons below pricing summary */}
-                            {quote.addons && quote.addons.length > 0 && (
-                                <div>
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
-                                        Add-ons
-                                    </p>
-                                    <div className="space-y-1.5">
-                                        {quote.addons.map((addon, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="flex justify-between items-center py-1.5 border-b border-alloy-stone/15 last:border-b-0"
-                                            >
-                                                <span className="text-sm text-alloy-midnight/85">
-                                                    {addon.name}
-                                                </span>
-                                                <span className="text-sm font-semibold text-alloy-midnight">
-                                                    {addon.price === null || addon.price === undefined
-                                                        ? "added (price included in quote)"
-                                                        : `$${addon.price.toFixed(2)}`}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Price Breakdown Accordion (optional, compact) */}
-                            {quote.price_breakdown && (
-                                <div>
-                                    <Accordion title="See full price breakdown">
-                                        <div className="text-sm text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
-                                            {quote.price_breakdown}
-                                        </div>
-                                    </Accordion>
-                                </div>
-                            )}
+                    {/* Right column: Calendar (3/4 width) */}
+                    <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
+                        <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
+                            <GhlEmbed
+                                src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz"
+                                title="Booking Calendar"
+                                height={1200}
+                                className="!min-h-[1200px] md:!min-h-[900px]"
+                            />
+                            <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
+                                You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
+                            </p>
                         </div>
                     </div>
-                )}
+                </div>
 
                 {/* Frontend debug block (non-production only) */}
                 {process.env.NODE_ENV !== "production" && quote && (
-                    <div className="mb-4 p-3 bg-alloy-stone rounded-lg border border-alloy-stone/60">
+                    <div className="mt-6 p-3 bg-alloy-stone rounded-lg border border-alloy-stone/60">
                         <p className="text-xs font-semibold text-alloy-midnight mb-1">
                             Quote JSON (debug):
                         </p>
@@ -217,19 +238,6 @@ function BookPageContent() {
                         </pre>
                     </div>
                 )}
-
-                {/* Calendar */}
-                <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                    <GhlEmbed
-                        src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz"
-                        title="Booking Calendar"
-                        height={1200}
-                        className="!min-h-[1200px] md:!min-h-[900px]"
-                    />
-                    <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
-                        You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
-                    </p>
-                </div>
             </Section>
         </div>
     );

@@ -477,7 +477,7 @@ export default function CleaningPage() {
                 }
               }}
             >
-              <PrimaryButton className="bg-white text-alloy-blue hover:bg-alloy-stone">
+              <PrimaryButton className="bg-white text-alloy-midnight hover:bg-alloy-stone hover:text-alloy-midnight">
                 Start my quote
               </PrimaryButton>
             </button>
