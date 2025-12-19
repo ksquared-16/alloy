@@ -205,13 +205,14 @@ export default function CleaningQuoteForm({
                 body: JSON.stringify(backendPayload),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: "Failed to submit lead" }));
-                throw new Error(errorData.detail || `HTTP ${response.status}: Failed to submit lead`);
-            }
-
             const backendResult = await response.json();
             console.log("Backend lead submission result:", backendResult);
+
+            // Check for error status in response
+            if (!response.ok || backendResult.status === "error") {
+                const errorMessage = backendResult.message || backendResult.detail || `HTTP ${response.status}: Failed to submit lead`;
+                throw new Error(errorMessage);
+            }
 
             // Calculate quote locally
             const result = calculateCleaningQuote(cleanInput);

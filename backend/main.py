@@ -518,6 +518,64 @@ def _ghl_headers() -> Dict[str, str]:
     }
 
 
+def normalize_phone(phone: str) -> str:
+    """
+    Normalize phone number to E.164 format.
+    
+    Args:
+        phone: Phone number (may include spaces, dashes, parentheses, etc.)
+    
+    Returns:
+        Normalized phone in E.164 format (e.g., +16022904816)
+        - If 10 digits, assumes US and prefixes +1
+        - If already starts with +, keeps it
+        - Strips all non-digit characters except leading +
+    """
+    if not phone:
+        return ""
+    
+    phone_trimmed = phone.strip()
+    digits = re.sub(r"\D", "", phone_trimmed)
+    
+    if not digits:
+        return phone_trimmed
+    
+    # If already starts with +, preserve it
+    if phone_trimmed.startswith("+"):
+        # Extract digits after +
+        if len(digits) >= 10:
+            return "+" + digits
+        return phone_trimmed
+    
+    # If 10 digits, assume US and prefix +1
+    if len(digits) == 10:
+        return "+1" + digits
+    
+    # Otherwise, prefix with +
+    return "+" + digits
+
+
+def search_contact_by_phone(phone: str) -> Optional[Dict[str, Any]]:
+    """
+    Search for a contact by phone number using GHL Contacts Search API.
+    
+    Args:
+        phone: Phone number (will be normalized to E.164)
+    
+    Returns:
+        First matching contact dict if found, None otherwise
+    """
+    phone_normalized = normalize_phone(phone)
+    if not phone_normalized:
+        logger.warning("search_contact_by_phone: empty phone after normalization")
+        return None
+    
+    contacts = _search_contact_by_phone_via_api(phone_normalized)
+    if contacts:
+        return contacts[0]
+    return None
+
+
 def fetch_contractors() -> List[Dict[str, Any]]:
     """
     Fetch contractors from GHL contacts API, filtered by tags.
@@ -707,7 +765,7 @@ def create_contact_in_ghl(
         first_name: Contact first name
         last_name: Contact last name
         email: Contact email
-        phone: Contact phone number
+        phone: Contact phone number (will be normalized to E.164)
         postal_code: Optional postal code
         custom_field_mapping: Optional dict mapping field keys to values for custom fields
 
@@ -723,11 +781,11 @@ def create_contact_in_ghl(
         "firstName": first_name.strip(),
         "lastName": last_name.strip(),
         "email": email.strip(),
-        "phone": phone.strip(),
-        "source": "Website Lead",
+        "phone": normalize_phone(phone),
+        "source": "Website Lead - Cleaning Quote",
     }
     
-    if postal_code:
+    if postal_code and postal_code.strip():
         payload["postalCode"] = postal_code.strip()
     
     # Build custom fields array if mapping provided
@@ -747,8 +805,105 @@ def create_contact_in_ghl(
             logger.error("create_contact_in_ghl: failed (%s): %s", resp.status_code, resp.text)
             return None
     except Exception as e:
-        logger.error("create_contact_in_ghl: exception: %s", e)
+        logger.error("create_contact_in_ghl: exception: %s", e, exc_info=True)
         return None
+
+
+def upsert_contact(
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    postal_code: Optional[str] = None,
+    custom_field_mapping: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """
+    Upsert a contact in GHL: search by phone, update if exists, create if not.
+    
+    Args:
+        first_name: Contact first name
+        last_name: Contact last name
+        email: Contact email
+        phone: Contact phone number (will be normalized to E.164)
+        postal_code: Optional postal code
+        custom_field_mapping: Optional dict mapping field keys to values for custom fields
+    
+    Returns:
+        Dict with keys:
+        - "status": "ok" or "error"
+        - "action": "updated" or "created" (if status is "ok")
+        - "contactId": GHL contact ID (if status is "ok")
+        - "phone": Normalized phone number (if status is "ok")
+        - "message": Error message (if status is "error")
+    """
+    phone_normalized = normalize_phone(phone)
+    if not phone_normalized:
+        return {
+            "status": "error",
+            "message": "Invalid phone number provided",
+        }
+    
+    logger.info("upsert_contact: searching for contact with phone=%s", phone_normalized[:4] + "***" + phone_normalized[-2:])
+    
+    # Search for existing contact
+    existing_contact = search_contact_by_phone(phone_normalized)
+    
+    if existing_contact:
+        contact_id = existing_contact.get("id")
+        logger.info("upsert_contact: found existing contact_id=%s, will update", contact_id)
+        
+        # Update existing contact
+        updated_id = update_contact_in_ghl(
+            contact_id=contact_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone_normalized,
+            postal_code=postal_code,
+            custom_field_mapping=custom_field_mapping,
+        )
+        
+        if updated_id:
+            logger.info("upsert_contact: successfully updated contact_id=%s", updated_id)
+            return {
+                "status": "ok",
+                "action": "updated",
+                "contactId": updated_id,
+                "phone": phone_normalized,
+            }
+        else:
+            logger.error("upsert_contact: failed to update contact_id=%s", contact_id)
+            return {
+                "status": "error",
+                "message": "Failed to update existing contact",
+            }
+    else:
+        logger.info("upsert_contact: no existing contact found, will create")
+        
+        # Create new contact
+        contact_id = create_contact_in_ghl(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone_normalized,
+            postal_code=postal_code,
+            custom_field_mapping=custom_field_mapping,
+        )
+        
+        if contact_id:
+            logger.info("upsert_contact: successfully created contact_id=%s", contact_id)
+            return {
+                "status": "ok",
+                "action": "created",
+                "contactId": contact_id,
+                "phone": phone_normalized,
+            }
+        else:
+            logger.error("upsert_contact: failed to create contact")
+            return {
+                "status": "error",
+                "message": "Failed to create new contact",
+            }
 
 
 def update_contact_in_ghl(
@@ -762,14 +917,16 @@ def update_contact_in_ghl(
 ) -> Optional[str]:
     """
     Update an existing contact in GHL.
+    
+    Only includes fields in the payload if they are non-empty (does not wipe fields with blanks).
 
     Args:
         contact_id: GHL contact ID to update
-        first_name: Optional first name to update
-        last_name: Optional last name to update
-        email: Optional email to update
-        phone: Optional phone to update
-        postal_code: Optional postal code to update
+        first_name: Optional first name to update (only included if non-empty)
+        last_name: Optional last name to update (only included if non-empty)
+        email: Optional email to update (only included if non-empty)
+        phone: Optional phone to update (will be normalized, only included if non-empty)
+        postal_code: Optional postal code to update (only included if non-empty)
         custom_field_mapping: Optional dict mapping field keys to values for custom fields
 
     Returns:
@@ -783,15 +940,16 @@ def update_contact_in_ghl(
         "locationId": GHL_LOCATION_ID,
     }
     
-    if first_name is not None:
+    # Only include non-empty fields (don't wipe existing data)
+    if first_name and first_name.strip():
         payload["firstName"] = first_name.strip()
-    if last_name is not None:
+    if last_name and last_name.strip():
         payload["lastName"] = last_name.strip()
-    if email is not None:
+    if email and email.strip():
         payload["email"] = email.strip()
-    if phone is not None:
-        payload["phone"] = phone.strip()
-    if postal_code is not None:
+    if phone and phone.strip():
+        payload["phone"] = normalize_phone(phone)
+    if postal_code and postal_code.strip():
         payload["postalCode"] = postal_code.strip()
     
     # Build custom fields array if mapping provided
@@ -816,7 +974,7 @@ def update_contact_in_ghl(
             logger.error("update_contact_in_ghl: failed (%s): %s", resp.status_code, resp.text)
             return None
     except Exception as e:
-        logger.error("update_contact_in_ghl: exception: %s", e)
+        logger.error("update_contact_in_ghl: exception: %s", e, exc_info=True)
         return None
 
 
@@ -1814,7 +1972,8 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
         - cleaning_frequency, extras_add_ons, addons__frequency, approximate_square_footage
 
     Returns:
-        JSON: { "status": "ok", "action": "created|updated", "contact_id": "...", "matched_by": "phone" }
+        JSON: { "status": "ok", "action": "created|updated", "contactId": "...", "phone": "+1..." }
+        OR: { "status": "error", "message": "..." }
 
     Side effects:
         - Creates or updates a contact in GHL with standard and custom fields
@@ -1836,92 +1995,56 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
     
     logger.info("leads_cleaning: received payload: %s", _redact_payload(payload.dict()))
     
-    # Normalize phone: ensure +1 format (same logic as quote endpoint)
-    phone_normalized = payload.phone.strip()
-    digits = re.sub(r"\D", "", phone_normalized)
-    if digits:
-        if len(digits) == 10:
-            phone_normalized = "+1" + digits
-        elif not phone_normalized.startswith("+"):
-            phone_normalized = "+" + digits
-    
-    # Search for existing contact by phone
-    existing_contacts = _search_contact_by_phone_via_api(phone_normalized)
-    contact_id = None
-    action = "created"
-    matched_by = None
-    
-    if existing_contacts:
-        contact_id = existing_contacts[0].get("id")
-        action = "updated"
-        matched_by = "phone"
-        logger.info("leads_cleaning: found existing contact_id=%s for phone=%s, will update", 
-                   contact_id, _redact_payload({"phone": phone_normalized})["phone"])
-    else:
-        logger.info("leads_cleaning: no existing contact found for phone=%s, will create",
-                   _redact_payload({"phone": phone_normalized})["phone"])
-    
-    # Build custom field mapping
+    # Build custom field mapping (only include non-empty values)
     custom_field_mapping = {}
-    if payload.service_type:
-        custom_field_mapping["service_type"] = payload.service_type
-    if payload.preferred_service_date:
-        custom_field_mapping["preferred_service_date"] = payload.preferred_service_date
-    if payload.home_type:
-        custom_field_mapping["home_type"] = payload.home_type
-    if payload.cleaning_frequency:
-        custom_field_mapping["cleaning_frequency"] = payload.cleaning_frequency
+    if payload.service_type and payload.service_type.strip():
+        custom_field_mapping["service_type"] = payload.service_type.strip()
+    if payload.preferred_service_date and payload.preferred_service_date.strip():
+        custom_field_mapping["preferred_service_date"] = payload.preferred_service_date.strip()
+    if payload.home_type and payload.home_type.strip():
+        custom_field_mapping["home_type"] = payload.home_type.strip()
+    if payload.cleaning_frequency and payload.cleaning_frequency.strip():
+        custom_field_mapping["cleaning_frequency"] = payload.cleaning_frequency.strip()
     if payload.extras_add_ons:
-        custom_field_mapping["extras_add_ons"] = payload.extras_add_ons  # Will be converted to comma-separated in build_custom_fields_array
-    if payload.addons__frequency:
-        custom_field_mapping["addons__frequency"] = payload.addons__frequency
-    if payload.approximate_square_footage:
-        custom_field_mapping["approximate_square_footage"] = payload.approximate_square_footage
+        # Convert list to newline-separated string for storage
+        if isinstance(payload.extras_add_ons, list):
+            custom_field_mapping["extras_add_ons"] = "\n".join(str(v) for v in payload.extras_add_ons if v)
+        else:
+            custom_field_mapping["extras_add_ons"] = str(payload.extras_add_ons)
+    if payload.addons__frequency and payload.addons__frequency.strip():
+        custom_field_mapping["addons__frequency"] = payload.addons__frequency.strip()
+    if payload.approximate_square_footage and payload.approximate_square_footage.strip():
+        custom_field_mapping["approximate_square_footage"] = payload.approximate_square_footage.strip()
     
-    # Upsert contact
-    if contact_id:
-        # Update existing contact
-        success = update_contact_in_ghl(
-            contact_id=contact_id,
-            first_name=payload.first_name,
-            last_name=payload.last_name,
-            email=payload.email,
-            phone=phone_normalized,
-            postal_code=payload.postal_code,
-            custom_field_mapping=custom_field_mapping,
-        )
-        if not success:
-            logger.error("leads_cleaning: failed to update contact_id=%s", contact_id)
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to update contact. Please try again or contact support.",
-            )
-    else:
-        # Create new contact
-        contact_id = create_contact_in_ghl(
-            first_name=payload.first_name,
-            last_name=payload.last_name,
-            email=payload.email,
-            phone=phone_normalized,
-            postal_code=payload.postal_code,
-            custom_field_mapping=custom_field_mapping,
-        )
-        if not contact_id:
-            logger.error("leads_cleaning: failed to create contact for phone=%s", 
-                       _redact_payload({"phone": phone_normalized})["phone"])
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to create contact. Please try again or contact support.",
-            )
+    # Upsert contact using helper function
+    result = upsert_contact(
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        email=payload.email,
+        phone=payload.phone,
+        postal_code=payload.postal_code,
+        custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
+    )
     
-    logger.info("leads_cleaning: action=%s contact_id=%s", action, contact_id)
+    if result["status"] == "error":
+        logger.error("leads_cleaning: upsert failed: %s", result.get("message"))
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": result.get("message", "Failed to process lead. Please try again or contact support."),
+            },
+            status_code=500,
+        )
+    
+    logger.info("leads_cleaning: action=%s contactId=%s phone=%s", 
+               result["action"], result["contactId"], result["phone"][:4] + "***" + result["phone"][-2:])
     
     return JSONResponse(
         {
             "status": "ok",
-            "action": action,
-            "contact_id": contact_id,
-            "matched_by": matched_by,
+            "action": result["action"],
+            "contactId": result["contactId"],
+            "phone": result["phone"],
         },
         status_code=200,
     )
