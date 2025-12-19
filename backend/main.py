@@ -61,6 +61,18 @@ if not GHL_API_KEY:
 if not GHL_LOCATION_ID:
     raise ValueError("GHL_LOCATION_ID environment variable is required but not set")
 
+# GHL Custom Field IDs (for contact custom fields)
+# These are loaded from environment variables. If not set, the field will be skipped.
+CUSTOM_FIELD_IDS = {
+    "service_type": os.getenv("GHL_CF_SERVICE_TYPE", "").strip(),
+    "preferred_service_date": os.getenv("GHL_CF_PREFERRED_SERVICE_DATE", "").strip(),
+    "home_type": os.getenv("GHL_CF_HOME_TYPE", "").strip(),
+    "cleaning_frequency": os.getenv("GHL_CF_CLEANING_FREQUENCY", "").strip(),
+    "extras_add_ons": os.getenv("GHL_CF_EXTRAS_ADD_ONS", "").strip(),
+    "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
+    "approximate_square_footage": os.getenv("GHL_CF_APPROX_SQFT", "").strip(),
+}
+
 # GHL API endpoints
 LC_BASE_URL = "https://services.leadconnectorhq.com"
 CONTACTS_URL = f"{LC_BASE_URL}/contacts/"
@@ -474,6 +486,23 @@ class ProsApplicationPayload(BaseModel):
     notes: Optional[str] = None
 
 
+class CleaningQuoteFormPayload(BaseModel):
+    """Payload for the new custom cleaning quote form (Phase 2)."""
+
+    first_name: str
+    last_name: str
+    phone: str
+    email: EmailStr
+    postal_code: str
+    home_type: str
+    service_type: str
+    approximate_square_footage: str
+    cleaning_frequency: str
+    preferred_service_date: Optional[str] = None
+    extras_add_ons: Optional[List[str]] = None
+    addons__frequency: Optional[str] = None
+
+
 # ---------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------
@@ -623,6 +652,171 @@ def create_or_update_contact_in_ghl(
             return None
     except Exception as e:
         logger.error("Exception creating/updating contact in GHL: %s", e)
+        return None
+
+
+def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, Any]]:
+    """
+    Build a GHL customFields array from a field mapping dict.
+
+    Args:
+        field_mapping: Dict mapping field keys (e.g., "service_type") to values (e.g., "Standard Cleaning")
+
+    Returns:
+        List of custom field dicts in format: [{"id": "...", "value": "..."}]
+        Only includes fields where the custom field ID is configured (non-empty).
+    """
+    custom_fields: List[Dict[str, Any]] = []
+    
+    for field_key, field_value in field_mapping.items():
+        if field_value is None or field_value == "":
+            continue
+            
+        field_id = CUSTOM_FIELD_IDS.get(field_key)
+        if not field_id:
+            logger.warning(
+                "build_custom_fields_array: custom field ID not configured for key=%s, skipping",
+                field_key
+            )
+            continue
+        
+        # Handle array values (e.g., extras_add_ons) by converting to comma-separated string
+        if isinstance(field_value, list):
+            field_value = ", ".join(str(v) for v in field_value if v)
+        
+        custom_fields.append({
+            "id": field_id,
+            "value": str(field_value)
+        })
+    
+    return custom_fields
+
+
+def create_contact_in_ghl(
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    postal_code: Optional[str] = None,
+    custom_field_mapping: Optional[Dict[str, str]] = None,
+) -> Optional[str]:
+    """
+    Create a new contact in GHL.
+
+    Args:
+        first_name: Contact first name
+        last_name: Contact last name
+        email: Contact email
+        phone: Contact phone number
+        postal_code: Optional postal code
+        custom_field_mapping: Optional dict mapping field keys to values for custom fields
+
+    Returns:
+        GHL contact ID if successful, None otherwise
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("create_contact_in_ghl: GHL_LOCATION_ID not set")
+        return None
+
+    payload: Dict[str, Any] = {
+        "locationId": GHL_LOCATION_ID,
+        "firstName": first_name.strip(),
+        "lastName": last_name.strip(),
+        "email": email.strip(),
+        "phone": phone.strip(),
+        "source": "Website Lead",
+    }
+    
+    if postal_code:
+        payload["postalCode"] = postal_code.strip()
+    
+    # Build custom fields array if mapping provided
+    if custom_field_mapping:
+        custom_fields = build_custom_fields_array(custom_field_mapping)
+        if custom_fields:
+            payload["customFields"] = custom_fields
+
+    try:
+        resp = requests.post(CONTACTS_URL, headers=_ghl_headers(), json=payload, timeout=10)
+        if resp.ok:
+            data = resp.json()
+            contact_id = data.get("contact", {}).get("id")
+            logger.info("create_contact_in_ghl: created contact_id=%s", contact_id)
+            return contact_id
+        else:
+            logger.error("create_contact_in_ghl: failed (%s): %s", resp.status_code, resp.text)
+            return None
+    except Exception as e:
+        logger.error("create_contact_in_ghl: exception: %s", e)
+        return None
+
+
+def update_contact_in_ghl(
+    contact_id: str,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    postal_code: Optional[str] = None,
+    custom_field_mapping: Optional[Dict[str, str]] = None,
+) -> Optional[str]:
+    """
+    Update an existing contact in GHL.
+
+    Args:
+        contact_id: GHL contact ID to update
+        first_name: Optional first name to update
+        last_name: Optional last name to update
+        email: Optional email to update
+        phone: Optional phone to update
+        postal_code: Optional postal code to update
+        custom_field_mapping: Optional dict mapping field keys to values for custom fields
+
+    Returns:
+        GHL contact ID if successful, None otherwise
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("update_contact_in_ghl: GHL_LOCATION_ID not set")
+        return None
+
+    payload: Dict[str, Any] = {
+        "locationId": GHL_LOCATION_ID,
+    }
+    
+    if first_name is not None:
+        payload["firstName"] = first_name.strip()
+    if last_name is not None:
+        payload["lastName"] = last_name.strip()
+    if email is not None:
+        payload["email"] = email.strip()
+    if phone is not None:
+        payload["phone"] = phone.strip()
+    if postal_code is not None:
+        payload["postalCode"] = postal_code.strip()
+    
+    # Build custom fields array if mapping provided
+    if custom_field_mapping:
+        custom_fields = build_custom_fields_array(custom_field_mapping)
+        if custom_fields:
+            payload["customFields"] = custom_fields
+
+    try:
+        resp = requests.put(
+            f"{CONTACTS_URL}{contact_id}",
+            headers=_ghl_headers(),
+            json=payload,
+            timeout=10
+        )
+        if resp.ok:
+            data = resp.json()
+            updated_contact_id = data.get("contact", {}).get("id") or contact_id
+            logger.info("update_contact_in_ghl: updated contact_id=%s", updated_contact_id)
+            return updated_contact_id
+        else:
+            logger.error("update_contact_in_ghl: failed (%s): %s", resp.status_code, resp.text)
+            return None
+    except Exception as e:
+        logger.error("update_contact_in_ghl: exception: %s", e)
         return None
 
 

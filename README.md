@@ -68,6 +68,16 @@ The backend is a FastAPI application that handles:
    # Required environment variables:
    GHL_API_KEY=your_ghl_api_key_here
    GHL_LOCATION_ID=your_ghl_location_id_here
+   
+   # Optional: GHL Custom Field IDs (for contact custom fields)
+   # If not set, these fields will be skipped when creating/updating contacts
+   GHL_CF_SERVICE_TYPE=your_custom_field_id_here
+   GHL_CF_PREFERRED_SERVICE_DATE=your_custom_field_id_here
+   GHL_CF_HOME_TYPE=your_custom_field_id_here
+   GHL_CF_CLEANING_FREQUENCY=your_custom_field_id_here
+   GHL_CF_EXTRAS_ADD_ONS=your_custom_field_id_here
+   GHL_CF_ADDONS_FREQUENCY=your_custom_field_id_here
+   GHL_CF_APPROX_SQFT=your_custom_field_id_here
    ```
 
 ### Running the Backend
@@ -89,6 +99,13 @@ The API will be available at `http://localhost:8000`
 |----------|-------------|----------|
 | `GHL_API_KEY` | GoHighLevel API Bearer token | Yes |
 | `GHL_LOCATION_ID` | GoHighLevel location ID | Yes |
+| `GHL_CF_SERVICE_TYPE` | GHL custom field ID for service type | No (skipped if missing) |
+| `GHL_CF_PREFERRED_SERVICE_DATE` | GHL custom field ID for preferred service date | No (skipped if missing) |
+| `GHL_CF_HOME_TYPE` | GHL custom field ID for home type | No (skipped if missing) |
+| `GHL_CF_CLEANING_FREQUENCY` | GHL custom field ID for cleaning frequency | No (skipped if missing) |
+| `GHL_CF_EXTRAS_ADD_ONS` | GHL custom field ID for extras/add-ons | No (skipped if missing) |
+| `GHL_CF_ADDONS_FREQUENCY` | GHL custom field ID for add-ons frequency | No (skipped if missing) |
+| `GHL_CF_APPROX_SQFT` | GHL custom field ID for approximate square footage | No (skipped if missing) |
 
 ## Frontend Setup
 
