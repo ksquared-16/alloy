@@ -15,7 +15,20 @@ import {
 } from "@/lib/pricing/cleaningPricing";
 import PrimaryButton from "@/components/PrimaryButton";
 
-type FormState = CleaningQuoteInput;
+type FormState = {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+    postalCode: string;
+    homeType: ServiceHomeType | "";
+    serviceType: ServiceType | "";
+    squareFootage: SquareFootageOption | "";
+    cleaningFrequency: CleaningFrequencyOption | "";
+    preferredServiceDate: string;
+    addOns: AddOnId[];
+    addOnFrequency: AddOnFrequencyOption | "";
+};
 
 type ValidationErrors = Partial<Record<keyof FormState | "consent" | "submit", string>>;
 
@@ -25,10 +38,10 @@ const INITIAL_FORM: FormState = {
     phone: "",
     email: "",
     postalCode: "",
-    homeType: "Single-Family Home",
-    serviceType: "Standard Cleaning",
-    squareFootage: "Under 1500 sq ft",
-    cleaningFrequency: "One-time",
+    homeType: "",
+    serviceType: "",
+    squareFootage: "",
+    cleaningFrequency: "",
     preferredServiceDate: "",
     addOns: [],
     addOnFrequency: "",
@@ -150,9 +163,20 @@ export default function CleaningQuoteForm({
 
         setIsSubmitting(true);
         try {
+            // Type assertion needed since form allows empty strings but CleaningQuoteInput doesn't
+            // Validation ensures these are not empty before submission
             const cleanInput: CleaningQuoteInput = {
-                ...form,
+                firstName: form.firstName,
+                lastName: form.lastName,
+                phone: form.phone,
+                email: form.email,
+                postalCode: form.postalCode,
+                homeType: form.homeType as ServiceHomeType,
+                serviceType: form.serviceType as ServiceType,
+                squareFootage: form.squareFootage as SquareFootageOption,
+                cleaningFrequency: form.cleaningFrequency as CleaningFrequencyOption,
                 preferredServiceDate: form.preferredServiceDate?.trim() || undefined,
+                addOns: form.addOns,
                 addOnFrequency: form.addOnFrequency || undefined,
             };
 
@@ -188,6 +212,16 @@ export default function CleaningQuoteForm({
 
             const backendResult = await response.json();
             console.log("Backend lead submission result:", backendResult);
+
+            // Calculate quote locally
+            const result = calculateCleaningQuote(cleanInput);
+
+            // Store quote in sessionStorage for /book page
+            try {
+                sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
+            } catch (e) {
+                console.warn("Failed to store quote in sessionStorage:", e);
+            }
 
             // Normalize phone for URL (ensure +1 format)
             let normalizedPhone = cleanInput.phone.trim();

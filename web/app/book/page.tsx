@@ -36,134 +36,34 @@ function BookPageContent() {
     const searchParams = useSearchParams();
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
     const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [hasTimedOut, setHasTimedOut] = useState(false);
-    const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
-    const [lastRequestUrl, setLastRequestUrl] = useState<string | null>(null);
     const phone = searchParams?.get("phone");
 
-    const fetchQuote = async (phoneNumber: string, baseUrl: string) => {
-        try {
-            const url = `${baseUrl}/quote/cleaning?phone=${encodeURIComponent(phoneNumber)}`;
-            setLastRequestUrl(url);
-            console.log("Fetching quote from:", url);
-            const response = await fetch(url);
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(
-                    `HTTP ${response.status}: ${response.statusText}${text ? ` - ${text}` : ""
-                    }`,
-                );
-            }
-            const data: QuoteResponse = await response.json();
-            console.log("QUOTE RESPONSE", data);
-            return data;
-        } catch (error) {
-            console.error("Error fetching quote:", error);
-            const errorMsg = error instanceof Error ? error.message : "Unknown error";
-            setErrorMessage(errorMsg);
-            return null;
-        }
-    };
-
     useEffect(() => {
-        const rawPhone = (phone || "").trim();
-        const digits = rawPhone.replace(/\D/g, "");
-
-        const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-        const isProd = process.env.NODE_ENV === "production";
-
-        // Validate phone param early
-        if (!rawPhone || digits.length < 7) {
-            setFetchStatus("error");
-            setErrorMessage(
-                "Missing/invalid phone param in URL. Expected /book?phone=…",
-            );
-            setApiBaseUrl(envBase || null);
-            setLastRequestUrl(null);
-            return;
-        }
-
-        // In production, require NEXT_PUBLIC_API_BASE_URL
-        if (isProd && !envBase) {
-            setFetchStatus("error");
-            setErrorMessage(
-                "Missing NEXT_PUBLIC_API_BASE_URL. Booking page cannot fetch quote.",
-            );
-            setApiBaseUrl(null);
-            setLastRequestUrl(null);
-            return;
-        }
-
-        const baseUrlToUse = envBase || "http://localhost:8000";
-        setApiBaseUrl(baseUrlToUse);
-
-        setFetchStatus("loading");
-        setErrorMessage(null);
-        setHasTimedOut(false);
-        setQuote(null);
-
-        let pollInterval: NodeJS.Timeout | null = null;
-        let pollCount = 0;
-        const POLL_INTERVAL_MS = 600;
-        const MAX_POLLS = 20; // 20 * 600ms = 12 seconds
-
-        const processQuote = (data: QuoteResponse | null) => {
-            if (!data) return;
-            setQuote(data);
-            if (isQuoteReady(data)) {
+        // Read quote from sessionStorage
+        try {
+            const storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
+            if (storedQuote) {
+                const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
+                setQuote(parsedQuote);
                 setFetchStatus("ready");
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                }
+                console.log("Loaded quote from sessionStorage:", parsedQuote);
+            } else {
+                setFetchStatus("error");
+                setQuote(null);
             }
-        };
+        } catch (e) {
+            console.error("Failed to load quote from sessionStorage:", e);
+            setFetchStatus("error");
+            setQuote(null);
+        }
+    }, []);
 
-        const startPolling = async () => {
-            const initialQuote = await fetchQuote(rawPhone, baseUrlToUse);
-            processQuote(initialQuote);
-
-            if (!initialQuote || !isQuoteReady(initialQuote)) {
-                pollInterval = setInterval(async () => {
-                    pollCount += 1;
-                    const updatedQuote = await fetchQuote(rawPhone, baseUrlToUse);
-                    processQuote(updatedQuote);
-
-                    if ((updatedQuote && isQuoteReady(updatedQuote)) || pollCount >= MAX_POLLS) {
-                        if (!updatedQuote || !isQuoteReady(updatedQuote)) {
-                            setHasTimedOut(true);
-                            if (fetchStatus !== "ready") {
-                                setFetchStatus("timeout");
-                            }
-                        }
-                        if (pollInterval) {
-                            clearInterval(pollInterval);
-                        }
-                    }
-                }, POLL_INTERVAL_MS);
-            }
-        };
-
-        startPolling();
-
-        return () => {
-            if (pollInterval) {
-                clearInterval(pollInterval);
-            }
-        };
-    }, [phone]);
-
-    const isReady = isQuoteReady(quote) && fetchStatus === "ready";
     const hasQuote =
         !!quote &&
         ((typeof quote.first_clean_price === "number" &&
             quote.first_clean_price > 0) ||
             (typeof quote.estimated_price === "number" &&
                 quote.estimated_price > 0));
-    const shouldShowDebug =
-        fetchStatus === "loading" ||
-        fetchStatus === "timeout" ||
-        fetchStatus === "error";
 
     return (
         <div className="min-h-screen py-6 md:py-10">
@@ -181,63 +81,21 @@ function BookPageContent() {
                     </div>
                 )}
 
-                {/* Loading / timeout states */}
-                {!hasQuote && !errorMessage && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 mb-5">
-                        <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
-                            Generating your quote…
+                {/* Fallback message if no quote found */}
+                {!hasQuote && fetchStatus === "error" && (
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 text-center">
+                        <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
+                            Please start your quote first
                         </h2>
-                        <p className="text-sm text-alloy-midnight/80 mb-4">
-                            Please wait a few seconds while we calculate your pricing.
+                        <p className="text-sm text-alloy-midnight/80 mb-6">
+                            To book a cleaning, please fill out the quote form first.
                         </p>
-                        <div className="flex items-center gap-3">
-                            <div className="h-5 w-5 border-2 border-alloy-stone border-t-alloy-blue rounded-full animate-spin" />
-                            <p className="text-sm text-alloy-midnight/70">
-                                This usually takes just a moment.
-                            </p>
-                        </div>
-
-                        {hasTimedOut && (
-                            <div className="mt-4 p-3 bg-alloy-stone/40 rounded-lg">
-                                <p className="text-sm text-alloy-midnight/80">
-                                    We&apos;re still working on your quote. Please refresh the page or contact us if
-                                    it doesn&apos;t appear.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {errorMessage && (
-                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 mb-6">
-                        <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
-                            Trouble loading your quote
-                        </h2>
-                        <p className="text-sm text-alloy-midnight/80 mb-3">
-                            Please try refreshing the page. If the issue continues, contact us and we&apos;ll
-                            confirm your pricing manually.
-                        </p>
-                        <p className="text-xs text-alloy-ember font-mono break-all">{errorMessage}</p>
-                    </div>
-                )}
-
-                {/* Debug info for API calls (visible in loading/timeout/error) */}
-                {shouldShowDebug && (
-                    <div className="mb-4 p-3 bg-alloy-stone/60 rounded-lg border border-alloy-stone/80">
-                        <p className="text-xs font-mono text-alloy-midnight break-all">
-                            <strong>API Base URL:</strong> {apiBaseUrl ?? "(unset)"}
-                        </p>
-                        <p className="text-xs font-mono text-alloy-midnight break-all mt-1">
-                            <strong>Request URL:</strong> {lastRequestUrl ?? "(none yet)"}
-                        </p>
-                        <p className="text-xs font-mono text-alloy-midnight mt-1">
-                            <strong>Phone param:</strong> {phone ?? "(missing)"}
-                        </p>
-                        {errorMessage && (
-                            <p className="text-xs font-mono text-alloy-ember break-all mt-1">
-                                <strong>Error:</strong> {errorMessage}
-                            </p>
-                        )}
+                        <a
+                            href="/services/cleaning?open=1#quote-form"
+                            className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                        >
+                            Get a Quote
+                        </a>
                     </div>
                 )}
 

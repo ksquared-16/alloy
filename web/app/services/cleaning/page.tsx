@@ -119,6 +119,28 @@ export default function CleaningPage() {
     }
   };
 
+  const scrollToQuoteForm = () => {
+    if (!isOpen) {
+      setIsOpen(true);
+      setHasRendered(true);
+    }
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  };
+
+  // Reusable CTA component for sections
+  const GetQuoteCTA = () => (
+    <div className="flex justify-center mt-8">
+      <button onClick={scrollToQuoteForm} className="w-full md:w-auto">
+        <PrimaryButton className="w-full md:w-auto">Get a Quote</PrimaryButton>
+      </button>
+    </div>
+  );
+
   // Handle hash-based expansion and ?open=1 param from CTA
   useEffect(() => {
     const checkHash = () => {
@@ -239,6 +261,7 @@ export default function CleaningPage() {
             </div>
           ))}
         </div>
+        <GetQuoteCTA />
       </Section>
 
       {/* Cleaning Options */}
@@ -293,6 +316,7 @@ export default function CleaningPage() {
             Recurring service discounts: Weekly and bi-weekly cleanings qualify for preferred pricing. The more consistent your schedule, the better the rate. Monthly cleanings are priced individually based on your home size.
           </p>
         </div>
+        <GetQuoteCTA />
       </Section>
 
       {/* What's Included - 2 Column Comparison */}
@@ -415,6 +439,7 @@ export default function CleaningPage() {
             </ul>
           </div>
         </div>
+        <GetQuoteCTA />
       </Section>
 
       {/* FAQ */}
@@ -429,6 +454,7 @@ export default function CleaningPage() {
             </Accordion>
           ))}
         </div>
+        <GetQuoteCTA />
       </Section>
 
       {/* Secondary CTA */}
@@ -451,7 +477,7 @@ export default function CleaningPage() {
                 }
               }}
             >
-              <PrimaryButton className="bg-white text-alloy-pine hover:bg-alloy-stone">
+              <PrimaryButton className="bg-white text-alloy-blue hover:bg-alloy-stone">
                 Start my quote
               </PrimaryButton>
             </button>
