@@ -806,6 +806,7 @@ def create_contact_in_ghl(
         "email": email.strip(),
         "phone": normalize_phone(phone),
         "source": "Website Lead - Cleaning Quote",
+        "tags": ["lead"],  # Add lead tag on creation
     }
     
     if postal_code and postal_code.strip():
@@ -888,6 +889,8 @@ def upsert_contact(
         
         if updated_id:
             logger.info("upsert_contact: successfully updated contact_id=%s", updated_id)
+            # Add lead tag to updated contact
+            ensure_contact_has_tag(updated_id, "lead")
             return {
                 "status": "ok",
                 "action": "updated",
@@ -915,6 +918,8 @@ def upsert_contact(
         
         if contact_id:
             logger.info("upsert_contact: successfully created contact_id=%s", contact_id)
+            # Tag is already added during creation, but ensure it's there as a safety check
+            ensure_contact_has_tag(contact_id, "lead")
             return {
                 "status": "ok",
                 "action": "created",
@@ -944,6 +949,75 @@ def strip_update_disallowed_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
     cleaned.pop("locationId", None)
     cleaned.pop("location_id", None)
     return cleaned
+
+
+def ensure_contact_has_tag(contact_id: str, tag: str) -> bool:
+    """
+    Ensure a contact has a specific tag, adding it if missing.
+    
+    Args:
+        contact_id: GHL contact ID
+        tag: Tag name to ensure (e.g., "lead")
+    
+    Returns:
+        True if tag was added or already present, False if update failed
+    """
+    if not contact_id or not tag:
+        logger.warning("ensure_contact_has_tag: invalid contact_id or tag")
+        return False
+    
+    try:
+        # Fetch existing contact to get current tags
+        resp = requests.get(
+            f"{CONTACTS_URL}{contact_id}",
+            headers=_ghl_headers(),
+            params={"locationId": GHL_LOCATION_ID},
+            timeout=10
+        )
+        
+        if not resp.ok:
+            logger.error("ensure_contact_has_tag: failed to fetch contact_id=%s (%s): %s", 
+                        contact_id, resp.status_code, resp.text)
+            return False
+        
+        data = resp.json()
+        contact = data.get("contact", {})
+        current_tags = contact.get("tags", [])
+        
+        # If tag already present, no action needed
+        if tag in current_tags:
+            logger.info("ensure_contact_has_tag: contact_id=%s already has tag=%s, skipping", contact_id, tag)
+            return True
+        
+        # Add tag to existing tags (preserve all existing tags)
+        updated_tags = list(current_tags) if current_tags else []
+        updated_tags.append(tag)
+        
+        # Update contact with new tags array
+        update_payload = {
+            "tags": updated_tags
+        }
+        # Remove any disallowed fields
+        update_payload = strip_update_disallowed_fields(update_payload)
+        
+        update_resp = requests.put(
+            f"{CONTACTS_URL}{contact_id}",
+            headers=_ghl_headers(),
+            json=update_payload,
+            timeout=10
+        )
+        
+        if update_resp.ok:
+            logger.info("ensure_contact_has_tag: added tag=%s to contact_id=%s", tag, contact_id)
+            return True
+        else:
+            logger.error("ensure_contact_has_tag: failed to update tags for contact_id=%s (%s): %s", 
+                        contact_id, update_resp.status_code, update_resp.text)
+            return False
+            
+    except Exception as e:
+        logger.error("ensure_contact_has_tag: exception for contact_id=%s: %s", contact_id, e, exc_info=True)
+        return False
 
 
 def update_contact_in_ghl(
