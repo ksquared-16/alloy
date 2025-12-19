@@ -452,62 +452,83 @@ export default function CleaningQuoteForm({
 
         {/* Submit */}
         <div className="pt-2">
-          <PrimaryButton type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
-            {isSubmitting ? "Calculating…" : "Get my quote"}
-          </PrimaryButton>
+          {isDark ? (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full md:w-auto bg-white text-alloy-blue hover:bg-white/90 hover:shadow-lg font-semibold px-6 py-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Calculating…" : "Get my quote"}
+            </button>
+          ) : (
+            <PrimaryButton type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
+              {isSubmitting ? "Calculating…" : "Get my quote"}
+            </PrimaryButton>
+          )}
         </div>
       </form>
 
-      {/* Quote summary (local, instant) */}
+      {/* Quote summary (local, instant) - condensed layout */}
       {quote && (
-        <div className="mt-4 rounded-xl border border-alloy-stone/30 bg-white p-4 shadow-sm">
-          {hasReadyQuote && quote.first_clean_price != null ? (
-            <div className="space-y-3">
+        <div className="mt-4 rounded-xl border border-alloy-stone/30 bg-white p-3 md:p-4 shadow-sm">
+          {hasReadyQuote && quote.first_clean_price != null && quote.first_clean_price > 0 ? (
+            <div className="space-y-2.5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* First cleaning or one-time */}
-                <div className="rounded-lg border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-3">
+                {/* First Cleaning */}
+                <div className="rounded-lg border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
                   <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                    {quote.recurring_price ? "First cleaning" : "One-time cleaning"}
+                    First Cleaning
                   </p>
-                  <p className="text-2xl font-bold text-alloy-blue">
+                  <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
                     ${quote.first_clean_price.toFixed(2)}
                   </p>
                 </div>
 
                 {/* Recurring (if any) */}
-                {quote.recurring_price != null && quote.frequency_label && (
-                  <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-3">
+                {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label ? (
+                  <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
                     <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                      {quote.frequency_label} cleaning
+                      {quote.frequency_label} Cleaning
                       {quote.discount_label && (
-                        <span className="ml-1 text-[11px] text-alloy-midnight/70">
+                        <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
                           ({quote.discount_label})
                         </span>
                       )}
                     </p>
-                    <p className="text-2xl font-bold text-alloy-juniper">
-                      ${quote.recurring_price.toFixed(2)}
-                      <span className="ml-1 text-[11px] text-alloy-midnight/60">per visit</span>
+                    <div className="flex items-baseline gap-1">
+                      <p className="text-2xl md:text-3xl font-bold text-alloy-juniper leading-tight">
+                        ${quote.recurring_price.toFixed(2)}
+                      </p>
+                      <span className="text-[11px] text-alloy-midnight/60">per visit</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
+                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                      Recurring Cleaning
                     </p>
+                    <p className="text-sm text-alloy-midnight/70">One-time service</p>
                   </div>
                 )}
               </div>
 
-              {/* Add-ons list + total */}
+              {/* Add-ons list (compact) */}
               {quote.addons && quote.addons.length > 0 && (
-                <div className="pt-1">
-                  <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                <div className="pt-1 border-t border-alloy-stone/20">
+                  <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
                     Add-ons
                   </p>
                   <div className="space-y-1">
                     {quote.addons.map((addon, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between text-sm text-alloy-midnight/85"
+                        className="flex justify-between items-center text-sm text-alloy-midnight/85"
                       >
                         <span>{addon.name}</span>
-                        <span>
-                          {addon.price != null ? `$${addon.price.toFixed(2)}` : "Included in quote"}
+                        <span className="font-medium">
+                          {addon.price != null && addon.price > 0
+                            ? `$${addon.price.toFixed(2)}`
+                            : "Included in quote"}
                         </span>
                       </div>
                     ))}
@@ -518,25 +539,44 @@ export default function CleaningQuoteForm({
               {/* Breakdown link */}
               {quote.price_breakdown && (
                 <details className="mt-1">
-                  <summary className="text-xs text-alloy-midnight/70 cursor-pointer">
+                  <summary className="text-xs text-alloy-midnight/70 cursor-pointer hover:text-alloy-midnight">
                     See full price breakdown
                   </summary>
-                  <pre className="mt-1 whitespace-pre-line text-xs text-alloy-midnight/80">
+                  <pre className="mt-1.5 whitespace-pre-line text-xs text-alloy-midnight/80 leading-relaxed">
                     {quote.price_breakdown}
                   </pre>
                 </details>
               )}
+
+              {/* Continue to booking CTA */}
+              {form.phone && (
+                <div className="pt-2 border-t border-alloy-stone/20">
+                  <PrimaryButton
+                    onClick={() => {
+                      const phoneParam = encodeURIComponent(form.phone.trim());
+                      router.push(`/book?phone=${phoneParam}`);
+                    }}
+                    className="w-full md:w-auto"
+                  >
+                    Continue to booking
+                  </PrimaryButton>
+                </div>
+              )}
+            </div>
+          ) : quote.status === "pending" ? (
+            <div className="py-3">
+              <p className="text-sm font-medium text-alloy-midnight">
+                Generating your quote…
+              </p>
+              <p className="text-xs text-alloy-midnight/70 mt-1">
+                Please wait a moment while we calculate your pricing.
+              </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="py-3">
               <p className="text-sm font-medium text-alloy-midnight">
                 We&apos;re reviewing your details and will confirm your quote shortly.
               </p>
-              {quote.price_breakdown && (
-                <pre className="mt-1 whitespace-pre-line text-xs text-alloy-midnight/80">
-                  {quote.price_breakdown}
-                </pre>
-              )}
             </div>
           )}
         </div>

@@ -4,9 +4,8 @@ import GhlEmbed from "@/components/GhlEmbed";
 export default function ProsPage() {
   const benefits = [
     "Pick your own jobs and set your schedule",
-    "We handle the busywork—marketing, booking, customer communication",
-    "Fair pay. You keep more of what you earn",
-    "Get paid promptly after job completion",
+    "We handle the busywork, so you can focus on what you're best at",
+    "Get paid promptly",
     "Real humans behind Alloy, not a faceless platform",
   ];
 
@@ -23,10 +22,10 @@ export default function ProsPage() {
       <Section className="py-12 md:py-20">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
-            Great cleaners deserve great customers.
+            Join Our Team
           </h1>
           <p className="text-lg text-alloy-midnight/80 mb-8">
-            We help you get quality jobs. We handle the busywork—marketing, booking, customer communication. You focus on the work.
+            We help you get quality jobs. We handle the busywork, so you can focus on what you're best at.
           </p>
         </div>
       </Section>
@@ -34,7 +33,7 @@ export default function ProsPage() {
       {/* How It Works */}
       <Section className="py-16 bg-white">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
-          How it works for cleaners
+          How it works
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
           {[

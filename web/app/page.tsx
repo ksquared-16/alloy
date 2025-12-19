@@ -45,8 +45,8 @@ export default function Home() {
       accentColor: "ember" as const,
     },
     {
-      title: "Fair for Everyone",
-      description: "Customers pay fair prices. Pros keep more of what they earn. Win-win is the only way this works.",
+      title: "We don't sell your information",
+      description: "Your information stays with us. We coordinate directly with a pro we know and trust. No lead blasting, no spam calls, no middleman chaos.",
       accentColor: "juniper" as const,
     },
   ];
@@ -70,12 +70,17 @@ export default function Home() {
     {
       question: "How do I pay?",
       answer:
-        "We securely save your payment method and only charge it after the work is done — no deposits, no surprises.",
+        "We save your payment information during booking and only charge you at the completion of the service, once you've confirmed the work was completed.",
     },
     {
-      question: "Can I schedule recurring cleanings?",
+      question: "Do I need to be home during the cleaning?",
       answer:
-        "Set up weekly, bi-weekly, or monthly cleanings. More frequent service may qualify for preferred pricing — just let us know your schedule when you request a quote.",
+        "No. We'll coordinate access with you beforehand. We're flexible to your preference.",
+    },
+    {
+      question: "What if I'm not satisfied with the cleaning?",
+      answer:
+        "We make it right. If something isn't up to your standards, let us know within 24 hours and we'll send the pro back to fix it at no extra charge.",
     },
   ];
 
@@ -86,11 +91,11 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-10 md:py-8">
           <div className="relative h-[340px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             {/* Background Image */}
-        <Image
+            <Image
               src="/hero/cleaning-hero.jpg"
               alt="Clean modern home interior"
               fill
-          priority
+              priority
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
@@ -106,9 +111,9 @@ export default function Home() {
                 </p>
                 <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
                   Trusted home services, without the runaround.
-          </h1>
+                </h1>
                 <p className="text-lg text-white/90">
-                  Alloy handles everything — scheduling, confirmation, and follow-up — using trusted local professionals in Bend. One point of contact. Real accountability.
+                  Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Link href="/services/cleaning?open=1#quote-form">
@@ -149,7 +154,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto mt-12 text-center">
           <div className="bg-white/80 rounded-lg p-6 border border-alloy-stone/30">
             <p className="text-lg text-alloy-midnight font-medium">
-              Alloy isn't a lead marketplace. We're your point of contact before, during, and after the job.
+              Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
             </p>
           </div>
         </div>

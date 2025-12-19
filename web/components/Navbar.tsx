@@ -10,7 +10,7 @@ export default function Navbar() {
   const pathname = usePathname();
 
   const navLinks = [
-    { href: "/services", label: "Services" },
+    { href: "/services/cleaning", label: "Home Cleaning" },
     { href: "/pros", label: "For Pros" },
     { href: "/about", label: "About" },
   ];

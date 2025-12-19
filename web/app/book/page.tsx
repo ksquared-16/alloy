@@ -243,36 +243,42 @@ function BookPageContent() {
 
                 {/* Quote details once we have any quote data */}
                 {quote && hasQuote && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 mb-5">
-                        <div className="space-y-3">
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-3 md:p-4 mb-5">
+                        <div className="space-y-2.5">
                             {/* Compact 2-column pricing summary */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {/* First Cleaning */}
-                                <div className="rounded-xl border border-alloy-stone/40 bg-alloy-stone/30 px-4 py-3 md:px-4 md:py-3 min-h-[92px] flex flex-col justify-center">
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
+                                <div className="rounded-lg border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
+                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
                                         First Cleaning
                                     </p>
-                                    <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
-                                        $
-                                        {(
+                                    {(() => {
+                                        const price =
                                             (typeof quote.first_clean_price === "number" &&
                                                 quote.first_clean_price > 0
                                                 ? quote.first_clean_price
                                                 : typeof quote.estimated_price === "number" &&
                                                     quote.estimated_price > 0
                                                     ? quote.estimated_price
-                                                    : 0)
-                                        ).toFixed(2)}
-                                    </p>
+                                                    : null);
+                                        return price != null && price > 0 ? (
+                                            <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
+                                                ${price.toFixed(2)}
+                                            </p>
+                                        ) : (
+                                            <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Recurring Cleaning */}
-                                <div className="rounded-xl border border-alloy-stone/40 bg-white px-4 py-3 md:px-4 md:py-3 min-h-[92px] flex flex-col justify-center">
+                                <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
                                     {quote.recurring_price !== undefined &&
                                         quote.recurring_price !== null &&
+                                        quote.recurring_price > 0 &&
                                         quote.frequency_label ? (
                                         <>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
                                                 {quote.frequency_label} Cleaning
                                                 {quote.discount_label && (
                                                     <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
@@ -291,11 +297,11 @@ function BookPageContent() {
                                         </>
                                     ) : (
                                         <>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
                                                 Recurring Cleaning
                                             </p>
-                                            <p className="text-sm text-alloy-midnight/80">
-                                                Calculating…
+                                            <p className="text-sm text-alloy-midnight/70">
+                                                One-time service
                                             </p>
                                         </>
                                     )}
