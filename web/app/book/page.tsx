@@ -223,6 +223,14 @@ function BookPageContent() {
                             <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
                                 You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
                             </p>
+                            <div className="mt-4 flex justify-center">
+                                <a
+                                    href="/"
+                                    className="inline-block bg-alloy-blue text-white font-semibold px-6 py-2 rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
+                                >
+                                    Done
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>

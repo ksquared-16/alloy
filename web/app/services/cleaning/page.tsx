@@ -32,9 +32,9 @@ export default function CleaningPage() {
 
   const frequencies = [
     { label: "One-time", description: "Perfect for special occasions or trying us out.", discount: null },
-    { label: "Weekly", description: "Keep your home consistently clean every week.", discount: "15% Off" },
-    { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "10% Off" },
-    { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "5% Off" },
+    { label: "Weekly", description: "Keep your home consistently clean every week.", discount: "40% Off" },
+    { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "30% Off" },
+    { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "20% Off" },
   ];
 
   const whatsIncluded = {

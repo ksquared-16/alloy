@@ -4,9 +4,9 @@ export type ServiceType = "Standard Cleaning" | "Move-Out / Heavy Clean";
 
 export type CleaningFrequencyOption =
     | "One-time"
-    | "Weekly (15% Off)"
-    | "Bi-Weekly (10% Off)"
-    | "Monthly (5% Off)";
+    | "Weekly (40% Off)"
+    | "Bi-Weekly (30% Off)"
+    | "Monthly (20% Off)";
 
 export type SquareFootageOption =
     | "Under 1500 sq ft"
@@ -82,20 +82,63 @@ const FREQUENCY_CONFIG: Record<
     { label: string; discountPercent: number | null; discountLabel: string | null }
 > = {
     "One-time": { label: "One-time", discountPercent: null, discountLabel: null },
-    "Weekly (15% Off)": {
+    "Weekly (40% Off)": {
         label: "Weekly",
-        discountPercent: 0.15,
-        discountLabel: "15% off",
+        discountPercent: 0.4,
+        discountLabel: "40% off",
     },
-    "Bi-Weekly (10% Off)": {
+    "Bi-Weekly (30% Off)": {
         label: "Bi-Weekly",
-        discountPercent: 0.1,
-        discountLabel: "10% off",
+        discountPercent: 0.3,
+        discountLabel: "30% off",
     },
-    "Monthly (5% Off)": {
+    "Monthly (20% Off)": {
         label: "Monthly",
-        discountPercent: 0.05,
-        discountLabel: "5% off",
+        discountPercent: 0.2,
+        discountLabel: "20% off",
+    },
+};
+
+// Fixed recurring prices by frequency and square footage (no formula calculation)
+const RECURRING_PRICES: Record<
+    CleaningFrequencyOption,
+    Record<SquareFootageOption, number | null>
+> = {
+    "One-time": {
+        "Under 1500 sq ft": null,
+        "1501–2,000 sq ft": null,
+        "2,001-2,600 sq ft": null,
+        "2,601-3,200 sq ft": null,
+        "3,201-4,000 sq ft": null,
+        "4,0001-5,500 sq ft": null,
+        "Over 5,500 sq ft": null,
+    },
+    "Weekly (40% Off)": {
+        "Under 1500 sq ft": 120,
+        "1501–2,000 sq ft": 130,
+        "2,001-2,600 sq ft": 145,
+        "2,601-3,200 sq ft": 160,
+        "3,201-4,000 sq ft": 170,
+        "4,0001-5,500 sq ft": 185,
+        "Over 5,500 sq ft": 210,
+    },
+    "Bi-Weekly (30% Off)": {
+        "Under 1500 sq ft": 140,
+        "1501–2,000 sq ft": 150,
+        "2,001-2,600 sq ft": 170,
+        "2,601-3,200 sq ft": 185,
+        "3,201-4,000 sq ft": 200,
+        "4,0001-5,500 sq ft": 215,
+        "Over 5,500 sq ft": 245,
+    },
+    "Monthly (20% Off)": {
+        "Under 1500 sq ft": 160,
+        "1501–2,000 sq ft": 170,
+        "2,001-2,600 sq ft": 190,
+        "2,601-3,200 sq ft": 210,
+        "3,201-4,000 sq ft": 225,
+        "4,0001-5,500 sq ft": 245,
+        "Over 5,500 sq ft": 280,
     },
 };
 
@@ -170,14 +213,19 @@ export function calculateCleaningQuote(
 
     const freqConfig = FREQUENCY_CONFIG[input.cleaningFrequency];
 
+    // Use fixed recurring prices instead of calculating from base price
     let recurringPrice: number | null = null;
     let frequencyLabel: string | null = null;
     let discountLabel: string | null = null;
 
-    if (freqConfig && firstCleanPrice != null && freqConfig.discountPercent != null) {
-        recurringPrice = roundCurrency(firstCleanPrice * (1 - freqConfig.discountPercent));
-        discountLabel = freqConfig.discountLabel;
-        frequencyLabel = freqConfig.label;
+    if (freqConfig && freqConfig.discountPercent != null) {
+        // Look up fixed recurring price for this frequency and square footage
+        const fixedRecurringPrice = RECURRING_PRICES[input.cleaningFrequency]?.[input.squareFootage];
+        if (fixedRecurringPrice != null) {
+            recurringPrice = roundCurrency(fixedRecurringPrice);
+            discountLabel = freqConfig.discountLabel;
+            frequencyLabel = freqConfig.label;
+        }
     }
 
     // Add-ons: adjust first clean and (optionally) recurring totals

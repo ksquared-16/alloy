@@ -28,9 +28,11 @@ type FormState = {
     preferredServiceDate: string;
     addOns: AddOnId[];
     addOnFrequency: AddOnFrequencyOption | "";
+    streetAddress: string;
+    photos: File[];
 };
 
-type ValidationErrors = Partial<Record<keyof FormState | "consent" | "submit", string>>;
+type ValidationErrors = Partial<Record<keyof FormState | "consent" | "submit" | "photos", string>>;
 
 const INITIAL_FORM: FormState = {
     firstName: "",
@@ -45,6 +47,8 @@ const INITIAL_FORM: FormState = {
     preferredServiceDate: "",
     addOns: [],
     addOnFrequency: "",
+    streetAddress: "",
+    photos: [],
 };
 
 function validate(form: FormState): ValidationErrors {
@@ -72,12 +76,28 @@ function validate(form: FormState): ValidationErrors {
     if (!form.homeType) errors.homeType = "Home type is required.";
     if (!form.serviceType) errors.serviceType = "Service type is required.";
     if (!form.squareFootage) errors.squareFootage = "Approximate size is required.";
-    if (!form.cleaningFrequency) errors.cleaningFrequency = "Cleaning frequency is required.";
 
-    if (form.serviceType === "Move-Out / Heavy Clean" && !form.preferredServiceDate?.trim()) {
-        errors.preferredServiceDate = "Please provide a preferred service date.";
+    const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
+
+    // Frequency is only required for Standard Cleaning
+    if (!isMoveOut && !form.cleaningFrequency) {
+        errors.cleaningFrequency = "Cleaning frequency is required.";
     }
 
+    // Move-Out specific requirements
+    if (isMoveOut) {
+        if (!form.preferredServiceDate?.trim()) {
+            errors.preferredServiceDate = "Please provide a preferred service date.";
+        }
+        if (!form.streetAddress.trim()) {
+            errors.streetAddress = "Street address is required for move-out cleaning.";
+        }
+        if (form.photos.length < 4) {
+            errors.photos = "Please upload at least 4 photos showcasing different areas of your home.";
+        }
+    }
+
+    // Add-ons frequency only required if add-ons are selected
     if (form.addOns.length > 0 && !form.addOnFrequency) {
         errors.addOnFrequency = "Please select how often you want add-ons.";
     }
@@ -100,6 +120,7 @@ export default function CleaningQuoteForm({
     const [errors, setErrors] = useState<ValidationErrors>({});
     const [quote, setQuote] = useState<CleaningQuoteResult | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showMoveOutSuccess, setShowMoveOutSuccess] = useState(false);
 
     const isDark = variant === "dark";
 
@@ -126,7 +147,20 @@ export default function CleaningQuoteForm({
         " text-alloy-juniper focus:ring-alloy-juniper";
 
     const handleChange = <K extends keyof FormState>(field: K, value: FormState[K]) => {
-        setForm((prev) => ({ ...prev, [field]: value }));
+        setForm((prev) => {
+            const updated = { ...prev, [field]: value };
+            // If service type changes to Move-Out, clear frequency (it's auto-set to One-time)
+            if (field === "serviceType" && value === "Move-Out / Heavy Clean") {
+                updated.cleaningFrequency = "";
+            }
+            // If service type changes to Standard, clear Move-Out specific fields
+            if (field === "serviceType" && value === "Standard Cleaning") {
+                updated.streetAddress = "";
+                updated.photos = [];
+                updated.preferredServiceDate = "";
+            }
+            return updated;
+        });
         setErrors((prev) => ({ ...prev, [field]: undefined }));
     };
 
@@ -143,6 +177,20 @@ export default function CleaningQuoteForm({
         setErrors((prev) => ({ ...prev, addOnFrequency: undefined }));
     };
 
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        setForm((prev) => ({ ...prev, photos: files }));
+        setErrors((prev) => ({ ...prev, photos: undefined }));
+    };
+
+    const removePhoto = (index: number) => {
+        setForm((prev) => ({
+            ...prev,
+            photos: prev.photos.filter((_, i) => i !== index),
+        }));
+        setErrors((prev) => ({ ...prev, photos: undefined }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const nextErrors = validate(form);
@@ -155,14 +203,13 @@ export default function CleaningQuoteForm({
             return;
         }
 
-        // If this is a move-out / heavy clean request, route to the dedicated estimate page
-        if (form.serviceType === "Move-Out / Heavy Clean") {
-            router.push("/services/cleaning/move-out");
-            return;
-        }
-
         setIsSubmitting(true);
         try {
+            const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
+
+            // For Move-Out, auto-set frequency to One-time
+            const cleaningFrequency = isMoveOut ? "One-time" : (form.cleaningFrequency as CleaningFrequencyOption);
+
             // Type assertion needed since form allows empty strings but CleaningQuoteInput doesn't
             // Validation ensures these are not empty before submission
             const cleanInput: CleaningQuoteInput = {
@@ -174,11 +221,22 @@ export default function CleaningQuoteForm({
                 homeType: form.homeType as ServiceHomeType,
                 serviceType: form.serviceType as ServiceType,
                 squareFootage: form.squareFootage as SquareFootageOption,
-                cleaningFrequency: form.cleaningFrequency as CleaningFrequencyOption,
+                cleaningFrequency: cleaningFrequency,
                 preferredServiceDate: form.preferredServiceDate?.trim() || undefined,
                 addOns: form.addOns,
                 addOnFrequency: form.addOnFrequency || undefined,
             };
+
+            // Convert photos to base64 for backend (or we could use FormData)
+            const photoPromises = form.photos.map((file) => {
+                return new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            });
+            const photoDataUrls = await Promise.all(photoPromises);
 
             // Phase 2: POST to backend to upsert GHL contact
             const backendPayload = {
@@ -190,10 +248,12 @@ export default function CleaningQuoteForm({
                 home_type: cleanInput.homeType,
                 service_type: cleanInput.serviceType,
                 approximate_square_footage: cleanInput.squareFootage,
-                cleaning_frequency: cleanInput.cleaningFrequency,
+                cleaning_frequency: cleaningFrequency,
                 preferred_service_date: cleanInput.preferredServiceDate || null,
                 extras_add_ons: cleanInput.addOns,
                 addons__frequency: cleanInput.addOnFrequency || null,
+                street_address: form.streetAddress.trim() || null,
+                photos: photoDataUrls,
             };
 
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -214,27 +274,36 @@ export default function CleaningQuoteForm({
                 throw new Error(errorMessage);
             }
 
-            // Calculate quote locally
-            const result = calculateCleaningQuote(cleanInput);
+            // Handle Move-Out vs Standard Cleaning differently
+            if (isMoveOut) {
+                // Show success message and redirect to homepage after 2 seconds
+                setShowMoveOutSuccess(true);
+                setTimeout(() => {
+                    router.push("/");
+                }, 2000);
+            } else {
+                // Standard Cleaning: Calculate quote and route to /book
+                const result = calculateCleaningQuote(cleanInput);
 
-            // Store quote in sessionStorage for /book page
-            try {
-                sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
-            } catch (e) {
-                console.warn("Failed to store quote in sessionStorage:", e);
+                // Store quote in sessionStorage for /book page
+                try {
+                    sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
+                } catch (e) {
+                    console.warn("Failed to store quote in sessionStorage:", e);
+                }
+
+                // Normalize phone for URL (ensure +1 format)
+                let normalizedPhone = cleanInput.phone.trim();
+                const digits = normalizedPhone.replace(/\D/g, "");
+                if (digits.length === 10) {
+                    normalizedPhone = "+1" + digits;
+                } else if (!normalizedPhone.startsWith("+")) {
+                    normalizedPhone = "+" + digits;
+                }
+
+                // Redirect to booking page with quote
+                router.push(`/book?phone=${encodeURIComponent(normalizedPhone)}`);
             }
-
-            // Normalize phone for URL (ensure +1 format)
-            let normalizedPhone = cleanInput.phone.trim();
-            const digits = normalizedPhone.replace(/\D/g, "");
-            if (digits.length === 10) {
-                normalizedPhone = "+1" + digits;
-            } else if (!normalizedPhone.startsWith("+")) {
-                normalizedPhone = "+" + digits;
-            }
-
-            // Redirect to booking page with quote
-            router.push(`/book?phone=${encodeURIComponent(normalizedPhone)}`);
         } catch (error) {
             console.error("Error submitting lead:", error);
             setErrors((prev) => ({ ...prev, submit: (error as Error).message }));
@@ -404,45 +473,114 @@ export default function CleaningQuoteForm({
                     </div>
                 </div>
 
-                {/* Cleaning Frequency */}
-                <div>
-                    <label className={labelClass}>
-                        Cleaning Frequency<span className="text-alloy-ember ml-0.5">*</span>
-                    </label>
-                    <select
-                        value={form.cleaningFrequency}
-                        onChange={(e) =>
-                            handleChange("cleaningFrequency", e.target.value as CleaningFrequencyOption)
-                        }
-                        className={selectClass}
-                    >
-                        <option value="">Select a frequency</option>
-                        <option value="One-time">One-time</option>
-                        <option value="Weekly (15% Off)">Weekly (15% Off)</option>
-                        <option value="Bi-Weekly (10% Off)">Bi-Weekly (10% Off)</option>
-                        <option value="Monthly (5% Off)">Monthly (5% Off)</option>
-                    </select>
-                    {errors.cleaningFrequency && (
-                        <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequency}</p>
-                    )}
-                </div>
-
-                {/* Preferred Service Date – only for Move-Out / Heavy Clean */}
-                {isMoveOut && (
+                {/* Cleaning Frequency - only for Standard Cleaning */}
+                {!isMoveOut && (
                     <div>
                         <label className={labelClass}>
-                            Preferred Service Date<span className="text-alloy-ember ml-0.5">*</span>
+                            Cleaning Frequency<span className="text-alloy-ember ml-0.5">*</span>
                         </label>
-                        <input
-                            type="date"
-                            value={form.preferredServiceDate || ""}
-                            onChange={(e) => handleChange("preferredServiceDate", e.target.value)}
-                            className={textInputClass}
-                        />
-                        {errors.preferredServiceDate && (
-                            <p className="mt-1 text-xs text-alloy-ember">{errors.preferredServiceDate}</p>
+                        <select
+                            value={form.cleaningFrequency}
+                            onChange={(e) =>
+                                handleChange("cleaningFrequency", e.target.value as CleaningFrequencyOption)
+                            }
+                            className={selectClass}
+                        >
+                            <option value="">Select a frequency</option>
+                            <option value="One-time">One-time</option>
+                            <option value="Weekly (40% Off)">Weekly (40% Off)</option>
+                            <option value="Bi-Weekly (30% Off)">Bi-Weekly (30% Off)</option>
+                            <option value="Monthly (20% Off)">Monthly (20% Off)</option>
+                        </select>
+                        {errors.cleaningFrequency && (
+                            <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequency}</p>
                         )}
                     </div>
+                )}
+
+                {/* Move-Out / Heavy Clean specific fields */}
+                {isMoveOut && (
+                    <>
+                        {/* Preferred Service Date */}
+                        <div>
+                            <label className={labelClass}>
+                                Preferred Service Date<span className="text-alloy-ember ml-0.5">*</span>
+                            </label>
+                            <input
+                                type="date"
+                                value={form.preferredServiceDate || ""}
+                                onChange={(e) => handleChange("preferredServiceDate", e.target.value)}
+                                className={textInputClass}
+                            />
+                            {errors.preferredServiceDate && (
+                                <p className="mt-1 text-xs text-alloy-ember">{errors.preferredServiceDate}</p>
+                            )}
+                        </div>
+
+                        {/* Street Address */}
+                        <div>
+                            <label className={labelClass}>
+                                Street Address<span className="text-alloy-ember ml-0.5">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={form.streetAddress}
+                                onChange={(e) => handleChange("streetAddress", e.target.value)}
+                                placeholder="123 Main St"
+                                className={textInputClass}
+                            />
+                            {errors.streetAddress && (
+                                <p className="mt-1 text-xs text-alloy-ember">{errors.streetAddress}</p>
+                            )}
+                        </div>
+
+                        {/* Photos Upload */}
+                        <div>
+                            <label className={labelClass}>
+                                Photos<span className="text-alloy-ember ml-0.5">*</span>
+                            </label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handlePhotoChange}
+                                className={textInputClass}
+                            />
+                            <p className="mt-1 text-xs text-alloy-midnight/70">
+                                Please submit at least 4 photos showcasing different areas of your home. At a minimum include images of your Kitchen, Master Bedroom & Bath, Living Room.
+                            </p>
+                            {errors.photos && (
+                                <p className="mt-1 text-xs text-alloy-ember">{errors.photos}</p>
+                            )}
+
+                            {/* Display selected photos */}
+                            {form.photos.length > 0 && (
+                                <div className="mt-2 space-y-2">
+                                    <p className="text-xs text-alloy-midnight/70">
+                                        Selected: {form.photos.length} photo{form.photos.length !== 1 ? "s" : ""}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {form.photos.map((photo, index) => (
+                                            <div
+                                                key={index}
+                                                className="relative inline-flex items-center gap-1 bg-alloy-stone/40 rounded px-2 py-1 text-xs"
+                                            >
+                                                <span className="truncate max-w-[120px]">{photo.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removePhoto(index)}
+                                                    className="text-alloy-ember hover:text-alloy-ember/80"
+                                                    aria-label="Remove photo"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </>
                 )}
 
                 {/* Add-ons */}
@@ -664,13 +802,17 @@ export default function CleaningQuoteForm({
                 </div>
             )}
 
-            {/* Move-out messaging for manual quotes (no calendar in this component) */}
-            {quote && quote.service === "Move-Out / Heavy Clean" && (
-                <div className="mt-4 rounded-lg border border-alloy-stone/40 bg-alloy-stone/40 p-4 text-sm text-alloy-midnight/85">
-                    <p className="font-semibold mb-1">Manual quote required</p>
-                    <p>
-                        We&apos;ll review your information and provide a personalized move-out / heavy clean
-                        quote shortly. You won&apos;t be charged until you confirm.
+            {/* Move-Out success message */}
+            {showMoveOutSuccess && (
+                <div className="mt-4 rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
+                    <p className="text-lg font-semibold text-alloy-midnight mb-2">
+                        Thanks — your inquiry has been submitted.
+                    </p>
+                    <p className="text-sm text-alloy-midnight/80 mb-4">
+                        Our team will review and reach out shortly with an estimate.
+                    </p>
+                    <p className="text-xs text-alloy-midnight/60">
+                        Redirecting to homepage...
                     </p>
                 </div>
             )}

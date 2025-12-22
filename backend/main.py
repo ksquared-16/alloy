@@ -71,6 +71,7 @@ CUSTOM_FIELD_IDS = {
     "extras_add_ons": os.getenv("GHL_CF_EXTRAS_ADD_ONS", "").strip(),
     "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
     "approximate_square_footage": os.getenv("GHL_CF_SQUARE_FOOTAGE", "").strip() or os.getenv("GHL_CF_APPROX_SQFT", "").strip(),  # Support both names
+    "street_address": os.getenv("GHL_CF_STREET_ADDRESS", "").strip(),
 }
 
 # Log missing custom field IDs at startup
@@ -512,6 +513,8 @@ class CleaningQuoteFormPayload(BaseModel):
     preferred_service_date: Optional[str] = None
     extras_add_ons: Optional[List[str]] = None
     addons__frequency: Optional[str] = None
+    street_address: Optional[str] = None
+    photos: Optional[List[str]] = None  # Base64 encoded images or URLs
 
 
 # ---------------------------------------------------------
@@ -2112,6 +2115,9 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
     
     logger.info("leads_cleaning: received payload: %s", _redact_payload(payload.dict()))
     
+    # Check if this is a Move-Out / Heavy Clean request
+    is_move_out = payload.service_type and "Move-Out" in payload.service_type
+    
     # Build custom field mapping (only include non-empty values)
     custom_field_mapping = {}
     if payload.service_type and payload.service_type.strip():
@@ -2132,6 +2138,14 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
         custom_field_mapping["addons__frequency"] = payload.addons__frequency.strip()
     if payload.approximate_square_footage and payload.approximate_square_footage.strip():
         custom_field_mapping["approximate_square_footage"] = payload.approximate_square_footage.strip()
+    if payload.street_address and payload.street_address.strip():
+        custom_field_mapping["street_address"] = payload.street_address.strip()
+    
+    # Log photos (for now, just log count - can be stored in GHL custom field or file storage later)
+    photo_count = len(payload.photos) if payload.photos else 0
+    if photo_count > 0:
+        logger.info("leads_cleaning: received %d photo(s) for move-out cleaning", photo_count)
+        # TODO: Store photos in GHL custom field or file storage service
     
     # Upsert contact using helper function
     result = upsert_contact(
@@ -2153,14 +2167,22 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
             status_code=500,
         )
     
+    contact_id = result["contactId"]
+    
+    # Add tags based on service type
+    ensure_contact_has_tag(contact_id, "lead")
+    if is_move_out:
+        ensure_contact_has_tag(contact_id, "manual_quote_needed")
+        logger.info("leads_cleaning: added manual_quote_needed tag for move-out cleaning")
+    
     logger.info("leads_cleaning: action=%s contactId=%s phone=%s", 
-               result["action"], result["contactId"], result["phone"][:4] + "***" + result["phone"][-2:])
+               result["action"], contact_id, result["phone"][:4] + "***" + result["phone"][-2:])
     
     return JSONResponse(
         {
             "status": "ok",
             "action": result["action"],
-            "contactId": result["contactId"],
+            "contactId": contact_id,
             "phone": result["phone"],
         },
         status_code=200,
