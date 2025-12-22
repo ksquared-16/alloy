@@ -36,6 +36,7 @@ function BookPageContent() {
     const searchParams = useSearchParams();
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
     const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
+    const [showBookingSuccess, setShowBookingSuccess] = useState(false);
     const phone = searchParams?.get("phone");
 
     useEffect(() => {
@@ -64,6 +65,65 @@ function BookPageContent() {
             quote.first_clean_price > 0) ||
             (typeof quote.estimated_price === "number" &&
                 quote.estimated_price > 0));
+
+    // Listen for booking completion
+    useEffect(() => {
+        // Check URL for booking completion parameters
+        const checkBookingComplete = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get("booking") === "complete" || urlParams.get("success") === "true" || urlParams.get("booked") === "true") {
+                setShowBookingSuccess(true);
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 2000);
+            }
+        };
+
+        // Check on mount
+        checkBookingComplete();
+
+        // Listen for postMessage events from GHL booking iframe
+        const handleMessage = (event: MessageEvent) => {
+            // GHL booking widget may send completion events
+            if (
+                event.data &&
+                (event.data.type === "booking_complete" ||
+                    event.data.event === "booking_completed" ||
+                    event.data.bookingComplete ||
+                    (typeof event.data === "string" && event.data.includes("booking")))
+            ) {
+                console.log("Booking completion detected:", event.data);
+                setShowBookingSuccess(true);
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 2000);
+            }
+        };
+
+        // Listen for URL hash changes (GHL sometimes uses hash for redirects)
+        const handleHashChange = () => {
+            if (window.location.hash.includes("success") || window.location.hash.includes("complete")) {
+                setShowBookingSuccess(true);
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 2000);
+            }
+        };
+
+        window.addEventListener("message", handleMessage);
+        window.addEventListener("hashchange", handleHashChange);
+        
+        // Poll URL for changes (fallback for GHL redirects)
+        const pollInterval = setInterval(() => {
+            checkBookingComplete();
+        }, 1000);
+
+        return () => {
+            window.removeEventListener("message", handleMessage);
+            window.removeEventListener("hashchange", handleHashChange);
+            clearInterval(pollInterval);
+        };
+    }, []);
 
     return (
         <div className="min-h-screen py-6 md:py-10">
@@ -215,7 +275,7 @@ function BookPageContent() {
                     <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
                         <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                             <GhlEmbed
-                                src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz"
+                                src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz?redirectUrl=https://www.workwithalloy.com/book?booked=true"
                                 title="Booking Calendar"
                                 height={1200}
                                 className="!min-h-[1200px] md:!min-h-[900px]"
@@ -234,6 +294,38 @@ function BookPageContent() {
                         </div>
                     </div>
                 </div>
+
+                {/* Booking Success Modal */}
+                {showBookingSuccess && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-xl">
+                            <div className="mb-4">
+                                <svg
+                                    className="w-16 h-16 mx-auto text-alloy-juniper"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M5 13l4 4L19 7"
+                                    />
+                                </svg>
+                            </div>
+                            <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
+                                You&apos;re booked!
+                            </h2>
+                            <p className="text-alloy-midnight/80 mb-6">
+                                We&apos;ll text you shortly to confirm details.
+                            </p>
+                            <p className="text-sm text-alloy-midnight/60">
+                                Redirecting to homepage...
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Frontend debug block (non-production only) */}
                 {process.env.NODE_ENV !== "production" && quote && (

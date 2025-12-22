@@ -227,42 +227,38 @@ export default function CleaningQuoteForm({
                 addOnFrequency: form.addOnFrequency || undefined,
             };
 
-            // Convert photos to base64 for backend (or we could use FormData)
-            const photoPromises = form.photos.map((file) => {
-                return new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-            });
-            const photoDataUrls = await Promise.all(photoPromises);
-
-            // Phase 2: POST to backend to upsert GHL contact
-            const backendPayload = {
-                first_name: cleanInput.firstName,
-                last_name: cleanInput.lastName,
-                phone: cleanInput.phone,
-                email: cleanInput.email,
-                postal_code: cleanInput.postalCode,
-                home_type: cleanInput.homeType,
-                service_type: cleanInput.serviceType,
-                approximate_square_footage: cleanInput.squareFootage,
-                cleaning_frequency: cleaningFrequency,
-                preferred_service_date: cleanInput.preferredServiceDate || null,
-                extras_add_ons: cleanInput.addOns,
-                addons__frequency: cleanInput.addOnFrequency || null,
-                street_address: form.streetAddress.trim() || null,
-                photos: photoDataUrls,
-            };
-
+            // Always use FormData (supports both Standard Cleaning and Move-Out with photos)
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+            const formData = new FormData();
+            formData.append("first_name", cleanInput.firstName);
+            formData.append("last_name", cleanInput.lastName);
+            formData.append("phone", cleanInput.phone);
+            formData.append("email", cleanInput.email);
+            formData.append("postal_code", cleanInput.postalCode);
+            formData.append("home_type", cleanInput.homeType);
+            formData.append("service_type", cleanInput.serviceType);
+            formData.append("approximate_square_footage", cleanInput.squareFootage);
+            formData.append("cleaning_frequency", cleaningFrequency);
+            if (cleanInput.preferredServiceDate) {
+                formData.append("preferred_service_date", cleanInput.preferredServiceDate);
+            }
+            if (cleanInput.addOns.length > 0) {
+                formData.append("extras_add_ons", JSON.stringify(cleanInput.addOns));
+            }
+            if (cleanInput.addOnFrequency) {
+                formData.append("addons__frequency", cleanInput.addOnFrequency);
+            }
+            if (form.streetAddress.trim()) {
+                formData.append("street_address", form.streetAddress.trim());
+            }
+            // Append photos (if any)
+            form.photos.forEach((photo) => {
+                formData.append("photos", photo);
+            });
+
             const response = await fetch(`${apiBaseUrl}/leads/cleaning`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(backendPayload),
+                body: formData, // Don't set Content-Type header - browser will set it with boundary
             });
 
             const backendResult = await response.json();
@@ -546,7 +542,7 @@ export default function CleaningQuoteForm({
                                 onChange={handlePhotoChange}
                                 className={textInputClass}
                             />
-                            <p className="mt-1 text-xs text-alloy-midnight/70">
+                            <p className={`mt-1 text-sm ${isDark ? "text-white/80" : "text-alloy-midnight/70"}`}>
                                 Please submit at least 4 photos showcasing different areas of your home. At a minimum include images of your Kitchen, Master Bedroom & Bath, Living Room.
                             </p>
                             {errors.photos && (

@@ -39,10 +39,11 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 import requests
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from typing import List as TypingList
 
 # ---------------------------------------------------------
 # Configuration & Constants
@@ -72,6 +73,7 @@ CUSTOM_FIELD_IDS = {
     "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
     "approximate_square_footage": os.getenv("GHL_CF_SQUARE_FOOTAGE", "").strip() or os.getenv("GHL_CF_APPROX_SQFT", "").strip(),  # Support both names
     "street_address": os.getenv("GHL_CF_STREET_ADDRESS", "").strip(),
+    "estimate_photos": os.getenv("GHL_CF_ESTIMATE_PHOTOS", "").strip(),
 }
 
 # Log missing custom field IDs at startup
@@ -1020,6 +1022,103 @@ def ensure_contact_has_tag(contact_id: str, tag: str) -> bool:
             
     except Exception as e:
         logger.error("ensure_contact_has_tag: exception for contact_id=%s: %s", contact_id, e, exc_info=True)
+        return False
+
+
+def upload_photo_to_ghl(file_content: bytes, filename: str, content_type: str = "image/jpeg") -> Optional[str]:
+    """
+    Upload a photo file to GoHighLevel Media API.
+    
+    Args:
+        file_content: Binary file content
+        filename: Original filename
+        content_type: MIME type (default: image/jpeg)
+    
+    Returns:
+        fileUrl from GHL response if successful, None otherwise
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("upload_photo_to_ghl: GHL_LOCATION_ID not configured")
+        return None
+    
+    url = f"{LC_BASE_URL}/medias/upload-file"
+    headers = {
+        "Authorization": f"Bearer {GHL_API_KEY}",
+        "Version": "2021-07-28",
+    }
+    
+    # GHL Media API expects multipart/form-data with:
+    # - file: the file content
+    # - locationId: the location ID
+    files = {
+        "file": (filename, file_content, content_type)
+    }
+    data = {
+        "locationId": GHL_LOCATION_ID
+    }
+    
+    try:
+        resp = requests.post(url, headers=headers, files=files, data=data, timeout=30)
+        if resp.ok:
+            result = resp.json()
+            file_url = result.get("fileUrl") or result.get("url")
+            if file_url:
+                logger.info("upload_photo_to_ghl: uploaded %s, fileUrl=%s", filename, file_url[:50] + "..." if len(file_url) > 50 else file_url)
+                return file_url
+            else:
+                logger.warning("upload_photo_to_ghl: no fileUrl in response: %s", resp.text[:200])
+                return None
+        else:
+            logger.error("upload_photo_to_ghl: failed (%s): %s", resp.status_code, resp.text[:200])
+            return None
+    except Exception as e:
+        logger.error("upload_photo_to_ghl: exception: %s", e)
+        return None
+
+
+def create_contact_note(contact_id: str, title: str, body: str) -> bool:
+    """
+    Create a note for a contact in GoHighLevel.
+    
+    Args:
+        contact_id: GHL contact ID
+        title: Note title
+        body: Note body/content
+    
+    Returns:
+        True if note was created successfully, False otherwise
+    """
+    if not contact_id or not title or not body:
+        logger.warning("create_contact_note: invalid parameters (contact_id=%s, title=%s)", contact_id, title)
+        return False
+    
+    if not GHL_LOCATION_ID:
+        logger.error("create_contact_note: GHL_LOCATION_ID not configured")
+        return False
+    
+    url = f"{LC_BASE_URL}/contacts/{contact_id}/notes"
+    headers = {
+        "Authorization": f"Bearer {GHL_API_KEY}",
+        "Version": "2021-07-28",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "locationId": GHL_LOCATION_ID,
+        "title": title,
+        "body": body,
+    }
+    
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        if resp.ok:
+            logger.info("create_contact_note: created note for contact_id=%s, title=%s", contact_id, title)
+            return True
+        else:
+            logger.error("create_contact_note: failed (%s): %s", resp.status_code, resp.text[:200])
+            return False
+    except Exception as e:
+        logger.error("create_contact_note: exception: %s", e)
         return False
 
 
@@ -2080,16 +2179,34 @@ def debug_quote_crash(phone: str):
 
 
 @app.post("/leads/cleaning")
-async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
+async def submit_cleaning_lead(
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    phone: str = Form(...),
+    email: EmailStr = Form(...),
+    postal_code: str = Form(...),
+    home_type: str = Form(...),
+    service_type: str = Form(...),
+    approximate_square_footage: str = Form(...),
+    cleaning_frequency: str = Form(...),
+    preferred_service_date: Optional[str] = Form(None),
+    extras_add_ons: Optional[str] = Form(None),
+    addons__frequency: Optional[str] = Form(None),
+    street_address: Optional[str] = Form(None),
+    photos: TypingList[UploadFile] = File(default=[]),
+):
     """
     Submit a cleaning lead from the new custom cleaning quote form (Phase 2).
     
+    Accepts multipart/form-data to support file uploads for Move-Out / Heavy Clean photos.
     Upserts a contact in GHL: creates if new, updates if exists (matched by phone).
 
-    Args (request body):
+    Args (multipart/form-data):
         - first_name, last_name, phone, email, postal_code
         - service_type, preferred_service_date, home_type
         - cleaning_frequency, extras_add_ons, addons__frequency, approximate_square_footage
+        - street_address (optional, required for Move-Out)
+        - photos (optional, multiple files, required for Move-Out)
 
     Returns:
         JSON: { "status": "ok", "action": "created|updated", "contactId": "...", "phone": "+1..." }
@@ -2097,63 +2214,98 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
 
     Side effects:
         - Creates or updates a contact in GHL with standard and custom fields
+        - Uploads photos to GHL Media API (for Move-Out / Heavy Clean)
         - Maps form fields to GHL custom fields using CUSTOM_FIELD_IDS
     """
-    # Redact sensitive data for logging
-    def _redact_payload(p: dict) -> dict:
-        redacted = p.copy()
-        if "email" in redacted:
-            email = redacted["email"]
-            if "@" in email:
-                parts = email.split("@")
-                redacted["email"] = f"{parts[0][:2]}***@{parts[1]}" if len(parts) == 2 else "***"
-        if "phone" in redacted:
-            phone = redacted["phone"]
-            if len(phone) > 4:
-                redacted["phone"] = f"{phone[:2]}***{phone[-2:]}"
-        return redacted
+    # Validate required fields
+    if not all([first_name, last_name, phone, email, postal_code, home_type, service_type, approximate_square_footage, cleaning_frequency]):
+        return JSONResponse(
+            {"status": "error", "message": "Missing required fields"},
+            status_code=400,
+        )
     
-    logger.info("leads_cleaning: received payload: %s", _redact_payload(payload.dict()))
+    # Redact sensitive data for logging
+    def _redact_phone(p: str) -> str:
+        if len(p) > 4:
+            return f"{p[:2]}***{p[-2:]}"
+        return "***"
+    
+    def _redact_email(e: str) -> str:
+        if "@" in e:
+            parts = e.split("@")
+            return f"{parts[0][:2]}***@{parts[1]}" if len(parts) == 2 else "***"
+        return "***"
+    
+    logger.info("leads_cleaning: received form data - service_type=%s, photo_count=%d", 
+               service_type, len(photos) if photos else 0)
     
     # Check if this is a Move-Out / Heavy Clean request
-    is_move_out = payload.service_type and "Move-Out" in payload.service_type
+    is_move_out = service_type and "Move-Out" in service_type
+    
+    # Parse extras_add_ons if provided as JSON string
+    extras_list = None
+    if extras_add_ons:
+        try:
+            import json
+            extras_list = json.loads(extras_add_ons)
+            if not isinstance(extras_list, list):
+                extras_list = [extras_add_ons]
+        except Exception:
+            # If not JSON, treat as comma-separated string
+            extras_list = [x.strip() for x in extras_add_ons.split(",") if x.strip()]
     
     # Build custom field mapping (only include non-empty values)
     custom_field_mapping = {}
-    if payload.service_type and payload.service_type.strip():
-        custom_field_mapping["service_type"] = payload.service_type.strip()
-    if payload.preferred_service_date and payload.preferred_service_date.strip():
-        custom_field_mapping["preferred_service_date"] = payload.preferred_service_date.strip()
-    if payload.home_type and payload.home_type.strip():
-        custom_field_mapping["home_type"] = payload.home_type.strip()
-    if payload.cleaning_frequency and payload.cleaning_frequency.strip():
-        custom_field_mapping["cleaning_frequency"] = payload.cleaning_frequency.strip()
-    if payload.extras_add_ons:
-        # Convert list to newline-separated string for storage
-        if isinstance(payload.extras_add_ons, list):
-            custom_field_mapping["extras_add_ons"] = "\n".join(str(v) for v in payload.extras_add_ons if v)
-        else:
-            custom_field_mapping["extras_add_ons"] = str(payload.extras_add_ons)
-    if payload.addons__frequency and payload.addons__frequency.strip():
-        custom_field_mapping["addons__frequency"] = payload.addons__frequency.strip()
-    if payload.approximate_square_footage and payload.approximate_square_footage.strip():
-        custom_field_mapping["approximate_square_footage"] = payload.approximate_square_footage.strip()
-    if payload.street_address and payload.street_address.strip():
-        custom_field_mapping["street_address"] = payload.street_address.strip()
+    if service_type and service_type.strip():
+        custom_field_mapping["service_type"] = service_type.strip()
+    if preferred_service_date and preferred_service_date.strip():
+        custom_field_mapping["preferred_service_date"] = preferred_service_date.strip()
+    if home_type and home_type.strip():
+        custom_field_mapping["home_type"] = home_type.strip()
+    if cleaning_frequency and cleaning_frequency.strip():
+        custom_field_mapping["cleaning_frequency"] = cleaning_frequency.strip()
+    if extras_list:
+        custom_field_mapping["extras_add_ons"] = "\n".join(str(v) for v in extras_list if v)
+    if addons__frequency and addons__frequency.strip():
+        custom_field_mapping["addons__frequency"] = addons__frequency.strip()
+    if approximate_square_footage and approximate_square_footage.strip():
+        custom_field_mapping["approximate_square_footage"] = approximate_square_footage.strip()
+    if street_address and street_address.strip():
+        custom_field_mapping["street_address"] = street_address.strip()
     
-    # Log photos (for now, just log count - can be stored in GHL custom field or file storage later)
-    photo_count = len(payload.photos) if payload.photos else 0
-    if photo_count > 0:
-        logger.info("leads_cleaning: received %d photo(s) for move-out cleaning", photo_count)
-        # TODO: Store photos in GHL custom field or file storage service
+    # Handle photo uploads for Move-Out / Heavy Clean
+    photo_urls = []
+    if is_move_out and photos:
+        logger.info("leads_cleaning: uploading %d photo(s) to GHL Media API", len(photos))
+        for photo_file in photos:
+            try:
+                # Read file content
+                file_content = await photo_file.read()
+                filename = photo_file.filename or "photo.jpg"
+                content_type = photo_file.content_type or "image/jpeg"
+                
+                # Upload to GHL
+                file_url = upload_photo_to_ghl(file_content, filename, content_type)
+                if file_url:
+                    photo_urls.append(file_url)
+                    logger.info("leads_cleaning: uploaded photo %s -> %s", filename, file_url[:50] + "..." if len(file_url) > 50 else file_url)
+                else:
+                    logger.warning("leads_cleaning: failed to upload photo %s", filename)
+            except Exception as e:
+                logger.error("leads_cleaning: exception uploading photo %s: %s", photo_file.filename, e)
+        
+        # Store photo URLs in custom field (comma-separated or newline-separated)
+        if photo_urls:
+            custom_field_mapping["estimate_photos"] = "\n".join(photo_urls)
+            logger.info("leads_cleaning: stored %d photo URL(s) in estimate_photos custom field", len(photo_urls))
     
     # Upsert contact using helper function
     result = upsert_contact(
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        email=payload.email,
-        phone=payload.phone,
-        postal_code=payload.postal_code,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone,
+        postal_code=postal_code,
         custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
     )
     
@@ -2174,9 +2326,28 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
     if is_move_out:
         ensure_contact_has_tag(contact_id, "manual_quote_needed")
         logger.info("leads_cleaning: added manual_quote_needed tag for move-out cleaning")
+        
+        # Create contact note with Move-Out estimate photos (if photos were uploaded)
+        if photo_urls:
+            note_body_parts = []
+            if street_address and street_address.strip():
+                note_body_parts.append(f"Street Address: {street_address.strip()}")
+            if preferred_service_date and preferred_service_date.strip():
+                note_body_parts.append(f"Preferred Service Date: {preferred_service_date.strip()}")
+            note_body_parts.append("")  # Empty line separator
+            note_body_parts.append("Photo URLs:")
+            for url in photo_urls:
+                note_body_parts.append(url)
+            
+            note_body = "\n".join(note_body_parts)
+            note_created = create_contact_note(contact_id, "Move-Out Estimate Photos", note_body)
+            if note_created:
+                logger.info("leads_cleaning: created contact note for Move-Out photos, contact_id=%s", contact_id)
+            else:
+                logger.warning("leads_cleaning: failed to create contact note for Move-Out photos, contact_id=%s", contact_id)
     
-    logger.info("leads_cleaning: action=%s contactId=%s phone=%s", 
-               result["action"], contact_id, result["phone"][:4] + "***" + result["phone"][-2:])
+    logger.info("leads_cleaning: action=%s contactId=%s phone=%s photo_count=%d", 
+               result["action"], contact_id, _redact_phone(result["phone"]), len(photo_urls))
     
     return JSONResponse(
         {
@@ -2184,6 +2355,7 @@ async def submit_cleaning_lead(payload: CleaningQuoteFormPayload):
             "action": result["action"],
             "contactId": contact_id,
             "phone": result["phone"],
+            "photos_uploaded": len(photo_urls),
         },
         status_code=200,
     )
