@@ -3,3 +3,4 @@ uvicorn[standard]
 requests
 pydantic
 email-validator
+python-multipart
