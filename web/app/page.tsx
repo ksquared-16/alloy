@@ -37,12 +37,12 @@ export default function Home() {
     {
       title: "Dead-Simple",
       description: "No apps. No endless forms. No confusing booking systems. Tell us what you need, confirm by text, and you're done.",
-      accentColor: "blue" as const,
+      accentColor: "juniper" as const,
     },
     {
       title: "Human + Smart",
       description: "Real people who know Bend and care about getting it right, supported by technology that makes coordination faster and more reliable.",
-      accentColor: "ember" as const,
+      accentColor: "juniper" as const,
     },
     {
       title: "We don't sell your information",
