@@ -88,8 +88,8 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="bg-alloy-stone">
-        <div className="mx-auto max-w-6xl px-4 md:px-8 py-10 md:py-8">
-          <div className="relative h-[340px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
+          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             {/* Background Image */}
             <Image
               src="/hero/cleaning-hero.jpg"
@@ -104,18 +104,18 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
 
             {/* Content Overlay */}
-            <div className="relative z-10 flex h-full items-center px-6 md:px-10 lg:px-12">
-              <div className="max-w-xl space-y-4 md:space-y-6">
-                <p className="text-sm font-medium text-alloy-juniper uppercase tracking-wide">
+            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
+              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
+                <p className="text-xs md:text-sm font-medium text-alloy-juniper uppercase tracking-wide">
                   Born in Bend. Built for trust.
                 </p>
-                <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
+                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
                   Trusted home services, without the runaround.
                 </h1>
-                <p className="text-lg text-white/90">
+                <p className="text-base md:text-lg text-white/90">
                   Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <Link href="/services/cleaning?open=1#quote-form">
                     <PrimaryButton className="w-full sm:w-auto">
                       Get a cleaning quote
@@ -134,26 +134,26 @@ export default function Home() {
       </section>
 
       {/* How Alloy Makes It Easy */}
-      <Section id="how-it-works" className="py-10 bg-alloy-stone">
-        <h2 className="text-3xl font-bold text-alloy-pine text-center mb-12">
+      <Section id="how-it-works" className="py-8 md:py-10 bg-alloy-stone">
+        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-8 md:mb-12">
           How Alloy Makes It Easy
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
           {howItWorksSteps.map((step) => (
             <div key={step.number} className="text-center">
-              <div className="w-16 h-16 bg-alloy-juniper text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4 shadow-md">
+              <div className="w-14 h-14 md:w-16 md:h-16 bg-alloy-juniper text-white rounded-full flex items-center justify-center text-xl md:text-2xl font-bold mx-auto mb-3 md:mb-4 shadow-md">
                 {step.number}
               </div>
-              <h3 className="text-xl font-semibold text-alloy-pine mb-2">
+              <h3 className="text-lg md:text-xl font-semibold text-alloy-pine mb-2">
                 {step.title}
               </h3>
-              <p className="text-alloy-midnight/80">{step.description}</p>
+              <p className="text-sm md:text-base text-alloy-midnight/80">{step.description}</p>
             </div>
           ))}
         </div>
-        <div className="max-w-3xl mx-auto mt-12 text-center">
-          <div className="bg-white/80 rounded-lg p-6 border border-alloy-stone/30">
-            <p className="text-lg text-alloy-midnight font-medium">
+        <div className="max-w-3xl mx-auto mt-8 md:mt-12 text-center">
+          <div className="bg-white/80 rounded-lg p-4 md:p-6 border border-alloy-stone/30">
+            <p className="text-base md:text-lg text-alloy-midnight font-medium">
               Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
             </p>
           </div>
@@ -161,11 +161,11 @@ export default function Home() {
       </Section>
 
       {/* Current Services */}
-      <Section className="py-20">
-        <h2 className="text-3xl font-bold text-alloy-pine text-center mb-4">
+      <Section className="py-12 md:py-20">
+        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-4">
           Services we offer
         </h2>
-        <p className="text-center text-alloy-midnight/80 mb-12">
+        <p className="text-center text-sm md:text-base text-alloy-midnight/80 mb-8 md:mb-12">
           Home cleaning is available now. More services coming soon.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -176,11 +176,11 @@ export default function Home() {
       </Section>
 
       {/* Why Alloy Is Different */}
-      <Section className="py-20 bg-white">
-        <h2 className="text-3xl font-bold text-alloy-pine text-center mb-4">
+      <Section className="py-12 md:py-20 bg-white">
+        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-6 md:mb-4">
           Why Alloy Is Different
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-5xl mx-auto">
           {whyAlloyIsDifferent.map((value) => (
             <BrandValueCard
               key={value.title}
@@ -208,16 +208,16 @@ export default function Home() {
       </Section>
 
       {/* Testimonials */}
-      <Section className="py-20 bg-alloy-pine/5">
-        <h2 className="text-3xl font-bold text-alloy-pine text-center mb-12">
+      <Section className="py-12 md:py-20 bg-alloy-pine/5">
+        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-8 md:mb-12">
           What our customers say
         </h2>
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-md p-6 border border-alloy-stone/50">
-            <p className="text-alloy-midnight/80 mb-4">
+          <div className="bg-white rounded-2xl shadow-md p-5 md:p-6 border border-alloy-stone/50">
+            <p className="text-sm md:text-base text-alloy-midnight/80 mb-3 md:mb-4">
               "Finally, a cleaner I can trust. The whole process was simple, and the work was exactly what I needed."
             </p>
-            <p className="font-semibold text-alloy-pine">
+            <p className="text-sm md:text-base font-semibold text-alloy-pine">
               — Sarah M., Bend
             </p>
           </div>
@@ -225,8 +225,8 @@ export default function Home() {
       </Section>
 
       {/* FAQ */}
-      <Section className="py-20 bg-white">
-        <h2 className="text-3xl font-bold text-alloy-midnight text-center mb-12">
+      <Section className="py-12 md:py-20 bg-white">
+        <h2 className="text-2xl md:text-3xl font-bold text-alloy-midnight text-center mb-8 md:mb-12">
           Frequently Asked Questions
         </h2>
         <div className="max-w-3xl mx-auto">
@@ -239,10 +239,10 @@ export default function Home() {
       </Section>
 
       {/* Final CTA – Cleaning quote form (Phase 1: frontend-only) */}
-      <Section className="py-12 md:py-16">
-        <div className="bg-alloy-blue rounded-lg p-6 md:p-8 text-center text-white">
-          <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
-          <p className="text-lg mb-6 opacity-90">
+      <Section className="py-10 md:py-12 lg:py-16">
+        <div className="bg-alloy-blue rounded-lg p-5 md:p-6 lg:p-8 text-center text-white">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4">Ready to get started?</h2>
+          <p className="text-base md:text-lg mb-5 md:mb-6 opacity-90">
             Tell us about your home and schedule. We&apos;ll calculate a transparent quote and text
             you to confirm details.
           </p>

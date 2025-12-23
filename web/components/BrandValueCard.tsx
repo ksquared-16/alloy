@@ -21,12 +21,12 @@ export default function BrandValueCard({
   };
 
   return (
-    <div className="bg-white rounded-2xl p-8 border border-alloy-stone/50 shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-2xl p-6 md:p-8 border border-alloy-stone/50 shadow-sm hover:shadow-md transition-shadow">
       {icon && (
-        <div className={`mb-4 ${accentColors[accentColor]}`}>{icon}</div>
+        <div className={`mb-3 md:mb-4 ${accentColors[accentColor]}`}>{icon}</div>
       )}
-      <h3 className="text-xl font-semibold text-alloy-pine mb-3">{title}</h3>
-      <p className="text-alloy-midnight/80">{description}</p>
+      <h3 className="text-lg md:text-xl font-semibold text-alloy-pine mb-2 md:mb-3">{title}</h3>
+      <p className="text-sm md:text-base text-alloy-midnight/80">{description}</p>
     </div>
   );
 }
