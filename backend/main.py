@@ -111,6 +111,11 @@ JOB_STATUS_ASSIGNED = "contractor_assigned"
 SERVICE_TYPE_STANDARD = "Standard Home Cleaning"
 SERVICE_TYPE_DEEP = "Deep Cleaning"
 
+# Photo upload limits
+MAX_PHOTOS = 4
+MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5MB per photo
+MAX_TOTAL_PHOTO_BYTES = 20 * 1024 * 1024  # 20MB total
+
 # In-memory job store: { job_id (appointmentId): job_summary_dict }
 # Note: In production, consider using Redis or a database for persistence
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
@@ -2241,8 +2246,11 @@ def process_lead_async(
         # Handle photo uploads for Move-Out / Heavy Clean
         t_photos_start = time.perf_counter()
         photo_urls = []
+        total_photo_bytes = 0
         if is_move_out and photos_data:
-            logger.info("process_lead_async: uploading %d photo(s) to GHL Media API", len(photos_data))
+            total_photo_bytes = sum(len(p.get("content", b"")) for p in photos_data)
+            logger.info("process_lead_async: uploading %d photo(s) to GHL Media API, total_bytes=%d", 
+                       len(photos_data), total_photo_bytes)
             for photo_data in photos_data:
                 try:
                     file_url = upload_photo_to_ghl(
@@ -2327,7 +2335,7 @@ def process_lead_async(
         
         # Log timing breakdown
         logger.info(
-            "lead_sync_timing contact_id=%s phone=%s total_ms=%.1f search_ms=%.1f create_ms=%.1f update_ms=%.1f tags_ms=%.1f photos_ms=%.1f note_ms=%.1f action=%s",
+            "lead_sync_timing contact_id=%s phone=%s total_ms=%.1f search_ms=%.1f create_ms=%.1f update_ms=%.1f tags_ms=%.1f photos_ms=%.1f note_ms=%.1f photo_count=%d photo_bytes=%d action=%s",
             contact_id,
             phone_normalized[:4] + "***" + phone_normalized[-2:] if len(phone_normalized) > 4 else "***",
             t_total_ms,
@@ -2337,6 +2345,8 @@ def process_lead_async(
             t_tags_ms,
             t_photos_ms,
             t_note_ms,
+            len(photos_data) if photos_data else 0,
+            total_photo_bytes,
             action,
         )
         
@@ -2401,6 +2411,55 @@ async def submit_cleaning_lead(
         )
     
     phone_normalized = normalize_phone(phone)
+    
+    # Check if this is a Move-Out / Heavy Clean request
+    is_move_out = service_type and "Move-Out" in service_type
+    
+    # Validate photos for Move-Out requests
+    if is_move_out:
+        if len(photos) < 4:
+            return JSONResponse(
+                {"ok": False, "error": "Please upload at least 4 photos."},
+                status_code=400,
+            )
+        if len(photos) > MAX_PHOTOS:
+            return JSONResponse(
+                {"ok": False, "error": f"Please upload up to {MAX_PHOTOS} photos."},
+                status_code=400,
+            )
+        
+        # Validate photo sizes
+        total_bytes = 0
+        for photo_file in photos:
+            try:
+                # Read file to check size (we'll read again for background task)
+                file_content = await photo_file.read()
+                file_size = len(file_content)
+                
+                if file_size > MAX_PHOTO_BYTES:
+                    return JSONResponse(
+                        {"ok": False, "error": f"Photo '{photo_file.filename}' is too large. Please upload photos under 5MB each."},
+                        status_code=400,
+                    )
+                
+                total_bytes += file_size
+                
+                # Reset file pointer for background task
+                await photo_file.seek(0)
+            except Exception as e:
+                logger.warning("leads_cleaning: failed to read photo %s: %s", photo_file.filename, e)
+                return JSONResponse(
+                    {"ok": False, "error": f"Failed to process photo '{photo_file.filename}'."},
+                    status_code=400,
+                )
+        
+        if total_bytes > MAX_TOTAL_PHOTO_BYTES:
+            return JSONResponse(
+                {"ok": False, "error": "Total photo size exceeds 20MB. Please reduce photo sizes."},
+                status_code=400,
+            )
+        
+        logger.info("leads_cleaning: validated %d photos, total_bytes=%d", len(photos), total_bytes)
     
     # Read photos into memory (needed for background task)
     photos_data = []

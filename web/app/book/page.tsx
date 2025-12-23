@@ -40,7 +40,7 @@ function BookPageContent() {
     const phone = searchParams?.get("phone");
 
     useEffect(() => {
-        // Read quote from sessionStorage
+        // Read quote from sessionStorage immediately
         try {
             const storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
             if (storedQuote) {
@@ -59,6 +59,66 @@ function BookPageContent() {
         }
     }, []);
 
+    // Poll backend in background to upgrade quote (if phone is available)
+    useEffect(() => {
+        if (!phone || !quote) return; // Only poll if we have a phone and initial quote
+        
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+        let pollCount = 0;
+        const MAX_POLLS = 5;
+        const POLL_INTERVAL = 750; // 750ms
+        
+        const pollQuote = async () => {
+            if (pollCount >= MAX_POLLS) {
+                console.log("Stopped polling after max attempts");
+                return;
+            }
+            
+            // Stop early if quote is already complete
+            if (quote.status === "ready" && quote.recurring_price) {
+                console.log("Quote already complete, stopping poll");
+                return;
+            }
+            
+            pollCount++;
+            
+            try {
+                const response = await fetch(
+                    `${apiBaseUrl}/quote/cleaning?phone=${encodeURIComponent(phone)}`
+                );
+                
+                if (response.ok) {
+                    const serverQuote: QuoteResponse = await response.json();
+                    
+                    // Upgrade quote if server has better data
+                    if (serverQuote.status === "ready" && serverQuote.recurring_price) {
+                        setQuote(serverQuote);
+                        // Update sessionStorage with upgraded quote
+                        try {
+                            sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(serverQuote));
+                        } catch (e) {
+                            console.warn("Failed to update sessionStorage:", e);
+                        }
+                        console.log("Upgraded quote from server:", serverQuote);
+                        return; // Stop polling once we have complete quote
+                    }
+                }
+            } catch (error) {
+                console.warn("Poll error (non-blocking):", error);
+            }
+            
+            // Schedule next poll
+            if (pollCount < MAX_POLLS) {
+                setTimeout(pollQuote, POLL_INTERVAL);
+            }
+        };
+        
+        // Start polling after initial delay
+        const timeoutId = setTimeout(pollQuote, POLL_INTERVAL);
+        
+        return () => clearTimeout(timeoutId);
+    }, [phone, quote]);
+
     const hasQuote =
         !!quote &&
         ((typeof quote.first_clean_price === "number" &&
@@ -73,6 +133,12 @@ function BookPageContent() {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get("booking") === "complete" || urlParams.get("success") === "true" || urlParams.get("booked") === "true") {
                 setShowBookingSuccess(true);
+                // Clear sessionStorage on booking completion
+                try {
+                    sessionStorage.removeItem("alloy_cleaning_quote");
+                } catch (e) {
+                    console.warn("Failed to clear sessionStorage:", e);
+                }
                 setTimeout(() => {
                     window.location.href = "/";
                 }, 2000);
@@ -94,6 +160,12 @@ function BookPageContent() {
             ) {
                 console.log("Booking completion detected:", event.data);
                 setShowBookingSuccess(true);
+                // Clear sessionStorage on booking completion
+                try {
+                    sessionStorage.removeItem("alloy_cleaning_quote");
+                } catch (e) {
+                    console.warn("Failed to clear sessionStorage:", e);
+                }
                 setTimeout(() => {
                     window.location.href = "/";
                 }, 2000);
@@ -104,6 +176,12 @@ function BookPageContent() {
         const handleHashChange = () => {
             if (window.location.hash.includes("success") || window.location.hash.includes("complete")) {
                 setShowBookingSuccess(true);
+                // Clear sessionStorage on booking completion
+                try {
+                    sessionStorage.removeItem("alloy_cleaning_quote");
+                } catch (e) {
+                    console.warn("Failed to clear sessionStorage:", e);
+                }
                 setTimeout(() => {
                     window.location.href = "/";
                 }, 2000);

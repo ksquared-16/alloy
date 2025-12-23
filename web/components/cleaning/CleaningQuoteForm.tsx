@@ -14,6 +14,7 @@ import {
     type ServiceHomeType,
 } from "@/lib/pricing/cleaningPricing";
 import PrimaryButton from "@/components/PrimaryButton";
+import { compressImage, validateImageSize } from "@/lib/images/resizeCompress";
 
 type FormState = {
     firstName: string;
@@ -94,6 +95,16 @@ function validate(form: FormState): ValidationErrors {
         }
         if (form.photos.length < 4) {
             errors.photos = "Please upload at least 4 photos showcasing different areas of your home.";
+        } else if (form.photos.length > 4) {
+            errors.photos = "Please upload no more than 4 photos.";
+        }
+        // Validate individual photo sizes (5MB limit)
+        const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5MB
+        for (const photo of form.photos) {
+            if (!validateImageSize(photo, MAX_PHOTO_SIZE)) {
+                errors.photos = `Photo "${photo.name}" is too large. Please upload photos under 5MB each.`;
+                break;
+            }
         }
     }
 
@@ -177,10 +188,44 @@ export default function CleaningQuoteForm({
         setErrors((prev) => ({ ...prev, addOnFrequency: undefined }));
     };
 
-    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        setForm((prev) => ({ ...prev, photos: files }));
-        setErrors((prev) => ({ ...prev, photos: undefined }));
+
+        // Enforce max 4 photos
+        const selectedFiles = files.slice(0, 4);
+        if (files.length > 4) {
+            setErrors((prev) => ({ ...prev, photos: "Please select no more than 4 photos." }));
+        } else {
+            setErrors((prev) => ({ ...prev, photos: undefined }));
+        }
+
+        // Validate and compress photos
+        const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5MB
+        const compressedFiles: File[] = [];
+
+        for (const file of selectedFiles) {
+            if (!validateImageSize(file, MAX_PHOTO_SIZE)) {
+                setErrors((prev) => ({
+                    ...prev,
+                    photos: `Photo "${file.name}" is too large. Please upload photos under 5MB each.`
+                }));
+                return;
+            }
+
+            try {
+                const compressed = await compressImage(file);
+                compressedFiles.push(compressed);
+            } catch (error) {
+                console.error("Failed to compress image:", error);
+                setErrors((prev) => ({
+                    ...prev,
+                    photos: `Failed to process photo "${file.name}". Please try a different image.`
+                }));
+                return;
+            }
+        }
+
+        setForm((prev) => ({ ...prev, photos: compressedFiles }));
     };
 
     const removePhoto = (index: number) => {
