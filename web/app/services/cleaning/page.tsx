@@ -142,6 +142,15 @@ export default function CleaningPage() {
   );
 
   // Handle hash-based expansion and ?open=1 param from CTA
+  // Optional: Warm-up API on page load (fire-and-forget)
+  useEffect(() => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    // Fire-and-forget health check to reduce cold start latency
+    fetch(`${apiBaseUrl}/`, { method: "GET" }).catch(() => {
+      // Ignore errors - this is just a warm-up
+    });
+  }, []);
+
   useEffect(() => {
     const checkHash = () => {
       if (isOpen) return;

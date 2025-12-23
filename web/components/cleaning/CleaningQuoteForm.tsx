@@ -227,7 +227,31 @@ export default function CleaningQuoteForm({
                 addOnFrequency: form.addOnFrequency || undefined,
             };
 
-            // Always use FormData (supports both Standard Cleaning and Move-Out with photos)
+            // For Standard Cleaning: Calculate quote immediately and show it
+            if (!isMoveOut) {
+                const result = calculateCleaningQuote(cleanInput);
+
+                // Store quote in sessionStorage for /book page
+                try {
+                    sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
+                } catch (e) {
+                    console.warn("Failed to store quote in sessionStorage:", e);
+                }
+
+                // Normalize phone for URL (ensure +1 format)
+                let normalizedPhone = cleanInput.phone.trim();
+                const digits = normalizedPhone.replace(/\D/g, "");
+                if (digits.length === 10) {
+                    normalizedPhone = "+1" + digits;
+                } else if (!normalizedPhone.startsWith("+")) {
+                    normalizedPhone = "+" + digits;
+                }
+
+                // Redirect to booking page immediately (don't wait for backend)
+                router.push(`/book?phone=${encodeURIComponent(normalizedPhone)}`);
+            }
+
+            // Submit to backend in background (non-blocking)
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
             const formData = new FormData();
             formData.append("first_name", cleanInput.firstName);
@@ -256,49 +280,44 @@ export default function CleaningQuoteForm({
                 formData.append("photos", photo);
             });
 
-            const response = await fetch(`${apiBaseUrl}/leads/cleaning`, {
+            // Fire-and-forget backend call with timeout guard
+            const submitPromise = fetch(`${apiBaseUrl}/leads/cleaning`, {
                 method: "POST",
-                body: formData, // Don't set Content-Type header - browser will set it with boundary
+                body: formData,
             });
 
-            const backendResult = await response.json();
-            console.log("Backend lead submission result:", backendResult);
+            // Set timeout guard (3 seconds)
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error("timeout")), 3000);
+            });
 
-            // Check for error status in response
-            if (!response.ok || backendResult.status === "error") {
-                const errorMessage = backendResult.message || backendResult.detail || `HTTP ${response.status}: Failed to submit lead`;
-                throw new Error(errorMessage);
-            }
+            Promise.race([submitPromise, timeoutPromise])
+                .then(async (response) => {
+                    if (response instanceof Response) {
+                        const backendResult = await response.json();
+                        console.log("Backend lead submission result:", backendResult);
 
-            // Handle Move-Out vs Standard Cleaning differently
+                        // Only handle errors, success is already handled
+                        if (!response.ok || (backendResult.ok === false)) {
+                            console.warn("Backend submission warning:", backendResult.message || "Unknown error");
+                        }
+                    }
+                })
+                .catch((error) => {
+                    if (error.message === "timeout") {
+                        // Timeout - backend is slow (cold start), but continue anyway
+                        console.log("Backend submission taking longer than expected, continuing...");
+                    } else {
+                        console.warn("Backend submission error (non-blocking):", error);
+                    }
+                });
+
+            // Handle Move-Out: Show success message and redirect
             if (isMoveOut) {
-                // Show success message and redirect to homepage after 2 seconds
                 setShowMoveOutSuccess(true);
                 setTimeout(() => {
                     router.push("/");
                 }, 2000);
-            } else {
-                // Standard Cleaning: Calculate quote and route to /book
-                const result = calculateCleaningQuote(cleanInput);
-
-                // Store quote in sessionStorage for /book page
-                try {
-                    sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
-                } catch (e) {
-                    console.warn("Failed to store quote in sessionStorage:", e);
-                }
-
-                // Normalize phone for URL (ensure +1 format)
-                let normalizedPhone = cleanInput.phone.trim();
-                const digits = normalizedPhone.replace(/\D/g, "");
-                if (digits.length === 10) {
-                    normalizedPhone = "+1" + digits;
-                } else if (!normalizedPhone.startsWith("+")) {
-                    normalizedPhone = "+" + digits;
-                }
-
-                // Redirect to booking page with quote
-                router.push(`/book?phone=${encodeURIComponent(normalizedPhone)}`);
             }
         } catch (error) {
             console.error("Error submitting lead:", error);
