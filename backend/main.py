@@ -1212,7 +1212,8 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns:
         Dict with keys: job_id, customer_name, contact_id, service_type, estimated_price,
-        start_time, end_time, access_method, access_notes
+        start_time, start_time_iso, end_time, access_method, access_notes, postal_code,
+        full_address, price_breakdown
 
     Price parsing logic:
         - Primary source: "Estimated Price (Contact)" field (numeric)
@@ -1228,17 +1229,39 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
         (payload.get("first_name") or "") + " " + (payload.get("last_name") or "")
     ).strip()
 
-    price_breakdown = payload.get("Price Breakdown (Contact)") or ""
+    # Try to get fields from custom_objects.jobs first, then fall back to top-level payload
+    custom_objects = payload.get("custom_objects", {})
+    jobs_obj = custom_objects.get("jobs", {}) if isinstance(custom_objects, dict) else {}
+    
+    # Customer name - prefer custom_objects.jobs.customer_name
+    customer_name = (
+        jobs_obj.get("customer_name")
+        or payload.get("customer_name")
+        or full_name
+        or "Unknown"
+    ).strip() if isinstance(jobs_obj.get("customer_name") or payload.get("customer_name") or full_name, str) else (full_name or "Unknown")
+
+    price_breakdown = (
+        jobs_obj.get("price_breakdown")
+        or payload.get("Price Breakdown (Contact)")
+        or payload.get("price_breakdown")
+        or ""
+    )
 
     # 1) Try direct numeric value from "Estimated Price (Contact)"
     estimated_price = 0.0
-    est_raw = payload.get("Estimated Price (Contact)") or payload.get("Estimated Price")
+    est_raw = (
+        jobs_obj.get("estimated_price")
+        or payload.get("Estimated Price (Contact)")
+        or payload.get("Estimated Price")
+        or payload.get("estimated_price")
+    )
     if est_raw:
         try:
             est_str = str(est_raw).replace("$", "").replace(",", "").strip()
             estimated_price = float(est_str)
         except Exception as e:
-            logger.warning("Failed to parse 'Estimated Price (Contact)'='%s': %s", est_raw, e)
+            logger.warning("Failed to parse estimated_price='%s': %s", est_raw, e)
 
     # 2) Fallback: parse from breakdown text if still zero
     if estimated_price <= 0 and price_breakdown:
@@ -1251,38 +1274,92 @@ def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-    service_type = SERVICE_TYPE_STANDARD
-    if "Deep" in price_breakdown:
+    # Service type - prefer custom_objects.jobs.service_type
+    service_type = (
+        jobs_obj.get("service_type")
+        or payload.get("service_type")
+        or SERVICE_TYPE_STANDARD
+    )
+    if "Deep" in price_breakdown or "Deep" in str(service_type):
         service_type = SERVICE_TYPE_DEEP
 
-    # Home access fields – try multiple possible label variants, fall back to ""
-    access_method = (
-        payload.get("How Will Your Cleaner Get Into Your Home")
-        or payload.get("How will your cleaner get into your home")
-        or payload.get("How Will Your Cleaner Get Into Your Home?")
-        or payload.get("How will your cleaner get into your home?")
+    # Start time - prefer custom_objects.jobs.start_time_iso, then calendar.startTime
+    start_time_iso = (
+        jobs_obj.get("start_time_iso")
+        or calendar.get("startTime")
+        or payload.get("start_time_iso")
+        or ""
+    )
+    start_time = (
+        calendar.get("startTime")
+        or jobs_obj.get("start_time")
+        or payload.get("start_time")
+        or "TBD"
+    )
+
+    # Full address - prefer custom_objects.jobs.full_address
+    full_address = (
+        jobs_obj.get("full_address")
+        or payload.get("full_address")
+        or payload.get("address")
         or ""
     )
 
+    # Postal code - prefer custom_objects.jobs.postal_code
+    postal_code = (
+        jobs_obj.get("postal_code")
+        or payload.get("postal_code")
+        or payload.get("postalCode")
+        or payload.get("zip")
+        or ""
+    )
+
+    # Home access fields – try custom_objects.jobs first, then multiple possible label variants
+    access_method = (
+        jobs_obj.get("how_will_your_cleaner_get_into_your_home")
+        or jobs_obj.get("access_method")
+        or payload.get("How Will Your Cleaner Get Into Your Home")
+        or payload.get("How will your cleaner get into your home")
+        or payload.get("How Will Your Cleaner Get Into Your Home?")
+        or payload.get("How will your cleaner get into your home?")
+        or payload.get("access_method")
+        or "Not specified"
+    )
+
     access_notes = (
-        payload.get("Access Notes For Your Cleaner")
+        jobs_obj.get("access_notes_for_your_cleaner")
+        or jobs_obj.get("access_notes")
+        or payload.get("Access Notes For Your Cleaner")
         or payload.get("Access notes for your cleaner")
         or payload.get("Access notes for your cleaner?")
+        or payload.get("access_notes")
         or ""
     )
 
     job_summary = {
-        "job_id": calendar.get("appointmentId"),
-        "customer_name": full_name or "Unknown",
+        "job_id": calendar.get("appointmentId") or payload.get("appointmentId"),
+        "customer_name": customer_name,
         "contact_id": contact_id,
         "service_type": service_type,
         "estimated_price": estimated_price,
-        "start_time": calendar.get("startTime"),
-        "end_time": calendar.get("endTime"),
+        "start_time": start_time,
+        "start_time_iso": start_time_iso,
+        "end_time": calendar.get("endTime") or payload.get("endTime") or "",
         "access_method": access_method,
         "access_notes": access_notes,
+        "postal_code": postal_code,
+        "full_address": full_address,
+        "price_breakdown": price_breakdown,
     }
-    logger.info("Job summary: %s", job_summary)
+    
+    # Debug log: show which required keys are present
+    required_keys = ["job_id", "customer_name", "contact_id", "service_type", "start_time", 
+                     "full_address", "postal_code", "estimated_price", "price_breakdown", 
+                     "access_method", "access_notes"]
+    present_keys = [key for key in required_keys if job_summary.get(key) and job_summary.get(key) != ""]
+    logger.info("build_job_summary: present keys=%s, missing keys=%s", 
+               present_keys, [k for k in required_keys if k not in present_keys])
+    
     return job_summary
 
 
@@ -2615,13 +2692,18 @@ async def dispatch(request: Request):
         )
 
     # Build contractor SMS message (NO access info yet – only broadcast)
+    postal_code = job_summary.get("postal_code", "")
+    zip_line = f"ZIP: {postal_code}\n" if postal_code else ""
+    price_line = f"Est. price: ${job_summary['estimated_price']:.2f}\n" if job_summary.get("estimated_price", 0) > 0 else ""
+    
     msg = (
-        f"New cleaning job available:\n"
+        f"New cleaning job available\n\n"
         f"Customer: {job_summary['customer_name']}\n"
         f"Service: {job_summary['service_type']}\n"
-        f"When: {job_summary['start_time'] or 'TBD'}\n"
-        f"Est. price: ${job_summary['estimated_price']:.2f}\n\n"
-        f"Reply YES {job_summary['job_id']} to accept."
+        f"When: {job_summary.get('start_time', 'TBD')}\n"
+        f"{zip_line}"
+        f"{price_line}"
+        f"\nReply YES {job_summary['job_id']} to accept."
     )
 
     notified_ids: List[str] = []
@@ -3215,22 +3297,38 @@ async def contractor_reply(request: Request):
     job["assigned_contractor_id"] = contact_id
     job["assigned_contractor_name"] = contractor_name
 
-    # 1) Confirm to the accepting contractor — NOW including access info
-    access_method = job.get("access_method") or "Not specified"
-    access_notes = job.get("access_notes") or ""
-
-    confirm_msg = (
-        f"You accepted this job:\n"
-        f"Customer: {job['customer_name']}\n"
-        f"When: {job['start_time']}\n"
-        f"Est. price: ${job['estimated_price']:.2f}\n"
-        f"Entry: {access_method}\n"
-    )
-
+    # 1) Confirm to the accepting contractor — including all details
+    # Format date/time nicely
+    start_time_display = job.get("start_time", "TBD")
+    if job.get("start_time_iso"):
+        try:
+            dt = datetime.fromisoformat(job["start_time_iso"].replace("Z", "+00:00"))
+            start_time_display = dt.strftime("%A, %B %d at %I:%M %p")
+        except Exception:
+            pass  # Fall back to raw start_time
+    
+    customer_name = job.get("customer_name", "Unknown")
+    full_address = job.get("full_address", "")
+    access_method = job.get("access_method", "Not specified")
+    access_notes = job.get("access_notes", "")
+    price_breakdown = job.get("price_breakdown", "")
+    
+    confirm_msg = f"✅ You got the job\n\n"
+    confirm_msg += f"Date/Time: {start_time_display}\n"
+    confirm_msg += f"Customer: {customer_name}\n"
+    
+    if full_address:
+        confirm_msg += f"Address: {full_address}\n"
+    
+    confirm_msg += f"Entry: {access_method}\n"
+    
     if access_notes:
-        confirm_msg += f"Notes: {access_notes}\n"
-
-    confirm_msg += "\nWe'll share final details in your Alloy dashboard."
+        confirm_msg += f"Access notes: {access_notes}\n"
+    
+    if price_breakdown:
+        confirm_msg += f"\nPrice breakdown:\n{price_breakdown}\n"
+    
+    confirm_msg += "\nReply here if you have questions."
 
     if contact_id:
         send_conversation_sms(contact_id, confirm_msg)
