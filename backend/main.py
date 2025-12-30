@@ -1081,6 +1081,59 @@ def get_cf_id(env_name: str) -> Optional[str]:
     return value if value else None
 
 
+def normalize_square_footage_option(raw: Optional[str]) -> Optional[str]:
+    """
+    Normalize square footage option to match GHL dropdown values exactly.
+    
+    Allowed values (must match exactly):
+    - Under 1500 sq ft
+    - 1,501–2,000 sq ft
+    - 2,001–2,600 sq ft
+    - 2,601–3,200 sq ft
+    - 3,201–4,000 sq ft
+    - 4,001–5,500 sq ft
+    - Over 5,500 sq ft
+    
+    Args:
+        raw: Raw square footage string from form
+    
+    Returns:
+        Normalized string if valid, None otherwise
+    """
+    if not raw:
+        return None
+    
+    # Strip whitespace
+    normalized = raw.strip()
+    if not normalized:
+        return None
+    
+    # Replace various dash types with en-dash –
+    # Handle: - (hyphen), — (em-dash), – (en-dash)
+    normalized = normalized.replace("—", "–")  # em-dash to en-dash
+    normalized = normalized.replace("-", "–")   # hyphen to en-dash
+    
+    # Preserve commas and "sq ft" suffix (already present in allowed values)
+    # No guessing ranges - must match exactly
+    
+    # Validate against allowed values
+    ALLOWED_SQFT_VALUES = [
+        "Under 1500 sq ft",
+        "1,501–2,000 sq ft",
+        "2,001–2,600 sq ft",
+        "2,601–3,200 sq ft",
+        "3,201–4,000 sq ft",
+        "4,001–5,500 sq ft",
+        "Over 5,500 sq ft",
+    ]
+    
+    if normalized in ALLOWED_SQFT_VALUES:
+        return normalized
+    
+    # Not a valid value
+    return None
+
+
 def build_custom_fields_from_env(payload_values: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Build custom fields array from payload values using env var IDs.
@@ -2782,10 +2835,24 @@ def process_lead_async(
             custom_field_mapping["extras_add_ons"] = "\n".join(str(v) for v in extras_list if v)
         if addons__frequency and addons__frequency.strip():
             custom_field_mapping["addons__frequency"] = addons__frequency.strip()
-        if approximate_square_footage and approximate_square_footage.strip():
+        
+        # Normalize and validate square footage before adding to custom fields
+        normalized_sqft = normalize_square_footage_option(approximate_square_footage)
+        if normalized_sqft:
             # Support both keys: approximate_square_footage and square_footage
-            custom_field_mapping["approximate_square_footage"] = approximate_square_footage.strip()
-            custom_field_mapping["square_footage"] = approximate_square_footage.strip()
+            custom_field_mapping["approximate_square_footage"] = normalized_sqft
+            custom_field_mapping["square_footage"] = normalized_sqft
+            logger.info(
+                "process_lead_async: square_footage_normalized raw=%s normalized=%s",
+                approximate_square_footage,
+                normalized_sqft
+            )
+        elif approximate_square_footage:
+            logger.warning(
+                "process_lead_async: square_footage_invalid raw=%s (not in allowed GHL dropdown values, skipping)",
+                approximate_square_footage
+            )
+        
         if street_address and street_address.strip():
             custom_field_mapping["street_address"] = street_address.strip()
         
