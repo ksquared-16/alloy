@@ -920,14 +920,30 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
     for field_key, field_value in field_mapping.items():
         if field_value is None or field_value == "":
             continue
-            
-        # Try to resolve field ID: first env var, then dynamic lookup
-        field_id = resolve_custom_field_id(field_key)
+        
+        # Default behavior: use env var (backward compatible)
+        field_id = CUSTOM_FIELD_IDS.get(field_key)
+        
+        # Special case: only use dynamic resolver for estimate_photos (optional, non-blocking)
+        if not field_id and field_key == "estimate_photos":
+            try:
+                field_id = resolve_custom_field_id(field_key)
+                if not field_id:
+                    logger.warning(
+                        "build_custom_fields_array: estimate_photos field ID not found via env var or dynamic lookup. Skipping this field."
+                    )
+            except Exception as e:
+                logger.warning(
+                    "build_custom_fields_array: exception resolving estimate_photos dynamically: %s. Skipping this field.",
+                    e
+                )
+                field_id = None
+        
         if not field_id:
             missing_fields.append(field_key)
             logger.warning(
-                "build_custom_fields_array: custom field ID not found for key=%s. "
-                "Tried env var and dynamic lookup. Set environment variable: GHL_CF_%s",
+                "build_custom_fields_array: custom field ID not configured for key=%s. "
+                "Set environment variable: GHL_CF_%s",
                 field_key,
                 field_key.upper().replace("__", "_")
             )
@@ -993,10 +1009,23 @@ def create_contact_in_ghl(
         payload["postalCode"] = postal_code.strip()
     
     # Build custom fields array if mapping provided
+    custom_fields = []
     if custom_field_mapping:
         custom_fields = build_custom_fields_array(custom_field_mapping)
         if custom_fields:
             payload["customFields"] = custom_fields
+    
+    # Log payload before sending (excluding sensitive data)
+    logger.info(
+        "contact_upsert_payload: core={firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d keys=%s",
+        first_name[:10] + "..." if len(first_name) > 10 else first_name,
+        last_name[:10] + "..." if len(last_name) > 10 else last_name,
+        email[:20] + "..." if len(email) > 20 else email,
+        phone[:4] + "***" if len(phone) > 4 else phone,
+        postal_code or "None",
+        len(custom_fields),
+        [cf.get("id", "unknown")[:8] + "..." if len(str(cf.get("id", ""))) > 8 else cf.get("id", "unknown") for cf in custom_fields]
+    )
 
     try:
         resp = requests.post(CONTACTS_URL, headers=_ghl_headers(), json=payload, timeout=10)
@@ -1339,10 +1368,24 @@ def update_contact_in_ghl(
         payload["postalCode"] = postal_code.strip()
     
     # Build custom fields array if mapping provided
+    custom_fields = []
     if custom_field_mapping:
         custom_fields = build_custom_fields_array(custom_field_mapping)
         if custom_fields:
             payload["customFields"] = custom_fields
+    
+    # Log payload before sending (excluding sensitive data)
+    logger.info(
+        "contact_upsert_payload: core={contact_id=%s, firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d keys=%s",
+        contact_id[:8] + "..." if len(contact_id) > 8 else contact_id,
+        first_name[:10] + "..." if first_name and len(first_name) > 10 else (first_name or "None"),
+        last_name[:10] + "..." if last_name and len(last_name) > 10 else (last_name or "None"),
+        email[:20] + "..." if email and len(email) > 20 else (email or "None"),
+        phone[:4] + "***" if phone and len(phone) > 4 else (phone or "None"),
+        postal_code or "None",
+        len(custom_fields),
+        [cf.get("id", "unknown")[:8] + "..." if len(str(cf.get("id", ""))) > 8 else cf.get("id", "unknown") for cf in custom_fields]
+    )
     
     # Remove any disallowed fields (e.g., locationId)
     payload = strip_update_disallowed_fields(payload)
