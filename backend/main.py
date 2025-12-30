@@ -36,6 +36,7 @@ import re
 import logging
 import traceback
 import time
+import threading
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -96,6 +97,27 @@ CONVERSATIONS_URL = f"{LC_BASE_URL}/conversations/messages"
 JOBS_RECORDS_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records"
 JOBS_SEARCH_URL = f"{LC_BASE_URL}/objects/custom_objects.jobs/records/search"
 OPPORTUNITIES_URL = f"{LC_BASE_URL}/opportunities/"
+CUSTOM_FIELDS_URL = f"{LC_BASE_URL}/customFields"
+
+# Dynamic custom field resolution cache
+_custom_fields_cache: Optional[Dict[str, str]] = None
+_custom_fields_cache_time: float = 0
+_custom_fields_cache_lock = threading.Lock()
+CUSTOM_FIELDS_CACHE_TTL = 6 * 60 * 60  # 6 hours in seconds
+
+# Mapping from our internal keys to expected GHL fieldKey/names
+# This allows us to resolve custom fields dynamically without env vars
+INTERNAL_TO_GHL_FIELD_MAPPING = {
+    "service_type": ["service_type", "Service Type"],
+    "preferred_service_date": ["preferred_service_date", "Preferred Service Date"],
+    "home_type": ["home_type", "Home Type"],
+    "cleaning_frequency": ["cleaning_frequency", "Cleaning Frequency"],
+    "extras_add_ons": ["extras_add_ons", "Extras Add Ons", "Add Ons"],
+    "addons__frequency": ["addons_frequency", "Addons Frequency", "Add-ons Frequency"],
+    "approximate_square_footage": ["approximate_square_footage", "Approximate Square Footage", "Square Footage"],
+    "street_address": ["street_address", "Street Address"],
+    "estimate_photos": ["quote_estimate_photos", "Quote Estimate Photos", "Estimate Photos"],
+}
 
 # GHL API version header
 GHL_API_VERSION = "2021-07-28"
@@ -735,6 +757,152 @@ def create_or_update_contact_in_ghl(
         return None
 
 
+def get_custom_fields_map(force_refresh: bool = False) -> Dict[str, str]:
+    """
+    Fetch custom fields from GHL API and build a mapping of fieldKey/name -> id.
+    Results are cached in memory with TTL to avoid repeated API calls.
+    
+    Returns:
+        Dict mapping fieldKey (or normalized name) -> custom field id
+        Example: {"quote_estimate_photos": "abc123", "Service Type": "def456"}
+    """
+    global _custom_fields_cache, _custom_fields_cache_time
+    
+    current_time = time.time()
+    
+    # Check cache validity
+    with _custom_fields_cache_lock:
+        if (
+            not force_refresh
+            and _custom_fields_cache is not None
+            and (current_time - _custom_fields_cache_time) < CUSTOM_FIELDS_CACHE_TTL
+        ):
+            return _custom_fields_cache
+    
+    if not GHL_LOCATION_ID:
+        logger.warning("get_custom_fields_map: GHL_LOCATION_ID not set, cannot fetch custom fields")
+        return {}
+    
+    url = f"{CUSTOM_FIELDS_URL}?locationId={GHL_LOCATION_ID}"
+    headers = _ghl_headers()
+    
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if not resp.ok:
+            logger.error(
+                "get_custom_fields_map: failed to fetch custom fields (%s): %s",
+                resp.status_code,
+                resp.text[:200]
+            )
+            # Return empty dict on error, but don't cache it
+            return {}
+        
+        data = resp.json()
+        # GHL API may return customFields as a list or nested in a response object
+        custom_fields_list = data.get("customFields", [])
+        if not custom_fields_list and isinstance(data, list):
+            custom_fields_list = data
+        elif not custom_fields_list and isinstance(data, dict):
+            # Try other possible keys
+            custom_fields_list = data.get("fields", []) or data.get("data", [])
+        
+        if not isinstance(custom_fields_list, list):
+            logger.warning("get_custom_fields_map: unexpected response format, customFields is not a list")
+            return {}
+        
+        # Build mapping: fieldKey -> id and name -> id
+        mapping: Dict[str, str] = {}
+        for field in custom_fields_list:
+            field_id = field.get("id")
+            if not field_id:
+                continue
+            
+            # Map by fieldKey (if present)
+            field_key = field.get("fieldKey")
+            if field_key:
+                mapping[field_key] = field_id
+            
+            # Map by name (normalized: lowercase, spaces to underscores)
+            field_name = field.get("name")
+            if field_name:
+                # Store original name
+                mapping[field_name] = field_id
+                # Also store normalized versions for flexible matching
+                normalized = field_name.lower().replace(" ", "_").replace("-", "_")
+                mapping[normalized] = field_id
+        
+        # Cache the result
+        with _custom_fields_cache_lock:
+            _custom_fields_cache = mapping
+            _custom_fields_cache_time = current_time
+        
+        logger.info(
+            "get_custom_fields_map: fetched and cached %d custom fields from GHL API",
+            len(mapping)
+        )
+        return mapping
+        
+    except Exception as e:
+        logger.error("get_custom_fields_map: exception fetching custom fields: %s", e, exc_info=True)
+        return {}
+
+
+def resolve_custom_field_id(internal_key: str) -> Optional[str]:
+    """
+    Resolve a custom field ID for an internal key.
+    
+    First tries env var (backward compatible), then tries dynamic lookup via GHL API.
+    
+    Args:
+        internal_key: Our internal field key (e.g., "estimate_photos")
+    
+    Returns:
+        Custom field ID if found, None otherwise
+    """
+    # First, try env var (backward compatible)
+    env_var_id = CUSTOM_FIELD_IDS.get(internal_key)
+    if env_var_id:
+        return env_var_id
+    
+    # Get the expected GHL fieldKey/names for this internal key
+    expected_keys = INTERNAL_TO_GHL_FIELD_MAPPING.get(internal_key, [])
+    if not expected_keys:
+        # If no mapping defined, try the internal key itself
+        expected_keys = [internal_key]
+    
+    # Fetch custom fields map from GHL API
+    ghl_fields_map = get_custom_fields_map()
+    if not ghl_fields_map:
+        return None
+    
+    # Try each expected key/name
+    for expected_key in expected_keys:
+        # Try exact match first
+        field_id = ghl_fields_map.get(expected_key)
+        if field_id:
+            logger.info(
+                "resolved custom field id via api key=%s fieldKey=%s id=%s",
+                internal_key,
+                expected_key,
+                field_id
+            )
+            return field_id
+        
+        # Try normalized version (lowercase, spaces/underscores)
+        normalized = expected_key.lower().replace(" ", "_").replace("-", "_")
+        field_id = ghl_fields_map.get(normalized)
+        if field_id:
+            logger.info(
+                "resolved custom field id via api key=%s fieldKey=%s (normalized) id=%s",
+                internal_key,
+                normalized,
+                field_id
+            )
+            return field_id
+    
+    return None
+
+
 def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, Any]]:
     """
     Build a GHL customFields array from a field mapping dict.
@@ -753,12 +921,13 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
         if field_value is None or field_value == "":
             continue
             
-        field_id = CUSTOM_FIELD_IDS.get(field_key)
+        # Try to resolve field ID: first env var, then dynamic lookup
+        field_id = resolve_custom_field_id(field_key)
         if not field_id:
             missing_fields.append(field_key)
             logger.warning(
-                "build_custom_fields_array: custom field ID not configured for key=%s. "
-                "Set environment variable: GHL_CF_%s",
+                "build_custom_fields_array: custom field ID not found for key=%s. "
+                "Tried env var and dynamic lookup. Set environment variable: GHL_CF_%s",
                 field_key,
                 field_key.upper().replace("__", "_")
             )
