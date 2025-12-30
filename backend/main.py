@@ -78,16 +78,7 @@ CUSTOM_FIELD_IDS = {
     "estimate_photos": os.getenv("GHL_CF_ESTIMATE_PHOTOS", "").strip(),
 }
 
-# Log missing custom field IDs at startup
-missing_cf_ids = [key for key, value in CUSTOM_FIELD_IDS.items() if not value]
-if missing_cf_ids:
-    logger.warning(
-        "Missing GHL custom field ID environment variables: %s. "
-        "Custom fields for these keys will be skipped. "
-        "Set: %s",
-        ", ".join(missing_cf_ids),
-        ", ".join(f"GHL_CF_{key.upper().replace('__', '_')}" for key in missing_cf_ids)
-    )
+# Note: Custom field IDs are optional. If not set, fields will be sent by name/key.
 
 # GHL API endpoints
 LC_BASE_URL = "https://services.leadconnectorhq.com"
@@ -911,60 +902,55 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
         field_mapping: Dict mapping field keys (e.g., "service_type") to values (e.g., "Standard Cleaning")
 
     Returns:
-        List of custom field dicts in format: [{"id": "...", "value": "..."}]
-        Only includes fields where the custom field ID is configured (non-empty).
+        List of custom field dicts in format: [{"id": "...", "value": "..."}] or [{"key": "...", "value": "..."}]
+        Always includes all fields - uses ID if available, otherwise uses key/name.
     """
     custom_fields: List[Dict[str, Any]] = []
-    missing_fields = []
+    
+    # Map internal keys to GHL field names/keys (for name-based lookup)
+    INTERNAL_TO_GHL_NAME = {
+        "service_type": "service_type",
+        "preferred_service_date": "preferred_service_date",
+        "home_type": "home_type",
+        "cleaning_frequency": "cleaning_frequency",
+        "extras_add_ons": "extras_add_ons",
+        "addons__frequency": "addons_frequency",
+        "approximate_square_footage": "approximate_square_footage",
+        "street_address": "street_address",
+        "estimate_photos": "quote_estimate_photos",
+    }
     
     for field_key, field_value in field_mapping.items():
         if field_value is None or field_value == "":
-            continue
-        
-        # Default behavior: use env var (backward compatible)
-        field_id = CUSTOM_FIELD_IDS.get(field_key)
-        
-        # Special case: only use dynamic resolver for estimate_photos (optional, non-blocking)
-        if not field_id and field_key == "estimate_photos":
-            try:
-                field_id = resolve_custom_field_id(field_key)
-                if not field_id:
-                    logger.warning(
-                        "build_custom_fields_array: estimate_photos field ID not found via env var or dynamic lookup. Skipping this field."
-                    )
-            except Exception as e:
-                logger.warning(
-                    "build_custom_fields_array: exception resolving estimate_photos dynamically: %s. Skipping this field.",
-                    e
-                )
-                field_id = None
-        
-        if not field_id:
-            missing_fields.append(field_key)
-            logger.warning(
-                "build_custom_fields_array: custom field ID not configured for key=%s. "
-                "Set environment variable: GHL_CF_%s",
-                field_key,
-                field_key.upper().replace("__", "_")
-            )
             continue
         
         # Handle array values (e.g., extras_add_ons) by converting to comma-separated string
         if isinstance(field_value, list):
             field_value = ", ".join(str(v) for v in field_value if v)
         
-        custom_fields.append({
-            "id": field_id,
-            "value": str(field_value)
-        })
-    
-    if missing_fields:
-        logger.info(
-            "build_custom_fields_array: missing custom field IDs for: %s. "
-            "To configure, set these environment variables: %s",
-            ", ".join(missing_fields),
-            ", ".join(f"GHL_CF_{key.upper().replace('__', '_')}" for key in missing_fields)
-        )
+        # Try to get field ID (env var first, then dynamic lookup for estimate_photos)
+        field_id = CUSTOM_FIELD_IDS.get(field_key)
+        
+        # Special case: try dynamic resolver for estimate_photos if env var missing
+        if not field_id and field_key == "estimate_photos":
+            try:
+                field_id = resolve_custom_field_id(field_key)
+            except Exception:
+                field_id = None
+        
+        # Build field entry: use ID if available, otherwise use key/name
+        if field_id:
+            custom_fields.append({
+                "id": field_id,
+                "value": str(field_value)
+            })
+        else:
+            # Use key/name when ID is not available
+            ghl_field_key = INTERNAL_TO_GHL_NAME.get(field_key, field_key)
+            custom_fields.append({
+                "key": ghl_field_key,
+                "value": str(field_value)
+            })
     
     return custom_fields
 
