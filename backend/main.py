@@ -911,11 +911,10 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
         field_mapping: Dict mapping field keys (e.g., "service_type") to values (e.g., "Standard Cleaning")
 
     Returns:
-        List of custom field dicts in format: [{"id": "...", "value": "..."}]
-        Only includes fields where the custom field ID is configured (non-empty).
+        List of custom field dicts in format: [{"id": "...", "value": "..."}] or [{"key": "...", "value": "..."}]
+        Uses ID if available, otherwise uses key-based mapping.
     """
     custom_fields: List[Dict[str, Any]] = []
-    missing_fields = []
     
     for field_key, field_value in field_mapping.items():
         if field_value is None or field_value == "":
@@ -939,32 +938,27 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
                 )
                 field_id = None
         
-        if not field_id:
-            missing_fields.append(field_key)
-            logger.warning(
-                "build_custom_fields_array: custom field ID not configured for key=%s. "
-                "Set environment variable: GHL_CF_%s",
-                field_key,
-                field_key.upper().replace("__", "_")
-            )
-            continue
-        
         # Handle array values (e.g., extras_add_ons) by converting to comma-separated string
         if isinstance(field_value, list):
             field_value = ", ".join(str(v) for v in field_value if v)
         
-        custom_fields.append({
-            "id": field_id,
-            "value": str(field_value)
-        })
-    
-    if missing_fields:
-        logger.info(
-            "build_custom_fields_array: missing custom field IDs for: %s. "
-            "To configure, set these environment variables: %s",
-            ", ".join(missing_fields),
-            ", ".join(f"GHL_CF_{key.upper().replace('__', '_')}" for key in missing_fields)
-        )
+        # Use ID if available, otherwise use key-based mapping (for fields like estimated_price_contact)
+        if field_id:
+            custom_fields.append({
+                "id": field_id,
+                "value": str(field_value)
+            })
+        else:
+            # Key-based mapping: use field key directly (GHL supports this for some fields)
+            # This allows fields to work without requiring custom field IDs
+            custom_fields.append({
+                "key": field_key,
+                "value": str(field_value)
+            })
+            logger.info(
+                "build_custom_fields_array: using key-based mapping for field_key=%s (no ID configured)",
+                field_key
+            )
     
     return custom_fields
 
@@ -2488,6 +2482,7 @@ def process_lead_async(
     addons__frequency: Optional[str],
     street_address: Optional[str],
     photos_data: List[Dict[str, Any]],  # List of {filename, content, content_type}
+    estimated_price: Optional[str] = None,  # Frontend-calculated price
 ):
     """
     Background task to process lead submission and sync with GHL.
@@ -2528,6 +2523,9 @@ def process_lead_async(
             custom_field_mapping["approximate_square_footage"] = approximate_square_footage.strip()
         if street_address and street_address.strip():
             custom_field_mapping["street_address"] = street_address.strip()
+        if estimated_price and estimated_price.strip():
+            # Add estimated_price_contact field using key-based mapping
+            custom_field_mapping["estimated_price_contact"] = estimated_price.strip()
         
         # Check if this is a Move-Out / Heavy Clean request
         is_move_out = service_type and "Move-Out" in service_type
@@ -2710,6 +2708,7 @@ async def submit_cleaning_lead(
     addons__frequency: Optional[str] = Form(None),
     street_address: Optional[str] = Form(None),
     photos: TypingList[UploadFile] = File(default=[]),
+    estimated_price: Optional[str] = Form(None),
 ):
     """
     Submit a cleaning lead from the new custom cleaning quote form (Phase 2).
@@ -2723,6 +2722,7 @@ async def submit_cleaning_lead(
         - cleaning_frequency, extras_add_ons, addons__frequency, approximate_square_footage
         - street_address (optional, required for Move-Out)
         - photos (optional, multiple files, required for Move-Out)
+        - estimated_price (optional, frontend-calculated price to sync to GHL)
 
     Returns:
         JSON: { "ok": true, "status": "accepted", "phone": "+1..." }
@@ -2849,6 +2849,7 @@ async def submit_cleaning_lead(
         addons__frequency=addons__frequency,
         street_address=street_address,
         photos_data=photos_data,
+        estimated_price=estimated_price,
     )
     
     # Return immediately with success
