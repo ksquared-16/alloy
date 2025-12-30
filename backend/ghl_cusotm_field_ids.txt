@@ -1,0 +1,45 @@
+GHL Custom Field ID Fetch (LeadConnector / GHL)
+
+1) List ALL contact custom fields for a location:
+curl -s "https://services.leadconnectorhq.com/locations/<LOCATION_ID>/customFields" \
+  -H "Authorization: Bearer <PIT_TOKEN>" \
+  -H "Version: 2021-07-28" | python -m json.tool
+
+2) Find ONE field by fieldKey:
+curl -s "https://services.leadconnectorhq.com/locations/<LOCATION_ID>/customFields" \
+  -H "Authorization: Bearer <PIT_TOKEN>" \
+  -H "Version: 2021-07-28" \
+| jq -r '.customFields[] | select(.fieldKey=="contact.estimated_price_contact")'
+
+3) Output a clean mapping: "FIELDKEY = ID"
+curl -s "https://services.leadconnectorhq.com/locations/<LOCATION_ID>/customFields" \
+  -H "Authorization: Bearer <PIT_TOKEN>" \
+  -H "Version: 2021-07-28" \
+| jq -r '.customFields[] | "\(.fieldKey) = \(.id)"'
+
+4) Quick search by name contains "Estimated Price"
+curl -s "https://services.leadconnectorhq.com/locations/<LOCATION_ID>/customFields" \
+  -H "Authorization: Bearer <PIT_TOKEN>" \
+  -H "Version: 2021-07-28" \
+| jq -r '.customFields[] | select(.name|test("Estimated Price";"i")) | "\(.name) | \(.fieldKey) | \(.id)"'
+
+
+# GHL Contact Custom Fields (Cleaning)
+
+| Purpose | Field Key | Env Var |
+|------|---------|--------|
+| Estimated Price | contact.estimated_price_contact | GHL_CF_ESTIMATED_PRICE |
+| Price Breakdown | contact.price_breakdown_contact | GHL_CF_PRICE_BREAKDOWN |
+| Recurring Price | contact.recurring_price | GHL_CF_RECURRING_PRICE |
+| Service Type | contact.service_type | GHL_CF_SERVICE_TYPE |
+| Home Type | contact.home_type | GHL_CF_HOME_TYPE |
+| Cleaning Frequency | contact.cleaning_frequency | GHL_CF_CLEANING_FREQUENCY |
+| Sq Ft | contact.approximate_square_footage | GHL_CF_APPROXIMATE_SQUARE_FOOTAGE |
+| Bedrooms | contact.bedrooms | GHL_CF_BEDROOMS |
+| Bathrooms | contact.bathrooms | GHL_CF_BATHROOMS |
+| Street Address | contact.street_address | GHL_CF_STREET_ADDRESS |
+| Access Method | contact.how_will_your_cleaner_get_into_your_home | GHL_CF_ACCESS_METHOD |
+| Access Notes | contact.access_notes_for_your_cleaner | GHL_CF_ACCESS_NOTES |
+| Add-ons | contact.extras_add_ons | GHL_CF_EXTRAS_ADD_ONS |
+| Add-on Frequency | contact.addons__frequency | GHL_CF_ADDONS_FREQUENCY |
+| Estimate Photos | contact.quote_estimate_photos | GHL_CF_QUOTE_ESTIMATE_PHOTOS |

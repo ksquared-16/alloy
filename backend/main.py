@@ -67,15 +67,22 @@ if not GHL_LOCATION_ID:
 # GHL Custom Field IDs (for contact custom fields)
 # These are loaded from environment variables. If not set, the field will be skipped.
 CUSTOM_FIELD_IDS = {
+    "estimated_price": os.getenv("GHL_CF_ESTIMATED_PRICE", "").strip(),
+    "price_breakdown": os.getenv("GHL_CF_PRICE_BREAKDOWN", "").strip(),
+    "recurring_price": os.getenv("GHL_CF_RECURRING_PRICE", "").strip(),
     "service_type": os.getenv("GHL_CF_SERVICE_TYPE", "").strip(),
-    "preferred_service_date": os.getenv("GHL_CF_PREFERRED_SERVICE_DATE", "").strip(),
     "home_type": os.getenv("GHL_CF_HOME_TYPE", "").strip(),
     "cleaning_frequency": os.getenv("GHL_CF_CLEANING_FREQUENCY", "").strip(),
+    "approximate_square_footage": os.getenv("GHL_CF_APPROXIMATE_SQUARE_FOOTAGE", "").strip(),
+    "bedrooms": os.getenv("GHL_CF_BEDROOMS", "").strip(),
+    "bathrooms": os.getenv("GHL_CF_BATHROOMS", "").strip(),
+    "street_address": os.getenv("GHL_CF_STREET_ADDRESS", "").strip(),
+    "access_method": os.getenv("GHL_CF_ACCESS_METHOD", "").strip(),
+    "access_notes": os.getenv("GHL_CF_ACCESS_NOTES", "").strip(),
     "extras_add_ons": os.getenv("GHL_CF_EXTRAS_ADD_ONS", "").strip(),
     "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
-    "approximate_square_footage": os.getenv("GHL_CF_SQUARE_FOOTAGE", "").strip() or os.getenv("GHL_CF_APPROX_SQFT", "").strip(),  # Support both names
-    "street_address": os.getenv("GHL_CF_STREET_ADDRESS", "").strip(),
-    "estimate_photos": os.getenv("GHL_CF_ESTIMATE_PHOTOS", "").strip(),
+    "estimate_photos": os.getenv("GHL_CF_QUOTE_ESTIMATE_PHOTOS", "").strip(),
+    "preferred_service_date": os.getenv("GHL_CF_PREFERRED_SERVICE_DATE", "").strip(),
 }
 
 # Log missing custom field IDs at startup
@@ -903,64 +910,72 @@ def resolve_custom_field_id(internal_key: str) -> Optional[str]:
     return None
 
 
-def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, Any]]:
+def get_cf_id(env_name: str) -> Optional[str]:
     """
-    Build a GHL customFields array from a field mapping dict.
-
+    Get custom field ID from environment variable name.
+    
     Args:
-        field_mapping: Dict mapping field keys (e.g., "service_type") to values (e.g., "Standard Cleaning")
-
+        env_name: Environment variable name (e.g., "GHL_CF_ESTIMATED_PRICE")
+    
     Returns:
-        List of custom field dicts in format: [{"id": "...", "value": "..."}] or [{"key": "...", "value": "..."}]
-        Uses ID if available, otherwise uses key-based mapping.
+        Custom field ID if set, None otherwise
+    """
+    value = os.getenv(env_name, "").strip()
+    return value if value else None
+
+
+def build_custom_fields_from_env(payload_values: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Build custom fields array from payload values using env var IDs.
+    
+    Args:
+        payload_values: Dict mapping field keys to values
+    
+    Returns:
+        List of custom field dicts in format: [{"id": "...", "value": "..."}]
+        Only includes fields where env var ID is configured.
     """
     custom_fields: List[Dict[str, Any]] = []
     
-    for field_key, field_value in field_mapping.items():
+    for field_key, field_value in payload_values.items():
         if field_value is None or field_value == "":
             continue
         
-        # Default behavior: use env var (backward compatible)
+        # Get field ID from CUSTOM_FIELD_IDS mapping
         field_id = CUSTOM_FIELD_IDS.get(field_key)
         
-        # Special case: only use dynamic resolver for estimate_photos (optional, non-blocking)
-        if not field_id and field_key == "estimate_photos":
-            try:
-                field_id = resolve_custom_field_id(field_key)
-                if not field_id:
-                    logger.warning(
-                        "build_custom_fields_array: estimate_photos field ID not found via env var or dynamic lookup. Skipping this field."
-                    )
-            except Exception as e:
-                logger.warning(
-                    "build_custom_fields_array: exception resolving estimate_photos dynamically: %s. Skipping this field.",
-                    e
-                )
-                field_id = None
+        if not field_id:
+            logger.warning(
+                "build_custom_fields_from_env: skipping field_key=%s (no env var ID configured)",
+                field_key
+            )
+            continue
         
         # Handle array values (e.g., extras_add_ons) by converting to comma-separated string
         if isinstance(field_value, list):
             field_value = ", ".join(str(v) for v in field_value if v)
         
-        # Use ID if available, otherwise use key-based mapping (for fields like estimated_price_contact)
-        if field_id:
-            custom_fields.append({
-                "id": field_id,
-                "value": str(field_value)
-            })
-        else:
-            # Key-based mapping: use field key directly (GHL supports this for some fields)
-            # This allows fields to work without requiring custom field IDs
-            custom_fields.append({
-                "key": field_key,
-                "value": str(field_value)
-            })
-            logger.info(
-                "build_custom_fields_array: using key-based mapping for field_key=%s (no ID configured)",
-                field_key
-            )
+        custom_fields.append({
+            "id": field_id,
+            "value": str(field_value)
+        })
     
     return custom_fields
+
+
+def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, Any]]:
+    """
+    Build a GHL customFields array from a field mapping dict.
+    Uses env var IDs only (no key-based mapping).
+
+    Args:
+        field_mapping: Dict mapping field keys (e.g., "service_type") to values (e.g., "Standard Cleaning")
+
+    Returns:
+        List of custom field dicts in format: [{"id": "...", "value": "..."}]
+        Only includes fields where the custom field ID is configured (non-empty).
+    """
+    return build_custom_fields_from_env(field_mapping)
 
 
 def create_contact_in_ghl(
@@ -970,6 +985,9 @@ def create_contact_in_ghl(
     phone: str,
     postal_code: Optional[str] = None,
     custom_field_mapping: Optional[Dict[str, str]] = None,
+    estimated_price: Optional[str] = None,
+    price_breakdown: Optional[str] = None,
+    recurring_price: Optional[str] = None,
 ) -> Optional[str]:
     """
     Create a new contact in GHL.
@@ -981,6 +999,9 @@ def create_contact_in_ghl(
         phone: Contact phone number (will be normalized to E.164)
         postal_code: Optional postal code
         custom_field_mapping: Optional dict mapping field keys to values for custom fields
+        estimated_price: Optional estimated price value
+        price_breakdown: Optional price breakdown text
+        recurring_price: Optional recurring price value
 
     Returns:
         GHL contact ID if successful, None otherwise
@@ -1002,12 +1023,18 @@ def create_contact_in_ghl(
     if postal_code and postal_code.strip():
         payload["postalCode"] = postal_code.strip()
     
-    # Build custom fields array if mapping provided
-    custom_fields = []
-    if custom_field_mapping:
-        custom_fields = build_custom_fields_array(custom_field_mapping)
-        if custom_fields:
-            payload["customFields"] = custom_fields
+    # Build custom fields from mapping and pricing fields
+    custom_field_values = dict(custom_field_mapping) if custom_field_mapping else {}
+    if estimated_price:
+        custom_field_values["estimated_price"] = estimated_price
+    if price_breakdown:
+        custom_field_values["price_breakdown"] = price_breakdown
+    if recurring_price:
+        custom_field_values["recurring_price"] = recurring_price
+    
+    custom_fields = build_custom_fields_from_env(custom_field_values)
+    if custom_fields:
+        payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
     logger.info(
@@ -1328,6 +1355,9 @@ def update_contact_in_ghl(
     phone: Optional[str] = None,
     postal_code: Optional[str] = None,
     custom_field_mapping: Optional[Dict[str, str]] = None,
+    estimated_price: Optional[str] = None,
+    price_breakdown: Optional[str] = None,
+    recurring_price: Optional[str] = None,
 ) -> Optional[str]:
     """
     Update an existing contact in GHL.
@@ -1343,6 +1373,9 @@ def update_contact_in_ghl(
         phone: Optional phone to update (will be normalized, only included if non-empty)
         postal_code: Optional postal code to update (only included if non-empty)
         custom_field_mapping: Optional dict mapping field keys to values for custom fields
+        estimated_price: Optional estimated price value
+        price_breakdown: Optional price breakdown text
+        recurring_price: Optional recurring price value
 
     Returns:
         GHL contact ID if successful, None otherwise
@@ -1361,12 +1394,18 @@ def update_contact_in_ghl(
     if postal_code and postal_code.strip():
         payload["postalCode"] = postal_code.strip()
     
-    # Build custom fields array if mapping provided
-    custom_fields = []
-    if custom_field_mapping:
-        custom_fields = build_custom_fields_array(custom_field_mapping)
-        if custom_fields:
-            payload["customFields"] = custom_fields
+    # Build custom fields from mapping and pricing fields
+    custom_field_values = dict(custom_field_mapping) if custom_field_mapping else {}
+    if estimated_price:
+        custom_field_values["estimated_price"] = estimated_price
+    if price_breakdown:
+        custom_field_values["price_breakdown"] = price_breakdown
+    if recurring_price:
+        custom_field_values["recurring_price"] = recurring_price
+    
+    custom_fields = build_custom_fields_from_env(custom_field_values)
+    if custom_fields:
+        payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
     logger.info(
@@ -2483,6 +2522,8 @@ def process_lead_async(
     street_address: Optional[str],
     photos_data: List[Dict[str, Any]],  # List of {filename, content, content_type}
     estimated_price: Optional[str] = None,  # Frontend-calculated price
+    price_breakdown: Optional[str] = None,  # Price breakdown text
+    recurring_price: Optional[str] = None,  # Recurring price value
 ):
     """
     Background task to process lead submission and sync with GHL.
@@ -2523,9 +2564,6 @@ def process_lead_async(
             custom_field_mapping["approximate_square_footage"] = approximate_square_footage.strip()
         if street_address and street_address.strip():
             custom_field_mapping["street_address"] = street_address.strip()
-        if estimated_price and estimated_price.strip():
-            # Add estimated_price_contact field using key-based mapping
-            custom_field_mapping["estimated_price_contact"] = estimated_price.strip()
         
         # Check if this is a Move-Out / Heavy Clean request
         is_move_out = service_type and "Move-Out" in service_type
@@ -2615,6 +2653,9 @@ def process_lead_async(
                 phone=phone,
                 postal_code=postal_code,
                 custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
+                estimated_price=estimated_price,
+                price_breakdown=price_breakdown,
+                recurring_price=recurring_price,
             )
             t_update_ms = (time.perf_counter() - t_upsert_start) * 1000
             t_create_ms = 0
@@ -2628,6 +2669,9 @@ def process_lead_async(
                 phone=phone,
                 postal_code=postal_code,
                 custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
+                estimated_price=estimated_price,
+                price_breakdown=price_breakdown,
+                recurring_price=recurring_price,
             )
             t_create_ms = (time.perf_counter() - t_upsert_start) * 1000
             t_update_ms = 0
