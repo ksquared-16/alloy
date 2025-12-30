@@ -2326,23 +2326,65 @@ def process_lead_async(
         total_photo_bytes = 0
         if is_move_out and photos_data:
             total_photo_bytes = sum(len(p.get("content", b"")) for p in photos_data)
-            logger.info("process_lead_async: uploading %d photo(s) to GHL Media API, total_bytes=%d", 
-                       len(photos_data), total_photo_bytes)
-            for photo_data in photos_data:
+            logger.info(
+                "process_lead_async: uploading %d photo(s) to GHL Media API, total_bytes=%d",
+                len(photos_data),
+                total_photo_bytes
+            )
+            # Log each photo's details before upload
+            for idx, photo_data in enumerate(photos_data):
+                filename = photo_data.get("filename", f"photo_{idx}")
+                photo_size = len(photo_data.get("content", b""))
+                logger.info(
+                    "process_lead_async: photo[%d] filename=%s size_bytes=%d content_type=%s",
+                    idx,
+                    filename,
+                    photo_size,
+                    photo_data.get("content_type", "image/jpeg")
+                )
+            
+            for idx, photo_data in enumerate(photos_data):
+                filename = photo_data.get("filename", f"photo_{idx}")
                 try:
                     file_url = upload_photo_to_ghl(
                         photo_data["content"],
-                        photo_data["filename"],
+                        filename,
                         photo_data.get("content_type", "image/jpeg")
                     )
                     if file_url:
                         photo_urls.append(file_url)
+                        # Log success with masked URL (first 50 chars)
+                        logger.info(
+                            "process_lead_async: photo[%d] uploaded successfully filename=%s fileUrl=%s",
+                            idx,
+                            filename,
+                            file_url[:50] + "..." if len(file_url) > 50 else file_url
+                        )
+                    else:
+                        logger.warning("process_lead_async: photo[%d] upload returned no fileUrl filename=%s", idx, filename)
                 except Exception as e:
-                    logger.error("process_lead_async: exception uploading photo %s: %s", photo_data.get("filename"), e)
+                    logger.error(
+                        "process_lead_async: exception uploading photo[%d] filename=%s error=%s",
+                        idx,
+                        filename,
+                        e,
+                        exc_info=True
+                    )
             
             # Store photo URLs in custom field
             if photo_urls:
                 custom_field_mapping["estimate_photos"] = "\n".join(photo_urls)
+                logger.info(
+                    "lead_photos_uploaded contact_id=%s count=%d urls_saved=true",
+                    contact_id or "pending",
+                    len(photo_urls)
+                )
+            else:
+                logger.warning(
+                    "lead_photos_uploaded contact_id=%s count=%d urls_saved=false (no successful uploads)",
+                    contact_id or "pending",
+                    len(photos_data)
+                )
         t_photos_ms = (time.perf_counter() - t_photos_start) * 1000
         
         # Search for existing contact
@@ -2536,19 +2578,45 @@ async def submit_cleaning_lead(
                 status_code=400,
             )
         
-        logger.info("leads_cleaning: validated %d photos, total_bytes=%d", len(photos), total_bytes)
+        logger.info(
+            "leads_cleaning: validated %d photos, total_bytes=%d for Move-Out request",
+            len(photos),
+            total_bytes
+        )
+        # Log each photo's filename and size
+        for idx, photo_file in enumerate(photos):
+            try:
+                await photo_file.seek(0)  # Reset if needed
+                file_content = await photo_file.read()
+                file_size = len(file_content)
+                logger.info(
+                    "leads_cleaning: photo[%d] filename=%s size_bytes=%d content_type=%s",
+                    idx,
+                    photo_file.filename or f"photo_{idx}.jpg",
+                    file_size,
+                    photo_file.content_type or "image/jpeg"
+                )
+                await photo_file.seek(0)  # Reset for background task
+            except Exception as e:
+                logger.warning("leads_cleaning: failed to read photo[%d] %s: %s", idx, photo_file.filename, e)
     
     # Read photos into memory (needed for background task)
     photos_data = []
     if photos:
-        for photo_file in photos:
+        for idx, photo_file in enumerate(photos):
             try:
                 file_content = await photo_file.read()
                 photos_data.append({
-                    "filename": photo_file.filename or "photo.jpg",
+                    "filename": photo_file.filename or f"photo_{idx}.jpg",
                     "content": file_content,
                     "content_type": photo_file.content_type or "image/jpeg",
                 })
+                logger.info(
+                    "leads_cleaning: loaded photo[%d] into memory filename=%s size_bytes=%d",
+                    idx,
+                    photos_data[-1]["filename"],
+                    len(file_content)
+                )
             except Exception as e:
                 logger.warning("leads_cleaning: failed to read photo %s: %s", photo_file.filename, e)
     

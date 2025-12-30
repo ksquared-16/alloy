@@ -22,8 +22,8 @@ export async function compressImage(
     const {
         maxWidth = 1280,
         maxHeight = 1280,
-        quality = 0.7,
-        maxSizeBytes = 2 * 1024 * 1024, // 2MB target
+        quality = 0.6, // Lower quality for better compression
+        maxSizeBytes = 3 * 1024 * 1024, // 3MB target (after compression)
     } = options;
 
     return new Promise((resolve, reject) => {
@@ -61,24 +61,38 @@ export async function compressImage(
                             return;
                         }
 
-                        // If still too large, reduce quality further
+                        // If still too large, reduce quality further (adaptive compression)
                         if (blob.size > maxSizeBytes) {
-                            canvas.toBlob(
-                                (smallerBlob) => {
-                                    if (!smallerBlob) {
-                                        reject(new Error("Failed to compress image further"));
-                                        return;
-                                    }
-                                    const compressedFile = new File(
-                                        [smallerBlob],
-                                        file.name.replace(/\.[^/.]+$/, ".jpg"),
-                                        { type: "image/jpeg" }
-                                    );
-                                    resolve(compressedFile);
-                                },
-                                "image/jpeg",
-                                quality * 0.5 // Reduce quality further
-                            );
+                            // Try progressively lower quality until we're under the limit
+                            let currentQuality = quality * 0.5;
+                            let attempts = 0;
+                            const maxAttempts = 3;
+                            
+                            const tryCompress = (q: number) => {
+                                canvas.toBlob(
+                                    (smallerBlob) => {
+                                        if (!smallerBlob) {
+                                            reject(new Error("Failed to compress image further"));
+                                            return;
+                                        }
+                                        // If still too large and we have attempts left, try again with lower quality
+                                        if (smallerBlob.size > maxSizeBytes && attempts < maxAttempts) {
+                                            attempts++;
+                                            tryCompress(q * 0.7);
+                                        } else {
+                                            const compressedFile = new File(
+                                                [smallerBlob],
+                                                file.name.replace(/\.[^/.]+$/, ".jpg"),
+                                                { type: "image/jpeg" }
+                                            );
+                                            resolve(compressedFile);
+                                        }
+                                    },
+                                    "image/jpeg",
+                                    q
+                                );
+                            };
+                            tryCompress(currentQuality);
                         } else {
                             const compressedFile = new File(
                                 [blob],

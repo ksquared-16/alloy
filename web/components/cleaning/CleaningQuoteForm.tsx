@@ -98,18 +98,18 @@ function validate(form: FormState): ValidationErrors {
         } else if (form.photos.length > 4) {
             errors.photos = "Please upload no more than 4 photos.";
         }
-        // Validate individual photo sizes (5MB limit)
-        const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5MB
+        // Validate individual photo sizes (3MB limit after compression)
+        const MAX_PHOTO_SIZE_AFTER = 3 * 1024 * 1024; // 3MB after compression
         for (const photo of form.photos) {
-            if (!validateImageSize(photo, MAX_PHOTO_SIZE)) {
-                errors.photos = `Photo "${photo.name}" is too large. Please upload photos under 5MB each.`;
+            if (!validateImageSize(photo, MAX_PHOTO_SIZE_AFTER)) {
+                errors.photos = `Photo "${photo.name}" is too large (${(photo.size / 1024 / 1024).toFixed(1)}MB). Please try a different image.`;
                 break;
             }
         }
     }
 
-    // Add-ons frequency only required if add-ons are selected
-    if (form.addOns.length > 0 && !form.addOnFrequency) {
+    // Add-ons frequency only required if add-ons are selected (and not Move-Out)
+    if (!isMoveOut && form.addOns.length > 0 && !form.addOnFrequency) {
         errors.addOnFrequency = "Please select how often you want add-ons.";
     }
 
@@ -161,8 +161,11 @@ export default function CleaningQuoteForm({
         setForm((prev) => {
             const updated = { ...prev, [field]: value };
             // If service type changes to Move-Out, clear frequency (it's auto-set to One-time)
+            // Also clear add-ons and add-on frequency (not used for Move-Out)
             if (field === "serviceType" && value === "Move-Out / Heavy Clean") {
                 updated.cleaningFrequency = "";
+                updated.addOns = [];
+                updated.addOnFrequency = "";
             }
             // If service type changes to Standard, clear Move-Out specific fields
             if (field === "serviceType" && value === "Standard Cleaning") {
@@ -200,20 +203,38 @@ export default function CleaningQuoteForm({
         }
 
         // Validate and compress photos
-        const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5MB
+        const MAX_PHOTO_SIZE_BEFORE = 5 * 1024 * 1024; // 5MB before compression
+        const MAX_PHOTO_SIZE_AFTER = 3 * 1024 * 1024; // 3MB after compression
         const compressedFiles: File[] = [];
 
         for (const file of selectedFiles) {
-            if (!validateImageSize(file, MAX_PHOTO_SIZE)) {
+            // Check original size
+            if (!validateImageSize(file, MAX_PHOTO_SIZE_BEFORE)) {
                 setErrors((prev) => ({
                     ...prev,
-                    photos: `Photo "${file.name}" is too large. Please upload photos under 5MB each.`
+                    photos: `Photo "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Please upload photos under 5MB each.`
                 }));
                 return;
             }
 
             try {
-                const compressed = await compressImage(file);
+                // Show compression feedback (optional - could add a loading state here)
+                const compressed = await compressImage(file, {
+                    maxWidth: 1280,
+                    maxHeight: 1280,
+                    quality: 0.6,
+                    maxSizeBytes: MAX_PHOTO_SIZE_AFTER,
+                });
+                
+                // Validate compressed size
+                if (compressed.size > MAX_PHOTO_SIZE_AFTER) {
+                    setErrors((prev) => ({
+                        ...prev,
+                        photos: `Photo "${file.name}" is still too large after compression (${(compressed.size / 1024 / 1024).toFixed(1)}MB). Please try a different image.`
+                    }));
+                    return;
+                }
+                
                 compressedFiles.push(compressed);
             } catch (error) {
                 console.error("Failed to compress image:", error);
@@ -257,6 +278,7 @@ export default function CleaningQuoteForm({
 
             // Type assertion needed since form allows empty strings but CleaningQuoteInput doesn't
             // Validation ensures these are not empty before submission
+            // For Move-Out, clear add-ons and add-on frequency (not used)
             const cleanInput: CleaningQuoteInput = {
                 firstName: form.firstName,
                 lastName: form.lastName,
@@ -268,8 +290,8 @@ export default function CleaningQuoteForm({
                 squareFootage: form.squareFootage as SquareFootageOption,
                 cleaningFrequency: cleaningFrequency,
                 preferredServiceDate: form.preferredServiceDate?.trim() || undefined,
-                addOns: form.addOns,
-                addOnFrequency: form.addOnFrequency || undefined,
+                addOns: isMoveOut ? [] : form.addOns,
+                addOnFrequency: isMoveOut ? undefined : (form.addOnFrequency || undefined),
             };
 
             // For Standard Cleaning: Calculate quote immediately and show it
@@ -311,10 +333,11 @@ export default function CleaningQuoteForm({
             if (cleanInput.preferredServiceDate) {
                 formData.append("preferred_service_date", cleanInput.preferredServiceDate);
             }
-            if (cleanInput.addOns.length > 0) {
+            // Only send add-ons for Standard Cleaning (not Move-Out)
+            if (!isMoveOut && cleanInput.addOns.length > 0) {
                 formData.append("extras_add_ons", JSON.stringify(cleanInput.addOns));
             }
-            if (cleanInput.addOnFrequency) {
+            if (!isMoveOut && cleanInput.addOnFrequency) {
                 formData.append("addons__frequency", cleanInput.addOnFrequency);
             }
             if (form.streetAddress.trim()) {
@@ -643,61 +666,65 @@ export default function CleaningQuoteForm({
                     </>
                 )}
 
-                {/* Add-ons */}
-                <div>
-                    <label className={labelClass}>
-                        Add-ons
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {(["Fridge", "Oven", "Cabinets", "Windows & Blinds", "Pet Hair", "Baseboards"] as AddOnId[]).map(
-                            (id) => {
-                                const checked = form.addOns.includes(id);
-                                return (
-                                    <label
-                                        key={id}
-                                        className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${checked
-                                            ? "border-alloy-juniper bg-alloy-stone/20"
-                                            : "border-alloy-stone/50 hover:border-alloy-juniper/60"
-                                            }`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={() => toggleAddOn(id)}
-                                            className={checkboxClass}
-                                        />
-                                        <span className={isDark ? "text-white" : "text-alloy-midnight"}>{id}</span>
-                                    </label>
-                                );
-                            },
-                        )}
-                    </div>
-                </div>
+                {/* Add-ons - only for Standard Cleaning */}
+                {!isMoveOut && (
+                    <>
+                        <div>
+                            <label className={labelClass}>
+                                Add-ons
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {(["Fridge", "Oven", "Cabinets", "Windows & Blinds", "Pet Hair", "Baseboards"] as AddOnId[]).map(
+                                    (id) => {
+                                        const checked = form.addOns.includes(id);
+                                        return (
+                                            <label
+                                                key={id}
+                                                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${checked
+                                                    ? "border-alloy-juniper bg-alloy-stone/20"
+                                                    : "border-alloy-stone/50 hover:border-alloy-juniper/60"
+                                                    }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => toggleAddOn(id)}
+                                                    className={checkboxClass}
+                                                />
+                                                <span className={isDark ? "text-white" : "text-alloy-midnight"}>{id}</span>
+                                            </label>
+                                        );
+                                    },
+                                )}
+                            </div>
+                        </div>
 
-                {/* Add-on Frequency – only when add-ons selected */}
-                {form.addOns.length > 0 && (
-                    <div>
-                        <label className={labelClass}>
-                            Add-ons Frequency<span className="text-alloy-ember ml-0.5">*</span>
-                        </label>
-                        <select
-                            value={form.addOnFrequency}
-                            onChange={(e) =>
-                                handleChange("addOnFrequency", e.target.value as AddOnFrequencyOption | "")
-                            }
-                            className={selectClass}
-                        >
-                            <option value="">Select an option</option>
-                            <option value="First cleaning only">First cleaning only</option>
-                            <option value="Every cleaning">Every cleaning</option>
-                            <option value="Not sure yet - let’s decide later">
-                                Not sure yet - let’s decide later
-                            </option>
-                        </select>
-                        {errors.addOnFrequency && (
-                            <p className="mt-1 text-xs text-alloy-ember">{errors.addOnFrequency}</p>
+                        {/* Add-on Frequency – only when add-ons selected */}
+                        {form.addOns.length > 0 && (
+                            <div>
+                                <label className={labelClass}>
+                                    Add-ons Frequency<span className="text-alloy-ember ml-0.5">*</span>
+                                </label>
+                                <select
+                                    value={form.addOnFrequency}
+                                    onChange={(e) =>
+                                        handleChange("addOnFrequency", e.target.value as AddOnFrequencyOption | "")
+                                    }
+                                    className={selectClass}
+                                >
+                                    <option value="">Select an option</option>
+                                    <option value="First cleaning only">First cleaning only</option>
+                                    <option value="Every cleaning">Every cleaning</option>
+                                    <option value="Not sure yet - let's decide later">
+                                        Not sure yet - let's decide later
+                                    </option>
+                                </select>
+                                {errors.addOnFrequency && (
+                                    <p className="mt-1 text-xs text-alloy-ember">{errors.addOnFrequency}</p>
+                                )}
+                            </div>
                         )}
-                    </div>
+                    </>
                 )}
 
                 {/* Consent */}
