@@ -14,7 +14,7 @@ export type SquareFootageOption =
     | "2,001-2,600 sq ft"
     | "2,601-3,200 sq ft"
     | "3,201-4,000 sq ft"
-    | "4,0001-5,500 sq ft"
+    | "4,001-5,500 sq ft"
     | "Over 5,500 sq ft";
 
 export type AddOnId =
@@ -73,7 +73,7 @@ const BASE_FIRST_CLEAN_BY_SQFT: Record<SquareFootageOption, number> = {
     "2,001-2,600 sq ft": 240,
     "2,601-3,200 sq ft": 280,
     "3,201-4,000 sq ft": 320,
-    "4,0001-5,500 sq ft": 380,
+    "4,001-5,500 sq ft": 380,
     "Over 5,500 sq ft": 450,
 };
 
@@ -110,7 +110,7 @@ const RECURRING_PRICES: Record<
         "2,001-2,600 sq ft": null,
         "2,601-3,200 sq ft": null,
         "3,201-4,000 sq ft": null,
-        "4,0001-5,500 sq ft": null,
+        "4,001-5,500 sq ft": null,
         "Over 5,500 sq ft": null,
     },
     "Weekly (40% Off)": {
@@ -119,7 +119,7 @@ const RECURRING_PRICES: Record<
         "2,001-2,600 sq ft": 145,
         "2,601-3,200 sq ft": 160,
         "3,201-4,000 sq ft": 170,
-        "4,0001-5,500 sq ft": 185,
+        "4,001-5,500 sq ft": 185,
         "Over 5,500 sq ft": 210,
     },
     "Bi-Weekly (30% Off)": {
@@ -128,7 +128,7 @@ const RECURRING_PRICES: Record<
         "2,001-2,600 sq ft": 170,
         "2,601-3,200 sq ft": 185,
         "3,201-4,000 sq ft": 200,
-        "4,0001-5,500 sq ft": 215,
+        "4,001-5,500 sq ft": 215,
         "Over 5,500 sq ft": 245,
     },
     "Monthly (20% Off)": {
@@ -137,7 +137,7 @@ const RECURRING_PRICES: Record<
         "2,001-2,600 sq ft": 190,
         "2,601-3,200 sq ft": 210,
         "3,201-4,000 sq ft": 225,
-        "4,0001-5,500 sq ft": 245,
+        "4,001-5,500 sq ft": 245,
         "Over 5,500 sq ft": 280,
     },
 };

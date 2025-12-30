@@ -73,7 +73,8 @@ CUSTOM_FIELD_IDS = {
     "service_type": os.getenv("GHL_CF_SERVICE_TYPE", "").strip(),
     "home_type": os.getenv("GHL_CF_HOME_TYPE", "").strip(),
     "cleaning_frequency": os.getenv("GHL_CF_CLEANING_FREQUENCY", "").strip(),
-    "approximate_square_footage": os.getenv("GHL_CF_APPROXIMATE_SQUARE_FOOTAGE", "").strip(),
+    "approximate_square_footage": os.getenv("GHL_CF_APPROXIMATE_SQUARE_FOOTAGE", "").strip() or os.getenv("GHL_CF_SQUARE_FOOTAGE", "").strip(),  # Support both names
+    "square_footage": os.getenv("GHL_CF_SQUARE_FOOTAGE", "").strip() or os.getenv("GHL_CF_APPROXIMATE_SQUARE_FOOTAGE", "").strip(),  # Alias for square_footage key
     "bedrooms": os.getenv("GHL_CF_BEDROOMS", "").strip(),
     "bathrooms": os.getenv("GHL_CF_BATHROOMS", "").strip(),
     "street_address": os.getenv("GHL_CF_STREET_ADDRESS", "").strip(),
@@ -83,6 +84,12 @@ CUSTOM_FIELD_IDS = {
     "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
     "estimate_photos": os.getenv("GHL_CF_QUOTE_ESTIMATE_PHOTOS", "").strip(),
     "preferred_service_date": os.getenv("GHL_CF_PREFERRED_SERVICE_DATE", "").strip(),
+}
+
+# Required custom field env vars for /leads/cleaning
+REQUIRED_CUSTOM_FIELD_ENV_VARS = {
+    "cleaning_frequency": "GHL_CF_CLEANING_FREQUENCY",
+    "square_footage": "GHL_CF_SQUARE_FOOTAGE",  # Also accepts GHL_CF_APPROXIMATE_SQUARE_FOOTAGE
 }
 
 # Log missing custom field IDs at startup
@@ -371,7 +378,7 @@ def calculate_pricing_from_form(
         "2,001-2,600 sq ft": 240,
         "2,601-3,200 sq ft": 280,
         "3,201-4,000 sq ft": 320,
-        "4,0001-5,500 sq ft": 380,
+        "4,001-5,500 sq ft": 380,
         "Over 5,500 sq ft": 450,
     }
     
@@ -383,7 +390,7 @@ def calculate_pricing_from_form(
             "2,001-2,600 sq ft": 145,
             "2,601-3,200 sq ft": 160,
             "3,201-4,000 sq ft": 170,
-            "4,0001-5,500 sq ft": 185,
+            "4,001-5,500 sq ft": 185,
             "Over 5,500 sq ft": 210,
         },
         "Bi-Weekly (30% Off)": {
@@ -392,7 +399,7 @@ def calculate_pricing_from_form(
             "2,001-2,600 sq ft": 170,
             "2,601-3,200 sq ft": 185,
             "3,201-4,000 sq ft": 200,
-            "4,0001-5,500 sq ft": 215,
+            "4,001-5,500 sq ft": 215,
             "Over 5,500 sq ft": 245,
         },
         "Monthly (20% Off)": {
@@ -401,7 +408,7 @@ def calculate_pricing_from_form(
             "2,001-2,600 sq ft": 190,
             "2,601-3,200 sq ft": 210,
             "3,201-4,000 sq ft": 225,
-            "4,0001-5,500 sq ft": 245,
+            "4,001-5,500 sq ft": 245,
             "Over 5,500 sq ft": 280,
         },
     }
@@ -1086,6 +1093,8 @@ def build_custom_fields_from_env(payload_values: Dict[str, Any]) -> List[Dict[st
         Only includes fields where env var ID is configured.
     """
     custom_fields: List[Dict[str, Any]] = []
+    included_field_keys = []
+    skipped_field_keys = []
     
     for field_key, field_value in payload_values.items():
         if field_value is None or field_value == "":
@@ -1095,6 +1104,7 @@ def build_custom_fields_from_env(payload_values: Dict[str, Any]) -> List[Dict[st
         field_id = CUSTOM_FIELD_IDS.get(field_key)
         
         if not field_id:
+            skipped_field_keys.append(field_key)
             logger.warning(
                 "build_custom_fields_from_env: skipping field_key=%s (no env var ID configured)",
                 field_key
@@ -1109,6 +1119,14 @@ def build_custom_fields_from_env(payload_values: Dict[str, Any]) -> List[Dict[st
             "id": field_id,
             "value": str(field_value)
         })
+        included_field_keys.append(field_key)
+    
+    if included_field_keys:
+        logger.info(
+            "build_custom_fields_from_env: customFields_included=%s skipped=%s",
+            included_field_keys,
+            skipped_field_keys if skipped_field_keys else []
+        )
     
     return custom_fields
 
@@ -1187,21 +1205,40 @@ def create_contact_in_ghl(
         payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
+    # Extract CF IDs for key fields
     estimated_price_cf_id = None
+    cleaning_frequency_cf_id = None
+    square_footage_cf_id = None
+    
     for cf in custom_fields:
-        if "estimated_price" in str(cf.get("id", "")).lower() or custom_field_values.get("estimated_price"):
-            estimated_price_cf_id = cf.get("id", "unknown")
-            break
+        cf_id = str(cf.get("id", ""))
+        # Match by checking if the field value exists in custom_field_values
+        if custom_field_values.get("estimated_price"):
+            # Find estimated_price CF by checking if we have the value
+            if any("estimated_price" in str(cf.get("id", "")).lower() for _ in [1]):
+                estimated_price_cf_id = cf_id if not estimated_price_cf_id else estimated_price_cf_id
+        if custom_field_values.get("cleaning_frequency"):
+            if any("cleaning_frequency" in str(cf.get("id", "")).lower() for _ in [1]):
+                cleaning_frequency_cf_id = cf_id if not cleaning_frequency_cf_id else cleaning_frequency_cf_id
+        if custom_field_values.get("square_footage") or custom_field_values.get("approximate_square_footage"):
+            if any("square" in str(cf.get("id", "")).lower() or "sqft" in str(cf.get("id", "")).lower() for _ in [1]):
+                square_footage_cf_id = cf_id if not square_footage_cf_id else square_footage_cf_id
+    
+    # Build list of included field keys for logging
+    included_keys = list(custom_field_values.keys())
     
     logger.info(
-        "contact_upsert_payload: core={firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d estimated_price_cf_id=%s",
+        "contact_upsert_payload: core={firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d estimated_price_cf_id=%s cleaning_frequency_cf_id=%s square_footage_cf_id=%s customFields_included=%s",
         first_name[:10] + "..." if len(first_name) > 10 else first_name,
         last_name[:10] + "..." if len(last_name) > 10 else last_name,
         email[:20] + "..." if len(email) > 20 else email,
         phone[:4] + "***" if len(phone) > 4 else phone,
         postal_code or "None",
         len(custom_fields),
-        estimated_price_cf_id[:8] + "..." if estimated_price_cf_id and len(str(estimated_price_cf_id)) > 8 else (estimated_price_cf_id or "None")
+        estimated_price_cf_id[:8] + "..." if estimated_price_cf_id and len(str(estimated_price_cf_id)) > 8 else (estimated_price_cf_id or "None"),
+        cleaning_frequency_cf_id[:8] + "..." if cleaning_frequency_cf_id and len(str(cleaning_frequency_cf_id)) > 8 else (cleaning_frequency_cf_id or "None"),
+        square_footage_cf_id[:8] + "..." if square_footage_cf_id and len(str(square_footage_cf_id)) > 8 else (square_footage_cf_id or "None"),
+        included_keys
     )
 
     try:
@@ -1564,14 +1601,34 @@ def update_contact_in_ghl(
         payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
+    # Extract CF IDs for key fields by matching field keys to custom field IDs
     estimated_price_cf_id = None
+    cleaning_frequency_cf_id = None
+    square_footage_cf_id = None
+    
+    # Map field keys to their CF IDs
+    field_key_to_cf_id = {}
+    for field_key, field_value in custom_field_values.items():
+        cf_id = CUSTOM_FIELD_IDS.get(field_key)
+        if cf_id:
+            field_key_to_cf_id[field_key] = cf_id
+    
+    # Find CF IDs in the custom_fields array
     for cf in custom_fields:
-        if "estimated_price" in str(cf.get("id", "")).lower() or custom_field_values.get("estimated_price"):
-            estimated_price_cf_id = cf.get("id", "unknown")
-            break
+        cf_id = str(cf.get("id", ""))
+        # Match by comparing CF ID to our known IDs
+        if field_key_to_cf_id.get("estimated_price") == cf_id:
+            estimated_price_cf_id = cf_id
+        if field_key_to_cf_id.get("cleaning_frequency") == cf_id:
+            cleaning_frequency_cf_id = cf_id
+        if field_key_to_cf_id.get("square_footage") == cf_id or field_key_to_cf_id.get("approximate_square_footage") == cf_id:
+            square_footage_cf_id = cf_id
+    
+    # Build list of included field keys for logging
+    included_keys = list(custom_field_values.keys())
     
     logger.info(
-        "contact_upsert_payload: core={contact_id=%s, firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d estimated_price_cf_id=%s",
+        "contact_upsert_payload: core={contact_id=%s, firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d estimated_price_cf_id=%s cleaning_frequency_cf_id=%s square_footage_cf_id=%s customFields_included=%s",
         contact_id[:8] + "..." if len(contact_id) > 8 else contact_id,
         first_name[:10] + "..." if first_name and len(first_name) > 10 else (first_name or "None"),
         last_name[:10] + "..." if last_name and len(last_name) > 10 else (last_name or "None"),
@@ -1579,7 +1636,10 @@ def update_contact_in_ghl(
         phone[:4] + "***" if phone and len(phone) > 4 else (phone or "None"),
         postal_code or "None",
         len(custom_fields),
-        estimated_price_cf_id[:8] + "..." if estimated_price_cf_id and len(str(estimated_price_cf_id)) > 8 else (estimated_price_cf_id or "None")
+        estimated_price_cf_id[:8] + "..." if estimated_price_cf_id and len(str(estimated_price_cf_id)) > 8 else (estimated_price_cf_id or "None"),
+        cleaning_frequency_cf_id[:8] + "..." if cleaning_frequency_cf_id and len(str(cleaning_frequency_cf_id)) > 8 else (cleaning_frequency_cf_id or "None"),
+        square_footage_cf_id[:8] + "..." if square_footage_cf_id and len(str(square_footage_cf_id)) > 8 else (square_footage_cf_id or "None"),
+        included_keys
     )
     
     # Remove any disallowed fields (e.g., locationId)
@@ -2723,7 +2783,9 @@ def process_lead_async(
         if addons__frequency and addons__frequency.strip():
             custom_field_mapping["addons__frequency"] = addons__frequency.strip()
         if approximate_square_footage and approximate_square_footage.strip():
+            # Support both keys: approximate_square_footage and square_footage
             custom_field_mapping["approximate_square_footage"] = approximate_square_footage.strip()
+            custom_field_mapping["square_footage"] = approximate_square_footage.strip()
         if street_address and street_address.strip():
             custom_field_mapping["street_address"] = street_address.strip()
         
@@ -3037,6 +3099,20 @@ async def submit_cleaning_lead(
                 )
             except Exception as e:
                 logger.warning("leads_cleaning: failed to read photo %s: %s", photo_file.filename, e)
+    
+    # Validate required custom field env vars
+    missing_required_env_vars = []
+    if not CUSTOM_FIELD_IDS.get("cleaning_frequency"):
+        missing_required_env_vars.append("GHL_CF_CLEANING_FREQUENCY")
+    if not CUSTOM_FIELD_IDS.get("square_footage") and not CUSTOM_FIELD_IDS.get("approximate_square_footage"):
+        missing_required_env_vars.append("GHL_CF_SQUARE_FOOTAGE or GHL_CF_APPROXIMATE_SQUARE_FOOTAGE")
+    
+    if missing_required_env_vars:
+        logger.error(
+            "submit_cleaning_lead: MISSING REQUIRED custom field env vars: %s. "
+            "Contact will be created but cleaning_frequency and/or square_footage will NOT be populated in GHL.",
+            ", ".join(missing_required_env_vars)
+        )
     
     # Calculate pricing from form data
     pricing = calculate_pricing_from_form(

@@ -225,7 +225,7 @@ export default function CleaningQuoteForm({
                     quality: 0.6,
                     maxSizeBytes: MAX_PHOTO_SIZE_AFTER,
                 });
-                
+
                 // Validate compressed size
                 if (compressed.size > MAX_PHOTO_SIZE_AFTER) {
                     setErrors((prev) => ({
@@ -234,7 +234,7 @@ export default function CleaningQuoteForm({
                     }));
                     return;
                 }
-                
+
                 compressedFiles.push(compressed);
             } catch (error) {
                 console.error("Failed to compress image:", error);
@@ -547,7 +547,7 @@ export default function CleaningQuoteForm({
                             <option value="2,001-2,600 sq ft">2,001-2,600 sq ft</option>
                             <option value="2,601-3,200 sq ft">2,601-3,200 sq ft</option>
                             <option value="3,201-4,000 sq ft">3,201-4,000 sq ft</option>
-                            <option value="4,0001-5,500 sq ft">4,0001-5,500 sq ft</option>
+                            <option value="4,001-5,500 sq ft">4,0001-5,500 sq ft</option>
                             <option value="Over 5,500 sq ft">Over 5,500 sq ft</option>
                         </select>
                         {errors.squareFootage && (
