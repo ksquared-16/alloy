@@ -343,6 +343,156 @@ def parse_simplified_price_breakdown(text: str) -> Dict[str, Any]:
     return result
 
 
+def calculate_pricing_from_form(
+    service_type: str,
+    approximate_square_footage: str,
+    cleaning_frequency: str,
+    extras_add_ons: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Calculate pricing from form data.
+    
+    Args:
+        service_type: Service type (e.g., "Standard Cleaning", "Move-Out / Heavy Clean")
+        approximate_square_footage: Square footage option (e.g., "1501–2,000 sq ft")
+        cleaning_frequency: Frequency option (e.g., "Weekly (40% Off)", "One-time")
+        extras_add_ons: Optional comma-separated or JSON string of add-ons
+    
+    Returns:
+        Dict with:
+        - estimated_price: float (first clean price + add-ons)
+        - price_breakdown: str (formatted breakdown text)
+        - recurring_price: float | None (only for Standard Cleaning with Weekly/Bi-Weekly/Monthly)
+    """
+    # Base first clean prices by square footage
+    BASE_FIRST_CLEAN_BY_SQFT = {
+        "Under 1500 sq ft": 180,
+        "1501–2,000 sq ft": 210,
+        "2,001-2,600 sq ft": 240,
+        "2,601-3,200 sq ft": 280,
+        "3,201-4,000 sq ft": 320,
+        "4,0001-5,500 sq ft": 380,
+        "Over 5,500 sq ft": 450,
+    }
+    
+    # Recurring prices by frequency and square footage
+    RECURRING_PRICES = {
+        "Weekly (40% Off)": {
+            "Under 1500 sq ft": 120,
+            "1501–2,000 sq ft": 130,
+            "2,001-2,600 sq ft": 145,
+            "2,601-3,200 sq ft": 160,
+            "3,201-4,000 sq ft": 170,
+            "4,0001-5,500 sq ft": 185,
+            "Over 5,500 sq ft": 210,
+        },
+        "Bi-Weekly (30% Off)": {
+            "Under 1500 sq ft": 140,
+            "1501–2,000 sq ft": 150,
+            "2,001-2,600 sq ft": 170,
+            "2,601-3,200 sq ft": 185,
+            "3,201-4,000 sq ft": 200,
+            "4,0001-5,500 sq ft": 215,
+            "Over 5,500 sq ft": 245,
+        },
+        "Monthly (20% Off)": {
+            "Under 1500 sq ft": 160,
+            "1501–2,000 sq ft": 170,
+            "2,001-2,600 sq ft": 190,
+            "2,601-3,200 sq ft": 210,
+            "3,201-4,000 sq ft": 225,
+            "4,0001-5,500 sq ft": 245,
+            "Over 5,500 sq ft": 280,
+        },
+    }
+    
+    # Add-on prices
+    ADDON_PRICES = {
+        "Fridge": 40,
+        "Oven": 40,
+        "Cabinets": 35,
+        "Windows & Blinds": 60,
+        "Pet Hair": 30,
+        "Baseboards": 30,
+    }
+    
+    # Frequency config
+    FREQUENCY_CONFIG = {
+        "Weekly (40% Off)": {"label": "Weekly", "discount": "40% off"},
+        "Bi-Weekly (30% Off)": {"label": "Bi-Weekly", "discount": "30% off"},
+        "Monthly (20% Off)": {"label": "Monthly", "discount": "20% off"},
+        "One-time": {"label": "One-time", "discount": None},
+    }
+    
+    # Get base first clean price
+    base_first_clean = BASE_FIRST_CLEAN_BY_SQFT.get(approximate_square_footage, 0)
+    
+    # Parse add-ons
+    addons_list = []
+    if extras_add_ons:
+        try:
+            import json
+            parsed = json.loads(extras_add_ons)
+            if isinstance(parsed, list):
+                addons_list = [str(a).strip() for a in parsed if a]
+            else:
+                addons_list = [str(extras_add_ons).strip()]
+        except Exception:
+            # Comma-separated string
+            addons_list = [a.strip() for a in extras_add_ons.split(",") if a.strip()]
+    
+    # Calculate add-ons total
+    addons_total = 0
+    addons_with_prices = []
+    for addon_name in addons_list:
+        addon_price = ADDON_PRICES.get(addon_name, 0)
+        if addon_price > 0:
+            addons_total += addon_price
+            addons_with_prices.append(f"{addon_name} (${addon_price:.0f})")
+        else:
+            addons_with_prices.append(addon_name)
+    
+    # Calculate first clean total (estimated price)
+    estimated_price = base_first_clean + addons_total
+    
+    # Calculate recurring price (only for Standard Cleaning with recurring frequency)
+    recurring_price = None
+    frequency_label = None
+    discount_label = None
+    
+    is_standard_cleaning = service_type and "Standard" in service_type
+    if is_standard_cleaning and cleaning_frequency in RECURRING_PRICES:
+        freq_prices = RECURRING_PRICES.get(cleaning_frequency, {})
+        base_recurring = freq_prices.get(approximate_square_footage)
+        if base_recurring is not None:
+            recurring_price = float(base_recurring)
+            freq_config = FREQUENCY_CONFIG.get(cleaning_frequency, {})
+            frequency_label = freq_config.get("label", cleaning_frequency)
+            discount_label = freq_config.get("discount")
+    
+    # Build price breakdown text
+    breakdown_lines = []
+    breakdown_lines.append(f"Sq Ft: {approximate_square_footage}")
+    breakdown_lines.append(f"Service: {service_type}")
+    if frequency_label:
+        breakdown_lines.append(f"Frequency: {frequency_label}")
+    if estimated_price > 0:
+        breakdown_lines.append(f"First cleaning: ${estimated_price:.2f}")
+    if recurring_price is not None:
+        discount_suffix = f" ({discount_label})" if discount_label else ""
+        breakdown_lines.append(f"Recurring ({frequency_label}): ${recurring_price:.2f} / visit{discount_suffix}")
+    if addons_with_prices:
+        breakdown_lines.append(f"Add-ons: {', '.join(addons_with_prices)}")
+    
+    price_breakdown = " | ".join(breakdown_lines)
+    
+    return {
+        "estimated_price": float(estimated_price),
+        "price_breakdown": price_breakdown,
+        "recurring_price": recurring_price,
+    }
+
+
 def build_contact_price_breakdown(contact: Dict[str, Any]) -> Optional[str]:
     """
     Build a pricing breakdown text block from contact.customFields.
@@ -1037,15 +1187,21 @@ def create_contact_in_ghl(
         payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
+    estimated_price_cf_id = None
+    for cf in custom_fields:
+        if "estimated_price" in str(cf.get("id", "")).lower() or custom_field_values.get("estimated_price"):
+            estimated_price_cf_id = cf.get("id", "unknown")
+            break
+    
     logger.info(
-        "contact_upsert_payload: core={firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d keys=%s",
+        "contact_upsert_payload: core={firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d estimated_price_cf_id=%s",
         first_name[:10] + "..." if len(first_name) > 10 else first_name,
         last_name[:10] + "..." if len(last_name) > 10 else last_name,
         email[:20] + "..." if len(email) > 20 else email,
         phone[:4] + "***" if len(phone) > 4 else phone,
         postal_code or "None",
         len(custom_fields),
-        [cf.get("id", "unknown")[:8] + "..." if len(str(cf.get("id", ""))) > 8 else cf.get("id", "unknown") for cf in custom_fields]
+        estimated_price_cf_id[:8] + "..." if estimated_price_cf_id and len(str(estimated_price_cf_id)) > 8 else (estimated_price_cf_id or "None")
     )
 
     try:
@@ -1408,8 +1564,14 @@ def update_contact_in_ghl(
         payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
+    estimated_price_cf_id = None
+    for cf in custom_fields:
+        if "estimated_price" in str(cf.get("id", "")).lower() or custom_field_values.get("estimated_price"):
+            estimated_price_cf_id = cf.get("id", "unknown")
+            break
+    
     logger.info(
-        "contact_upsert_payload: core={contact_id=%s, firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d keys=%s",
+        "contact_upsert_payload: core={contact_id=%s, firstName=%s, lastName=%s, email=%s, phone=%s, postalCode=%s} customFields_count=%d estimated_price_cf_id=%s",
         contact_id[:8] + "..." if len(contact_id) > 8 else contact_id,
         first_name[:10] + "..." if first_name and len(first_name) > 10 else (first_name or "None"),
         last_name[:10] + "..." if last_name and len(last_name) > 10 else (last_name or "None"),
@@ -1417,7 +1579,7 @@ def update_contact_in_ghl(
         phone[:4] + "***" if phone and len(phone) > 4 else (phone or "None"),
         postal_code or "None",
         len(custom_fields),
-        [cf.get("id", "unknown")[:8] + "..." if len(str(cf.get("id", ""))) > 8 else cf.get("id", "unknown") for cf in custom_fields]
+        estimated_price_cf_id[:8] + "..." if estimated_price_cf_id and len(str(estimated_price_cf_id)) > 8 else (estimated_price_cf_id or "None")
     )
     
     # Remove any disallowed fields (e.g., locationId)
@@ -2876,6 +3038,26 @@ async def submit_cleaning_lead(
             except Exception as e:
                 logger.warning("leads_cleaning: failed to read photo %s: %s", photo_file.filename, e)
     
+    # Calculate pricing from form data
+    pricing = calculate_pricing_from_form(
+        service_type=service_type,
+        approximate_square_footage=approximate_square_footage,
+        cleaning_frequency=cleaning_frequency,
+        extras_add_ons=extras_add_ons,
+    )
+    
+    calculated_estimated_price = pricing["estimated_price"]
+    calculated_price_breakdown = pricing["price_breakdown"]
+    calculated_recurring_price = pricing["recurring_price"]
+    
+    logger.info(
+        "pricing_calculated estimated_price=%.2f recurring_price=%s frequency=%s service_type=%s",
+        calculated_estimated_price,
+        calculated_recurring_price if calculated_recurring_price is not None else "None",
+        cleaning_frequency,
+        service_type
+    )
+    
     # Add background task to process GHL sync
     background_tasks.add_task(
         process_lead_async,
@@ -2893,15 +3075,20 @@ async def submit_cleaning_lead(
         addons__frequency=addons__frequency,
         street_address=street_address,
         photos_data=photos_data,
-        estimated_price=estimated_price,
+        estimated_price=str(calculated_estimated_price),
+        price_breakdown=calculated_price_breakdown,
+        recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
     )
     
-    # Return immediately with success
+    # Return immediately with success, including calculated pricing
     return JSONResponse(
         {
             "ok": True,
             "status": "accepted",
             "phone": phone_normalized,
+            "estimated_price": calculated_estimated_price,
+            "recurring_price": calculated_recurring_price,
+            "price_breakdown": calculated_price_breakdown,
         },
         status_code=202,  # Accepted - processing in background
     )
