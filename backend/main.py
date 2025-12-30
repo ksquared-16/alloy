@@ -105,6 +105,11 @@ _custom_fields_cache_time: float = 0
 _custom_fields_cache_lock = threading.Lock()
 CUSTOM_FIELDS_CACHE_TTL = 6 * 60 * 60  # 6 hours in seconds
 
+# Per-locationId custom field ID cache for estimated_price_contact
+# Key: f"{locationId}:{fieldKey}" -> field_id
+_custom_field_id_cache: Dict[str, str] = {}
+_custom_field_id_cache_lock = threading.Lock()
+
 # Mapping from our internal keys to expected GHL fieldKey/names
 # This allows us to resolve custom fields dynamically without env vars
 INTERNAL_TO_GHL_FIELD_MAPPING = {
@@ -757,6 +762,152 @@ def create_or_update_contact_in_ghl(
         return None
 
 
+def get_custom_field_id(location_id: str, field_key: str) -> Optional[str]:
+    """
+    Resolve a custom field ID by locationId and fieldKey.
+    
+    IMPORTANT: Custom fields in GHL must be sent by ID, not by name/key.
+    This function provides dynamic resolution and caching to support this requirement.
+    
+    Process:
+    1. Checks cache first (keyed by locationId:fieldKey)
+    2. Fetches custom fields from GHL API for the locationId
+    3. Finds the field matching fieldKey (exact match) or name (fallback)
+    4. Caches the result for future use
+    5. Returns the field ID or None if not found
+    
+    Multi-vertical support:
+    This supports future verticals where each vertical uses a different locationId.
+    The cache is per locationId to ensure correct field resolution across verticals.
+    Each locationId may have different custom field IDs for the same fieldKey.
+    
+    Args:
+        location_id: GHL location ID
+        field_key: The fieldKey to match (e.g., "estimated_price_contact")
+    
+    Returns:
+        Custom field ID if found, None otherwise
+    
+    Raises:
+        Exception: If field not found (logs available field keys/names for debugging)
+    """
+    cache_key = f"{location_id}:{field_key}"
+    
+    # Check cache first
+    with _custom_field_id_cache_lock:
+        if cache_key in _custom_field_id_cache:
+            cached_id = _custom_field_id_cache[cache_key]
+            logger.debug(
+                "get_custom_field_id: cache hit locationId=%s fieldKey=%s id=%s",
+                location_id[:8] + "..." if len(location_id) > 8 else location_id,
+                field_key,
+                cached_id[:8] + "..." if len(cached_id) > 8 else cached_id
+            )
+            return cached_id
+    
+    if not location_id:
+        logger.error("get_custom_field_id: location_id is required")
+        return None
+    
+    url = f"{CUSTOM_FIELDS_URL}?locationId={location_id}"
+    headers = _ghl_headers()
+    
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if not resp.ok:
+            logger.error(
+                "get_custom_field_id: failed to fetch custom fields (%s): %s",
+                resp.status_code,
+                resp.text[:200]
+            )
+            return None
+        
+        data = resp.json()
+        # GHL API may return customFields as a list or nested in a response object
+        custom_fields_list = data.get("customFields", [])
+        if not custom_fields_list and isinstance(data, list):
+            custom_fields_list = data
+        elif not custom_fields_list and isinstance(data, dict):
+            # Try other possible keys
+            custom_fields_list = data.get("fields", []) or data.get("data", [])
+        
+        if not isinstance(custom_fields_list, list):
+            logger.warning("get_custom_field_id: unexpected response format, customFields is not a list")
+            return None
+        
+        # Search for matching field
+        matched_field = None
+        available_keys: List[str] = []
+        available_names: List[str] = []
+        
+        for field in custom_fields_list:
+            field_id = field.get("id")
+            if not field_id:
+                continue
+            
+            field_key_candidate = field.get("fieldKey")
+            field_name = field.get("name")
+            
+            # Collect available keys/names for error reporting
+            if field_key_candidate:
+                available_keys.append(field_key_candidate)
+            if field_name:
+                available_names.append(field_name)
+            
+            # Match by fieldKey first (exact match)
+            if field_key_candidate == field_key:
+                matched_field = field
+                break
+            
+            # Fallback: match by name (case-insensitive, normalized)
+            if field_name:
+                normalized_name = field_name.lower().replace(" ", "_").replace("-", "_")
+                normalized_key = field_key.lower().replace(" ", "_").replace("-", "_")
+                if normalized_name == normalized_key:
+                    matched_field = field
+                    break
+        
+        if matched_field:
+            field_id = matched_field.get("id")
+            # Cache the result
+            with _custom_field_id_cache_lock:
+                _custom_field_id_cache[cache_key] = field_id
+            
+            logger.info(
+                "get_custom_field_id: resolved locationId=%s fieldKey=%s id=%s",
+                location_id[:8] + "..." if len(location_id) > 8 else location_id,
+                field_key,
+                field_id[:8] + "..." if len(field_id) > 8 else field_id
+            )
+            return field_id
+        else:
+            # Field not found - log available keys/names for debugging
+            available_keys_sample = available_keys[:20]
+            available_names_sample = available_names[:20]
+            logger.error(
+                "get_custom_field_id: field not found locationId=%s fieldKey=%s. "
+                "Available fieldKeys (first 20): %s. Available names (first 20): %s",
+                location_id[:8] + "..." if len(location_id) > 8 else location_id,
+                field_key,
+                available_keys_sample,
+                available_names_sample
+            )
+            raise ValueError(
+                f"Custom field '{field_key}' not found for locationId {location_id}. "
+                f"Available fieldKeys: {available_keys_sample}"
+            )
+    
+    except Exception as e:
+        logger.error(
+            "get_custom_field_id: exception fetching custom fields locationId=%s fieldKey=%s: %s",
+            location_id[:8] + "..." if len(location_id) > 8 else location_id,
+            field_key,
+            e,
+            exc_info=True
+        )
+        return None
+
+
 def get_custom_fields_map(force_refresh: bool = False) -> Dict[str, str]:
     """
     Fetch custom fields from GHL API and build a mapping of fieldKey/name -> id.
@@ -976,6 +1127,7 @@ def create_contact_in_ghl(
     phone: str,
     postal_code: Optional[str] = None,
     custom_field_mapping: Optional[Dict[str, str]] = None,
+    estimated_price: Optional[float] = None,
 ) -> Optional[str]:
     """
     Create a new contact in GHL.
@@ -987,6 +1139,7 @@ def create_contact_in_ghl(
         phone: Contact phone number (will be normalized to E.164)
         postal_code: Optional postal code
         custom_field_mapping: Optional dict mapping field keys to values for custom fields
+        estimated_price: Optional estimated price to set on contact.estimated_price_contact field
 
     Returns:
         GHL contact ID if successful, None otherwise
@@ -1012,8 +1165,38 @@ def create_contact_in_ghl(
     custom_fields = []
     if custom_field_mapping:
         custom_fields = build_custom_fields_array(custom_field_mapping)
-        if custom_fields:
-            payload["customFields"] = custom_fields
+    
+    # Add estimated_price_contact field if provided
+    # Custom fields must be sent by ID, so we resolve the field ID dynamically
+    if estimated_price is not None:
+        try:
+            estimated_price_field_id = get_custom_field_id(GHL_LOCATION_ID, "estimated_price_contact")
+            if estimated_price_field_id:
+                # Ensure custom_fields list exists
+                if not custom_fields:
+                    custom_fields = []
+                custom_fields.append({
+                    "id": estimated_price_field_id,
+                    "value": str(estimated_price)
+                })
+                logger.info(
+                    "create_contact_in_ghl: added estimated_price_contact field_id=%s value=%.2f",
+                    estimated_price_field_id[:8] + "..." if len(estimated_price_field_id) > 8 else estimated_price_field_id,
+                    estimated_price
+                )
+            else:
+                logger.warning(
+                    "create_contact_in_ghl: failed to resolve estimated_price_contact field ID, skipping"
+                )
+        except Exception as e:
+            logger.error(
+                "create_contact_in_ghl: exception resolving estimated_price_contact: %s",
+                e,
+                exc_info=True
+            )
+    
+    if custom_fields:
+        payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
     logger.info(
@@ -1334,6 +1517,7 @@ def update_contact_in_ghl(
     phone: Optional[str] = None,
     postal_code: Optional[str] = None,
     custom_field_mapping: Optional[Dict[str, str]] = None,
+    estimated_price: Optional[float] = None,
 ) -> Optional[str]:
     """
     Update an existing contact in GHL.
@@ -1349,6 +1533,7 @@ def update_contact_in_ghl(
         phone: Optional phone to update (will be normalized, only included if non-empty)
         postal_code: Optional postal code to update (only included if non-empty)
         custom_field_mapping: Optional dict mapping field keys to values for custom fields
+        estimated_price: Optional estimated price to set on contact.estimated_price_contact field
 
     Returns:
         GHL contact ID if successful, None otherwise
@@ -1371,8 +1556,38 @@ def update_contact_in_ghl(
     custom_fields = []
     if custom_field_mapping:
         custom_fields = build_custom_fields_array(custom_field_mapping)
-        if custom_fields:
-            payload["customFields"] = custom_fields
+    
+    # Add estimated_price_contact field if provided
+    # Custom fields must be sent by ID, so we resolve the field ID dynamically
+    if estimated_price is not None:
+        try:
+            estimated_price_field_id = get_custom_field_id(GHL_LOCATION_ID, "estimated_price_contact")
+            if estimated_price_field_id:
+                # Ensure custom_fields list exists
+                if not custom_fields:
+                    custom_fields = []
+                custom_fields.append({
+                    "id": estimated_price_field_id,
+                    "value": str(estimated_price)
+                })
+                logger.info(
+                    "update_contact_in_ghl: added estimated_price_contact field_id=%s value=%.2f",
+                    estimated_price_field_id[:8] + "..." if len(estimated_price_field_id) > 8 else estimated_price_field_id,
+                    estimated_price
+                )
+            else:
+                logger.warning(
+                    "update_contact_in_ghl: failed to resolve estimated_price_contact field ID, skipping"
+                )
+        except Exception as e:
+            logger.error(
+                "update_contact_in_ghl: exception resolving estimated_price_contact: %s",
+                e,
+                exc_info=True
+            )
+    
+    if custom_fields:
+        payload["customFields"] = custom_fields
     
     # Log payload before sending (excluding sensitive data)
     logger.info(
@@ -2488,6 +2703,7 @@ def process_lead_async(
     addons__frequency: Optional[str],
     street_address: Optional[str],
     photos_data: List[Dict[str, Any]],  # List of {filename, content, content_type}
+    estimated_price: Optional[float] = None,  # Optional estimated price to set on contact
 ):
     """
     Background task to process lead submission and sync with GHL.
@@ -2617,6 +2833,7 @@ def process_lead_async(
                 phone=phone,
                 postal_code=postal_code,
                 custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
+                estimated_price=estimated_price,
             )
             t_update_ms = (time.perf_counter() - t_upsert_start) * 1000
             t_create_ms = 0
@@ -2630,6 +2847,7 @@ def process_lead_async(
                 phone=phone,
                 postal_code=postal_code,
                 custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
+                estimated_price=estimated_price,
             )
             t_create_ms = (time.perf_counter() - t_upsert_start) * 1000
             t_update_ms = 0
@@ -2860,6 +3078,207 @@ async def submit_cleaning_lead(
         },
         status_code=202,  # Accepted - processing in background
     )
+
+
+@app.post("/test/contact_estimated_price")
+async def test_contact_estimated_price(
+    phone: str,
+    estimated_price: float,
+):
+    """
+    Test endpoint to manually set estimated_price_contact on a contact.
+    
+    This endpoint:
+    1. Resolves the custom field ID for estimated_price_contact
+    2. Finds or creates a contact by phone
+    3. Updates the contact with the estimated_price value
+    4. Returns detailed logging of the process
+    
+    Args (query params):
+        phone: Phone number to search for/create contact
+        estimated_price: Estimated price value to set
+    
+    Returns:
+        JSON with:
+        - resolved_field_id: The custom field ID that was resolved
+        - contact_id: The contact ID that was updated/created
+        - customFields: The customFields portion of the payload sent to GHL
+        - ghl_response_status: HTTP status code from GHL
+        - ghl_response_body: Response body snippet from GHL
+    """
+    try:
+        phone_normalized = normalize_phone(phone)
+        if not phone_normalized:
+            return JSONResponse(
+                {"error": "Invalid phone number"},
+                status_code=400
+            )
+        
+        if not GHL_LOCATION_ID:
+            return JSONResponse(
+                {"error": "GHL_LOCATION_ID not configured"},
+                status_code=500
+            )
+        
+        # Resolve custom field ID
+        logger.info(
+            "test_contact_estimated_price: resolving field ID locationId=%s fieldKey=estimated_price_contact",
+            GHL_LOCATION_ID[:8] + "..." if len(GHL_LOCATION_ID) > 8 else GHL_LOCATION_ID
+        )
+        resolved_field_id = get_custom_field_id(GHL_LOCATION_ID, "estimated_price_contact")
+        
+        if not resolved_field_id:
+            return JSONResponse(
+                {
+                    "error": "Failed to resolve estimated_price_contact field ID",
+                    "locationId": GHL_LOCATION_ID[:8] + "..." if len(GHL_LOCATION_ID) > 8 else GHL_LOCATION_ID
+                },
+                status_code=500
+            )
+        
+        # Build customFields payload
+        custom_fields_payload = [{
+            "id": resolved_field_id,
+            "value": str(estimated_price)
+        }]
+        
+        logger.info(
+            "test_contact_estimated_price: resolved field_id=%s value=%.2f customFields=%s",
+            resolved_field_id[:8] + "..." if len(resolved_field_id) > 8 else resolved_field_id,
+            estimated_price,
+            custom_fields_payload
+        )
+        
+        # Search for existing contact
+        existing_contact = search_contact_by_phone(phone_normalized)
+        
+        if existing_contact:
+            contact_id = existing_contact.get("id")
+            logger.info(
+                "test_contact_estimated_price: found existing contact_id=%s, updating",
+                contact_id[:8] + "..." if len(contact_id) > 8 else contact_id
+            )
+            
+            # Update contact
+            payload = {
+                "customFields": custom_fields_payload
+            }
+            
+            try:
+                resp = requests.put(
+                    f"{CONTACTS_URL}{contact_id}",
+                    headers=_ghl_headers(),
+                    json=payload,
+                    timeout=10
+                )
+                
+                ghl_status = resp.status_code
+                ghl_body = resp.text[:500] if resp.text else ""
+                
+                if resp.ok:
+                    logger.info(
+                        "test_contact_estimated_price: updated contact_id=%s status=%d",
+                        contact_id[:8] + "..." if len(contact_id) > 8 else contact_id,
+                        ghl_status
+                    )
+                else:
+                    logger.error(
+                        "test_contact_estimated_price: update failed contact_id=%s status=%d body=%s",
+                        contact_id[:8] + "..." if len(contact_id) > 8 else contact_id,
+                        ghl_status,
+                        ghl_body
+                    )
+                
+                return JSONResponse({
+                    "resolved_field_id": resolved_field_id,
+                    "contact_id": contact_id,
+                    "customFields": custom_fields_payload,
+                    "ghl_response_status": ghl_status,
+                    "ghl_response_body": ghl_body,
+                    "action": "updated"
+                })
+            except Exception as e:
+                logger.error(
+                    "test_contact_estimated_price: exception updating contact: %s",
+                    e,
+                    exc_info=True
+                )
+                return JSONResponse(
+                    {"error": str(e), "traceback": traceback.format_exc()},
+                    status_code=500
+                )
+        else:
+            # Create new contact (minimal fields required)
+            logger.info(
+                "test_contact_estimated_price: no existing contact found, creating new one"
+            )
+            
+            payload = {
+                "locationId": GHL_LOCATION_ID,
+                "firstName": "Test",
+                "lastName": "Contact",
+                "phone": phone_normalized,
+                "email": f"test+{phone_normalized.replace('+', '').replace('-', '')}@example.com",
+                "source": "Test Endpoint",
+                "customFields": custom_fields_payload
+            }
+            
+            try:
+                resp = requests.post(
+                    CONTACTS_URL,
+                    headers=_ghl_headers(),
+                    json=payload,
+                    timeout=10
+                )
+                
+                ghl_status = resp.status_code
+                ghl_body = resp.text[:500] if resp.text else ""
+                
+                if resp.ok:
+                    data = resp.json()
+                    contact_id = data.get("contact", {}).get("id")
+                    logger.info(
+                        "test_contact_estimated_price: created contact_id=%s status=%d",
+                        contact_id[:8] + "..." if len(contact_id) > 8 else contact_id if contact_id else "unknown",
+                        ghl_status
+                    )
+                else:
+                    logger.error(
+                        "test_contact_estimated_price: create failed status=%d body=%s",
+                        ghl_status,
+                        ghl_body
+                    )
+                    contact_id = None
+                
+                return JSONResponse({
+                    "resolved_field_id": resolved_field_id,
+                    "contact_id": contact_id,
+                    "customFields": custom_fields_payload,
+                    "ghl_response_status": ghl_status,
+                    "ghl_response_body": ghl_body,
+                    "action": "created" if contact_id else "failed"
+                })
+            except Exception as e:
+                logger.error(
+                    "test_contact_estimated_price: exception creating contact: %s",
+                    e,
+                    exc_info=True
+                )
+                return JSONResponse(
+                    {"error": str(e), "traceback": traceback.format_exc()},
+                    status_code=500
+                )
+    
+    except Exception as e:
+        logger.error(
+            "test_contact_estimated_price: exception: %s",
+            e,
+            exc_info=True
+        )
+        return JSONResponse(
+            {"error": str(e), "traceback": traceback.format_exc()},
+            status_code=500
+        )
 
 
 @app.post("/leads/pros")
