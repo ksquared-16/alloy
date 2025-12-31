@@ -353,7 +353,7 @@ function BookPageContent() {
                     <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
                         <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                             <GhlEmbed
-                                src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz?redirectUrl=https://www.workwithalloy.com/book?booked=true"
+                                src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz?redirectUrl=https://www.workwithalloy.com/booking-thank-you"
                                 title="Booking Calendar"
                                 height={1200}
                                 className="!min-h-[1200px] md:!min-h-[900px]"
@@ -361,14 +361,6 @@ function BookPageContent() {
                             <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
                                 You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
                             </p>
-                            <div className="mt-4 flex justify-center">
-                                <a
-                                    href="/"
-                                    className="inline-block bg-alloy-blue text-white font-semibold px-6 py-2 rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
-                                >
-                                    Done
-                                </a>
-                            </div>
                         </div>
                     </div>
                 </div>
