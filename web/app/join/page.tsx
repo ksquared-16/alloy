@@ -1,7 +1,7 @@
 import Section from "@/components/Section";
 import GhlEmbed from "@/components/GhlEmbed";
 
-export default function ProsPage() {
+export default function JoinPage() {
   const benefits = [
     "Pick your own jobs and set your schedule",
     "We handle the busywork, so you can focus on what you're best at",
@@ -112,7 +112,7 @@ export default function ProsPage() {
             Fill out the form below. We'll review your application and be in touch soon.
           </p>
           <GhlEmbed
-            src="https://api.leadconnectorhq.com/widget/form/S4ajOQFaanzumo8eyadC"
+            src="https://api.leadconnectorhq.com/widget/form/S4ajOQFaanzumo8eyadC?redirectUrl=https://www.workwithalloy.com/join-thank-you"
             title="Subcontractor Onboarding"
             height={1845}
           />

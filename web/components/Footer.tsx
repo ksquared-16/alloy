@@ -9,7 +9,7 @@ export default function Footer() {
     ],
     company: [
       { href: "/about", label: "About" },
-      { href: "/pros", label: "For Pros" },
+      { href: "/join", label: "Join Our Team" },
     ],
     legal: [
       { href: "/privacy", label: "Privacy" },
