@@ -365,9 +365,25 @@ export default function CleaningQuoteForm({
                         const backendResult = await response.json();
                         console.log("Backend lead submission result:", backendResult);
 
-                        // Only handle errors, success is already handled
+                        // Handle errors
                         if (!response.ok || (backendResult.ok === false)) {
                             console.warn("Backend submission warning:", backendResult.message || "Unknown error");
+                            return;
+                        }
+
+                        // If booking_url is provided, redirect to it
+                        if (backendResult.booking_url) {
+                            console.log("Redirecting to booking URL:", backendResult.booking_url);
+                            window.location.href = backendResult.booking_url;
+                            return;
+                        }
+
+                        // Fallback: Handle Move-Out with success message
+                        if (isMoveOut) {
+                            setShowMoveOutSuccess(true);
+                            setTimeout(() => {
+                                router.push("/");
+                            }, 2000);
                         }
                     }
                 })
@@ -375,18 +391,17 @@ export default function CleaningQuoteForm({
                     if (error.message === "timeout") {
                         // Timeout - backend is slow (cold start), but continue anyway
                         console.log("Backend submission taking longer than expected, continuing...");
+                        // Fallback: Handle Move-Out with success message
+                        if (isMoveOut) {
+                            setShowMoveOutSuccess(true);
+                            setTimeout(() => {
+                                router.push("/");
+                            }, 2000);
+                        }
                     } else {
                         console.warn("Backend submission error (non-blocking):", error);
                     }
                 });
-
-            // Handle Move-Out: Show success message and redirect
-            if (isMoveOut) {
-                setShowMoveOutSuccess(true);
-                setTimeout(() => {
-                    router.push("/");
-                }, 2000);
-            }
         } catch (error) {
             console.error("Error submitting lead:", error);
             setErrors((prev) => ({ ...prev, submit: (error as Error).message }));

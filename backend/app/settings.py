@@ -111,3 +111,6 @@ MAX_TOTAL_PHOTO_BYTES = 20 * 1024 * 1024  # 20MB total
 # Note: In production, consider using Redis or a database for persistence
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 
+# GHL Booking URL for cleaning appointments (with prefill support)
+GHL_BOOKING_URL_CLEANING = os.getenv("GHL_BOOKING_URL_CLEANING", "").strip()
+

@@ -10,8 +10,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..settings import GHL_LOCATION_ID, JOB_STORE, CONTACTS_SEARCH_URL
-from ..utils import _ghl_headers
+from ..utils import _ghl_headers, normalize_phone
 from ..ghl_client import find_contact_record_by_phone
+from ..settings import CUSTOM_FIELD_IDS
+import traceback
 from ..pricing import (
     build_contact_price_breakdown,
     parse_simplified_price_breakdown,
@@ -350,6 +352,102 @@ def debug_contact_pricing(phone: str):
                 "custom_fields": fields_out,
                 "recurring_price": pricing.get("recurring_price"),
                 "frequency_label": pricing.get("frequency_label"),
+            },
+            status_code=200,
+        )
+    except Exception as e:
+        return JSONResponse(
+            {
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            },
+            status_code=200,
+        )
+
+
+@router.get("/debug/contact_by_phone")
+def debug_contact_by_phone(phone: str):
+    """
+    Debug endpoint to search for a contact by phone and return full details.
+    
+    Args (query param):
+        phone: Phone number to search for
+    
+    Returns:
+        JSON with:
+        - contact: Full contact dict with customFields and opportunities
+        - contact_id: Contact ID if found
+        - phone_normalized: Normalized phone number
+        - custom_fields: List of custom fields
+        - estimated_price: Estimated price from custom fields
+        - price_breakdown: Price breakdown from custom fields
+    """
+    try:
+        phone_normalized = normalize_phone(phone.strip() if phone else "")
+        if not phone_normalized:
+            return JSONResponse(
+                {
+                    "phone_normalized": None,
+                    "contact_id": None,
+                    "contact": None,
+                    "custom_fields": [],
+                    "estimated_price": None,
+                    "price_breakdown": None,
+                },
+                status_code=200,
+            )
+        
+        contact = find_contact_record_by_phone(phone_normalized)
+        
+        if not contact:
+            return JSONResponse(
+                {
+                    "phone_normalized": phone_normalized,
+                    "contact_id": None,
+                    "contact": None,
+                    "custom_fields": [],
+                    "estimated_price": None,
+                    "price_breakdown": None,
+                },
+                status_code=200,
+            )
+        
+        contact_id = contact.get("id")
+        custom_fields_raw = contact.get("customFields", [])
+        custom_fields = []
+        
+        if isinstance(custom_fields_raw, list):
+            custom_fields = custom_fields_raw
+        elif isinstance(custom_fields_raw, dict):
+            custom_fields = [{"id": k, "value": v} for k, v in custom_fields_raw.items()]
+        
+        # Extract estimated_price and price_breakdown from custom fields
+        estimated_price = None
+        price_breakdown = None
+        
+        for cf in custom_fields:
+            cf_id = str(cf.get("id", ""))
+            cf_value = cf.get("value", "")
+            
+            # Check if this is the estimated_price custom field
+            if cf_id == CUSTOM_FIELD_IDS.get("estimated_price"):
+                try:
+                    estimated_price = float(str(cf_value).replace("$", "").replace(",", "").strip())
+                except Exception:
+                    pass
+            
+            # Check if this is the price_breakdown custom field
+            if cf_id == CUSTOM_FIELD_IDS.get("price_breakdown"):
+                price_breakdown = str(cf_value)
+        
+        return JSONResponse(
+            {
+                "phone_normalized": phone_normalized,
+                "contact_id": contact_id,
+                "contact": contact,
+                "custom_fields": custom_fields,
+                "estimated_price": estimated_price,
+                "price_breakdown": price_breakdown,
             },
             status_code=200,
         )

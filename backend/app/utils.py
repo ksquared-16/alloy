@@ -4,9 +4,10 @@ Utility functions and helpers.
 import re
 import logging
 import os
+import urllib.parse
 from typing import Optional
 
-from .settings import GHL_API_KEY, GHL_API_VERSION
+from .settings import GHL_API_KEY, GHL_API_VERSION, GHL_BOOKING_URL_CLEANING
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -124,3 +125,49 @@ def normalize_square_footage_option(raw: Optional[str]) -> Optional[str]:
     # Not a valid value
     return None
 
+
+def build_booking_url(
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    contact_id: str,
+) -> Optional[str]:
+    """
+    Build GHL booking URL with prefill parameters.
+    
+    Args:
+        first_name: Contact first name
+        last_name: Contact last name
+        email: Contact email
+        phone: Contact phone (E.164 format)
+        contact_id: GHL contact ID
+    
+    Returns:
+        Booking URL with prefill params, or None if GHL_BOOKING_URL_CLEANING not configured
+    """
+    if not GHL_BOOKING_URL_CLEANING:
+        logger.warning("build_booking_url: GHL_BOOKING_URL_CLEANING not configured")
+        return None
+    
+    # Build query params for prefill
+    params = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "phone": phone,
+        "lead_contact_id": contact_id,
+        "lead_phone": phone,
+    }
+    
+    # Encode params
+    query_string = urllib.parse.urlencode(params)
+    booking_url = f"{GHL_BOOKING_URL_CLEANING}?{query_string}"
+    
+    logger.info(
+        "build_booking_url: built booking_url for contact_id=%s phone=%s",
+        contact_id,
+        phone[:4] + "***" if len(phone) > 4 else "***"
+    )
+    
+    return booking_url

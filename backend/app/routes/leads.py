@@ -9,10 +9,16 @@ from pydantic import EmailStr
 from typing import Optional
 
 from ..settings import CUSTOM_FIELD_IDS, MAX_PHOTOS, MAX_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES
-from ..utils import normalize_phone
+from ..utils import normalize_phone, normalize_square_footage_option, build_booking_url
 from ..pricing import calculate_pricing_from_form
 from ..lead_processing import process_lead_async
-from ..ghl_client import create_or_update_contact_in_ghl
+from ..ghl_client import (
+    create_or_update_contact_in_ghl,
+    search_contact_by_phone,
+    create_contact_in_ghl,
+    update_contact_in_ghl,
+    build_custom_fields_from_env,
+)
 from ..models import ProsApplicationPayload
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -195,12 +201,106 @@ async def submit_cleaning_lead(
         service_type
     )
     
-    # Add background task to process GHL sync
+    # FAST synchronous contact upsert (for booking URL continuity)
+    # Build custom field mapping
+    custom_field_mapping = {}
+    if service_type and service_type.strip():
+        custom_field_mapping["service_type"] = service_type.strip()
+    if preferred_service_date and preferred_service_date.strip():
+        custom_field_mapping["preferred_service_date"] = preferred_service_date.strip()
+    if home_type and home_type.strip():
+        custom_field_mapping["home_type"] = home_type.strip()
+    if cleaning_frequency and cleaning_frequency.strip():
+        custom_field_mapping["cleaning_frequency"] = cleaning_frequency.strip()
+    
+    # Normalize and validate square footage
+    normalized_sqft = normalize_square_footage_option(approximate_square_footage)
+    if normalized_sqft:
+        custom_field_mapping["approximate_square_footage"] = normalized_sqft
+        custom_field_mapping["square_footage"] = normalized_sqft
+    
+    # Parse extras_add_ons if provided
+    if extras_add_ons:
+        try:
+            import json
+            extras_list = json.loads(extras_add_ons)
+            if not isinstance(extras_list, list):
+                extras_list = [extras_add_ons]
+        except Exception:
+            extras_list = [x.strip() for x in extras_add_ons.split(",") if x.strip()]
+        if extras_list:
+            custom_field_mapping["extras_add_ons"] = "\n".join(str(v) for v in extras_list if v)
+    
+    if addons__frequency and addons__frequency.strip():
+        custom_field_mapping["addons__frequency"] = addons__frequency.strip()
+    if street_address and street_address.strip():
+        custom_field_mapping["street_address"] = street_address.strip()
+    
+    # Add pricing fields
+    custom_field_mapping["estimated_price"] = str(calculated_estimated_price)
+    custom_field_mapping["price_breakdown"] = calculated_price_breakdown
+    if calculated_recurring_price is not None:
+        custom_field_mapping["recurring_price"] = str(calculated_recurring_price)
+    
+    # Search for existing contact
+    existing_contact = search_contact_by_phone(phone_normalized)
+    contact_id = None
+    
+    if existing_contact:
+        contact_id = existing_contact.get("id")
+        logger.info("submit_cleaning_lead: found existing contact_id=%s, updating", contact_id)
+        # Update existing contact
+        updated_id = update_contact_in_ghl(
+            contact_id=contact_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone_normalized,
+            postal_code=postal_code,
+            custom_field_mapping=custom_field_mapping,
+            estimated_price=str(calculated_estimated_price),
+            price_breakdown=calculated_price_breakdown,
+            recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
+        )
+        if updated_id:
+            contact_id = updated_id
+    else:
+        logger.info("submit_cleaning_lead: no existing contact found, creating")
+        # Create new contact
+        contact_id = create_contact_in_ghl(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone_normalized,
+            postal_code=postal_code,
+            custom_field_mapping=custom_field_mapping,
+            estimated_price=str(calculated_estimated_price),
+            price_breakdown=calculated_price_breakdown,
+            recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
+        )
+    
+    if not contact_id:
+        logger.error("submit_cleaning_lead: failed to create/update contact")
+        return JSONResponse(
+            {"ok": False, "status": "error", "message": "Failed to create contact"},
+            status_code=500,
+        )
+    
+    # Build booking URL
+    booking_url = build_booking_url(
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone_normalized,
+        contact_id=contact_id,
+    )
+    
+    # Add background task for heavy work (tags, photos, notes)
     background_tasks.add_task(
         process_lead_async,
         first_name=first_name,
         last_name=last_name,
-        phone=phone,
+        phone=phone_normalized,  # Use normalized phone
         email=email,
         postal_code=postal_code,
         home_type=home_type,
@@ -217,17 +317,19 @@ async def submit_cleaning_lead(
         recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
     )
     
-    # Return immediately with success, including calculated pricing
+    # Return immediately with contact_id and booking_url
     return JSONResponse(
         {
             "ok": True,
             "status": "accepted",
-            "phone": phone_normalized,
+            "normalized_phone": phone_normalized,
+            "contact_id": contact_id,
+            "booking_url": booking_url,
             "estimated_price": calculated_estimated_price,
             "recurring_price": calculated_recurring_price,
             "price_breakdown": calculated_price_breakdown,
         },
-        status_code=202,  # Accepted - processing in background
+        status_code=200,  # OK - contact created/updated synchronously
     )
 
 
