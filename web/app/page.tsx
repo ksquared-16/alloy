@@ -91,11 +91,11 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
           <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             {/* Background Image */}
-        <Image
-              src="/hero/cleaning-hero.jpg"
+            <Image
+              src="/hero/cleaning-hero.jpeg"
               alt="Clean modern home interior"
               fill
-          priority
+              priority
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
