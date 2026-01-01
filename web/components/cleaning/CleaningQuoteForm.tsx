@@ -15,6 +15,7 @@ import {
 } from "@/lib/pricing/cleaningPricing";
 import PrimaryButton from "@/components/PrimaryButton";
 import { compressImage, validateImageSize } from "@/lib/images/resizeCompress";
+import { buildBookingUrl } from "@/lib/booking";
 
 type FormState = {
     firstName: string;
@@ -305,17 +306,17 @@ export default function CleaningQuoteForm({
                     console.warn("Failed to store quote in sessionStorage:", e);
                 }
 
-                // Normalize phone for URL (ensure +1 format)
-                let normalizedPhone = cleanInput.phone.trim();
-                const digits = normalizedPhone.replace(/\D/g, "");
-                if (digits.length === 10) {
-                    normalizedPhone = "+1" + digits;
-                } else if (!normalizedPhone.startsWith("+")) {
-                    normalizedPhone = "+" + digits;
-                }
+                // Build booking URL with all prefill parameters to ensure GHL matches existing contact
+                const bookingUrl = buildBookingUrl({
+                    phone: cleanInput.phone,
+                    email: cleanInput.email,
+                    firstName: cleanInput.firstName,
+                    lastName: cleanInput.lastName,
+                    estimatedPrice: result.estimated_price,
+                });
 
                 // Redirect to booking page immediately (don't wait for backend)
-                router.push(`/book?phone=${encodeURIComponent(normalizedPhone)}`);
+                router.push(bookingUrl);
             }
 
             // Submit to backend in background (non-blocking)
@@ -871,12 +872,18 @@ export default function CleaningQuoteForm({
                             )}
 
                             {/* Continue to booking CTA */}
-                            {form.phone && (
+                            {form.phone && form.email && form.firstName && form.lastName && (
                                 <div className="pt-2 border-t border-alloy-stone/20">
                                     <PrimaryButton
                                         onClick={() => {
-                                            const phoneParam = encodeURIComponent(form.phone.trim());
-                                            router.push(`/book?phone=${phoneParam}`);
+                                            const bookingUrl = buildBookingUrl({
+                                                phone: form.phone,
+                                                email: form.email,
+                                                firstName: form.firstName,
+                                                lastName: form.lastName,
+                                                estimatedPrice: quote?.estimated_price,
+                                            });
+                                            router.push(bookingUrl);
                                         }}
                                         className="w-full md:w-auto"
                                     >

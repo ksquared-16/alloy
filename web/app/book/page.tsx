@@ -38,6 +38,10 @@ function BookPageContent() {
     const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
     const [showBookingSuccess, setShowBookingSuccess] = useState(false);
     const phone = searchParams?.get("phone");
+    const email = searchParams?.get("email");
+    const firstName = searchParams?.get("first_name");
+    const lastName = searchParams?.get("last_name");
+    const estimatedPrice = searchParams?.get("estimated_price");
 
     useEffect(() => {
         // Read quote from sessionStorage immediately
@@ -353,7 +357,22 @@ function BookPageContent() {
                     <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
                         <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                             <GhlEmbed
-                                src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz?redirectUrl=https://www.workwithalloy.com/booking-thank-you"
+                                src={(() => {
+                                    // Build GHL booking widget URL with prefill parameters
+                                    const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
+                                    const params = new URLSearchParams({
+                                        redirectUrl: "https://www.workwithalloy.com/booking-thank-you",
+                                    });
+                                    
+                                    // Add prefill parameters if available
+                                    if (phone) params.append("phone", phone);
+                                    if (email) params.append("email", email);
+                                    if (firstName) params.append("first_name", firstName);
+                                    if (lastName) params.append("last_name", lastName);
+                                    if (estimatedPrice) params.append("estimated_price", estimatedPrice);
+                                    
+                                    return `${baseUrl}?${params.toString()}`;
+                                })()}
                                 title="Booking Calendar"
                                 height={1200}
                                 className="!min-h-[1200px] md:!min-h-[900px]"
@@ -427,7 +446,22 @@ export default function BookPage() {
                     )}
                     <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                         <GhlEmbed
-                            src="https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz"
+                            src={(() => {
+                                // Build GHL booking widget URL with prefill parameters
+                                const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
+                                const params = new URLSearchParams({
+                                    redirectUrl: "https://www.workwithalloy.com/booking-thank-you",
+                                });
+                                
+                                // Add prefill parameters if available
+                                if (phone) params.append("phone", phone);
+                                if (email) params.append("email", email);
+                                if (firstName) params.append("first_name", firstName);
+                                if (lastName) params.append("last_name", lastName);
+                                if (estimatedPrice) params.append("estimated_price", estimatedPrice);
+                                
+                                return `${baseUrl}?${params.toString()}`;
+                            })()}
                             title="Booking Calendar"
                             height={1200}
                             className="!min-h-[1200px] md:!min-h-[900px]"
