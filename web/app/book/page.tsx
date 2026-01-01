@@ -433,6 +433,14 @@ function BookPageContent() {
 }
 
 export default function BookPage() {
+    // Extract search params for use in fallback
+    const searchParams = useSearchParams();
+    const phone = searchParams?.get("phone");
+    const email = searchParams?.get("email");
+    const firstName = searchParams?.get("first_name");
+    const lastName = searchParams?.get("last_name");
+    const estimatedPrice = searchParams?.get("estimated_price");
+    
     return (
         <Suspense fallback={
             <div className="min-h-screen py-6 md:py-10">
