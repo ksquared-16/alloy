@@ -57,7 +57,7 @@ export default function JoinPage() {
             },
           ].map((item) => (
             <div key={item.step} className="text-center">
-              <div className="w-16 h-16 bg-alloy-blue text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+              <div className="w-16 h-16 bg-alloy-juniper text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4 shadow-md">
                 {item.step}
               </div>
               <h3 className="text-xl font-semibold text-alloy-midnight mb-2">
