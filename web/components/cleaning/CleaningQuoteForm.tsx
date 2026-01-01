@@ -312,7 +312,7 @@ export default function CleaningQuoteForm({
                     email: cleanInput.email,
                     firstName: cleanInput.firstName,
                     lastName: cleanInput.lastName,
-                    estimatedPrice: result.estimated_price,
+                    estimatedPrice: result.estimated_price ?? undefined,
                 });
 
                 // Redirect to booking page immediately (don't wait for backend)
@@ -881,7 +881,7 @@ export default function CleaningQuoteForm({
                                                 email: form.email,
                                                 firstName: form.firstName,
                                                 lastName: form.lastName,
-                                                estimatedPrice: quote?.estimated_price,
+                                                estimatedPrice: quote?.estimated_price ?? undefined,
                                             });
                                             router.push(bookingUrl);
                                         }}
