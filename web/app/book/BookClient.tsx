@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 
-// GHL Booking Iframe Component with script loading
+// GHL Booking Iframe Component
+// Note: form_embed.js is loaded globally via GhlScript in layout.tsx
 function GhlBookingIframe({
     phone,
     email,
@@ -19,33 +20,12 @@ function GhlBookingIframe({
     lastName: string | null;
     contactId: string | null;
 }) {
-    const scriptLoaded = useRef(false);
-
-    // Load the GHL form embed script
-    useEffect(() => {
-        if (scriptLoaded.current) return;
-        
-        const script = document.createElement("script");
-        script.src = "https://link.msgsndr.com/js/form_embed.js";
-        script.type = "text/javascript";
-        script.async = true;
-        document.body.appendChild(script);
-        scriptLoaded.current = true;
-
-        return () => {
-            // Cleanup script on unmount if needed
-            const existingScript = document.querySelector('script[src="https://link.msgsndr.com/js/form_embed.js"]');
-            if (existingScript && existingScript.parentNode) {
-                existingScript.parentNode.removeChild(existingScript);
-            }
-        };
-    }, []);
-
     // Build GHL booking widget URL with prefill parameters
+    // Redirect to payment page after calendar selection
     const buildBookingUrl = () => {
         const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
         const params = new URLSearchParams({
-            redirectUrl: "https://www.workwithalloy.com/booking-thank-you",
+            redirectUrl: "https://www.workwithalloy.com/payment",
         });
         
         // Add prefill parameters if available (for contact matching)
@@ -58,18 +38,20 @@ function GhlBookingIframe({
         return `${baseUrl}?${params.toString()}`;
     };
 
-    // Generate unique ID for iframe
-    const iframeId = `GficiTFm4cbAbQ05IHwz_${Date.now()}`;
+    // Generate unique ID for iframe (static ID as per GHL requirements)
+    const iframeId = "GficiTFm4cbAbQ05IHwz_1767381006867";
 
     return (
-        <iframe
-            src={buildBookingUrl()}
-            style={{ width: "100%", border: "none", overflow: "hidden" }}
-            scrolling="no"
-            id={iframeId}
-            title="Booking Calendar"
-            className="min-h-[1200px] md:min-h-[900px]"
-        />
+        <>
+            <iframe
+                src={buildBookingUrl()}
+                style={{ width: "100%", border: "none", overflow: "hidden" }}
+                scrolling="no"
+                id={iframeId}
+                title="Booking Calendar"
+                className="min-h-[1200px] md:min-h-[900px]"
+            />
+        </>
     );
 }
 
