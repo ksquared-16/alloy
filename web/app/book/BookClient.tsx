@@ -1,10 +1,77 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Section from "@/components/Section";
-import GhlEmbed from "@/components/GhlEmbed";
 import Accordion from "@/components/Accordion";
+
+// GHL Booking Iframe Component with script loading
+function GhlBookingIframe({
+    phone,
+    email,
+    firstName,
+    lastName,
+    contactId,
+}: {
+    phone: string | null;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    contactId: string | null;
+}) {
+    const scriptLoaded = useRef(false);
+
+    // Load the GHL form embed script
+    useEffect(() => {
+        if (scriptLoaded.current) return;
+        
+        const script = document.createElement("script");
+        script.src = "https://link.msgsndr.com/js/form_embed.js";
+        script.type = "text/javascript";
+        script.async = true;
+        document.body.appendChild(script);
+        scriptLoaded.current = true;
+
+        return () => {
+            // Cleanup script on unmount if needed
+            const existingScript = document.querySelector('script[src="https://link.msgsndr.com/js/form_embed.js"]');
+            if (existingScript && existingScript.parentNode) {
+                existingScript.parentNode.removeChild(existingScript);
+            }
+        };
+    }, []);
+
+    // Build GHL booking widget URL with prefill parameters
+    const buildBookingUrl = () => {
+        const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
+        const params = new URLSearchParams({
+            redirectUrl: "https://www.workwithalloy.com/booking-thank-you",
+        });
+        
+        // Add prefill parameters if available (for contact matching)
+        if (phone) params.append("phone", phone);
+        if (email) params.append("email", email);
+        if (firstName) params.append("first_name", firstName);
+        if (lastName) params.append("last_name", lastName);
+        if (contactId) params.append("lead_contact_id", contactId);
+        
+        return `${baseUrl}?${params.toString()}`;
+    };
+
+    // Generate unique ID for iframe
+    const iframeId = `GficiTFm4cbAbQ05IHwz_${Date.now()}`;
+
+    return (
+        <iframe
+            src={buildBookingUrl()}
+            style={{ width: "100%", border: "none", overflow: "hidden" }}
+            scrolling="no"
+            id={iframeId}
+            title="Booking Calendar"
+            className="min-h-[1200px] md:min-h-[900px]"
+        />
+    );
+}
 
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
@@ -356,26 +423,12 @@ export default function BookClient() {
                     {/* Right column: Calendar (3/4 width) */}
                     <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
                         <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                            <GhlEmbed
-                                src={(() => {
-                                    // Build GHL booking widget URL with prefill parameters
-                                    const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
-                                    const params = new URLSearchParams({
-                                        redirectUrl: "https://www.workwithalloy.com/booking-thank-you",
-                                    });
-                                    
-                                    // Add prefill parameters if available
-                                    if (phone) params.append("phone", phone);
-                                    if (email) params.append("email", email);
-                                    if (firstName) params.append("first_name", firstName);
-                                    if (lastName) params.append("last_name", lastName);
-                                    if (estimatedPrice) params.append("estimated_price", estimatedPrice);
-                                    
-                                    return `${baseUrl}?${params.toString()}`;
-                                })()}
-                                title="Booking Calendar"
-                                height={1200}
-                                className="!min-h-[1200px] md:!min-h-[900px]"
+                            <GhlBookingIframe
+                                phone={phone}
+                                email={email}
+                                firstName={firstName}
+                                lastName={lastName}
+                                contactId={null}
                             />
                             <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
                                 You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
