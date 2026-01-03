@@ -79,30 +79,53 @@ curl -X POST http://localhost:8000/leads/cleaning \
 # Should return 202 with ok: true
 ```
 
-### 6. Test Stripe webhook (local testing with Stripe CLI)
+### 6. Test Stripe SetupIntent flow (local testing with Stripe CLI)
 
 **Prerequisites:**
 - Install Stripe CLI: https://stripe.com/docs/stripe-cli
 - Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in your environment
+- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in your frontend environment
+- Install Stripe packages: `cd web && npm install`
+
+**Start backend:**
+```bash
+cd backend
+uvicorn backend.main:app --reload
+```
 
 **Forward webhooks to local server:**
 ```bash
 stripe listen --forward-to localhost:8000/stripe/webhook
 ```
 
-**Trigger a test SetupIntent succeeded event:**
+**Start frontend:**
+```bash
+cd web
+npm run dev
+```
+
+**Test the flow:**
+1. Navigate to `/payment?phone=+15551234567&email=test@example.com&ghl_contact_id=TEST123` (or use real values from your lead flow)
+2. Enter test card details:
+   - Card: `4242 4242 4242 4242`
+   - Expiry: Any future date (e.g., `12/34`)
+   - CVC: Any 3 digits (e.g., `123`)
+3. Click "Save Card & Confirm"
+4. Verify:
+   - SetupIntent is created (check backend logs for `create_setup_intent: created setup_intent_id=...`)
+   - Webhook receives `setup_intent.succeeded` event (check logs for `stripe_webhook: received event type=setup_intent.succeeded`)
+   - Contact in GHL is tagged with "card_on_file:collected" (check logs for `stripe_webhook: tagged contact_id=...`)
+   - Success page is shown and redirects to homepage
+
+**Trigger a test SetupIntent succeeded event manually:**
 ```bash
 stripe trigger setup_intent.succeeded
 ```
 
-**Verify:**
-- Check server logs for webhook receipt and contact tagging
-- Verify contact in GHL has tag "card_on_file:collected"
-
 **Note:** The webhook expects metadata with keys:
-- `ghl_contact_id` (optional, preferred)
-- `phone` (fallback for contact search)
-- `email` (fallback for contact search)
+- `ghl_contact_id` (optional, preferred - will use this directly if present)
+- `phone` (fallback for contact search if ghl_contact_id not present)
+- `email` (fallback for contact search if ghl_contact_id not present)
 
 ## Notes
 

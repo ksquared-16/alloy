@@ -1,0 +1,7 @@
+#!/bin/sh
+# block committing common secret patterns
+if git diff --cached | grep -E "sk_(test|live)_[A-Za-z0-9]+" >/dev/null; then
+  echo "❌ Stripe secret key detected in staged changes. Remove it before commit."
+  exit 1
+fi
+exit 0

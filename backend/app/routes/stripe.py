@@ -22,6 +22,76 @@ logger = logging.getLogger("alloy-dispatcher")
 router = APIRouter()
 
 
+@router.post("/stripe/setup-intent")
+async def create_setup_intent(request: Request):
+    """
+    Create a Stripe SetupIntent for card-on-file collection (no charge).
+    
+    Input JSON body:
+        {
+            "phone": string (required),
+            "email": string (required),
+            "ghl_contact_id": string (optional)
+        }
+    
+    Returns:
+        {
+            "client_secret": string
+        }
+    
+    The SetupIntent will have:
+    - usage="off_session" (for future charges)
+    - metadata with ghl_contact_id, phone, email for webhook matching
+    """
+    try:
+        body = await request.json()
+    except Exception as e:
+        logger.error("create_setup_intent: failed to parse JSON body: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    
+    phone = body.get("phone")
+    email = body.get("email")
+    ghl_contact_id = body.get("ghl_contact_id")
+    
+    if not phone or not email:
+        logger.error("create_setup_intent: missing required fields (phone=%s, email=%s)", bool(phone), bool(email))
+        raise HTTPException(status_code=400, detail="phone and email are required")
+    
+    # Build metadata for webhook matching
+    metadata = {
+        "phone": phone,
+        "email": email,
+    }
+    if ghl_contact_id:
+        metadata["ghl_contact_id"] = ghl_contact_id
+    
+    try:
+        # Create SetupIntent (not PaymentIntent - no charge)
+        setup_intent = stripe.SetupIntent.create(
+            usage="off_session",  # For future charges
+            metadata=metadata,
+        )
+        
+        logger.info(
+            "create_setup_intent: created setup_intent_id=%s phone=%s email=%s ghl_contact_id=%s",
+            setup_intent.id,
+            phone[:4] + "***" if len(phone) > 4 else "***",
+            email[:10] + "***" if len(email) > 10 else "***",
+            ghl_contact_id or "None"
+        )
+        
+        return JSONResponse(
+            {"client_secret": setup_intent.client_secret},
+            status_code=200
+        )
+    except stripe.error.StripeError as e:
+        logger.error("create_setup_intent: Stripe error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+    except Exception as e:
+        logger.error("create_setup_intent: unexpected error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 def search_contact_by_email(email: str) -> Optional[Dict[str, Any]]:
     """
     Search for a contact by email using GHL Contacts Search API.
@@ -87,7 +157,7 @@ def search_contact_by_email(email: str) -> Optional[Dict[str, Any]]:
 
 
 @router.post("/stripe/webhook")
-async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
+async def stripe_webhook(request: Request):
     """
     Stripe webhook endpoint for SetupIntent events.
     
@@ -98,16 +168,17 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
     
     Args:
         request: FastAPI request object
-        stripe_signature: Stripe signature header for webhook verification
     
     Returns:
         JSONResponse with status 200 for all events (Stripe requires 200)
     """
+    # Get Stripe signature from headers (case-insensitive)
+    stripe_signature = request.headers.get("stripe-signature")
     if not stripe_signature:
         logger.error("stripe_webhook: missing Stripe-Signature header")
         raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
     
-    # Get raw body for signature verification
+    # Get raw body for signature verification (MUST be bytes, not parsed JSON)
     body = await request.body()
     
     try:
