@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { loadStripe, Stripe, StripeElements, StripeCardElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
+import Accordion from "@/components/Accordion";
 
 interface BookingPrefill {
     phone?: string;
@@ -12,6 +13,18 @@ interface BookingPrefill {
     last_name?: string;
     estimated_price?: string;
     ghl_contact_id?: string;
+}
+
+interface QuoteResponse {
+    status?: "ready" | "pending" | "not_found" | "error";
+    estimated_price?: number;
+    first_clean_price?: number;
+    recurring_price?: number;
+    frequency_label?: string;
+    service?: string;
+    discount_label?: string;
+    price_breakdown?: string;
+    addons?: Array<{ name: string; price: number | null }>;
 }
 
 function clearBookingPrefill() {
@@ -32,8 +45,8 @@ export default function PaymentClient() {
     const [card, setCard] = useState<StripeCardElement | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState(false);
     const cardElementRef = useRef<HTMLDivElement>(null);
+    const [quote, setQuote] = useState<QuoteResponse | null>(null);
 
     // Resolve user info with fallback priority:
     // 1. URL query params
@@ -89,6 +102,19 @@ export default function PaymentClient() {
         setResolvedPhone(phone);
         setResolvedEmail(email);
         setResolvedGhlContactId(ghlContactId);
+        
+        // Load quote from storage if available
+        if (typeof window !== "undefined") {
+            try {
+                const storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
+                if (storedQuote) {
+                    const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
+                    setQuote(parsedQuote);
+                }
+            } catch (e) {
+                console.warn("Failed to load quote from sessionStorage:", e);
+            }
+        }
     }, [mounted, searchParams]);
 
     // Initialize Stripe
@@ -210,9 +236,8 @@ export default function PaymentClient() {
                 throw new Error(confirmError.message || "Card setup failed");
             }
 
-            // Success! Clear storage and redirect
+            // Success! Clear storage and immediately redirect (no intermediate success UI)
             clearBookingPrefill();
-            setSuccess(true);
             
             // Build success URL with params
             const successParams = new URLSearchParams({
@@ -223,9 +248,8 @@ export default function PaymentClient() {
                 successParams.append("ghl_contact_id", resolvedGhlContactId);
             }
             
-            setTimeout(() => {
-                router.push(`/payment/success?${successParams.toString()}`);
-            }, 1500);
+            // Immediately redirect using replace to avoid back button issues
+            router.replace(`/payment/success?${successParams.toString()}`);
         } catch (err) {
             setError(err instanceof Error ? err.message : "An error occurred");
             setIsProcessing(false);
@@ -291,98 +315,184 @@ export default function PaymentClient() {
         );
     }
 
-    if (success) {
-        return (
-            <div className="min-h-screen py-6 md:py-10">
-                <Section className="max-w-2xl">
-                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-10">
-                        <div className="text-center py-8">
-                            <div className="mb-4">
-                                <svg
-                                    className="w-16 h-16 mx-auto text-alloy-juniper"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 13l4 4L19 7"
-                                    />
-                                </svg>
-                            </div>
-                            <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
-                                Card saved successfully!
-                            </h2>
-                            <p className="text-alloy-midnight/70">
-                                Redirecting to confirmation...
-                            </p>
-                        </div>
-                    </div>
-                </Section>
-            </div>
-        );
-    }
+    const hasQuote = quote && (
+        (typeof quote.first_clean_price === "number" && quote.first_clean_price > 0) ||
+        (typeof quote.estimated_price === "number" && quote.estimated_price > 0)
+    );
 
     return (
         <div className="min-h-screen py-6 md:py-10">
-            <Section className="max-w-2xl">
-                <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-10">
-                    <h1 className="text-3xl font-bold text-alloy-midnight mb-6">
-                        Save Card on File
-                    </h1>
+            <Section className={hasQuote ? "max-w-5xl" : "max-w-2xl"}>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+                    {/* Left column: Quote summary (1/4 width on desktop) */}
+                    {hasQuote && (
+                        <div className="lg:col-span-1">
+                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6">
+                                <div className="space-y-4 text-left">
+                                    <h2 className="text-lg font-bold text-alloy-midnight mb-3">
+                                        Your Quote
+                                    </h2>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Customer Info (Read-only display) */}
-                        <div className="bg-alloy-stone/20 rounded-lg p-4 border border-alloy-stone/30">
-                            <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">
-                                Your Information
-                            </h3>
-                            <div className="space-y-2 text-sm text-alloy-midnight/70">
-                                <div>
-                                    <strong>Email:</strong> {resolvedEmail}
+                                    {/* First Cleaning */}
+                                    <div>
+                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                            First Cleaning
+                                        </p>
+                                        {(() => {
+                                            const price =
+                                                (typeof quote.first_clean_price === "number" &&
+                                                    quote.first_clean_price > 0
+                                                    ? quote.first_clean_price
+                                                    : typeof quote.estimated_price === "number" &&
+                                                        quote.estimated_price > 0
+                                                        ? quote.estimated_price
+                                                        : null);
+                                            return price != null && price > 0 ? (
+                                                <p className="text-2xl font-bold text-alloy-blue leading-tight">
+                                                    ${price.toFixed(2)}
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Recurring Cleaning */}
+                                    <div>
+                                        {quote.recurring_price !== undefined &&
+                                            quote.recurring_price !== null &&
+                                            quote.recurring_price > 0 &&
+                                            quote.frequency_label ? (
+                                            <>
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                    {quote.frequency_label} Cleaning
+                                                    {quote.discount_label && (
+                                                        <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
+                                                            ({quote.discount_label})
+                                                        </span>
+                                                    )}
+                                                </p>
+                                                <div className="flex items-baseline gap-1">
+                                                    <p className="text-2xl font-bold text-alloy-juniper leading-tight">
+                                                        ${quote.recurring_price.toFixed(2)}
+                                                    </p>
+                                                    <span className="text-xs text-alloy-midnight/60">
+                                                        per visit
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                    Recurring Cleaning
+                                                </p>
+                                                <p className="text-sm text-alloy-midnight/70">
+                                                    One-time service
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Add-ons */}
+                                    {quote.addons && quote.addons.length > 0 && (
+                                        <div>
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                                Add-ons
+                                            </p>
+                                            <div className="space-y-1.5">
+                                                {quote.addons.map((addon, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="flex justify-between items-center py-1 border-b border-alloy-stone/15 last:border-b-0"
+                                                    >
+                                                        <span className="text-xs text-alloy-midnight/85">
+                                                            {addon.name}
+                                                        </span>
+                                                        <span className="text-xs font-semibold text-alloy-midnight">
+                                                            {addon.price === null || addon.price === undefined
+                                                                ? "included"
+                                                                : `$${addon.price.toFixed(2)}`}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Price Breakdown Accordion */}
+                                    {quote.price_breakdown && (
+                                        <div>
+                                            <Accordion title="See full price breakdown">
+                                                <div className="text-xs text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
+                                                    {quote.price_breakdown}
+                                                </div>
+                                            </Accordion>
+                                        </div>
+                                    )}
                                 </div>
-                                <div>
-                                    <strong>Phone:</strong> {resolvedPhone}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Right column: Payment form (3/4 width if quote exists, full width otherwise) */}
+                    <div className={hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
+                        <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-10">
+                            <h1 className="text-3xl font-bold text-alloy-midnight mb-6">
+                                Save Card on File
+                            </h1>
+
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                {/* Customer Info (Read-only display) */}
+                                <div className="bg-alloy-stone/20 rounded-lg p-4 border border-alloy-stone/30">
+                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">
+                                        Your Information
+                                    </h3>
+                                    <div className="space-y-2 text-sm text-alloy-midnight/70">
+                                        <div>
+                                            <strong>Email:</strong> {resolvedEmail}
+                                        </div>
+                                        <div>
+                                            <strong>Phone:</strong> {resolvedPhone}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+
+                                {/* Card Details */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-alloy-midnight mb-2">
+                                        Card Details
+                                    </label>
+                                    <div className="bg-white border border-alloy-stone/40 rounded-lg p-4">
+                                        <div id="card-element" ref={cardElementRef}></div>
+                                    </div>
+                                </div>
+
+                                {/* Info Message */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <p className="text-sm text-blue-900">
+                                        <strong>No charge today.</strong> To reserve your appointment, we&apos;ll save a card on file. 
+                                        You will not be charged today. You will only be charged after service (or per our cancellation policy).
+                                    </p>
+                                </div>
+
+                                {/* Error Message */}
+                                {error && (
+                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                        <p className="text-sm text-red-800">{error}</p>
+                                    </div>
+                                )}
+
+                                {/* Submit Button */}
+                                <button
+                                    type="submit"
+                                    disabled={!stripe || !card || isProcessing}
+                                    className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isProcessing ? "Processing..." : "Save Card & Confirm"}
+                                </button>
+                            </form>
                         </div>
-
-                        {/* Card Details */}
-                        <div>
-                            <label className="block text-sm font-semibold text-alloy-midnight mb-2">
-                                Card Details
-                            </label>
-                            <div className="bg-white border border-alloy-stone/40 rounded-lg p-4">
-                                <div id="card-element" ref={cardElementRef}></div>
-                            </div>
-                        </div>
-
-                        {/* Info Message */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <p className="text-sm text-blue-900">
-                                <strong>No charge today.</strong> To reserve your appointment, we&apos;ll save a card on file. 
-                                You will not be charged today. You will only be charged after service (or per our cancellation policy).
-                            </p>
-                        </div>
-
-                        {/* Error Message */}
-                        {error && (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                                <p className="text-sm text-red-800">{error}</p>
-                            </div>
-                        )}
-
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={!stripe || !card || isProcessing}
-                            className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isProcessing ? "Processing..." : "Save Card & Confirm"}
-                        </button>
-                    </form>
+                    </div>
                 </div>
             </Section>
         </div>

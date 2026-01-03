@@ -11,9 +11,6 @@ from .settings import MAX_PHOTOS, MAX_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES
 from .utils import normalize_phone, normalize_square_footage_option
 from .pricing import calculate_pricing_from_form
 from .ghl_client import (
-    search_contact_by_phone,
-    create_contact_in_ghl,
-    update_contact_in_ghl,
     ensure_contact_has_tag,
     upload_photo_to_ghl,
     create_contact_note,
@@ -166,47 +163,37 @@ def process_lead_async(
                 )
         t_photos_ms = (time.perf_counter() - t_photos_start) * 1000
         
-        # Search for existing contact
+        # Use canonical contact resolution (email-first, then phone, then create with duplicate recovery)
+        from .ghl_client import resolve_or_create_contact_canonical
+        
         t_search_start = time.perf_counter()
-        existing_contact = search_contact_by_phone(phone_normalized)
+        contact_id, resolution_path = resolve_or_create_contact_canonical(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone_normalized,
+            postal_code=postal_code,
+            custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
+            estimated_price=estimated_price,
+            price_breakdown=price_breakdown,
+            recurring_price=recurring_price,
+        )
         t_search_ms = (time.perf_counter() - t_search_start) * 1000
         
-        # Upsert contact
+        # Determine action based on resolution path
         t_upsert_start = time.perf_counter()
-        if existing_contact:
-            contact_id = existing_contact.get("id")
-            # Update existing contact
-            updated_id = update_contact_in_ghl(
-                contact_id=contact_id,
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                phone=phone,
-                postal_code=postal_code,
-                custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
-                estimated_price=estimated_price,
-                price_breakdown=price_breakdown,
-                recurring_price=recurring_price,
-            )
+        if resolution_path in ("email_search", "phone_search", "duplicate_recovered"):
+            action = "updated"
             t_update_ms = (time.perf_counter() - t_upsert_start) * 1000
             t_create_ms = 0
-            action = "updated"
-        else:
-            # Create new contact
-            contact_id = create_contact_in_ghl(
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                phone=phone,
-                postal_code=postal_code,
-                custom_field_mapping=custom_field_mapping if custom_field_mapping else None,
-                estimated_price=estimated_price,
-                price_breakdown=price_breakdown,
-                recurring_price=recurring_price,
-            )
+        elif resolution_path == "created":
+            action = "created"
             t_create_ms = (time.perf_counter() - t_upsert_start) * 1000
             t_update_ms = 0
-            action = "created"
+        else:
+            action = "error"
+            t_create_ms = 0
+            t_update_ms = 0
         
         if not contact_id:
             raise Exception("Failed to create or update contact")
@@ -264,4 +251,5 @@ def process_lead_async(
             error_msg,
             traceback.format_exc(),
         )
+
 

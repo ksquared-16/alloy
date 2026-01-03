@@ -549,6 +549,195 @@ def build_custom_fields_array(field_mapping: Dict[str, str]) -> List[Dict[str, A
     return build_custom_fields_from_env(field_mapping)
 
 
+def resolve_or_create_contact_canonical(
+    first_name: str,
+    last_name: str,
+    email: str,
+    phone: str,
+    postal_code: Optional[str] = None,
+    custom_field_mapping: Optional[Dict[str, str]] = None,
+    estimated_price: Optional[str] = None,
+    price_breakdown: Optional[str] = None,
+    recurring_price: Optional[str] = None,
+) -> tuple[Optional[str], str]:
+    """
+    Canonical contact resolution: email-first, then phone, then create.
+    Handles duplicate contact errors by recovering with existing contact ID.
+    
+    Args:
+        first_name: Contact first name
+        last_name: Contact last name
+        email: Contact email (required for email-first search)
+        phone: Contact phone number (will be normalized to E.164)
+        postal_code: Optional postal code
+        custom_field_mapping: Optional dict mapping field keys to values for custom fields
+        estimated_price: Optional estimated price value
+        price_breakdown: Optional price breakdown text
+        recurring_price: Optional recurring price value
+    
+    Returns:
+        Tuple of (contact_id, resolution_path) where resolution_path is one of:
+        - "email_search": Found by email
+        - "phone_search": Found by phone (email search didn't find)
+        - "created": Created new contact
+        - "duplicate_recovered": Duplicate error recovered, updated existing contact
+        Returns (None, "error") on failure
+    """
+    phone_normalized = normalize_phone(phone)
+    email_normalized = email.strip().lower() if email else ""
+    
+    # Step 1: Search by email first (GHL dedupe is enforced on email)
+    contact = None
+    contact_id = None
+    resolution_path = None
+    
+    if email_normalized:
+        contact = search_contact_by_email(email_normalized)
+        if contact:
+            contact_id = contact.get("id")
+            resolution_path = "email_search"
+            logger.info(
+                "resolve_or_create_contact_canonical: found by email contact_id=%s email=%s",
+                contact_id,
+                email_normalized[:10] + "***"
+            )
+    
+    # Step 2: Fallback to phone search if email didn't find
+    if not contact and phone_normalized:
+        contact = search_contact_by_phone(phone_normalized)
+        if contact:
+            contact_id = contact.get("id")
+            resolution_path = "phone_search"
+            logger.info(
+                "resolve_or_create_contact_canonical: found by phone contact_id=%s phone=%s",
+                contact_id,
+                phone_normalized[:4] + "***"
+            )
+    
+    # Step 3: Update existing contact if found
+    if contact_id:
+        updated_id = update_contact_in_ghl(
+            contact_id=contact_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone_normalized,
+            postal_code=postal_code,
+            custom_field_mapping=custom_field_mapping,
+            estimated_price=estimated_price,
+            price_breakdown=price_breakdown,
+            recurring_price=recurring_price,
+        )
+        if updated_id:
+            logger.info(
+                "resolve_or_create_contact_canonical: updated contact_id=%s resolution_path=%s email=%s phone=%s",
+                updated_id,
+                resolution_path,
+                email_normalized[:10] + "***" if email_normalized else "None",
+                phone_normalized[:4] + "***" if phone_normalized else "None"
+            )
+            return (updated_id, resolution_path)
+    
+    # Step 4: Create new contact if not found
+    # Build payload for create attempt
+    try:
+        # Build payload for create attempt
+        payload: Dict[str, Any] = {
+            "locationId": GHL_LOCATION_ID,
+            "firstName": first_name.strip(),
+            "lastName": last_name.strip(),
+            "email": email.strip(),
+            "phone": phone_normalized,
+            "source": "Website Lead - Cleaning Quote",
+            "tags": ["lead"],
+        }
+        if postal_code and postal_code.strip():
+            payload["postalCode"] = postal_code.strip()
+        
+        custom_field_values = dict(custom_field_mapping) if custom_field_mapping else {}
+        if estimated_price:
+            custom_field_values["estimated_price"] = estimated_price
+        if price_breakdown:
+            custom_field_values["price_breakdown"] = price_breakdown
+        if recurring_price:
+            custom_field_values["recurring_price"] = recurring_price
+        
+        custom_fields = build_custom_fields_from_env(custom_field_values)
+        if custom_fields:
+            payload["customFields"] = custom_fields
+        
+        resp = requests.post(CONTACTS_URL, headers=_ghl_headers(), json=payload, timeout=10)
+        
+        if resp.ok:
+            data = resp.json()
+            contact_id = data.get("contact", {}).get("id")
+            resolution_path = "created"
+            logger.info(
+                "resolve_or_create_contact_canonical: created contact_id=%s resolution_path=%s email=%s phone=%s",
+                contact_id,
+                resolution_path,
+                email_normalized[:10] + "***" if email_normalized else "None",
+                phone_normalized[:4] + "***" if phone_normalized else "None"
+            )
+            return (contact_id, resolution_path)
+        
+        # Step 5: Handle duplicate error recovery (400 with contactId in meta)
+        if resp.status_code == 400:
+            try:
+                error_data = resp.json()
+                meta = error_data.get("meta", {})
+                existing_contact_id = meta.get("contactId")
+                
+                if existing_contact_id:
+                    # Recover by updating the existing contact
+                    logger.warning(
+                        "resolve_or_create_contact_canonical: duplicate contact error, recovering with contact_id=%s email=%s phone=%s",
+                        existing_contact_id,
+                        email_normalized[:10] + "***" if email_normalized else "None",
+                        phone_normalized[:4] + "***" if phone_normalized else "None"
+                    )
+                    
+                    updated_id = update_contact_in_ghl(
+                        contact_id=existing_contact_id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=email,
+                        phone=phone_normalized,
+                        postal_code=postal_code,
+                        custom_field_mapping=custom_field_mapping,
+                        estimated_price=estimated_price,
+                        price_breakdown=price_breakdown,
+                        recurring_price=recurring_price,
+                    )
+                    
+                    if updated_id:
+                        resolution_path = "duplicate_recovered"
+                        logger.info(
+                            "resolve_or_create_contact_canonical: duplicate recovered contact_id=%s resolution_path=%s email=%s phone=%s",
+                            updated_id,
+                            resolution_path,
+                            email_normalized[:10] + "***" if email_normalized else "None",
+                            phone_normalized[:4] + "***" if phone_normalized else "None"
+                        )
+                        return (updated_id, resolution_path)
+            except Exception:
+                pass
+        
+        logger.error(
+            "resolve_or_create_contact_canonical: failed to create contact (%s): %s",
+            resp.status_code,
+            resp.text[:200]
+        )
+    except Exception as e:
+        logger.error(
+            "resolve_or_create_contact_canonical: exception: %s",
+            e,
+            exc_info=True
+        )
+    
+    return (None, "error")
+
+
 def create_contact_in_ghl(
     first_name: str,
     last_name: str,

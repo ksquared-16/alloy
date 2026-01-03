@@ -14,9 +14,7 @@ from ..pricing import calculate_pricing_from_form
 from ..lead_processing import process_lead_async
 from ..ghl_client import (
     create_or_update_contact_in_ghl,
-    search_contact_by_phone,
-    create_contact_in_ghl,
-    update_contact_in_ghl,
+    resolve_or_create_contact_canonical,
     build_custom_fields_from_env,
 )
 from ..models import ProsApplicationPayload
@@ -242,42 +240,24 @@ async def submit_cleaning_lead(
     if calculated_recurring_price is not None:
         custom_field_mapping["recurring_price"] = str(calculated_recurring_price)
     
-    # Search for existing contact
-    existing_contact = search_contact_by_phone(phone_normalized)
-    contact_id = None
+    # Use canonical contact resolution (email-first, then phone, then create with duplicate recovery)
+    contact_id, resolution_path = resolve_or_create_contact_canonical(
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone_normalized,
+        postal_code=postal_code,
+        custom_field_mapping=custom_field_mapping,
+        estimated_price=str(calculated_estimated_price),
+        price_breakdown=calculated_price_breakdown,
+        recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
+    )
     
-    if existing_contact:
-        contact_id = existing_contact.get("id")
-        logger.info("submit_cleaning_lead: found existing contact_id=%s, updating", contact_id)
-        # Update existing contact
-        updated_id = update_contact_in_ghl(
-            contact_id=contact_id,
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            phone=phone_normalized,
-            postal_code=postal_code,
-            custom_field_mapping=custom_field_mapping,
-            estimated_price=str(calculated_estimated_price),
-            price_breakdown=calculated_price_breakdown,
-            recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
-        )
-        if updated_id:
-            contact_id = updated_id
-    else:
-        logger.info("submit_cleaning_lead: no existing contact found, creating")
-        # Create new contact
-        contact_id = create_contact_in_ghl(
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            phone=phone_normalized,
-            postal_code=postal_code,
-            custom_field_mapping=custom_field_mapping,
-            estimated_price=str(calculated_estimated_price),
-            price_breakdown=calculated_price_breakdown,
-            recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
-        )
+    logger.info(
+        "submit_cleaning_lead: contact resolved contact_id=%s resolution_path=%s",
+        contact_id,
+        resolution_path
+    )
     
     if not contact_id:
         logger.error("submit_cleaning_lead: failed to create/update contact")

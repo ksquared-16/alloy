@@ -112,8 +112,9 @@ MAX_TOTAL_PHOTO_BYTES = 20 * 1024 * 1024  # 20MB total
 # Note: In production, consider using Redis or a database for persistence
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 
-# GHL Booking URL for cleaning appointments (with prefill support)
-GHL_BOOKING_URL_CLEANING = os.getenv("GHL_BOOKING_URL_CLEANING", "").strip()
+# GHL Booking URL for cleaning appointments (deprecated - no longer used)
+# The booking flow now uses direct GHL widget embeds
+# GHL_BOOKING_URL_CLEANING = os.getenv("GHL_BOOKING_URL_CLEANING", "").strip()
 
 # Stripe settings
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()

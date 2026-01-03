@@ -7,7 +7,7 @@ import os
 import urllib.parse
 from typing import Optional
 
-from .settings import GHL_API_KEY, GHL_API_VERSION, GHL_BOOKING_URL_CLEANING
+from .settings import GHL_API_KEY, GHL_API_VERSION
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -200,6 +200,9 @@ def build_booking_url(
     """
     Build GHL booking URL with prefill parameters.
     
+    Note: This function is deprecated. GHL_BOOKING_URL_CLEANING is no longer used.
+    The booking flow now uses direct GHL widget embeds.
+    
     Args:
         first_name: Contact first name
         last_name: Contact last name
@@ -208,30 +211,8 @@ def build_booking_url(
         contact_id: GHL contact ID
     
     Returns:
-        Booking URL with prefill params, or None if GHL_BOOKING_URL_CLEANING not configured
+        None (deprecated - booking flow uses direct widget embeds)
     """
-    if not GHL_BOOKING_URL_CLEANING:
-        logger.warning("build_booking_url: GHL_BOOKING_URL_CLEANING not configured")
-        return None
-    
-    # Build query params for prefill
-    params = {
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": email,
-        "phone": phone,
-        "lead_contact_id": contact_id,
-        "lead_phone": phone,
-    }
-    
-    # Encode params
-    query_string = urllib.parse.urlencode(params)
-    booking_url = f"{GHL_BOOKING_URL_CLEANING}?{query_string}"
-    
-    logger.info(
-        "build_booking_url: built booking_url for contact_id=%s phone=%s",
-        contact_id,
-        phone[:4] + "***" if len(phone) > 4 else "***"
-    )
-    
-    return booking_url
+    # Deprecated: booking URL is no longer used
+    logger.debug("build_booking_url: deprecated, returning None")
+    return None
