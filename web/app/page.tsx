@@ -51,6 +51,30 @@ export default function Home() {
     },
   ];
 
+  const testimonials = [
+    {
+      quote:
+        "Alloy Services is a new local home services company, and I've been impressed with how thoughtfully they're approaching things from the start. They're clearly focused on quality, reliability, and creating a professional experience for homeowners.",
+      name: "Sarah M.",
+      relation: "Early supporter",
+      location: null,
+    },
+    {
+      quote:
+        "What stood out to me about Alloy Services is how intentional they are about handling everything end-to-end — from customer intake to service execution and follow-up. It feels like a modern, well-run operation.",
+      name: "James R.",
+      relation: "Early supporter",
+      location: null,
+    },
+    {
+      quote:
+        "Alloy Services is building something really solid. I appreciate their focus on clear communication, consistency, and supporting the people doing the work.",
+      name: "Emily T.",
+      relation: "Early supporter",
+      location: null,
+    },
+  ];
+
   const faqs = [
     {
       question: "How does Alloy work?",
@@ -209,17 +233,54 @@ export default function Home() {
 
       {/* Testimonials */}
       <Section className="py-12 md:py-20 bg-alloy-pine/5">
-        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-8 md:mb-12">
-          What our customers say
-        </h2>
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-md p-5 md:p-6 border border-alloy-stone/50">
-            <p className="text-sm md:text-base text-alloy-midnight/80 mb-3 md:mb-4">
-              "Finally, a cleaner I can trust. The whole process was simple, and the work was exactly what I needed."
-            </p>
-            <p className="text-sm md:text-base font-semibold text-alloy-pine">
-              — Sarah M., Bend
-            </p>
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-3">
+            What people are saying about Alloy
+          </h2>
+          <p className="text-sm md:text-base text-alloy-midnight/70 text-center mb-8 md:mb-12">
+            Early supporters — customer reviews coming soon.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 md:mb-12">
+            {testimonials.map((testimonial, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-2xl shadow-md p-5 md:p-6 border border-alloy-stone/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
+              >
+                {/* 5-star rating */}
+                <div className="flex gap-0.5 mb-4">
+                  {[...Array(5)].map((_, i) => (
+                    <svg
+                      key={i}
+                      className="w-4 h-4 text-alloy-juniper"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+                <p className="text-sm md:text-base text-alloy-midnight/80 mb-4 leading-relaxed">
+                  &quot;{testimonial.quote}&quot;
+                </p>
+                <div className="pt-4 border-t border-alloy-stone/20">
+                  <p className="text-sm md:text-base font-semibold text-alloy-pine">
+                    — {testimonial.name}
+                  </p>
+                  <p className="text-xs md:text-sm text-alloy-midnight/60 mt-1">
+                    {testimonial.relation}
+                    {testimonial.location && ` • ${testimonial.location}`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-center">
+            <Link href="/book">
+              <PrimaryButton className="w-full sm:w-auto">
+                Get a same-day quote
+              </PrimaryButton>
+            </Link>
           </div>
         </div>
       </Section>
