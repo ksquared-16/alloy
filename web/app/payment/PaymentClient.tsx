@@ -98,11 +98,11 @@ export default function PaymentClient() {
         }
 
         const initializeStripe = async () => {
-            const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+            const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE;
             
             // Strict check for publishable key
             if (!publishableKey || publishableKey.trim() === "") {
-                const errorMsg = "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY environment variable is missing or empty. Please set it in Vercel project settings and redeploy.";
+                const errorMsg = "NEXT_PUBLIC_STRIPE_PUBLISHABLE environment variable is missing or empty. Please set it in Vercel project settings and redeploy.";
                 console.error(errorMsg);
                 console.error("Current hostname:", typeof window !== "undefined" ? window.location.hostname : "unknown");
                 console.error("NODE_ENV:", process.env.NODE_ENV);

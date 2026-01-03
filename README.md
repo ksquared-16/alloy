@@ -150,14 +150,14 @@ The website will be available at `http://localhost:3000`
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `NEXT_PUBLIC_API_BASE_URL` | Base URL of the backend API (e.g., `http://localhost:8000` in dev) | Yes |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for card-on-file collection | Yes (for payment flow) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE` | Stripe publishable key for card-on-file collection | Yes (for payment flow) |
 
 ### Stripe Configuration
 
 The application uses Stripe SetupIntents for card-on-file collection (no charge today).
 
 **Frontend (Vercel):**
-- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in Vercel project settings
+- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE` in Vercel project settings
 - **Important:** After changing environment variables in Vercel, you MUST redeploy for changes to take effect
 - Debug page available at `/debug/stripe` to verify configuration
 

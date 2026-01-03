@@ -13,7 +13,7 @@ export default function StripeDebugPage() {
         setMounted(true);
         
         // Check if publishable key exists (but don't log the actual key)
-        const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+        const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE;
         setHasPublishableKey(key !== undefined && key !== null && key.trim() !== "");
         
         // Get hostname and environment info
@@ -54,7 +54,7 @@ export default function StripeDebugPage() {
                             <div className="space-y-2 text-sm">
                                 <div className="flex items-center justify-between">
                                     <span className="text-alloy-midnight/70">
-                                        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
+                                        NEXT_PUBLIC_STRIPE_PUBLISHABLE:
                                     </span>
                                     <span
                                         className={`font-semibold ${
@@ -96,7 +96,7 @@ export default function StripeDebugPage() {
                                     The Stripe publishable key is not configured. Please:
                                 </p>
                                 <ul className="text-sm text-red-700 mt-2 list-disc list-inside space-y-1">
-                                    <li>Set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in Vercel project settings</li>
+                                    <li>Set NEXT_PUBLIC_STRIPE_PUBLISHABLE in Vercel project settings</li>
                                     <li>Redeploy the application for changes to take effect</li>
                                 </ul>
                             </div>
