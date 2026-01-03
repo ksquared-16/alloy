@@ -87,28 +87,21 @@ def normalize_square_footage_option(raw: Optional[str]) -> Optional[str]:
     - Over 5,500 sq ft
     
     Args:
-        raw: Raw square footage string from form
+        raw: Raw square footage string from form (may include variations like
+             "1501-2000", "Under 1500", "1,501-2,000 sq ft", etc.)
     
     Returns:
-        Normalized string if valid, None otherwise
+        Normalized string matching exact GHL picklist option, None if cannot map confidently
     """
     if not raw:
         return None
     
-    # Strip whitespace
+    # Strip whitespace and normalize case
     normalized = raw.strip()
     if not normalized:
         return None
     
-    # Replace various dash types with en-dash –
-    # Handle: - (hyphen), — (em-dash), – (en-dash)
-    normalized = normalized.replace("—", "–")  # em-dash to en-dash
-    normalized = normalized.replace("-", "–")   # hyphen to en-dash
-    
-    # Preserve commas and "sq ft" suffix (already present in allowed values)
-    # No guessing ranges - must match exactly
-    
-    # Validate against allowed values
+    # Exact match first (fast path)
     ALLOWED_SQFT_VALUES = [
         "Under 1500 sq ft",
         "1,501–2,000 sq ft",
@@ -119,10 +112,81 @@ def normalize_square_footage_option(raw: Optional[str]) -> Optional[str]:
         "Over 5,500 sq ft",
     ]
     
-    if normalized in ALLOWED_SQFT_VALUES:
-        return normalized
+    # Replace various dash types with en-dash –
+    normalized_dash = normalized.replace("—", "–")  # em-dash to en-dash
+    normalized_dash = normalized_dash.replace("-", "–")   # hyphen to en-dash
     
-    # Not a valid value
+    if normalized_dash in ALLOWED_SQFT_VALUES:
+        return normalized_dash
+    
+    # Try to map variations to exact values
+    # Extract numbers and patterns
+    lower = normalized.lower()
+    
+    # Handle "Under 1500" variations
+    if "under" in lower and ("1500" in normalized or "1500" in normalized.replace(",", "")):
+        return "Under 1500 sq ft"
+    
+    # Handle "Over 5,500" or "Over 5500" variations
+    if "over" in lower and ("5500" in normalized.replace(",", "") or "5,500" in normalized):
+        return "Over 5,500 sq ft"
+    
+    # Extract numeric ranges (handle with/without commas, with/without "sq ft")
+    # Pattern: number-number or number,number-number,number
+    digits_only = re.sub(r"\D", "", normalized)
+    
+    # Try to match ranges
+    if len(digits_only) >= 6:
+        # Try to parse as range (e.g., "15012000" -> 1501-2000)
+        # Common patterns: 1501-2000, 2001-2600, 2601-3200, 3201-4000, 4001-5500
+        try:
+            # Try 4-digit start, 4-digit end
+            if len(digits_only) == 8:
+                start = int(digits_only[:4])
+                end = int(digits_only[4:])
+                
+                # Map to exact ranges
+                if start == 1501 and end == 2000:
+                    return "1,501–2,000 sq ft"
+                elif start == 2001 and end == 2600:
+                    return "2,001–2,600 sq ft"
+                elif start == 2601 and end == 3200:
+                    return "2,601–3,200 sq ft"
+                elif start == 3201 and end == 4000:
+                    return "3,201–4,000 sq ft"
+                elif start == 4001 and end == 5500:
+                    return "4,001–5,500 sq ft"
+        except ValueError:
+            pass
+    
+    # Try pattern matching with common separators
+    # Pattern: "1501-2000", "1,501-2,000", "1501–2000", etc.
+    range_pattern = re.search(r"(\d{1,4}[,\d]*)\s*[–-]\s*(\d{1,4}[,\d]*)", normalized_dash)
+    if range_pattern:
+        start_str = range_pattern.group(1).replace(",", "")
+        end_str = range_pattern.group(2).replace(",", "")
+        try:
+            start = int(start_str)
+            end = int(end_str)
+            
+            if start == 1501 and end == 2000:
+                return "1,501–2,000 sq ft"
+            elif start == 2001 and end == 2600:
+                return "2,001–2,600 sq ft"
+            elif start == 2601 and end == 3200:
+                return "2,601–3,200 sq ft"
+            elif start == 3201 and end == 4000:
+                return "3,201–4,000 sq ft"
+            elif start == 4001 and end == 5500:
+                return "4,001–5,500 sq ft"
+        except ValueError:
+            pass
+    
+    # If we can't map confidently, return None (will skip field)
+    logger.warning(
+        "normalize_square_footage_option: could not map input=%s to exact GHL picklist value",
+        raw
+    )
     return None
 
 

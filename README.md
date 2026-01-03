@@ -101,6 +101,7 @@ The API will be available at `http://localhost:8000`
 | `GHL_LOCATION_ID` | GoHighLevel location ID | Yes |
 | `STRIPE_SECRET_KEY` | Stripe secret key for SetupIntent creation | Yes (for payment flow) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | Yes (for payment flow) |
+| `GHL_STRIPE_CUSTOMER_ID` | GHL custom field ID for storing Stripe Customer ID | Yes (for payment flow) |
 | `GHL_CF_SERVICE_TYPE` | GHL custom field ID for service type | No (skipped if missing) |
 | `GHL_CF_PREFERRED_SERVICE_DATE` | GHL custom field ID for preferred service date | No (skipped if missing) |
 | `GHL_CF_HOME_TYPE` | GHL custom field ID for home type | No (skipped if missing) |
@@ -156,14 +157,17 @@ The website will be available at `http://localhost:3000`
 
 The application uses Stripe SetupIntents for card-on-file collection (no charge today).
 
+**Important:** SetupIntent is NOT a payment. It saves a payment method to a Stripe Customer for future charges. No money is charged when collecting the card.
+
 **Frontend (Vercel):**
-- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE` in Vercel project settings
+- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE` in Vercel project settings (Stripe publishable key)
 - **Important:** After changing environment variables in Vercel, you MUST redeploy for changes to take effect
 - Debug page available at `/debug/stripe` to verify configuration
 
 **Backend (Render):**
 - Set `STRIPE_SECRET_KEY` - Your Stripe secret key
 - Set `STRIPE_WEBHOOK_SECRET` - Webhook signing secret (get from `stripe listen` or Stripe Dashboard)
+- Set `GHL_STRIPE_CUSTOMER_ID` - GHL custom field ID where Stripe Customer ID (cus_...) is stored
 
 **Testing Locally:**
 1. Start backend: `uvicorn backend.main:app --reload`
@@ -171,6 +175,11 @@ The application uses Stripe SetupIntents for card-on-file collection (no charge 
 3. Start frontend: `npm run dev`
 4. Visit `/payment?phone=+15551234567&email=test@example.com`
 5. Use test card: `4242 4242 4242 4242`
+6. Verify:
+   - SetupIntent is created with Stripe Customer
+   - Webhook receives `setup_intent.succeeded`
+   - Contact in GHL is tagged with "card_on_file:collected"
+   - Stripe Customer ID is synced to GHL contact custom field
 
 ## Development Workflow
 

@@ -1133,6 +1133,55 @@ def update_contact_in_ghl(
         return None
 
 
+def update_contact_custom_field(contact_id: str, field_key: str, field_value: str) -> bool:
+    """
+    Update a single custom field for a GHL contact.
+    
+    Args:
+        contact_id: GHL contact ID
+        field_key: Internal field key (e.g., "stripe_customer_id")
+        field_value: Value to set
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    if not contact_id or not field_key or not field_value:
+        logger.warning("update_contact_custom_field: invalid parameters")
+        return False
+    
+    cf_id = CUSTOM_FIELD_IDS.get(field_key)
+    if not cf_id:
+        logger.warning("update_contact_custom_field: no custom field ID for key=%s", field_key)
+        return False
+    
+    # Build custom fields array with single field
+    custom_fields = [{"id": cf_id, "value": field_value}]
+    
+    payload = {
+        "customFields": custom_fields
+    }
+    
+    # Remove any disallowed fields
+    payload = strip_update_disallowed_fields(payload)
+    
+    try:
+        resp = requests.put(
+            f"{CONTACTS_URL}{contact_id}",
+            headers=_ghl_headers(),
+            json=payload,
+            timeout=10
+        )
+        if resp.ok:
+            logger.info("update_contact_custom_field: updated contact_id=%s field_key=%s", contact_id, field_key)
+            return True
+        else:
+            logger.error("update_contact_custom_field: failed (%s): %s", resp.status_code, resp.text)
+            return False
+    except Exception as e:
+        logger.error("update_contact_custom_field: exception: %s", e, exc_info=True)
+        return False
+
+
 def build_job_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build a normalized job summary dict from the GHL appointment / calendar payload.

@@ -39,6 +39,7 @@ CUSTOM_FIELD_IDS = {
     "addons__frequency": os.getenv("GHL_CF_ADDONS_FREQUENCY", "").strip(),
     "estimate_photos": os.getenv("GHL_CF_QUOTE_ESTIMATE_PHOTOS", "").strip(),
     "preferred_service_date": os.getenv("GHL_CF_PREFERRED_SERVICE_DATE", "").strip(),
+    "stripe_customer_id": os.getenv("GHL_STRIPE_CUSTOMER_ID", "").strip(),
 }
 
 # Required custom field env vars for /leads/cleaning
