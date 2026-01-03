@@ -5,6 +5,24 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { loadStripe, Stripe, StripeElements, StripeCardElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
 
+interface BookingPrefill {
+    phone?: string;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    estimated_price?: string;
+    ghl_contact_id?: string;
+}
+
+function clearBookingPrefill() {
+    try {
+        sessionStorage.removeItem("alloy_booking_prefill");
+        localStorage.removeItem("alloy_booking_prefill");
+    } catch (e) {
+        console.warn("Failed to clear booking prefill storage:", e);
+    }
+}
+
 export default function PaymentClient() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -17,28 +35,77 @@ export default function PaymentClient() {
     const [success, setSuccess] = useState(false);
     const cardElementRef = useRef<HTMLDivElement>(null);
 
-    // Required params
-    const phone = searchParams?.get("phone");
-    const email = searchParams?.get("email");
-    
-    // Optional params
-    const ghlContactId = searchParams?.get("ghl_contact_id");
+    // Resolve user info with fallback priority:
+    // 1. URL query params
+    // 2. sessionStorage
+    // 3. localStorage
+    const [resolvedPhone, setResolvedPhone] = useState<string | null>(null);
+    const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
+    const [resolvedGhlContactId, setResolvedGhlContactId] = useState<string | null>(null);
 
-    // Set mounted state
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    // Resolve phone/email from URL or storage
+    useEffect(() => {
+        if (!mounted) return;
+
+        // Priority 1: URL query params
+        let phone = searchParams?.get("phone");
+        let email = searchParams?.get("email");
+        let ghlContactId = searchParams?.get("ghl_contact_id");
+
+        // Priority 2: sessionStorage fallback
+        if ((!phone || !email) && typeof window !== "undefined") {
+            try {
+                const stored = sessionStorage.getItem("alloy_booking_prefill");
+                if (stored) {
+                    const parsed: BookingPrefill = JSON.parse(stored);
+                    if (!phone && parsed.phone) phone = parsed.phone;
+                    if (!email && parsed.email) email = parsed.email;
+                    if (!ghlContactId && parsed.ghl_contact_id) ghlContactId = parsed.ghl_contact_id;
+                }
+            } catch (e) {
+                console.warn("Failed to read from sessionStorage:", e);
+            }
+        }
+
+        // Priority 3: localStorage fallback
+        if ((!phone || !email) && typeof window !== "undefined") {
+            try {
+                const stored = localStorage.getItem("alloy_booking_prefill");
+                if (stored) {
+                    const parsed: BookingPrefill = JSON.parse(stored);
+                    if (!phone && parsed.phone) phone = parsed.phone;
+                    if (!email && parsed.email) email = parsed.email;
+                    if (!ghlContactId && parsed.ghl_contact_id) ghlContactId = parsed.ghl_contact_id;
+                }
+            } catch (e) {
+                console.warn("Failed to read from localStorage:", e);
+            }
+        }
+
+        setResolvedPhone(phone);
+        setResolvedEmail(email);
+        setResolvedGhlContactId(ghlContactId);
+    }, [mounted, searchParams]);
+
     // Initialize Stripe
     useEffect(() => {
-        if (!mounted || !phone || !email) {
+        if (!mounted || !resolvedPhone || !resolvedEmail) {
             return;
         }
 
         const initializeStripe = async () => {
             const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-            if (!publishableKey) {
-                console.error("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set");
+            
+            // Strict check for publishable key
+            if (!publishableKey || publishableKey.trim() === "") {
+                const errorMsg = "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY environment variable is missing or empty. Please set it in Vercel project settings and redeploy.";
+                console.error(errorMsg);
+                console.error("Current hostname:", typeof window !== "undefined" ? window.location.hostname : "unknown");
+                console.error("NODE_ENV:", process.env.NODE_ENV);
                 setError("Stripe is not configured. Please contact support.");
                 return;
             }
@@ -78,7 +145,7 @@ export default function PaymentClient() {
         };
 
         initializeStripe();
-    }, [mounted, phone, email]);
+    }, [mounted, resolvedPhone, resolvedEmail]);
 
     // Mount card element when both card and ref are ready
     useEffect(() => {
@@ -116,9 +183,9 @@ export default function PaymentClient() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    phone: phone!,
-                    email: email!,
-                    ghl_contact_id: ghlContactId || undefined,
+                    phone: resolvedPhone!,
+                    email: resolvedEmail!,
+                    ghl_contact_id: resolvedGhlContactId || undefined,
                 }),
             });
 
@@ -143,16 +210,17 @@ export default function PaymentClient() {
                 throw new Error(confirmError.message || "Card setup failed");
             }
 
-            // Success! Redirect to success page with params
+            // Success! Clear storage and redirect
+            clearBookingPrefill();
             setSuccess(true);
             
             // Build success URL with params
             const successParams = new URLSearchParams({
-                phone: phone!,
-                email: email!,
+                phone: resolvedPhone!,
+                email: resolvedEmail!,
             });
-            if (ghlContactId) {
-                successParams.append("ghl_contact_id", ghlContactId);
+            if (resolvedGhlContactId) {
+                successParams.append("ghl_contact_id", resolvedGhlContactId);
             }
             
             setTimeout(() => {
@@ -164,8 +232,13 @@ export default function PaymentClient() {
         }
     };
 
-    // Check for required params
-    if (mounted && (!phone || !email)) {
+    const handleStartOver = () => {
+        clearBookingPrefill();
+        window.location.href = "/services/cleaning";
+    };
+
+    // Check for required params (after all fallbacks)
+    if (mounted && (!resolvedPhone || !resolvedEmail)) {
         return (
             <div className="min-h-screen py-6 md:py-10">
                 <Section className="max-w-2xl">
@@ -191,12 +264,12 @@ export default function PaymentClient() {
                         <p className="text-alloy-midnight/70 mb-6">
                             Phone and email are required to save your card. Please start over from the beginning.
                         </p>
-                        <a
-                            href="/services/cleaning"
+                        <button
+                            onClick={handleStartOver}
                             className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
                         >
                             Start Over
-                        </a>
+                        </button>
                     </div>
                 </Section>
             </div>
@@ -268,10 +341,10 @@ export default function PaymentClient() {
                             </h3>
                             <div className="space-y-2 text-sm text-alloy-midnight/70">
                                 <div>
-                                    <strong>Email:</strong> {email}
+                                    <strong>Email:</strong> {resolvedEmail}
                                 </div>
                                 <div>
-                                    <strong>Phone:</strong> {phone}
+                                    <strong>Phone:</strong> {resolvedPhone}
                                 </div>
                             </div>
                         </div>

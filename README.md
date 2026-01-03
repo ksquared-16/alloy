@@ -99,6 +99,8 @@ The API will be available at `http://localhost:8000`
 |----------|-------------|----------|
 | `GHL_API_KEY` | GoHighLevel API Bearer token | Yes |
 | `GHL_LOCATION_ID` | GoHighLevel location ID | Yes |
+| `STRIPE_SECRET_KEY` | Stripe secret key for SetupIntent creation | Yes (for payment flow) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | Yes (for payment flow) |
 | `GHL_CF_SERVICE_TYPE` | GHL custom field ID for service type | No (skipped if missing) |
 | `GHL_CF_PREFERRED_SERVICE_DATE` | GHL custom field ID for preferred service date | No (skipped if missing) |
 | `GHL_CF_HOME_TYPE` | GHL custom field ID for home type | No (skipped if missing) |
@@ -148,6 +150,27 @@ The website will be available at `http://localhost:3000`
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `NEXT_PUBLIC_API_BASE_URL` | Base URL of the backend API (e.g., `http://localhost:8000` in dev) | Yes |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for card-on-file collection | Yes (for payment flow) |
+
+### Stripe Configuration
+
+The application uses Stripe SetupIntents for card-on-file collection (no charge today).
+
+**Frontend (Vercel):**
+- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in Vercel project settings
+- **Important:** After changing environment variables in Vercel, you MUST redeploy for changes to take effect
+- Debug page available at `/debug/stripe` to verify configuration
+
+**Backend (Render):**
+- Set `STRIPE_SECRET_KEY` - Your Stripe secret key
+- Set `STRIPE_WEBHOOK_SECRET` - Webhook signing secret (get from `stripe listen` or Stripe Dashboard)
+
+**Testing Locally:**
+1. Start backend: `uvicorn backend.main:app --reload`
+2. Forward webhooks: `stripe listen --forward-to localhost:8000/stripe/webhook`
+3. Start frontend: `npm run dev`
+4. Visit `/payment?phone=+15551234567&email=test@example.com`
+5. Use test card: `4242 4242 4242 4242`
 
 ## Development Workflow
 

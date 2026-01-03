@@ -1,10 +1,13 @@
 import { Suspense } from "react";
 import Section from "@/components/Section";
 import BookClient from "./BookClient";
+import BookPrefillPersist from "./BookPrefillPersist";
 
 export default function BookPage() {
     return (
-        <Suspense fallback={
+        <>
+            <BookPrefillPersist />
+            <Suspense fallback={
             <div className="min-h-screen py-6 md:py-10">
                 <Section className="max-w-5xl">
                     {process.env.NODE_ENV !== "production" && (
@@ -24,5 +27,6 @@ export default function BookPage() {
         }>
             <BookClient />
         </Suspense>
+        </>
     );
 }

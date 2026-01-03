@@ -4,6 +4,15 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Section from "@/components/Section";
 
+function clearBookingPrefill() {
+    try {
+        sessionStorage.removeItem("alloy_booking_prefill");
+        localStorage.removeItem("alloy_booking_prefill");
+    } catch (e) {
+        console.warn("Failed to clear booking prefill storage:", e);
+    }
+}
+
 export default function PaymentSuccessClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -12,6 +21,11 @@ export default function PaymentSuccessClient() {
     const phone = searchParams?.get("phone");
     const email = searchParams?.get("email");
     const ghlContactId = searchParams?.get("ghl_contact_id");
+
+    // Clear storage on mount (payment already succeeded)
+    useEffect(() => {
+        clearBookingPrefill();
+    }, []);
 
     useEffect(() => {
         // Auto-redirect after 5 seconds
