@@ -141,6 +141,66 @@ def _search_contact_by_phone_via_api(phone: str) -> List[Dict[str, Any]]:
     return []
 
 
+def search_contact_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """
+    Search for a contact by email using GHL Contacts Search API.
+    
+    Args:
+        email: Email address (will be trimmed and lowercased)
+    
+    Returns:
+        First matching contact dict if found, None otherwise
+    """
+    if not GHL_LOCATION_ID:
+        logger.warning("search_contact_by_email: GHL_LOCATION_ID not set")
+        return None
+    
+    email_trimmed = email.strip().lower()
+    if not email_trimmed:
+        logger.warning("search_contact_by_email: empty email after normalization")
+        return None
+    
+    # Build request body with locationId in body and filters array
+    body = {
+        "locationId": GHL_LOCATION_ID.strip(),
+        "page": 1,
+        "pageLimit": 20,
+        "filters": [
+            {"field": "email", "operator": "eq", "value": email_trimmed}
+        ],
+    }
+    
+    try:
+        resp = requests.post(
+            CONTACTS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+        )
+    except Exception as e:
+        logger.error("search_contact_by_email: exception: %s", e)
+        return None
+    
+    if not resp.ok:
+        logger.debug("search_contact_by_email: search failed (%s): %s", resp.status_code, resp.text)
+        return None
+    
+    try:
+        data = resp.json()
+    except Exception:
+        logger.error("search_contact_by_email: failed to parse JSON response")
+        return None
+    
+    # Extract contacts from response
+    contacts = data.get("contacts", [])
+    if not contacts and isinstance(data, list):
+        contacts = data
+    
+    if contacts:
+        logger.info("search_contact_by_email: found %d contacts using email=%s", len(contacts), email_trimmed)
+        return contacts[0]
+    
+    logger.debug("search_contact_by_email: no contacts found for email=%s", email_trimmed)
+    return None
+
+
 def fetch_contractors() -> List[Dict[str, Any]]:
     """
     Fetch contractors from GHL contacts API, filtered by tags.

@@ -547,3 +547,78 @@ def debug_quote_source(phone: str):
             "traceback": traceback.format_exc(),
         }, status_code=200)
 
+
+@router.get("/debug/ghl-contact")
+def debug_ghl_contact(phone: Optional[str] = None, email: Optional[str] = None):
+    """
+    Debug endpoint to test GHL contact resolution (same logic as Stripe webhook).
+    
+    Args (query params):
+        phone: Phone number to search for (optional)
+        email: Email address to search for (optional)
+    
+    Returns:
+        JSON with:
+        - contact: Contact dict if found (id, name, phone, email) or null
+        - resolution_path: "phone_search", "email_search", or null
+        - phone_normalized: Normalized phone if provided
+        - email_normalized: Lowercased email if provided
+    """
+    # Validate that at least one parameter is provided
+    if not phone and not email:
+        return JSONResponse({
+            "error": "At least one of 'phone' or 'email' query parameters is required",
+        }, status_code=400)
+    
+    try:
+        contact = None
+        resolution_path = None
+        phone_normalized = None
+        email_normalized = None
+        
+        # Try phone first if provided
+        if phone:
+            phone_normalized = normalize_phone(phone.strip() if phone else "")
+            if phone_normalized:
+                contact = search_contact_by_phone(phone_normalized)
+                if contact:
+                    resolution_path = "phone_search"
+        
+        # Try email if phone didn't find anything
+        if not contact and email:
+            email_normalized = email.strip().lower() if email else None
+            if email_normalized:
+                contact = search_contact_by_email(email_normalized)
+                if contact:
+                    resolution_path = "email_search"
+        
+        # Build response
+        if contact:
+            return JSONResponse({
+                "contact": {
+                    "id": contact.get("id"),
+                    "name": (
+                        contact.get("contactName")
+                        or f"{contact.get('firstName', '')} {contact.get('lastName', '')}".strip()
+                        or "Unknown"
+                    ),
+                    "phone": contact.get("phone", ""),
+                    "email": contact.get("email", ""),
+                },
+                "resolution_path": resolution_path,
+                "phone_normalized": phone_normalized,
+                "email_normalized": email_normalized,
+            }, status_code=200)
+        else:
+            return JSONResponse({
+                "contact": None,
+                "resolution_path": None,
+                "phone_normalized": phone_normalized,
+                "email_normalized": email_normalized,
+            }, status_code=200)
+    except Exception as e:
+        return JSONResponse({
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }, status_code=200)
+
