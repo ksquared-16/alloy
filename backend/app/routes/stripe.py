@@ -12,6 +12,7 @@ from ..utils import normalize_phone
 from ..ghl_client import (
     search_contact_by_phone,
     add_tag_to_contact,
+    get_contact_by_id,
 )
 
 # Initialize Stripe
@@ -214,24 +215,36 @@ async def stripe_webhook(request: Request):
         )
         
         contact_id_to_tag = None
+        resolution_path = None
         
-        # Try to find contact by ghl_contact_id first
+        # Try to find contact by ghl_contact_id first (if provided)
         if ghl_contact_id:
-            contact_id_to_tag = ghl_contact_id
-            logger.info(
-                "stripe_webhook: using ghl_contact_id from metadata: %s",
-                contact_id_to_tag
-            )
-        else:
-            # Fallback: search by phone or email
+            # Validate the contact_id by attempting to fetch it
+            contact = get_contact_by_id(ghl_contact_id)
+            if contact:
+                contact_id_to_tag = ghl_contact_id
+                resolution_path = "ghl_contact_id"
+                logger.info(
+                    "stripe_webhook: validated ghl_contact_id=%s from metadata (path: ghl_contact_id)",
+                    contact_id_to_tag
+                )
+            else:
+                logger.warning(
+                    "stripe_webhook: ghl_contact_id=%s from metadata is invalid (400/404), falling back to search",
+                    ghl_contact_id
+                )
+        
+        # Fallback: search by phone or email if ghl_contact_id not found or invalid
+        if not contact_id_to_tag:
             if phone:
                 phone_normalized = normalize_phone(phone)
                 if phone_normalized:
                     contact = search_contact_by_phone(phone_normalized)
                     if contact:
                         contact_id_to_tag = contact.get("id")
+                        resolution_path = "phone_search"
                         logger.info(
-                            "stripe_webhook: found contact by phone: contact_id=%s phone=%s",
+                            "stripe_webhook: found contact by phone: contact_id=%s phone=%s (path: phone_search)",
                             contact_id_to_tag,
                             phone_normalized[:4] + "***"
                         )
@@ -240,8 +253,9 @@ async def stripe_webhook(request: Request):
                 contact = search_contact_by_email(email)
                 if contact:
                     contact_id_to_tag = contact.get("id")
+                    resolution_path = "email_search"
                     logger.info(
-                        "stripe_webhook: found contact by email: contact_id=%s email=%s",
+                        "stripe_webhook: found contact by email: contact_id=%s email=%s (path: email_search)",
                         contact_id_to_tag,
                         email[:10] + "***"
                     )
@@ -252,21 +266,23 @@ async def stripe_webhook(request: Request):
             success = add_tag_to_contact(contact_id_to_tag, tag)
             if success:
                 logger.info(
-                    "stripe_webhook: tagged contact_id=%s with tag=%s event_id=%s",
+                    "stripe_webhook: tagged contact_id=%s with tag=%s event_id=%s resolution_path=%s",
                     contact_id_to_tag,
                     tag,
-                    event_id
+                    event_id,
+                    resolution_path
                 )
             else:
                 logger.error(
-                    "stripe_webhook: failed to tag contact_id=%s with tag=%s event_id=%s",
+                    "stripe_webhook: failed to tag contact_id=%s with tag=%s event_id=%s resolution_path=%s",
                     contact_id_to_tag,
                     tag,
-                    event_id
+                    event_id,
+                    resolution_path
                 )
         else:
             logger.warning(
-                "stripe_webhook: could not find contact for setup_intent_id=%s metadata=%s event_id=%s",
+                "stripe_webhook: could not find contact for setup_intent_id=%s metadata=%s event_id=%s (tried ghl_contact_id, phone, email)",
                 setup_intent_id,
                 metadata,
                 event_id

@@ -5,13 +5,13 @@ import re
 import logging
 import traceback
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..settings import GHL_LOCATION_ID, JOB_STORE, CONTACTS_SEARCH_URL
 from ..utils import _ghl_headers, normalize_phone
-from ..ghl_client import find_contact_record_by_phone
+from ..ghl_client import find_contact_record_by_phone, search_contact_by_phone, search_contact_by_email
 from ..settings import CUSTOM_FIELD_IDS
 import traceback
 from ..pricing import (

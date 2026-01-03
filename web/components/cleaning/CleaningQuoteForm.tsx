@@ -372,6 +372,39 @@ export default function CleaningQuoteForm({
                             return;
                         }
 
+                        // Persist contact_id to booking prefill storage if available
+                        if (backendResult.contact_id) {
+                            try {
+                                // Read existing prefill data or create new
+                                const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
+                                let prefillData: any = {};
+                                
+                                if (existingPrefill) {
+                                    try {
+                                        prefillData = JSON.parse(existingPrefill);
+                                    } catch (e) {
+                                        console.warn("Failed to parse existing prefill data:", e);
+                                    }
+                                }
+                                
+                                // Update with contact_id and current form data
+                                prefillData.ghl_contact_id = backendResult.contact_id;
+                                prefillData.phone = form.phone;
+                                prefillData.email = form.email;
+                                prefillData.first_name = form.firstName;
+                                prefillData.last_name = form.lastName;
+                                
+                                // Store in both sessionStorage and localStorage
+                                const jsonData = JSON.stringify(prefillData);
+                                sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                                localStorage.setItem("alloy_booking_prefill", jsonData);
+                                
+                                console.log("Persisted contact_id to booking prefill:", backendResult.contact_id);
+                            } catch (e) {
+                                console.warn("Failed to persist contact_id:", e);
+                            }
+                        }
+
                         // If booking_url is provided, redirect to it
                         if (backendResult.booking_url) {
                             console.log("Redirecting to booking URL:", backendResult.booking_url);

@@ -717,6 +717,49 @@ def strip_update_disallowed_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+def get_contact_by_id(contact_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch a contact by ID from GHL.
+    
+    Args:
+        contact_id: GHL contact ID
+    
+    Returns:
+        Contact dict if found, None if not found or error
+    """
+    if not contact_id:
+        logger.warning("get_contact_by_id: invalid contact_id")
+        return None
+    
+    try:
+        resp = requests.get(
+            f"{CONTACTS_URL}{contact_id}",
+            headers=_ghl_headers(),
+            params={"locationId": GHL_LOCATION_ID},
+            timeout=10
+        )
+        
+        if resp.status_code == 404 or resp.status_code == 400:
+            logger.debug("get_contact_by_id: contact_id=%s not found (%s)", contact_id, resp.status_code)
+            return None
+        
+        if not resp.ok:
+            logger.error("get_contact_by_id: failed to fetch contact_id=%s (%s): %s", 
+                        contact_id, resp.status_code, resp.text)
+            return None
+        
+        data = resp.json()
+        contact = data.get("contact", {})
+        if contact:
+            logger.debug("get_contact_by_id: found contact_id=%s", contact_id)
+            return contact
+        
+        return None
+    except Exception as e:
+        logger.error("get_contact_by_id: exception for contact_id=%s: %s", contact_id, e, exc_info=True)
+        return None
+
+
 def add_tag_to_contact(contact_id: str, tag: str) -> bool:
     """
     Add a tag to a contact in GHL.
