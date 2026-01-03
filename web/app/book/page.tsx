@@ -6,7 +6,9 @@ import BookPrefillPersist from "./BookPrefillPersist";
 export default function BookPage() {
     return (
         <>
-            <BookPrefillPersist />
+            <Suspense fallback={null}>
+                <BookPrefillPersist />
+            </Suspense>
             <Suspense fallback={
             <div className="min-h-screen py-6 md:py-10">
                 <Section className="max-w-5xl">
