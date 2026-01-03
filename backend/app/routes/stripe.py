@@ -3,7 +3,7 @@ Stripe webhook endpoints for SetupIntent events (card on file collection).
 """
 import logging
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Request, Header, HTTPException
+from fastapi import APIRouter, Request, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 import stripe
 
@@ -23,6 +23,179 @@ stripe.api_key = STRIPE_SECRET_KEY
 logger = logging.getLogger("alloy-dispatcher")
 
 router = APIRouter()
+
+
+@router.get("/stripe/card-status")
+async def get_card_status(
+    ghl_contact_id: Optional[str] = Query(None),
+    phone: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+):
+    """
+    Check if a contact has a card on file.
+    
+    Query params (at least one required):
+        - ghl_contact_id: Preferred - GHL contact ID
+        - phone: Fallback if ghl_contact_id not provided
+        - email: Fallback if ghl_contact_id not provided
+    
+    Returns:
+        {
+            "has_card_on_file": boolean,
+            "customer_id": string | null,
+            "default_payment_method_id": string | null,
+            "brand": string | null,
+            "last4": string | null
+        }
+    """
+    # Resolve contact using canonical resolution (email-first, then phone)
+    contact = None
+    resolved_ghl_contact_id = None
+    resolution_path = None
+    
+    if ghl_contact_id:
+        contact = get_contact_by_id(ghl_contact_id)
+        if contact:
+            resolved_ghl_contact_id = ghl_contact_id
+            resolution_path = "ghl_contact_id"
+            logger.info("get_card_status: validated ghl_contact_id=%s", ghl_contact_id)
+        else:
+            logger.warning("get_card_status: ghl_contact_id=%s invalid, falling back to search", ghl_contact_id)
+    
+    # Fallback: search by email first (canonical resolution)
+    if not contact and email:
+        email_normalized = email.strip().lower()
+        contact = search_contact_by_email(email_normalized)
+        if contact:
+            resolved_ghl_contact_id = contact.get("id")
+            resolution_path = "email_search"
+            logger.info("get_card_status: found contact by email: contact_id=%s", resolved_ghl_contact_id)
+    
+    # Fallback: search by phone
+    if not contact and phone:
+        phone_normalized = normalize_phone(phone)
+        if phone_normalized:
+            contact = search_contact_by_phone(phone_normalized)
+            if contact:
+                resolved_ghl_contact_id = contact.get("id")
+                resolution_path = "phone_search"
+                logger.info("get_card_status: found contact by phone: contact_id=%s", resolved_ghl_contact_id)
+    
+    if not contact:
+        logger.info(
+            "get_card_status: no contact found ghl_contact_id=%s phone=%s email=%s",
+            ghl_contact_id or "None",
+            phone[:4] + "***" if phone else "None",
+            email[:10] + "***" if email else "None"
+        )
+        return JSONResponse({
+            "has_card_on_file": False,
+            "customer_id": None,
+            "default_payment_method_id": None,
+            "brand": None,
+            "last4": None,
+        })
+    
+    # Extract Stripe Customer ID from GHL contact
+    stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+    
+    if not stripe_customer_id:
+        logger.info(
+            "get_card_status: no stripe_customer_id found contact_id=%s resolution_path=%s",
+            resolved_ghl_contact_id,
+            resolution_path
+        )
+        return JSONResponse({
+            "has_card_on_file": False,
+            "customer_id": None,
+            "default_payment_method_id": None,
+            "brand": None,
+            "last4": None,
+        })
+    
+    # Retrieve Stripe customer and check for default payment method
+    try:
+        customer = stripe.Customer.retrieve(stripe_customer_id)
+        default_payment_method_id = customer.invoice_settings.default_payment_method
+        
+        if not default_payment_method_id:
+            # Check if customer has any payment methods attached
+            payment_methods = stripe.PaymentMethod.list(
+                customer=stripe_customer_id,
+                type="card",
+                limit=1
+            )
+            if payment_methods.data:
+                default_payment_method_id = payment_methods.data[0].id
+                logger.info(
+                    "get_card_status: no default payment method, using first available payment_method_id=%s",
+                    default_payment_method_id[:8] + "***"
+                )
+        
+        if default_payment_method_id:
+            # Retrieve payment method to get brand and last4
+            payment_method = stripe.PaymentMethod.retrieve(default_payment_method_id)
+            card = payment_method.card
+            brand = card.brand if card else None
+            last4 = card.last4 if card else None
+            
+            logger.info(
+                "get_card_status: card on file found contact_id=%s customer_id=%s payment_method_id=%s brand=%s last4=%s resolution_path=%s",
+                resolved_ghl_contact_id,
+                stripe_customer_id[:8] + "***",
+                default_payment_method_id[:8] + "***",
+                brand,
+                last4,
+                resolution_path
+            )
+            
+            return JSONResponse({
+                "has_card_on_file": True,
+                "customer_id": stripe_customer_id,
+                "default_payment_method_id": default_payment_method_id,
+                "brand": brand,
+                "last4": last4,
+            })
+        else:
+            logger.info(
+                "get_card_status: customer exists but no payment method contact_id=%s customer_id=%s resolution_path=%s",
+                resolved_ghl_contact_id,
+                stripe_customer_id[:8] + "***",
+                resolution_path
+            )
+            return JSONResponse({
+                "has_card_on_file": False,
+                "customer_id": stripe_customer_id,
+                "default_payment_method_id": None,
+                "brand": None,
+                "last4": None,
+            })
+    except stripe.error.StripeError as e:
+        logger.error(
+            "get_card_status: Stripe error retrieving customer_id=%s: %s",
+            stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
+            e
+        )
+        return JSONResponse({
+            "has_card_on_file": False,
+            "customer_id": stripe_customer_id,
+            "default_payment_method_id": None,
+            "brand": None,
+            "last4": None,
+        })
+    except Exception as e:
+        logger.error(
+            "get_card_status: unexpected error: %s",
+            e,
+            exc_info=True
+        )
+        return JSONResponse({
+            "has_card_on_file": False,
+            "customer_id": None,
+            "default_payment_method_id": None,
+            "brand": None,
+            "last4": None,
+        })
 
 
 def _extract_stripe_customer_id_from_contact(contact: Dict[str, Any]) -> Optional[str]:

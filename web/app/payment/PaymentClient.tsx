@@ -47,6 +47,15 @@ export default function PaymentClient() {
     const [error, setError] = useState<string | null>(null);
     const cardElementRef = useRef<HTMLDivElement>(null);
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
+    const [cardStatus, setCardStatus] = useState<{
+        has_card_on_file: boolean;
+        customer_id: string | null;
+        default_payment_method_id: string | null;
+        brand: string | null;
+        last4: string | null;
+    } | null>(null);
+    const [showUpdateCard, setShowUpdateCard] = useState(false);
+    const [isCheckingCardStatus, setIsCheckingCardStatus] = useState(true);
 
     // Resolve user info with fallback priority:
     // 1. URL query params
@@ -117,9 +126,65 @@ export default function PaymentClient() {
         }
     }, [mounted, searchParams]);
 
-    // Initialize Stripe
+    // Check card status after contact info is resolved
     useEffect(() => {
         if (!mounted || !resolvedPhone || !resolvedEmail) {
+            setIsCheckingCardStatus(false);
+            return;
+        }
+
+        const checkCardStatus = async () => {
+            setIsCheckingCardStatus(true);
+            try {
+                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+                const params = new URLSearchParams();
+                if (resolvedGhlContactId) {
+                    params.append("ghl_contact_id", resolvedGhlContactId);
+                }
+                params.append("phone", resolvedPhone);
+                params.append("email", resolvedEmail);
+
+                const response = await fetch(`${apiBaseUrl}/stripe/card-status?${params.toString()}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setCardStatus(data);
+                } else {
+                    console.warn("Failed to check card status:", response.status);
+                    setCardStatus({
+                        has_card_on_file: false,
+                        customer_id: null,
+                        default_payment_method_id: null,
+                        brand: null,
+                        last4: null,
+                    });
+                }
+            } catch (e) {
+                console.error("Error checking card status:", e);
+                setCardStatus({
+                    has_card_on_file: false,
+                    customer_id: null,
+                    default_payment_method_id: null,
+                    brand: null,
+                    last4: null,
+                });
+            } finally {
+                setIsCheckingCardStatus(false);
+            }
+        };
+
+        checkCardStatus();
+    }, [mounted, resolvedPhone, resolvedEmail, resolvedGhlContactId]);
+
+    // Initialize Stripe (only if we need to show card entry)
+    useEffect(() => {
+        if (!mounted || !resolvedPhone || !resolvedEmail) {
+            return;
+        }
+
+        // Only initialize Stripe if:
+        // 1. No card on file, OR
+        // 2. Card on file but user wants to update it
+        if (cardStatus?.has_card_on_file && !showUpdateCard) {
             return;
         }
 
@@ -171,7 +236,7 @@ export default function PaymentClient() {
         };
 
         initializeStripe();
-    }, [mounted, resolvedPhone, resolvedEmail]);
+    }, [mounted, resolvedPhone, resolvedEmail, cardStatus?.has_card_on_file, showUpdateCard]);
 
     // Mount card element when both card and ref are ready
     useEffect(() => {
@@ -188,6 +253,32 @@ export default function PaymentClient() {
             };
         }
     }, [card]);
+
+    const handleConfirmWithCardOnFile = async () => {
+        // User confirms appointment with existing card on file
+        setIsProcessing(true);
+        setError(null);
+
+        try {
+            // Clear storage and immediately redirect (no SetupIntent needed)
+            clearBookingPrefill();
+            
+            // Build success URL with params
+            const successParams = new URLSearchParams({
+                phone: resolvedPhone!,
+                email: resolvedEmail!,
+            });
+            if (resolvedGhlContactId) {
+                successParams.append("ghl_contact_id", resolvedGhlContactId);
+            }
+            
+            // Immediately redirect using replace to avoid back button issues
+            router.replace(`/payment/success?${successParams.toString()}`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "An error occurred");
+            setIsProcessing(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -300,7 +391,7 @@ export default function PaymentClient() {
         );
     }
 
-    if (!mounted) {
+    if (!mounted || isCheckingCardStatus) {
         return (
             <div className="min-h-screen py-6 md:py-10">
                 <Section className="max-w-2xl">
@@ -438,59 +529,119 @@ export default function PaymentClient() {
                     <div className={hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
                         <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-10">
                             <h1 className="text-3xl font-bold text-alloy-midnight mb-6">
-                                Save Card on File
+                                {cardStatus?.has_card_on_file ? "Payment Method on File" : "Save Card on File"}
                             </h1>
 
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                {/* Customer Info (Read-only display) */}
-                                <div className="bg-alloy-stone/20 rounded-lg p-4 border border-alloy-stone/30">
-                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">
-                                        Your Information
-                                    </h3>
-                                    <div className="space-y-2 text-sm text-alloy-midnight/70">
-                                        <div>
-                                            <strong>Email:</strong> {resolvedEmail}
+                            {/* Customer Info (Read-only display) */}
+                            <div className="bg-alloy-stone/20 rounded-lg p-4 border border-alloy-stone/30 mb-6">
+                                <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">
+                                    Your Information
+                                </h3>
+                                <div className="space-y-2 text-sm text-alloy-midnight/70">
+                                    <div>
+                                        <strong>Email:</strong> {resolvedEmail}
+                                    </div>
+                                    <div>
+                                        <strong>Phone:</strong> {resolvedPhone}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card on File UI */}
+                            {cardStatus?.has_card_on_file && !showUpdateCard ? (
+                                <div className="space-y-6">
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <svg
+                                                className="w-6 h-6 text-green-600"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                />
+                                            </svg>
+                                            <p className="text-sm font-semibold text-green-900">
+                                                Card on file detected: {cardStatus.brand ? cardStatus.brand.charAt(0).toUpperCase() + cardStatus.brand.slice(1) : "Card"} •••• {cardStatus.last4}
+                                            </p>
                                         </div>
-                                        <div>
-                                            <strong>Phone:</strong> {resolvedPhone}
+                                    </div>
+
+                                    {/* Info Message */}
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <p className="text-sm text-blue-900">
+                                            <strong>No charge today.</strong> We&apos;ll only charge after service (or per cancellation policy).
+                                        </p>
+                                    </div>
+
+                                    {/* Error Message */}
+                                    {error && (
+                                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                            <p className="text-sm text-red-800">{error}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div className="space-y-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleConfirmWithCardOnFile}
+                                            disabled={isProcessing}
+                                            className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isProcessing ? "Processing..." : "Confirm Appointment"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUpdateCard(true)}
+                                            disabled={isProcessing}
+                                            className="w-full bg-alloy-stone/20 text-alloy-midnight font-semibold px-6 py-3 rounded-lg hover:bg-alloy-stone/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Update Card
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Card Entry Form */
+                                <form onSubmit={handleSubmit} className="space-y-6">
+                                    {/* Card Details */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-alloy-midnight mb-2">
+                                            Card Details
+                                        </label>
+                                        <div className="bg-white border border-alloy-stone/40 rounded-lg p-4">
+                                            <div id="card-element" ref={cardElementRef}></div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* Card Details */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-alloy-midnight mb-2">
-                                        Card Details
-                                    </label>
-                                    <div className="bg-white border border-alloy-stone/40 rounded-lg p-4">
-                                        <div id="card-element" ref={cardElementRef}></div>
+                                    {/* Info Message */}
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <p className="text-sm text-blue-900">
+                                            <strong>No charge today.</strong> We&apos;ll only charge after service (or per cancellation policy).
+                                        </p>
                                     </div>
-                                </div>
 
-                                {/* Info Message */}
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <p className="text-sm text-blue-900">
-                                        <strong>No charge today.</strong> To reserve your appointment, we&apos;ll save a card on file. 
-                                        You will not be charged today. You will only be charged after service (or per our cancellation policy).
-                                    </p>
-                                </div>
+                                    {/* Error Message */}
+                                    {error && (
+                                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                            <p className="text-sm text-red-800">{error}</p>
+                                        </div>
+                                    )}
 
-                                {/* Error Message */}
-                                {error && (
-                                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                                        <p className="text-sm text-red-800">{error}</p>
-                                    </div>
-                                )}
-
-                                {/* Submit Button */}
-                                <button
-                                    type="submit"
-                                    disabled={!stripe || !card || isProcessing}
-                                    className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isProcessing ? "Processing..." : "Save Card & Confirm"}
-                                </button>
-                            </form>
+                                    {/* Submit Button */}
+                                    <button
+                                        type="submit"
+                                        disabled={!stripe || !card || isProcessing}
+                                        className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isProcessing ? "Processing..." : "Save Card & Confirm"}
+                                    </button>
+                                </form>
+                            )}
                         </div>
                     </div>
                 </div>
