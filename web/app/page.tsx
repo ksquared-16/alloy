@@ -276,7 +276,7 @@ export default function Home() {
             ))}
           </div>
           <div className="text-center">
-            <Link href="/book">
+            <Link href="/services/cleaning?open=1#quote-form">
               <PrimaryButton className="w-full sm:w-auto">
                 Get a same-day quote
               </PrimaryButton>
