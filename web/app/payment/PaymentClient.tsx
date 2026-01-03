@@ -1,39 +1,106 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { loadStripe } from "@stripe/stripe-js";
-import {
-    Elements,
-    CardElement,
-    useStripe,
-    useElements,
-} from "@stripe/react-stripe-js";
+import { loadStripe, Stripe, StripeElements, StripeCardElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
 
-// Initialize Stripe
-const stripePromise = loadStripe(
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
-);
-
-interface PaymentFormProps {
-    phone: string;
-    email: string;
-    ghlContactId?: string;
-}
-
-function PaymentForm({ phone, email, ghlContactId }: PaymentFormProps) {
-    const stripe = useStripe();
-    const elements = useElements();
+export default function PaymentClient() {
+    const searchParams = useSearchParams();
     const router = useRouter();
+    const [mounted, setMounted] = useState(false);
+    const [stripe, setStripe] = useState<Stripe | null>(null);
+    const [elements, setElements] = useState<StripeElements | null>(null);
+    const [card, setCard] = useState<StripeCardElement | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const cardElementRef = useRef<HTMLDivElement>(null);
+
+    // Required params
+    const phone = searchParams?.get("phone");
+    const email = searchParams?.get("email");
+    
+    // Optional params
+    const ghlContactId = searchParams?.get("ghl_contact_id");
+
+    // Set mounted state
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    // Initialize Stripe
+    useEffect(() => {
+        if (!mounted || !phone || !email) {
+            return;
+        }
+
+        const initializeStripe = async () => {
+            const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+            if (!publishableKey) {
+                console.error("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set");
+                setError("Stripe is not configured. Please contact support.");
+                return;
+            }
+
+            try {
+                const stripeInstance = await loadStripe(publishableKey);
+                if (!stripeInstance) {
+                    throw new Error("Failed to load Stripe");
+                }
+                
+                setStripe(stripeInstance);
+                
+                const elementsInstance = stripeInstance.elements();
+                setElements(elementsInstance);
+                
+                // Create card element
+                const cardElement = elementsInstance.create("card", {
+                    style: {
+                        base: {
+                            fontSize: "16px",
+                            color: "#1a1a1a",
+                            "::placeholder": {
+                                color: "#9ca3af",
+                            },
+                        },
+                        invalid: {
+                            color: "#ef4444",
+                        },
+                    },
+                });
+                
+                setCard(cardElement);
+            } catch (err) {
+                console.error("Failed to initialize Stripe:", err);
+                setError("Failed to load payment form. Please refresh the page.");
+            }
+        };
+
+        initializeStripe();
+    }, [mounted, phone, email]);
+
+    // Mount card element when both card and ref are ready
+    useEffect(() => {
+        if (card && cardElementRef.current) {
+            card.mount(cardElementRef.current);
+            
+            // Cleanup: unmount card element
+            return () => {
+                try {
+                    card.unmount();
+                } catch (e) {
+                    // Ignore unmount errors
+                }
+            };
+        }
+    }, [card]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!stripe || !elements) {
+        if (!stripe || !card) {
+            setError("Payment form is not ready. Please wait a moment and try again.");
             return;
         }
 
@@ -41,12 +108,6 @@ function PaymentForm({ phone, email, ghlContactId }: PaymentFormProps) {
         setError(null);
 
         try {
-            // Get card element
-            const cardElement = elements.getElement(CardElement);
-            if (!cardElement) {
-                throw new Error("Card element not found");
-            }
-
             // Call backend to create SetupIntent
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
             const response = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
@@ -55,8 +116,8 @@ function PaymentForm({ phone, email, ghlContactId }: PaymentFormProps) {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    phone,
-                    email,
+                    phone: phone!,
+                    email: email!,
                     ghl_contact_id: ghlContactId || undefined,
                 }),
             });
@@ -73,7 +134,7 @@ function PaymentForm({ phone, email, ghlContactId }: PaymentFormProps) {
                 client_secret,
                 {
                     payment_method: {
-                        card: cardElement,
+                        card: card,
                     },
                 }
             );
@@ -87,8 +148,8 @@ function PaymentForm({ phone, email, ghlContactId }: PaymentFormProps) {
             
             // Build success URL with params
             const successParams = new URLSearchParams({
-                phone,
-                email,
+                phone: phone!,
+                email: email!,
             });
             if (ghlContactId) {
                 successParams.append("ghl_contact_id", ghlContactId);
@@ -102,118 +163,6 @@ function PaymentForm({ phone, email, ghlContactId }: PaymentFormProps) {
             setIsProcessing(false);
         }
     };
-
-    if (success) {
-        return (
-            <div className="text-center py-8">
-                <div className="mb-4">
-                    <svg
-                        className="w-16 h-16 mx-auto text-alloy-juniper"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                        />
-                    </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
-                    Card saved successfully!
-                </h2>
-                <p className="text-alloy-midnight/70">
-                    Redirecting to confirmation...
-                </p>
-            </div>
-        );
-    }
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Customer Info (Read-only display) */}
-            <div className="bg-alloy-stone/20 rounded-lg p-4 border border-alloy-stone/30">
-                <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">
-                    Your Information
-                </h3>
-                <div className="space-y-2 text-sm text-alloy-midnight/70">
-                    <div>
-                        <strong>Email:</strong> {email}
-                    </div>
-                    <div>
-                        <strong>Phone:</strong> {phone}
-                    </div>
-                </div>
-            </div>
-
-            {/* Card Details */}
-            <div>
-                <label className="block text-sm font-semibold text-alloy-midnight mb-2">
-                    Card Details
-                </label>
-                <div className="bg-white border border-alloy-stone/40 rounded-lg p-4">
-                    <CardElement
-                        options={{
-                            style: {
-                                base: {
-                                    fontSize: "16px",
-                                    color: "#1a1a1a",
-                                    "::placeholder": {
-                                        color: "#9ca3af",
-                                    },
-                                },
-                                invalid: {
-                                    color: "#ef4444",
-                                },
-                            },
-                        }}
-                    />
-                </div>
-            </div>
-
-            {/* Info Message */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900">
-                    <strong>No charge today.</strong> To reserve your appointment, we&apos;ll save a card on file. 
-                    You will not be charged today. You will only be charged after service (or per our cancellation policy).
-                </p>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-sm text-red-800">{error}</p>
-                </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-                type="submit"
-                disabled={!stripe || isProcessing}
-                className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {isProcessing ? "Processing..." : "Save Card & Confirm"}
-            </button>
-        </form>
-    );
-}
-
-export default function PaymentClient() {
-    const searchParams = useSearchParams();
-    const [mounted, setMounted] = useState(false);
-
-    // Required params
-    const phone = searchParams?.get("phone");
-    const email = searchParams?.get("email");
-    
-    // Optional params
-    const ghlContactId = searchParams?.get("ghl_contact_id");
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
 
     // Check for required params
     if (mounted && (!phone || !email)) {
@@ -269,6 +218,40 @@ export default function PaymentClient() {
         );
     }
 
+    if (success) {
+        return (
+            <div className="min-h-screen py-6 md:py-10">
+                <Section className="max-w-2xl">
+                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-10">
+                        <div className="text-center py-8">
+                            <div className="mb-4">
+                                <svg
+                                    className="w-16 h-16 mx-auto text-alloy-juniper"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M5 13l4 4L19 7"
+                                    />
+                                </svg>
+                            </div>
+                            <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
+                                Card saved successfully!
+                            </h2>
+                            <p className="text-alloy-midnight/70">
+                                Redirecting to confirmation...
+                            </p>
+                        </div>
+                    </div>
+                </Section>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen py-6 md:py-10">
             <Section className="max-w-2xl">
@@ -277,13 +260,56 @@ export default function PaymentClient() {
                         Save Card on File
                     </h1>
 
-                    <Elements stripe={stripePromise}>
-                        <PaymentForm
-                            phone={phone!}
-                            email={email!}
-                            ghlContactId={ghlContactId || undefined}
-                        />
-                    </Elements>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Customer Info (Read-only display) */}
+                        <div className="bg-alloy-stone/20 rounded-lg p-4 border border-alloy-stone/30">
+                            <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">
+                                Your Information
+                            </h3>
+                            <div className="space-y-2 text-sm text-alloy-midnight/70">
+                                <div>
+                                    <strong>Email:</strong> {email}
+                                </div>
+                                <div>
+                                    <strong>Phone:</strong> {phone}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Card Details */}
+                        <div>
+                            <label className="block text-sm font-semibold text-alloy-midnight mb-2">
+                                Card Details
+                            </label>
+                            <div className="bg-white border border-alloy-stone/40 rounded-lg p-4">
+                                <div id="card-element" ref={cardElementRef}></div>
+                            </div>
+                        </div>
+
+                        {/* Info Message */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p className="text-sm text-blue-900">
+                                <strong>No charge today.</strong> To reserve your appointment, we&apos;ll save a card on file. 
+                                You will not be charged today. You will only be charged after service (or per our cancellation policy).
+                            </p>
+                        </div>
+
+                        {/* Error Message */}
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <p className="text-sm text-red-800">{error}</p>
+                            </div>
+                        )}
+
+                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            disabled={!stripe || !card || isProcessing}
+                            className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isProcessing ? "Processing..." : "Save Card & Confirm"}
+                        </button>
+                    </form>
                 </div>
             </Section>
         </div>
