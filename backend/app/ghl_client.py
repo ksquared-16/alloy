@@ -717,6 +717,23 @@ def strip_update_disallowed_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+def add_tag_to_contact(contact_id: str, tag: str) -> bool:
+    """
+    Add a tag to a contact in GHL.
+    
+    This is an alias for ensure_contact_has_tag for clarity.
+    Does NOT include locationId in PUT payload.
+    
+    Args:
+        contact_id: GHL contact ID
+        tag: Tag name to add (e.g., "card_on_file:collected")
+    
+    Returns:
+        True if tag was added or already present, False if update failed
+    """
+    return ensure_contact_has_tag(contact_id, tag)
+
+
 def ensure_contact_has_tag(contact_id: str, tag: str) -> bool:
     """
     Ensure a contact has a specific tag, adding it if missing.

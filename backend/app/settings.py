@@ -114,3 +114,13 @@ JOB_STORE: Dict[str, Dict[str, Any]] = {}
 # GHL Booking URL for cleaning appointments (with prefill support)
 GHL_BOOKING_URL_CLEANING = os.getenv("GHL_BOOKING_URL_CLEANING", "").strip()
 
+# Stripe settings
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+
+# Fail fast if required Stripe env vars are missing
+if not STRIPE_SECRET_KEY:
+    raise ValueError("STRIPE_SECRET_KEY environment variable is required but not set")
+if not STRIPE_WEBHOOK_SECRET:
+    raise ValueError("STRIPE_WEBHOOK_SECRET environment variable is required but not set")
+

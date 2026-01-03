@@ -50,6 +50,7 @@ Expected endpoints:
 - `/dispatch` (POST)
 - `/contractor-reply` (POST)
 - `/quote/cleaning` (GET)
+- `/stripe/webhook` (POST)
 - `/debug/jobs` (GET)
 - `/debug/cors` (GET)
 - `/debug/quote_crash` (GET)
@@ -78,10 +79,36 @@ curl -X POST http://localhost:8000/leads/cleaning \
 # Should return 202 with ok: true
 ```
 
+### 6. Test Stripe webhook (local testing with Stripe CLI)
+
+**Prerequisites:**
+- Install Stripe CLI: https://stripe.com/docs/stripe-cli
+- Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in your environment
+
+**Forward webhooks to local server:**
+```bash
+stripe listen --forward-to localhost:8000/stripe/webhook
+```
+
+**Trigger a test SetupIntent succeeded event:**
+```bash
+stripe trigger setup_intent.succeeded
+```
+
+**Verify:**
+- Check server logs for webhook receipt and contact tagging
+- Verify contact in GHL has tag "card_on_file:collected"
+
+**Note:** The webhook expects metadata with keys:
+- `ghl_contact_id` (optional, preferred)
+- `phone` (fallback for contact search)
+- `email` (fallback for contact search)
+
 ## Notes
 
 - All behavior is unchanged - this is a mechanical refactor only
 - No API changes, no endpoint renames
 - All env var names remain the same
 - Render entrypoint: `uvicorn backend.main:app` (unchanged)
+- Stripe webhook endpoint: `/stripe/webhook` (POST) - handles SetupIntent events only
 

@@ -4,3 +4,4 @@ requests
 pydantic
 email-validator
 python-multipart
+stripe
