@@ -2,12 +2,14 @@
 Stripe webhook endpoints for SetupIntent events (card on file collection).
 """
 import logging
+import hashlib
+from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Request, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 import stripe
 
-from ..settings import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, CUSTOM_FIELD_IDS
+from ..settings import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, CUSTOM_FIELD_IDS, GHL_WORKFLOW_SECRET
 from ..utils import normalize_phone
 from ..ghl_client import (
     search_contact_by_phone,
@@ -15,6 +17,7 @@ from ..ghl_client import (
     add_tag_to_contact,
     get_contact_by_id,
     update_contact_custom_field,
+    create_contact_note,
 )
 
 # Initialize Stripe
@@ -620,4 +623,337 @@ async def stripe_webhook(request: Request):
     
     # Always return 200 (Stripe requires 200 for all events)
     return JSONResponse({"received": True}, status_code=200)
+
+
+@router.post("/stripe/charge")
+async def charge_customer(
+    request: Request,
+    x_alloy_workflow_secret: Optional[str] = Header(None, alias="X-ALLOY-WORKFLOW-SECRET"),
+):
+    """
+    Charge a customer's saved payment method (off-session).
+    
+    Called by GHL workflow when opportunity stage becomes "Ready to Pay".
+    
+    Security: Requires X-ALLOY-WORKFLOW-SECRET header matching GHL_WORKFLOW_SECRET.
+    
+    Accepts JSON or form-urlencoded body with:
+        - stripe_customer_id (required): Stripe Customer ID
+        - amount (required): Amount in dollars (e.g., "240" or "240.00")
+        - currency (optional, default "usd")
+        - description (optional)
+        - opportunity_id (optional)
+        - ghl_contact_id (optional)
+    
+    Returns:
+        {
+            "status": "succeeded" | "failed",
+            "payment_intent_id": string | null,
+            "amount_cents": integer,
+            "error": string | null
+        }
+    """
+    # Security check
+    if not x_alloy_workflow_secret or x_alloy_workflow_secret != GHL_WORKFLOW_SECRET:
+        logger.error("charge_customer: invalid or missing X-ALLOY-WORKFLOW-SECRET header")
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid workflow secret")
+    
+    # Parse request body (support both JSON and form-urlencoded)
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            body = await request.json()
+        else:
+            # Try form-urlencoded
+            form_data = await request.form()
+            body = dict(form_data)
+    except Exception as e:
+        logger.error("charge_customer: failed to parse request body: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid request body")
+    
+    stripe_customer_id = body.get("stripe_customer_id")
+    amount_str = body.get("amount")
+    currency = body.get("currency", "usd")
+    description = body.get("description")
+    opportunity_id = body.get("opportunity_id")
+    ghl_contact_id = body.get("ghl_contact_id")
+    
+    # Validate required fields
+    if not stripe_customer_id:
+        logger.error("charge_customer: missing stripe_customer_id")
+        raise HTTPException(status_code=400, detail="stripe_customer_id is required")
+    
+    if not amount_str:
+        logger.error("charge_customer: missing amount")
+        raise HTTPException(status_code=400, detail="amount is required")
+    
+    # Log input (mask sensitive)
+    logger.info(
+        "charge_customer: received request customer_id=%s amount=%s currency=%s description=%s opportunity_id=%s ghl_contact_id=%s",
+        stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
+        amount_str,
+        currency,
+        description[:50] + "..." if description and len(description) > 50 else (description or "None"),
+        opportunity_id or "None",
+        ghl_contact_id or "None"
+    )
+    
+    # Convert amount to cents (safely handle dollars)
+    try:
+        amount_decimal = Decimal(str(amount_str))
+        amount_cents = int(amount_decimal * 100)
+        
+        if amount_cents <= 0:
+            logger.error("charge_customer: invalid amount (must be > 0): %s", amount_str)
+            raise HTTPException(status_code=400, detail="amount must be greater than 0")
+        
+        logger.info("charge_customer: converted amount %s dollars to %d cents", amount_str, amount_cents)
+    except (InvalidOperation, ValueError, TypeError) as e:
+        logger.error("charge_customer: failed to convert amount %s: %s", amount_str, e)
+        raise HTTPException(status_code=400, detail=f"Invalid amount format: {amount_str}")
+    
+    # Retrieve Stripe customer and resolve payment method
+    try:
+        customer = stripe.Customer.retrieve(stripe_customer_id)
+        logger.info("charge_customer: retrieved customer_id=%s", stripe_customer_id[:8] + "***")
+    except stripe.error.StripeError as e:
+        logger.error("charge_customer: failed to retrieve customer_id=%s: %s", stripe_customer_id[:8] + "***", e)
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": amount_cents,
+            "error": f"Failed to retrieve customer: {str(e)}"
+        }, status_code=200)
+    
+    # Determine default payment method
+    payment_method_id = customer.invoice_settings.default_payment_method
+    
+    if not payment_method_id:
+        # Fallback: list payment methods and use the newest
+        try:
+            payment_methods = stripe.PaymentMethod.list(
+                customer=stripe_customer_id,
+                type="card",
+                limit=1
+            )
+            if payment_methods.data:
+                payment_method_id = payment_methods.data[0].id
+                logger.info(
+                    "charge_customer: no default payment method, using first available payment_method_id=%s",
+                    payment_method_id[:8] + "***"
+                )
+            else:
+                logger.error("charge_customer: no payment methods found for customer_id=%s", stripe_customer_id[:8] + "***")
+                return JSONResponse({
+                    "status": "failed",
+                    "payment_intent_id": None,
+                    "amount_cents": amount_cents,
+                    "error": "No payment method found for customer. Please add a payment method first."
+                }, status_code=200)
+        except stripe.error.StripeError as e:
+            logger.error("charge_customer: failed to list payment methods: %s", e)
+            return JSONResponse({
+                "status": "failed",
+                "payment_intent_id": None,
+                "amount_cents": amount_cents,
+                "error": f"Failed to retrieve payment methods: {str(e)}"
+            }, status_code=200)
+    else:
+        logger.info(
+            "charge_customer: using default payment method payment_method_id=%s",
+            payment_method_id[:8] + "***"
+        )
+    
+    # Build idempotency key
+    idempotency_parts = [
+        "charge",
+        stripe_customer_id,
+        str(amount_cents),
+        opportunity_id or description or "unknown"
+    ]
+    idempotency_key = ":".join(idempotency_parts)
+    # Hash to keep it under Stripe's 255 char limit and make it URL-safe
+    idempotency_key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()[:64]
+    
+    logger.info(
+        "charge_customer: created idempotency_key_hash=%s from parts=%s",
+        idempotency_key_hash,
+        idempotency_parts
+    )
+    
+    # Create and confirm PaymentIntent
+    try:
+        metadata = {}
+        if opportunity_id:
+            metadata["opportunity_id"] = opportunity_id
+        if ghl_contact_id:
+            metadata["ghl_contact_id"] = ghl_contact_id
+        
+        payment_intent = stripe.PaymentIntent.create(
+            customer=stripe_customer_id,
+            amount=amount_cents,
+            currency=currency,
+            description=description,
+            payment_method=payment_method_id,
+            confirm=True,
+            off_session=True,
+            metadata=metadata,
+            idempotency_key=idempotency_key_hash
+        )
+        
+        logger.info(
+            "charge_customer: created payment_intent_id=%s status=%s customer_id=%s amount_cents=%d",
+            payment_intent.id,
+            payment_intent.status,
+            stripe_customer_id[:8] + "***",
+            amount_cents
+        )
+        
+        # Update GHL based on result
+        if payment_intent.status == "succeeded":
+            # Success: tag contact and add note
+            if ghl_contact_id:
+                add_tag_to_contact(ghl_contact_id, "payment:succeeded")
+                
+                note_title = "Payment Succeeded"
+                note_body = f"Payment succeeded: ${amount_decimal:.2f}\nPayment Intent: {payment_intent.id}"
+                if opportunity_id:
+                    note_body += f"\nOpportunity ID: {opportunity_id}"
+                create_contact_note(ghl_contact_id, note_title, note_body)
+                
+                logger.info(
+                    "charge_customer: updated GHL contact_id=%s with payment:succeeded tag and note",
+                    ghl_contact_id
+                )
+            
+            return JSONResponse({
+                "status": "succeeded",
+                "payment_intent_id": payment_intent.id,
+                "amount_cents": amount_cents,
+                "error": None
+            }, status_code=200)
+        elif payment_intent.status == "requires_action":
+            # SCA required - customer needs to authenticate
+            error_msg = "Payment requires customer authentication (SCA). Customer needs to re-authenticate."
+            logger.warning(
+                "charge_customer: payment requires SCA payment_intent_id=%s customer_id=%s",
+                payment_intent.id,
+                stripe_customer_id[:8] + "***"
+            )
+            
+            if ghl_contact_id:
+                add_tag_to_contact(ghl_contact_id, "payment:failed")
+                note_title = "Payment Failed - Authentication Required"
+                note_body = f"Payment failed: {error_msg}\nPayment Intent: {payment_intent.id}\nAmount: ${amount_decimal:.2f}"
+                if opportunity_id:
+                    note_body += f"\nOpportunity ID: {opportunity_id}"
+                create_contact_note(ghl_contact_id, note_title, note_body)
+            
+            return JSONResponse({
+                "status": "failed",
+                "payment_intent_id": payment_intent.id,
+                "amount_cents": amount_cents,
+                "error": error_msg
+            }, status_code=200)
+        else:
+            # Other failure status
+            error_msg = f"Payment failed with status: {payment_intent.status}"
+            if payment_intent.last_payment_error:
+                error_msg += f" - {payment_intent.last_payment_error.message}"
+            
+            logger.error(
+                "charge_customer: payment failed payment_intent_id=%s status=%s customer_id=%s",
+                payment_intent.id,
+                payment_intent.status,
+                stripe_customer_id[:8] + "***"
+            )
+            
+            if ghl_contact_id:
+                add_tag_to_contact(ghl_contact_id, "payment:failed")
+                note_title = "Payment Failed"
+                note_body = f"Payment failed: {error_msg}\nPayment Intent: {payment_intent.id}\nAmount: ${amount_decimal:.2f}"
+                if opportunity_id:
+                    note_body += f"\nOpportunity ID: {opportunity_id}"
+                if payment_intent.last_payment_error:
+                    note_body += f"\nStripe Error Code: {payment_intent.last_payment_error.code}"
+                create_contact_note(ghl_contact_id, note_title, note_body)
+            
+            return JSONResponse({
+                "status": "failed",
+                "payment_intent_id": payment_intent.id,
+                "amount_cents": amount_cents,
+                "error": error_msg
+            }, status_code=200)
+            
+    except stripe.error.CardError as e:
+        # Card was declined
+        error_msg = f"Card declined: {e.user_message or str(e)}"
+        logger.error(
+            "charge_customer: card declined customer_id=%s error=%s code=%s",
+            stripe_customer_id[:8] + "***",
+            error_msg,
+            e.code
+        )
+        
+        if ghl_contact_id:
+            add_tag_to_contact(ghl_contact_id, "payment:failed")
+            note_title = "Payment Failed - Card Declined"
+            note_body = f"Payment failed: {error_msg}\nStripe Error Code: {e.code}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            create_contact_note(ghl_contact_id, note_title, note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": amount_cents,
+            "error": error_msg
+        }, status_code=200)
+    except stripe.error.StripeError as e:
+        # Other Stripe errors
+        error_msg = f"Stripe error: {str(e)}"
+        logger.error(
+            "charge_customer: Stripe error customer_id=%s error=%s",
+            stripe_customer_id[:8] + "***",
+            error_msg
+        )
+        
+        if ghl_contact_id:
+            add_tag_to_contact(ghl_contact_id, "payment:failed")
+            note_title = "Payment Failed"
+            note_body = f"Payment failed: {error_msg}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            create_contact_note(ghl_contact_id, note_title, note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": amount_cents,
+            "error": error_msg
+        }, status_code=200)
+    except Exception as e:
+        # Unexpected errors
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.error(
+            "charge_customer: unexpected error customer_id=%s error=%s",
+            stripe_customer_id[:8] + "***",
+            error_msg,
+            exc_info=True
+        )
+        
+        if ghl_contact_id:
+            add_tag_to_contact(ghl_contact_id, "payment:failed")
+            note_title = "Payment Failed"
+            note_body = f"Payment failed: {error_msg}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            create_contact_note(ghl_contact_id, note_title, note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": amount_cents,
+            "error": error_msg
+        }, status_code=200)
 

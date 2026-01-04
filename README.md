@@ -168,6 +168,7 @@ The application uses Stripe SetupIntents for card-on-file collection (no charge 
 - Set `STRIPE_SECRET_KEY` - Your Stripe secret key
 - Set `STRIPE_WEBHOOK_SECRET` - Webhook signing secret (get from `stripe listen` or Stripe Dashboard)
 - Set `GHL_STRIPE_CUSTOMER_ID` - GHL custom field ID where Stripe Customer ID (cus_...) is stored
+- Set `GHL_WORKFLOW_SECRET` - Secret token for GHL workflow webhook authentication (used for `/stripe/charge` endpoint)
 
 **Testing Locally:**
 1. Start backend: `uvicorn backend.main:app --reload`
@@ -180,6 +181,43 @@ The application uses Stripe SetupIntents for card-on-file collection (no charge 
    - Webhook receives `setup_intent.succeeded`
    - Contact in GHL is tagged with "card_on_file:collected"
    - Stripe Customer ID is synced to GHL contact custom field
+
+**Charging Customers (GHL Workflow Integration):**
+
+The `/stripe/charge` endpoint allows GHL workflows to charge customers when an opportunity stage becomes "Ready to Pay".
+
+**Testing the charge endpoint:**
+
+```bash
+curl -X POST https://alloy-dispatcher.onrender.com/stripe/charge \
+  -H "Content-Type: application/json" \
+  -H "X-ALLOY-WORKFLOW-SECRET: <your-secret>" \
+  -d '{
+    "stripe_customer_id": "cus_123",
+    "amount": "240.00",
+    "currency": "usd",
+    "description": "Test Job Payment",
+    "ghl_contact_id": "...",
+    "opportunity_id": "..."
+  }'
+```
+
+**GHL Workflow Configuration:**
+
+When setting up the workflow action in GHL, use these fields:
+- **Stripe Customer ID**: `{{contact.stripe_customer_id}}`
+- **Description**: `{{opportunity.name}}`
+- **Amount**: `{{opportunity.lead_value}}`
+- **Currency**: `usd` (or leave empty for default)
+- **GHL Contact ID**: `{{contact.id}}` (optional but recommended)
+- **Opportunity ID**: `{{opportunity.id}}` (optional but recommended)
+
+The endpoint will:
+1. Verify the workflow secret (X-ALLOY-WORKFLOW-SECRET header)
+2. Convert amount from dollars to cents
+3. Retrieve the customer's default payment method
+4. Create and confirm a PaymentIntent (off-session)
+5. Update GHL with success/failure tags and notes
 
 ## Development Workflow
 
@@ -211,6 +249,7 @@ The application uses Stripe SetupIntents for card-on-file collection (no charge 
 
 - `POST /dispatch` – Called when a customer books an appointment
 - `POST /contractor-reply` – Called when a contractor replies to a dispatch SMS
+- `POST /stripe/charge` – Charge customer's saved payment method (requires X-ALLOY-WORKFLOW-SECRET header)
 
 ### Debug Endpoints
 
