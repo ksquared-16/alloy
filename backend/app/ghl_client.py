@@ -212,6 +212,8 @@ def fetch_contractors() -> List[Dict[str, Any]]:
     Returns:
         List of contact dicts with keys: id, name, phone, tags, contact_source
     """
+    logger.warning("FETCH_CONTRACTORS_FINGERPRINT: backend/app/ghl_client.py v2026-01-05")
+    
     if not GHL_LOCATION_ID:
         logger.error("GHL_LOCATION_ID is not set; cannot fetch contractors.")
         return []
