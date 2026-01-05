@@ -638,12 +638,12 @@ async def charge_customer(
     Security: Requires X-ALLOY-WORKFLOW-SECRET header matching GHL_WORKFLOW_SECRET.
     
     Accepts JSON or form-urlencoded body with:
-        - stripe_customer_id (required): Stripe Customer ID
+        - stripe_customer_id (optional): Stripe Customer ID (can be provided as "stripe_customer_id", "Stripe Customer ID", or "stripeCustomerId")
         - amount (required): Amount in dollars (e.g., "240" or "240.00")
         - currency (optional, default "usd")
         - description (optional)
         - opportunity_id (optional)
-        - ghl_contact_id (optional)
+        - ghl_contact_id (optional): If stripe_customer_id is missing, will attempt to extract from GHL contact
     
     Returns:
         {
@@ -672,17 +672,37 @@ async def charge_customer(
         logger.error("charge_customer: failed to parse request body: %s", e)
         raise HTTPException(status_code=400, detail="Invalid request body")
     
-    stripe_customer_id = body.get("stripe_customer_id")
+    # Support multiple key names for stripe_customer_id
+    stripe_customer_id = (
+        body.get("stripe_customer_id") or
+        body.get("Stripe Customer ID") or
+        body.get("stripeCustomerId")
+    )
     amount_str = body.get("amount")
     currency = body.get("currency", "usd")
     description = body.get("description")
     opportunity_id = body.get("opportunity_id")
     ghl_contact_id = body.get("ghl_contact_id")
     
-    # Validate required fields
+    # If stripe_customer_id is missing and ghl_contact_id is provided, try to extract from GHL contact
+    resolution_path = "direct"
+    if not stripe_customer_id and ghl_contact_id:
+        logger.info("charge_customer: stripe_customer_id missing, attempting to extract from GHL contact_id=%s", ghl_contact_id)
+        contact = get_contact_by_id(ghl_contact_id)
+        if contact:
+            stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+            if stripe_customer_id:
+                resolution_path = "ghl_contact_fallback"
+                logger.info("charge_customer: extracted stripe_customer_id=%s from GHL contact_id=%s", stripe_customer_id[:8] + "***", ghl_contact_id)
+            else:
+                logger.warning("charge_customer: GHL contact_id=%s found but no Stripe Customer ID in custom fields", ghl_contact_id)
+        else:
+            logger.warning("charge_customer: GHL contact_id=%s not found", ghl_contact_id)
+    
+    # Validate required fields (only return 400 if still missing after GHL fallback)
     if not stripe_customer_id:
-        logger.error("charge_customer: missing stripe_customer_id")
-        raise HTTPException(status_code=400, detail="stripe_customer_id is required")
+        logger.error("charge_customer: missing stripe_customer_id (resolution_path=%s)", resolution_path)
+        raise HTTPException(status_code=400, detail="stripe_customer_id is required and could not be extracted from GHL contact")
     
     if not amount_str:
         logger.error("charge_customer: missing amount")
@@ -690,13 +710,14 @@ async def charge_customer(
     
     # Log input (mask sensitive)
     logger.info(
-        "charge_customer: received request customer_id=%s amount=%s currency=%s description=%s opportunity_id=%s ghl_contact_id=%s",
+        "charge_customer: received request customer_id=%s amount=%s currency=%s description=%s opportunity_id=%s ghl_contact_id=%s resolution_path=%s",
         stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
         amount_str,
         currency,
         description[:50] + "..." if description and len(description) > 50 else (description or "None"),
         opportunity_id or "None",
-        ghl_contact_id or "None"
+        ghl_contact_id or "None",
+        resolution_path
     )
     
     # Convert amount to cents (safely handle dollars)
