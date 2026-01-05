@@ -29,6 +29,18 @@ logger = logging.getLogger("alloy-dispatcher")
 router = APIRouter()
 
 
+def record_payment_failure(ghl_contact_id: Optional[str], title: str, body: str) -> None:
+    """
+    Helper to record payment failure in GHL: add tag and create note.
+    Safe/no-op if ghl_contact_id is missing.
+    """
+    if not ghl_contact_id:
+        return
+    
+    add_tag_to_contact(ghl_contact_id, "payment:failed")
+    create_contact_note(ghl_contact_id, title, body)
+
+
 @router.get("/stripe/card-status")
 async def get_card_status(
     ghl_contact_id: Optional[str] = Query(None),
@@ -652,7 +664,8 @@ async def charge_customer(
             "payment_intent_id": string | null,
             "amount_cents": integer,
             "opportunity_id": string | null,
-            "error": string | null
+            "error": string | null,
+            "attempted_charge": boolean
         }
     """
     # Security check
@@ -661,6 +674,7 @@ async def charge_customer(
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid workflow secret")
     
     # Parse request body (support both JSON and form-urlencoded)
+    body = {}
     try:
         content_type = request.headers.get("content-type", "")
         if "application/json" in content_type:
@@ -671,7 +685,20 @@ async def charge_customer(
             body = dict(form_data)
     except Exception as e:
         logger.error("charge_customer: failed to parse request body: %s", e)
-        raise HTTPException(status_code=400, detail="Invalid request body")
+        error_msg = "Invalid request body"
+        body_keys = list(body.keys()) if isinstance(body, dict) else []
+        
+        note_body = f"Payment failed: {error_msg}\nReceived payload keys: {body_keys}"
+        record_payment_failure(None, "Payment Failed - Preflight", note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": 0,
+            "opportunity_id": None,
+            "error": error_msg,
+            "attempted_charge": False
+        }, status_code=200)
     
     # Support multiple key names for stripe_customer_id
     stripe_customer_id = (
@@ -734,14 +761,54 @@ async def charge_customer(
             else:
                 logger.warning("charge_customer: GHL opportunity_id=%s not found", opportunity_id)
     
-    # Validate required fields (only return 400 if still missing after GHL fallbacks)
+    # Validate required fields (record failure and return 200 if still missing after GHL fallbacks)
     if not stripe_customer_id:
         logger.error("charge_customer: missing stripe_customer_id (resolution_path=%s)", resolution_path)
-        raise HTTPException(status_code=400, detail="stripe_customer_id is required and could not be extracted from GHL contact")
+        error_msg = "stripe_customer_id is required and could not be extracted from GHL contact"
+        body_keys = list(body.keys()) if isinstance(body, dict) else []
+        note_body = f"Payment failed: {error_msg}\nResolution path: {resolution_path}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if ghl_contact_id:
+            note_body += f"\nGHL Contact ID: {ghl_contact_id}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        note_body += f"\nReceived payload keys: {body_keys}"
+        record_payment_failure(ghl_contact_id, "Payment Failed - Preflight", note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": 0,
+            "opportunity_id": opportunity_id,
+            "error": error_msg,
+            "attempted_charge": False
+        }, status_code=200)
     
     if not amount_str or not amount_str.strip():
         logger.error("charge_customer: missing amount (amount_resolution_path=%s)", amount_resolution_path)
-        raise HTTPException(status_code=400, detail="amount is required (and could not be derived from opportunity)")
+        error_msg = "amount is required (and could not be derived from opportunity)"
+        body_keys = list(body.keys()) if isinstance(body, dict) else []
+        note_body = f"Payment failed: {error_msg}\nAmount resolution path: {amount_resolution_path}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if ghl_contact_id:
+            note_body += f"\nGHL Contact ID: {ghl_contact_id}"
+        if stripe_customer_id:
+            note_body += f"\nStripe Customer ID: {stripe_customer_id[:8] + '***'}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        note_body += f"\nReceived payload keys: {body_keys}"
+        record_payment_failure(ghl_contact_id, "Payment Failed - Preflight", note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": 0,
+            "opportunity_id": opportunity_id,
+            "error": error_msg,
+            "attempted_charge": False
+        }, status_code=200)
     
     # Log input (mask sensitive)
     logger.info(
@@ -763,12 +830,54 @@ async def charge_customer(
         
         if amount_cents <= 0:
             logger.error("charge_customer: invalid amount (must be > 0): %s", amount_str)
-            raise HTTPException(status_code=400, detail="amount must be greater than 0")
+            error_msg = "amount must be greater than 0"
+            body_keys = list(body.keys()) if isinstance(body, dict) else []
+            note_body = f"Payment failed: {error_msg}\nAmount provided: {amount_str}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            if ghl_contact_id:
+                note_body += f"\nGHL Contact ID: {ghl_contact_id}"
+            if stripe_customer_id:
+                note_body += f"\nStripe Customer ID: {stripe_customer_id[:8] + '***'}"
+            if description:
+                note_body += f"\nDescription: {description}"
+            note_body += f"\nReceived payload keys: {body_keys}"
+            record_payment_failure(ghl_contact_id, "Payment Failed - Preflight", note_body)
+            
+            return JSONResponse({
+                "status": "failed",
+                "payment_intent_id": None,
+                "amount_cents": 0,
+                "opportunity_id": opportunity_id,
+                "error": error_msg,
+                "attempted_charge": False
+            }, status_code=200)
         
         logger.info("charge_customer: converted amount %s dollars to %d cents", amount_str, amount_cents)
     except (InvalidOperation, ValueError, TypeError) as e:
         logger.error("charge_customer: failed to convert amount %s: %s", amount_str, e)
-        raise HTTPException(status_code=400, detail=f"Invalid amount format: {amount_str}")
+        error_msg = f"Invalid amount format: {amount_str}"
+        body_keys = list(body.keys()) if isinstance(body, dict) else []
+        note_body = f"Payment failed: {error_msg}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if ghl_contact_id:
+            note_body += f"\nGHL Contact ID: {ghl_contact_id}"
+        if stripe_customer_id:
+            note_body += f"\nStripe Customer ID: {stripe_customer_id[:8] + '***'}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        note_body += f"\nReceived payload keys: {body_keys}"
+        record_payment_failure(ghl_contact_id, "Payment Failed - Preflight", note_body)
+        
+        return JSONResponse({
+            "status": "failed",
+            "payment_intent_id": None,
+            "amount_cents": 0,
+            "opportunity_id": opportunity_id,
+            "error": error_msg,
+            "attempted_charge": False
+        }, status_code=200)
     
     # Retrieve Stripe customer and resolve payment method
     try:
@@ -778,22 +887,20 @@ async def charge_customer(
         logger.error("charge_customer: failed to retrieve customer_id=%s: %s", stripe_customer_id[:8] + "***", e)
         error_msg = f"Failed to retrieve customer: {str(e)}"
         
-        if ghl_contact_id:
-            add_tag_to_contact(ghl_contact_id, "payment:failed")
-            note_title = "Payment Failed"
-            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-            if opportunity_id:
-                note_body += f"\nOpportunity ID: {opportunity_id}"
-            if description:
-                note_body += f"\nDescription: {description}"
-            create_contact_note(ghl_contact_id, note_title, note_body)
+        note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
         
         return JSONResponse({
             "status": "failed",
             "payment_intent_id": None,
             "amount_cents": amount_cents,
             "opportunity_id": opportunity_id,
-            "error": error_msg
+            "error": error_msg,
+            "attempted_charge": True
         }, status_code=200)
     
     # Determine default payment method
@@ -817,43 +924,39 @@ async def charge_customer(
                 logger.error("charge_customer: no payment methods found for customer_id=%s", stripe_customer_id[:8] + "***")
                 error_msg = "No payment method found for customer. Please add a payment method first."
                 
-                if ghl_contact_id:
-                    add_tag_to_contact(ghl_contact_id, "payment:failed")
-                    note_title = "Payment Failed"
-                    note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-                    if opportunity_id:
-                        note_body += f"\nOpportunity ID: {opportunity_id}"
-                    if description:
-                        note_body += f"\nDescription: {description}"
-                    create_contact_note(ghl_contact_id, note_title, note_body)
+                note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+                if opportunity_id:
+                    note_body += f"\nOpportunity ID: {opportunity_id}"
+                if description:
+                    note_body += f"\nDescription: {description}"
+                record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
                 
                 return JSONResponse({
                     "status": "failed",
                     "payment_intent_id": None,
                     "amount_cents": amount_cents,
                     "opportunity_id": opportunity_id,
-                    "error": error_msg
+                    "error": error_msg,
+                    "attempted_charge": True
                 }, status_code=200)
         except stripe.error.StripeError as e:
             logger.error("charge_customer: failed to list payment methods: %s", e)
             error_msg = f"Failed to retrieve payment methods: {str(e)}"
             
-            if ghl_contact_id:
-                add_tag_to_contact(ghl_contact_id, "payment:failed")
-                note_title = "Payment Failed"
-                note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-                if opportunity_id:
-                    note_body += f"\nOpportunity ID: {opportunity_id}"
-                if description:
-                    note_body += f"\nDescription: {description}"
-                create_contact_note(ghl_contact_id, note_title, note_body)
+            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            if description:
+                note_body += f"\nDescription: {description}"
+            record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
             
             return JSONResponse({
                 "status": "failed",
                 "payment_intent_id": None,
                 "amount_cents": amount_cents,
                 "opportunity_id": opportunity_id,
-                "error": error_msg
+                "error": error_msg,
+                "attempted_charge": True
             }, status_code=200)
     else:
         logger.info(
@@ -930,7 +1033,8 @@ async def charge_customer(
                 "payment_intent_id": payment_intent.id,
                 "amount_cents": amount_cents,
                 "opportunity_id": opportunity_id,
-                "error": None
+                "error": None,
+                "attempted_charge": True
             }, status_code=200)
         elif payment_intent.status == "requires_action":
             # SCA required - customer needs to authenticate
@@ -941,24 +1045,22 @@ async def charge_customer(
                 stripe_customer_id[:8] + "***"
             )
             
-            if ghl_contact_id:
-                add_tag_to_contact(ghl_contact_id, "payment:failed")
-                note_title = "Payment Failed - Authentication Required"
-                note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-                if opportunity_id:
-                    note_body += f"\nOpportunity ID: {opportunity_id}"
-                if description:
-                    note_body += f"\nDescription: {description}"
-                if payment_intent.id:
-                    note_body += f"\nPayment Intent: {payment_intent.id}"
-                create_contact_note(ghl_contact_id, note_title, note_body)
+            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            if description:
+                note_body += f"\nDescription: {description}"
+            if payment_intent.id:
+                note_body += f"\nPayment Intent: {payment_intent.id}"
+            record_payment_failure(ghl_contact_id, "Payment Failed - Authentication Required", note_body)
             
             return JSONResponse({
                 "status": "failed",
                 "payment_intent_id": payment_intent.id,
                 "amount_cents": amount_cents,
                 "opportunity_id": opportunity_id,
-                "error": error_msg
+                "error": error_msg,
+                "attempted_charge": True
             }, status_code=200)
         else:
             # Other failure status
@@ -973,26 +1075,24 @@ async def charge_customer(
                 stripe_customer_id[:8] + "***"
             )
             
-            if ghl_contact_id:
-                add_tag_to_contact(ghl_contact_id, "payment:failed")
-                note_title = "Payment Failed"
-                note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-                if opportunity_id:
-                    note_body += f"\nOpportunity ID: {opportunity_id}"
-                if description:
-                    note_body += f"\nDescription: {description}"
-                if payment_intent.id:
-                    note_body += f"\nPayment Intent: {payment_intent.id}"
-                if payment_intent.last_payment_error:
-                    note_body += f"\nStripe Error Code: {payment_intent.last_payment_error.code}"
-                create_contact_note(ghl_contact_id, note_title, note_body)
+            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            if description:
+                note_body += f"\nDescription: {description}"
+            if payment_intent.id:
+                note_body += f"\nPayment Intent: {payment_intent.id}"
+            if payment_intent.last_payment_error:
+                note_body += f"\nStripe Error Code: {payment_intent.last_payment_error.code}"
+            record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
             
             return JSONResponse({
                 "status": "failed",
                 "payment_intent_id": payment_intent.id,
                 "amount_cents": amount_cents,
                 "opportunity_id": opportunity_id,
-                "error": error_msg
+                "error": error_msg,
+                "attempted_charge": True
             }, status_code=200)
             
     except stripe.error.CardError as e:
@@ -1005,23 +1105,21 @@ async def charge_customer(
             e.code
         )
         
-        if ghl_contact_id:
-            add_tag_to_contact(ghl_contact_id, "payment:failed")
-            note_title = "Payment Failed - Card Declined"
-            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-            if opportunity_id:
-                note_body += f"\nOpportunity ID: {opportunity_id}"
-            if description:
-                note_body += f"\nDescription: {description}"
-            note_body += f"\nStripe Error Code: {e.code}"
-            create_contact_note(ghl_contact_id, note_title, note_body)
+        note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        note_body += f"\nStripe Error Code: {e.code}"
+        record_payment_failure(ghl_contact_id, "Payment Failed - Card Declined", note_body)
         
         return JSONResponse({
             "status": "failed",
             "payment_intent_id": None,
             "amount_cents": amount_cents,
             "opportunity_id": opportunity_id,
-            "error": error_msg
+            "error": error_msg,
+            "attempted_charge": True
         }, status_code=200)
     except stripe.error.StripeError as e:
         # Other Stripe errors
@@ -1032,22 +1130,20 @@ async def charge_customer(
             error_msg
         )
         
-        if ghl_contact_id:
-            add_tag_to_contact(ghl_contact_id, "payment:failed")
-            note_title = "Payment Failed"
-            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-            if opportunity_id:
-                note_body += f"\nOpportunity ID: {opportunity_id}"
-            if description:
-                note_body += f"\nDescription: {description}"
-            create_contact_note(ghl_contact_id, note_title, note_body)
+        note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
         
         return JSONResponse({
             "status": "failed",
             "payment_intent_id": None,
             "amount_cents": amount_cents,
             "opportunity_id": opportunity_id,
-            "error": error_msg
+            "error": error_msg,
+            "attempted_charge": True
         }, status_code=200)
     except Exception as e:
         # Unexpected errors
@@ -1059,21 +1155,19 @@ async def charge_customer(
             exc_info=True
         )
         
-        if ghl_contact_id:
-            add_tag_to_contact(ghl_contact_id, "payment:failed")
-            note_title = "Payment Failed"
-            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-            if opportunity_id:
-                note_body += f"\nOpportunity ID: {opportunity_id}"
-            if description:
-                note_body += f"\nDescription: {description}"
-            create_contact_note(ghl_contact_id, note_title, note_body)
+        note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+        if opportunity_id:
+            note_body += f"\nOpportunity ID: {opportunity_id}"
+        if description:
+            note_body += f"\nDescription: {description}"
+        record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
         
         return JSONResponse({
             "status": "failed",
             "payment_intent_id": None,
             "amount_cents": amount_cents,
             "opportunity_id": opportunity_id,
-            "error": error_msg
+            "error": error_msg,
+            "attempted_charge": True
         }, status_code=200)
 
