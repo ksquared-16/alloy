@@ -68,22 +68,48 @@ async def dispatch(request: Request):
     logger.info("Contractors found: %s", contractors)
 
     # Filter contractors to only include those with both required tags
-    required_tags = {"contractor_forms_completed", "contractor_cleaning"}
+    # Normalize required tags: lowercase and trim whitespace
+    required_tags = {tag.strip().lower() for tag in ["contractor_forms_completed", "contractor_cleaning"]}
     initial_count = len(contractors)
     eligible_contractors = []
+    filtered_candidates = []  # Track filtered contractors for logging
+    
+    logger.info("contractor_filter_debug: filtering contractors, initial_count=%d required_tags=%s", 
+                initial_count, required_tags)
     
     for contractor in contractors:
-        contractor_tags = set(contractor.get("tags", []))
-        if required_tags.issubset(contractor_tags):
+        # Normalize contractor tags: lowercase and trim whitespace
+        raw_tags = contractor.get("tags", [])
+        normalized_tags = {str(tag).strip().lower() for tag in raw_tags if tag}
+        contractor_tags_set = normalized_tags
+        
+        if required_tags.issubset(contractor_tags_set):
             eligible_contractors.append(contractor)
+        else:
+            # Track filtered contractors for detailed logging
+            filtered_candidates.append({
+                "id": contractor.get("id", "unknown"),
+                "raw_tags": raw_tags,
+                "normalized_tags": contractor_tags_set
+            })
     
     filtered_out_count = initial_count - len(eligible_contractors)
+    
+    logger.info("contractor_filter_debug: after filtering, eligible_count=%d filtered_out_count=%d", 
+                len(eligible_contractors), filtered_out_count)
+    
     if filtered_out_count > 0:
         logger.info(
-            "dispatch: filtered out %d contractor(s) missing required tags (required: %s)",
+            "contractor_filter_debug: filtered out %d contractor(s) missing required tags (required: %s)",
             filtered_out_count,
             required_tags
         )
+        # If filtered to 0, log details of each candidate
+        if len(eligible_contractors) == 0 and filtered_candidates:
+            logger.warning("contractor_filter_debug: all contractors filtered out. Candidate details:")
+            for candidate in filtered_candidates:
+                logger.warning("contractor_filter_debug: candidate id=%s raw_tags=%s normalized_tags=%s", 
+                             candidate["id"], candidate["raw_tags"], candidate["normalized_tags"])
     
     contractors = eligible_contractors
 

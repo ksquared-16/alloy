@@ -221,18 +221,40 @@ def fetch_contractors() -> List[Dict[str, Any]]:
         "locationId": GHL_LOCATION_ID,
         "limit": 50,
     }
+    
+    # Debug logging: endpoint and params
+    logger.info("contractor_fetch_debug: calling GHL endpoint=%s locationId=%s params=%s", 
+                CONTACTS_URL, GHL_LOCATION_ID, params)
+    
     try:
         resp = requests.get(CONTACTS_URL, headers=_ghl_headers(), params=params, timeout=10)
     except Exception as e:
-        logger.error("GHL contact fetch exception: %s", e)
+        logger.error("contractor_fetch_debug: GHL contact fetch exception: %s", e)
         return []
 
+    # Debug logging: HTTP status
+    logger.info("contractor_fetch_debug: HTTP status_code=%d", resp.status_code)
+    
     if not resp.ok:
-        logger.error("GHL contact fetch failed (%s): %s", resp.status_code, resp.text)
+        logger.error("contractor_fetch_debug: GHL contact fetch failed (%s): %s", resp.status_code, resp.text)
         return []
 
     data = resp.json()
     contacts = data.get("contacts", [])
+    
+    # Debug logging: total contacts returned before filtering
+    total_contacts = len(contacts)
+    logger.info("contractor_fetch_debug: total contacts returned from GHL (before filtering)=%d", total_contacts)
+    
+    # Debug logging: first 3 contacts with IDs and tags
+    if total_contacts > 0:
+        sample_contacts = contacts[:3]
+        for idx, c in enumerate(sample_contacts):
+            contact_id = c.get("id", "unknown")
+            contact_tags = c.get("tags", [])
+            logger.info("contractor_fetch_debug: sample contact[%d] id=%s tags=%s", 
+                       idx, contact_id, contact_tags)
+    
     contractors: List[Dict[str, Any]] = []
 
     for c in contacts:
@@ -249,7 +271,7 @@ def fetch_contractors() -> List[Dict[str, Any]]:
                 }
             )
 
-    logger.info("Fetched %d contractors from GHL", len(contractors))
+    logger.info("contractor_fetch_debug: fetched %d contractors from GHL (after initial tag filter)", len(contractors))
     return contractors
 
 
