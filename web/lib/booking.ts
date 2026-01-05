@@ -13,7 +13,7 @@ export function buildBookingUrl(params: {
     estimatedPrice?: number;
 }): string {
     const { phone, email, firstName, lastName, estimatedPrice } = params;
-    
+
     // Normalize phone to E.164 format (+1##########)
     let normalizedPhone = phone.trim();
     const digits = normalizedPhone.replace(/\D/g, "");
@@ -22,7 +22,7 @@ export function buildBookingUrl(params: {
     } else if (!normalizedPhone.startsWith("+")) {
         normalizedPhone = "+" + digits;
     }
-    
+
     // Build query parameters
     const queryParams = new URLSearchParams({
         phone: normalizedPhone,
@@ -30,12 +30,12 @@ export function buildBookingUrl(params: {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
     });
-    
+
     // Add estimated_price if provided
     if (estimatedPrice !== undefined && estimatedPrice > 0) {
         queryParams.append("estimated_price", estimatedPrice.toFixed(2));
     }
-    
+
     // Build full URL
     const baseUrl = "/book";
     return `${baseUrl}?${queryParams.toString()}`;

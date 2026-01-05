@@ -306,6 +306,30 @@ export default function CleaningQuoteForm({
                     console.warn("Failed to store quote in sessionStorage:", e);
                 }
 
+                // Store complete form data for potential resubmission on /payment
+                try {
+                    const formDataForStorage = {
+                        first_name: cleanInput.firstName,
+                        last_name: cleanInput.lastName,
+                        phone: cleanInput.phone,
+                        email: cleanInput.email,
+                        postal_code: cleanInput.postalCode,
+                        home_type: cleanInput.homeType,
+                        service_type: cleanInput.serviceType,
+                        approximate_square_footage: cleanInput.squareFootage,
+                        cleaning_frequency: cleaningFrequency,
+                        preferred_service_date: cleanInput.preferredServiceDate || undefined,
+                        extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
+                        addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
+                        street_address: form.streetAddress.trim() || undefined,
+                        estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
+                    };
+                    sessionStorage.setItem("alloy_lead_form_data", JSON.stringify(formDataForStorage));
+                    console.log("Stored form data for potential resubmission:", formDataForStorage);
+                } catch (e) {
+                    console.warn("Failed to store form data in sessionStorage:", e);
+                }
+
                 // Build booking URL with all prefill parameters to ensure GHL matches existing contact
                 const bookingUrl = buildBookingUrl({
                     phone: cleanInput.phone,
@@ -373,6 +397,7 @@ export default function CleaningQuoteForm({
                         }
 
                         // Persist contact_id to booking prefill storage if available
+                        // This is the PRIMARY identifier for contact resolution
                         if (backendResult.contact_id) {
                             try {
                                 // Read existing prefill data or create new
@@ -387,19 +412,24 @@ export default function CleaningQuoteForm({
                                     }
                                 }
                                 
-                                // Update with contact_id and current form data
+                                // Store ghl_contact_id as PRIMARY identifier (set first)
                                 prefillData.ghl_contact_id = backendResult.contact_id;
+                                // Also store supporting data for fallback
                                 prefillData.phone = form.phone;
                                 prefillData.email = form.email;
                                 prefillData.first_name = form.firstName;
                                 prefillData.last_name = form.lastName;
                                 
-                                // Store in both sessionStorage and localStorage
+                                // Store in both sessionStorage and localStorage for persistence
                                 const jsonData = JSON.stringify(prefillData);
                                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                                 localStorage.setItem("alloy_booking_prefill", jsonData);
                                 
-                                console.log("Persisted contact_id to booking prefill:", backendResult.contact_id);
+                                console.log("Lead submission: Stored ghl_contact_id as primary identifier", {
+                                    ghl_contact_id: backendResult.contact_id,
+                                    phone: form.phone,
+                                    email: form.email
+                                });
                             } catch (e) {
                                 console.warn("Failed to persist contact_id:", e);
                             }

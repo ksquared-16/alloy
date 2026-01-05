@@ -56,6 +56,7 @@ export default function PaymentClient() {
     } | null>(null);
     const [showUpdateCard, setShowUpdateCard] = useState(false);
     const [isCheckingCardStatus, setIsCheckingCardStatus] = useState(true);
+    const [isEnsuringLeadSubmitted, setIsEnsuringLeadSubmitted] = useState(false);
 
     // Resolve user info with fallback priority:
     // 1. URL query params
@@ -73,35 +74,45 @@ export default function PaymentClient() {
     useEffect(() => {
         if (!mounted) return;
 
-        // Priority 1: URL query params
+        // Priority 1: URL query params (ghl_contact_id is PRIMARY identifier)
         let phone = searchParams?.get("phone");
         let email = searchParams?.get("email");
         let ghlContactId = searchParams?.get("ghl_contact_id");
 
-        // Priority 2: sessionStorage fallback
-        if ((!phone || !email) && typeof window !== "undefined") {
+        // Priority 2: sessionStorage fallback (ghl_contact_id takes priority)
+        if (typeof window !== "undefined") {
             try {
                 const stored = sessionStorage.getItem("alloy_booking_prefill");
                 if (stored) {
                     const parsed: BookingPrefill = JSON.parse(stored);
+                    // ghl_contact_id is PRIMARY - use it if available
+                    if (!ghlContactId && parsed.ghl_contact_id) {
+                        ghlContactId = parsed.ghl_contact_id;
+                        console.log("Payment page: Using ghl_contact_id from sessionStorage as primary identifier", ghlContactId);
+                    }
+                    // Fallback to phone/email if not in URL
                     if (!phone && parsed.phone) phone = parsed.phone;
                     if (!email && parsed.email) email = parsed.email;
-                    if (!ghlContactId && parsed.ghl_contact_id) ghlContactId = parsed.ghl_contact_id;
                 }
             } catch (e) {
                 console.warn("Failed to read from sessionStorage:", e);
             }
         }
 
-        // Priority 3: localStorage fallback
-        if ((!phone || !email) && typeof window !== "undefined") {
+        // Priority 3: localStorage fallback (ghl_contact_id takes priority)
+        if (typeof window !== "undefined") {
             try {
                 const stored = localStorage.getItem("alloy_booking_prefill");
                 if (stored) {
                     const parsed: BookingPrefill = JSON.parse(stored);
+                    // ghl_contact_id is PRIMARY - use it if available
+                    if (!ghlContactId && parsed.ghl_contact_id) {
+                        ghlContactId = parsed.ghl_contact_id;
+                        console.log("Payment page: Using ghl_contact_id from localStorage as primary identifier", ghlContactId);
+                    }
+                    // Fallback to phone/email if not in URL or sessionStorage
                     if (!phone && parsed.phone) phone = parsed.phone;
                     if (!email && parsed.email) email = parsed.email;
-                    if (!ghlContactId && parsed.ghl_contact_id) ghlContactId = parsed.ghl_contact_id;
                 }
             } catch (e) {
                 console.warn("Failed to read from localStorage:", e);
@@ -126,6 +137,127 @@ export default function PaymentClient() {
         }
     }, [mounted, searchParams]);
 
+    // Ensure lead submission before proceeding with payment
+    useEffect(() => {
+        if (!mounted || !resolvedPhone || !resolvedEmail) {
+            return;
+        }
+
+        // If we already have ghl_contact_id (PRIMARY identifier), no need to resubmit
+        if (resolvedGhlContactId) {
+            console.log("Payment page: ghl_contact_id present as primary identifier, skipping lead submission check", {
+                ghl_contact_id: resolvedGhlContactId,
+                phone: resolvedPhone,
+                email: resolvedEmail
+            });
+            return;
+        }
+
+        // Check if we have form data to resubmit
+        const ensureLeadSubmitted = async () => {
+            setIsEnsuringLeadSubmitted(true);
+            try {
+                const storedFormData = sessionStorage.getItem("alloy_lead_form_data");
+                if (!storedFormData) {
+                    console.warn("Payment page: No form data found in storage, cannot ensure lead submission");
+                    setIsEnsuringLeadSubmitted(false);
+                    return;
+                }
+
+                const formData = JSON.parse(storedFormData);
+                console.log("Payment page: Ensuring lead submission before payment flow", {
+                    phone: resolvedPhone,
+                    email: resolvedEmail,
+                    hasFormData: !!formData
+                });
+
+                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+                const submitFormData = new FormData();
+                
+                // Add all required fields
+                if (formData.first_name) submitFormData.append("first_name", formData.first_name);
+                if (formData.last_name) submitFormData.append("last_name", formData.last_name);
+                if (formData.phone) submitFormData.append("phone", formData.phone);
+                if (formData.email) submitFormData.append("email", formData.email);
+                if (formData.postal_code) submitFormData.append("postal_code", formData.postal_code);
+                if (formData.home_type) submitFormData.append("home_type", formData.home_type);
+                if (formData.service_type) submitFormData.append("service_type", formData.service_type);
+                if (formData.approximate_square_footage) submitFormData.append("approximate_square_footage", formData.approximate_square_footage);
+                if (formData.cleaning_frequency) submitFormData.append("cleaning_frequency", formData.cleaning_frequency);
+                if (formData.preferred_service_date) submitFormData.append("preferred_service_date", formData.preferred_service_date);
+                if (formData.extras_add_ons) submitFormData.append("extras_add_ons", formData.extras_add_ons);
+                if (formData.addons__frequency) submitFormData.append("addons__frequency", formData.addons__frequency);
+                if (formData.street_address) submitFormData.append("street_address", formData.street_address);
+                if (formData.estimated_price) submitFormData.append("estimated_price", formData.estimated_price);
+
+                const response = await fetch(`${apiBaseUrl}/leads/cleaning`, {
+                    method: "POST",
+                    body: submitFormData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error("Payment page: Lead submission failed", {
+                        status: response.status,
+                        error: errorData
+                    });
+                    setIsEnsuringLeadSubmitted(false);
+                    return;
+                }
+
+                const backendResult = await response.json();
+                console.log("Payment page: Lead submission successful", {
+                    contact_id: backendResult.contact_id,
+                    status: backendResult.status
+                });
+
+                // Store ghl_contact_id as PRIMARY identifier if received
+                if (backendResult.contact_id) {
+                    setResolvedGhlContactId(backendResult.contact_id);
+                    
+                    // Update storage with ghl_contact_id as PRIMARY identifier
+                    try {
+                        const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
+                        let prefillData: any = {};
+                        
+                        if (existingPrefill) {
+                            try {
+                                prefillData = JSON.parse(existingPrefill);
+                            } catch (e) {
+                                console.warn("Failed to parse existing prefill data:", e);
+                            }
+                        }
+                        
+                        // Store ghl_contact_id as PRIMARY identifier (set first)
+                        prefillData.ghl_contact_id = backendResult.contact_id;
+                        // Also store supporting data for fallback
+                        prefillData.phone = resolvedPhone;
+                        prefillData.email = resolvedEmail;
+                        
+                        // Store in both sessionStorage and localStorage for persistence
+                        const jsonData = JSON.stringify(prefillData);
+                        sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                        localStorage.setItem("alloy_booking_prefill", jsonData);
+                        
+                        console.log("Payment page: Stored ghl_contact_id as primary identifier", {
+                            ghl_contact_id: backendResult.contact_id,
+                            phone: resolvedPhone,
+                            email: resolvedEmail
+                        });
+                    } catch (e) {
+                        console.warn("Payment page: Failed to update storage with contact_id:", e);
+                    }
+                }
+            } catch (error) {
+                console.error("Payment page: Error ensuring lead submission", error);
+            } finally {
+                setIsEnsuringLeadSubmitted(false);
+            }
+        };
+
+        ensureLeadSubmitted();
+    }, [mounted, resolvedPhone, resolvedEmail, resolvedGhlContactId]);
+
     // Check card status after contact info is resolved
     useEffect(() => {
         if (!mounted || !resolvedPhone || !resolvedEmail) {
@@ -138,9 +270,12 @@ export default function PaymentClient() {
             try {
                 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
                 const params = new URLSearchParams();
+                // Use ghl_contact_id as PRIMARY identifier if available
                 if (resolvedGhlContactId) {
                     params.append("ghl_contact_id", resolvedGhlContactId);
+                    console.log("Payment page: Checking card status with ghl_contact_id as primary identifier", resolvedGhlContactId);
                 }
+                // Include phone/email as fallback identifiers
                 params.append("phone", resolvedPhone);
                 params.append("email", resolvedEmail);
 
@@ -293,17 +428,30 @@ export default function PaymentClient() {
 
         try {
             // Call backend to create SetupIntent
+            // Use ghl_contact_id as PRIMARY identifier if available
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+            const requestBody: {
+                phone: string;
+                email: string;
+                ghl_contact_id?: string;
+            } = {
+                phone: resolvedPhone!,
+                email: resolvedEmail!,
+            };
+            
+            if (resolvedGhlContactId) {
+                requestBody.ghl_contact_id = resolvedGhlContactId;
+                console.log("Payment page: Creating SetupIntent with ghl_contact_id as primary identifier", resolvedGhlContactId);
+            } else {
+                console.warn("Payment page: Creating SetupIntent without ghl_contact_id, using phone/email fallback");
+            }
+            
             const response = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    phone: resolvedPhone!,
-                    email: resolvedEmail!,
-                    ghl_contact_id: resolvedGhlContactId || undefined,
-                }),
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -391,14 +539,16 @@ export default function PaymentClient() {
         );
     }
 
-    if (!mounted || isCheckingCardStatus) {
+    if (!mounted || isCheckingCardStatus || isEnsuringLeadSubmitted) {
         return (
             <div className="min-h-screen py-6 md:py-10">
                 <Section className="max-w-2xl">
                     <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-10">
                         <div className="text-center">
                             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alloy-blue border-t-transparent mb-4"></div>
-                            <p className="text-alloy-midnight/70">Loading...</p>
+                            <p className="text-alloy-midnight/70">
+                                {isEnsuringLeadSubmitted ? "Preparing your payment..." : "Loading..."}
+                            </p>
                         </div>
                     </div>
                 </Section>

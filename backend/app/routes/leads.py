@@ -254,9 +254,11 @@ async def submit_cleaning_lead(
     )
     
     logger.info(
-        "submit_cleaning_lead: contact resolved contact_id=%s resolution_path=%s",
+        "submit_cleaning_lead: endpoint hit contact_id=%s resolution_path=%s phone=%s email=%s",
         contact_id,
-        resolution_path
+        resolution_path,
+        phone_normalized[:4] + "***" if phone_normalized else "None",
+        email[:10] + "***" if email else "None"
     )
     
     if not contact_id:
