@@ -204,14 +204,13 @@ def search_contact_by_email(email: str) -> Optional[Dict[str, Any]]:
 
 def fetch_contractors() -> List[Dict[str, Any]]:
     """
-    Fetch contractors from GHL contacts API, filtered by tags.
+    Fetch contacts from GHL contacts API for the location.
+    
+    Returns all contacts from GHL (no filtering applied here).
+    Eligibility filtering is handled in dispatch.py.
 
     Returns:
-        List of contractor dicts with keys: id, name, phone, tags, contact_source
-
-    Filters for contractors with tags:
-        - contractor_cleaning
-        - job-pending-assignment
+        List of contact dicts with keys: id, name, phone, tags, contact_source
     """
     if not GHL_LOCATION_ID:
         logger.error("GHL_LOCATION_ID is not set; cannot fetch contractors.")
@@ -242,12 +241,12 @@ def fetch_contractors() -> List[Dict[str, Any]]:
     data = resp.json()
     contacts = data.get("contacts", [])
     
-    # Debug logging: total contacts returned before filtering
-    total_contacts = len(contacts)
-    logger.info("contractor_fetch_debug: total contacts returned from GHL (before filtering)=%d", total_contacts)
+    # Debug logging: total contacts returned from API
+    total_contacts_from_api = len(contacts)
+    logger.info("contractor_fetch_debug: total contacts returned from GHL API=%d", total_contacts_from_api)
     
     # Debug logging: first 3 contacts with IDs and tags
-    if total_contacts > 0:
+    if total_contacts_from_api > 0:
         sample_contacts = contacts[:3]
         for idx, c in enumerate(sample_contacts):
             contact_id = c.get("id", "unknown")
@@ -255,23 +254,26 @@ def fetch_contractors() -> List[Dict[str, Any]]:
             logger.info("contractor_fetch_debug: sample contact[%d] id=%s tags=%s", 
                        idx, contact_id, contact_tags)
     
+    # Return all contacts (only basic validation: must have an id)
     contractors: List[Dict[str, Any]] = []
-
     for c in contacts:
-        tags = c.get("tags") or []
-        if CONTRACTOR_TAG_CLEANING in tags and CONTRACTOR_TAG_PENDING in tags:
-            contractors.append(
-                {
-                    "id": c.get("id"),
-                    "name": c.get("contactName")
-                    or f"{c.get('firstName', '')} {c.get('lastName', '')}".strip(),
-                    "phone": c.get("phone"),
-                    "tags": tags,
-                    "contact_source": c.get("source") or "",
-                }
-            )
+        contact_id = c.get("id")
+        if not contact_id:
+            continue  # Skip contacts without an ID
+        
+        contractors.append(
+            {
+                "id": contact_id,
+                "name": c.get("contactName")
+                or f"{c.get('firstName', '')} {c.get('lastName', '')}".strip(),
+                "phone": c.get("phone"),
+                "tags": c.get("tags") or [],
+                "contact_source": c.get("source") or "",
+            }
+        )
 
-    logger.info("contractor_fetch_debug: fetched %d contractors from GHL (after initial tag filter)", len(contractors))
+    logger.info("contractor_fetch_debug: total contacts returned by fetch_contractors()=%d (from API=%d)", 
+                len(contractors), total_contacts_from_api)
     return contractors
 
 
