@@ -729,12 +729,23 @@ async def charge_customer(
     
     # If amount is missing and opportunity_id is provided, try to extract from GHL opportunity
     amount_resolution_path = "direct"
+    amount_source_key = None
     if not amount_str or not amount_str.strip():
         if opportunity_id:
             logger.info("charge_customer: amount missing/blank, attempting to extract from GHL opportunity_id=%s", opportunity_id)
-            opportunity = get_opportunity_by_id(opportunity_id)
-            if opportunity:
-                # Extract amount - handle both snake_case and camelCase keys
+            opportunity_resp = get_opportunity_by_id(opportunity_id)
+            if opportunity_resp:
+                # Normalize shape: handle both wrapped { "opportunity": {...} } and unwrapped {...}
+                if isinstance(opportunity_resp, dict) and "opportunity" in opportunity_resp:
+                    opportunity = opportunity_resp["opportunity"]
+                    wrapper_detected = True
+                else:
+                    opportunity = opportunity_resp
+                    wrapper_detected = False
+                
+                logger.info("charge_customer: opportunity fetched opportunity_id=%s wrapper_detected=%s", opportunity_id, wrapper_detected)
+                
+                # Extract amount with priority order
                 amount_str = (
                     opportunity.get("monetaryValue") or
                     opportunity.get("monetary_value") or
@@ -742,15 +753,40 @@ async def charge_customer(
                     opportunity.get("lead_value")
                 )
                 
-                # Log raw keys found for debugging
-                opportunity_keys = list(opportunity.keys())
-                logger.info("charge_customer: opportunity fetched, keys found: %s", opportunity_keys)
+                if amount_str:
+                    # Determine which key was used
+                    if opportunity.get("monetaryValue"):
+                        amount_source_key = "monetaryValue"
+                    elif opportunity.get("monetary_value"):
+                        amount_source_key = "monetary_value"
+                    elif opportunity.get("leadValue"):
+                        amount_source_key = "leadValue"
+                    elif opportunity.get("lead_value"):
+                        amount_source_key = "lead_value"
+                else:
+                    # OPTIONAL: scan customFields for first numeric fieldValue
+                    custom_fields = opportunity.get("customFields", [])
+                    if isinstance(custom_fields, list):
+                        for cf in custom_fields:
+                            if isinstance(cf, dict):
+                                field_value = cf.get("value") or cf.get("fieldValue")
+                                if field_value:
+                                    try:
+                                        # Try to parse as numeric
+                                        float_val = float(str(field_value))
+                                        if float_val > 0:
+                                            amount_str = str(field_value)
+                                            amount_source_key = f"customFields[{cf.get('name', 'unknown')}]"
+                                            logger.info("charge_customer: extracted amount from customField: %s", amount_source_key)
+                                            break
+                                    except (ValueError, TypeError):
+                                        continue
                 
                 if amount_str:
-                    amount_resolution_path = "ghl_opportunity_fallback"
-                    logger.info("charge_customer: extracted amount=%s from GHL opportunity_id=%s", amount_str, opportunity_id)
+                    amount_resolution_path = f"ghl_opportunity_fallback:{amount_source_key}"
+                    logger.info("charge_customer: extracted amount=%s from GHL opportunity_id=%s source_key=%s", amount_str, opportunity_id, amount_source_key)
                 else:
-                    logger.warning("charge_customer: GHL opportunity_id=%s found but no amount field (monetaryValue/monetary_value/leadValue/lead_value)", opportunity_id)
+                    logger.warning("charge_customer: GHL opportunity_id=%s found but no amount field could be extracted", opportunity_id)
                 
                 # Extract description from opportunity name if missing
                 if not description:
@@ -789,7 +825,7 @@ async def charge_customer(
         logger.error("charge_customer: missing amount (amount_resolution_path=%s)", amount_resolution_path)
         error_msg = "amount is required (and could not be derived from opportunity)"
         body_keys = list(body.keys()) if isinstance(body, dict) else []
-        note_body = f"Payment failed: {error_msg}\nAmount resolution path: {amount_resolution_path}"
+        note_body = f"Payment failed: {error_msg}\nThis is a system/configuration error - the opportunity may be missing amount fields.\nAmount resolution path: {amount_resolution_path}"
         if opportunity_id:
             note_body += f"\nOpportunity ID: {opportunity_id}"
         if ghl_contact_id:
