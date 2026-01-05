@@ -67,6 +67,26 @@ async def dispatch(request: Request):
     contractors = fetch_contractors()
     logger.info("Contractors found: %s", contractors)
 
+    # Filter contractors to only include those with both required tags
+    required_tags = {"contractor_forms_completed", "contractor_cleaning"}
+    initial_count = len(contractors)
+    eligible_contractors = []
+    
+    for contractor in contractors:
+        contractor_tags = set(contractor.get("tags", []))
+        if required_tags.issubset(contractor_tags):
+            eligible_contractors.append(contractor)
+    
+    filtered_out_count = initial_count - len(eligible_contractors)
+    if filtered_out_count > 0:
+        logger.info(
+            "dispatch: filtered out %d contractor(s) missing required tags (required: %s)",
+            filtered_out_count,
+            required_tags
+        )
+    
+    contractors = eligible_contractors
+
     if not contractors:
         logger.warning("No contractors available for dispatch.")
         return JSONResponse(
