@@ -16,6 +16,7 @@ from ..ghl_client import (
     search_contact_by_email,
     add_tag_to_contact,
     get_contact_by_id,
+    get_opportunity_by_id,
     update_contact_custom_field,
     create_contact_note,
 )
@@ -699,25 +700,60 @@ async def charge_customer(
         else:
             logger.warning("charge_customer: GHL contact_id=%s not found", ghl_contact_id)
     
-    # Validate required fields (only return 400 if still missing after GHL fallback)
+    # If amount is missing and opportunity_id is provided, try to extract from GHL opportunity
+    amount_resolution_path = "direct"
+    if not amount_str or not amount_str.strip():
+        if opportunity_id:
+            logger.info("charge_customer: amount missing/blank, attempting to extract from GHL opportunity_id=%s", opportunity_id)
+            opportunity = get_opportunity_by_id(opportunity_id)
+            if opportunity:
+                # Extract amount - handle both snake_case and camelCase keys
+                amount_str = (
+                    opportunity.get("monetaryValue") or
+                    opportunity.get("monetary_value") or
+                    opportunity.get("leadValue") or
+                    opportunity.get("lead_value")
+                )
+                
+                # Log raw keys found for debugging
+                opportunity_keys = list(opportunity.keys())
+                logger.info("charge_customer: opportunity fetched, keys found: %s", opportunity_keys)
+                
+                if amount_str:
+                    amount_resolution_path = "ghl_opportunity_fallback"
+                    logger.info("charge_customer: extracted amount=%s from GHL opportunity_id=%s", amount_str, opportunity_id)
+                else:
+                    logger.warning("charge_customer: GHL opportunity_id=%s found but no amount field (monetaryValue/monetary_value/leadValue/lead_value)", opportunity_id)
+                
+                # Extract description from opportunity name if missing
+                if not description:
+                    opportunity_name = opportunity.get("name") or opportunity.get("title")
+                    if opportunity_name:
+                        description = opportunity_name
+                        logger.info("charge_customer: extracted description=%s from GHL opportunity", description[:50] + "..." if len(description) > 50 else description)
+            else:
+                logger.warning("charge_customer: GHL opportunity_id=%s not found", opportunity_id)
+    
+    # Validate required fields (only return 400 if still missing after GHL fallbacks)
     if not stripe_customer_id:
         logger.error("charge_customer: missing stripe_customer_id (resolution_path=%s)", resolution_path)
         raise HTTPException(status_code=400, detail="stripe_customer_id is required and could not be extracted from GHL contact")
     
-    if not amount_str:
-        logger.error("charge_customer: missing amount")
-        raise HTTPException(status_code=400, detail="amount is required")
+    if not amount_str or not amount_str.strip():
+        logger.error("charge_customer: missing amount (amount_resolution_path=%s)", amount_resolution_path)
+        raise HTTPException(status_code=400, detail="amount is required (and could not be derived from opportunity)")
     
     # Log input (mask sensitive)
     logger.info(
-        "charge_customer: received request customer_id=%s amount=%s currency=%s description=%s opportunity_id=%s ghl_contact_id=%s resolution_path=%s",
+        "charge_customer: received request customer_id=%s amount=%s currency=%s description=%s opportunity_id=%s ghl_contact_id=%s resolution_path=%s amount_resolution_path=%s",
         stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
         amount_str,
         currency,
         description[:50] + "..." if description and len(description) > 50 else (description or "None"),
         opportunity_id or "None",
         ghl_contact_id or "None",
-        resolution_path
+        resolution_path,
+        amount_resolution_path
     )
     
     # Convert amount to cents (safely handle dollars)

@@ -1009,6 +1009,53 @@ def get_contact_by_id(contact_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def get_opportunity_by_id(opportunity_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch an opportunity by ID from GHL.
+    
+    Args:
+        opportunity_id: GHL opportunity ID
+    
+    Returns:
+        Opportunity dict if found, None if not found or error
+    """
+    if not opportunity_id:
+        logger.warning("get_opportunity_by_id: invalid opportunity_id")
+        return None
+    
+    if not GHL_LOCATION_ID:
+        logger.error("get_opportunity_by_id: GHL_LOCATION_ID not set")
+        return None
+    
+    try:
+        resp = requests.get(
+            f"{OPPORTUNITIES_URL}{opportunity_id}",
+            headers=_ghl_headers(),
+            params={"locationId": GHL_LOCATION_ID},
+            timeout=10
+        )
+        
+        if resp.status_code == 404 or resp.status_code == 400:
+            logger.debug("get_opportunity_by_id: opportunity_id=%s not found (%s)", opportunity_id, resp.status_code)
+            return None
+        
+        if not resp.ok:
+            logger.error("get_opportunity_by_id: failed to fetch opportunity_id=%s (%s): %s", 
+                        opportunity_id, resp.status_code, resp.text)
+            return None
+        
+        data = resp.json()
+        opportunity = data.get("opportunity", {})
+        if opportunity:
+            logger.debug("get_opportunity_by_id: found opportunity_id=%s", opportunity_id)
+            return opportunity
+        
+        return None
+    except Exception as e:
+        logger.error("get_opportunity_by_id: exception for opportunity_id=%s: %s", opportunity_id, e, exc_info=True)
+        return None
+
+
 def add_tag_to_contact(contact_id: str, tag: str) -> bool:
     """
     Add a tag to a contact in GHL.
