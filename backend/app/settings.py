@@ -129,3 +129,6 @@ if not STRIPE_WEBHOOK_SECRET:
 if not GHL_WORKFLOW_SECRET:
     raise ValueError("GHL_WORKFLOW_SECRET environment variable is required but not set")
 
+# GHL Opportunity Stage IDs
+GHL_STAGE_ID_PAYMENT_SUCCEEDED = os.getenv("GHL_STAGE_ID_PAYMENT_SUCCEEDED", "").strip()
+

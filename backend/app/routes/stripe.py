@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 import stripe
 
-from ..settings import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, CUSTOM_FIELD_IDS, GHL_WORKFLOW_SECRET
+from ..settings import STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, CUSTOM_FIELD_IDS, GHL_WORKFLOW_SECRET, GHL_STAGE_ID_PAYMENT_SUCCEEDED
 from ..utils import normalize_phone
 from ..ghl_client import (
     search_contact_by_phone,
@@ -19,6 +19,7 @@ from ..ghl_client import (
     get_opportunity_by_id,
     update_contact_custom_field,
     create_contact_note,
+    update_opportunity_stage,
 )
 
 # Initialize Stripe
@@ -1158,9 +1159,26 @@ async def charge_customer(
                 create_contact_note(ghl_contact_id, note_title, note_body)
                 
                 logger.info(
-                    "charge_customer: updated GHL contact_id=%s with payment:succeeded tag and note",
-                    ghl_contact_id
+                    "charge_customer: updated GHL contact_id=%s with payment:succeeded tag and note payment_intent_id=%s status=%s",
+                    ghl_contact_id,
+                    payment_intent.id,
+                    payment_intent.status
                 )
+            
+            # Move opportunity to "Payment Succeeded" stage if opportunity_id is present
+            PAYMENT_SUCCEEDED_STAGE_ID = "86508b40-a1d7-4c38-948f-76bb7b8c7a4f"
+            if opportunity_id:
+                logger.info("charge_customer: attempting to update opportunity_id=%s to stage_id=%s", opportunity_id, PAYMENT_SUCCEEDED_STAGE_ID)
+                stage_update_success = update_opportunity_stage(opportunity_id, PAYMENT_SUCCEEDED_STAGE_ID)
+                if stage_update_success:
+                    logger.info("charge_customer: successfully updated opportunity_id=%s to stage_id=%s", opportunity_id, PAYMENT_SUCCEEDED_STAGE_ID)
+                else:
+                    logger.error("charge_customer: failed to update opportunity_id=%s to stage_id=%s", opportunity_id, PAYMENT_SUCCEEDED_STAGE_ID)
+                    # Tag contact with needs_attention and create note explaining the issue
+                    if ghl_contact_id:
+                        add_tag_to_contact(ghl_contact_id, "payment:needs_attention")
+                        error_note_body = f"Payment succeeded in Stripe but failed to update opportunity stage.\nPayment Intent: {payment_intent.id}\nOpportunity ID: {opportunity_id}\nStage ID: {PAYMENT_SUCCEEDED_STAGE_ID}\nAmount: ${amount_decimal:.2f}"
+                        create_contact_note(ghl_contact_id, "Payment Stage Update Failed", error_note_body)
             
             return JSONResponse({
                 "status": "succeeded",

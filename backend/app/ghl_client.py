@@ -31,6 +31,7 @@ from .settings import (
     _custom_fields_cache_time,
     _custom_fields_cache_lock,
     CUSTOM_FIELDS_CACHE_TTL,
+    GHL_STAGE_ID_PAYMENT_SUCCEEDED,
 )
 from .utils import _ghl_headers, normalize_phone
 
@@ -1056,6 +1057,47 @@ def get_opportunity_by_id(opportunity_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def update_opportunity_stage(opportunity_id: str, pipeline_stage_id: str) -> bool:
+    """
+    Update an opportunity's pipeline stage in GHL.
+    
+    Args:
+        opportunity_id: GHL opportunity ID
+        pipeline_stage_id: GHL pipeline stage ID to set
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    if not opportunity_id or not pipeline_stage_id:
+        logger.warning("update_opportunity_stage: invalid parameters (opportunity_id=%s, pipeline_stage_id=%s)", opportunity_id, pipeline_stage_id)
+        return False
+    
+    if not GHL_LOCATION_ID:
+        logger.error("update_opportunity_stage: GHL_LOCATION_ID not set")
+        return False
+    
+    try:
+        url = f"{OPPORTUNITIES_URL}{opportunity_id}"
+        payload = {
+            "pipelineStageId": pipeline_stage_id,
+        }
+        params = {"locationId": GHL_LOCATION_ID}
+        
+        resp = requests.put(url, headers=_ghl_headers(), params=params, json=payload, timeout=10)
+        
+        if resp.ok:
+            logger.info("update_opportunity_stage: updated opportunity_id=%s to stage_id=%s", opportunity_id, pipeline_stage_id)
+            return True
+        else:
+            logger.error("update_opportunity_stage: failed (%s) for opportunity_id=%s stage_id=%s: %s", 
+                        resp.status_code, opportunity_id, pipeline_stage_id, resp.text[:200])
+            return False
+    except Exception as e:
+        logger.error("update_opportunity_stage: exception for opportunity_id=%s stage_id=%s: %s", 
+                    opportunity_id, pipeline_stage_id, e, exc_info=True)
+        return False
+
+
 def add_tag_to_contact(contact_id: str, tag: str) -> bool:
     """
     Add a tag to a contact in GHL.
@@ -1199,14 +1241,14 @@ def create_contact_note(contact_id: str, title: str, body: str) -> bool:
     
     Args:
         contact_id: GHL contact ID
-        title: Note title
+        title: Note title (used for logging only, not sent to API)
         body: Note body/content
     
     Returns:
         True if note was created successfully, False otherwise
     """
-    if not contact_id or not title or not body:
-        logger.warning("create_contact_note: invalid parameters (contact_id=%s, title=%s)", contact_id, title)
+    if not contact_id or not body:
+        logger.warning("create_contact_note: invalid parameters (contact_id=%s)", contact_id)
         return False
     
     if not GHL_LOCATION_ID:
@@ -1220,9 +1262,8 @@ def create_contact_note(contact_id: str, title: str, body: str) -> bool:
         "Content-Type": "application/json",
     }
     
+    # GHL API only accepts "body" field for note creation
     payload = {
-        "locationId": GHL_LOCATION_ID,
-        "title": title,
         "body": body,
     }
     
