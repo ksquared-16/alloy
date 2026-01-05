@@ -2,22 +2,86 @@
 Dispatch and contractor reply routes.
 """
 import logging
-from datetime import datetime
-from typing import List
+import random
+from datetime import datetime, timedelta
+from typing import List, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+import pytz
 
-from ..settings import JOB_STORE
+from ..settings import JOB_STORE, OFFER_STORE, GHL_STAGE_ID_ASSIGNED
 from ..ghl_client import (
     build_job_summary,
     fetch_contractors,
     send_conversation_sms,
     upsert_job_assignment_to_ghl,
+    update_opportunity_stage,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
 
 router = APIRouter()
+
+# Timezone for date formatting
+LA_TZ = pytz.timezone("America/Los_Angeles")
+
+
+def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -> str:
+    """
+    Convert ISO datetime string to friendly format in America/Los_Angeles timezone.
+    
+    Args:
+        iso_string: ISO datetime string (may include Z or timezone offset)
+        fallback: String to return if parsing fails
+    
+    Returns:
+        Formatted string like "Wed, Jan 8 at 8:00 AM"
+    """
+    if not iso_string:
+        return fallback
+    
+    try:
+        # Handle both Z and timezone-aware strings
+        if iso_string.endswith("Z"):
+            dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(iso_string)
+        
+        # Convert to UTC if naive
+        if dt.tzinfo is None:
+            dt = pytz.UTC.localize(dt)
+        
+        # Convert to LA timezone
+        dt_la = dt.astimezone(LA_TZ)
+        
+        # Format: "Wed, Jan 8 at 8:00 AM"
+        # Use day without leading zero and hour without leading zero
+        day = dt_la.day
+        hour_str = dt_la.strftime("%I").lstrip("0") or "12"  # Handle 12-hour format, remove leading zero
+        minute_str = dt_la.strftime("%M")
+        am_pm = dt_la.strftime("%p")
+        weekday = dt_la.strftime("%a")
+        month = dt_la.strftime("%b")
+        return f"{weekday}, {month} {day} at {hour_str}:{minute_str} {am_pm}"
+    except Exception as e:
+        logger.warning("format_datetime_friendly: failed to parse %s: %s", iso_string, e)
+        return fallback
+
+
+def generate_offer_code() -> str:
+    """
+    Generate a unique 5-digit code (10000-99999) that doesn't exist in OFFER_STORE.
+    
+    Returns:
+        5-digit code string
+    """
+    max_attempts = 100
+    for _ in range(max_attempts):
+        code = str(random.randint(10000, 99999))
+        if code not in OFFER_STORE:
+            return code
+    # Fallback: use timestamp-based code if all random codes are taken
+    return str(random.randint(10000, 99999)) + str(int(datetime.utcnow().timestamp()))[-3:]
 
 
 @router.post("/dispatch")
@@ -45,6 +109,15 @@ async def dispatch(request: Request):
     logger.info("Received payload from GHL: %s", payload)
 
     job_summary = build_job_summary(payload)
+
+    # Extract opportunity_id from payload if available
+    opportunity_id = (
+        payload.get("opportunity_id") or
+        payload.get("opportunityId") or
+        payload.get("opportunity", {}).get("id") if isinstance(payload.get("opportunity"), dict) else None
+    )
+    if opportunity_id:
+        job_summary["opportunity_id"] = opportunity_id
 
     # Enrich with dispatch metadata
     job_summary.setdefault("notified_contractors", [])
@@ -123,19 +196,40 @@ async def dispatch(request: Request):
             }
         )
 
+    # Generate offer code and store in OFFER_STORE
+    offer_code = generate_offer_code()
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    
+    OFFER_STORE[offer_code] = {
+        "opportunity_id": job_summary.get("opportunity_id"),
+        "job_id": job_id,
+        "customer_contact_id": job_summary.get("contact_id"),
+        "expires_at": expires_at.isoformat(),
+        "sent_to_contractor_ids": [],
+    }
+    
+    logger.info("OFFER_CODE_CREATED code=%s opportunity_id=%s job_id=%s", 
+                offer_code, job_summary.get("opportunity_id"), job_id)
+
+    # Format friendly date/time
+    friendly_datetime = format_datetime_friendly(
+        job_summary.get("start_time_iso") or job_summary.get("start_time"),
+        job_summary.get("start_time", "TBD")
+    )
+
     # Build contractor SMS message (NO access info yet – only broadcast)
     postal_code = job_summary.get("postal_code", "")
     zip_line = f"ZIP: {postal_code}\n" if postal_code else ""
     price_line = f"Est. price: ${job_summary['estimated_price']:.2f}\n" if job_summary.get("estimated_price", 0) > 0 else ""
     
     msg = (
-        f"New cleaning job available\n\n"
+        f"New cleaning job available\n"
         f"Customer: {job_summary['customer_name']}\n"
         f"Service: {job_summary['service_type']}\n"
-        f"When: {job_summary.get('start_time', 'TBD')}\n"
+        f"When: {friendly_datetime}\n"
         f"{zip_line}"
         f"{price_line}"
-        f"\nReply YES {job_summary['job_id']} to accept."
+        f"\nReply YES {offer_code} to accept."
     )
 
     notified_ids: List[str] = []
@@ -152,6 +246,8 @@ async def dispatch(request: Request):
         send_conversation_sms(cid, msg)
         notified_ids.append(cid)
         job_summary["notified_contractors"].append(cid)
+        # Track which contractors received this offer
+        OFFER_STORE[offer_code]["sent_to_contractor_ids"].append(cid)
 
     return JSONResponse(
         {
@@ -221,91 +317,140 @@ async def contractor_reply(request: Request):
     text_upper = text_stripped.upper()
     parts = text_stripped.split()
 
-    # Start with job_id from customData if present and non-empty
-    job_id = custom.get("job_id")
-    if isinstance(job_id, str):
-        job_id = job_id.strip() or None
+    # Parse 5-digit code from message
+    # Supported formats: "YES 12345", "12345", "Yes 12345"
+    offer_code = None
+    if len(parts) >= 2 and parts[0].upper() in ("YES", "Y", "YEA", "YEAH", "YEP"):
+        # Format: "YES 12345"
+        potential_code = parts[1].strip()
+        if potential_code.isdigit() and len(potential_code) == 5:
+            offer_code = potential_code
+    elif len(parts) == 1 and parts[0].isdigit() and len(parts[0]) == 5:
+        # Format: "12345"
+        offer_code = parts[0].strip()
 
-    # If not provided, try to parse "YES <job_id>" pattern
-    if not job_id and len(parts) >= 2 and parts[0].upper() == "YES":
-        job_id = parts[1].strip() or None
+    logger.info("OFFER_ACCEPT_ATTEMPT contractor_id=%s code=%s message_text=%s", 
+                contact_id, offer_code, message_text)
 
-    job = None
+    # Validate offer code
+    if not offer_code or offer_code not in OFFER_STORE:
+        # Invalid code - send rejection message
+        logger.warning("OFFER_ACCEPT_INVALID reason=code_not_found contractor_id=%s code=%s", 
+                      contact_id, offer_code)
+        rejection_msg = "Invalid code. Please reply with the 5-digit code from the job offer."
+        if offer_code:
+            rejection_msg = f"Invalid code. Reply YES {offer_code} to accept."
+        send_conversation_sms(contact_id, rejection_msg)
+        return JSONResponse(
+            {
+                "ok": False,
+                "reason": "invalid_code",
+                "message_text": message_text,
+                "code": offer_code,
+            },
+            status_code=200,
+        )
 
-    # If we have an explicit job_id, try to get it from JOB_STORE
-    if job_id:
-        job = JOB_STORE.get(job_id)
+    offer = OFFER_STORE[offer_code]
+    
+    # Check expiration
+    expires_at_str = offer.get("expires_at")
+    if expires_at_str:
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+            if datetime.utcnow().replace(tzinfo=pytz.UTC) > expires_at:
+                logger.warning("OFFER_ACCEPT_INVALID reason=expired contractor_id=%s code=%s", 
+                              contact_id, offer_code)
+                send_conversation_sms(contact_id, "This offer has expired. Please wait for a new job offer.")
+                # Clean up expired offer
+                del OFFER_STORE[offer_code]
+                return JSONResponse(
+                    {
+                        "ok": False,
+                        "reason": "code_expired",
+                        "code": offer_code,
+                    },
+                    status_code=200,
+                )
+        except Exception as e:
+            logger.warning("contractor-reply: failed to parse expires_at %s: %s", expires_at_str, e)
 
-    # If no job yet, but it's a YES/Y reply, fall back to latest job
+    # Get job_id and opportunity_id from offer
+    job_id = offer.get("job_id")
+    opportunity_id = offer.get("opportunity_id")
+    
+    # Get job from JOB_STORE
+    job = JOB_STORE.get(job_id) if job_id else None
+
     if not job:
-        if text_upper not in ("YES", "Y", "YEA", "YEAH", "YEP"):
-            logger.error(
-                "contractor-reply: invalid reply format: %s", message_text
-            )
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "reason": "invalid_format",
-                    "message_text": message_text,
-                },
-                status_code=200,
-            )
-
-        # Look for jobs we notified this contractor about
-        candidate_jobs = [
-            (jid, j)
-            for jid, j in JOB_STORE.items()
-            if contact_id and contact_id in (j.get("notified_contractors") or [])
-        ]
-        if not candidate_jobs:
-            logger.error(
-                "contractor-reply: no matching job found for contractor %s. Known job_ids=%s",
-                contact_id,
-                list(JOB_STORE.keys()),
-            )
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "reason": "job_not_found_for_contractor",
-                    "contact_id": contact_id,
-                },
-                status_code=200,
-            )
-
-        # Pick the most recently dispatched job
-        candidate_jobs.sort(key=lambda pair: pair[1].get("dispatched_at", ""))
-        job_id, job = candidate_jobs[-1]
-
-    if not job or not job_id:
         logger.error(
-            "contractor-reply: job still not resolved. job_id=%s, known job_ids=%s",
+            "contractor-reply: job not found in JOB_STORE. job_id=%s, known job_ids=%s",
             job_id,
             list(JOB_STORE.keys()),
         )
+        send_conversation_sms(contact_id, "Job not found. Please contact support.")
         return JSONResponse(
             {"ok": False, "reason": "job_not_found", "job_id": job_id},
             status_code=200,
         )
 
-    # Lookup contractor info (mainly for name in logs / notifications)
+    # Lookup contractor info and validate eligibility
     contractors = fetch_contractors()
     contractor = next((c for c in contractors if c.get("id") == contact_id), None)
 
+    if not contractor:
+        logger.warning("OFFER_ACCEPT_INVALID reason=contractor_not_found contractor_id=%s code=%s", 
+                      contact_id, offer_code)
+        send_conversation_sms(contact_id, "Contractor not found. Please contact support.")
+        return JSONResponse(
+            {"ok": False, "reason": "contractor_not_found", "contact_id": contact_id},
+            status_code=200,
+        )
+
+    # Validate contractor has required tags
+    required_tags = {tag.strip().lower() for tag in ["contractor_forms_completed", "contractor_cleaning"]}
+    raw_tags = contractor.get("tags", [])
+    normalized_tags = {str(tag).strip().lower() for tag in raw_tags if tag}
+    
+    if not required_tags.issubset(normalized_tags):
+        logger.warning("OFFER_ACCEPT_INVALID reason=contractor_not_eligible contractor_id=%s code=%s tags=%s", 
+                      contact_id, offer_code, raw_tags)
+        send_conversation_sms(contact_id, "You are not eligible for this job. Please contact support.")
+        return JSONResponse(
+            {"ok": False, "reason": "contractor_not_eligible", "contact_id": contact_id},
+            status_code=200,
+        )
+
     contractor_name = contractor.get("name") if contractor else "Unknown contractor"
+
+    # Update opportunity stage if opportunity_id is present
+    stage_updated = False
+    if opportunity_id and GHL_STAGE_ID_ASSIGNED:
+        logger.info("OFFER_ACCEPT_SUCCESS opportunity_id=%s contractor_id=%s code=%s", 
+                   opportunity_id, contact_id, offer_code)
+        stage_updated = update_opportunity_stage(opportunity_id, GHL_STAGE_ID_ASSIGNED)
+        logger.info("OFFER_ACCEPT_SUCCESS stage_updated=%s opportunity_id=%s stage_id=%s", 
+                   stage_updated, opportunity_id, GHL_STAGE_ID_ASSIGNED)
+    elif opportunity_id:
+        logger.warning("contractor-reply: opportunity_id=%s present but GHL_STAGE_ID_ASSIGNED not configured, skipping opportunity stage update", 
+                      opportunity_id)
+    else:
+        logger.info("contractor-reply: no opportunity_id in offer, skipping opportunity stage update (job assignment will continue)")
 
     # Mark assignment in memory
     job["assigned_contractor_id"] = contact_id
     job["assigned_contractor_name"] = contractor_name
+    
+    # Invalidate the offer code (remove from OFFER_STORE)
+    del OFFER_STORE[offer_code]
+    logger.info("contractor-reply: invalidated offer code=%s", offer_code)
 
     # 1) Confirm to the accepting contractor — including all details
-    # Format date/time nicely
-    start_time_display = job.get("start_time", "TBD")
-    if job.get("start_time_iso"):
-        try:
-            dt = datetime.fromisoformat(job["start_time_iso"].replace("Z", "+00:00"))
-            start_time_display = dt.strftime("%A, %B %d at %I:%M %p")
-        except Exception:
-            pass  # Fall back to raw start_time
+    # Format date/time nicely using the same helper
+    start_time_display = format_datetime_friendly(
+        job.get("start_time_iso") or job.get("start_time"),
+        job.get("start_time", "TBD")
+    )
     
     customer_name = job.get("customer_name", "Unknown")
     full_address = job.get("full_address", "")

@@ -112,6 +112,11 @@ MAX_TOTAL_PHOTO_BYTES = 20 * 1024 * 1024  # 20MB total
 # Note: In production, consider using Redis or a database for persistence
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 
+# In-memory offer code store: { code (5-digit string): offer_dict }
+# offer_dict contains: opportunity_id, job_id, customer_contact_id, expires_at, sent_to_contractor_ids
+# Note: In production, consider using Redis or a database for persistence
+OFFER_STORE: Dict[str, Dict[str, Any]] = {}
+
 # GHL Booking URL for cleaning appointments (deprecated - no longer used)
 # The booking flow now uses direct GHL widget embeds
 # GHL_BOOKING_URL_CLEANING = os.getenv("GHL_BOOKING_URL_CLEANING", "").strip()
@@ -131,4 +136,5 @@ if not GHL_WORKFLOW_SECRET:
 
 # GHL Opportunity Stage IDs
 GHL_STAGE_ID_PAYMENT_SUCCEEDED = os.getenv("GHL_STAGE_ID_PAYMENT_SUCCEEDED", "").strip()
+GHL_STAGE_ID_ASSIGNED = os.getenv("GHL_STAGE_ID_ASSIGNED", "fe23b7dc-9557-4f8a-841c-829b14b0b711").strip()
 
