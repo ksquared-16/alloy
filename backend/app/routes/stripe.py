@@ -700,6 +700,46 @@ async def charge_customer(
             "attempted_charge": False
         }, status_code=200)
     
+    # CHARGE_PAYLOAD_DEBUG: Temporary debug logging for request body inspection
+    body_keys = list(body.keys()) if isinstance(body, dict) else []
+    custom_data = body.get("customData")
+    custom_data_keys = list(custom_data.keys()) if isinstance(custom_data, dict) else None
+    opportunity_obj = body.get("opportunity")
+    opportunity_keys = list(opportunity_obj.keys()) if isinstance(opportunity_obj, dict) else None
+    
+    # Mask PII in values before logging
+    def mask_pii(value):
+        if not value or not isinstance(value, str):
+            return value
+        # Simple masking: if contains @ or looks like phone, mask it
+        if "@" in value:
+            parts = value.split("@")
+            if len(parts) == 2:
+                return f"{parts[0][:2]}***@{parts[1]}"
+        # If looks like phone number (has digits and + or -), mask
+        if any(c.isdigit() for c in value) and ("+" in value or "-" in value or "(" in value):
+            return value[:4] + "***" + value[-4:] if len(value) > 8 else "***"
+        return value
+    
+    opportunity_id_raw = body.get("opportunity_id")
+    amount_raw = body.get("amount")
+    custom_data_opportunity_id = body.get("customData", {}).get("opportunity_id") if isinstance(body.get("customData"), dict) else None
+    custom_data_amount = body.get("customData", {}).get("amount") if isinstance(body.get("customData"), dict) else None
+    
+    logger.info(
+        "CHARGE_PAYLOAD_DEBUG: content_type=%s body_keys=%s customData_keys=%s opportunity_present=%s opportunity_keys=%s "
+        "opportunity_id=%s amount=%s customData.opportunity_id=%s customData.amount=%s",
+        content_type,
+        body_keys,
+        custom_data_keys,
+        opportunity_obj is not None,
+        opportunity_keys,
+        mask_pii(str(opportunity_id_raw)) if opportunity_id_raw is not None else None,
+        mask_pii(str(amount_raw)) if amount_raw is not None else None,
+        mask_pii(str(custom_data_opportunity_id)) if custom_data_opportunity_id is not None else None,
+        mask_pii(str(custom_data_amount)) if custom_data_amount is not None else None
+    )
+    
     # Support multiple key names for stripe_customer_id
     stripe_customer_id = (
         body.get("stripe_customer_id") or
@@ -709,8 +749,64 @@ async def charge_customer(
     amount_str = body.get("amount")
     currency = body.get("currency", "usd")
     description = body.get("description")
-    opportunity_id = body.get("opportunity_id")
     ghl_contact_id = body.get("ghl_contact_id")
+    
+    # Resolve opportunity_id robustly from multiple possible keys and nested structures
+    opportunity_id = (
+        body.get("opportunity_id") or
+        body.get("opportunityId") or
+        None
+    )
+    
+    # Fallback to body["id"] only if opportunity_id not found
+    if not opportunity_id:
+        opportunity_id = body.get("id")
+    
+    # Check nested structures
+    if not opportunity_id:
+        opp_obj = body.get("opportunity")
+        if isinstance(opp_obj, dict):
+            opportunity_id = (
+                opp_obj.get("id") or
+                opp_obj.get("opportunity_id") or
+                opp_obj.get("opportunityId")
+            )
+            # Check double-nested
+            if not opportunity_id:
+                nested_opp = opp_obj.get("opportunity")
+                if isinstance(nested_opp, dict):
+                    opportunity_id = (
+                        nested_opp.get("id") or
+                        nested_opp.get("opportunity_id") or
+                        nested_opp.get("opportunityId")
+                    )
+    
+    # Normalize amount_str: treat None, empty string, or whitespace as missing
+    amount_is_blank = not amount_str or (isinstance(amount_str, str) and not amount_str.strip())
+    
+    # Normalize description: treat None, empty string, or whitespace as missing
+    description_is_blank = not description or (isinstance(description, str) and not description.strip())
+    
+    # Determine initial fallback path
+    initial_fallback_path = "direct"
+    if not stripe_customer_id and ghl_contact_id:
+        initial_fallback_path = "will_attempt_ghl_contact_fallback"
+    if amount_is_blank and opportunity_id:
+        if initial_fallback_path == "direct":
+            initial_fallback_path = "will_attempt_opportunity_fallback"
+        else:
+            initial_fallback_path = "will_attempt_both_fallbacks"
+    
+    # Log initial state
+    body_keys = list(body.keys()) if isinstance(body, dict) else []
+    logger.info(
+        "charge_customer: received keys=%s opportunity_id=%s amount_blank=%s description_blank=%s fallback_path=%s",
+        body_keys,
+        opportunity_id or "None",
+        amount_is_blank,
+        description_is_blank,
+        initial_fallback_path
+    )
     
     # If stripe_customer_id is missing and ghl_contact_id is provided, try to extract from GHL contact
     resolution_path = "direct"
@@ -730,7 +826,8 @@ async def charge_customer(
     # If amount is missing and opportunity_id is provided, try to extract from GHL opportunity
     amount_resolution_path = "direct"
     amount_source_key = None
-    if not amount_str or not amount_str.strip():
+    wrapper_detected = False
+    if amount_is_blank:
         if opportunity_id:
             logger.info("charge_customer: amount missing/blank, attempting to extract from GHL opportunity_id=%s", opportunity_id)
             opportunity_resp = get_opportunity_by_id(opportunity_id)
@@ -784,15 +881,17 @@ async def charge_customer(
                 
                 if amount_str:
                     amount_resolution_path = f"ghl_opportunity_fallback:{amount_source_key}"
-                    logger.info("charge_customer: extracted amount=%s from GHL opportunity_id=%s source_key=%s", amount_str, opportunity_id, amount_source_key)
+                    amount_is_blank = False  # Update flag since we successfully extracted amount
+                    logger.info("charge_customer: extracted amount=%s from GHL opportunity_id=%s source_key=%s wrapper_detected=%s", amount_str, opportunity_id, amount_source_key, wrapper_detected)
                 else:
-                    logger.warning("charge_customer: GHL opportunity_id=%s found but no amount field could be extracted", opportunity_id)
+                    logger.warning("charge_customer: GHL opportunity_id=%s found but no amount field could be extracted wrapper_detected=%s", opportunity_id, wrapper_detected)
                 
-                # Extract description from opportunity name if missing
-                if not description:
+                # Extract description from opportunity name if missing/blank
+                if description_is_blank:
                     opportunity_name = opportunity.get("name") or opportunity.get("title")
                     if opportunity_name:
                         description = opportunity_name
+                        description_is_blank = False
                         logger.info("charge_customer: extracted description=%s from GHL opportunity", description[:50] + "..." if len(description) > 50 else description)
             else:
                 logger.warning("charge_customer: GHL opportunity_id=%s not found", opportunity_id)
@@ -821,13 +920,12 @@ async def charge_customer(
             "attempted_charge": False
         }, status_code=200)
     
-    if not amount_str or not amount_str.strip():
+    if amount_is_blank:
         logger.error("charge_customer: missing amount (amount_resolution_path=%s)", amount_resolution_path)
         error_msg = "amount is required (and could not be derived from opportunity)"
-        body_keys = list(body.keys()) if isinstance(body, dict) else []
-        note_body = f"Payment failed: {error_msg}\nThis is a system/configuration error - the opportunity may be missing amount fields.\nAmount resolution path: {amount_resolution_path}"
+        note_body = f"Payment failed: {error_msg}\nThis is a SYSTEM/CONFIG failure (not a card failure) - the opportunity may be missing amount fields.\nAmount resolution path: {amount_resolution_path}"
         if opportunity_id:
-            note_body += f"\nOpportunity ID: {opportunity_id}"
+            note_body += f"\nResolved Opportunity ID: {opportunity_id}"
         if ghl_contact_id:
             note_body += f"\nGHL Contact ID: {ghl_contact_id}"
         if stripe_customer_id:
