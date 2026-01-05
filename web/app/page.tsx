@@ -281,6 +281,17 @@ export default function Home() {
                 Get a same-day quote
               </PrimaryButton>
             </Link>
+            <p className="text-sm text-alloy-midnight/60 mt-6">
+              Had a great experience?{" "}
+              <a
+                href="https://www.google.com/search?sca_esv=7670df6d756a93b6&sxsrf=AE3TifNkBI028mC6V8lu01Pi7_VO0zSISw:1767651952450&si=AMgyJEtREmoPL4P1I5IDCfuA8gybfVI2d5Uj7QMwYCZHKDZ-E1vaBZPzHkn18HCW9v8UVy2cjwvDEtsPTjI29B5Ok2Wd7GZcsLRus5HtywFRGe9rcAgM3BMkhEoX69tYnzEXHihFmtQ-&q=Alloy+Services+Reviews&sa=X&ved=2ahUKEwjxmNnVuPWRAxU8JDQIHRExOEIQ0bkNegQILxAD#lrd=0x12915f0438ac783:0x94b6c943526afd86,3,,,,"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-alloy-juniper hover:text-alloy-pine underline transition-colors"
+              >
+                Leave us a Google review
+              </a>
+            </p>
           </div>
         </div>
       </Section>
