@@ -5,9 +5,9 @@ import logging
 import random
 from datetime import datetime, timedelta
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-import pytz
 
 from ..settings import JOB_STORE, OFFER_STORE, GHL_STAGE_ID_ASSIGNED
 from ..ghl_client import (
@@ -23,7 +23,7 @@ logger = logging.getLogger("alloy-dispatcher")
 router = APIRouter()
 
 # Timezone for date formatting
-LA_TZ = pytz.timezone("America/Los_Angeles")
+LA_TZ = ZoneInfo("America/Los_Angeles")
 
 
 def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -> str:
@@ -49,7 +49,7 @@ def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -
         
         # Convert to UTC if naive
         if dt.tzinfo is None:
-            dt = pytz.UTC.localize(dt)
+            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
         
         # Convert to LA timezone
         dt_la = dt.astimezone(LA_TZ)
@@ -358,7 +358,9 @@ async def contractor_reply(request: Request):
     if expires_at_str:
         try:
             expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
-            if datetime.utcnow().replace(tzinfo=pytz.UTC) > expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=ZoneInfo("UTC"))
+            if datetime.now(ZoneInfo("UTC")) > expires_at:
                 logger.warning("OFFER_ACCEPT_INVALID reason=expired contractor_id=%s code=%s", 
                               contact_id, offer_code)
                 send_conversation_sms(contact_id, "This offer has expired. Please wait for a new job offer.")
