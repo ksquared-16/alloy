@@ -2354,13 +2354,15 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
     Update assignment details into the Jobs custom object in GHL.
 
     Args:
-        job_id: External job ID (appointment ID)
-        contractor_id: GHL contact ID of the assigned contractor
-        contractor_name: Name of the assigned contractor
+        job_id: External job ID (appointment ID) - optional if record_id is provided
+        contractor_id: GHL contact ID of the assigned contractor (required)
+        contractor_name: Name of the assigned contractor (required)
+        record_id: GHL Jobs custom object record ID (optional, will search if not provided)
 
     Process:
-        1. Find record id via /objects/custom_objects.jobs/records/search using external_job_id
-        2. PUT /objects/custom_objects.jobs/records/{id}?locationId=...
+        1. If record_id provided, use it directly
+        2. Otherwise, find record id via /objects/custom_objects.jobs/records/search using external_job_id
+        3. PUT /objects/custom_objects.jobs/records/{id}?locationId=...
            with properties:
              - contractor_assigned_id
              - contractor_assigned_name
@@ -2368,14 +2370,29 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
              - how_will_your_cleaner_get_into_your_home
              - access_notes_for_your_cleaner
     """
-    if not job_id or not contractor_id:
+    # Require contractor_id always
+    if not contractor_id:
         logger.warning(
-            "upsert_job_assignment_to_ghl: missing job_id or contractor_id, skipping. "
-            "job_id=%s contractor_id=%s",
+            "upsert_job_assignment_to_ghl: missing contractor_id, skipping. "
+            "job_id=%s contractor_id=%s record_id=%s",
             job_id,
             contractor_id,
+            record_id,
         )
         return
+    
+    # If record_id is provided, job_id is optional
+    # If record_id is not provided, job_id is required for lookup
+    if not record_id and not job_id:
+        logger.warning(
+            "upsert_job_assignment_to_ghl: missing both job_id and record_id, skipping. "
+            "job_id=%s contractor_id=%s record_id=%s",
+            job_id,
+            contractor_id,
+            record_id,
+        )
+        return
+    
     if not GHL_LOCATION_ID:
         logger.error("upsert_job_assignment_to_ghl: GHL_LOCATION_ID not set")
         return
@@ -2389,51 +2406,73 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
                 job_id,
             )
             return
+        logger.info("upsert_job_assignment_to_ghl: resolved record_id=%s from job_id=%s", record_id, job_id)
     else:
-        logger.info("upsert_job_assignment_to_ghl: using provided record_id=%s for job_id=%s", record_id, job_id)
+        logger.info("upsert_job_assignment_to_ghl: using provided record_id=%s (job_id=%s)", record_id, job_id)
 
     # Pull the in-memory job to get access info (if available)
-    job = JOB_STORE.get(job_id, {})
+    # If job_id is empty, try to get from record_id (optional)
+    job = JOB_STORE.get(job_id, {}) if job_id else {}
 
     payload = {
-        "properties": {
-            "external_job_id": job_id,
-            "contractor_assigned_id": contractor_id,
-            "contractor_assigned_name": contractor_name,
-            "job_status": JOB_STATUS_ASSIGNED,
-            # These keys must match the Unique Key of your Job custom fields in GHL
-            "how_will_your_cleaner_get_into_your_home": job.get("access_method", ""),
-            "access_notes_for_your_cleaner": job.get("access_notes", ""),
-        }
+        "properties": {}
     }
+    
+    # Only include external_job_id if we have it
+    if job_id:
+        payload["properties"]["external_job_id"] = job_id
+    
+    payload["properties"]["contractor_assigned_id"] = contractor_id
+    payload["properties"]["contractor_assigned_name"] = contractor_name
+    payload["properties"]["job_status"] = JOB_STATUS_ASSIGNED
+    
+    # These keys must match the Unique Key of your Job custom fields in GHL
+    if job:
+        payload["properties"]["how_will_your_cleaner_get_into_your_home"] = job.get("access_method", "")
+        payload["properties"]["access_notes_for_your_cleaner"] = job.get("access_notes", "")
+    else:
+        # If job not in JOB_STORE, set empty strings
+        payload["properties"]["how_will_your_cleaner_get_into_your_home"] = ""
+        payload["properties"]["access_notes_for_your_cleaner"] = ""
+    
     params = {"locationId": GHL_LOCATION_ID}
+    url = f"{JOBS_RECORDS_URL}/{record_id}"
 
     logger.info(
-        "Updating Jobs object on assignment via %s/%s with params %s and payload: %s",
-        JOBS_RECORDS_URL,
+        "JOB_ASSIGNMENT_UPDATE_REQUEST record_id=%s contractor_id=%s contractor_name=%s job_status=%s",
         record_id,
-        params,
-        payload,
+        contractor_id,
+        contractor_name,
+        JOB_STATUS_ASSIGNED,
     )
 
     try:
         resp = requests.put(
-            f"{JOBS_RECORDS_URL}/{record_id}",
+            url,
             headers=_ghl_headers(),
             params=params,
             json=payload,
             timeout=10,
         )
     except Exception as e:
-        logger.error("Jobs object assignment upsert exception: %s", e)
+        logger.error("JOB_ASSIGNMENT_UPDATE_RESPONSE record_id=%s exception: %s", record_id, e, exc_info=True)
         return
 
+    # Log response
+    try:
+        response_json = resp.json() if resp.text else {}
+    except Exception:
+        response_json = {"raw_text": resp.text[:500] if resp.text else ""}
+    
     if resp.ok:
-        logger.info("Jobs object assignment upsert OK: %s", resp.text)
+        logger.info("JOB_ASSIGNMENT_UPDATE_RESPONSE record_id=%s status=%d success=true json=%s",
+                   record_id, resp.status_code, response_json)
     else:
         logger.error(
-            "Jobs object assignment upsert failed (%s): %s",
+            "JOB_ASSIGNMENT_UPDATE_RESPONSE record_id=%s status=%d success=false error=%s json=%s",
+            record_id,
             resp.status_code,
-            resp.text,
+            resp.text[:500] if resp.text else "No error message",
+            response_json,
         )
 

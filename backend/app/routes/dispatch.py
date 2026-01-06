@@ -482,10 +482,31 @@ async def contractor_reply(request: Request):
         )
     
     # Extract job info from Job custom object record
-    properties = job_record.get("properties", {})
+    # Handle nested structure: properties may be at top level or in record.properties
+    properties = (
+        job_record.get("properties") or
+        job_record.get("record", {}).get("properties") or
+        {}
+    )
+    
     job_id = properties.get("external_job_id")
-    opportunity_id = properties.get("opportunity_id") or properties.get(JOBS_OPPORTUNITY_ID_FIELD_KEY)
-    expires_at_str = properties.get("offer_expires_at") or properties.get(JOBS_OFFER_EXPIRES_AT_FIELD_KEY)
+    opportunity_id = (
+        properties.get("opportunity_id") or
+        properties.get(JOBS_OPPORTUNITY_ID_FIELD_KEY) or
+        properties.get("opportunityId") or
+        properties.get("Opportunity ID")
+    )
+    expires_at_str = (
+        properties.get("offer_expires_at") or
+        properties.get(JOBS_OFFER_EXPIRES_AT_FIELD_KEY) or
+        properties.get("offerExpiresAt")
+    )
+    
+    # Log opportunity_id resolution
+    opportunity_keys_present = [k for k in ["opportunity_id", JOBS_OPPORTUNITY_ID_FIELD_KEY, "opportunityId", "Opportunity ID"] 
+                               if properties.get(k)]
+    logger.info("OFFER_ACCEPT_OPPORTUNITY_ID_RESOLVE resolved=%s keys_present=%s all_property_keys=%s",
+               opportunity_id, opportunity_keys_present, list(properties.keys())[:20] if isinstance(properties, dict) else [])
     
     # Check expiration
     if expires_at_str:
@@ -518,7 +539,7 @@ async def contractor_reply(request: Request):
             job_id,
         )
         job = {
-            "job_id": job_id,
+            "job_id": job_id,  # Ensure job_id is set from properties
             "customer_name": properties.get("customer_name") or "Unknown",
             "start_time": properties.get("start_time") or "TBD",
             "start_time_iso": properties.get("start_time_iso") or "",
@@ -528,6 +549,10 @@ async def contractor_reply(request: Request):
             "price_breakdown": properties.get("price_breakdown") or "",
             "contact_id": properties.get("contact_id") or "",
         }
+    else:
+        # Ensure job_id is set even if job was in JOB_STORE
+        if not job.get("job_id") and job_id:
+            job["job_id"] = job_id
 
     # Lookup contractor info and validate eligibility
     contractors = fetch_contractors()
@@ -561,9 +586,16 @@ async def contractor_reply(request: Request):
     # Update job assignment first (using record_id directly)
     job_updated = False
     if job_record_id:
-        upsert_job_assignment_to_ghl(job_id or "", contact_id or "", contractor_name or "", record_id=job_record_id)
+        # Pass job_id if available, but record_id takes precedence
+        upsert_job_assignment_to_ghl(
+            job_id or "",  # May be empty, but record_id will be used
+            contact_id or "",
+            contractor_name or "",
+            record_id=job_record_id
+        )
         job_updated = True
-        logger.info("OFFER_ACCEPT_JOB_UPDATED code=%s job_record_id=%s", offer_code, job_record_id)
+        logger.info("OFFER_ACCEPT_JOB_UPDATED code=%s job_record_id=%s job_id=%s", 
+                   offer_code, job_record_id, job_id)
     else:
         logger.error("OFFER_ACCEPT_ERROR reason=no_record_id code=%s", offer_code)
 
