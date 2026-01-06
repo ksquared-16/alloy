@@ -3,13 +3,14 @@ Dispatch and contractor reply routes.
 """
 import logging
 import random
+import time
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ..settings import JOB_STORE, GHL_STAGE_ID_ASSIGNED
+from ..settings import JOB_STORE, GHL_STAGE_ID_ASSIGNED, OFFER_STORE
 from ..ghl_client import (
     build_job_summary,
     fetch_contractors,
@@ -17,7 +18,9 @@ from ..ghl_client import (
     upsert_job_assignment_to_ghl,
     update_opportunity_stage,
     update_job_offer_code,
+    update_job_offer_code_by_record_id,
     find_job_by_offer_code,
+    find_job_record_id,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -83,6 +86,45 @@ def generate_offer_code() -> str:
     return str(random.randint(10000, 99999))
 
 
+def resolve_job_record_id_with_retries(candidates: List[str], max_attempts: int = 6, sleep_seconds: float = 1.0) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Attempt to resolve a job record ID by trying multiple candidate external_job_ids with retries.
+    
+    Args:
+        candidates: List of candidate external_job_ids to try
+        max_attempts: Maximum number of attempts per candidate
+        sleep_seconds: Seconds to sleep between attempts
+    
+    Returns:
+        Tuple of (record_id, external_job_id_used) if found, (None, first_candidate) otherwise
+    """
+    if not candidates:
+        return (None, None)
+    
+    first_candidate = candidates[0] if candidates else None
+    logger.info("JOB_RECORD_RESOLVE_START candidates=%s", candidates)
+    
+    for candidate in candidates:
+        if not candidate:
+            continue
+        
+        for attempt in range(1, max_attempts + 1):
+            record_id = find_job_record_id(candidate)
+            found = record_id is not None
+            logger.info("JOB_RECORD_RESOLVE_ATTEMPT external_job_id=%s attempt=%d found=%s record_id=%s",
+                       candidate, attempt, found, record_id)
+            
+            if found:
+                return (record_id, candidate)
+            
+            # Sleep before next attempt (except on last attempt)
+            if attempt < max_attempts:
+                time.sleep(sleep_seconds)
+    
+    logger.warning("JOB_RECORD_RESOLVE_FAILED candidates=%s", candidates)
+    return (None, first_candidate)
+
+
 @router.post("/dispatch")
 async def dispatch(request: Request):
     """
@@ -109,14 +151,34 @@ async def dispatch(request: Request):
 
     job_summary = build_job_summary(payload)
 
-    # Extract opportunity_id from payload if available
+    # Extract opportunity_id from payload - try multiple locations
     opportunity_id = (
+        payload.get("id") or  # Often opportunity id in GHL payloads
         payload.get("opportunity_id") or
         payload.get("opportunityId") or
         payload.get("opportunity", {}).get("id") if isinstance(payload.get("opportunity"), dict) else None
     )
     if opportunity_id:
         job_summary["opportunity_id"] = opportunity_id
+        logger.info("Extracted opportunity_id=%s from payload", opportunity_id)
+    else:
+        logger.warning("No opportunity_id found in payload")
+
+    # Capture multiple candidate external_job_ids from payload.calendar
+    calendar = payload.get("calendar") or {}
+    candidates = [
+        calendar.get("appointmentId"),
+        calendar.get("id"),
+        payload.get("calendar", {}).get("appointmentId"),
+        payload.get("calendar", {}).get("id"),
+        payload.get("appointmentId"),
+        payload.get("appointment_id"),
+    ]
+    # Filter out falsy and de-dup
+    candidates = list(dict.fromkeys([c for c in candidates if c]))
+    
+    if not candidates:
+        logger.warning("No candidate external_job_ids found in payload")
 
     # Enrich with dispatch metadata
     job_summary.setdefault("notified_contractors", [])
@@ -195,27 +257,42 @@ async def dispatch(request: Request):
             }
         )
 
-    # Generate offer code and save to Job custom object
+    # Generate offer code and resolve job record with retries
     offer_code = generate_offer_code()
     expires_at = datetime.utcnow() + timedelta(hours=24)
     expires_at_iso = expires_at.isoformat()
     
-    # Save offer code to Job custom object
-    if job_id:
-        update_success = update_job_offer_code(
-            job_id,
+    # Resolve job record ID with retries (handles race condition where record may not exist yet)
+    job_record_id, external_job_id_used = resolve_job_record_id_with_retries(candidates)
+    
+    # Store offer metadata in OFFER_STORE
+    offer_metadata = {
+        "code": offer_code,
+        "external_job_id": external_job_id_used or (candidates[0] if candidates else None),
+        "job_record_id": job_record_id,
+        "opportunity_id": opportunity_id,
+        "created_at": datetime.utcnow().isoformat(),
+        "expires_at": expires_at_iso,
+    }
+    OFFER_STORE[offer_code] = offer_metadata
+    
+    # Save offer code to Job custom object if record_id was found
+    if job_record_id:
+        update_success = update_job_offer_code_by_record_id(
+            job_record_id,
             offer_code,
             expires_at_iso,
-            job_summary.get("opportunity_id")
+            opportunity_id
         )
         if update_success:
-            logger.info("OFFER_CODE_CREATED code=%s opportunity_id=%s job_id=%s saved to Job custom object", 
-                       offer_code, job_summary.get("opportunity_id"), job_id)
+            logger.info("OFFER_CODE_CREATED code=%s external_job_id=%s job_record_id=%s opportunity_id=%s saved to Job custom object",
+                       offer_code, external_job_id_used, job_record_id, opportunity_id)
         else:
-            logger.warning("OFFER_CODE_CREATED code=%s but failed to save to Job custom object job_id=%s", 
-                          offer_code, job_id)
+            logger.warning("OFFER_CODE_CREATED code=%s but failed to save to Job custom object job_record_id=%s",
+                          offer_code, job_record_id)
     else:
-        logger.warning("OFFER_CODE_CREATED code=%s but no job_id to save to Job custom object", offer_code)
+        logger.warning("OFFER_CODE_CREATED code=%s external_job_id=%s job_record_id=None (will resolve on acceptance) opportunity_id=%s",
+                      offer_code, external_job_id_used, opportunity_id)
 
     # Format friendly date/time
     friendly_datetime = format_datetime_friendly(
@@ -372,8 +449,35 @@ async def contractor_reply(request: Request):
     # Extract job info from Job custom object record
     properties = job_record.get("properties", {})
     job_id = properties.get("external_job_id")
-    opportunity_id = properties.get("opportunity_id")
+    opportunity_id_from_record = properties.get("opportunity_id")
     expires_at_str = properties.get("offer_expires_at")
+    
+    # Try to get offer metadata from OFFER_STORE (more reliable)
+    offer_metadata = OFFER_STORE.get(offer_code)
+    if offer_metadata:
+        opportunity_id = offer_metadata.get("opportunity_id") or opportunity_id_from_record
+        job_record_id = offer_metadata.get("job_record_id")
+        external_job_id = offer_metadata.get("external_job_id") or job_id
+        logger.info("OFFER_ACCEPT_LOADED_FROM_STORE code=%s job_record_id=%s opportunity_id=%s external_job_id=%s",
+                   offer_code, job_record_id, opportunity_id, external_job_id)
+    else:
+        opportunity_id = opportunity_id_from_record
+        job_record_id = None
+        external_job_id = job_id
+        logger.warning("OFFER_ACCEPT_NOT_IN_STORE code=%s (using job_record data only)", offer_code)
+    
+    # If job_record_id is missing, resolve it again with retries
+    if not job_record_id and external_job_id:
+        logger.info("OFFER_ACCEPT_RESOLVING_RECORD_ID code=%s external_job_id=%s", offer_code, external_job_id)
+        job_record_id, _ = resolve_job_record_id_with_retries([external_job_id])
+        if job_record_id:
+            # Update OFFER_STORE with resolved record_id
+            if offer_metadata:
+                offer_metadata["job_record_id"] = job_record_id
+                OFFER_STORE[offer_code] = offer_metadata
+            logger.info("OFFER_ACCEPT_RESOLVED_RECORD_ID code=%s job_record_id=%s", offer_code, job_record_id)
+        else:
+            logger.warning("OFFER_ACCEPT_RESOLVE_FAILED code=%s external_job_id=%s", offer_code, external_job_id)
     
     # Check expiration
     if expires_at_str:
@@ -440,19 +544,19 @@ async def contractor_reply(request: Request):
 
     contractor_name = contractor.get("name") if contractor else "Unknown contractor"
 
-    # Update opportunity stage if opportunity_id is present
+    # Update opportunity stage ONLY (do not assign contractor to opportunity)
     stage_updated = False
     if opportunity_id and GHL_STAGE_ID_ASSIGNED:
-        logger.info("OFFER_ACCEPT_SUCCESS opportunity_id=%s contractor_id=%s code=%s", 
-                   opportunity_id, contact_id, offer_code)
+        logger.info("OFFER_ACCEPT_UPDATING_STAGE opportunity_id=%s contractor_id=%s code=%s stage_id=%s",
+                   opportunity_id, contact_id, offer_code, GHL_STAGE_ID_ASSIGNED)
         stage_updated = update_opportunity_stage(opportunity_id, GHL_STAGE_ID_ASSIGNED)
-        logger.info("OFFER_ACCEPT_SUCCESS stage_updated=%s opportunity_id=%s stage_id=%s", 
-                   stage_updated, opportunity_id, GHL_STAGE_ID_ASSIGNED)
+        logger.info("OFFER_ACCEPT_STAGE_UPDATE_RESULT stage_updated=%s opportunity_id=%s", 
+                   stage_updated, opportunity_id)
     elif opportunity_id:
-        logger.warning("contractor-reply: opportunity_id=%s present but GHL_STAGE_ID_ASSIGNED not configured, skipping opportunity stage update", 
-                      opportunity_id)
+        logger.warning("OFFER_ACCEPT_NO_OPPORTUNITY_ID code=%s opportunity_id=%s present but GHL_STAGE_ID_ASSIGNED not configured, skipping stage update",
+                      offer_code, opportunity_id)
     else:
-        logger.info("contractor-reply: no opportunity_id in offer, skipping opportunity stage update (job assignment will continue)")
+        logger.warning("OFFER_ACCEPT_NO_OPPORTUNITY_ID code=%s (opportunity_id missing, skipping stage update)", offer_code)
 
     # Mark assignment in memory
     job["assigned_contractor_id"] = contact_id
@@ -520,7 +624,18 @@ async def contractor_reply(request: Request):
         send_conversation_sms(customer_contact_id, customer_msg)
 
     # 4) Push assignment into Jobs object (custom_objects.jobs)
-    upsert_job_assignment_to_ghl(job_id, contact_id or "", contractor_name or "")
+    job_updated = False
+    if job_record_id:
+        upsert_job_assignment_to_ghl(job_id, contact_id or "", contractor_name or "", record_id=job_record_id)
+        job_updated = True
+        logger.info("OFFER_ACCEPT_JOB_UPDATED code=%s job_record_id=%s", offer_code, job_record_id)
+    else:
+        # Fallback: try without record_id (will search)
+        upsert_job_assignment_to_ghl(job_id, contact_id or "", contractor_name or "")
+        logger.warning("OFFER_ACCEPT_JOB_UPDATE_NO_RECORD_ID code=%s job_id=%s (used fallback search)", offer_code, job_id)
+    
+    logger.info("OFFER_ACCEPT_SUCCESS code=%s job_record_id=%s opportunity_id=%s stage_updated=%s job_updated=%s",
+               offer_code, job_record_id, opportunity_id, stage_updated, job_updated)
 
     logger.info(
         "contractor-reply: job %s assigned to contractor %s (%s)",

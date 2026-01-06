@@ -1866,6 +1866,71 @@ def find_latest_opportunity_for_contact(contact_id: str) -> Optional[Dict[str, A
     return opportunity
 
 
+def update_job_offer_code_by_record_id(record_id: str, offer_code: str, offer_expires_at: str, opportunity_id: Optional[str] = None) -> bool:
+    """
+    Update the Jobs custom object with offer code information using a known record_id.
+    
+    Args:
+        record_id: GHL Jobs custom object record ID (already resolved)
+        offer_code: 5-digit offer code
+        offer_expires_at: ISO datetime string when offer expires
+        opportunity_id: Optional GHL opportunity ID
+    
+    Returns:
+        True if update was successful, False otherwise
+    
+    Note:
+        This function assumes record_id is already correct and does NOT search for it.
+    """
+    if not record_id or not offer_code:
+        logger.warning("update_job_offer_code_by_record_id: missing record_id or offer_code")
+        return False
+    if not GHL_LOCATION_ID:
+        logger.error("update_job_offer_code_by_record_id: GHL_LOCATION_ID not set")
+        return False
+    
+    payload = {
+        "properties": {}
+    }
+    
+    # Use configurable field keys for offer code fields
+    payload["properties"][JOBS_OFFER_CODE_FIELD_KEY] = offer_code
+    payload["properties"][JOBS_OFFER_EXPIRES_AT_FIELD_KEY] = offer_expires_at
+    
+    if opportunity_id:
+        payload["properties"][JOBS_OPPORTUNITY_ID_FIELD_KEY] = opportunity_id
+    
+    logger.info("update_job_offer_code_by_record_id: using field keys offer_code=%s offer_expires_at=%s opportunity_id=%s record_id=%s",
+               JOBS_OFFER_CODE_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY, JOBS_OPPORTUNITY_ID_FIELD_KEY, record_id)
+    
+    params = {"locationId": GHL_LOCATION_ID}
+    
+    try:
+        resp = requests.put(
+            f"{JOBS_RECORDS_URL}/{record_id}",
+            headers=_ghl_headers(),
+            params=params,
+            json=payload,
+            timeout=10,
+        )
+        if resp.ok:
+            logger.info("update_job_offer_code_by_record_id: updated record_id=%s with offer_code=%s using field_key=%s",
+                       record_id, offer_code, JOBS_OFFER_CODE_FIELD_KEY)
+            return True
+        else:
+            error_text = resp.text[:500] if resp.text else "No error message"
+            logger.error("update_job_offer_code_by_record_id: failed (%s) for record_id=%s: %s",
+                        resp.status_code, record_id, error_text)
+            # Check if it's an invalid key error
+            if resp.status_code == 400 and "Invalid key" in error_text:
+                logger.error("update_job_offer_code_by_record_id: INVALID KEY ERROR - field_key=%s may be incorrect. Response: %s",
+                           JOBS_OFFER_CODE_FIELD_KEY, error_text)
+            return False
+    except Exception as e:
+        logger.error("update_job_offer_code_by_record_id: exception: %s", e, exc_info=True)
+        return False
+
+
 def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, opportunity_id: Optional[str] = None) -> bool:
     """
     Update the Jobs custom object with offer code information.
@@ -1891,48 +1956,8 @@ def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, o
         logger.error("update_job_offer_code: could not find job record for external_job_id=%s", job_id)
         return False
     
-    payload = {
-        "properties": {
-            "external_job_id": job_id,
-        }
-    }
-    
-    # Use configurable field keys for offer code fields
-    payload["properties"][JOBS_OFFER_CODE_FIELD_KEY] = offer_code
-    payload["properties"][JOBS_OFFER_EXPIRES_AT_FIELD_KEY] = offer_expires_at
-    
-    if opportunity_id:
-        payload["properties"][JOBS_OPPORTUNITY_ID_FIELD_KEY] = opportunity_id
-    
-    logger.info("update_job_offer_code: using field keys offer_code=%s offer_expires_at=%s opportunity_id=%s", 
-               JOBS_OFFER_CODE_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY, JOBS_OPPORTUNITY_ID_FIELD_KEY)
-    
-    params = {"locationId": GHL_LOCATION_ID}
-    
-    try:
-        resp = requests.put(
-            f"{JOBS_RECORDS_URL}/{record_id}",
-            headers=_ghl_headers(),
-            params=params,
-            json=payload,
-            timeout=10,
-        )
-        if resp.ok:
-            logger.info("update_job_offer_code: updated job_id=%s with offer_code=%s using field_key=%s", 
-                       job_id, offer_code, JOBS_OFFER_CODE_FIELD_KEY)
-            return True
-        else:
-            error_text = resp.text[:500] if resp.text else "No error message"
-            logger.error("update_job_offer_code: failed (%s) for job_id=%s record_id=%s: %s", 
-                        resp.status_code, job_id, record_id, error_text)
-            # Check if it's an invalid key error
-            if resp.status_code == 400 and "Invalid key" in error_text:
-                logger.error("update_job_offer_code: INVALID KEY ERROR - field_key=%s may be incorrect. Response: %s", 
-                           JOBS_OFFER_CODE_FIELD_KEY, error_text)
-            return False
-    except Exception as e:
-        logger.error("update_job_offer_code: exception: %s", e, exc_info=True)
-        return False
+    # Use the new function that takes record_id directly
+    return update_job_offer_code_by_record_id(record_id, offer_code, offer_expires_at, opportunity_id)
 
 
 def find_job_by_offer_code(offer_code: str) -> Optional[Dict[str, Any]]:
@@ -1998,7 +2023,7 @@ def find_job_by_offer_code(offer_code: str) -> Optional[Dict[str, Any]]:
     return record
 
 
-def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_name: str) -> None:
+def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_name: str, record_id: Optional[str] = None) -> None:
     """
     Update assignment details into the Jobs custom object in GHL.
 
@@ -2029,13 +2054,17 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
         logger.error("upsert_job_assignment_to_ghl: GHL_LOCATION_ID not set")
         return
 
-    record_id = find_job_record_id(job_id)
+    # Use provided record_id if available, otherwise search for it
     if not record_id:
-        logger.error(
-            "upsert_job_assignment_to_ghl: could not find job record for external_job_id=%s",
-            job_id,
-        )
-        return
+        record_id = find_job_record_id(job_id)
+        if not record_id:
+            logger.error(
+                "upsert_job_assignment_to_ghl: could not find job record for external_job_id=%s",
+                job_id,
+            )
+            return
+    else:
+        logger.info("upsert_job_assignment_to_ghl: using provided record_id=%s for job_id=%s", record_id, job_id)
 
     # Pull the in-memory job to get access info (if available)
     job = JOB_STORE.get(job_id, {})
