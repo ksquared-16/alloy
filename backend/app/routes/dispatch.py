@@ -154,12 +154,29 @@ async def dispatch(request: Request):
     job_summary = build_job_summary(payload)
 
     # Extract opportunity_id from payload - try multiple locations (prioritize payload.id)
+    payload_id = payload.get("id")
+    opportunity_id_from_opportunity = payload.get("opportunity", {}).get("id") if isinstance(payload.get("opportunity"), dict) else None
     opportunity_id = (
-        payload.get("id") or  # First priority: payload.id is often the opportunity id in GHL payloads
+        payload_id or  # First priority: payload.id is often the opportunity id in GHL payloads
         payload.get("opportunity_id") or
         payload.get("opportunityId") or
-        payload.get("opportunity", {}).get("id") if isinstance(payload.get("opportunity"), dict) else None
+        opportunity_id_from_opportunity
     )
+    
+    # Log resolution details
+    relevant_keys = []
+    if payload_id:
+        relevant_keys.append("payload.id")
+    if payload.get("opportunity_id"):
+        relevant_keys.append("opportunity_id")
+    if payload.get("opportunityId"):
+        relevant_keys.append("opportunityId")
+    if opportunity_id_from_opportunity:
+        relevant_keys.append("opportunity.id")
+    
+    logger.info("DISPATCH_OPPORTUNITY_ID_RESOLVE payload_id=%s resolved=%s keys_present=%s",
+               payload_id, opportunity_id, relevant_keys)
+    
     if opportunity_id:
         job_summary["opportunity_id"] = opportunity_id
         logger.info("DISPATCH_OPPORTUNITY_ID opportunity_id=%s", opportunity_id)

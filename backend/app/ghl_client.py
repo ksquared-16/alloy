@@ -1914,8 +1914,23 @@ def update_job_offer_code_by_record_id(record_id: str, offer_code: str, offer_ex
             timeout=10,
         )
         if resp.ok:
-            logger.info("update_job_offer_code_by_record_id: updated record_id=%s with offer_code=%s using field_key=%s",
-                       record_id, offer_code, JOBS_OFFER_CODE_FIELD_KEY)
+            logger.info("JOB_UPDATED_WITH_OFFER_AND_OPP record_id=%s offer_code=%s opportunity_id=%s",
+                       record_id, offer_code, opportunity_id)
+            
+            # Readback verification: fetch the record to confirm values were stored
+            try:
+                readback_record = get_job_record(record_id)
+                if readback_record:
+                    readback_properties = readback_record.get("properties", {})
+                    stored_offer_code = readback_properties.get(JOBS_OFFER_CODE_FIELD_KEY) or readback_properties.get("offer_code")
+                    stored_opportunity_id = readback_properties.get(JOBS_OPPORTUNITY_ID_FIELD_KEY) or readback_properties.get("opportunity_id")
+                    logger.info("JOB_RECORD_READBACK record_id=%s stored_offer_code=%s stored_opportunity_id=%s",
+                               record_id, stored_offer_code, stored_opportunity_id)
+                else:
+                    logger.warning("JOB_RECORD_READBACK record_id=%s failed to fetch record for verification", record_id)
+            except Exception as e:
+                logger.warning("JOB_RECORD_READBACK record_id=%s exception during readback: %s", record_id, e)
+            
             return True
         else:
             error_text = resp.text[:500] if resp.text else "No error message"
