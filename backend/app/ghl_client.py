@@ -1960,9 +1960,130 @@ def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, o
     return update_job_offer_code_by_record_id(record_id, offer_code, offer_expires_at, opportunity_id)
 
 
+def find_job_record_id_by_offer_code(offer_code: str) -> Optional[str]:
+    """
+    Find a Job custom object record ID by offer_code using query search.
+    
+    Args:
+        offer_code: 5-digit offer code
+    
+    Returns:
+        Job record ID if found, None otherwise
+    """
+    if not offer_code:
+        return None
+    if not GHL_LOCATION_ID:
+        logger.error("find_job_record_id_by_offer_code: GHL_LOCATION_ID not set")
+        return None
+    
+    body = {
+        "locationId": GHL_LOCATION_ID,
+        "page": 1,
+        "pageLimit": 10,
+        "query": offer_code,
+    }
+    
+    try:
+        logger.info("Searching job record id by offer_code=%s", offer_code)
+        resp = requests.post(
+            JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+        )
+    except Exception as e:
+        logger.error("find_job_record_id_by_offer_code: exception: %s", e)
+        return None
+    
+    if not resp.ok:
+        logger.error("find_job_record_id_by_offer_code: search failed (%s): %s", resp.status_code, resp.text)
+        return None
+    
+    data = resp.json()
+    records = data.get("records") or data.get("customObjectRecords") or []
+    total_records = len(records)
+    
+    if not records:
+        logger.info("find_job_record_id_by_offer_code: no records found for offer_code=%s", offer_code)
+        return None
+    
+    # Find exact match on offer_code
+    matched_record = None
+    for record in records:
+        properties = record.get("properties", {})
+        # Try both possible field key names
+        record_offer_code = properties.get(JOBS_OFFER_CODE_FIELD_KEY) or properties.get("offer_code")
+        if record_offer_code == offer_code:
+            matched_record = record
+            break
+    
+    matched_exact = matched_record is not None
+    
+    # Fallback: if no exact match and exactly one record, use it with warning
+    if not matched_record and total_records == 1:
+        matched_record = records[0]
+        logger.warning(
+            "find_job_record_id_by_offer_code: no exact match for offer_code=%s, using single returned record as fallback",
+            offer_code
+        )
+    elif not matched_record:
+        logger.error(
+            "find_job_record_id_by_offer_code: no exact match for offer_code=%s (found %d records)",
+            offer_code,
+            total_records,
+        )
+        return None
+    
+    record_id = matched_record.get("id")
+    logger.info(
+        "JOB_RECORD_LOOKUP_BY_OFFER offer_code=%s record_id=%s matched_exact=%s total_records=%d",
+        offer_code,
+        record_id,
+        matched_exact,
+        total_records,
+    )
+    return record_id
+
+
+def get_job_record(record_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch a Job custom object record by record_id.
+    
+    Args:
+        record_id: GHL Jobs custom object record ID
+    
+    Returns:
+        Job record dict if found, None otherwise
+    """
+    if not record_id:
+        return None
+    if not GHL_LOCATION_ID:
+        logger.error("get_job_record: GHL_LOCATION_ID not set")
+        return None
+    
+    params = {"locationId": GHL_LOCATION_ID}
+    
+    try:
+        logger.info("Fetching job record record_id=%s", record_id)
+        resp = requests.get(
+            f"{JOBS_RECORDS_URL}/{record_id}",
+            headers=_ghl_headers(),
+            params=params,
+            timeout=10,
+        )
+    except Exception as e:
+        logger.error("get_job_record: exception: %s", e)
+        return None
+    
+    if not resp.ok:
+        logger.error("get_job_record: fetch failed (%s): %s", resp.status_code, resp.text)
+        return None
+    
+    record = resp.json()
+    logger.info("get_job_record: found record record_id=%s", record_id)
+    return record
+
+
 def find_job_by_offer_code(offer_code: str) -> Optional[Dict[str, Any]]:
     """
-    Find a Job custom object record by offer_code.
+    Find a Job custom object record by offer_code (returns full record).
     
     Args:
         offer_code: 5-digit offer code
@@ -1970,57 +2091,11 @@ def find_job_by_offer_code(offer_code: str) -> Optional[Dict[str, Any]]:
     Returns:
         Job record dict if found, None otherwise
     """
-    if not offer_code:
-        return None
-    if not GHL_LOCATION_ID:
-        logger.error("find_job_by_offer_code: GHL_LOCATION_ID not set")
+    record_id = find_job_record_id_by_offer_code(offer_code)
+    if not record_id:
         return None
     
-    body = {
-        "locationId": GHL_LOCATION_ID,
-        "page": 1,
-        "pageLimit": 1,
-        "filters": [
-            {
-                "group": "AND",
-                "filters": [
-                    {
-                        "group": "AND",
-                        "filters": [
-                            {
-                                "field": "properties.offer_code",
-                                "operator": "eq",
-                                "value": offer_code,
-                            }
-                        ],
-                    }
-                ],
-            }
-        ],
-    }
-    
-    try:
-        logger.info("Searching job record by offer_code=%s", offer_code)
-        resp = requests.post(
-            JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
-        )
-    except Exception as e:
-        logger.error("find_job_by_offer_code: exception: %s", e)
-        return None
-    
-    if not resp.ok:
-        logger.error("find_job_by_offer_code: search failed (%s): %s", resp.status_code, resp.text)
-        return None
-    
-    data = resp.json()
-    records = data.get("records") or data.get("customObjectRecords") or []
-    if not records:
-        logger.info("find_job_by_offer_code: no records found for offer_code=%s", offer_code)
-        return None
-    
-    record = records[0]
-    logger.info("find_job_by_offer_code: found record for offer_code=%s", offer_code)
-    return record
+    return get_job_record(record_id)
 
 
 def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_name: str, record_id: Optional[str] = None) -> None:
