@@ -138,3 +138,8 @@ if not GHL_WORKFLOW_SECRET:
 GHL_STAGE_ID_PAYMENT_SUCCEEDED = os.getenv("GHL_STAGE_ID_PAYMENT_SUCCEEDED", "").strip()
 GHL_STAGE_ID_ASSIGNED = os.getenv("GHL_STAGE_ID_ASSIGNED", "fe23b7dc-9557-4f8a-841c-829b14b0b711").strip()
 
+# GHL Jobs Custom Object Field Keys
+JOBS_OFFER_CODE_FIELD_KEY = os.getenv("JOBS_OFFER_CODE_FIELD_KEY", "offer_code").strip()
+JOBS_OFFER_EXPIRES_AT_FIELD_KEY = os.getenv("JOBS_OFFER_EXPIRES_AT_FIELD_KEY", "offer_expires_at").strip()
+JOBS_OPPORTUNITY_ID_FIELD_KEY = os.getenv("JOBS_OPPORTUNITY_ID_FIELD_KEY", "opportunity_id").strip()
+

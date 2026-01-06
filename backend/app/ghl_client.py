@@ -32,6 +32,9 @@ from .settings import (
     _custom_fields_cache_lock,
     CUSTOM_FIELDS_CACHE_TTL,
     GHL_STAGE_ID_PAYMENT_SUCCEEDED,
+    JOBS_OFFER_CODE_FIELD_KEY,
+    JOBS_OFFER_EXPIRES_AT_FIELD_KEY,
+    JOBS_OPPORTUNITY_ID_FIELD_KEY,
 )
 from .utils import _ghl_headers, normalize_phone
 
@@ -1666,7 +1669,7 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
     body = {
         "locationId": GHL_LOCATION_ID,
         "page": 1,
-        "pageLimit": 1,
+        "pageLimit": 10,
         "query": external_job_id,
     }
 
@@ -1689,6 +1692,8 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
 
     data = resp.json()
     records = data.get("records") or data.get("customObjectRecords") or []
+    total_records = len(records)
+    
     if not records:
         logger.error(
             "find_job_record_id: no records found for external_job_id=%s",
@@ -1696,11 +1701,38 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
         )
         return None
 
-    record_id = records[0].get("id")
+    # Find exact match on external_job_id
+    matched_record = None
+    for record in records:
+        properties = record.get("properties", {})
+        if properties.get("external_job_id") == external_job_id:
+            matched_record = record
+            break
+    
+    matched_exact = matched_record is not None
+    
+    # Fallback: if no exact match and exactly one record, use it with warning
+    if not matched_record and total_records == 1:
+        matched_record = records[0]
+        logger.warning(
+            "find_job_record_id: no exact match for external_job_id=%s, using single returned record as fallback",
+            external_job_id
+        )
+    elif not matched_record:
+        logger.error(
+            "find_job_record_id: no exact match for external_job_id=%s (found %d records)",
+            external_job_id,
+            total_records,
+        )
+        return None
+    
+    record_id = matched_record.get("id")
     logger.info(
-        "JOB_RECORD_LOOKUP external_job_id=%s record_id=%s",
+        "JOB_RECORD_LOOKUP external_job_id=%s record_id=%s matched_exact=%s total_records=%d",
         external_job_id,
         record_id,
+        matched_exact,
+        total_records,
     )
     return record_id
 
@@ -1862,12 +1894,18 @@ def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, o
     payload = {
         "properties": {
             "external_job_id": job_id,
-            "offer_code": offer_code,
-            "offer_expires_at": offer_expires_at,
         }
     }
+    
+    # Use configurable field keys for offer code fields
+    payload["properties"][JOBS_OFFER_CODE_FIELD_KEY] = offer_code
+    payload["properties"][JOBS_OFFER_EXPIRES_AT_FIELD_KEY] = offer_expires_at
+    
     if opportunity_id:
-        payload["properties"]["opportunity_id"] = opportunity_id
+        payload["properties"][JOBS_OPPORTUNITY_ID_FIELD_KEY] = opportunity_id
+    
+    logger.info("update_job_offer_code: using field keys offer_code=%s offer_expires_at=%s opportunity_id=%s", 
+               JOBS_OFFER_CODE_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY, JOBS_OPPORTUNITY_ID_FIELD_KEY)
     
     params = {"locationId": GHL_LOCATION_ID}
     
@@ -1880,10 +1918,17 @@ def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, o
             timeout=10,
         )
         if resp.ok:
-            logger.info("update_job_offer_code: updated job_id=%s with offer_code=%s", job_id, offer_code)
+            logger.info("update_job_offer_code: updated job_id=%s with offer_code=%s using field_key=%s", 
+                       job_id, offer_code, JOBS_OFFER_CODE_FIELD_KEY)
             return True
         else:
-            logger.error("update_job_offer_code: failed (%s): %s", resp.status_code, resp.text[:200])
+            error_text = resp.text[:500] if resp.text else "No error message"
+            logger.error("update_job_offer_code: failed (%s) for job_id=%s record_id=%s: %s", 
+                        resp.status_code, job_id, record_id, error_text)
+            # Check if it's an invalid key error
+            if resp.status_code == 400 and "Invalid key" in error_text:
+                logger.error("update_job_offer_code: INVALID KEY ERROR - field_key=%s may be incorrect. Response: %s", 
+                           JOBS_OFFER_CODE_FIELD_KEY, error_text)
             return False
     except Exception as e:
         logger.error("update_job_offer_code: exception: %s", e, exc_info=True)
