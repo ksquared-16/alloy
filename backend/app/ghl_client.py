@@ -2022,10 +2022,10 @@ def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, o
 
 def find_job_record_id_by_offer_code(offer_code: str) -> Optional[str]:
     """
-    Find a Job custom object record ID by offer_code using query search.
+    Find a Job custom object record ID by offer_code using query search with multiple variants and fallbacks.
     
     Args:
-        offer_code: 5-digit offer code
+        offer_code: 5-digit offer code (will be cast to string)
     
     Returns:
         Job record ID if found, None otherwise
@@ -2036,70 +2036,197 @@ def find_job_record_id_by_offer_code(offer_code: str) -> Optional[str]:
         logger.error("find_job_record_id_by_offer_code: GHL_LOCATION_ID not set")
         return None
     
+    # Ensure offer_code is a string
+    offer_code_str = str(offer_code).strip()
+    
+    # Try multiple search query variants
+    search_variants = [
+        offer_code_str,  # Direct match
+        f'"{offer_code_str}"',  # Quoted
+        f"offer_code:{offer_code_str}",  # Field prefix
+        f'offer_code:"{offer_code_str}"',  # Field prefix with quotes
+    ]
+    
+    params = {"locationId": GHL_LOCATION_ID}
+    
+    for variant_idx, query_variant in enumerate(search_variants):
+        body = {
+            "locationId": GHL_LOCATION_ID,
+            "page": 1,
+            "pageLimit": 20,
+            "query": query_variant,
+        }
+        
+        try:
+            logger.info("OFFER_SEARCH_ATTEMPT variant=%s offer_code=%s", query_variant, offer_code_str)
+            resp = requests.post(
+                JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+            )
+        except Exception as e:
+            logger.error("OFFER_SEARCH_ATTEMPT variant=%s exception: %s", query_variant, e)
+            continue
+        
+        if not resp.ok:
+            logger.warning("OFFER_SEARCH_ATTEMPT variant=%s status=%d error=%s",
+                          query_variant, resp.status_code, resp.text[:200])
+            continue
+        
+        try:
+            data = resp.json()
+        except Exception as e:
+            logger.warning("OFFER_SEARCH_ATTEMPT variant=%s json_parse_error: %s", query_variant, e)
+            continue
+        
+        records = data.get("records") or data.get("customObjectRecords") or []
+        total_records = len(records)
+        
+        logger.info("OFFER_SEARCH_ATTEMPT variant=%s status=200 total_records=%d",
+                   query_variant, total_records)
+        
+        if not records:
+            continue  # Try next variant
+        
+        # Find exact match on offer_code in properties
+        matched_record = None
+        for record in records:
+            properties = record.get("properties", {})
+            # Try multiple field key variations
+            record_offer_code = (
+                properties.get(JOBS_OFFER_CODE_FIELD_KEY) or
+                properties.get("offer_code") or
+                properties.get("offerCode") or
+                properties.get("Offer Code")
+            )
+            # Compare as strings
+            if str(record_offer_code).strip() == offer_code_str:
+                matched_record = record
+                break
+        
+        if matched_record:
+            record_id = matched_record.get("id")
+            logger.info(
+                "JOB_RECORD_LOOKUP_BY_OFFER offer_code=%s record_id=%s matched_exact=true total_records=%d variant=%s",
+                offer_code_str,
+                record_id,
+                total_records,
+                query_variant,
+            )
+            return record_id
+        
+        # Fallback: if exactly one record returned, use it with warning
+        if total_records == 1:
+            matched_record = records[0]
+            record_id = matched_record.get("id")
+            logger.warning(
+                "JOB_RECORD_LOOKUP_BY_OFFER offer_code=%s record_id=%s matched_exact=false (single record fallback) variant=%s",
+                offer_code_str,
+                record_id,
+                query_variant,
+            )
+            return record_id
+    
+    # All search variants failed - try fallback scan of recent jobs
+    logger.warning("OFFER_SEARCH_FALLBACK_SCAN starting offer_code=%s", offer_code_str)
+    return _find_job_by_offer_code_fallback_scan(offer_code_str)
+
+
+def _find_job_by_offer_code_fallback_scan(offer_code: str) -> Optional[str]:
+    """
+    Fallback: Scan recent job records to find one with matching offer_code.
+    Only used if query search returns no results.
+    
+    Args:
+        offer_code: 5-digit offer code
+    
+    Returns:
+        Job record ID if found, None otherwise
+    """
+    if not GHL_LOCATION_ID:
+        return None
+    
+    # Try to fetch recent jobs by searching with empty or broad query
+    # Attempt 1: Empty query to get recent records
     body = {
         "locationId": GHL_LOCATION_ID,
         "page": 1,
-        "pageLimit": 10,
-        "query": offer_code,
+        "pageLimit": 50,  # Fetch last 50 jobs
+        "query": "",  # Empty query to get recent records
     }
     
     try:
-        logger.info("Searching job record id by offer_code=%s", offer_code)
+        logger.info("OFFER_SEARCH_FALLBACK_SCAN fetching recent jobs n=50")
         resp = requests.post(
             JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
         )
+        
+        if not resp.ok:
+            logger.warning("OFFER_SEARCH_FALLBACK_SCAN search failed status=%d", resp.status_code)
+            return None
+        
+        data = resp.json()
+        records = data.get("records") or data.get("customObjectRecords") or []
+        
+        logger.info("OFFER_SEARCH_FALLBACK_SCAN fetched n=%d records", len(records))
+        
+        # Filter for exact offer_code match
+        for record in records:
+            properties = record.get("properties", {})
+            record_offer_code = (
+                properties.get(JOBS_OFFER_CODE_FIELD_KEY) or
+                properties.get("offer_code") or
+                properties.get("offerCode") or
+                properties.get("Offer Code")
+            )
+            if str(record_offer_code).strip() == offer_code:
+                record_id = record.get("id")
+                logger.info("OFFER_SEARCH_FALLBACK_SCAN matched_record_id=%s offer_code=%s",
+                           record_id, offer_code)
+                return record_id
+        
+        logger.warning("OFFER_SEARCH_FALLBACK_SCAN no match found in recent %d records", len(records))
+        return None
+        
     except Exception as e:
-        logger.error("find_job_record_id_by_offer_code: exception: %s", e)
+        logger.error("OFFER_SEARCH_FALLBACK_SCAN exception: %s", e, exc_info=True)
         return None
+
+
+def debug_find_job_by_offer_code(offer_code: str) -> Dict[str, Any]:
+    """
+    Debug helper to manually validate offer_code search.
+    Returns detailed information about the search process and results.
     
-    if not resp.ok:
-        logger.error("find_job_record_id_by_offer_code: search failed (%s): %s", resp.status_code, resp.text)
-        return None
+    Args:
+        offer_code: 5-digit offer code
     
-    data = resp.json()
-    records = data.get("records") or data.get("customObjectRecords") or []
-    total_records = len(records)
+    Returns:
+        Dict with search results, record_id, and properties if found
+    """
+    result = {
+        "offer_code": offer_code,
+        "found": False,
+        "record_id": None,
+        "properties": None,
+        "search_variants_tried": [],
+        "fallback_scan_used": False,
+    }
     
-    if not records:
-        logger.info("find_job_record_id_by_offer_code: no records found for offer_code=%s", offer_code)
-        return None
+    # Try the main search function
+    record_id = find_job_record_id_by_offer_code(offer_code)
     
-    # Find exact match on offer_code
-    matched_record = None
-    for record in records:
-        properties = record.get("properties", {})
-        # Try both possible field key names
-        record_offer_code = properties.get(JOBS_OFFER_CODE_FIELD_KEY) or properties.get("offer_code")
-        if record_offer_code == offer_code:
-            matched_record = record
-            break
+    if record_id:
+        result["found"] = True
+        result["record_id"] = record_id
+        
+        # Fetch full record to get properties
+        job_record = get_job_record(record_id)
+        if job_record:
+            properties = job_record.get("properties") or job_record.get("record", {}).get("properties") or {}
+            result["properties"] = properties
+            logger.info("DEBUG_FIND_JOB_BY_OFFER_CODE offer_code=%s record_id=%s properties_keys=%s",
+                       offer_code, record_id, list(properties.keys()) if isinstance(properties, dict) else [])
     
-    matched_exact = matched_record is not None
-    
-    # Fallback: if no exact match and exactly one record, use it with warning
-    if not matched_record and total_records == 1:
-        matched_record = records[0]
-        logger.warning(
-            "find_job_record_id_by_offer_code: no exact match for offer_code=%s, using single returned record as fallback",
-            offer_code
-        )
-    elif not matched_record:
-        logger.error(
-            "find_job_record_id_by_offer_code: no exact match for offer_code=%s (found %d records)",
-            offer_code,
-            total_records,
-        )
-        return None
-    
-    record_id = matched_record.get("id")
-    logger.info(
-        "JOB_RECORD_LOOKUP_BY_OFFER offer_code=%s record_id=%s matched_exact=%s total_records=%d",
-        offer_code,
-        record_id,
-        matched_exact,
-        total_records,
-    )
-    return record_id
+    return result
 
 
 def get_job_record(record_id: str) -> Optional[Dict[str, Any]]:
