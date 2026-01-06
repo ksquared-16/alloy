@@ -691,6 +691,16 @@ async def contractor_reply(request: Request):
         send_conversation_sms(contact_id, confirm_msg)
 
     # 2) Notify all other contractors that the job was claimed
+    # Get customer_name from job_record properties if available, fallback to job dict
+    customer_name_for_notification = (
+        properties.get("customer_name") or
+        job.get("customer_name") or
+        "a customer"
+    )
+    
+    # Build notification message with offer_code (no date/time)
+    claimed_msg = f"Job offer {offer_code} for {customer_name_for_notification} has been claimed by another contractor.\nReply STOP to unsubscribe.\nThanks, Alloy - Cleaning"
+    
     for c in contractors:
         cid = c.get("id")
         phone = c.get("phone")
@@ -702,10 +712,8 @@ async def contractor_reply(request: Request):
                     phone,
                 )
             continue
-        send_conversation_sms(
-            cid,
-            f"Job for {job['customer_name']} on {job['start_time']} has been claimed by another contractor.",
-        )
+        send_conversation_sms(cid, claimed_msg)
+        logger.info("OFFER_CLAIMED_NOTIFICATION sent to contractor_id=%s offer_code=%s", cid, offer_code)
 
     # 3) Notify the customer their job has been assigned (if we have their contact_id)
     customer_contact_id = job.get("contact_id")
