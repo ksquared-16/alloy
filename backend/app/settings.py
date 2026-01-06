@@ -145,4 +145,8 @@ JOBS_OPPORTUNITY_ID_FIELD_KEY = os.getenv("JOBS_OPPORTUNITY_ID_FIELD_KEY", "oppo
 
 # GHL Opportunity Custom Field IDs
 OPP_ASSIGNED_CONTRACTOR_FIELD_ID = os.getenv("OPP_ASSIGNED_CONTRACTOR_FIELD_ID", "").strip()
+OPP_CONTRACTOR_PAY_AMOUNT = os.getenv("OPP_CONTRACTOR_PAY_AMOUNT", "").strip()
+
+# GHL Jobs Custom Object Field Keys (for contractor pay)
+JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY = os.getenv("JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY", "contractor_pay_amount").strip()
 

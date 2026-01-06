@@ -36,6 +36,9 @@ from .settings import (
     JOBS_OFFER_EXPIRES_AT_FIELD_KEY,
     JOBS_OPPORTUNITY_ID_FIELD_KEY,
     OPP_ASSIGNED_CONTRACTOR_FIELD_ID,
+    OPP_CONTRACTOR_PAY_AMOUNT,
+    JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
+    CUSTOM_FIELD_IDS,
 )
 from .utils import _ghl_headers, normalize_phone
 
@@ -2038,6 +2041,59 @@ def update_job_offer_code_by_record_id(record_id: str, offer_code: str, offer_ex
         return False
 
 
+def update_job_custom_field_by_record_id(record_id: str, field_key: str, field_value: Any) -> bool:
+    """
+    Update a custom field on a Jobs custom object record.
+    
+    Args:
+        record_id: GHL Jobs custom object record ID
+        field_key: Field key (e.g., "contractor_pay_amount")
+        field_value: Value to set
+        
+    Returns:
+        True if update was successful, False otherwise
+    """
+    if not record_id or not field_key:
+        logger.warning("update_job_custom_field_by_record_id: missing record_id or field_key")
+        return False
+    if not GHL_LOCATION_ID:
+        logger.error("update_job_custom_field_by_record_id: GHL_LOCATION_ID not set")
+        return False
+    
+    payload = {
+        "properties": {
+            field_key: field_value
+        }
+    }
+    
+    params = {"locationId": GHL_LOCATION_ID}
+    url = f"{JOBS_RECORDS_URL}/{record_id}"
+    
+    logger.info("JOB_CUSTOM_FIELD_UPDATE_REQUEST url=%s method=PUT field_key=%s field_value=%s",
+               url, field_key, field_value)
+    
+    try:
+        resp = requests.put(
+            url,
+            headers=_ghl_headers(),
+            params=params,
+            json=payload,
+            timeout=10,
+        )
+        
+        if resp.ok:
+            logger.info("JOB_CUSTOM_FIELD_UPDATE_RESPONSE record_id=%s field_key=%s success=true",
+                       record_id, field_key)
+            return True
+        else:
+            logger.error("JOB_CUSTOM_FIELD_UPDATE_RESPONSE record_id=%s field_key=%s status=%d error=%s",
+                        record_id, field_key, resp.status_code, resp.text[:500])
+            return False
+    except Exception as e:
+        logger.error("update_job_custom_field_by_record_id: exception: %s", e, exc_info=True)
+        return False
+
+
 def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, opportunity_id: Optional[str] = None) -> bool:
     """
     Update the Jobs custom object with offer code information.
@@ -2522,4 +2578,143 @@ def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_nam
             resp.text[:500] if resp.text else "No error message",
             response_json,
         )
+
+
+def extract_bedrooms_bathrooms_from_contact(contact: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    """
+    Extract bedrooms and bathrooms from contact custom fields.
+    
+    Args:
+        contact: GHL contact dict with customFields
+        
+    Returns:
+        Tuple of (bedrooms, bathrooms) as strings, or (None, None) if not found
+    """
+    bedrooms = None
+    bathrooms = None
+    
+    custom_fields_raw = contact.get("customFields", [])
+    bedrooms_cf_id = CUSTOM_FIELD_IDS.get("bedrooms")
+    bathrooms_cf_id = CUSTOM_FIELD_IDS.get("bathrooms")
+    
+    if isinstance(custom_fields_raw, list):
+        for cf in custom_fields_raw:
+            if not isinstance(cf, dict):
+                continue
+            field_id = str(cf.get("id") or "")
+            value = cf.get("value")
+            
+            if field_id == bedrooms_cf_id and value:
+                bedrooms = str(value).strip()
+            elif field_id == bathrooms_cf_id and value:
+                bathrooms = str(value).strip()
+    
+    logger.info("BEDROOMS_BATHROOMS_EXTRACT bedrooms=%s bathrooms=%s bedrooms_cf_id=%s bathrooms_cf_id=%s",
+               bedrooms, bathrooms, bedrooms_cf_id, bathrooms_cf_id)
+    
+    return (bedrooms, bathrooms)
+
+
+def enhance_price_breakdown_with_beds_baths_and_contractor_pay(
+    price_breakdown: str,
+    bedrooms: Optional[str],
+    bathrooms: Optional[str],
+    first_clean_price: float,
+    recurring_price: Optional[float] = None,
+    frequency_label: Optional[str] = None,
+    discount_label: Optional[str] = None,
+) -> tuple[str, int, Optional[int]]:
+    """
+    Enhance price breakdown string with bedrooms/bathrooms and contractor pay amounts.
+    
+    Args:
+        price_breakdown: Original price breakdown string
+        bedrooms: Number of bedrooms (string)
+        bathrooms: Number of bathrooms (string)
+        first_clean_price: First cleaning price in dollars
+        recurring_price: Optional recurring price in dollars
+        frequency_label: Optional frequency label (e.g., "Weekly")
+        discount_label: Optional discount label (e.g., "40% off")
+        
+    Returns:
+        Tuple of (enhanced_price_breakdown, contractor_pay_first_clean, contractor_pay_recurring)
+        contractor_pay amounts are in integer dollars (floored)
+    """
+    import re
+    
+    # Compute contractor pay (70% of price, floored)
+    contractor_pay_first_clean = int(first_clean_price * 0.70)
+    contractor_pay_recurring = int(recurring_price * 0.70) if recurring_price else None
+    
+    logger.info("CONTRACTOR_PAY_COMPUTED first_clean_price=%.2f contractor_pay_first_clean=%d recurring_price=%s contractor_pay_recurring=%s",
+               first_clean_price, contractor_pay_first_clean, recurring_price, contractor_pay_recurring)
+    
+    # Parse existing price breakdown to extract components
+    # Format: "Sq Ft: 2,601-3,200 sq ft | Service: Standard Cleaning | Frequency: Weekly | First cleaning: $280.00 | Recurring (Weekly): $160.00 / visit (40% off)"
+    parts = price_breakdown.split(" | ") if price_breakdown else []
+    
+    # Find Sq Ft part and insert beds/baths after it
+    enhanced_parts = []
+    sq_ft_inserted = False
+    
+    for part in parts:
+        if part.startswith("Sq Ft:") and not sq_ft_inserted:
+            enhanced_parts.append(part)
+            # Add beds/baths after Sq Ft
+            bed_bath_parts = []
+            if bedrooms:
+                bed_bath_parts.append(f"{bedrooms} Bed")
+            if bathrooms:
+                bed_bath_parts.append(f"{bathrooms} Bath")
+            if bed_bath_parts:
+                enhanced_parts.append(" | ".join(bed_bath_parts))
+            sq_ft_inserted = True
+        else:
+            enhanced_parts.append(part)
+    
+    # If no Sq Ft found, add it at the beginning
+    if not sq_ft_inserted:
+        # Try to extract sq ft from original breakdown
+        sq_ft_part = None
+        for part in parts:
+            if "sq ft" in part.lower() or "sqft" in part.lower():
+                sq_ft_part = part
+                break
+        if sq_ft_part:
+            enhanced_parts.insert(0, sq_ft_part)
+            bed_bath_parts = []
+            if bedrooms:
+                bed_bath_parts.append(f"{bedrooms} Bed")
+            if bathrooms:
+                bed_bath_parts.append(f"{bathrooms} Bath")
+            if bed_bath_parts:
+                enhanced_parts.insert(1, " | ".join(bed_bath_parts))
+    
+    # Update First cleaning line to include contractor pay
+    updated_parts = []
+    for part in enhanced_parts:
+        if "First cleaning:" in part:
+            # Extract price from "First cleaning: $280.00"
+            match = re.search(r'\$([0-9,]+(?:\.[0-9]{2})?)', part)
+            if match:
+                # Replace with "First cleaning: $280.00 ($196)"
+                part = part.replace(match.group(0), f"{match.group(0)} (${contractor_pay_first_clean})")
+            updated_parts.append(part)
+        elif "Recurring" in part and contractor_pay_recurring is not None:
+            # Extract price from "Recurring (Weekly): $160.00 / visit (40% off)"
+            match = re.search(r'\$([0-9,]+(?:\.[0-9]{2})?)', part)
+            if match:
+                # Insert contractor pay before the discount
+                if "(" in part and ")" in part:
+                    # Insert before the last parenthesis group
+                    part = part.rsplit("(", 1)[0] + f" (${contractor_pay_recurring})" + " (" + part.rsplit("(", 1)[1]
+                else:
+                    part = part.replace(match.group(0), f"{match.group(0)} (${contractor_pay_recurring})")
+            updated_parts.append(part)
+        else:
+            updated_parts.append(part)
+    
+    enhanced_breakdown = " | ".join(updated_parts)
+    
+    return (enhanced_breakdown, contractor_pay_first_clean, contractor_pay_recurring)
 

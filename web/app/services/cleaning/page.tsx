@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
@@ -180,29 +181,49 @@ export default function CleaningPage() {
   return (
     <div>
       {/* Hero */}
-      <Section ref={heroRef} className="py-10 md:py-14">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
-            Home Cleaning You Can Actually Rely On
-          </h1>
-          <p className="text-lg text-alloy-midnight/80 mb-6">
-            Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
-          </p>
-          <div className="flex justify-center">
-            <button
-              onClick={handleToggle}
-              aria-expanded={isOpen}
-              aria-controls="quote-form-content"
-              aria-label={isOpen ? "Hide form" : "Get a quote"}
-              className="w-full md:w-auto"
-            >
-              <PrimaryButton className="w-full md:w-auto">
-                {isOpen ? "Hide form" : "Get a quote"}
-              </PrimaryButton>
-            </button>
+      <section className="bg-alloy-stone" ref={heroRef}>
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
+          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
+            {/* Background Image */}
+            <Image
+              src="/hero/home_cleaning_hero.jpeg"
+              alt="Home cleaning service"
+              fill
+              priority
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
+            />
+
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
+
+            {/* Content Overlay */}
+            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
+              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
+                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
+                  Home Cleaning You Can Actually Rely On
+                </h1>
+                <p className="text-base md:text-lg text-white/90">
+                  Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={handleToggle}
+                    aria-expanded={isOpen}
+                    aria-controls="quote-form-content"
+                    aria-label={isOpen ? "Hide form" : "Get a quote"}
+                    className="w-full sm:w-auto"
+                  >
+                    <PrimaryButton className="w-full sm:w-auto">
+                      {isOpen ? "Hide form" : "Get a quote"}
+                    </PrimaryButton>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </Section>
+      </section>
 
       {/* Quote Form (custom Alloy form, replaces embedded GHL form) */}
       {isOpen && (

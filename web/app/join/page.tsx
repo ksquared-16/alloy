@@ -1,5 +1,6 @@
 import Section from "@/components/Section";
 import GhlEmbed from "@/components/GhlEmbed";
+import Image from "next/image";
 
 export default function JoinPage() {
   const benefits = [
@@ -19,16 +20,36 @@ export default function JoinPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <Section className="py-12 md:py-20">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
-            Join Our Team
-          </h1>
-          <p className="text-lg text-alloy-midnight/80 mb-8">
-            We help you get quality jobs. We handle the busywork, so you can focus on what you're best at.
-          </p>
+      <section className="bg-alloy-stone">
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
+          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
+            {/* Background Image */}
+            <Image
+              src="/hero/join_our_team_hero.jpeg"
+              alt="Join our team"
+              fill
+              priority
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
+            />
+
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
+
+            {/* Content Overlay */}
+            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
+              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
+                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
+                  Join Our Team
+                </h1>
+                <p className="text-base md:text-lg text-white/90">
+                  We help you get quality jobs. We handle the busywork, so you can focus on what you're best at.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </Section>
+      </section>
 
       {/* How It Works */}
       <Section className="py-16 bg-white">

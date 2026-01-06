@@ -10,7 +10,11 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ..settings import JOB_STORE, GHL_STAGE_ID_ASSIGNED, OFFER_STORE, JOBS_OPPORTUNITY_ID_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY, OPP_ASSIGNED_CONTRACTOR_FIELD_ID
+from ..settings import (
+    JOB_STORE, GHL_STAGE_ID_ASSIGNED, OFFER_STORE, JOBS_OPPORTUNITY_ID_FIELD_KEY, 
+    JOBS_OFFER_EXPIRES_AT_FIELD_KEY, OPP_ASSIGNED_CONTRACTOR_FIELD_ID, 
+    OPP_CONTRACTOR_PAY_AMOUNT, JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY, CUSTOM_FIELD_IDS
+)
 from ..ghl_client import (
     build_job_summary,
     fetch_contractors,
@@ -25,6 +29,9 @@ from ..ghl_client import (
     find_job_record_id_by_offer_code,
     get_job_record,
     get_contact_by_id,
+    extract_bedrooms_bathrooms_from_contact,
+    enhance_price_breakdown_with_beds_baths_and_contractor_pay,
+    update_job_custom_field_by_record_id,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -315,6 +322,71 @@ async def dispatch(request: Request):
         logger.warning("OFFER_CODE_CREATED code=%s external_job_id=%s job_record_id=None (will resolve on acceptance) opportunity_id=%s",
                       offer_code, external_job_id_used, opportunity_id)
 
+    # Fetch customer contact to get bedrooms/bathrooms
+    bedrooms = None
+    bathrooms = None
+    customer_contact_id = job_summary.get("contact_id")
+    if customer_contact_id:
+        try:
+            customer_contact = get_contact_by_id(customer_contact_id)
+            if customer_contact:
+                bedrooms, bathrooms = extract_bedrooms_bathrooms_from_contact(customer_contact)
+                logger.info("BEDROOMS_BATHROOMS_RESOLVED customer_contact_id=%s bedrooms=%s bathrooms=%s",
+                           customer_contact_id, bedrooms, bathrooms)
+        except Exception as e:
+            logger.warning("BEDROOMS_BATHROOMS_FETCH_FAILED customer_contact_id=%s exception=%s",
+                          customer_contact_id, e)
+    
+    # Parse price_breakdown to extract pricing components
+    from ..pricing import parse_simplified_price_breakdown
+    price_breakdown_raw = job_summary.get("price_breakdown", "")
+    parsed_breakdown = parse_simplified_price_breakdown(price_breakdown_raw) if price_breakdown_raw else {}
+    first_clean_price = parsed_breakdown.get("first_clean_price") or job_summary.get("estimated_price", 0)
+    recurring_price = parsed_breakdown.get("recurring_price")
+    frequency_label = parsed_breakdown.get("frequency_label")
+    discount_label = parsed_breakdown.get("discount_label")
+    
+    # Enhance price breakdown with beds/baths and contractor pay
+    enhanced_price_breakdown, contractor_pay_first_clean, contractor_pay_recurring = (
+        enhance_price_breakdown_with_beds_baths_and_contractor_pay(
+            price_breakdown_raw,
+            bedrooms,
+            bathrooms,
+            first_clean_price,
+            recurring_price,
+            frequency_label,
+            discount_label,
+        )
+    )
+    
+    # Store contractor_pay_amount on Job custom object
+    if job_record_id and contractor_pay_first_clean:
+        update_success = update_job_custom_field_by_record_id(
+            job_record_id,
+            JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
+            contractor_pay_first_clean
+        )
+        if update_success:
+            logger.info("CONTRACTOR_PAY_STORED_ON_JOB code=%s job_record_id=%s contractor_pay_amount=%d",
+                       offer_code, job_record_id, contractor_pay_first_clean)
+        else:
+            logger.warning("CONTRACTOR_PAY_STORE_FAILED code=%s job_record_id=%s contractor_pay_amount=%d",
+                          offer_code, job_record_id, contractor_pay_first_clean)
+    
+    # Store contractor_pay_amount in offer metadata for later use
+    if contractor_pay_first_clean:
+        offer_metadata["contractor_pay_amount"] = contractor_pay_first_clean
+    
+    # Store contractor_pay_amount on Opportunity if available
+    if opportunity_id and OPP_CONTRACTOR_PAY_AMOUNT and contractor_pay_first_clean:
+        opp_update_success = update_opportunity_custom_field(
+            opportunity_id,
+            OPP_CONTRACTOR_PAY_AMOUNT,
+            str(contractor_pay_first_clean)
+        )
+        logger.info("OPP_CONTRACTOR_PAY_UPDATE opportunity_id=%s field_id=%s value=%d success=%s",
+                   opportunity_id, OPP_CONTRACTOR_PAY_AMOUNT, contractor_pay_first_clean, opp_update_success)
+    
     # Format friendly date/time
     friendly_datetime = format_datetime_friendly(
         job_summary.get("start_time_iso") or job_summary.get("start_time"),
@@ -324,7 +396,7 @@ async def dispatch(request: Request):
     # Build contractor SMS message (NO access info yet – only broadcast)
     postal_code = job_summary.get("postal_code", "")
     zip_line = f"ZIP: {postal_code}\n" if postal_code else ""
-    price_line = f"Est. price: ${job_summary['estimated_price']:.2f}\n" if job_summary.get("estimated_price", 0) > 0 else ""
+    price_breakdown_line = f"Price breakdown:\n{enhanced_price_breakdown}\n" if enhanced_price_breakdown else ""
     
     msg = (
         f"New cleaning job available\n"
@@ -332,7 +404,7 @@ async def dispatch(request: Request):
         f"Service: {job_summary['service_type']}\n"
         f"When: {friendly_datetime}\n"
         f"{zip_line}"
-        f"{price_line}"
+        f"{price_breakdown_line}"
         f"\nReply YES {offer_code} to accept."
     )
 
@@ -602,6 +674,30 @@ async def contractor_reply(request: Request):
     else:
         logger.error("OFFER_ACCEPT_ERROR reason=no_record_id code=%s", offer_code)
     
+    # Get contractor_pay_amount from offer metadata or job record
+    contractor_pay_amount = None
+    offer = OFFER_STORE.get(offer_code)
+    if offer and offer.get("contractor_pay_amount"):
+        contractor_pay_amount = offer.get("contractor_pay_amount")
+    else:
+        # Try to get from job record properties
+        contractor_pay_amount = properties.get(JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY) or properties.get("contractor_pay_amount")
+        if contractor_pay_amount:
+            try:
+                contractor_pay_amount = int(contractor_pay_amount)
+            except (ValueError, TypeError):
+                contractor_pay_amount = None
+    
+    # Store contractor_pay_amount on Job if not already stored
+    if job_record_id and contractor_pay_amount:
+        update_success = update_job_custom_field_by_record_id(
+            job_record_id,
+            JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
+            contractor_pay_amount
+        )
+        logger.info("CONTRACTOR_PAY_STORED_ON_JOB_ACCEPTANCE code=%s job_record_id=%s contractor_pay_amount=%d success=%s",
+                   offer_code, job_record_id, contractor_pay_amount, update_success)
+    
     # Update Opportunity custom field with assigned contractor name (for GHL workflow merge fields)
     if opportunity_id and OPP_ASSIGNED_CONTRACTOR_FIELD_ID and contractor_name:
         opp_update_success = update_opportunity_custom_field(
@@ -616,6 +712,21 @@ async def contractor_reply(request: Request):
                       opportunity_id)
     elif not opportunity_id:
         logger.info("OPP_ASSIGNED_CONTRACTOR_UPDATE skipped: opportunity_id missing from job record")
+    
+    # Update Opportunity custom field with contractor pay amount
+    if opportunity_id and OPP_CONTRACTOR_PAY_AMOUNT and contractor_pay_amount:
+        opp_pay_update_success = update_opportunity_custom_field(
+            opportunity_id,
+            OPP_CONTRACTOR_PAY_AMOUNT,
+            str(contractor_pay_amount)
+        )
+        logger.info("OPP_CONTRACTOR_PAY_UPDATE_ACCEPTANCE opportunity_id=%s field_id=%s value=%d success=%s",
+                   opportunity_id, OPP_CONTRACTOR_PAY_AMOUNT, contractor_pay_amount, opp_pay_update_success)
+    elif opportunity_id and not OPP_CONTRACTOR_PAY_AMOUNT:
+        logger.warning("OPP_CONTRACTOR_PAY_UPDATE_ACCEPTANCE skipped: opportunity_id=%s but OPP_CONTRACTOR_PAY_AMOUNT not configured",
+                      opportunity_id)
+    elif not opportunity_id:
+        logger.info("OPP_CONTRACTOR_PAY_UPDATE_ACCEPTANCE skipped: opportunity_id missing from job record")
 
     # Update opportunity stage if opportunity_id is present
     stage_updated = False
@@ -639,11 +750,14 @@ async def contractor_reply(request: Request):
     logger.info("contractor-reply: offer code=%s accepted, job assignment proceeding", offer_code)
 
     # 1) Confirm to the accepting contractor — including all details
-    # Format date/time nicely using the same helper
+    # Format date/time nicely using the same helper (same as offer SMS)
+    start_time_iso = job.get("start_time_iso") or job.get("start_time")
     start_time_display = format_datetime_friendly(
-        job.get("start_time_iso") or job.get("start_time"),
-        job.get("start_time", "TBD")
+        start_time_iso,
+        "TBD"  # Only show TBD if no start_time exists
     )
+    logger.info("OFFER_ACCEPT_WINNER_SMS_DATETIME start_time_iso=%s start_time_display=%s",
+               start_time_iso, start_time_display)
     
     customer_name = job.get("customer_name", "Unknown")
     full_address = job.get("full_address", "")
@@ -699,7 +813,7 @@ async def contractor_reply(request: Request):
     )
     
     # Build notification message with offer_code (no date/time)
-    claimed_msg = f"Job offer {offer_code} for {customer_name_for_notification} has been claimed by another contractor.\nReply STOP to unsubscribe.\nThanks, Alloy - Cleaning"
+    claimed_msg = f"Job for {customer_name_for_notification} (Code {offer_code}) has been claimed by another contractor.\nReply STOP to unsubscribe.\nThanks, Alloy - Cleaning"
     
     for c in contractors:
         cid = c.get("id")
