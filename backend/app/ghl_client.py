@@ -1903,16 +1903,39 @@ def update_job_offer_code_by_record_id(record_id: str, offer_code: str, offer_ex
     logger.info("update_job_offer_code_by_record_id: using field keys offer_code=%s offer_expires_at=%s opportunity_id=%s record_id=%s",
                JOBS_OFFER_CODE_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY, JOBS_OPPORTUNITY_ID_FIELD_KEY, record_id)
     
+    # Fetch schema once to see available fields (debug only, don't fail if it doesn't work)
+    try:
+        schema = get_jobs_object_schema()
+        if schema:
+            logger.info("JOBS_OBJECT_SCHEMA_AVAILABLE (for reference)")
+    except Exception:
+        pass  # Ignore schema fetch errors
+    
     params = {"locationId": GHL_LOCATION_ID}
+    url = f"{JOBS_RECORDS_URL}/{record_id}"
+    
+    # Log request details
+    logger.info("JOB_UPDATE_REQUEST url=%s method=PUT params=%s body=%s",
+               url, params, payload)
     
     try:
         resp = requests.put(
-            f"{JOBS_RECORDS_URL}/{record_id}",
+            url,
             headers=_ghl_headers(),
             params=params,
             json=payload,
             timeout=10,
         )
+        
+        # Log response details
+        try:
+            response_json = resp.json() if resp.text else {}
+        except Exception:
+            response_json = {"raw_text": resp.text[:500] if resp.text else ""}
+        
+        logger.info("JOB_UPDATE_RESPONSE status=%d json=%s",
+                   resp.status_code, response_json)
+        
         if resp.ok:
             logger.info("JOB_UPDATED_WITH_OFFER_AND_OPP record_id=%s offer_code=%s opportunity_id=%s",
                        record_id, offer_code, opportunity_id)
@@ -1921,15 +1944,37 @@ def update_job_offer_code_by_record_id(record_id: str, offer_code: str, offer_ex
             try:
                 readback_record = get_job_record(record_id)
                 if readback_record:
-                    readback_properties = readback_record.get("properties", {})
-                    stored_offer_code = readback_properties.get(JOBS_OFFER_CODE_FIELD_KEY) or readback_properties.get("offer_code")
-                    stored_opportunity_id = readback_properties.get(JOBS_OPPORTUNITY_ID_FIELD_KEY) or readback_properties.get("opportunity_id")
+                    # Try multiple possible locations for properties
+                    readback_properties = (
+                        readback_record.get("properties") or
+                        readback_record.get("record", {}).get("properties") or
+                        {}
+                    )
+                    
+                    # Log all property keys for debugging
+                    all_property_keys = list(readback_properties.keys()) if isinstance(readback_properties, dict) else []
+                    logger.info("JOB_RECORD_READBACK_PROPERTIES record_id=%s all_keys=%s",
+                               record_id, all_property_keys)
+                    
+                    # Try multiple field key variations
+                    stored_offer_code = (
+                        readback_properties.get(JOBS_OFFER_CODE_FIELD_KEY) or
+                        readback_properties.get("offer_code") or
+                        readback_properties.get("offerCode") or
+                        readback_properties.get("Offer Code")
+                    )
+                    stored_opportunity_id = (
+                        readback_properties.get(JOBS_OPPORTUNITY_ID_FIELD_KEY) or
+                        readback_properties.get("opportunity_id") or
+                        readback_properties.get("opportunityId") or
+                        readback_properties.get("Opportunity ID")
+                    )
                     logger.info("JOB_RECORD_READBACK record_id=%s stored_offer_code=%s stored_opportunity_id=%s",
                                record_id, stored_offer_code, stored_opportunity_id)
                 else:
                     logger.warning("JOB_RECORD_READBACK record_id=%s failed to fetch record for verification", record_id)
             except Exception as e:
-                logger.warning("JOB_RECORD_READBACK record_id=%s exception during readback: %s", record_id, e)
+                logger.warning("JOB_RECORD_READBACK record_id=%s exception during readback: %s", record_id, e, exc_info=True)
             
             return True
         else:
@@ -2074,11 +2119,12 @@ def get_job_record(record_id: str) -> Optional[Dict[str, Any]]:
         return None
     
     params = {"locationId": GHL_LOCATION_ID}
+    url = f"{JOBS_RECORDS_URL}/{record_id}"
     
     try:
-        logger.info("Fetching job record record_id=%s", record_id)
+        logger.info("Fetching job record record_id=%s url=%s", record_id, url)
         resp = requests.get(
-            f"{JOBS_RECORDS_URL}/{record_id}",
+            url,
             headers=_ghl_headers(),
             params=params,
             timeout=10,
@@ -2087,13 +2133,76 @@ def get_job_record(record_id: str) -> Optional[Dict[str, Any]]:
         logger.error("get_job_record: exception: %s", e)
         return None
     
+    # Log response details
+    try:
+        response_json = resp.json() if resp.text else {}
+    except Exception:
+        response_json = {"raw_text": resp.text[:500] if resp.text else ""}
+    
+    logger.info("JOB_GET_RESPONSE status=%d json=%s",
+               resp.status_code, response_json)
+    
     if not resp.ok:
         logger.error("get_job_record: fetch failed (%s): %s", resp.status_code, resp.text)
         return None
     
-    record = resp.json()
-    logger.info("get_job_record: found record record_id=%s", record_id)
+    record = response_json
+    logger.info("get_job_record: found record record_id=%s top_level_keys=%s",
+               record_id, list(record.keys()) if isinstance(record, dict) else "not_dict")
+    
+    # Debug: log the full structure to understand where properties live
+    if isinstance(record, dict):
+        if "properties" in record:
+            logger.info("get_job_record: properties found at top level, keys=%s",
+                       list(record["properties"].keys()) if isinstance(record["properties"], dict) else "not_dict")
+        if "record" in record:
+            logger.info("get_job_record: record found at top level, keys=%s",
+                       list(record["record"].keys()) if isinstance(record["record"], dict) else "not_dict")
+            if isinstance(record["record"], dict) and "properties" in record["record"]:
+                logger.info("get_job_record: properties found in record, keys=%s",
+                           list(record["record"]["properties"].keys()) if isinstance(record["record"]["properties"], dict) else "not_dict")
+    
     return record
+
+
+def get_jobs_object_schema() -> Optional[Dict[str, Any]]:
+    """
+    Fetch the Jobs custom object schema to see available field keys.
+    
+    Returns:
+        Schema dict if found, None otherwise
+    """
+    if not GHL_LOCATION_ID:
+        logger.error("get_jobs_object_schema: GHL_LOCATION_ID not set")
+        return None
+    
+    # Try to fetch object schema
+    # GHL API endpoint for custom object schema
+    url = f"{LC_BASE_URL}/objects/custom_objects.jobs"
+    params = {"locationId": GHL_LOCATION_ID}
+    
+    try:
+        logger.info("Fetching Jobs object schema url=%s", url)
+        resp = requests.get(url, headers=_ghl_headers(), params=params, timeout=10)
+        
+        if resp.ok:
+            schema = resp.json()
+            logger.info("JOBS_OBJECT_SCHEMA_FETCHED schema_keys=%s",
+                      list(schema.keys()) if isinstance(schema, dict) else "not_dict")
+            
+            # Extract field definitions if present
+            fields = schema.get("fields") or schema.get("properties") or []
+            if fields:
+                field_keys = [f.get("key") or f.get("fieldKey") or f.get("name") for f in fields if isinstance(f, dict)]
+                logger.info("JOBS_OBJECT_SCHEMA_FIELDS available_field_keys=%s", field_keys)
+            
+            return schema
+        else:
+            logger.warning("get_jobs_object_schema: failed (%s): %s", resp.status_code, resp.text[:200])
+            return None
+    except Exception as e:
+        logger.warning("get_jobs_object_schema: exception: %s", e)
+        return None
 
 
 def find_job_by_offer_code(offer_code: str) -> Optional[Dict[str, Any]]:
