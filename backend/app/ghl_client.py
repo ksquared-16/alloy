@@ -1850,6 +1850,125 @@ def find_latest_opportunity_for_contact(contact_id: str) -> Optional[Dict[str, A
     return opportunity
 
 
+def update_job_offer_code(job_id: str, offer_code: str, offer_expires_at: str, opportunity_id: Optional[str] = None) -> bool:
+    """
+    Update the Jobs custom object with offer code information.
+    
+    Args:
+        job_id: External job ID (appointment ID)
+        offer_code: 5-digit offer code
+        offer_expires_at: ISO datetime string when offer expires
+        opportunity_id: Optional GHL opportunity ID
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    if not job_id or not offer_code:
+        logger.warning("update_job_offer_code: missing job_id or offer_code")
+        return False
+    if not GHL_LOCATION_ID:
+        logger.error("update_job_offer_code: GHL_LOCATION_ID not set")
+        return False
+    
+    record_id = find_job_record_id(job_id)
+    if not record_id:
+        logger.error("update_job_offer_code: could not find job record for external_job_id=%s", job_id)
+        return False
+    
+    payload = {
+        "properties": {
+            "external_job_id": job_id,
+            "offer_code": offer_code,
+            "offer_expires_at": offer_expires_at,
+        }
+    }
+    if opportunity_id:
+        payload["properties"]["opportunity_id"] = opportunity_id
+    
+    params = {"locationId": GHL_LOCATION_ID}
+    
+    try:
+        resp = requests.put(
+            f"{JOBS_RECORDS_URL}/{record_id}",
+            headers=_ghl_headers(),
+            params=params,
+            json=payload,
+            timeout=10,
+        )
+        if resp.ok:
+            logger.info("update_job_offer_code: updated job_id=%s with offer_code=%s", job_id, offer_code)
+            return True
+        else:
+            logger.error("update_job_offer_code: failed (%s): %s", resp.status_code, resp.text[:200])
+            return False
+    except Exception as e:
+        logger.error("update_job_offer_code: exception: %s", e, exc_info=True)
+        return False
+
+
+def find_job_by_offer_code(offer_code: str) -> Optional[Dict[str, Any]]:
+    """
+    Find a Job custom object record by offer_code.
+    
+    Args:
+        offer_code: 5-digit offer code
+    
+    Returns:
+        Job record dict if found, None otherwise
+    """
+    if not offer_code:
+        return None
+    if not GHL_LOCATION_ID:
+        logger.error("find_job_by_offer_code: GHL_LOCATION_ID not set")
+        return None
+    
+    body = {
+        "locationId": GHL_LOCATION_ID,
+        "page": 1,
+        "pageLimit": 1,
+        "filters": [
+            {
+                "group": "AND",
+                "filters": [
+                    {
+                        "group": "AND",
+                        "filters": [
+                            {
+                                "field": "properties.offer_code",
+                                "operator": "eq",
+                                "value": offer_code,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    
+    try:
+        logger.info("Searching job record by offer_code=%s", offer_code)
+        resp = requests.post(
+            JOBS_SEARCH_URL, headers=_ghl_headers(), json=body, timeout=10
+        )
+    except Exception as e:
+        logger.error("find_job_by_offer_code: exception: %s", e)
+        return None
+    
+    if not resp.ok:
+        logger.error("find_job_by_offer_code: search failed (%s): %s", resp.status_code, resp.text)
+        return None
+    
+    data = resp.json()
+    records = data.get("records") or data.get("customObjectRecords") or []
+    if not records:
+        logger.info("find_job_by_offer_code: no records found for offer_code=%s", offer_code)
+        return None
+    
+    record = records[0]
+    logger.info("find_job_by_offer_code: found record for offer_code=%s", offer_code)
+    return record
+
+
 def upsert_job_assignment_to_ghl(job_id: str, contractor_id: str, contractor_name: str) -> None:
     """
     Update assignment details into the Jobs custom object in GHL.

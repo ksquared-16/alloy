@@ -9,13 +9,15 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ..settings import JOB_STORE, OFFER_STORE, GHL_STAGE_ID_ASSIGNED
+from ..settings import JOB_STORE, GHL_STAGE_ID_ASSIGNED
 from ..ghl_client import (
     build_job_summary,
     fetch_contractors,
     send_conversation_sms,
     upsert_job_assignment_to_ghl,
     update_opportunity_stage,
+    update_job_offer_code,
+    find_job_by_offer_code,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -47,12 +49,13 @@ def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -
         else:
             dt = datetime.fromisoformat(iso_string)
         
-        # Convert to UTC if naive
+        # If naive datetime, treat as America/Los_Angeles local time
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-        
-        # Convert to LA timezone
-        dt_la = dt.astimezone(LA_TZ)
+            dt = dt.replace(tzinfo=LA_TZ)
+            dt_la = dt
+        else:
+            # Convert to LA timezone if timezone-aware
+            dt_la = dt.astimezone(LA_TZ)
         
         # Format: "Wed, Jan 8 at 8:00 AM"
         # Use day without leading zero and hour without leading zero
@@ -70,18 +73,14 @@ def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -
 
 def generate_offer_code() -> str:
     """
-    Generate a unique 5-digit code (10000-99999) that doesn't exist in OFFER_STORE.
+    Generate a unique 5-digit code (10000-99999).
     
     Returns:
         5-digit code string
     """
-    max_attempts = 100
-    for _ in range(max_attempts):
-        code = str(random.randint(10000, 99999))
-        if code not in OFFER_STORE:
-            return code
-    # Fallback: use timestamp-based code if all random codes are taken
-    return str(random.randint(10000, 99999)) + str(int(datetime.utcnow().timestamp()))[-3:]
+    # Generate random 5-digit code
+    # Note: Uniqueness is ensured by storing in GHL Job custom object
+    return str(random.randint(10000, 99999))
 
 
 @router.post("/dispatch")
@@ -196,20 +195,27 @@ async def dispatch(request: Request):
             }
         )
 
-    # Generate offer code and store in OFFER_STORE
+    # Generate offer code and save to Job custom object
     offer_code = generate_offer_code()
     expires_at = datetime.utcnow() + timedelta(hours=24)
+    expires_at_iso = expires_at.isoformat()
     
-    OFFER_STORE[offer_code] = {
-        "opportunity_id": job_summary.get("opportunity_id"),
-        "job_id": job_id,
-        "customer_contact_id": job_summary.get("contact_id"),
-        "expires_at": expires_at.isoformat(),
-        "sent_to_contractor_ids": [],
-    }
-    
-    logger.info("OFFER_CODE_CREATED code=%s opportunity_id=%s job_id=%s", 
-                offer_code, job_summary.get("opportunity_id"), job_id)
+    # Save offer code to Job custom object
+    if job_id:
+        update_success = update_job_offer_code(
+            job_id,
+            offer_code,
+            expires_at_iso,
+            job_summary.get("opportunity_id")
+        )
+        if update_success:
+            logger.info("OFFER_CODE_CREATED code=%s opportunity_id=%s job_id=%s saved to Job custom object", 
+                       offer_code, job_summary.get("opportunity_id"), job_id)
+        else:
+            logger.warning("OFFER_CODE_CREATED code=%s but failed to save to Job custom object job_id=%s", 
+                          offer_code, job_id)
+    else:
+        logger.warning("OFFER_CODE_CREATED code=%s but no job_id to save to Job custom object", offer_code)
 
     # Format friendly date/time
     friendly_datetime = format_datetime_friendly(
@@ -246,8 +252,6 @@ async def dispatch(request: Request):
         send_conversation_sms(cid, msg)
         notified_ids.append(cid)
         job_summary["notified_contractors"].append(cid)
-        # Track which contractors received this offer
-        OFFER_STORE[offer_code]["sent_to_contractor_ids"].append(cid)
 
     return JSONResponse(
         {
@@ -332,14 +336,28 @@ async def contractor_reply(request: Request):
     logger.info("OFFER_ACCEPT_ATTEMPT contractor_id=%s code=%s message_text=%s", 
                 contact_id, offer_code, message_text)
 
-    # Validate offer code
-    if not offer_code or offer_code not in OFFER_STORE:
+    # Look up job by offer code from GHL Job custom object
+    if not offer_code:
+        logger.warning("OFFER_ACCEPT_INVALID reason=no_code_provided contractor_id=%s", contact_id)
+        rejection_msg = "Invalid code. Please reply with the 5-digit code from the job offer."
+        send_conversation_sms(contact_id, rejection_msg)
+        return JSONResponse(
+            {
+                "ok": False,
+                "reason": "invalid_code",
+                "message_text": message_text,
+                "code": None,
+            },
+            status_code=200,
+        )
+    
+    job_record = find_job_by_offer_code(offer_code)
+    
+    if not job_record:
         # Invalid code - send rejection message
         logger.warning("OFFER_ACCEPT_INVALID reason=code_not_found contractor_id=%s code=%s", 
                       contact_id, offer_code)
-        rejection_msg = "Invalid code. Please reply with the 5-digit code from the job offer."
-        if offer_code:
-            rejection_msg = f"Invalid code. Reply YES {offer_code} to accept."
+        rejection_msg = f"Invalid code. Reply YES {offer_code} to accept."
         send_conversation_sms(contact_id, rejection_msg)
         return JSONResponse(
             {
@@ -350,11 +368,14 @@ async def contractor_reply(request: Request):
             },
             status_code=200,
         )
-
-    offer = OFFER_STORE[offer_code]
+    
+    # Extract job info from Job custom object record
+    properties = job_record.get("properties", {})
+    job_id = properties.get("external_job_id")
+    opportunity_id = properties.get("opportunity_id")
+    expires_at_str = properties.get("offer_expires_at")
     
     # Check expiration
-    expires_at_str = offer.get("expires_at")
     if expires_at_str:
         try:
             expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
@@ -364,8 +385,6 @@ async def contractor_reply(request: Request):
                 logger.warning("OFFER_ACCEPT_INVALID reason=expired contractor_id=%s code=%s", 
                               contact_id, offer_code)
                 send_conversation_sms(contact_id, "This offer has expired. Please wait for a new job offer.")
-                # Clean up expired offer
-                del OFFER_STORE[offer_code]
                 return JSONResponse(
                     {
                         "ok": False,
@@ -376,10 +395,6 @@ async def contractor_reply(request: Request):
                 )
         except Exception as e:
             logger.warning("contractor-reply: failed to parse expires_at %s: %s", expires_at_str, e)
-
-    # Get job_id and opportunity_id from offer
-    job_id = offer.get("job_id")
-    opportunity_id = offer.get("opportunity_id")
     
     # Get job from JOB_STORE
     job = JOB_STORE.get(job_id) if job_id else None
@@ -443,9 +458,7 @@ async def contractor_reply(request: Request):
     job["assigned_contractor_id"] = contact_id
     job["assigned_contractor_name"] = contractor_name
     
-    # Invalidate the offer code (remove from OFFER_STORE)
-    del OFFER_STORE[offer_code]
-    logger.info("contractor-reply: invalidated offer code=%s", offer_code)
+    logger.info("contractor-reply: offer code=%s accepted, job assignment proceeding", offer_code)
 
     # 1) Confirm to the accepting contractor — including all details
     # Format date/time nicely using the same helper
