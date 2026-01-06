@@ -1667,23 +1667,7 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
         "locationId": GHL_LOCATION_ID,
         "page": 1,
         "pageLimit": 1,
-        "filters": [
-            {
-                "group": "AND",
-                "filters": [
-                    {
-                        "group": "AND",
-                        "filters": [
-                            {
-                                "field": "properties.external_job_id",
-                                "operator": "eq",
-                                "value": external_job_id,
-                            }
-                        ],
-                    }
-                ],
-            }
-        ],
+        "query": external_job_id,
     }
 
     try:
@@ -1714,9 +1698,9 @@ def find_job_record_id(external_job_id: str) -> Optional[str]:
 
     record_id = records[0].get("id")
     logger.info(
-        "find_job_record_id: found record_id=%s for external_job_id=%s",
-        record_id,
+        "JOB_RECORD_LOOKUP external_job_id=%s record_id=%s",
         external_job_id,
+        record_id,
     )
     return record_id
 
