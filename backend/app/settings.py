@@ -143,3 +143,6 @@ JOBS_OFFER_CODE_FIELD_KEY = os.getenv("JOBS_OFFER_CODE_FIELD_KEY", "offer_code")
 JOBS_OFFER_EXPIRES_AT_FIELD_KEY = os.getenv("JOBS_OFFER_EXPIRES_AT_FIELD_KEY", "offer_expires_at").strip()
 JOBS_OPPORTUNITY_ID_FIELD_KEY = os.getenv("JOBS_OPPORTUNITY_ID_FIELD_KEY", "opportunity_id").strip()
 
+# GHL Opportunity Custom Field IDs
+OPP_ASSIGNED_CONTRACTOR_FIELD_ID = os.getenv("OPP_ASSIGNED_CONTRACTOR_FIELD_ID", "").strip()
+

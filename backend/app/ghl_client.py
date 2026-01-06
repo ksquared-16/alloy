@@ -35,6 +35,7 @@ from .settings import (
     JOBS_OFFER_CODE_FIELD_KEY,
     JOBS_OFFER_EXPIRES_AT_FIELD_KEY,
     JOBS_OPPORTUNITY_ID_FIELD_KEY,
+    OPP_ASSIGNED_CONTRACTOR_FIELD_ID,
 )
 from .utils import _ghl_headers, normalize_phone
 
@@ -1124,6 +1125,52 @@ def update_opportunity_stage(opportunity_id: str, pipeline_stage_id: str) -> boo
     except Exception as e:
         logger.error("update_opportunity_stage: exception for opportunity_id=%s stage_id=%s: %s", 
                     opportunity_id, pipeline_stage_id, e, exc_info=True)
+        return False
+
+
+def update_opportunity_custom_field(opportunity_id: str, field_id: str, field_value: str) -> bool:
+    """
+    Update a custom field on an opportunity in GHL.
+    
+    Args:
+        opportunity_id: GHL opportunity ID
+        field_id: GHL custom field ID
+        field_value: Value to set for the custom field
+    
+    Returns:
+        True if update was successful, False otherwise
+    """
+    if not opportunity_id or not field_id or not field_value:
+        logger.warning("update_opportunity_custom_field: invalid parameters (opportunity_id=%s, field_id=%s, field_value=%s)",
+                      opportunity_id, field_id, field_value)
+        return False
+    
+    if not GHL_LOCATION_ID:
+        logger.error("update_opportunity_custom_field: GHL_LOCATION_ID not set")
+        return False
+    
+    try:
+        url = f"{OPPORTUNITIES_URL}{opportunity_id}"
+        payload = {
+            "customFields": [
+                {"id": field_id, "value": field_value}
+            ]
+        }
+        params = {"locationId": GHL_LOCATION_ID}
+        
+        resp = requests.put(url, headers=_ghl_headers(), params=params, json=payload, timeout=10)
+        
+        if resp.ok:
+            logger.info("update_opportunity_custom_field: updated opportunity_id=%s field_id=%s value=%s",
+                       opportunity_id, field_id, field_value)
+            return True
+        else:
+            logger.error("update_opportunity_custom_field: failed (%s) for opportunity_id=%s field_id=%s: %s",
+                        resp.status_code, opportunity_id, field_id, resp.text[:200])
+            return False
+    except Exception as e:
+        logger.error("update_opportunity_custom_field: exception for opportunity_id=%s field_id=%s: %s",
+                    opportunity_id, field_id, e, exc_info=True)
         return False
 
 

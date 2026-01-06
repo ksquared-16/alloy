@@ -10,19 +10,21 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ..settings import JOB_STORE, GHL_STAGE_ID_ASSIGNED, OFFER_STORE, JOBS_OPPORTUNITY_ID_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY
+from ..settings import JOB_STORE, GHL_STAGE_ID_ASSIGNED, OFFER_STORE, JOBS_OPPORTUNITY_ID_FIELD_KEY, JOBS_OFFER_EXPIRES_AT_FIELD_KEY, OPP_ASSIGNED_CONTRACTOR_FIELD_ID
 from ..ghl_client import (
     build_job_summary,
     fetch_contractors,
     send_conversation_sms,
     upsert_job_assignment_to_ghl,
     update_opportunity_stage,
+    update_opportunity_custom_field,
     update_job_offer_code,
     update_job_offer_code_by_record_id,
     find_job_by_offer_code,
     find_job_record_id,
     find_job_record_id_by_offer_code,
     get_job_record,
+    get_contact_by_id,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -490,6 +492,7 @@ async def contractor_reply(request: Request):
     )
     
     job_id = properties.get("external_job_id")
+    customer_contact_id = properties.get("customer_contact_id") or properties.get("contact_id")
     opportunity_id = (
         properties.get("opportunity_id") or
         properties.get(JOBS_OPPORTUNITY_ID_FIELD_KEY) or
@@ -598,6 +601,21 @@ async def contractor_reply(request: Request):
                    offer_code, job_record_id, job_id)
     else:
         logger.error("OFFER_ACCEPT_ERROR reason=no_record_id code=%s", offer_code)
+    
+    # Update Opportunity custom field with assigned contractor name (for GHL workflow merge fields)
+    if opportunity_id and OPP_ASSIGNED_CONTRACTOR_FIELD_ID and contractor_name:
+        opp_update_success = update_opportunity_custom_field(
+            opportunity_id,
+            OPP_ASSIGNED_CONTRACTOR_FIELD_ID,
+            contractor_name
+        )
+        logger.info("OPP_ASSIGNED_CONTRACTOR_UPDATE opportunity_id=%s field_id=%s value=%s success=%s",
+                   opportunity_id, OPP_ASSIGNED_CONTRACTOR_FIELD_ID, contractor_name, opp_update_success)
+    elif opportunity_id and not OPP_ASSIGNED_CONTRACTOR_FIELD_ID:
+        logger.warning("OPP_ASSIGNED_CONTRACTOR_UPDATE skipped: opportunity_id=%s but OPP_ASSIGNED_CONTRACTOR_FIELD_ID not configured",
+                      opportunity_id)
+    elif not opportunity_id:
+        logger.info("OPP_ASSIGNED_CONTRACTOR_UPDATE skipped: opportunity_id missing from job record")
 
     # Update opportunity stage if opportunity_id is present
     stage_updated = False
@@ -633,9 +651,28 @@ async def contractor_reply(request: Request):
     access_notes = job.get("access_notes", "")
     price_breakdown = job.get("price_breakdown", "")
     
+    # Fetch customer phone number from customer contact
+    customer_phone = "Not available"
+    if customer_contact_id:
+        try:
+            customer_contact = get_contact_by_id(customer_contact_id)
+            if customer_contact:
+                customer_phone = customer_contact.get("phone") or customer_contact.get("phoneNumber") or "Not available"
+                logger.info("OFFER_ACCEPT_CUSTOMER_PHONE_FETCHED customer_contact_id=%s phone=%s",
+                           customer_contact_id, customer_phone)
+            else:
+                logger.warning("OFFER_ACCEPT_CUSTOMER_PHONE_FETCH_FAILED customer_contact_id=%s (contact not found)",
+                              customer_contact_id)
+        except Exception as e:
+            logger.warning("OFFER_ACCEPT_CUSTOMER_PHONE_FETCH_EXCEPTION customer_contact_id=%s exception=%s",
+                          customer_contact_id, e)
+    else:
+        logger.warning("OFFER_ACCEPT_CUSTOMER_PHONE_SKIPPED customer_contact_id missing from job record")
+    
     confirm_msg = f"✅ You got the job\n\n"
     confirm_msg += f"Date/Time: {start_time_display}\n"
     confirm_msg += f"Customer: {customer_name}\n"
+    confirm_msg += f"Customer phone: {customer_phone}\n"
     
     if full_address:
         confirm_msg += f"Address: {full_address}\n"
