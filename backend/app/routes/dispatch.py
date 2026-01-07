@@ -2,6 +2,7 @@
 Dispatch and contractor reply routes.
 """
 import logging
+import math
 import random
 import time
 from datetime import datetime, timedelta
@@ -323,9 +324,10 @@ async def dispatch(request: Request):
         logger.warning("OFFER_CODE_CREATED code=%s external_job_id=%s job_record_id=None (will resolve on acceptance) opportunity_id=%s",
                       offer_code, external_job_id_used, opportunity_id)
 
-    # Fetch customer contact to get bedrooms/bathrooms
+    # Fetch customer contact to get bedrooms/bathrooms and recurring_price (numeric)
     bedrooms = None
     bathrooms = None
+    recurring_price = None
     customer_contact_id = job_summary.get("contact_id")
     if customer_contact_id:
         try:
@@ -334,21 +336,41 @@ async def dispatch(request: Request):
                 bedrooms, bathrooms = extract_bedrooms_bathrooms_from_contact(customer_contact)
                 logger.info("BEDROOMS_BATHROOMS_RESOLVED customer_contact_id=%s bedrooms=%s bathrooms=%s",
                            customer_contact_id, bedrooms, bathrooms)
+                
+                # Extract recurring_price from contact custom fields (numeric value)
+                from ..pricing import extract_contact_pricing_from_custom_fields
+                pricing_data = extract_contact_pricing_from_custom_fields(customer_contact)
+                recurring_price = pricing_data.get("recurring_price")  # Already a float or None
+                if recurring_price is not None:
+                    logger.info("RECURRING_PRICE_FETCHED customer_contact_id=%s recurring_price=%.2f",
+                               customer_contact_id, recurring_price)
         except Exception as e:
-            logger.warning("BEDROOMS_BATHROOMS_FETCH_FAILED customer_contact_id=%s exception=%s",
+            logger.warning("CUSTOMER_CONTACT_FETCH_FAILED customer_contact_id=%s exception=%s",
                           customer_contact_id, e)
     
-    # Parse price_breakdown to extract pricing components
+    # Use numeric values directly (no parsing for contractor pay)
+    first_clean_price = float(job_summary.get("estimated_price", 0))
+    
+    # Compute contractor pay from numeric values
+    contractor_pay_first_clean = math.floor(first_clean_price * 0.70) if first_clean_price > 0 else 0
+    contractor_pay_recurring = math.floor(recurring_price * 0.70) if recurring_price is not None and recurring_price > 0 else None
+    
+    logger.info("CONTRACTOR_PAY_COMPUTED_NUMERIC first_clean_price=%.2f recurring_price=%s contractor_pay_first_clean=%d contractor_pay_recurring=%s",
+               first_clean_price, recurring_price, contractor_pay_first_clean, contractor_pay_recurring)
+    
+    if recurring_price is None:
+        logger.info("RECURRING_CONTRACTOR_PAY_SKIPPED_NUMERIC reason=recurring_price_is_None")
+    
+    # Parse price_breakdown ONLY for presentation (frequency_label, discount_label for SMS formatting)
     from ..pricing import parse_simplified_price_breakdown
     price_breakdown_raw = job_summary.get("price_breakdown", "")
     parsed_breakdown = parse_simplified_price_breakdown(price_breakdown_raw) if price_breakdown_raw else {}
-    first_clean_price = parsed_breakdown.get("first_clean_price") or job_summary.get("estimated_price", 0)
-    recurring_price = parsed_breakdown.get("recurring_price")
     frequency_label = parsed_breakdown.get("frequency_label")
     discount_label = parsed_breakdown.get("discount_label")
     
-    # Enhance price breakdown with beds/baths and contractor pay
-    enhanced_price_breakdown, contractor_pay_first_clean, contractor_pay_recurring = (
+    # Enhance price breakdown with beds/baths and contractor pay (presentation only)
+    # Note: contractor_pay values are already computed from numeric values above
+    enhanced_price_breakdown, _, _ = (
         enhance_price_breakdown_with_beds_baths_and_contractor_pay(
             price_breakdown_raw,
             bedrooms,
@@ -359,6 +381,7 @@ async def dispatch(request: Request):
             discount_label,
         )
     )
+    # Use the pre-computed contractor pay values (ignore return values from helper)
     
     # Store contractor_pay_amount on Job custom object
     if job_record_id and contractor_pay_first_clean:
