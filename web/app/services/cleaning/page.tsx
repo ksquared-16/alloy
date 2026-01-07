@@ -190,7 +190,7 @@ export default function CleaningPage() {
               alt="Home cleaning service"
               fill
               priority
-              className="object-cover"
+              className="object-cover object-[center_65%] sm:object-center"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
 
