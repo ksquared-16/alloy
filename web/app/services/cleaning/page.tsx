@@ -181,11 +181,12 @@ export default function CleaningPage() {
   return (
     <div>
       <style dangerouslySetInnerHTML={{__html: `
-        .cleaning-hero-img {
-          object-position: 50% 75%;
+        .cleaningHeroImg {
+          object-fit: cover;
+          object-position: 50% 95%;
         }
         @media (min-width: 640px) {
-          .cleaning-hero-img {
+          .cleaningHeroImg {
             object-position: 50% 50%;
           }
         }
@@ -200,7 +201,7 @@ export default function CleaningPage() {
               alt="Home cleaning service"
               fill
               priority
-              className="object-cover cleaning-hero-img"
+              className="cleaningHeroImg"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
 
