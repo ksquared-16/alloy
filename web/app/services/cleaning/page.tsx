@@ -180,6 +180,16 @@ export default function CleaningPage() {
 
   return (
     <div>
+      <style dangerouslySetInnerHTML={{__html: `
+        .cleaning-hero-img {
+          object-position: 50% 75%;
+        }
+        @media (min-width: 640px) {
+          .cleaning-hero-img {
+            object-position: 50% 50%;
+          }
+        }
+      `}} />
       {/* Hero */}
       <section className="bg-alloy-stone" ref={heroRef}>
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
@@ -190,7 +200,7 @@ export default function CleaningPage() {
               alt="Home cleaning service"
               fill
               priority
-              className="object-cover object-[center_65%] sm:object-center"
+              className="object-cover cleaning-hero-img"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
 
