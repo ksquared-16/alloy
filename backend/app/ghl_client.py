@@ -2625,6 +2625,8 @@ def enhance_price_breakdown_with_beds_baths_and_contractor_pay(
     recurring_price: Optional[float] = None,
     frequency_label: Optional[str] = None,
     discount_label: Optional[str] = None,
+    contractor_pay_first_clean: Optional[int] = None,
+    contractor_pay_recurring: Optional[int] = None,
 ) -> tuple[str, int, Optional[int]]:
     """
     Enhance price breakdown string with bedrooms/bathrooms and contractor pay amounts.
@@ -2644,9 +2646,11 @@ def enhance_price_breakdown_with_beds_baths_and_contractor_pay(
     """
     import re
     
-    # Compute contractor pay (70% of price, floored)
-    contractor_pay_first_clean = int(first_clean_price * 0.70)
-    contractor_pay_recurring = int(recurring_price * 0.70) if recurring_price else None
+    # Use provided contractor pay values if available, otherwise compute them
+    if contractor_pay_first_clean is None:
+        contractor_pay_first_clean = int(first_clean_price * 0.70)
+    if contractor_pay_recurring is None and recurring_price is not None:
+        contractor_pay_recurring = int(recurring_price * 0.70)
     
     logger.info("CONTRACTOR_PAY_COMPUTED first_clean_price=%.2f contractor_pay_first_clean=%d recurring_price=%s contractor_pay_recurring=%s",
                first_clean_price, contractor_pay_first_clean, recurring_price, contractor_pay_recurring)

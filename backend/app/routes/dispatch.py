@@ -6,7 +6,7 @@ import math
 import random
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -85,6 +85,59 @@ def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -
     except Exception as e:
         logger.warning("format_datetime_friendly: failed to parse %s: %s", iso_string, e)
         return fallback
+
+
+def get_recurring_price_numeric(payload: Dict[str, Any], customer_contact: Optional[Dict[str, Any]] = None) -> Optional[float]:
+    """
+    Get recurring_price as a numeric value, prioritizing payload over contact custom fields.
+    
+    Args:
+        payload: GHL webhook payload
+        customer_contact: Optional customer contact dict (for fallback)
+        
+    Returns:
+        Recurring price as float, or None if not found
+    """
+    # 1) Try payload.get("Recurring Price") first
+    recurring_price_raw = payload.get("Recurring Price")
+    if recurring_price_raw is not None:
+        try:
+            # Handle int/float/str; normalize to float
+            if isinstance(recurring_price_raw, (int, float)):
+                recurring_price = float(recurring_price_raw)
+            elif isinstance(recurring_price_raw, str):
+                # Remove $ and commas, then parse
+                cleaned = recurring_price_raw.replace("$", "").replace(",", "").strip()
+                if cleaned:
+                    recurring_price = float(cleaned)
+                else:
+                    recurring_price = None
+            else:
+                recurring_price = None
+            
+            # Treat 0 or empty as None
+            if recurring_price is not None and recurring_price > 0:
+                logger.info("RECURRING_PRICE_SOURCE source=payload value=%.2f", recurring_price)
+                return recurring_price
+            else:
+                logger.info("RECURRING_PRICE_SOURCE source=payload value=%s (treated as None)", recurring_price_raw)
+        except (ValueError, TypeError) as e:
+            logger.warning("RECURRING_PRICE_SOURCE source=payload value=%s parse_error=%s", recurring_price_raw, e)
+    
+    # 2) Fallback to customer contact custom fields
+    if customer_contact:
+        try:
+            from ..pricing import extract_contact_pricing_from_custom_fields
+            pricing_data = extract_contact_pricing_from_custom_fields(customer_contact)
+            recurring_price = pricing_data.get("recurring_price")  # Already a float or None
+            if recurring_price is not None and recurring_price > 0:
+                logger.info("RECURRING_PRICE_SOURCE source=contact_custom_fields value=%.2f", recurring_price)
+                return recurring_price
+        except Exception as e:
+            logger.warning("RECURRING_PRICE_SOURCE source=contact_custom_fields exception=%s", e)
+    
+    logger.info("RECURRING_PRICE_SOURCE source=none value=None")
+    return None
 
 
 def generate_offer_code() -> str:
@@ -324,10 +377,10 @@ async def dispatch(request: Request):
         logger.warning("OFFER_CODE_CREATED code=%s external_job_id=%s job_record_id=None (will resolve on acceptance) opportunity_id=%s",
                       offer_code, external_job_id_used, opportunity_id)
 
-    # Fetch customer contact to get bedrooms/bathrooms and recurring_price (numeric)
+    # Fetch customer contact to get bedrooms/bathrooms
     bedrooms = None
     bathrooms = None
-    recurring_price = None
+    customer_contact = None
     customer_contact_id = job_summary.get("contact_id")
     if customer_contact_id:
         try:
@@ -336,17 +389,12 @@ async def dispatch(request: Request):
                 bedrooms, bathrooms = extract_bedrooms_bathrooms_from_contact(customer_contact)
                 logger.info("BEDROOMS_BATHROOMS_RESOLVED customer_contact_id=%s bedrooms=%s bathrooms=%s",
                            customer_contact_id, bedrooms, bathrooms)
-                
-                # Extract recurring_price from contact custom fields (numeric value)
-                from ..pricing import extract_contact_pricing_from_custom_fields
-                pricing_data = extract_contact_pricing_from_custom_fields(customer_contact)
-                recurring_price = pricing_data.get("recurring_price")  # Already a float or None
-                if recurring_price is not None:
-                    logger.info("RECURRING_PRICE_FETCHED customer_contact_id=%s recurring_price=%.2f",
-                               customer_contact_id, recurring_price)
         except Exception as e:
             logger.warning("CUSTOMER_CONTACT_FETCH_FAILED customer_contact_id=%s exception=%s",
                           customer_contact_id, e)
+    
+    # Get recurring_price from payload first, then fallback to contact custom fields
+    recurring_price = get_recurring_price_numeric(payload, customer_contact)
     
     # Use numeric values directly (no parsing for contractor pay)
     first_clean_price = float(job_summary.get("estimated_price", 0))
@@ -355,11 +403,15 @@ async def dispatch(request: Request):
     contractor_pay_first_clean = math.floor(first_clean_price * 0.70) if first_clean_price > 0 else 0
     contractor_pay_recurring = math.floor(recurring_price * 0.70) if recurring_price is not None and recurring_price > 0 else None
     
+    if contractor_pay_recurring is not None:
+        logger.info("CONTRACTOR_PAY_RECURRING_COMPUTED recurring_price=%.2f contractor_pay_recurring=%d",
+                   recurring_price, contractor_pay_recurring)
+    else:
+        reason = "recurring_price_is_None_or_zero" if recurring_price is None else "contractor_pay_recurring_is_None"
+        logger.info("RECURRING_CONTRACTOR_PAY_SKIPPED_NUMERIC reason=%s", reason)
+    
     logger.info("CONTRACTOR_PAY_COMPUTED_NUMERIC first_clean_price=%.2f recurring_price=%s contractor_pay_first_clean=%d contractor_pay_recurring=%s",
                first_clean_price, recurring_price, contractor_pay_first_clean, contractor_pay_recurring)
-    
-    if recurring_price is None:
-        logger.info("RECURRING_CONTRACTOR_PAY_SKIPPED_NUMERIC reason=recurring_price_is_None")
     
     # Parse price_breakdown ONLY for presentation (frequency_label, discount_label for SMS formatting)
     from ..pricing import parse_simplified_price_breakdown
@@ -369,7 +421,7 @@ async def dispatch(request: Request):
     discount_label = parsed_breakdown.get("discount_label")
     
     # Enhance price breakdown with beds/baths and contractor pay (presentation only)
-    # Note: contractor_pay values are already computed from numeric values above
+    # Pass pre-computed contractor pay values to ensure they're used in formatting
     enhanced_price_breakdown, _, _ = (
         enhance_price_breakdown_with_beds_baths_and_contractor_pay(
             price_breakdown_raw,
@@ -379,9 +431,10 @@ async def dispatch(request: Request):
             recurring_price,
             frequency_label,
             discount_label,
+            contractor_pay_first_clean=contractor_pay_first_clean,
+            contractor_pay_recurring=contractor_pay_recurring,
         )
     )
-    # Use the pre-computed contractor pay values (ignore return values from helper)
     
     # Store contractor_pay_amount on Job custom object
     if job_record_id and contractor_pay_first_clean:
@@ -405,13 +458,14 @@ async def dispatch(request: Request):
             contractor_pay_recurring
         )
         if update_success:
-            logger.info("RECURRING_CONTRACTOR_PAY_STORED_ON_JOB code=%s job_record_id=%s recurring_contractor_pay_amount=%d",
+            logger.info("RECURRING_CONTRACTOR_PAY_STORED_ON_JOB code=%s job_record_id=%s value=%d",
                        offer_code, job_record_id, contractor_pay_recurring)
         else:
-            logger.warning("RECURRING_CONTRACTOR_PAY_STORE_FAILED code=%s job_record_id=%s recurring_contractor_pay_amount=%d",
+            logger.warning("RECURRING_CONTRACTOR_PAY_STORE_FAILED code=%s job_record_id=%s value=%d",
                           offer_code, job_record_id, contractor_pay_recurring)
-    elif recurring_price is None:
-        logger.info("RECURRING_CONTRACTOR_PAY_SKIPPED code=%s (no recurring_price)", offer_code)
+    else:
+        reason = "recurring_price_is_None_or_zero" if recurring_price is None else "contractor_pay_recurring_is_None"
+        logger.info("RECURRING_CONTRACTOR_PAY_SKIPPED_NUMERIC code=%s reason=%s", offer_code, reason)
     
     # Store contractor_pay_amount and enhanced_price_breakdown in offer metadata for later use
     if contractor_pay_first_clean:
@@ -439,8 +493,11 @@ async def dispatch(request: Request):
         )
         logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE opportunity_id=%s field_id=%s value=%d success=%s",
                    opportunity_id, OPP_RECURRING_CONTRACTOR_PAY_AMOUNT, contractor_pay_recurring, opp_recurring_update_success)
-    elif opportunity_id and recurring_price is None:
-        logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_SKIPPED opportunity_id=%s (no recurring_price)", opportunity_id)
+    elif opportunity_id and contractor_pay_recurring is None:
+        reason = "recurring_price_is_None_or_zero" if recurring_price is None else "contractor_pay_recurring_is_None"
+        logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_SKIPPED opportunity_id=%s reason=%s", opportunity_id, reason)
+    elif opportunity_id and not OPP_RECURRING_CONTRACTOR_PAY_AMOUNT:
+        logger.warning("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_SKIPPED opportunity_id=%s (OPP_RECURRING_CONTRACTOR_PAY_AMOUNT not configured)", opportunity_id)
     
     # Format friendly date/time
     friendly_datetime = format_datetime_friendly(
