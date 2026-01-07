@@ -130,8 +130,9 @@ export default function Home() {
             {/* Content Overlay */}
             <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
               <div className="max-w-xl space-y-3 md:space-y-6 w-full">
-                <p className="text-xs md:text-sm font-medium text-alloy-juniper uppercase tracking-wide bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full inline-block">
-                  Born in Bend. Built for trust.
+                <p className="text-xs md:text-sm font-medium text-white uppercase tracking-wide px-3 py-1.5 rounded-full inline-block relative">
+                  <span className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/25 to-black/20 rounded-full backdrop-blur-sm"></span>
+                  <span className="relative z-10">Born in Bend. Built for trust.</span>
                 </p>
                 <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
                   Trusted home services, without the runaround.

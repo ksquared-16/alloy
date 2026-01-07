@@ -37,7 +37,9 @@ from .settings import (
     JOBS_OPPORTUNITY_ID_FIELD_KEY,
     OPP_ASSIGNED_CONTRACTOR_FIELD_ID,
     OPP_CONTRACTOR_PAY_AMOUNT,
+    OPP_RECURRING_CONTRACTOR_PAY_AMOUNT,
     JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
+    JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
     CUSTOM_FIELD_IDS,
 )
 from .utils import _ghl_headers, normalize_phone
@@ -2702,14 +2704,22 @@ def enhance_price_breakdown_with_beds_baths_and_contractor_pay(
             updated_parts.append(part)
         elif "Recurring" in part and contractor_pay_recurring is not None:
             # Extract price from "Recurring (Weekly): $160.00 / visit (40% off)"
+            # Remove "/ visit" and any discount text like "(40% off)" or "(% off)"
+            part = re.sub(r'\s*/ visit\s*', '', part)  # Remove "/ visit"
+            part = re.sub(r'\s*\([^)]*% off[^)]*\)', '', part)  # Remove any "(xx% off)" text
+            part = re.sub(r'\s*\([^)]*off[^)]*\)', '', part, flags=re.IGNORECASE)  # Remove any "off" in parentheses
+            
+            # Extract price and add contractor pay
             match = re.search(r'\$([0-9,]+(?:\.[0-9]{2})?)', part)
             if match:
-                # Insert contractor pay before the discount
-                if "(" in part and ")" in part:
-                    # Insert before the last parenthesis group
-                    part = part.rsplit("(", 1)[0] + f" (${contractor_pay_recurring})" + " (" + part.rsplit("(", 1)[1]
-                else:
-                    part = part.replace(match.group(0), f"{match.group(0)} (${contractor_pay_recurring})")
+                # Replace with "Recurring (Weekly): $160.00 ($112)"
+                part = part.replace(match.group(0), f"{match.group(0)} (${contractor_pay_recurring})")
+            updated_parts.append(part)
+        elif "Recurring" in part:
+            # Even if no contractor pay, still remove "/ visit" and discount text
+            part = re.sub(r'\s*/ visit\s*', '', part)
+            part = re.sub(r'\s*\([^)]*% off[^)]*\)', '', part)
+            part = re.sub(r'\s*\([^)]*off[^)]*\)', '', part, flags=re.IGNORECASE)
             updated_parts.append(part)
         else:
             updated_parts.append(part)

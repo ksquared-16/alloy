@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse
 from ..settings import (
     JOB_STORE, GHL_STAGE_ID_ASSIGNED, OFFER_STORE, JOBS_OPPORTUNITY_ID_FIELD_KEY, 
     JOBS_OFFER_EXPIRES_AT_FIELD_KEY, OPP_ASSIGNED_CONTRACTOR_FIELD_ID, 
-    OPP_CONTRACTOR_PAY_AMOUNT, JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY, CUSTOM_FIELD_IDS
+    OPP_CONTRACTOR_PAY_AMOUNT, OPP_RECURRING_CONTRACTOR_PAY_AMOUNT,
+    JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY, JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY, CUSTOM_FIELD_IDS
 )
 from ..ghl_client import (
     build_job_summary,
@@ -373,9 +374,28 @@ async def dispatch(request: Request):
             logger.warning("CONTRACTOR_PAY_STORE_FAILED code=%s job_record_id=%s contractor_pay_amount=%d",
                           offer_code, job_record_id, contractor_pay_first_clean)
     
-    # Store contractor_pay_amount in offer metadata for later use
+    # Store recurring_contractor_pay_amount on Job custom object
+    if job_record_id and contractor_pay_recurring is not None:
+        update_success = update_job_custom_field_by_record_id(
+            job_record_id,
+            JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
+            contractor_pay_recurring
+        )
+        if update_success:
+            logger.info("RECURRING_CONTRACTOR_PAY_STORED_ON_JOB code=%s job_record_id=%s recurring_contractor_pay_amount=%d",
+                       offer_code, job_record_id, contractor_pay_recurring)
+        else:
+            logger.warning("RECURRING_CONTRACTOR_PAY_STORE_FAILED code=%s job_record_id=%s recurring_contractor_pay_amount=%d",
+                          offer_code, job_record_id, contractor_pay_recurring)
+    elif recurring_price is None:
+        logger.info("RECURRING_CONTRACTOR_PAY_SKIPPED code=%s (no recurring_price)", offer_code)
+    
+    # Store contractor_pay_amount and enhanced_price_breakdown in offer metadata for later use
     if contractor_pay_first_clean:
         offer_metadata["contractor_pay_amount"] = contractor_pay_first_clean
+    if contractor_pay_recurring is not None:
+        offer_metadata["recurring_contractor_pay_amount"] = contractor_pay_recurring
+        offer_metadata["enhanced_price_breakdown"] = enhanced_price_breakdown  # Store for winner SMS
     
     # Store contractor_pay_amount on Opportunity if available
     if opportunity_id and OPP_CONTRACTOR_PAY_AMOUNT and contractor_pay_first_clean:
@@ -386,6 +406,18 @@ async def dispatch(request: Request):
         )
         logger.info("OPP_CONTRACTOR_PAY_UPDATE opportunity_id=%s field_id=%s value=%d success=%s",
                    opportunity_id, OPP_CONTRACTOR_PAY_AMOUNT, contractor_pay_first_clean, opp_update_success)
+    
+    # Store recurring_contractor_pay_amount on Opportunity if available
+    if opportunity_id and OPP_RECURRING_CONTRACTOR_PAY_AMOUNT and contractor_pay_recurring is not None:
+        opp_recurring_update_success = update_opportunity_custom_field(
+            opportunity_id,
+            OPP_RECURRING_CONTRACTOR_PAY_AMOUNT,
+            str(contractor_pay_recurring)
+        )
+        logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE opportunity_id=%s field_id=%s value=%d success=%s",
+                   opportunity_id, OPP_RECURRING_CONTRACTOR_PAY_AMOUNT, contractor_pay_recurring, opp_recurring_update_success)
+    elif opportunity_id and recurring_price is None:
+        logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_SKIPPED opportunity_id=%s (no recurring_price)", opportunity_id)
     
     # Format friendly date/time
     friendly_datetime = format_datetime_friendly(
@@ -674,12 +706,17 @@ async def contractor_reply(request: Request):
     else:
         logger.error("OFFER_ACCEPT_ERROR reason=no_record_id code=%s", offer_code)
     
-    # Get contractor_pay_amount from offer metadata or job record
+    # Get contractor_pay_amount, recurring_contractor_pay_amount, and enhanced_price_breakdown from offer metadata or job record
     contractor_pay_amount = None
+    recurring_contractor_pay_amount = None
+    enhanced_price_breakdown_for_winner = None
     offer = OFFER_STORE.get(offer_code)
-    if offer and offer.get("contractor_pay_amount"):
+    if offer:
         contractor_pay_amount = offer.get("contractor_pay_amount")
-    else:
+        recurring_contractor_pay_amount = offer.get("recurring_contractor_pay_amount")
+        enhanced_price_breakdown_for_winner = offer.get("enhanced_price_breakdown")
+    
+    if not contractor_pay_amount:
         # Try to get from job record properties
         contractor_pay_amount = properties.get(JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY) or properties.get("contractor_pay_amount")
         if contractor_pay_amount:
@@ -687,6 +724,15 @@ async def contractor_reply(request: Request):
                 contractor_pay_amount = int(contractor_pay_amount)
             except (ValueError, TypeError):
                 contractor_pay_amount = None
+    
+    if recurring_contractor_pay_amount is None:
+        # Try to get from job record properties
+        recurring_contractor_pay_amount = properties.get(JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY) or properties.get("recurring_contractor_pay_amount")
+        if recurring_contractor_pay_amount:
+            try:
+                recurring_contractor_pay_amount = int(recurring_contractor_pay_amount)
+            except (ValueError, TypeError):
+                recurring_contractor_pay_amount = None
     
     # Store contractor_pay_amount on Job if not already stored
     if job_record_id and contractor_pay_amount:
@@ -697,6 +743,16 @@ async def contractor_reply(request: Request):
         )
         logger.info("CONTRACTOR_PAY_STORED_ON_JOB_ACCEPTANCE code=%s job_record_id=%s contractor_pay_amount=%d success=%s",
                    offer_code, job_record_id, contractor_pay_amount, update_success)
+    
+    # Store recurring_contractor_pay_amount on Job if not already stored
+    if job_record_id and recurring_contractor_pay_amount is not None:
+        update_success = update_job_custom_field_by_record_id(
+            job_record_id,
+            JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY,
+            recurring_contractor_pay_amount
+        )
+        logger.info("RECURRING_CONTRACTOR_PAY_STORED_ON_JOB_ACCEPTANCE code=%s job_record_id=%s recurring_contractor_pay_amount=%d success=%s",
+                   offer_code, job_record_id, recurring_contractor_pay_amount, update_success)
     
     # Update Opportunity custom field with assigned contractor name (for GHL workflow merge fields)
     if opportunity_id and OPP_ASSIGNED_CONTRACTOR_FIELD_ID and contractor_name:
@@ -727,6 +783,22 @@ async def contractor_reply(request: Request):
                       opportunity_id)
     elif not opportunity_id:
         logger.info("OPP_CONTRACTOR_PAY_UPDATE_ACCEPTANCE skipped: opportunity_id missing from job record")
+    
+    # Update Opportunity custom field with recurring contractor pay amount
+    if opportunity_id and OPP_RECURRING_CONTRACTOR_PAY_AMOUNT and recurring_contractor_pay_amount is not None:
+        opp_recurring_pay_update_success = update_opportunity_custom_field(
+            opportunity_id,
+            OPP_RECURRING_CONTRACTOR_PAY_AMOUNT,
+            str(recurring_contractor_pay_amount)
+        )
+        logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_ACCEPTANCE opportunity_id=%s field_id=%s value=%d success=%s",
+                   opportunity_id, OPP_RECURRING_CONTRACTOR_PAY_AMOUNT, recurring_contractor_pay_amount, opp_recurring_pay_update_success)
+    elif opportunity_id and recurring_contractor_pay_amount is None:
+        logger.info("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_ACCEPTANCE skipped: opportunity_id=%s (no recurring_contractor_pay_amount)",
+                   opportunity_id)
+    elif opportunity_id and not OPP_RECURRING_CONTRACTOR_PAY_AMOUNT:
+        logger.warning("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_ACCEPTANCE skipped: opportunity_id=%s but OPP_RECURRING_CONTRACTOR_PAY_AMOUNT not configured",
+                      opportunity_id)
 
     # Update opportunity stage if opportunity_id is present
     stage_updated = False
@@ -763,7 +835,14 @@ async def contractor_reply(request: Request):
     full_address = job.get("full_address", "")
     access_method = job.get("access_method", "Not specified")
     access_notes = job.get("access_notes", "")
-    price_breakdown = job.get("price_breakdown", "")
+    
+    # Use enhanced_price_breakdown from offer metadata if available (same as offer SMS)
+    # Otherwise fall back to job price_breakdown
+    price_breakdown = enhanced_price_breakdown_for_winner or job.get("price_breakdown", "")
+    if enhanced_price_breakdown_for_winner:
+        logger.info("OFFER_ACCEPT_WINNER_SMS_PRICE_BREAKDOWN using enhanced_price_breakdown from offer metadata")
+    else:
+        logger.info("OFFER_ACCEPT_WINNER_SMS_PRICE_BREAKDOWN using job price_breakdown (enhanced not available)")
     
     # Fetch customer phone number from customer contact
     customer_phone = "Not available"
