@@ -183,7 +183,7 @@ export default function CleaningPage() {
       <style dangerouslySetInnerHTML={{__html: `
         .cleaningHeroImg {
           object-fit: cover;
-          object-position: 50% 95%;
+          object-position: 30% 50%;
         }
         @media (min-width: 640px) {
           .cleaningHeroImg {
