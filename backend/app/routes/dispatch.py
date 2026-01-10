@@ -472,7 +472,9 @@ async def dispatch(request: Request):
         offer_metadata["contractor_pay_amount"] = contractor_pay_first_clean
     if contractor_pay_recurring is not None:
         offer_metadata["recurring_contractor_pay_amount"] = contractor_pay_recurring
-        offer_metadata["enhanced_price_breakdown"] = enhanced_price_breakdown  # Store for winner SMS
+    # Always store enhanced_price_breakdown for winner SMS (works for both recurring and one-time)
+    if enhanced_price_breakdown:
+        offer_metadata["enhanced_price_breakdown"] = enhanced_price_breakdown
     
     # Store contractor_pay_amount on Opportunity if available
     if opportunity_id and OPP_CONTRACTOR_PAY_AMOUNT and contractor_pay_first_clean:
@@ -510,6 +512,12 @@ async def dispatch(request: Request):
     zip_line = f"ZIP: {postal_code}\n" if postal_code else ""
     price_breakdown_line = f"Price breakdown:\n{enhanced_price_breakdown}\n" if enhanced_price_breakdown else ""
     
+    # Determine job type and add-ons presence for logging
+    job_type = "recurring" if (recurring_price is not None and recurring_price > 0) else "one_time"
+    has_recurring = recurring_price is not None and recurring_price > 0
+    has_addons = "Add-ons:" in (enhanced_price_breakdown or "") or "add-ons:" in (enhanced_price_breakdown or "").lower()
+    has_price_breakdown = bool(enhanced_price_breakdown)
+    
     msg = (
         f"New cleaning job available\n"
         f"Customer: {job_summary['customer_name']}\n"
@@ -519,6 +527,10 @@ async def dispatch(request: Request):
         f"{price_breakdown_line}"
         f"\nReply YES {offer_code} to accept."
     )
+
+    # Log before sending offer SMS
+    logger.info("SMS_OFFER_RENDER job_type=%s has_recurring=%s has_addons=%s has_price_breakdown=%s",
+               job_type, has_recurring, has_addons, has_price_breakdown)
 
     notified_ids: List[str] = []
     for c in contractors:
@@ -923,6 +935,15 @@ async def contractor_reply(request: Request):
         logger.info("OFFER_ACCEPT_WINNER_SMS_PRICE_BREAKDOWN using enhanced_price_breakdown from offer metadata")
     else:
         logger.info("OFFER_ACCEPT_WINNER_SMS_PRICE_BREAKDOWN using job price_breakdown (enhanced not available)")
+    
+    # Determine job type for logging (check if recurring from offer metadata or job)
+    has_recurring_pay = recurring_contractor_pay_amount is not None
+    job_type_winner = "recurring" if has_recurring_pay else "one_time"
+    has_price_breakdown_winner = bool(price_breakdown)
+    
+    # Log before sending winner SMS
+    logger.info("SMS_WINNER_RENDER job_type=%s has_price_breakdown=%s when_value=%s",
+               job_type_winner, has_price_breakdown_winner, start_time_display)
     
     # Fetch customer phone number from customer contact
     customer_phone = "Not available"
