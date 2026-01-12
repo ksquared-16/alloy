@@ -1,6 +1,12 @@
-# GHL to Supabase Contact Sync Worker
+# GHL to Supabase Sync Workers
 
-This sync worker pulls contacts from GoHighLevel (GHL) and upserts them into Supabase. It's designed to be idempotent and safe to run multiple times.
+These sync workers pull data from GoHighLevel (GHL) and upsert them into Supabase. They are designed to be idempotent and safe to run multiple times.
+
+## Available Sync Scripts
+
+1. **sync_contacts.py** - Syncs contacts from GHL to Supabase
+2. **sync_opportunities.py** - Syncs opportunities from GHL to Supabase
+3. **sync_jobs.py** - Syncs jobs (custom object records) from GHL to Supabase
 
 ## ⚠️ Security Warning
 
@@ -67,6 +73,22 @@ Ensure your Supabase database has the following tables:
   - `metadata` (jsonb) - stores address, tags, and other extra fields
   - `created_at`, `updated_at` (timestamptz)
 
+- **opportunities** table with columns:
+  - `id` (UUID, primary key)
+  - `title`, `status`, `value`
+  - `primary_contact_id` (UUID, references contacts.id) - resolved via external_mappings
+  - `pipeline_id`, `pipeline_stage_id` (UUID, nullable) - left NULL, GHL IDs stored in metadata
+  - `metadata` (jsonb) - stores GHL pipeline/stage IDs and other extra fields
+  - `created_at`, `updated_at` (timestamptz)
+
+- **jobs** table with columns:
+  - `id` (UUID, primary key)
+  - `title`, `description`
+  - `opportunity_id` (UUID, references opportunities.id) - resolved via external_mappings
+  - `job_status_id` (UUID, nullable) - left NULL, GHL status stored in metadata
+  - `metadata` (jsonb) - stores GHL status and other extra fields
+  - `created_at`, `updated_at` (timestamptz)
+
 - **external_mappings** table with columns:
   - `id` (UUID, primary key)
   - `source` (text) - e.g., 'ghl'
@@ -93,22 +115,40 @@ This index allows PostgREST to use `on_conflict` for idempotent upserts.
 
 ## Running the Sync
 
+### Run Order
+
+**Important:** Run the sync scripts in this order to ensure relationships are properly linked:
+
+1. **sync_contacts** - Must run first (opportunities reference contacts)
+2. **sync_opportunities** - Must run second (jobs reference opportunities)
+3. **sync_jobs** - Run last (depends on opportunities)
+
 ### Basic Usage
 
 From the `sync/` directory:
 
 ```bash
+# Step 1: Sync contacts
 python -m src.sync_contacts
+
+# Step 2: Sync opportunities (after contacts)
+python -m src.sync_opportunities
+
+# Step 3: Sync jobs (after opportunities)
+python -m src.sync_jobs
 ```
 
 Or from the repo root:
 
 ```bash
 python -m sync.src.sync_contacts
+python -m sync.src.sync_opportunities
+python -m sync.src.sync_jobs
 ```
 
-### What It Does
+### What Each Script Does
 
+#### sync_contacts.py
 1. **Fetches all contacts** from GHL for the specified location (with pagination)
 2. **Normalizes contact data** (maps GHL field names to our schema)
 3. **Upserts into Supabase**:
@@ -117,12 +157,64 @@ python -m sync.src.sync_contacts
    - Updates existing contact if mapping exists
    - Creates/updates `external_mappings` record
 
+#### sync_opportunities.py
+1. **Fetches all opportunities** from GHL for the specified location (with pagination)
+   - Uses POST `/opportunities/search` endpoint with `page` and `pageLimit` pagination
+2. **Resolves relationships**:
+   - Maps `primary_contact_id` via `external_mappings` (requires contacts to be synced first)
+3. **Upserts into Supabase**:
+   - Stores GHL pipeline/stage IDs in `metadata` (leaves `pipeline_id`, `pipeline_stage_id` NULL)
+   - Creates/updates `external_mappings` record with `entity_type='opportunity'`
+
+#### sync_jobs.py
+1. **Fetches all jobs** (custom object records) from GHL for the specified location (with pagination)
+2. **Resolves relationships**:
+   - Maps `opportunity_id` via `external_mappings` (requires opportunities to be synced first)
+3. **Upserts into Supabase**:
+   - Stores GHL status in `metadata` (leaves `job_status_id` NULL)
+   - Creates/updates `external_mappings` record
+
 ### Idempotency
 
-The sync is **idempotent** - you can run it multiple times safely:
-- Existing contacts will be updated (not duplicated)
-- New contacts will be created
-- External mappings are maintained
+All sync scripts are **idempotent** - you can run them multiple times safely:
+- **First run**: Creates new records and external mappings
+- **Second run**: Updates existing records (shows "Updated" counts, not "Created")
+- **Dedupe fallback**: Contacts sync automatically matches existing contacts by email/phone to avoid 409 errors
+- External mappings are maintained for all entity types
+
+### Expected Behavior
+
+#### First Run
+```
+Total contacts fetched from GHL: 523
+Successfully upserted: 523
+  - Created: 523
+  - Updated: 0
+```
+
+#### Second Run (Idempotent)
+```
+Total contacts fetched from GHL: 523
+Successfully upserted: 523
+  - Created: 0
+  - Updated: 523
+```
+
+#### Opportunities Endpoint Probing
+The opportunities sync automatically probes multiple endpoints to find the working one:
+```
+Probing opportunities endpoint: GET /opportunities (no trailing slash)
+Probing opportunities endpoint: GET /opportunities/ (trailing slash)
+Probing opportunities endpoint: POST /opportunities/search with page
+✓ Successfully probed: POST /opportunities/search with page
+Using opportunities endpoint strategy: POST /opportunities/search with page
+```
+
+#### Jobs Logging
+If no jobs are found, you'll see:
+```
+No job records found in this custom object for this location (possible: none exist yet OR object name differs)
+```
 
 ## Output
 

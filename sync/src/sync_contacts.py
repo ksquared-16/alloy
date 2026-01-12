@@ -117,7 +117,8 @@ def main():
                 contact_payload = build_contact_payload(normalized)
                 
                 # Upsert contact (PATCH if exists, POST if new)
-                contact_result = upsert_contact(contact_payload, existing_internal_id)
+                # Pass ghl_contact for dedupe fallback context
+                contact_result = upsert_contact(contact_payload, existing_internal_id, ghl_contact)
                 contact_id = contact_result["id"]
                 
                 # Build and upsert external mapping
