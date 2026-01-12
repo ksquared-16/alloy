@@ -595,6 +595,7 @@ def resolve_or_create_contact_canonical(
     estimated_price: Optional[str] = None,
     price_breakdown: Optional[str] = None,
     recurring_price: Optional[str] = None,
+    vertical_key: str = "cleaning",
 ) -> tuple[Optional[str], str]:
     """
     Canonical contact resolution: email-first, then phone, then create.
@@ -665,10 +666,29 @@ def resolve_or_create_contact_canonical(
             recurring_price=recurring_price,
         )
         if updated_id:
+            # Apply tags based on vertical (idempotent merge)
+            # Fetch current tags from the contact we just updated
+            try:
+                resp = requests.get(
+                    f"{CONTACTS_URL}{updated_id}",
+                    headers=_ghl_headers(),
+                    params={"locationId": GHL_LOCATION_ID},
+                    timeout=10
+                )
+                existing_tags = None
+                if resp.ok:
+                    data = resp.json()
+                    contact = data.get("contact", {})
+                    existing_tags = contact.get("tags", [])
+            except Exception:
+                existing_tags = None
+            apply_ghl_tags(updated_id, vertical_key, existing_tags)
+            
             logger.info(
-                "resolve_or_create_contact_canonical: updated contact_id=%s resolution_path=%s email=%s phone=%s",
+                "resolve_or_create_contact_canonical: updated contact_id=%s resolution_path=%s vertical_key=%s email=%s phone=%s",
                 updated_id,
                 resolution_path,
+                vertical_key,
                 email_normalized[:10] + "***" if email_normalized else "None",
                 phone_normalized[:4] + "***" if phone_normalized else "None"
             )
@@ -677,6 +697,10 @@ def resolve_or_create_contact_canonical(
     # Step 4: Create new contact if not found
     # Build payload for create attempt
     try:
+        # Get tags for vertical
+        from .vertical_tags import get_tags_for_vertical
+        vertical_tags = get_tags_for_vertical(vertical_key)
+        
         # Build payload for create attempt
         payload: Dict[str, Any] = {
             "locationId": GHL_LOCATION_ID,
@@ -685,7 +709,7 @@ def resolve_or_create_contact_canonical(
             "email": email.strip(),
             "phone": phone_normalized,
             "source": "Website Lead - Cleaning Quote",
-            "tags": ["lead"],
+            "tags": vertical_tags,
         }
         if postal_code and postal_code.strip():
             payload["postalCode"] = postal_code.strip()
@@ -709,9 +733,11 @@ def resolve_or_create_contact_canonical(
             contact_id = data.get("contact", {}).get("id")
             resolution_path = "created"
             logger.info(
-                "resolve_or_create_contact_canonical: created contact_id=%s resolution_path=%s email=%s phone=%s",
+                "resolve_or_create_contact_canonical: created contact_id=%s resolution_path=%s vertical_key=%s tags=%s email=%s phone=%s",
                 contact_id,
                 resolution_path,
+                vertical_key,
+                vertical_tags,
                 email_normalized[:10] + "***" if email_normalized else "None",
                 phone_normalized[:4] + "***" if phone_normalized else "None"
             )
@@ -747,11 +773,30 @@ def resolve_or_create_contact_canonical(
                     )
                     
                     if updated_id:
+                        # Apply tags based on vertical (idempotent merge)
+                        # Fetch current tags from the contact we just updated
+                        try:
+                            resp = requests.get(
+                                f"{CONTACTS_URL}{updated_id}",
+                                headers=_ghl_headers(),
+                                params={"locationId": GHL_LOCATION_ID},
+                                timeout=10
+                            )
+                            existing_tags = None
+                            if resp.ok:
+                                data = resp.json()
+                                contact = data.get("contact", {})
+                                existing_tags = contact.get("tags", [])
+                        except Exception:
+                            existing_tags = None
+                        apply_ghl_tags(updated_id, vertical_key, existing_tags)
+                        
                         resolution_path = "duplicate_recovered"
                         logger.info(
-                            "resolve_or_create_contact_canonical: duplicate recovered contact_id=%s resolution_path=%s email=%s phone=%s",
+                            "resolve_or_create_contact_canonical: duplicate recovered contact_id=%s resolution_path=%s vertical_key=%s email=%s phone=%s",
                             updated_id,
                             resolution_path,
+                            vertical_key,
                             email_normalized[:10] + "***" if email_normalized else "None",
                             phone_normalized[:4] + "***" if phone_normalized else "None"
                         )
@@ -784,6 +829,7 @@ def create_contact_in_ghl(
     estimated_price: Optional[str] = None,
     price_breakdown: Optional[str] = None,
     recurring_price: Optional[str] = None,
+    vertical_key: str = "cleaning",
 ) -> Optional[str]:
     """
     Create a new contact in GHL.
@@ -798,6 +844,7 @@ def create_contact_in_ghl(
         estimated_price: Optional estimated price value
         price_breakdown: Optional price breakdown text
         recurring_price: Optional recurring price value
+        vertical_key: Vertical identifier (defaults to "cleaning" for backward compatibility)
 
     Returns:
         GHL contact ID if successful, None otherwise
@@ -806,6 +853,10 @@ def create_contact_in_ghl(
         logger.error("create_contact_in_ghl: GHL_LOCATION_ID not set")
         return None
 
+    # Get tags for vertical
+    from .vertical_tags import get_tags_for_vertical
+    vertical_tags = get_tags_for_vertical(vertical_key)
+
     payload: Dict[str, Any] = {
         "locationId": GHL_LOCATION_ID,
         "firstName": first_name.strip(),
@@ -813,7 +864,7 @@ def create_contact_in_ghl(
         "email": email.strip(),
         "phone": normalize_phone(phone),
         "source": "Website Lead - Cleaning Quote",
-        "tags": ["lead"],  # Add lead tag on creation
+        "tags": vertical_tags,
     }
     
     if postal_code and postal_code.strip():
@@ -1196,9 +1247,96 @@ def add_tag_to_contact(contact_id: str, tag: str) -> bool:
     return ensure_contact_has_tag(contact_id, tag)
 
 
+def apply_ghl_tags(contact_id: str, vertical_key: str, existing_tags: Optional[List[str]] = None) -> bool:
+    """
+    Apply tags to a GHL contact based on vertical key, merging with existing tags idempotently.
+    
+    Args:
+        contact_id: GHL contact ID
+        vertical_key: Vertical identifier (e.g., "cleaning", "gutter")
+        existing_tags: Optional list of existing tags (if None, will fetch from GHL)
+    
+    Returns:
+        True if tags were applied successfully, False otherwise
+    """
+    from .vertical_tags import get_tags_for_vertical
+    
+    if not contact_id or not vertical_key:
+        logger.warning("apply_ghl_tags: invalid contact_id or vertical_key")
+        return False
+    
+    # Get tags for this vertical
+    required_tags = get_tags_for_vertical(vertical_key)
+    
+    # Fetch existing tags if not provided
+    if existing_tags is None:
+        try:
+            resp = requests.get(
+                f"{CONTACTS_URL}{contact_id}",
+                headers=_ghl_headers(),
+                params={"locationId": GHL_LOCATION_ID},
+                timeout=10
+            )
+            
+            if not resp.ok:
+                logger.error("apply_ghl_tags: failed to fetch contact_id=%s (%s): %s", 
+                            contact_id, resp.status_code, resp.text)
+                return False
+            
+            data = resp.json()
+            contact = data.get("contact", {})
+            existing_tags = contact.get("tags", [])
+        except Exception as e:
+            logger.error("apply_ghl_tags: exception fetching contact_id=%s: %s", contact_id, e, exc_info=True)
+            return False
+    
+    # Merge tags: start with existing, add required tags that aren't already present
+    current_tags = list(existing_tags) if existing_tags else []
+    tags_to_add = []
+    
+    for tag in required_tags:
+        if tag not in current_tags:
+            current_tags.append(tag)
+            tags_to_add.append(tag)
+    
+    # If no new tags to add, we're done
+    if not tags_to_add:
+        logger.info("apply_ghl_tags: contact_id=%s vertical_key=%s all_tags_already_present tags=%s", 
+                   contact_id, vertical_key, required_tags)
+        return True
+    
+    # Update contact with merged tags
+    update_payload = {
+        "tags": current_tags
+    }
+    # Remove any disallowed fields
+    update_payload = strip_update_disallowed_fields(update_payload)
+    
+    try:
+        update_resp = requests.put(
+            f"{CONTACTS_URL}{contact_id}",
+            headers=_ghl_headers(),
+            json=update_payload,
+            timeout=10
+        )
+        
+        if update_resp.ok:
+            logger.info("apply_ghl_tags: contact_id=%s vertical_key=%s tags_applied=%s all_tags=%s", 
+                       contact_id, vertical_key, tags_to_add, current_tags)
+            return True
+        else:
+            logger.error("apply_ghl_tags: failed to update tags for contact_id=%s (%s): %s", 
+                        contact_id, update_resp.status_code, update_resp.text)
+            return False
+            
+    except Exception as e:
+        logger.error("apply_ghl_tags: exception for contact_id=%s: %s", contact_id, e, exc_info=True)
+        return False
+
 def ensure_contact_has_tag(contact_id: str, tag: str) -> bool:
     """
     Ensure a contact has a specific tag, adding it if missing.
+    DEPRECATED: Use apply_ghl_tags() instead for multi-vertical support.
     
     Args:
         contact_id: GHL contact ID

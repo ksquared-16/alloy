@@ -4,6 +4,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import GhlScript from "@/components/GhlScript";
+import StagingBanner from "@/components/StagingBanner";
+import LayoutWrapper from "@/components/LayoutWrapper";
 
 const poppins = Poppins({
   weight: ["300", "400", "500", "600", "700"],
@@ -29,9 +31,12 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${poppins.variable} font-sans antialiased`}>
         <GhlScript />
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
+        <StagingBanner />
+        <LayoutWrapper>
+          <Navbar />
+          <main>{children}</main>
+          <Footer />
+        </LayoutWrapper>
       </body>
     </html>
   );
