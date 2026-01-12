@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   findContactByEmailOrPhone,
   upsertContact,
-  findOrCreateVertical,
-  ensureContactVertical,
+  findVerticalIdByKey,
   createOpportunity,
 } from "@/lib/supabase";
 
@@ -12,9 +11,8 @@ import {
  * 
  * Creates a gutter lead in Supabase:
  * 1. Upserts contact (match by email, fallback phone)
- * 2. Ensures "gutters" vertical exists
- * 3. Creates contact_verticals association
- * 4. Creates opportunity representing the lead
+ * 2. Looks up existing vertical_id for "gutters" (if any)
+ * 3. Creates opportunity representing the lead
  */
 export async function POST(request: NextRequest) {
   try {
@@ -70,23 +68,20 @@ export async function POST(request: NextRequest) {
 
     const contactId = contact.id;
 
-    // Step 2: Ensure "gutters" vertical exists
-    const vertical = await findOrCreateVertical("gutters", "Gutter Cleaning");
-    const verticalId = vertical.id;
+    // Step 2: Look up existing vertical_id for "gutters" (if any opportunities exist)
+    // If none found, vertical_id will be null (which is fine - vertical stored in metadata)
+    const verticalId = await findVerticalIdByKey("gutters");
 
-    // Step 3: Ensure contact_verticals association exists
-    await ensureContactVertical(contactId, verticalId);
-
-    // Step 4: Create opportunity
+    // Step 3: Create opportunity
     const appEnv = process.env.NEXT_PUBLIC_APP_ENV || "production";
     const opportunityMetadata: Record<string, any> = {
       vertical: "gutters",
+      early_access: true,
+      app_env: appEnv,
       intake: {
-        address_line1,
-        city,
+        address: address_line1,
         notes,
       },
-      app_env: appEnv,
       timestamp: new Date().toISOString(),
     };
 
@@ -99,7 +94,7 @@ export async function POST(request: NextRequest) {
     const opportunity = await createOpportunity({
       vertical_id: verticalId,
       primary_contact_id: contactId,
-      name: `${first_name} ${last_name} — Gutters Early Signup`,
+      name: `${first_name} ${last_name} — Gutters Early Access`,
       status: "open",
       source: "website",
       metadata: opportunityMetadata,
@@ -107,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Log for debugging (server-side only)
     console.log(
-      `[GUTTERS_LEAD] contact_id=${contactId} opportunity_id=${opportunity.id} vertical_id=${verticalId} app_env=${appEnv}`
+      `[GUTTERS_LEAD] contact_id=${contactId} opportunity_id=${opportunity.id} vertical_id=${verticalId || "null"} app_env=${appEnv}`
     );
 
     return NextResponse.json({

@@ -168,88 +168,41 @@ export async function upsertContact(
 }
 
 /**
- * Find or create vertical by key
+ * Find existing vertical_id for a vertical key by querying opportunities table.
+ * Looks for opportunities with matching vertical in metadata.
+ * Returns null if no existing opportunities found (vertical_id will be null in opportunity).
  */
-export async function findOrCreateVertical(
-  key: string,
-  name: string
-): Promise<{ id: string }> {
-  const url = `${getPostgrestUrl()}/verticals`;
+export async function findVerticalIdByKey(key: string): Promise<string | null> {
+  const url = `${getPostgrestUrl()}/opportunities`;
   const headers = getPostgrestHeaders();
 
-  // Try to find existing vertical
+  // Try to find an existing opportunity with this vertical in metadata that has a vertical_id
+  // Query for opportunities where metadata contains the vertical key and vertical_id is not null
   const params = new URLSearchParams({
-    select: "id",
-    key: `eq.${key}`,
+    select: "vertical_id",
+    metadata: `cs.{"vertical":"${key}"}`,
+    vertical_id: "not.is.null",
     limit: "1",
   });
 
-  const findResponse = await fetch(`${url}?${params.toString()}`, {
-    headers,
-    method: "GET",
-  });
+  try {
+    const response = await fetch(`${url}?${params.toString()}`, {
+      headers,
+      method: "GET",
+    });
 
-  if (findResponse.ok) {
-    const data = await findResponse.json();
-    if (data && data.length > 0) {
-      return data[0];
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0 && data[0].vertical_id) {
+        return data[0].vertical_id;
+      }
     }
+  } catch (e) {
+    // If query fails, return null (will use null for vertical_id)
+    console.debug(`Could not find vertical_id for key "${key}", will use null`);
   }
 
-  // Create if not found
-  const createResponse = await fetch(url, {
-    headers,
-    method: "POST",
-    body: JSON.stringify({ key, name }),
-  });
-
-  if (!createResponse.ok) {
-    const text = await createResponse.text();
-    throw new Error(`Failed to create vertical: ${createResponse.status} ${text}`);
-  }
-
-  const data = await createResponse.json();
-  if (!data || data.length === 0) {
-    throw new Error("Create returned no data");
-  }
-
-  return data[0];
-}
-
-/**
- * Ensure contact_verticals association exists
- */
-export async function ensureContactVertical(
-  contactId: string,
-  verticalId: string
-): Promise<void> {
-  const url = `${getPostgrestUrl()}/contact_verticals`;
-  const headers = {
-    ...getPostgrestHeaders(),
-    Prefer: "resolution=merge-duplicates,return=representation",
-  };
-
-  const params = new URLSearchParams({
-    on_conflict: "contact_id,vertical_id",
-  });
-
-  const response = await fetch(`${url}?${params.toString()}`, {
-    headers,
-    method: "POST",
-    body: JSON.stringify({
-      contact_id: contactId,
-      vertical_id: verticalId,
-    }),
-  });
-
-  if (!response.ok) {
-    // If conflict, that's fine (association already exists)
-    if (response.status === 409) {
-      return;
-    }
-    const text = await response.text();
-    throw new Error(`Failed to create contact_vertical: ${response.status} ${text}`);
-  }
+  return null;
 }
 
 /**

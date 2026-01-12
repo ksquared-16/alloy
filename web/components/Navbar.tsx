@@ -4,14 +4,19 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import PrimaryButton from "@/components/PrimaryButton";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const pathname = usePathname();
 
-  const navLinks = [
+  const servicesLinks = [
     { href: "/services/cleaning", label: "Home Cleaning" },
     { href: "/gutters", label: "Gutters" },
+  ];
+
+  const navLinks = [
     { href: "/join", label: "Join Our Team" },
     { href: "/about", label: "About" },
   ];
@@ -35,6 +40,52 @@ export default function Navbar() {
 
           {/* Navigation Links - Right Aligned */}
           <div className="flex items-center space-x-8">
+            {/* Services Dropdown */}
+            <div
+              className="relative"
+              onMouseEnter={() => setServicesDropdownOpen(true)}
+              onMouseLeave={() => setServicesDropdownOpen(false)}
+            >
+              <button
+                className={`
+                  text-alloy-midnight hover:text-alloy-juniper 
+                  transition-colors font-medium pb-1 relative flex items-center gap-1
+                  ${pathname?.startsWith("/services/") || pathname === "/gutters"
+                    ? "border-b-2 border-alloy-juniper"
+                    : ""}
+                `}
+              >
+                Services
+                <svg
+                  className={`w-4 h-4 transition-transform ${servicesDropdownOpen ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {servicesDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-alloy-stone/30 py-2 z-50">
+                  {servicesLinks.map((link) => {
+                    const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={`
+                          block px-4 py-2 text-sm text-alloy-midnight hover:bg-alloy-stone/50 transition-colors
+                          ${isActive ? "bg-alloy-juniper/10 text-alloy-juniper font-medium" : ""}
+                        `}
+                      >
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {navLinks.map((link) => {
               const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
               return (
@@ -52,6 +103,12 @@ export default function Navbar() {
               );
             })}
 
+            {/* Get a Quote CTA */}
+            <Link href="/quote">
+              <PrimaryButton className="!px-4 !py-2 !text-sm">
+                Get a Quote
+              </PrimaryButton>
+            </Link>
           </div>
         </div>
 
@@ -97,6 +154,26 @@ export default function Navbar() {
         {mobileMenuOpen && (
           <div className="md:hidden py-6 border-t border-alloy-midnight/10">
             <div className="flex flex-col space-y-5">
+              <div className="pb-2 border-b border-alloy-midnight/10">
+                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/60 mb-2">Services</p>
+                {servicesLinks.map((link) => {
+                  const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`
+                        block text-alloy-midnight hover:text-alloy-juniper 
+                        transition-colors font-medium py-2 pl-4 relative
+                        ${isActive ? "text-alloy-juniper font-semibold" : ""}
+                      `}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {link.label}
+                    </Link>
+                  );
+                })}
+              </div>
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
                 return (
@@ -114,6 +191,11 @@ export default function Navbar() {
                   </Link>
                 );
               })}
+              <div className="pt-2">
+                <Link href="/quote" onClick={() => setMobileMenuOpen(false)}>
+                  <PrimaryButton className="w-full">Get a Quote</PrimaryButton>
+                </Link>
+              </div>
             </div>
           </div>
         )}

@@ -128,31 +128,30 @@ export default function GutterLeadForm() {
     }
   };
 
+  // Match cleaning form styling exactly
+  const labelClass = "block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70";
+  const inputBase = "w-full rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2";
+  const inputClass = inputBase + " border border-alloy-stone/80 bg-white focus:ring-alloy-blue focus:border-alloy-blue";
+  const errorInputClass = inputBase + " border-red-500 bg-white focus:ring-red-500 focus:border-red-500";
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30">
-      <h2 className="text-2xl font-bold text-alloy-pine mb-6">
-        Get Early Access Discount
-      </h2>
-
       {submitStatus.type === "success" && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm">
           {submitStatus.message}
         </div>
       )}
 
       {submitStatus.type === "error" && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
           {submitStatus.message}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label
-              htmlFor="first_name"
-              className="block text-sm font-medium text-alloy-midnight mb-2"
-            >
+            <label htmlFor="first_name" className={labelClass}>
               First Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -162,23 +161,16 @@ export default function GutterLeadForm() {
               onChange={(e) =>
                 setForm({ ...form, first_name: e.target.value })
               }
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper ${
-                errors.first_name
-                  ? "border-red-500"
-                  : "border-alloy-stone/50"
-              }`}
+              className={errors.first_name ? errorInputClass : inputClass}
               required
             />
             {errors.first_name && (
-              <p className="mt-1 text-sm text-red-600">{errors.first_name}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.first_name}</p>
             )}
           </div>
 
           <div>
-            <label
-              htmlFor="last_name"
-              className="block text-sm font-medium text-alloy-midnight mb-2"
-            >
+            <label htmlFor="last_name" className={labelClass}>
               Last Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -188,24 +180,19 @@ export default function GutterLeadForm() {
               onChange={(e) =>
                 setForm({ ...form, last_name: e.target.value })
               }
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper ${
-                errors.last_name ? "border-red-500" : "border-alloy-stone/50"
-              }`}
+              className={errors.last_name ? errorInputClass : inputClass}
               required
             />
             {errors.last_name && (
-              <p className="mt-1 text-sm text-red-600">{errors.last_name}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.last_name}</p>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label
-              htmlFor="phone"
-              className="block text-sm font-medium text-alloy-midnight mb-2"
-            >
-              Phone <span className="text-red-500">*</span>
+            <label htmlFor="phone" className={labelClass}>
+              Phone {!form.email.trim() && <span className="text-red-500">*</span>}
             </label>
             <input
               type="tel"
@@ -213,21 +200,16 @@ export default function GutterLeadForm() {
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="(555) 123-4567"
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper ${
-                errors.phone ? "border-red-500" : "border-alloy-stone/50"
-              }`}
+              className={errors.phone ? errorInputClass : inputClass}
             />
             {errors.phone && (
-              <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.phone}</p>
             )}
           </div>
 
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-alloy-midnight mb-2"
-            >
-              Email <span className="text-red-500">*</span>
+            <label htmlFor="email" className={labelClass}>
+              Email {!form.phone.trim() && <span className="text-red-500">*</span>}
             </label>
             <input
               type="email"
@@ -235,22 +217,17 @@ export default function GutterLeadForm() {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="you@example.com"
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper ${
-                errors.email ? "border-red-500" : "border-alloy-stone/50"
-              }`}
+              className={errors.email ? errorInputClass : inputClass}
             />
             {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.email}</p>
             )}
           </div>
         </div>
 
         <div>
-          <label
-            htmlFor="address_line1"
-            className="block text-sm font-medium text-alloy-midnight mb-2"
-          >
-            Address (Optional)
+          <label htmlFor="address_line1" className={labelClass}>
+            Address
           </label>
           <input
             type="text"
@@ -260,33 +237,13 @@ export default function GutterLeadForm() {
               setForm({ ...form, address_line1: e.target.value })
             }
             placeholder="123 Main St"
-            className="w-full px-4 py-2 border border-alloy-stone/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper"
+            className={inputClass}
           />
         </div>
 
         <div>
-          <label
-            htmlFor="city"
-            className="block text-sm font-medium text-alloy-midnight mb-2"
-          >
-            City (Optional)
-          </label>
-          <input
-            type="text"
-            id="city"
-            value={form.city}
-            onChange={(e) => setForm({ ...form, city: e.target.value })}
-            placeholder="Bend"
-            className="w-full px-4 py-2 border border-alloy-stone/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="notes"
-            className="block text-sm font-medium text-alloy-midnight mb-2"
-          >
-            Notes (Optional)
+          <label htmlFor="notes" className={labelClass}>
+            Notes
           </label>
           <textarea
             id="notes"
@@ -294,15 +251,15 @@ export default function GutterLeadForm() {
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
             rows={4}
             placeholder="Any additional information about your gutter cleaning needs..."
-            className="w-full px-4 py-2 border border-alloy-stone/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper"
+            className={inputClass}
           />
         </div>
 
-        <div className="pt-4">
+        <div className="pt-2">
           <PrimaryButton
             type="submit"
             disabled={isSubmitting}
-            className="w-full"
+            className="w-full md:w-auto"
           >
             {isSubmitting ? "Submitting..." : "Get Early Access Discount"}
           </PrimaryButton>

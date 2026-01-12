@@ -10,10 +10,10 @@ export default function QuoteSelectionPage() {
       <Section className="py-12 md:py-20">
         <div className="max-w-2xl mx-auto text-center">
           <h1 className="text-3xl md:text-4xl font-bold text-alloy-pine mb-4">
-            What do you need?
+            What service do you need?
           </h1>
           <p className="text-base md:text-lg text-alloy-midnight/80 mb-8">
-            Select a service to get started with a quote.
+            Select a service to get started.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
