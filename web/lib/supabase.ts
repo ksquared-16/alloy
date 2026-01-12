@@ -212,22 +212,27 @@ export async function updateContact(
  */
 export async function getVerticalIdBySlug(slug: string): Promise<string> {
   const url = `${getPostgrestUrl()}/verticals`;
-  const headers = getPostgrestHeaders();
+  const headers = {
+    apikey: getSupabaseServiceRoleKey(),
+    Authorization: `Bearer ${getSupabaseServiceRoleKey()}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
 
-  const params = new URLSearchParams({
-    select: "id",
-    key: `eq.${slug}`,
-    limit: "1",
-  });
+  // Build query params exactly as specified: select=id&slug=eq.<slug>&limit=1
+  // Encode the slug value for safety
+  const encodedSlug = encodeURIComponent(slug);
+  const queryString = `select=id&slug=eq.${encodedSlug}&limit=1`;
 
   try {
-    const response = await fetch(`${url}?${params.toString()}`, {
+    const response = await fetch(`${url}?${queryString}`, {
       headers,
       method: "GET",
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to query verticals: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to query verticals: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -240,7 +245,9 @@ export async function getVerticalIdBySlug(slug: string): Promise<string> {
     if (e.message?.includes("not found")) {
       throw e;
     }
-    throw new Error(`Failed to get vertical ID for slug "${slug}": ${e.message || e}`);
+    // Include original error message for better debugging
+    const errorMessage = e.message || String(e);
+    throw new Error(`Failed to get vertical ID for slug "${slug}": ${errorMessage}`);
   }
 }
 

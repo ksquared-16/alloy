@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import ServicePicker from "@/components/ServicePicker";
+import PrimaryButton from "@/components/PrimaryButton";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -14,7 +14,7 @@ export default function Navbar() {
 
   const servicesLinks = [
     { href: "/services/cleaning", label: "Home Cleaning" },
-    { href: "/gutters", label: "Gutters" },
+    { href: "/gutters", label: "Gutter Cleaning" },
   ];
 
   const navLinks = [
@@ -211,7 +211,9 @@ export default function Navbar() {
                 );
               })}
               <div className="pt-2">
-                <ServicePicker variant="button" className="w-full" />
+                <Link href="/quote" onClick={() => setMobileMenuOpen(false)}>
+                  <PrimaryButton className="w-full">Get a Quote</PrimaryButton>
+                </Link>
               </div>
             </div>
           </div>
