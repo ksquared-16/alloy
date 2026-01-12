@@ -11,6 +11,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/services/cleaning", label: "Home Cleaning" },
+    { href: "/gutters", label: "Gutters" },
     { href: "/join", label: "Join Our Team" },
     { href: "/about", label: "About" },
   ];
