@@ -1,7 +1,20 @@
+"use client";
+
+import { useRef } from "react";
 import Section from "@/components/Section";
+import PrimaryButton from "@/components/PrimaryButton";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 
 export default function GuttersPage() {
+  const formRef = useRef<HTMLDivElement>(null);
+
+  const scrollToForm = () => {
+    formRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -20,6 +33,21 @@ export default function GuttersPage() {
                 <p className="text-base md:text-lg text-white/90">
                   Keep your gutters clean and your home protected. Sign up for early access and get $25 off your first service when we launch.
                 </p>
+                <ul className="space-y-2 text-sm md:text-base text-white/90 list-disc list-inside">
+                  <li>Complete gutter cleaning and debris removal</li>
+                  <li>Downspout flushing and inspection</li>
+                  <li>Protect your home from water damage</li>
+                </ul>
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={scrollToForm}
+                    className="w-full sm:w-auto"
+                  >
+                    <PrimaryButton className="w-full sm:w-auto">
+                      Request gutter quote
+                    </PrimaryButton>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -119,17 +147,18 @@ export default function GuttersPage() {
       </Section>
 
       {/* Early Access Form */}
-      <Section className="py-10 md:py-12">
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine mb-4">
-              Sign Up for Early Access
-            </h2>
-            <p className="text-alloy-midnight/80">
-              Be the first to know when gutter cleaning becomes available. Get $25 off your first service.
-            </p>
+      <Section id="quote-form" ref={formRef} className="pt-6 pb-0 bg-white">
+        <div className="max-w-2xl md:max-w-4xl mx-auto">
+          <div className="rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm bg-white">
+            <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20">
+              <h2 className="text-xl font-bold text-alloy-midnight">
+                Get early access
+              </h2>
+            </div>
+            <div className="p-4 md:p-6">
+              <GutterLeadForm />
+            </div>
           </div>
-          <GutterLeadForm />
         </div>
       </Section>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/PrimaryButton";
 
 interface FormData {
@@ -18,6 +19,7 @@ interface FormErrors {
 }
 
 export default function GutterLeadForm() {
+  const router = useRouter();
   const [form, setForm] = useState<FormData>({
     first_name: "",
     last_name: "",
@@ -34,6 +36,16 @@ export default function GutterLeadForm() {
     type: "success" | "error" | null;
     message: string;
   }>({ type: null, message: "" });
+
+  // Auto-redirect after 5 seconds on success
+  useEffect(() => {
+    if (submitStatus.type === "success") {
+      const timer = setTimeout(() => {
+        router.push("/");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [submitStatus.type, router]);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -137,8 +149,13 @@ export default function GutterLeadForm() {
   return (
     <div className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30">
       {submitStatus.type === "success" && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm">
-          {submitStatus.message}
+        <div className="mb-6 rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
+          <p className="text-lg font-semibold text-alloy-midnight mb-2">
+            {submitStatus.message}
+          </p>
+          <p className="text-xs text-alloy-midnight/60">
+            Redirecting to homepage...
+          </p>
         </div>
       )}
 
@@ -255,7 +272,7 @@ export default function GutterLeadForm() {
           />
         </div>
 
-        <div className="pt-2">
+        <div className="pt-2 flex justify-center">
           <PrimaryButton
             type="submit"
             disabled={isSubmitting}

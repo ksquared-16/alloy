@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import PrimaryButton from "@/components/PrimaryButton";
+import ServicePicker from "@/components/ServicePicker";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
+  const servicesDropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
   const servicesLinks = [
@@ -20,6 +21,23 @@ export default function Navbar() {
     { href: "/join", label: "Join Our Team" },
     { href: "/about", label: "About" },
   ];
+
+  // Close Services dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(event.target as Node)) {
+        setServicesDropdownOpen(false);
+      }
+    };
+
+    if (servicesDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [servicesDropdownOpen]);
 
   return (
     <nav className="sticky top-0 z-50 bg-alloy-stone shadow-sm border-b border-alloy-stone/60">
@@ -43,10 +61,12 @@ export default function Navbar() {
             {/* Services Dropdown */}
             <div
               className="relative"
+              ref={servicesDropdownRef}
               onMouseEnter={() => setServicesDropdownOpen(true)}
               onMouseLeave={() => setServicesDropdownOpen(false)}
             >
               <button
+                onClick={() => setServicesDropdownOpen(!servicesDropdownOpen)}
                 className={`
                   text-alloy-midnight hover:text-alloy-juniper 
                   transition-colors font-medium pb-1 relative flex items-center gap-1
@@ -54,6 +74,8 @@ export default function Navbar() {
                     ? "border-b-2 border-alloy-juniper"
                     : ""}
                 `}
+                aria-expanded={servicesDropdownOpen}
+                aria-haspopup="true"
               >
                 Services
                 <svg
@@ -73,6 +95,7 @@ export default function Navbar() {
                       <Link
                         key={link.href}
                         href={link.href}
+                        onClick={() => setServicesDropdownOpen(false)}
                         className={`
                           block px-4 py-2 text-sm text-alloy-midnight hover:bg-alloy-stone/50 transition-colors
                           ${isActive ? "bg-alloy-juniper/10 text-alloy-juniper font-medium" : ""}
@@ -103,12 +126,8 @@ export default function Navbar() {
               );
             })}
 
-            {/* Get a Quote CTA */}
-            <Link href="/quote">
-              <PrimaryButton className="!px-4 !py-2 !text-sm">
-                Get a Quote
-              </PrimaryButton>
-            </Link>
+            {/* Get a Quote CTA with Service Picker */}
+            <ServicePicker variant="link" />
           </div>
         </div>
 
@@ -192,9 +211,7 @@ export default function Navbar() {
                 );
               })}
               <div className="pt-2">
-                <Link href="/quote" onClick={() => setMobileMenuOpen(false)}>
-                  <PrimaryButton className="w-full">Get a Quote</PrimaryButton>
-                </Link>
+                <ServicePicker variant="button" className="w-full" />
               </div>
             </div>
           </div>

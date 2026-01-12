@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  findContactByEmailOrPhone,
-  upsertContact,
-  findVerticalIdByKey,
+  findContactByEmail,
+  findContactByPhone,
+  createContact,
+  updateContact,
+  getVerticalIdBySlug,
   createOpportunity,
 } from "@/lib/supabase";
 
@@ -11,8 +13,8 @@ import {
  * 
  * Creates a gutter lead in Supabase:
  * 1. Upserts contact (match by email, fallback phone)
- * 2. Looks up existing vertical_id for "gutters" (if any)
- * 3. Creates opportunity representing the lead
+ * 2. Gets vertical_id from verticals table by slug="gutters"
+ * 3. Creates opportunity with correct vertical_id and primary_contact_id
  */
 export async function POST(request: NextRequest) {
   try {
@@ -42,37 +44,83 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Normalize phone (basic normalization - remove non-digits except +)
-    const phoneNormalized = phone
-      ? phone.replace(/[^\d+]/g, "").replace(/^\+?1/, "").replace(/^/, "+1")
-      : undefined;
+    // Normalize: email lowercase + trim, phone trim only
+    const emailNormalized = email ? email.trim().toLowerCase() : undefined;
+    const phoneNormalized = phone ? phone.trim() : undefined;
 
-    // Step 1: Find or create contact
-    const existingContact = await findContactByEmailOrPhone(email, phoneNormalized);
-    
+    // Step 1: Find existing contact
+    let existingContact: { id: string; first_name?: string; last_name?: string; phone?: string; email?: string } | null = null;
+    let matchMethod = "";
+
+    if (emailNormalized) {
+      existingContact = await findContactByEmail(emailNormalized);
+      if (existingContact) {
+        matchMethod = "email";
+        console.log(`[GUTTERS_LEAD] Found existing contact by email: ${existingContact.id}`);
+      }
+    }
+
+    if (!existingContact && phoneNormalized) {
+      existingContact = await findContactByPhone(phoneNormalized);
+      if (existingContact) {
+        matchMethod = "phone";
+        console.log(`[GUTTERS_LEAD] Found existing contact by phone: ${existingContact.id}`);
+      }
+    }
+
+    // Step 2: Upsert contact (update if found, create if not)
+    let contactId: string;
     const contactMetadata: Record<string, any> = {};
     if (address_line1) contactMetadata.address_line1 = address_line1;
     if (city) contactMetadata.city = city;
 
-    const contact = await upsertContact(
-      {
+    if (existingContact) {
+      // Update existing contact - fill in missing fields
+      const updateData: any = {
+        contact_type: "lead",
+      };
+
+      // Only update fields that are missing or empty in existing contact
+      if (!existingContact.first_name && first_name) {
+        updateData.first_name = first_name.trim();
+      }
+      if (!existingContact.last_name && last_name) {
+        updateData.last_name = last_name.trim();
+      }
+      if (!existingContact.email && emailNormalized) {
+        updateData.email = emailNormalized;
+      }
+      if (!existingContact.phone && phoneNormalized) {
+        updateData.phone = phoneNormalized;
+      }
+
+      // Merge metadata
+      if (Object.keys(contactMetadata).length > 0) {
+        updateData.metadata = contactMetadata;
+      }
+
+      const updated = await updateContact(existingContact.id, updateData);
+      contactId = updated.id;
+      console.log(`[GUTTERS_LEAD] Updated existing contact: ${contactId} (matched by ${matchMethod})`);
+    } else {
+      // Create new contact
+      const newContact = await createContact({
         first_name: first_name.trim(),
         last_name: last_name.trim(),
-        email: email?.trim() || undefined,
+        email: emailNormalized,
         phone: phoneNormalized,
         contact_type: "lead",
         metadata: Object.keys(contactMetadata).length > 0 ? contactMetadata : undefined,
-      },
-      existingContact?.id
-    );
+      });
+      contactId = newContact.id;
+      console.log(`[GUTTERS_LEAD] Created new contact: ${contactId}`);
+    }
 
-    const contactId = contact.id;
+    // Step 3: Get vertical_id from verticals table
+    const verticalId = await getVerticalIdBySlug("gutters");
+    console.log(`[GUTTERS_LEAD] Found vertical_id for gutters: ${verticalId}`);
 
-    // Step 2: Look up existing vertical_id for "gutters" (if any opportunities exist)
-    // If none found, vertical_id will be null (which is fine - vertical stored in metadata)
-    const verticalId = await findVerticalIdByKey("gutters");
-
-    // Step 3: Create opportunity
+    // Step 4: Create opportunity
     const appEnv = process.env.NEXT_PUBLIC_APP_ENV || "production";
     const opportunityMetadata: Record<string, any> = {
       vertical: "gutters",
@@ -92,23 +140,22 @@ export async function POST(request: NextRequest) {
     }
 
     const opportunity = await createOpportunity({
-      vertical_id: verticalId ?? undefined,
+      vertical_id: verticalId,
       primary_contact_id: contactId,
-      name: `${first_name} ${last_name} — Gutters Early Access`,
+      name: `${first_name} ${last_name} — Gutter Cleaning`,
       status: "open",
       source: "website",
       metadata: opportunityMetadata,
     });
 
-    // Log for debugging (server-side only)
     console.log(
-      `[GUTTERS_LEAD] contact_id=${contactId} opportunity_id=${opportunity.id} vertical_id=${verticalId || "null"} app_env=${appEnv}`
+      `[GUTTERS_LEAD_SUCCESS] contact_id=${contactId} opportunity_id=${opportunity.id} vertical_id=${verticalId} app_env=${appEnv}`
     );
 
     return NextResponse.json({
       ok: true,
-      contact_id: contactId,
-      opportunity_id: opportunity.id,
+      contactId: contactId,
+      opportunityId: opportunity.id,
     });
   } catch (error: any) {
     console.error("[GUTTERS_LEAD_ERROR]", error);

@@ -40,148 +40,16 @@ export function getPostgrestHeaders(): Record<string, string> {
 }
 
 /**
- * Find contact by email (case-insensitive) or phone
+ * Find contact by email (case-insensitive)
  */
-export async function findContactByEmailOrPhone(
-  email?: string,
-  phone?: string
-): Promise<{ id: string } | null> {
-  if (!email && !phone) {
-    return null;
-  }
-
+export async function findContactByEmail(email: string): Promise<{ id: string; first_name?: string; last_name?: string; phone?: string; email?: string } | null> {
   const url = `${getPostgrestUrl()}/contacts`;
   const headers = getPostgrestHeaders();
+  const emailLower = email.trim().toLowerCase();
 
-  // Try email first (case-insensitive)
-  if (email) {
-    const emailLower = email.trim().toLowerCase();
-    const params = new URLSearchParams({
-      select: "id",
-      email: `ilike.${emailLower}`,
-      limit: "1",
-    });
-
-    try {
-      const response = await fetch(`${url}?${params.toString()}`, {
-        headers,
-        method: "GET",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.length > 0) {
-          return data[0];
-        }
-      }
-    } catch (e) {
-      console.error("Error searching contact by email:", e);
-    }
-  }
-
-  // Try phone if email didn't match
-  if (phone) {
-    const phoneClean = phone.trim();
-    const params = new URLSearchParams({
-      select: "id",
-      phone: `eq.${phoneClean}`,
-      limit: "1",
-    });
-
-    try {
-      const response = await fetch(`${url}?${params.toString()}`, {
-        headers,
-        method: "GET",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.length > 0) {
-          return data[0];
-        }
-      }
-    } catch (e) {
-      console.error("Error searching contact by phone:", e);
-    }
-  }
-
-  return null;
-}
-
-/**
- * Upsert contact (create or update)
- */
-export async function upsertContact(
-  contactData: {
-    first_name?: string;
-    last_name?: string;
-    email?: string;
-    phone?: string;
-    contact_type?: string;
-    metadata?: Record<string, any>;
-  },
-  existingId?: string
-): Promise<{ id: string }> {
-  const url = `${getPostgrestUrl()}/contacts`;
-  const headers = getPostgrestHeaders();
-
-  if (existingId) {
-    // Update existing contact
-    const params = new URLSearchParams({ id: `eq.${existingId}` });
-    const response = await fetch(`${url}?${params.toString()}`, {
-      headers,
-      method: "PATCH",
-      body: JSON.stringify(contactData),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to update contact: ${response.status} ${text}`);
-    }
-
-    const data = await response.json();
-    if (!data || data.length === 0) {
-      throw new Error("Update returned no data");
-    }
-
-    return data[0];
-  } else {
-    // Create new contact
-    const response = await fetch(url, {
-      headers,
-      method: "POST",
-      body: JSON.stringify(contactData),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to create contact: ${response.status} ${text}`);
-    }
-
-    const data = await response.json();
-    if (!data || data.length === 0) {
-      throw new Error("Create returned no data");
-    }
-
-    return data[0];
-  }
-}
-
-/**
- * Find existing vertical_id for a vertical key by querying opportunities table.
- * Looks for opportunities with matching vertical in metadata.
- * Returns null if no existing opportunities found (vertical_id will be null in opportunity).
- */
-export async function findVerticalIdByKey(key: string): Promise<string | null> {
-  const url = `${getPostgrestUrl()}/opportunities`;
-  const headers = getPostgrestHeaders();
-
-  // Try to find an existing opportunity with this vertical in metadata that has a vertical_id
-  // Query for opportunities where metadata contains the vertical key and vertical_id is not null
   const params = new URLSearchParams({
-    select: "vertical_id",
-    metadata: `cs.{"vertical":"${key}"}`,
-    vertical_id: "not.is.null",
+    select: "id,first_name,last_name,phone,email",
+    email: `ilike.${emailLower}`,
     limit: "1",
   });
 
@@ -193,16 +61,187 @@ export async function findVerticalIdByKey(key: string): Promise<string | null> {
 
     if (response.ok) {
       const data = await response.json();
-      if (data && data.length > 0 && data[0].vertical_id) {
-        return data[0].vertical_id;
+      if (data && data.length > 0) {
+        return data[0];
       }
     }
   } catch (e) {
-    // If query fails, return null (will use null for vertical_id)
-    console.debug(`Could not find vertical_id for key "${key}", will use null`);
+    console.error("Error searching contact by email:", e);
   }
 
   return null;
+}
+
+/**
+ * Find contact by phone (exact match)
+ */
+export async function findContactByPhone(phone: string): Promise<{ id: string; first_name?: string; last_name?: string; phone?: string; email?: string } | null> {
+  const url = `${getPostgrestUrl()}/contacts`;
+  const headers = getPostgrestHeaders();
+  const phoneClean = phone.trim();
+
+  const params = new URLSearchParams({
+    select: "id,first_name,last_name,phone,email",
+    phone: `eq.${phoneClean}`,
+    limit: "1",
+  });
+
+  try {
+    const response = await fetch(`${url}?${params.toString()}`, {
+      headers,
+      method: "GET",
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        return data[0];
+      }
+    }
+  } catch (e) {
+    console.error("Error searching contact by phone:", e);
+  }
+
+  return null;
+}
+
+/**
+ * Find contact by email (case-insensitive) or phone
+ */
+export async function findContactByEmailOrPhone(
+  email?: string,
+  phone?: string
+): Promise<{ id: string; first_name?: string; last_name?: string; phone?: string; email?: string } | null> {
+  if (!email && !phone) {
+    return null;
+  }
+
+  // Try email first (case-insensitive)
+  if (email) {
+    const found = await findContactByEmail(email);
+    if (found) {
+      return found;
+    }
+  }
+
+  // Try phone if email didn't match
+  if (phone) {
+    const found = await findContactByPhone(phone);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Create contact
+ */
+export async function createContact(
+  contactData: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+    contact_type?: string;
+    metadata?: Record<string, any>;
+  }
+): Promise<{ id: string }> {
+  const url = `${getPostgrestUrl()}/contacts`;
+  const headers = getPostgrestHeaders();
+
+  const response = await fetch(url, {
+    headers,
+    method: "POST",
+    body: JSON.stringify(contactData),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to create contact: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data || data.length === 0) {
+    throw new Error("Create returned no data");
+  }
+
+  return data[0];
+}
+
+/**
+ * Update contact
+ */
+export async function updateContact(
+  id: string,
+  contactData: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+    contact_type?: string;
+    metadata?: Record<string, any>;
+  }
+): Promise<{ id: string }> {
+  const url = `${getPostgrestUrl()}/contacts`;
+  const headers = getPostgrestHeaders();
+
+  const params = new URLSearchParams({ id: `eq.${id}` });
+  const response = await fetch(`${url}?${params.toString()}`, {
+    headers,
+    method: "PATCH",
+    body: JSON.stringify(contactData),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to update contact: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data || data.length === 0) {
+    throw new Error("Update returned no data");
+  }
+
+  return data[0];
+}
+
+/**
+ * Get vertical ID by slug from verticals table
+ */
+export async function getVerticalIdBySlug(slug: string): Promise<string> {
+  const url = `${getPostgrestUrl()}/verticals`;
+  const headers = getPostgrestHeaders();
+
+  const params = new URLSearchParams({
+    select: "id",
+    key: `eq.${slug}`,
+    limit: "1",
+  });
+
+  try {
+    const response = await fetch(`${url}?${params.toString()}`, {
+      headers,
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to query verticals: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || data.length === 0 || !data[0].id) {
+      throw new Error(`Vertical with slug "${slug}" not found. Please add it to the verticals table.`);
+    }
+
+    return data[0].id;
+  } catch (e: any) {
+    if (e.message?.includes("not found")) {
+      throw e;
+    }
+    throw new Error(`Failed to get vertical ID for slug "${slug}": ${e.message || e}`);
+  }
 }
 
 /**

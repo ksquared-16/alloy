@@ -847,9 +847,11 @@ export default function CleaningQuoteForm({
                             {isSubmitting ? "Submitting…" : "Get my quote"}
                         </button>
                     ) : (
-                        <PrimaryButton type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
-                            {isSubmitting ? "Submitting…" : "Get my quote"}
-                        </PrimaryButton>
+                        <div className="flex justify-center">
+                            <PrimaryButton type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
+                                {isSubmitting ? "Submitting…" : "Get my quote"}
+                            </PrimaryButton>
+                        </div>
                     )}
                 </div>
             </form>
