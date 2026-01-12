@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const opportunity = await createOpportunity({
-      vertical_id: verticalId,
+      vertical_id: verticalId ?? undefined,
       primary_contact_id: contactId,
       name: `${first_name} ${last_name} — Gutters Early Access`,
       status: "open",
