@@ -241,6 +241,10 @@ async def submit_cleaning_lead(
         custom_field_mapping["recurring_price"] = str(calculated_recurring_price)
     
     # Use canonical contact resolution (email-first, then phone, then create with duplicate recovery)
+    # Default to "cleaning" vertical for backward compatibility
+    vertical_key = "cleaning"
+    # Store vertical_key in custom fields for tracking
+    custom_field_mapping["vertical"] = vertical_key
     contact_id, resolution_path = resolve_or_create_contact_canonical(
         first_name=first_name,
         last_name=last_name,
@@ -251,6 +255,7 @@ async def submit_cleaning_lead(
         estimated_price=str(calculated_estimated_price),
         price_breakdown=calculated_price_breakdown,
         recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
+        vertical_key=vertical_key,
     )
     
     logger.info(
@@ -278,6 +283,8 @@ async def submit_cleaning_lead(
     )
     
     # Add background task for heavy work (tags, photos, notes)
+    # Default to "cleaning" vertical for backward compatibility
+    vertical_key = "cleaning"
     background_tasks.add_task(
         process_lead_async,
         first_name=first_name,
@@ -297,6 +304,7 @@ async def submit_cleaning_lead(
         estimated_price=str(calculated_estimated_price),
         price_breakdown=calculated_price_breakdown,
         recurring_price=str(calculated_recurring_price) if calculated_recurring_price is not None else None,
+        vertical_key=vertical_key,
     )
     
     # Return immediately with contact_id and booking_url

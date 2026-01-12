@@ -37,6 +37,7 @@ def process_lead_async(
     estimated_price: Optional[str] = None,  # Frontend-calculated price
     price_breakdown: Optional[str] = None,  # Price breakdown text
     recurring_price: Optional[str] = None,  # Recurring price value
+    vertical_key: str = "cleaning",  # Vertical identifier (defaults to "cleaning" for backward compatibility)
 ):
     """
     Background task to process lead submission and sync with GHL.
@@ -92,6 +93,9 @@ def process_lead_async(
         
         if street_address and street_address.strip():
             custom_field_mapping["street_address"] = street_address.strip()
+        
+        # Store vertical_key in custom fields for tracking
+        custom_field_mapping["vertical"] = vertical_key
         
         # Check if this is a Move-Out / Heavy Clean request
         is_move_out = service_type and "Move-Out" in service_type
@@ -177,6 +181,7 @@ def process_lead_async(
             estimated_price=estimated_price,
             price_breakdown=price_breakdown,
             recurring_price=recurring_price,
+            vertical_key=vertical_key,
         )
         t_search_ms = (time.perf_counter() - t_search_start) * 1000
         
@@ -198,10 +203,14 @@ def process_lead_async(
         if not contact_id:
             raise Exception("Failed to create or update contact")
         
-        # Add tags
+        # Apply tags based on vertical (idempotent merge)
         t_tags_start = time.perf_counter()
-        ensure_contact_has_tag(contact_id, "lead")
+        from .ghl_client import apply_ghl_tags
+        apply_ghl_tags(contact_id, vertical_key)
+        
+        # Add move-out specific tag if needed
         if is_move_out:
+            from .ghl_client import ensure_contact_has_tag
             ensure_contact_has_tag(contact_id, "manual_quote_needed")
         t_tags_ms = (time.perf_counter() - t_tags_start) * 1000
         
