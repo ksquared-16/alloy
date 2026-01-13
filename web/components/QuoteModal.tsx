@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
@@ -111,13 +112,21 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                 {/* Cleaning Option */}
                 <button
                   onClick={() => setSelectedVertical("cleaning")}
-                  className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left"
+                  className="bg-white rounded-lg shadow-md p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col"
                 >
-                  <div className="text-4xl mb-4">🏠</div>
+                  <div className="mb-4 flex items-center justify-center">
+                    <Image
+                      src="/icons/hvac-blue.png"
+                      alt="Home Cleaning"
+                      width={64}
+                      height={64}
+                      className="w-16 h-16"
+                    />
+                  </div>
                   <h3 className="text-xl font-bold text-alloy-pine mb-2">
                     Home Cleaning
                   </h3>
-                  <p className="text-alloy-midnight/70 mb-4">
+                  <p className="text-alloy-midnight/70 mb-4 text-sm">
                     Professional home cleaning services in Bend, Oregon.
                   </p>
                   <PrimaryButton className="w-full">Get a cleaning quote</PrimaryButton>
@@ -126,13 +135,21 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                 {/* Gutter Cleaning Option */}
                 <button
                   onClick={() => setSelectedVertical("gutters")}
-                  className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left"
+                  className="bg-white rounded-lg shadow-md p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col"
                 >
-                  <div className="text-4xl mb-4">🪟</div>
+                  <div className="mb-4 flex items-center justify-center">
+                    <Image
+                      src="/icons/commercial-blue.png"
+                      alt="Gutter Cleaning"
+                      width={64}
+                      height={64}
+                      className="w-16 h-16"
+                    />
+                  </div>
                   <h3 className="text-xl font-bold text-alloy-pine mb-2">
                     Gutter Cleaning
                   </h3>
-                  <p className="text-alloy-midnight/70 mb-4">
+                  <p className="text-alloy-midnight/70 mb-4 text-sm">
                     Sign up early and get $25 off your first service.
                   </p>
                   <PrimaryButton className="w-full">Get Early Access</PrimaryButton>

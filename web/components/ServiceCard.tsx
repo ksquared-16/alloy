@@ -8,6 +8,7 @@ interface ServiceCardProps {
 
 export default function ServiceCard({ service }: ServiceCardProps) {
   const isAvailable = service.status === "available";
+  const isGutters = service.id === "gutter";
 
   return (
     <div
@@ -28,12 +29,14 @@ export default function ServiceCard({ service }: ServiceCardProps) {
             px-3 py-1 rounded-full text-sm font-medium
             ${
               isAvailable
-                ? "bg-green-100 text-green-800"
+                ? isGutters
+                  ? "bg-alloy-juniper/20 text-alloy-juniper"
+                  : "bg-green-100 text-green-800"
                 : "bg-gray-100 text-gray-600"
             }
           `}
         >
-          {isAvailable ? "Available" : "Coming Soon"}
+          {isAvailable ? (isGutters ? "Get Early Access" : "Available") : "Coming Soon"}
         </span>
         
         {isAvailable ? (
