@@ -15,22 +15,23 @@ export default function ServiceCard({ service }: ServiceCardProps) {
       className={`
         bg-white rounded-lg shadow-md p-6
         transition-shadow hover:shadow-lg
+        flex flex-col
         ${!isAvailable ? "opacity-75" : ""}
       `}
     >
       <h3 className="text-xl font-bold text-alloy-midnight mb-2">
         {service.name}
       </h3>
-      <p className="text-gray-600 mb-4">{service.description}</p>
+      <p className="text-gray-600 mb-4 flex-grow">{service.description}</p>
       
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mt-auto">
         <span
           className={`
             px-3 py-1 rounded-full text-sm font-medium
             ${
               isAvailable
                 ? isGutters
-                  ? "bg-alloy-juniper/20 text-alloy-juniper"
+                  ? "bg-yellow-100 text-yellow-800"
                   : "bg-green-100 text-green-800"
                 : "bg-gray-100 text-gray-600"
             }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
@@ -112,47 +111,47 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                 {/* Cleaning Option */}
                 <button
                   onClick={() => setSelectedVertical("cleaning")}
-                  className="bg-white rounded-lg shadow-md p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col"
+                  className="bg-white rounded-lg shadow-md p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
                 >
                   <div className="mb-4 flex items-center justify-center">
-                    <Image
+                    <img
                       src="/icons/hvac-blue.png"
                       alt="Home Cleaning"
-                      width={64}
-                      height={64}
                       className="w-16 h-16"
                     />
                   </div>
                   <h3 className="text-xl font-bold text-alloy-pine mb-2">
                     Home Cleaning
                   </h3>
-                  <p className="text-alloy-midnight/70 mb-4 text-sm">
-                    Professional home cleaning services in Bend, Oregon.
+                  <p className="text-alloy-midnight/70 mb-4 text-sm flex-grow">
+                    Professional home cleaning services.
                   </p>
-                  <PrimaryButton className="w-full">Get a cleaning quote</PrimaryButton>
+                  <div className="mt-auto">
+                    <PrimaryButton className="w-full">Get a cleaning quote</PrimaryButton>
+                  </div>
                 </button>
 
                 {/* Gutter Cleaning Option */}
                 <button
                   onClick={() => setSelectedVertical("gutters")}
-                  className="bg-white rounded-lg shadow-md p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col"
+                  className="bg-white rounded-lg shadow-md p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
                 >
                   <div className="mb-4 flex items-center justify-center">
-                    <Image
+                    <img
                       src="/icons/commercial-blue.png"
                       alt="Gutter Cleaning"
-                      width={64}
-                      height={64}
                       className="w-16 h-16"
                     />
                   </div>
                   <h3 className="text-xl font-bold text-alloy-pine mb-2">
                     Gutter Cleaning
                   </h3>
-                  <p className="text-alloy-midnight/70 mb-4 text-sm">
+                  <p className="text-alloy-midnight/70 mb-4 text-sm flex-grow">
                     Sign up early and get $25 off your first service.
                   </p>
-                  <PrimaryButton className="w-full">Get Early Access</PrimaryButton>
+                  <div className="mt-auto">
+                    <PrimaryButton className="w-full">Get Early Access</PrimaryButton>
+                  </div>
                 </button>
               </div>
             </div>
