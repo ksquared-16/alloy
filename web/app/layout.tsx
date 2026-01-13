@@ -6,6 +6,8 @@ import Footer from "@/components/Footer";
 import GhlScript from "@/components/GhlScript";
 import StagingBanner from "@/components/StagingBanner";
 import LayoutWrapper from "@/components/LayoutWrapper";
+import { QuoteModalProvider } from "@/lib/quoteModal";
+import QuoteModalWrapper from "@/components/QuoteModalWrapper";
 
 const poppins = Poppins({
   weight: ["300", "400", "500", "600", "700"],
@@ -32,11 +34,14 @@ export default function RootLayout({
       <body className={`${poppins.variable} font-sans antialiased`}>
         <GhlScript />
         <StagingBanner />
-        <LayoutWrapper>
-          <Navbar />
-          <main>{children}</main>
-          <Footer />
-        </LayoutWrapper>
+        <QuoteModalProvider>
+          <LayoutWrapper>
+            <Navbar />
+            <main>{children}</main>
+            <Footer />
+            <QuoteModalWrapper />
+          </LayoutWrapper>
+        </QuoteModalProvider>
       </body>
     </html>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 import {
     calculateCleaningQuote,
     type CleaningQuoteInput,
@@ -120,11 +121,13 @@ function validate(form: FormState): ValidationErrors {
 interface CleaningQuoteFormProps {
     onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
     variant?: "light" | "dark";
+    onSuccess?: () => void;
 }
 
 export default function CleaningQuoteForm({
     onQuoteCalculated,
     variant = "light",
+    onSuccess,
 }: CleaningQuoteFormProps) {
     const router = useRouter();
     const [form, setForm] = useState<FormState>(INITIAL_FORM);
@@ -445,9 +448,13 @@ export default function CleaningQuoteForm({
                         // Fallback: Handle Move-Out with success message
                         if (isMoveOut) {
                             setShowMoveOutSuccess(true);
+                            // Call onSuccess callback if provided (e.g., to close modal)
+                            if (onSuccess) {
+                                onSuccess();
+                            }
                             setTimeout(() => {
                                 router.push("/");
-                            }, 2000);
+                            }, REDIRECT_DELAY_MS);
                         }
                     }
                 })
@@ -458,9 +465,13 @@ export default function CleaningQuoteForm({
                         // Fallback: Handle Move-Out with success message
                         if (isMoveOut) {
                             setShowMoveOutSuccess(true);
+                            // Call onSuccess callback if provided (e.g., to close modal)
+                            if (onSuccess) {
+                                onSuccess();
+                            }
                             setTimeout(() => {
                                 router.push("/");
-                            }, 2000);
+                            }, REDIRECT_DELAY_MS);
                         }
                     } else {
                         console.warn("Backend submission error (non-blocking):", error);
@@ -481,6 +492,25 @@ export default function CleaningQuoteForm({
         quote.status === "ready" &&
         typeof quote.first_clean_price === "number" &&
         quote.first_clean_price > 0;
+
+    // If Move-Out success, only show thank-you message
+    if (showMoveOutSuccess) {
+        return (
+            <div className="space-y-4">
+                <div className="rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
+                    <p className="text-lg font-semibold text-alloy-midnight mb-2">
+                        Thanks — your inquiry has been submitted.
+                    </p>
+                    <p className="text-sm text-alloy-midnight/80 mb-4">
+                        Our team will review and reach out shortly with an estimate.
+                    </p>
+                    <p className="text-xs text-alloy-midnight/60">
+                        Redirecting to homepage...
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -976,20 +1006,6 @@ export default function CleaningQuoteForm({
                 </div>
             )}
 
-            {/* Move-Out success message */}
-            {showMoveOutSuccess && (
-                <div className="mt-4 rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
-                    <p className="text-lg font-semibold text-alloy-midnight mb-2">
-                        Thanks — your inquiry has been submitted.
-                    </p>
-                    <p className="text-sm text-alloy-midnight/80 mb-4">
-                        Our team will review and reach out shortly with an estimate.
-                    </p>
-                    <p className="text-xs text-alloy-midnight/60">
-                        Redirecting to homepage...
-                    </p>
-                </div>
-            )}
         </div>
     );
 }

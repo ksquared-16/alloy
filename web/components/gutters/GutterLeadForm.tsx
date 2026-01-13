@@ -3,6 +3,7 @@
 import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/PrimaryButton";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
 interface FormData {
   first_name: string;
@@ -18,7 +19,11 @@ interface FormErrors {
   [key: string]: string;
 }
 
-export default function GutterLeadForm() {
+interface GutterLeadFormProps {
+  onSuccess?: () => void;
+}
+
+export default function GutterLeadForm({ onSuccess }: GutterLeadFormProps = {} as GutterLeadFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<FormData>({
     first_name: "",
@@ -37,15 +42,19 @@ export default function GutterLeadForm() {
     message: string;
   }>({ type: null, message: "" });
 
-  // Auto-redirect after 5 seconds on success
+  // Auto-redirect after delay on success
   useEffect(() => {
     if (submitStatus.type === "success") {
+      // Call onSuccess callback if provided (e.g., to close modal)
+      if (onSuccess) {
+        onSuccess();
+      }
       const timer = setTimeout(() => {
         router.push("/");
-      }, 5000);
+      }, REDIRECT_DELAY_MS);
       return () => clearTimeout(timer);
     }
-  }, [submitStatus.type, router]);
+  }, [submitStatus.type, router, onSuccess]);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -146,10 +155,11 @@ export default function GutterLeadForm() {
   const inputClass = inputBase + " border border-alloy-stone/80 bg-white focus:ring-alloy-blue focus:border-alloy-blue";
   const errorInputClass = inputBase + " border-red-500 bg-white focus:ring-red-500 focus:border-red-500";
 
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30">
-      {submitStatus.type === "success" && (
-        <div className="mb-6 rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
+  // If success, only show thank-you message
+  if (submitStatus.type === "success") {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30">
+        <div className="rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
           <p className="text-lg font-semibold text-alloy-midnight mb-2">
             {submitStatus.message}
           </p>
@@ -157,8 +167,12 @@ export default function GutterLeadForm() {
             Redirecting to homepage...
           </p>
         </div>
-      )}
+      </div>
+    );
+  }
 
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6 md:p-8 border border-alloy-stone/30">
       {submitStatus.type === "error" && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
           {submitStatus.message}

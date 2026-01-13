@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import Section from "@/components/Section";
@@ -7,8 +9,10 @@ import ServiceCard from "@/components/ServiceCard";
 import Accordion from "@/components/Accordion";
 import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
+import { useQuoteModal } from "@/lib/quoteModal";
 
 export default function Home() {
+  const { openModal } = useQuoteModal();
   const howItWorksSteps = [
     {
       number: "1",
@@ -140,11 +144,11 @@ export default function Home() {
                   Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <Link href="/quote">
+                  <button onClick={openModal} className="w-full sm:w-auto">
                     <PrimaryButton className="w-full sm:w-auto">
                       Get a quote
                     </PrimaryButton>
-                  </Link>
+                  </button>
                   <Link href="#how-it-works">
                     <SecondaryButton className="!bg-white/20 backdrop-blur-md !border !border-white/50 !text-white hover:!bg-white/30 w-full sm:w-auto">
                       See how Alloy works
@@ -318,11 +322,11 @@ export default function Home() {
             Select a service to get a quote.
           </p>
           <div className="flex justify-center">
-            <Link href="/quote">
+            <button onClick={openModal}>
               <PrimaryButton className="!bg-alloy-juniper hover:!bg-alloy-juniper/90 !text-white">
                 Get a Quote
               </PrimaryButton>
-            </Link>
+            </button>
           </div>
         </div>
       </Section>

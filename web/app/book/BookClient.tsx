@@ -194,7 +194,7 @@ export default function BookClient() {
                 }
                 setTimeout(() => {
                     window.location.href = "/";
-                }, 2000);
+                }, REDIRECT_DELAY_MS);
             }
         };
 
@@ -221,7 +221,7 @@ export default function BookClient() {
                 }
                 setTimeout(() => {
                     window.location.href = "/";
-                }, 2000);
+                }, REDIRECT_DELAY_MS);
             }
         };
 
@@ -237,7 +237,7 @@ export default function BookClient() {
                 }
                 setTimeout(() => {
                     window.location.href = "/";
-                }, 2000);
+                }, REDIRECT_DELAY_MS);
             }
         };
 
