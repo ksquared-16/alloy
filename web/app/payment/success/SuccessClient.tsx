@@ -14,8 +14,6 @@ function clearBookingPrefill() {
     }
 }
 
-import { REDIRECT_DELAY_MS } from "@/lib/ui";
-
 export default function PaymentSuccessClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
