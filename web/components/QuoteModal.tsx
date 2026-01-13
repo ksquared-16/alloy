@@ -75,8 +75,8 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
             {selectedVertical === null
               ? "What service do you need?"
               : selectedVertical === "cleaning"
-              ? "Get a cleaning quote"
-              : "Get early access"}
+                ? "Get a cleaning quote"
+                : "Get early access"}
           </h2>
           <button
             onClick={onClose}
@@ -115,9 +115,11 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                 >
                   <div className="mb-4 flex items-center justify-center">
                     <img
-                      src="/icons/hvac-blue.png"
+                      src="/icons/vacuum-blue.png"
                       alt="Home Cleaning"
-                      className="w-16 h-16"
+                      width={56}
+                      height={56}
+                      className="w-14 h-14"
                     />
                   </div>
                   <h3 className="text-xl font-bold text-alloy-pine mb-2">
@@ -138,9 +140,11 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                 >
                   <div className="mb-4 flex items-center justify-center">
                     <img
-                      src="/icons/commercial-blue.png"
+                      src="/icons/gutter-blue.png"
                       alt="Gutter Cleaning"
-                      className="w-16 h-16"
+                      width={56}
+                      height={56}
+                      className="w-14 h-14"
                     />
                   </div>
                   <h3 className="text-xl font-bold text-alloy-pine mb-2">
