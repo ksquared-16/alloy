@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
 type SelectedVertical = "cleaning" | "gutters" | null;
 
