@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
 // GHL Booking Iframe Component
 // Note: form_embed.js is loaded globally via GhlScript in layout.tsx
