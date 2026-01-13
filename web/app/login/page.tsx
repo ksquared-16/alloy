@@ -19,7 +19,7 @@ function LoginForm() {
     errorParam === "unauthorized"
       ? "You are not authorized to access the admin area."
       : errorParam === "config"
-      ? "Server configuration error. Please contact support."
+      ? "Missing SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY)."
       : null;
 
   const handleSubmit = async (e: FormEvent) => {

@@ -15,13 +15,18 @@ Add these to your Vercel project (staging environment):
 
 ### Required
 
-1. **`NEXT_PUBLIC_SUPABASE_URL`**
+The code supports both naming conventions (with fallbacks):
+
+1. **`SUPABASE_URL`** (or `NEXT_PUBLIC_SUPABASE_URL`)
    - Your Supabase project URL
    - Example: `https://xxxxx.supabase.co`
+   - **Note**: Code checks `NEXT_PUBLIC_SUPABASE_URL` first, then falls back to `SUPABASE_URL`
 
-2. **`NEXT_PUBLIC_SUPABASE_ANON_KEY`**
-   - Your Supabase anonymous/public key
+2. **`SUPABASE_ANON_KEY`** (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+   - Your Supabase anonymous/public key (NOT the service role key)
    - Found in: Supabase Dashboard → Settings → API → Project API keys → `anon` `public`
+   - **Note**: Code checks `NEXT_PUBLIC_SUPABASE_ANON_KEY` first, then falls back to `SUPABASE_ANON_KEY`
+   - **Important**: Do NOT use `SUPABASE_SERVICE_ROLE_KEY` for auth - that's for admin database operations
 
 ### Optional (for allowlist protection)
 
@@ -84,9 +89,10 @@ The user can now sign in at `/login` with their email and password.
 - Check that the user's email is in `ALLOWED_ADMIN_EMAILS`
 - Verify email is lowercase and matches exactly (case-insensitive comparison)
 
-### "Server configuration error"
-- Verify `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set
+### "Server configuration error" or config error message
+- Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`) are set
 - Check that values are correct in Vercel environment variables
+- Ensure you're using the **anon key**, not the service role key
 
 ### Can't sign in
 - Verify user exists in Supabase Auth
