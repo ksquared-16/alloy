@@ -1,6 +1,7 @@
 /**
  * Supabase client for server-side operations (middleware, server components).
- * Uses server-only environment variables (SUPABASE_URL, SUPABASE_ANON_KEY).
+ * Prefers server-only environment variables (SUPABASE_URL, SUPABASE_ANON_KEY),
+ * falls back to NEXT_PUBLIC_* vars for robustness in Vercel environments.
  * Do NOT use this in client components.
  */
 
@@ -10,13 +11,13 @@ import { cookies } from "next/headers";
 export async function createClient() {
   const cookieStore = await cookies();
 
-  // Server-only: Read SUPABASE_URL and SUPABASE_ANON_KEY (not NEXT_PUBLIC_*)
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  // Server: Prefer SUPABASE_URL/SUPABASE_ANON_KEY, fallback to NEXT_PUBLIC_* for robustness
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
-      "Missing Supabase server environment variables: SUPABASE_URL and SUPABASE_ANON_KEY are required"
+      "Missing Supabase environment variables. Required: SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY)"
     );
   }
 
