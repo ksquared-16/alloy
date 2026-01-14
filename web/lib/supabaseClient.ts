@@ -1,17 +1,22 @@
 /**
  * Supabase client for client-side operations (browser).
- * Uses anon key for public operations and auth.
+ * Uses client-accessible environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY).
+ * Do NOT use server-only env vars here.
  */
 
 import { createBrowserClient } from "@supabase/ssr";
 
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  // Client-only: Read NEXT_PUBLIC_* variables (accessible in browser)
+  // These are inlined at build time by Next.js
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    // Don't throw here - let the calling code handle the error
+    // This prevents module-level errors that break the build
     throw new Error(
-      "Missing Supabase environment variables: SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) are required"
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. These must be set in your environment."
     );
   }
 

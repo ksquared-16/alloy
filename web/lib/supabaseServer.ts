@@ -1,6 +1,7 @@
 /**
  * Supabase client for server-side operations (middleware, server components).
- * Uses anon key and handles cookies for session management.
+ * Uses server-only environment variables (SUPABASE_URL, SUPABASE_ANON_KEY).
+ * Do NOT use this in client components.
  */
 
 import { createServerClient } from "@supabase/ssr";
@@ -9,12 +10,13 @@ import { cookies } from "next/headers";
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  // Server-only: Read SUPABASE_URL and SUPABASE_ANON_KEY (not NEXT_PUBLIC_*)
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
-      "Missing Supabase environment variables: SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) are required"
+      "Missing Supabase server environment variables: SUPABASE_URL and SUPABASE_ANON_KEY are required"
     );
   }
 

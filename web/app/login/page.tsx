@@ -19,7 +19,7 @@ function LoginForm() {
     errorParam === "unauthorized"
       ? "You are not authorized to access the admin area."
       : errorParam === "config"
-      ? "Missing SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY)."
+      ? "Configuration error: Missing server environment variables (SUPABASE_URL and SUPABASE_ANON_KEY)."
       : null;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -50,10 +50,20 @@ function LoginForm() {
       router.push("/admin");
       router.refresh();
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred. Please try again.");
+      // Handle configuration errors gracefully
+      if (err.message?.includes("NEXT_PUBLIC_SUPABASE")) {
+        setError("Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      } else {
+        setError(err.message || "An unexpected error occurred. Please try again.");
+      }
       setIsLoading(false);
     }
   };
+
+  // TEMPORARY: Staging-only debug info
+  const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+  const hasUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const hasAnonKey = Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
@@ -61,6 +71,15 @@ function LoginForm() {
         <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
           Admin Sign In
         </h1>
+
+        {/* TEMPORARY: Staging debug info - REMOVE AFTER CONFIRMING LOGIN WORKS */}
+        {isStaging && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-800 text-xs font-mono">
+            <div className="font-semibold mb-2">[STAGING DEBUG]</div>
+            <div>NEXT_PUBLIC_SUPABASE_URL: {hasUrl ? "✓" : "✗"}</div>
+            <div>NEXT_PUBLIC_SUPABASE_ANON_KEY: {hasAnonKey ? "✓" : "✗"}</div>
+          </div>
+        )}
 
         {(error || initialError) && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
