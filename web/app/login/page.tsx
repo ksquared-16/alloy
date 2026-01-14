@@ -15,11 +15,15 @@ function LoginForm() {
 
   // Check for error query param
   const errorParam = searchParams?.get("error");
+  
+  // Only show config error if env vars are actually missing
+  const hasClientEnvVars = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  
   const initialError =
     errorParam === "unauthorized"
       ? "You are not authorized to access the admin area."
-      : errorParam === "config"
-      ? "Configuration error: Missing server environment variables (SUPABASE_URL and SUPABASE_ANON_KEY)."
+      : errorParam === "config" && !hasClientEnvVars
+      ? "Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY."
       : null;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -60,26 +64,12 @@ function LoginForm() {
     }
   };
 
-  // TEMPORARY: Staging-only debug info
-  const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
-  const hasUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const hasAnonKey = Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
         <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
           Admin Sign In
         </h1>
-
-        {/* TEMPORARY: Staging debug info - REMOVE AFTER CONFIRMING LOGIN WORKS */}
-        {isStaging && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-800 text-xs font-mono">
-            <div className="font-semibold mb-2">[STAGING DEBUG]</div>
-            <div>NEXT_PUBLIC_SUPABASE_URL: {hasUrl ? "✓" : "✗"}</div>
-            <div>NEXT_PUBLIC_SUPABASE_ANON_KEY: {hasAnonKey ? "✓" : "✗"}</div>
-          </div>
-        )}
 
         {(error || initialError) && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
