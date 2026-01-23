@@ -15,17 +15,20 @@ export default function CleaningPage() {
   const formRef = useRef<HTMLDivElement>(null);
   const cleaningOptions = [
     {
-      type: "Standard Cleaning (+ Recurring Options)",
+      type: "Standard",
+      subtitle: "+ Recurring options",
       description:
         "Regular maintenance cleaning to keep your home fresh and tidy.",
     },
     {
       type: "Deep",
+      subtitle: null,
       description:
         "Thorough cleaning including baseboards, inside appliances, and detailed scrubbing.",
     },
     {
       type: "Move-out",
+      subtitle: null,
       description:
         "Comprehensive cleaning to prepare your home for the next residents.",
     },
@@ -303,11 +306,18 @@ export default function CleaningPage() {
           {cleaningOptions.map((option) => {
             const isMoveOut = option.type === "Move-out";
             const content = (
-              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200">
-                <h3 className="text-xl font-semibold text-alloy-midnight mb-2">
-                  {option.type} Cleaning
-                </h3>
-                <p className="text-gray-600">{option.description}</p>
+              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200 flex flex-col">
+                <div className="mb-2">
+                  <h3 className="text-xl font-semibold text-alloy-midnight">
+                    {option.type} Cleaning
+                  </h3>
+                  {option.subtitle && (
+                    <p className="text-sm text-alloy-midnight/60 mt-0.5">
+                      {option.subtitle}
+                    </p>
+                  )}
+                </div>
+                <p className="text-gray-600 flex-grow">{option.description}</p>
               </div>
             );
             return isMoveOut ? (

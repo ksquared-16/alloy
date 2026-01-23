@@ -19,6 +19,7 @@ export interface SupabaseQuoteResult {
   total_first_visit_cents: number | null;
   price_breakdown: string | null;
   is_manual_quote: boolean;
+  out_frequency_key?: string | null;
 }
 
 /**
@@ -129,6 +130,15 @@ export async function getQuotePricingFromSupabase(
     throw new Error("No pricing data returned from Supabase");
   }
 
+  // RPC returns an array - use first row
+  if (Array.isArray(data)) {
+    if (data.length === 0) {
+      throw new Error("No pricing data returned from Supabase (empty array)");
+    }
+    return data[0] as SupabaseQuoteResult;
+  }
+
+  // Fallback: if it's not an array, return as-is
   return data as SupabaseQuoteResult;
 }
 
@@ -141,6 +151,12 @@ export function convertSupabaseResultToQuoteResult(
   frequency: CleaningFrequencyOption,
   addOns: AddOnId[]
 ): CleaningQuoteResult {
+  const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+  
+  if (isStaging) {
+    console.log("[STAGING] convertSupabaseResultToQuoteResult - raw row:", supabaseResult);
+  }
+
   const serviceLabel =
     serviceType === "Move-Out / Heavy Clean"
       ? "Move-Out / Heavy Clean"
@@ -148,9 +164,9 @@ export function convertSupabaseResultToQuoteResult(
 
   // Handle manual quote
   if (supabaseResult.is_manual_quote) {
-    return {
-      status: "pending",
-      source: "supabase",
+    const result = {
+      status: "pending" as const,
+      source: "supabase" as const,
       service: serviceLabel,
       estimated_price: null,
       first_clean_price: null,
@@ -159,54 +175,82 @@ export function convertSupabaseResultToQuoteResult(
       discount_label: null,
       addons: addOns.map((id) => ({ name: id, price: null })),
       price_breakdown: supabaseResult.price_breakdown || "Manual quote required",
+      is_manual_quote: true,
     };
+    
+    if (isStaging) {
+      console.log("[STAGING] convertSupabaseResultToQuoteResult - converted (manual):", result);
+    }
+    
+    return result;
   }
 
-  // Convert cents to dollars
-  const firstCleanPrice =
-    supabaseResult.total_first_visit_cents != null
-      ? supabaseResult.total_first_visit_cents / 100
-      : null;
-  const recurringPrice =
-    supabaseResult.recurring_cents != null
-      ? supabaseResult.recurring_cents / 100
-      : null;
-
-  // Extract frequency label and discount from frequency option
-  // Normalize frequency first (handle legacy values)
-  const normalizedFrequency = mapFrequencyToKey(frequency);
+  // Map fields from Supabase RPC response
+  // first_clean_price = (row.first_clean_cents ?? 0) / 100
+  const firstCleanPrice = (supabaseResult.first_clean_cents ?? 0) / 100;
   
+  // recurring_price = row.recurring_cents != null ? row.recurring_cents / 100 : null
+  const recurringPrice = supabaseResult.recurring_cents != null 
+    ? supabaseResult.recurring_cents / 100 
+    : null;
+  
+  // estimated_price = (row.total_first_visit_cents ?? (row.first_clean_cents ?? 0) + (row.addons_total_cents ?? 0)) / 100
+  const estimatedPrice = (supabaseResult.total_first_visit_cents ?? 
+    ((supabaseResult.first_clean_cents ?? 0) + (supabaseResult.addons_total_cents ?? 0))) / 100;
+
+  // Extract frequency label and discount from out_frequency_key or fallback to input frequency
   let frequencyLabel: string | null = null;
   let discountLabel: string | null = null;
-
-  if (normalizedFrequency === "Weekly (30% Off)") {
-    frequencyLabel = "Weekly";
-    discountLabel = "30% off";
-  } else if (normalizedFrequency === "Bi-Weekly (20% Off)") {
-    frequencyLabel = "Bi-Weekly";
-    discountLabel = "20% off";
-  } else if (normalizedFrequency === "Monthly (10% Off)") {
-    frequencyLabel = "Monthly";
-    discountLabel = "10% off";
+  
+  // Use out_frequency_key from RPC if available, otherwise derive from input frequency
+  const frequencyKey = supabaseResult.out_frequency_key || mapFrequencyToKey(frequency);
+  
+  if (frequencyKey) {
+    if (frequencyKey === "Weekly (30% Off)" || frequencyKey.includes("Weekly")) {
+      frequencyLabel = "Weekly";
+      discountLabel = "30% off";
+    } else if (frequencyKey === "Bi-Weekly (20% Off)" || frequencyKey.includes("Bi-Weekly")) {
+      frequencyLabel = "Bi-Weekly";
+      discountLabel = "20% off";
+    } else if (frequencyKey === "Monthly (10% Off)" || frequencyKey.includes("Monthly")) {
+      frequencyLabel = "Monthly";
+      discountLabel = "10% off";
+    } else {
+      // Fallback: try to extract from the key string
+      frequencyLabel = frequencyKey.split(" ")[0] || null;
+      // Extract discount from key if present
+      const discountMatch = frequencyKey.match(/(\d+)%/);
+      if (discountMatch) {
+        discountLabel = `${discountMatch[1]}% off`;
+      }
+    }
   }
 
   // Build addons list (we don't have individual addon prices from Supabase, so use null)
   const addonsList = addOns.map((id) => ({ name: id, price: null }));
 
+  // status = "ready" if we have pricing data
   const status: "ready" | "pending" =
-    firstCleanPrice != null && firstCleanPrice > 0 ? "ready" : "pending";
+    (firstCleanPrice > 0 || estimatedPrice > 0) ? "ready" : "pending";
 
-  return {
+  const result: CleaningQuoteResult = {
     status,
     source: "supabase",
     service: serviceLabel,
-    estimated_price: firstCleanPrice,
+    estimated_price: estimatedPrice,
     first_clean_price: firstCleanPrice,
     recurring_price: recurringPrice,
     frequency_label: frequencyLabel,
     discount_label: discountLabel,
     addons: addonsList,
     price_breakdown: supabaseResult.price_breakdown || null,
+    is_manual_quote: false,
   };
+
+  if (isStaging) {
+    console.log("[STAGING] convertSupabaseResultToQuoteResult - converted:", result);
+  }
+
+  return result;
 }
 
