@@ -16,7 +16,7 @@ export default function CleaningPage() {
   const cleaningOptions = [
     {
       type: "Standard",
-      subtitle: "+ Recurring options",
+      subtitle: "Recurring options available",
       description:
         "Regular maintenance cleaning to keep your home fresh and tidy.",
     },
@@ -306,18 +306,18 @@ export default function CleaningPage() {
           {cleaningOptions.map((option) => {
             const isMoveOut = option.type === "Move-out";
             const content = (
-              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200 flex flex-col">
-                <div className="mb-2">
-                  <h3 className="text-xl font-semibold text-alloy-midnight">
+              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200 flex flex-col h-full">
+                <div className="mb-3">
+                  <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
                     {option.type} Cleaning
                   </h3>
                   {option.subtitle && (
-                    <p className="text-sm text-alloy-midnight/60 mt-0.5">
+                    <p className="text-xs text-alloy-midnight/60 mt-1 leading-tight">
                       {option.subtitle}
                     </p>
                   )}
                 </div>
-                <p className="text-gray-600 flex-grow">{option.description}</p>
+                <p className="text-gray-600 text-sm flex-grow leading-relaxed">{option.description}</p>
               </div>
             );
             return isMoveOut ? (
