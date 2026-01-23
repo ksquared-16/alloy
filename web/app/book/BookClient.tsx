@@ -28,14 +28,14 @@ function GhlBookingIframe({
         const params = new URLSearchParams({
             redirectUrl: "https://www.workwithalloy.com/payment",
         });
-        
+
         // Add prefill parameters if available (for contact matching)
         if (phone) params.append("phone", phone);
         if (email) params.append("email", email);
         if (firstName) params.append("first_name", firstName);
         if (lastName) params.append("last_name", lastName);
         if (contactId) params.append("lead_contact_id", contactId);
-        
+
         return `${baseUrl}?${params.toString()}`;
     };
 
@@ -94,64 +94,249 @@ export default function BookClient() {
     const estimatedPrice = searchParams?.get("estimated_price");
 
     useEffect(() => {
-        // Read quote from sessionStorage immediately
+        // Read quote from localStorage or sessionStorage (prefer localStorage)
         try {
-            const storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
+            // Try localStorage first (new storage location)
+            let storedQuote = localStorage.getItem("cleaning_quote");
+            if (!storedQuote) {
+                // Fallback to sessionStorage (backward compatibility)
+                storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
+            }
+
             if (storedQuote) {
                 const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
                 setQuote(parsedQuote);
                 setFetchStatus("ready");
-                console.log("Loaded quote from sessionStorage:", parsedQuote);
+                console.log("Loaded quote from storage:", parsedQuote);
             } else {
                 setFetchStatus("error");
                 setQuote(null);
             }
         } catch (e) {
-            console.error("Failed to load quote from sessionStorage:", e);
+            console.error("Failed to load quote from storage:", e);
             setFetchStatus("error");
             setQuote(null);
         }
     }, []);
 
+    // Submit lead to backend/GHL if quote exists and ghl_contact_id is missing (Standard Cleaning only)
+    useEffect(() => {
+        const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+
+        // Only submit for Standard Cleaning (not Move-Out)
+        if (!quote || quote.service === "Move-Out / Heavy Clean") return;
+
+        // Check if ghl_contact_id already exists (idempotent check)
+        let hasGhlContactId = false;
+        try {
+            // Check sessionStorage first (alloy_booking_prefill)
+            const sessionPrefill = sessionStorage.getItem("alloy_booking_prefill");
+            if (sessionPrefill) {
+                const parsed = JSON.parse(sessionPrefill);
+                if (parsed.ghl_contact_id) {
+                    hasGhlContactId = true;
+                    if (isStaging) {
+                        console.log("[STAGING] ghl_contact_id already exists in sessionStorage, skipping lead submission");
+                    }
+                }
+            }
+
+            // Check localStorage as fallback
+            if (!hasGhlContactId) {
+                const localPrefill = localStorage.getItem("alloy_booking_prefill");
+                if (localPrefill) {
+                    const parsed = JSON.parse(localPrefill);
+                    if (parsed.ghl_contact_id) {
+                        hasGhlContactId = true;
+                        if (isStaging) {
+                            console.log("[STAGING] ghl_contact_id already exists in localStorage, skipping lead submission");
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to check for existing ghl_contact_id:", e);
+        }
+
+        if (hasGhlContactId) return; // Skip submission if contact already exists
+
+        // Load form data from storage
+        let formData: any = null;
+        try {
+            const storedFormData = sessionStorage.getItem("alloy_lead_form_data");
+            if (storedFormData) {
+                formData = JSON.parse(storedFormData);
+            }
+        } catch (e) {
+            console.warn("Failed to load form data from storage:", e);
+        }
+
+        // Need form data to submit lead
+        if (!formData || !formData.phone || !formData.email) {
+            if (isStaging) {
+                console.log("[STAGING] Missing form data for lead submission, skipping");
+            }
+            return;
+        }
+
+        // Only submit for Standard Cleaning service type
+        if (formData.service_type !== "Standard Cleaning") {
+            return;
+        }
+
+        if (isStaging) {
+            console.log("[STAGING] Submitting Standard Cleaning lead to backend from /book page");
+        }
+
+        // Submit lead in background (non-blocking)
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+        const submitFormData = new FormData();
+
+        // Build FormData from stored form data
+        if (formData.first_name) submitFormData.append("first_name", formData.first_name);
+        if (formData.last_name) submitFormData.append("last_name", formData.last_name);
+        if (formData.phone) submitFormData.append("phone", formData.phone);
+        if (formData.email) submitFormData.append("email", formData.email);
+        if (formData.postal_code) submitFormData.append("postal_code", formData.postal_code);
+        if (formData.home_type) submitFormData.append("home_type", formData.home_type);
+        if (formData.service_type) submitFormData.append("service_type", formData.service_type);
+        if (formData.approximate_square_footage) submitFormData.append("approximate_square_footage", formData.approximate_square_footage);
+        if (formData.cleaning_frequency) submitFormData.append("cleaning_frequency", formData.cleaning_frequency);
+        if (formData.preferred_service_date) submitFormData.append("preferred_service_date", formData.preferred_service_date);
+        if (formData.extras_add_ons) submitFormData.append("extras_add_ons", formData.extras_add_ons);
+        if (formData.addons__frequency) submitFormData.append("addons__frequency", formData.addons__frequency);
+        if (formData.street_address) submitFormData.append("street_address", formData.street_address);
+
+        // Fire-and-forget with timeout
+        const submitPromise = fetch(`${apiBaseUrl}/leads/cleaning`, {
+            method: "POST",
+            body: submitFormData,
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("timeout")), 5000);
+        });
+
+        Promise.race([submitPromise, timeoutPromise])
+            .then(async (response) => {
+                if (response instanceof Response) {
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        if (isStaging) {
+                            console.error("[STAGING] Lead submission failed:", {
+                                status: response.status,
+                                error: errorData
+                            });
+                        } else {
+                            console.warn("Lead submission failed (non-blocking):", response.status);
+                        }
+                        return;
+                    }
+
+                    const backendResult = await response.json();
+                    if (isStaging) {
+                        console.log("[STAGING] Lead submission successful:", {
+                            contact_id: backendResult.contact_id,
+                            status: backendResult.status
+                        });
+                    }
+
+                    // Store ghl_contact_id as PRIMARY identifier
+                    if (backendResult.contact_id) {
+                        try {
+                            // Read existing prefill data or create new
+                            const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
+                            let prefillData: any = {};
+
+                            if (existingPrefill) {
+                                try {
+                                    prefillData = JSON.parse(existingPrefill);
+                                } catch (e) {
+                                    console.warn("Failed to parse existing prefill data:", e);
+                                }
+                            }
+
+                            // Store ghl_contact_id as PRIMARY identifier (set first)
+                            prefillData.ghl_contact_id = backendResult.contact_id;
+                            // Also store supporting data for fallback
+                            prefillData.phone = formData.phone;
+                            prefillData.email = formData.email;
+                            prefillData.first_name = formData.first_name;
+                            prefillData.last_name = formData.last_name;
+
+                            // Store in both sessionStorage and localStorage for persistence
+                            const jsonData = JSON.stringify(prefillData);
+                            sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                            localStorage.setItem("alloy_booking_prefill", jsonData);
+
+                            if (isStaging) {
+                                console.log("[STAGING] Stored ghl_contact_id as primary identifier", {
+                                    ghl_contact_id: backendResult.contact_id,
+                                    phone: formData.phone,
+                                    email: formData.email
+                                });
+                            }
+                        } catch (e) {
+                            console.warn("Failed to persist ghl_contact_id:", e);
+                        }
+                    }
+                }
+            })
+            .catch((error) => {
+                if (error.message === "timeout") {
+                    if (isStaging) {
+                        console.warn("[STAGING] Lead submission timeout (non-blocking)");
+                    }
+                } else {
+                    if (isStaging) {
+                        console.error("[STAGING] Lead submission error:", error);
+                    } else {
+                        console.warn("Lead submission error (non-blocking):", error);
+                    }
+                }
+            });
+    }, [quote]);
+
     // Poll backend in background to upgrade quote (if phone is available)
     useEffect(() => {
         if (!phone || !quote) return; // Only poll if we have a phone and initial quote
-        
+
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
         let pollCount = 0;
         const MAX_POLLS = 5;
         const POLL_INTERVAL = 750; // 750ms
-        
+
         const pollQuote = async () => {
             if (pollCount >= MAX_POLLS) {
                 console.log("Stopped polling after max attempts");
                 return;
             }
-            
+
             // Stop early if quote is already complete
             if (quote.status === "ready" && quote.recurring_price) {
                 console.log("Quote already complete, stopping poll");
                 return;
             }
-            
+
             pollCount++;
-            
+
             try {
                 const response = await fetch(
                     `${apiBaseUrl}/quote/cleaning?phone=${encodeURIComponent(phone)}`
                 );
-                
+
                 if (response.ok) {
                     const serverQuote: QuoteResponse = await response.json();
-                    
+
                     // Upgrade quote if server has better data
                     if (serverQuote.status === "ready" && serverQuote.recurring_price) {
                         setQuote(serverQuote);
-                        // Update sessionStorage with upgraded quote
+                        // Update both localStorage and sessionStorage with upgraded quote
                         try {
+                            localStorage.setItem("cleaning_quote", JSON.stringify(serverQuote));
                             sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(serverQuote));
                         } catch (e) {
-                            console.warn("Failed to update sessionStorage:", e);
+                            console.warn("Failed to update storage:", e);
                         }
                         console.log("Upgraded quote from server:", serverQuote);
                         return; // Stop polling once we have complete quote
@@ -160,16 +345,16 @@ export default function BookClient() {
             } catch (error) {
                 console.warn("Poll error (non-blocking):", error);
             }
-            
+
             // Schedule next poll
             if (pollCount < MAX_POLLS) {
                 setTimeout(pollQuote, POLL_INTERVAL);
             }
         };
-        
+
         // Start polling after initial delay
         const timeoutId = setTimeout(pollQuote, POLL_INTERVAL);
-        
+
         return () => clearTimeout(timeoutId);
     }, [phone, quote]);
 
@@ -187,11 +372,12 @@ export default function BookClient() {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get("booking") === "complete" || urlParams.get("success") === "true" || urlParams.get("booked") === "true") {
                 setShowBookingSuccess(true);
-                // Clear sessionStorage on booking completion
+                // Clear both localStorage and sessionStorage on booking completion
                 try {
+                    localStorage.removeItem("cleaning_quote");
                     sessionStorage.removeItem("alloy_cleaning_quote");
                 } catch (e) {
-                    console.warn("Failed to clear sessionStorage:", e);
+                    console.warn("Failed to clear storage:", e);
                 }
                 setTimeout(() => {
                     window.location.href = "/";
@@ -214,11 +400,12 @@ export default function BookClient() {
             ) {
                 console.log("Booking completion detected:", event.data);
                 setShowBookingSuccess(true);
-                // Clear sessionStorage on booking completion
+                // Clear both localStorage and sessionStorage on booking completion
                 try {
+                    localStorage.removeItem("cleaning_quote");
                     sessionStorage.removeItem("alloy_cleaning_quote");
                 } catch (e) {
-                    console.warn("Failed to clear sessionStorage:", e);
+                    console.warn("Failed to clear storage:", e);
                 }
                 setTimeout(() => {
                     window.location.href = "/";
@@ -230,11 +417,12 @@ export default function BookClient() {
         const handleHashChange = () => {
             if (window.location.hash.includes("success") || window.location.hash.includes("complete")) {
                 setShowBookingSuccess(true);
-                // Clear sessionStorage on booking completion
+                // Clear both localStorage and sessionStorage on booking completion
                 try {
+                    localStorage.removeItem("cleaning_quote");
                     sessionStorage.removeItem("alloy_cleaning_quote");
                 } catch (e) {
-                    console.warn("Failed to clear sessionStorage:", e);
+                    console.warn("Failed to clear storage:", e);
                 }
                 setTimeout(() => {
                     window.location.href = "/";
@@ -244,7 +432,7 @@ export default function BookClient() {
 
         window.addEventListener("message", handleMessage);
         window.addEventListener("hashchange", handleHashChange);
-        
+
         // Poll URL for changes (fallback for GHL redirects)
         const pollInterval = setInterval(() => {
             checkBookingComplete();

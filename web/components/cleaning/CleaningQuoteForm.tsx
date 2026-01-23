@@ -368,16 +368,45 @@ export default function CleaningQuoteForm({
                 addOnFrequency: isMoveOut ? undefined : (form.addOnFrequency || undefined),
             };
 
-            // For Standard Cleaning: Calculate quote immediately and show it
+            // For Standard Cleaning: Calculate quote and navigate to /book
             if (!isMoveOut) {
+                const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+                
+                if (isStaging) {
+                    console.log("[STAGING] Starting quote calculation for submission");
+                }
+
                 try {
-                    // Call Supabase RPC for pricing
-                    const supabaseResult = await getQuotePricingFromSupabase(
+                    // Wrap Supabase RPC call with timeout (10s)
+                    const supabasePromise = getQuotePricingFromSupabase(
                         cleanInput.serviceType,
                         cleanInput.squareFootage,
                         cleaningFrequency,
                         cleanInput.addOns
                     );
+                    
+                    const timeoutPromise = new Promise<never>((_, reject) => {
+                        setTimeout(() => reject(new Error("Quote calculation timeout after 10 seconds")), 10000);
+                    });
+
+                    if (isStaging) {
+                        console.log("[STAGING] Calling Supabase RPC with params:", {
+                            serviceType: cleanInput.serviceType,
+                            squareFootage: cleanInput.squareFootage,
+                            frequency: cleaningFrequency,
+                            addOns: cleanInput.addOns,
+                        });
+                    }
+
+                    const supabaseResult = await Promise.race([
+                        supabasePromise,
+                        timeoutPromise,
+                    ]);
+
+                    if (isStaging) {
+                        console.log("[STAGING] Supabase RPC success:", supabaseResult);
+                    }
+
                     const result = convertSupabaseResultToQuoteResult(
                         supabaseResult,
                         cleanInput.serviceType,
@@ -385,51 +414,64 @@ export default function CleaningQuoteForm({
                         cleanInput.addOns
                     );
 
-                    // Store quote in sessionStorage for /book page
-                try {
-                    sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
-                } catch (e) {
-                    console.warn("Failed to store quote in sessionStorage:", e);
-                }
+                    // Store quote in localStorage for /book page
+                    try {
+                        localStorage.setItem("cleaning_quote", JSON.stringify(result));
+                        // Also store in sessionStorage for backward compatibility
+                        sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
+                        if (isStaging) {
+                            console.log("[STAGING] Stored quote to localStorage and sessionStorage");
+                        }
+                    } catch (e) {
+                        console.warn("Failed to store quote:", e);
+                    }
 
-                // Store complete form data for potential resubmission on /payment
-                try {
-                    const formDataForStorage = {
-                        first_name: cleanInput.firstName,
-                        last_name: cleanInput.lastName,
+                    // Store complete form data for potential resubmission on /payment
+                    try {
+                        const formDataForStorage = {
+                            first_name: cleanInput.firstName,
+                            last_name: cleanInput.lastName,
+                            phone: cleanInput.phone,
+                            email: cleanInput.email,
+                            postal_code: cleanInput.postalCode,
+                            home_type: cleanInput.homeType,
+                            service_type: cleanInput.serviceType,
+                            approximate_square_footage: cleanInput.squareFootage,
+                            cleaning_frequency: cleaningFrequency,
+                            preferred_service_date: cleanInput.preferredServiceDate || undefined,
+                            extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
+                            addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
+                            street_address: form.streetAddress.trim() || undefined,
+                            estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
+                        };
+                        sessionStorage.setItem("alloy_lead_form_data", JSON.stringify(formDataForStorage));
+                        if (isStaging) {
+                            console.log("[STAGING] Stored form data:", formDataForStorage);
+                        }
+                    } catch (e) {
+                        console.warn("Failed to store form data in sessionStorage:", e);
+                    }
+
+                    // Build booking URL with all prefill parameters to ensure GHL matches existing contact
+                    const bookingUrl = buildBookingUrl({
                         phone: cleanInput.phone,
                         email: cleanInput.email,
-                        postal_code: cleanInput.postalCode,
-                        home_type: cleanInput.homeType,
-                        service_type: cleanInput.serviceType,
-                        approximate_square_footage: cleanInput.squareFootage,
-                        cleaning_frequency: cleaningFrequency,
-                        preferred_service_date: cleanInput.preferredServiceDate || undefined,
-                        extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
-                        addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
-                        street_address: form.streetAddress.trim() || undefined,
-                        estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
-                    };
-                    sessionStorage.setItem("alloy_lead_form_data", JSON.stringify(formDataForStorage));
-                    console.log("Stored form data for potential resubmission:", formDataForStorage);
-                } catch (e) {
-                    console.warn("Failed to store form data in sessionStorage:", e);
-                }
+                        firstName: cleanInput.firstName,
+                        lastName: cleanInput.lastName,
+                        estimatedPrice: result.estimated_price ?? undefined,
+                    });
 
-                // Build booking URL with all prefill parameters to ensure GHL matches existing contact
-                const bookingUrl = buildBookingUrl({
-                    phone: cleanInput.phone,
-                    email: cleanInput.email,
-                    firstName: cleanInput.firstName,
-                    lastName: cleanInput.lastName,
-                    estimatedPrice: result.estimated_price ?? undefined,
-                });
-
-                    // Redirect to booking page immediately (don't wait for backend)
+                    // Navigate to /book page
                     router.push(bookingUrl);
+                    return; // Exit early, don't continue with backend submission
                 } catch (error) {
-                    console.error("Error calculating quote for submission:", error);
-                    // If quote calculation fails, still allow submission but show error
+                    if (isStaging) {
+                        console.error("[STAGING] Error calculating quote:", error);
+                        console.error("[STAGING] Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                    } else {
+                        console.error("Error calculating quote for submission:", error);
+                    }
+                    // If quote calculation fails, show error and stop submission
                     setErrors((prev) => ({
                         ...prev,
                         submit: "Failed to calculate quote. Please try again or contact us directly.",
@@ -976,135 +1018,6 @@ export default function CleaningQuoteForm({
                     )}
                 </div>
             </form>
-
-            {/* Quote summary (local, instant) - condensed layout */}
-            {quote && (
-                <div className="mt-4 rounded-xl border border-alloy-stone/30 bg-white p-3 md:p-4 shadow-sm">
-                    {hasReadyQuote && quote.first_clean_price != null && quote.first_clean_price > 0 ? (
-                        <div className="space-y-2.5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {/* First Cleaning */}
-                                <div className="rounded-lg border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                        First Cleaning
-                                    </p>
-                                    <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
-                                        ${quote.first_clean_price.toFixed(2)}
-                                    </p>
-                                </div>
-
-                                {/* Recurring (if any) */}
-                                {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label ? (
-                                    <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                            {quote.frequency_label} Cleaning
-                                            {quote.discount_label && (
-                                                <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
-                                                    ({quote.discount_label})
-                                                </span>
-                                            )}
-                                        </p>
-                                        <div className="flex items-baseline gap-1">
-                                            <p className="text-2xl md:text-3xl font-bold text-alloy-juniper leading-tight">
-                                                ${quote.recurring_price.toFixed(2)}
-                                            </p>
-                                            <span className="text-[11px] text-alloy-midnight/60">per visit</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                            Recurring Cleaning
-                                        </p>
-                                        <p className="text-sm text-alloy-midnight/70">One-time service</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Add-ons list (compact) */}
-                            {quote.addons && quote.addons.length > 0 && (
-                                <div className="pt-1 border-t border-alloy-stone/20">
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
-                                        Add-ons
-                                    </p>
-                                    <div className="space-y-1">
-                                        {quote.addons.map((addon, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="flex justify-between items-center text-sm text-alloy-midnight/85"
-                                            >
-                                                <span>{addon.name}</span>
-                                                <span className="font-medium">
-                                                    {addon.price != null && addon.price > 0
-                                                        ? `$${addon.price.toFixed(2)}`
-                                                        : "Included in quote"}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Breakdown link */}
-                            {quote.price_breakdown && (
-                                <details className="mt-1">
-                                    <summary className="text-xs text-alloy-midnight/70 cursor-pointer hover:text-alloy-midnight">
-                                        See full price breakdown
-                                    </summary>
-                                    <pre className="mt-1.5 whitespace-pre-line text-xs text-alloy-midnight/80 leading-relaxed">
-                                        {quote.price_breakdown}
-                                    </pre>
-                                </details>
-                            )}
-
-                            {/* Continue to booking CTA */}
-                            {form.phone && form.email && form.firstName && form.lastName && (
-                                <div className="pt-2 border-t border-alloy-stone/20">
-                                    <PrimaryButton
-                                        onClick={() => {
-                                            const bookingUrl = buildBookingUrl({
-                                                phone: form.phone,
-                                                email: form.email,
-                                                firstName: form.firstName,
-                                                lastName: form.lastName,
-                                                estimatedPrice: quote?.estimated_price ?? undefined,
-                                            });
-                                            router.push(bookingUrl);
-                                        }}
-                                        className="w-full md:w-auto"
-                                    >
-                                        Continue to booking
-                                    </PrimaryButton>
-                                </div>
-                            )}
-                        </div>
-                    ) : quote.status === "pending" || isCalculatingQuote ? (
-                        <div className="py-3">
-                            <p className="text-sm font-medium text-alloy-midnight">
-                                {quote?.is_manual_quote
-                                    ? "Manual quote required"
-                                    : "Generating your quote…"}
-                            </p>
-                            {quote?.price_breakdown && (
-                                <p className="text-xs text-alloy-midnight/70 mt-1 whitespace-pre-line">
-                                    {quote.price_breakdown}
-                                </p>
-                            )}
-                            {!quote?.is_manual_quote && (
-                                <p className="text-xs text-alloy-midnight/70 mt-1">
-                                    Please wait a moment while we calculate your pricing.
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="py-3">
-                            <p className="text-sm font-medium text-alloy-midnight">
-                                We&apos;re reviewing your details and will confirm your quote shortly.
-                            </p>
-                        </div>
-                    )}
-                </div>
-            )}
 
         </div>
     );
