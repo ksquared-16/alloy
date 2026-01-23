@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
 import {
-    calculateCleaningQuote,
     type CleaningQuoteInput,
     type CleaningQuoteResult,
     type ServiceType,
@@ -14,6 +13,10 @@ import {
     type AddOnFrequencyOption,
     type ServiceHomeType,
 } from "@/lib/pricing/cleaningPricing";
+import {
+    getQuotePricingFromSupabase,
+    convertSupabaseResultToQuoteResult,
+} from "@/lib/pricing/supabasePricing";
 import PrimaryButton from "@/components/PrimaryButton";
 import { compressImage, validateImageSize } from "@/lib/images/resizeCompress";
 import { buildBookingUrl } from "@/lib/booking";
@@ -136,8 +139,75 @@ export default function CleaningQuoteForm({
     const [quote, setQuote] = useState<CleaningQuoteResult | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showMoveOutSuccess, setShowMoveOutSuccess] = useState(false);
+    const [isCalculatingQuote, setIsCalculatingQuote] = useState(false);
 
     const isDark = variant === "dark";
+    const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
+
+    // Calculate quote when relevant form fields change (for Standard Cleaning only)
+    useEffect(() => {
+        if (
+            isMoveOut ||
+            !form.serviceType ||
+            !form.squareFootage ||
+            !form.cleaningFrequency
+        ) {
+            setQuote(null);
+            return;
+        }
+
+        // Debounce quote calculation
+        const timeoutId = setTimeout(async () => {
+            setIsCalculatingQuote(true);
+            try {
+                const supabaseResult = await getQuotePricingFromSupabase(
+                    form.serviceType as ServiceType,
+                    form.squareFootage as SquareFootageOption,
+                    form.cleaningFrequency as CleaningFrequencyOption,
+                    form.addOns as AddOnId[]
+                );
+                const result = convertSupabaseResultToQuoteResult(
+                    supabaseResult,
+                    form.serviceType as ServiceType,
+                    form.cleaningFrequency as CleaningFrequencyOption,
+                    form.addOns as AddOnId[]
+                );
+                setQuote(result);
+                if (onQuoteCalculated) {
+                    const cleanInput: CleaningQuoteInput = {
+                        firstName: form.firstName,
+                        lastName: form.lastName,
+                        phone: form.phone,
+                        email: form.email,
+                        postalCode: form.postalCode,
+                        homeType: form.homeType as ServiceHomeType,
+                        serviceType: form.serviceType as ServiceType,
+                        squareFootage: form.squareFootage as SquareFootageOption,
+                        cleaningFrequency: form.cleaningFrequency as CleaningFrequencyOption,
+                        addOns: form.addOns as AddOnId[],
+                        addOnFrequency: form.addOnFrequency as AddOnFrequencyOption | undefined,
+                    };
+                    onQuoteCalculated(result, cleanInput);
+                }
+            } catch (error) {
+                console.error("Error calculating quote:", error);
+                // Don't show error to user for real-time calculation
+                // Only set quote to null so it doesn't show stale data
+                setQuote(null);
+            } finally {
+                setIsCalculatingQuote(false);
+            }
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timeoutId);
+    }, [
+        form.serviceType,
+        form.squareFootage,
+        form.cleaningFrequency,
+        form.addOns,
+        isMoveOut,
+        onQuoteCalculated,
+    ]);
 
     const labelClass =
         "block text-xs font-semibold uppercase tracking-wide mb-1 " +
@@ -300,9 +370,22 @@ export default function CleaningQuoteForm({
 
             // For Standard Cleaning: Calculate quote immediately and show it
             if (!isMoveOut) {
-                const result = calculateCleaningQuote(cleanInput);
+                try {
+                    // Call Supabase RPC for pricing
+                    const supabaseResult = await getQuotePricingFromSupabase(
+                        cleanInput.serviceType,
+                        cleanInput.squareFootage,
+                        cleaningFrequency,
+                        cleanInput.addOns
+                    );
+                    const result = convertSupabaseResultToQuoteResult(
+                        supabaseResult,
+                        cleanInput.serviceType,
+                        cleaningFrequency,
+                        cleanInput.addOns
+                    );
 
-                // Store quote in sessionStorage for /book page
+                    // Store quote in sessionStorage for /book page
                 try {
                     sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
                 } catch (e) {
@@ -342,8 +425,18 @@ export default function CleaningQuoteForm({
                     estimatedPrice: result.estimated_price ?? undefined,
                 });
 
-                // Redirect to booking page immediately (don't wait for backend)
-                router.push(bookingUrl);
+                    // Redirect to booking page immediately (don't wait for backend)
+                    router.push(bookingUrl);
+                } catch (error) {
+                    console.error("Error calculating quote for submission:", error);
+                    // If quote calculation fails, still allow submission but show error
+                    setErrors((prev) => ({
+                        ...prev,
+                        submit: "Failed to calculate quote. Please try again or contact us directly.",
+                    }));
+                    setIsSubmitting(false);
+                    return;
+                }
             }
 
             // Submit to backend in background (non-blocking)
@@ -484,8 +577,6 @@ export default function CleaningQuoteForm({
             setIsSubmitting(false);
         }
     };
-
-    const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
 
     const hasReadyQuote =
         quote &&
@@ -680,9 +771,9 @@ export default function CleaningQuoteForm({
                         >
                             <option value="">Select a frequency</option>
                             <option value="One-time">One-time</option>
-                            <option value="Weekly (40% Off)">Weekly (40% Off)</option>
-                            <option value="Bi-Weekly (30% Off)">Bi-Weekly (30% Off)</option>
-                            <option value="Monthly (20% Off)">Monthly (20% Off)</option>
+                            <option value="Weekly (30% Off)">Weekly (30% Off)</option>
+                            <option value="Bi-Weekly (20% Off)">Bi-Weekly (20% Off)</option>
+                            <option value="Monthly (10% Off)">Monthly (10% Off)</option>
                         </select>
                         {errors.cleaningFrequency && (
                             <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequency}</p>
@@ -987,14 +1078,23 @@ export default function CleaningQuoteForm({
                                 </div>
                             )}
                         </div>
-                    ) : quote.status === "pending" ? (
+                    ) : quote.status === "pending" || isCalculatingQuote ? (
                         <div className="py-3">
                             <p className="text-sm font-medium text-alloy-midnight">
-                                Generating your quote…
+                                {quote?.is_manual_quote
+                                    ? "Manual quote required"
+                                    : "Generating your quote…"}
                             </p>
-                            <p className="text-xs text-alloy-midnight/70 mt-1">
-                                Please wait a moment while we calculate your pricing.
-                            </p>
+                            {quote?.price_breakdown && (
+                                <p className="text-xs text-alloy-midnight/70 mt-1 whitespace-pre-line">
+                                    {quote.price_breakdown}
+                                </p>
+                            )}
+                            {!quote?.is_manual_quote && (
+                                <p className="text-xs text-alloy-midnight/70 mt-1">
+                                    Please wait a moment while we calculate your pricing.
+                                </p>
+                            )}
                         </div>
                     ) : (
                         <div className="py-3">
