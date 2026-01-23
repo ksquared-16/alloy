@@ -58,6 +58,7 @@ function GhlBookingIframe({
 
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
+    source?: "local_pricing" | "supabase";
     estimated_price?: number;
     first_clean_price?: number;
     recurring_price?: number;
@@ -298,8 +299,15 @@ export default function BookClient() {
     }, [quote]);
 
     // Poll backend in background to upgrade quote (if phone is available)
+    // SKIP polling if quote.source === "supabase" (Supabase is source of truth)
     useEffect(() => {
         if (!phone || !quote) return; // Only poll if we have a phone and initial quote
+
+        // Skip polling entirely if quote is from Supabase (source of truth)
+        if (quote.source === "supabase") {
+            console.log("Skipping poll - quote is from Supabase (source of truth)");
+            return;
+        }
 
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
         let pollCount = 0;
@@ -328,17 +336,37 @@ export default function BookClient() {
                 if (response.ok) {
                     const serverQuote: QuoteResponse = await response.json();
 
-                    // Upgrade quote if server has better data
-                    if (serverQuote.status === "ready" && serverQuote.recurring_price) {
-                        setQuote(serverQuote);
-                        // Update both localStorage and sessionStorage with upgraded quote
+                    // Merge server quote with existing quote (preserve Supabase fields)
+                    if (serverQuote.status === "ready") {
+                        // Only merge fields that don't already exist in current quote
+                        // Preserve: frequency_label, discount_label, recurring_price, price_breakdown if they exist
+                        const mergedQuote: QuoteResponse = {
+                            ...quote,
+                            ...serverQuote,
+                            // Never overwrite these fields if they already exist (check for null/undefined, not falsy)
+                            frequency_label: (quote.frequency_label !== null && quote.frequency_label !== undefined)
+                                ? quote.frequency_label
+                                : serverQuote.frequency_label,
+                            discount_label: (quote.discount_label !== null && quote.discount_label !== undefined)
+                                ? quote.discount_label
+                                : serverQuote.discount_label,
+                            recurring_price: (quote.recurring_price !== null && quote.recurring_price !== undefined)
+                                ? quote.recurring_price
+                                : serverQuote.recurring_price,
+                            price_breakdown: (quote.price_breakdown !== null && quote.price_breakdown !== undefined)
+                                ? quote.price_breakdown
+                                : serverQuote.price_breakdown,
+                        };
+
+                        setQuote(mergedQuote);
+                        // Update both localStorage and sessionStorage with merged quote
                         try {
-                            localStorage.setItem("cleaning_quote", JSON.stringify(serverQuote));
-                            sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(serverQuote));
+                            localStorage.setItem("cleaning_quote", JSON.stringify(mergedQuote));
+                            sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(mergedQuote));
                         } catch (e) {
                             console.warn("Failed to update storage:", e);
                         }
-                        console.log("Upgraded quote from server:", serverQuote);
+                        console.log("Merged quote from server (preserved existing fields):", mergedQuote);
                         return; // Stop polling once we have complete quote
                     }
                 }
@@ -526,29 +554,45 @@ export default function BookClient() {
                                         </div>
 
                                         {/* Recurring Cleaning - stacked vertically */}
-                                        {quote.recurring_price !== undefined &&
-                                            quote.recurring_price !== null &&
-                                            quote.recurring_price > 0 &&
-                                            quote.frequency_label ? (
-                                            <div>
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                                    {quote.frequency_label.toUpperCase()} CLEANING
-                                                    {quote.discount_label && (
-                                                        <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
-                                                            ({quote.discount_label})
-                                                        </span>
-                                                    )}
-                                                </p>
-                                                <div className="flex items-baseline gap-1">
-                                                    <p className="text-2xl font-bold text-alloy-juniper leading-tight">
-                                                        ${quote.recurring_price.toFixed(2)}
-                                                    </p>
-                                                    <span className="text-xs text-alloy-midnight/60">
-                                                        per visit
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ) : null}
+                                        {(() => {
+                                            // Staging-only debug log
+                                            if (process.env.NEXT_PUBLIC_APP_ENV === "staging") {
+                                                console.log("[STAGING] Recurring section render", {
+                                                    source: quote.source,
+                                                    recurring_price: quote.recurring_price,
+                                                    frequency_label: quote.frequency_label,
+                                                    discount_label: quote.discount_label,
+                                                    price_breakdown: quote.price_breakdown
+                                                });
+                                            }
+
+                                            if (quote.recurring_price !== undefined &&
+                                                quote.recurring_price !== null &&
+                                                quote.recurring_price > 0 &&
+                                                quote.frequency_label) {
+                                                return (
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                            {quote.frequency_label.toUpperCase()} CLEANING
+                                                            {quote.discount_label && (
+                                                                <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
+                                                                    ({quote.discount_label})
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <p className="text-2xl font-bold text-alloy-juniper leading-tight">
+                                                                ${quote.recurring_price.toFixed(2)}
+                                                            </p>
+                                                            <span className="text-xs text-alloy-midnight/60">
+                                                                per visit
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
 
                                         {/* Add-ons - stacked vertically */}
                                         {quote.addons && quote.addons.length > 0 && (
