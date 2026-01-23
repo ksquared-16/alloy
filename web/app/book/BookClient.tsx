@@ -482,47 +482,57 @@ export default function BookClient() {
                 {/* Two-column layout: Quote (1/4) + Calendar (3/4) */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
                     {/* Left column: Quote panel (1/4 width) */}
-                    {quote && hasQuote && (
-                        <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6">
-                                <div className="space-y-4 text-left">
-                                    <h2 className="text-lg font-bold text-alloy-midnight mb-3">
-                                        Your Quote
-                                    </h2>
+                    {quote && hasQuote && (() => {
+                        // Staging-only debug log
+                        if (process.env.NEXT_PUBLIC_APP_ENV === "staging") {
+                            console.log("[STAGING] Quote labels", {
+                                frequency_label: quote.frequency_label,
+                                discount_label: quote.discount_label,
+                                recurring_price: quote.recurring_price,
+                                price_breakdown: quote.price_breakdown
+                            });
+                        }
 
-                                    {/* First Cleaning - stacked vertically */}
-                                    <div>
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                            First Cleaning
-                                        </p>
-                                        {(() => {
-                                            const price =
-                                                (typeof quote.first_clean_price === "number" &&
-                                                    quote.first_clean_price > 0
-                                                    ? quote.first_clean_price
-                                                    : typeof quote.estimated_price === "number" &&
-                                                        quote.estimated_price > 0
-                                                        ? quote.estimated_price
-                                                        : null);
-                                            return price != null && price > 0 ? (
-                                                <p className="text-2xl font-bold text-alloy-blue leading-tight">
-                                                    ${price.toFixed(2)}
-                                                </p>
-                                            ) : (
-                                                <p className="text-sm text-alloy-midnight/70">Calculating…</p>
-                                            );
-                                        })()}
-                                    </div>
+                        return (
+                            <div className="lg:col-span-1">
+                                <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6">
+                                    <div className="space-y-4 text-left">
+                                        <h2 className="text-lg font-bold text-alloy-midnight mb-3">
+                                            Your Quote
+                                        </h2>
 
-                                    {/* Recurring Cleaning - stacked vertically */}
-                                    <div>
+                                        {/* First Cleaning - stacked vertically */}
+                                        <div>
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                First Cleaning
+                                            </p>
+                                            {(() => {
+                                                const price =
+                                                    (typeof quote.first_clean_price === "number" &&
+                                                        quote.first_clean_price > 0
+                                                        ? quote.first_clean_price
+                                                        : typeof quote.estimated_price === "number" &&
+                                                            quote.estimated_price > 0
+                                                            ? quote.estimated_price
+                                                            : null);
+                                                return price != null && price > 0 ? (
+                                                    <p className="text-2xl font-bold text-alloy-blue leading-tight">
+                                                        ${price.toFixed(2)}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {/* Recurring Cleaning - stacked vertically */}
                                         {quote.recurring_price !== undefined &&
                                             quote.recurring_price !== null &&
                                             quote.recurring_price > 0 &&
                                             quote.frequency_label ? (
-                                            <>
+                                            <div>
                                                 <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                                    {quote.frequency_label} Cleaning
+                                                    {quote.frequency_label.toUpperCase()} CLEANING
                                                     {quote.discount_label && (
                                                         <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
                                                             ({quote.discount_label})
@@ -537,59 +547,50 @@ export default function BookClient() {
                                                         per visit
                                                     </span>
                                                 </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                                    Recurring Cleaning
+                                            </div>
+                                        ) : null}
+
+                                        {/* Add-ons - stacked vertically */}
+                                        {quote.addons && quote.addons.length > 0 && (
+                                            <div>
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                                    Add-ons
                                                 </p>
-                                                <p className="text-sm text-alloy-midnight/70">
-                                                    One-time service
-                                                </p>
-                                            </>
+                                                <div className="space-y-1.5">
+                                                    {quote.addons.map((addon, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            className="flex justify-between items-center py-1 border-b border-alloy-stone/15 last:border-b-0"
+                                                        >
+                                                            <span className="text-xs text-alloy-midnight/85">
+                                                                {addon.name}
+                                                            </span>
+                                                            <span className="text-xs font-semibold text-alloy-midnight">
+                                                                {addon.price === null || addon.price === undefined
+                                                                    ? "included"
+                                                                    : `$${addon.price.toFixed(2)}`}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Price Breakdown Accordion */}
+                                        {quote.price_breakdown && (
+                                            <div>
+                                                <Accordion title="See full price breakdown">
+                                                    <div className="text-xs text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
+                                                        {quote.price_breakdown}
+                                                    </div>
+                                                </Accordion>
+                                            </div>
                                         )}
                                     </div>
-
-                                    {/* Add-ons - stacked vertically */}
-                                    {quote.addons && quote.addons.length > 0 && (
-                                        <div>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                                                Add-ons
-                                            </p>
-                                            <div className="space-y-1.5">
-                                                {quote.addons.map((addon, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        className="flex justify-between items-center py-1 border-b border-alloy-stone/15 last:border-b-0"
-                                                    >
-                                                        <span className="text-xs text-alloy-midnight/85">
-                                                            {addon.name}
-                                                        </span>
-                                                        <span className="text-xs font-semibold text-alloy-midnight">
-                                                            {addon.price === null || addon.price === undefined
-                                                                ? "included"
-                                                                : `$${addon.price.toFixed(2)}`}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Price Breakdown Accordion */}
-                                    {quote.price_breakdown && (
-                                        <div>
-                                            <Accordion title="See full price breakdown">
-                                                <div className="text-xs text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
-                                                    {quote.price_breakdown}
-                                                </div>
-                                            </Accordion>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Right column: Calendar (3/4 width) */}
                     <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
