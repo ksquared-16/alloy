@@ -120,6 +120,65 @@ export default function BookClient() {
         }
     }, []);
 
+    // Initialize alloy_booking_prefill from alloy_lead_form_data if it doesn't exist
+    // This ensures phone/email are available for PaymentClient even if query params are missing
+    useEffect(() => {
+        const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+
+        // Check if alloy_booking_prefill already exists
+        const existingPrefill = sessionStorage.getItem("alloy_booking_prefill") ||
+            localStorage.getItem("alloy_booking_prefill");
+
+        if (existingPrefill) {
+            // Already exists, no need to initialize
+            if (isStaging) {
+                console.log("[STAGING] alloy_booking_prefill already exists, skipping initialization");
+            }
+            return;
+        }
+
+        // Try to load from alloy_lead_form_data (stored when quote form was submitted)
+        try {
+            const storedFormData = sessionStorage.getItem("alloy_lead_form_data");
+            if (storedFormData) {
+                const formData = JSON.parse(storedFormData);
+
+                // Only initialize if we have phone and email
+                if (formData.phone && formData.email) {
+                    const prefillData = {
+                        phone: formData.phone,
+                        email: formData.email,
+                        first_name: formData.first_name || undefined,
+                        last_name: formData.last_name || undefined,
+                    };
+
+                    // Remove undefined values
+                    const cleanedData = Object.fromEntries(
+                        Object.entries(prefillData).filter(([_, v]) => v !== undefined)
+                    );
+
+                    const jsonData = JSON.stringify(cleanedData);
+                    sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                    localStorage.setItem("alloy_booking_prefill", jsonData);
+
+                    if (isStaging) {
+                        console.log("[STAGING] Initialized alloy_booking_prefill from alloy_lead_form_data", cleanedData);
+                    }
+                } else {
+                    if (isStaging) {
+                        console.log("[STAGING] alloy_lead_form_data missing phone or email, cannot initialize prefill");
+                    }
+                }
+            } else {
+                if (isStaging) {
+                    console.log("[STAGING] No alloy_lead_form_data found, cannot initialize prefill");
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to initialize alloy_booking_prefill from form data:", e);
+        }
+    }, []);
+
     // Submit lead to backend/GHL if quote exists and ghl_contact_id is missing (Standard Cleaning only)
     useEffect(() => {
         const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
