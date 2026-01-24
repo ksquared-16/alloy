@@ -97,6 +97,12 @@ export default function BookClient() {
     const firstName = searchParams?.get("first_name");
     const lastName = searchParams?.get("last_name");
     const estimatedPrice = searchParams?.get("estimated_price");
+    
+    // State for ensuring ghl_contact_id exists before showing booking widget
+    const [isEnsuringContactId, setIsEnsuringContactId] = useState(false);
+    const [contactIdReady, setContactIdReady] = useState(false);
+    const [contactIdError, setContactIdError] = useState<string | null>(null);
+    const [resolvedContactId, setResolvedContactId] = useState<string | null>(null);
 
     useEffect(() => {
         // Read quote from localStorage or sessionStorage (prefer localStorage)
@@ -183,7 +189,173 @@ export default function BookClient() {
         }
     }, []);
 
+    // Ensure ghl_contact_id exists before showing booking widget (Standard Cleaning only)
+    useEffect(() => {
+        const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+        
+        // Only for Standard Cleaning
+        if (!quote || quote.service === "Move-Out / Heavy Clean") {
+            // For Move-Out, allow widget to show immediately
+            setContactIdReady(true);
+            return;
+        }
+
+        // Check if contact_id already exists
+        let existingPrefill: any = null;
+        try {
+            const stored = sessionStorage.getItem("alloy_booking_prefill") || 
+                          localStorage.getItem("alloy_booking_prefill");
+            if (stored) {
+                existingPrefill = JSON.parse(stored);
+                if (existingPrefill.ghl_contact_id) {
+                    if (isStaging) {
+                        console.log("[STAGING] ghl_contact_id already exists, ready to show widget");
+                    }
+                    setResolvedContactId(existingPrefill.ghl_contact_id);
+                    setContactIdReady(true);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to read existing prefill:", e);
+        }
+
+        // Contact_id doesn't exist, need to submit lead form
+        setIsEnsuringContactId(true);
+        setContactIdError(null);
+
+        // Load form data from storage
+        let formData: any = null;
+        try {
+            const storedFormData = sessionStorage.getItem("alloy_lead_form_data");
+            if (storedFormData) {
+                formData = JSON.parse(storedFormData);
+            }
+        } catch (e) {
+            console.warn("Failed to load form data from storage:", e);
+        }
+
+        // Validate phone and email exist
+        if (!formData || !formData.phone || !formData.email) {
+            const errorMsg = "Missing form data. Please go back and complete the quote form.";
+            setContactIdError(errorMsg);
+            setIsEnsuringContactId(false);
+            if (isStaging) {
+                console.error("[STAGING] Cannot ensure contact_id: missing phone or email");
+            }
+            return;
+        }
+
+        // Submit lead to backend
+        if (isStaging) {
+            console.log("[STAGING] Ensuring ghl_contact_id before showing booking widget");
+        }
+
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+        const submitFormData = new FormData();
+
+        // Build FormData from stored form data
+        if (formData.first_name) submitFormData.append("first_name", formData.first_name);
+        if (formData.last_name) submitFormData.append("last_name", formData.last_name);
+        if (formData.phone) submitFormData.append("phone", formData.phone);
+        if (formData.email) submitFormData.append("email", formData.email);
+        if (formData.postal_code) submitFormData.append("postal_code", formData.postal_code);
+        if (formData.home_type) submitFormData.append("home_type", formData.home_type);
+        if (formData.service_type) submitFormData.append("service_type", formData.service_type);
+        if (formData.approximate_square_footage) submitFormData.append("approximate_square_footage", formData.approximate_square_footage);
+        if (formData.cleaning_frequency) submitFormData.append("cleaning_frequency", formData.cleaning_frequency);
+        if (formData.preferred_service_date) submitFormData.append("preferred_service_date", formData.preferred_service_date);
+        if (formData.extras_add_ons) submitFormData.append("extras_add_ons", formData.extras_add_ons);
+        if (formData.addons__frequency) submitFormData.append("addons__frequency", formData.addons__frequency);
+        if (formData.street_address) submitFormData.append("street_address", formData.street_address);
+
+        // Submit with 10 second timeout
+        const submitPromise = fetch(`${apiBaseUrl}/leads/cleaning`, {
+            method: "POST",
+            body: submitFormData,
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("timeout")), 10000);
+        });
+
+        Promise.race([submitPromise, timeoutPromise])
+            .then(async (response) => {
+                if (response instanceof Response) {
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        const errorMsg = errorData.detail || "Failed to create contact. Please try again.";
+                        setContactIdError(errorMsg);
+                        setIsEnsuringContactId(false);
+                        if (isStaging) {
+                            console.error("[STAGING] Lead submission failed:", {
+                                status: response.status,
+                                error: errorData
+                            });
+                        }
+                        return;
+                    }
+
+                    const backendResult = await response.json();
+                    if (isStaging) {
+                        console.log("[STAGING] Lead submission successful, contact_id:", backendResult.contact_id);
+                    }
+
+                    // Store ghl_contact_id in prefill
+                    if (backendResult.contact_id) {
+                        try {
+                            const prefillData = {
+                                ...existingPrefill,
+                                ghl_contact_id: backendResult.contact_id,
+                                phone: formData.phone,
+                                email: formData.email,
+                                first_name: formData.first_name,
+                                last_name: formData.last_name,
+                            };
+
+                            const jsonData = JSON.stringify(prefillData);
+                            sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                            localStorage.setItem("alloy_booking_prefill", jsonData);
+
+                            setResolvedContactId(backendResult.contact_id);
+                            setContactIdReady(true);
+                            setIsEnsuringContactId(false);
+
+                            if (isStaging) {
+                                console.log("[STAGING] ghl_contact_id stored, widget ready to show");
+                            }
+                        } catch (e) {
+                            console.warn("Failed to store ghl_contact_id:", e);
+                            setContactIdError("Contact created but failed to save. Please refresh and try again.");
+                            setIsEnsuringContactId(false);
+                        }
+                    } else {
+                        const errorMsg = "Contact created but no ID returned. Please try again.";
+                        setContactIdError(errorMsg);
+                        setIsEnsuringContactId(false);
+                    }
+                }
+            })
+            .catch((error) => {
+                if (error.message === "timeout") {
+                    const errorMsg = "Request timed out. Please try again.";
+                    setContactIdError(errorMsg);
+                    if (isStaging) {
+                        console.warn("[STAGING] Lead submission timeout");
+                    }
+                } else {
+                    const errorMsg = "We couldn't start your booking. Please try again.";
+                    setContactIdError(errorMsg);
+                    if (isStaging) {
+                        console.error("[STAGING] Lead submission error:", error);
+                    }
+                }
+                setIsEnsuringContactId(false);
+            });
+    }, [quote]);
+
     // Submit lead to backend/GHL if quote exists and ghl_contact_id is missing (Standard Cleaning only)
+    // This is the background submission that runs in parallel (non-blocking)
     useEffect(() => {
         const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
 
@@ -702,16 +874,103 @@ export default function BookClient() {
                     {/* Right column: Calendar (3/4 width) */}
                     <div className={quote && hasQuote ? "lg:col-span-3" : "lg:col-span-4"}>
                         <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                            <GhlBookingIframe
-                                phone={phone}
-                                email={email}
-                                firstName={firstName}
-                                lastName={lastName}
-                                contactId={null}
-                            />
-                            <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
-                                You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
-                            </p>
+                            {(() => {
+                                // For Move-Out, always show widget
+                                if (quote && quote.service === "Move-Out / Heavy Clean") {
+                                    return (
+                                        <>
+                                            <GhlBookingIframe
+                                                phone={phone}
+                                                email={email}
+                                                firstName={firstName}
+                                                lastName={lastName}
+                                                contactId={null}
+                                            />
+                                            <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
+                                                You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
+                                            </p>
+                                        </>
+                                    );
+                                }
+
+                                // For Standard Cleaning, ensure contact_id is ready
+                                if (isEnsuringContactId) {
+                                    return (
+                                        <div className="min-h-[1200px] md:min-h-[900px] flex items-center justify-center">
+                                            <div className="text-center">
+                                                <div className="mb-4">
+                                                    <div className="w-12 h-12 border-4 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                                </div>
+                                                <p className="text-alloy-midnight font-semibold">Preparing booking...</p>
+                                                <p className="text-sm text-alloy-midnight/60 mt-2">
+                                                    Setting up your account
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                if (contactIdError) {
+                                    return (
+                                        <div className="min-h-[1200px] md:min-h-[900px] flex items-center justify-center">
+                                            <div className="text-center max-w-md">
+                                                <div className="mb-4">
+                                                    <svg
+                                                        className="w-16 h-16 mx-auto text-red-500"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                                        />
+                                                    </svg>
+                                                </div>
+                                                <h3 className="text-lg font-bold text-alloy-midnight mb-2">
+                                                    We couldn&apos;t start your booking
+                                                </h3>
+                                                <p className="text-alloy-midnight/70 mb-6">
+                                                    {contactIdError}
+                                                </p>
+                                                <button
+                                                    onClick={() => window.location.reload()}
+                                                    className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                                                >
+                                                    Try Again
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                // Show widget only when contact_id is ready
+                                if (contactIdReady) {
+                                    return (
+                                        <>
+                                            <GhlBookingIframe
+                                                phone={phone}
+                                                email={email}
+                                                firstName={firstName}
+                                                lastName={lastName}
+                                                contactId={resolvedContactId}
+                                            />
+                                            <p className="text-sm text-alloy-midnight/60 mt-4 text-center">
+                                                You&apos;ll pay after the clean is completed. We&apos;ll text to confirm details.
+                                            </p>
+                                        </>
+                                    );
+                                }
+
+                                // Default: show loading (shouldn't reach here, but safety fallback)
+                                return (
+                                    <div className="min-h-[1200px] md:min-h-[900px] flex items-center justify-center">
+                                        <p className="text-alloy-midnight/70">Loading...</p>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
