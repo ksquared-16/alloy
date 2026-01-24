@@ -371,7 +371,7 @@ export default function CleaningQuoteForm({
             // For Standard Cleaning: Calculate quote and navigate to /book
             if (!isMoveOut) {
                 const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
-                
+
                 if (isStaging) {
                     console.log("[STAGING] Starting quote calculation for submission");
                 }
@@ -384,7 +384,7 @@ export default function CleaningQuoteForm({
                         cleaningFrequency,
                         cleanInput.addOns
                     );
-                    
+
                     const timeoutPromise = new Promise<never>((_, reject) => {
                         setTimeout(() => reject(new Error("Quote calculation timeout after 10 seconds")), 10000);
                     });
@@ -416,12 +416,17 @@ export default function CleaningQuoteForm({
 
                     // Store quote in localStorage for /book page
                     try {
+                        if (isStaging) {
+                            console.log("[STAGING] Storing quote to localStorage/sessionStorage", {
+                                recurring_price: result.recurring_price,
+                                frequency_label: result.frequency_label,
+                                discount_label: result.discount_label,
+                                price_breakdown: result.price_breakdown
+                            });
+                        }
                         localStorage.setItem("cleaning_quote", JSON.stringify(result));
                         // Also store in sessionStorage for backward compatibility
                         sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
-                        if (isStaging) {
-                            console.log("[STAGING] Stored quote to localStorage and sessionStorage");
-                        }
                     } catch (e) {
                         console.warn("Failed to store quote:", e);
                     }
@@ -541,7 +546,7 @@ export default function CleaningQuoteForm({
                                 // Read existing prefill data or create new
                                 const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
                                 let prefillData: any = {};
-                                
+
                                 if (existingPrefill) {
                                     try {
                                         prefillData = JSON.parse(existingPrefill);
@@ -549,7 +554,7 @@ export default function CleaningQuoteForm({
                                         console.warn("Failed to parse existing prefill data:", e);
                                     }
                                 }
-                                
+
                                 // Store ghl_contact_id as PRIMARY identifier (set first)
                                 prefillData.ghl_contact_id = backendResult.contact_id;
                                 // Also store supporting data for fallback
@@ -557,12 +562,12 @@ export default function CleaningQuoteForm({
                                 prefillData.email = form.email;
                                 prefillData.first_name = form.firstName;
                                 prefillData.last_name = form.lastName;
-                                
+
                                 // Store in both sessionStorage and localStorage for persistence
                                 const jsonData = JSON.stringify(prefillData);
                                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                                 localStorage.setItem("alloy_booking_prefill", jsonData);
-                                
+
                                 console.log("Lead submission: Stored ghl_contact_id as primary identifier", {
                                     ghl_contact_id: backendResult.contact_id,
                                     phone: form.phone,
@@ -575,8 +580,14 @@ export default function CleaningQuoteForm({
 
                         // If booking_url is provided, redirect to it
                         if (backendResult.booking_url) {
-                            console.log("Redirecting to booking URL:", backendResult.booking_url);
-                            window.location.href = backendResult.booking_url;
+                            try {
+                                const targetPath = new URL(backendResult.booking_url).pathname;
+                                console.log("Redirecting to booking URL (pathname only):", targetPath);
+                                router.push(targetPath);
+                            } catch (e) {
+                                console.warn("Invalid booking_url, falling back to /payment", backendResult.booking_url);
+                                router.push("/payment");
+                            }
                             return;
                         }
 

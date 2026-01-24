@@ -26,7 +26,7 @@ function GhlBookingIframe({
     const buildBookingUrl = () => {
         const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
         // Use window.location.origin to ensure staging stays on staging domain
-        const redirectUrl = typeof window !== "undefined" 
+        const redirectUrl = typeof window !== "undefined"
             ? `${window.location.origin}/payment`
             : "/payment"; // Fallback for SSR
         const params = new URLSearchParams({
