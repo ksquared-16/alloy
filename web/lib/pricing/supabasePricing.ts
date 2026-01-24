@@ -108,18 +108,33 @@ export async function getQuotePricingFromSupabase(
   addOns: AddOnId[]
 ): Promise<SupabaseQuoteResult> {
   const supabase = createClient();
+  const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
 
   const serviceKey = mapServiceTypeToKey(serviceType);
   const frequencyKey = mapFrequencyToKey(frequency);
-  const addonKeys = mapAddOnsToKeys(addOns);
+  // Ensure addonKeys is always an array, never undefined/null
+  const addonKeys = mapAddOnsToKeys(addOns) ?? [];
 
-  const { data, error } = await supabase.rpc("get_quote_pricing", {
+  // Ensure p_frequency_key is always a string ("" for one-time, never undefined/null)
+  const frequencyKeyParam = frequencyKey ?? "";
+
+  const rpcParams = {
     p_vertical_slug: "cleaning",
     p_service_key: serviceKey,
     p_sqft_key: squareFootage, // Pass exactly as it appears in UI
-    p_frequency_key: frequencyKey || "", // Empty string for one-time
+    p_frequency_key: frequencyKeyParam,
     p_addon_keys: addonKeys,
-  });
+  };
+
+  if (isStaging) {
+    console.log("[STAGING] Supabase RPC params:", rpcParams);
+  }
+
+  const { data, error } = await supabase.rpc("get_quote_pricing", rpcParams);
+
+  if (isStaging) {
+    console.log("[STAGING] Supabase RPC response:", { data, error });
+  }
 
   if (error) {
     console.error("[SUPABASE_PRICING] RPC error:", error);
@@ -198,32 +213,42 @@ export function convertSupabaseResultToQuoteResult(
   const estimatedPrice = (supabaseResult.total_first_visit_cents ?? 
     ((supabaseResult.first_clean_cents ?? 0) + (supabaseResult.addons_total_cents ?? 0))) / 100;
 
-  // Extract frequency label and discount from out_frequency_key or fallback to input frequency
+  // Extract frequency_label and discount_label from price_breakdown (source of truth)
+  // Do NOT use input frequency parameter - parse from breakdown instead
+  // Wrap in try/catch to never throw even if price_breakdown is null or malformed
   let frequencyLabel: string | null = null;
   let discountLabel: string | null = null;
   
-  // Use out_frequency_key from RPC if available, otherwise derive from input frequency
-  const frequencyKey = supabaseResult.out_frequency_key || mapFrequencyToKey(frequency);
-  
-  if (frequencyKey) {
-    if (frequencyKey === "Weekly (30% Off)" || frequencyKey.includes("Weekly")) {
-      frequencyLabel = "Weekly";
-      discountLabel = "30% off";
-    } else if (frequencyKey === "Bi-Weekly (20% Off)" || frequencyKey.includes("Bi-Weekly")) {
-      frequencyLabel = "Bi-Weekly";
-      discountLabel = "20% off";
-    } else if (frequencyKey === "Monthly (10% Off)" || frequencyKey.includes("Monthly")) {
-      frequencyLabel = "Monthly";
-      discountLabel = "10% off";
-    } else {
-      // Fallback: try to extract from the key string
-      frequencyLabel = frequencyKey.split(" ")[0] || null;
-      // Extract discount from key if present
-      const discountMatch = frequencyKey.match(/(\d+)%/);
-      if (discountMatch) {
+  try {
+    if (recurringPrice != null && recurringPrice > 0 && supabaseResult.price_breakdown) {
+      // Parse frequency from "Recurring (Bi-Weekly):" or similar pattern
+      const frequencyMatch = supabaseResult.price_breakdown.match(/Recurring\s*\(([^)]+)\)/i);
+      if (frequencyMatch && frequencyMatch[1]) {
+        const parsedFrequency = frequencyMatch[1].trim();
+        // Normalize common variations
+        if (parsedFrequency.toLowerCase().includes("bi-weekly") || parsedFrequency.toLowerCase().includes("biweekly")) {
+          frequencyLabel = "Bi-Weekly";
+        } else if (parsedFrequency.toLowerCase().includes("weekly")) {
+          frequencyLabel = "Weekly";
+        } else if (parsedFrequency.toLowerCase().includes("monthly")) {
+          frequencyLabel = "Monthly";
+        } else {
+          // Use as-is if it doesn't match known patterns
+          frequencyLabel = parsedFrequency;
+        }
+      }
+      
+      // Parse discount from "(XX% off)" pattern in price_breakdown
+      const discountMatch = supabaseResult.price_breakdown.match(/\((\d+)%\s*off\)/i);
+      if (discountMatch && discountMatch[1]) {
         discountLabel = `${discountMatch[1]}% off`;
       }
     }
+  } catch (parseError) {
+    // If parsing fails, default to null (don't throw - let quote proceed)
+    console.warn("[SUPABASE_PRICING] Failed to parse frequency/discount from price_breakdown:", parseError);
+    frequencyLabel = null;
+    discountLabel = null;
   }
 
   // Build addons list (we don't have individual addon prices from Supabase, so use null)
