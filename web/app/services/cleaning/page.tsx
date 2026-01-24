@@ -15,17 +15,20 @@ export default function CleaningPage() {
   const formRef = useRef<HTMLDivElement>(null);
   const cleaningOptions = [
     {
-      type: "Standard Cleaning (+ Recurring Options)",
+      type: "Standard",
+      subtitle: "Recurring options available",
       description:
         "Regular maintenance cleaning to keep your home fresh and tidy.",
     },
     {
       type: "Deep",
+      subtitle: null,
       description:
         "Thorough cleaning including baseboards, inside appliances, and detailed scrubbing.",
     },
     {
       type: "Move-out",
+      subtitle: null,
       description:
         "Comprehensive cleaning to prepare your home for the next residents.",
     },
@@ -33,9 +36,9 @@ export default function CleaningPage() {
 
   const frequencies = [
     { label: "One-time", description: "Perfect for special occasions or trying us out.", discount: null },
-    { label: "Weekly", description: "Keep your home consistently clean every week.", discount: "40% Off" },
-    { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "30% Off" },
-    { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "20% Off" },
+    { label: "Weekly", description: "Keep your home consistently clean every week.", discount: "30% Off" },
+    { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "20% Off" },
+    { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "10% Off" },
   ];
 
   const whatsIncluded = {
@@ -303,11 +306,18 @@ export default function CleaningPage() {
           {cleaningOptions.map((option) => {
             const isMoveOut = option.type === "Move-out";
             const content = (
-              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200">
-                <h3 className="text-xl font-semibold text-alloy-midnight mb-2">
-                  {option.type} Cleaning
-                </h3>
-                <p className="text-gray-600">{option.description}</p>
+              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200 flex flex-col h-full">
+                <div className="mb-3">
+                  <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
+                    {option.type} Cleaning
+                  </h3>
+                  {option.subtitle && (
+                    <p className="text-xs text-alloy-midnight/60 mt-1 leading-tight">
+                      {option.subtitle}
+                    </p>
+                  )}
+                </div>
+                <p className="text-gray-600 text-sm flex-grow leading-relaxed">{option.description}</p>
               </div>
             );
             return isMoveOut ? (

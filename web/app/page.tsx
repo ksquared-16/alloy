@@ -1,15 +1,18 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
-import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import SecondaryButton from "@/components/SecondaryButton";
 import ServiceCard from "@/components/ServiceCard";
 import Accordion from "@/components/Accordion";
 import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
+import { useQuoteModal } from "@/lib/quoteModal";
 
 export default function Home() {
+  const { openModal } = useQuoteModal();
   const howItWorksSteps = [
     {
       number: "1",
@@ -141,11 +144,11 @@ export default function Home() {
                   Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <Link href="/services/cleaning?open=1#quote-form">
+                  <button onClick={openModal} className="w-full sm:w-auto">
                     <PrimaryButton className="w-full sm:w-auto">
-                      Get a cleaning quote
+                      Get a quote
                     </PrimaryButton>
-                  </Link>
+                  </button>
                   <Link href="#how-it-works">
                     <SecondaryButton className="!bg-white/20 backdrop-blur-md !border !border-white/50 !text-white hover:!bg-white/30 w-full sm:w-auto">
                       See how Alloy works
@@ -277,9 +280,9 @@ export default function Home() {
             ))}
           </div>
           <div className="text-center">
-            <Link href="/services/cleaning?open=1#quote-form">
+            <Link href="/quote">
               <PrimaryButton className="w-full sm:w-auto">
-                Get a same-day quote
+                Get a quote
               </PrimaryButton>
             </Link>
             <p className="text-sm text-alloy-midnight/60 mt-6">
@@ -311,16 +314,19 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Final CTA – Cleaning quote form (Phase 1: frontend-only) */}
+      {/* Final CTA */}
       <Section className="py-10 md:py-12 lg:py-16">
         <div className="bg-alloy-blue rounded-lg p-5 md:p-6 lg:p-8 text-center text-white">
           <h2 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4">Ready to get started?</h2>
           <p className="text-base md:text-lg mb-5 md:mb-6 opacity-90">
-            Tell us about your home and schedule. We&apos;ll calculate a transparent quote and text
-            you to confirm details.
+            Select a service to get a quote.
           </p>
-          <div className="max-w-3xl mx-auto text-left">
-            <CleaningQuoteForm variant="dark" />
+          <div className="flex justify-center">
+            <button onClick={openModal}>
+              <PrimaryButton className="!bg-alloy-juniper hover:!bg-alloy-juniper/90 !text-white">
+                Get a Quote
+              </PrimaryButton>
+            </button>
           </div>
         </div>
       </Section>

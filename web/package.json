@@ -9,10 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^2.4.0",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.90.1",
     "next": "16.0.8",
     "react": "19.2.1",
-    "react-dom": "19.2.1",
-    "@stripe/stripe-js": "^2.4.0"
+    "react-dom": "19.2.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

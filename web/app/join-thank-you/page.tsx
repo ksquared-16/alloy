@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Section from "@/components/Section";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
 export default function JoinThankYouPage() {
     const router = useRouter();
-    const [countdown, setCountdown] = useState(5);
+    const redirectSeconds = Math.ceil(REDIRECT_DELAY_MS / 1000);
+    const [countdown, setCountdown] = useState(redirectSeconds);
 
     useEffect(() => {
-        // Auto-redirect after 5 seconds
+        // Auto-redirect after delay
         const redirectTimer = setInterval(() => {
             setCountdown((prev) => {
                 if (prev <= 1) {

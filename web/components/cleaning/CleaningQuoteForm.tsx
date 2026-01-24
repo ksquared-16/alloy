@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 import {
-    calculateCleaningQuote,
     type CleaningQuoteInput,
     type CleaningQuoteResult,
     type ServiceType,
@@ -13,6 +13,10 @@ import {
     type AddOnFrequencyOption,
     type ServiceHomeType,
 } from "@/lib/pricing/cleaningPricing";
+import {
+    getQuotePricingFromSupabase,
+    convertSupabaseResultToQuoteResult,
+} from "@/lib/pricing/supabasePricing";
 import PrimaryButton from "@/components/PrimaryButton";
 import { compressImage, validateImageSize } from "@/lib/images/resizeCompress";
 import { buildBookingUrl } from "@/lib/booking";
@@ -120,11 +124,13 @@ function validate(form: FormState): ValidationErrors {
 interface CleaningQuoteFormProps {
     onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
     variant?: "light" | "dark";
+    onSuccess?: () => void;
 }
 
 export default function CleaningQuoteForm({
     onQuoteCalculated,
     variant = "light",
+    onSuccess,
 }: CleaningQuoteFormProps) {
     const router = useRouter();
     const [form, setForm] = useState<FormState>(INITIAL_FORM);
@@ -133,8 +139,75 @@ export default function CleaningQuoteForm({
     const [quote, setQuote] = useState<CleaningQuoteResult | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showMoveOutSuccess, setShowMoveOutSuccess] = useState(false);
+    const [isCalculatingQuote, setIsCalculatingQuote] = useState(false);
 
     const isDark = variant === "dark";
+    const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
+
+    // Calculate quote when relevant form fields change (for Standard Cleaning only)
+    useEffect(() => {
+        if (
+            isMoveOut ||
+            !form.serviceType ||
+            !form.squareFootage ||
+            !form.cleaningFrequency
+        ) {
+            setQuote(null);
+            return;
+        }
+
+        // Debounce quote calculation
+        const timeoutId = setTimeout(async () => {
+            setIsCalculatingQuote(true);
+            try {
+                const supabaseResult = await getQuotePricingFromSupabase(
+                    form.serviceType as ServiceType,
+                    form.squareFootage as SquareFootageOption,
+                    form.cleaningFrequency as CleaningFrequencyOption,
+                    form.addOns as AddOnId[]
+                );
+                const result = convertSupabaseResultToQuoteResult(
+                    supabaseResult,
+                    form.serviceType as ServiceType,
+                    form.cleaningFrequency as CleaningFrequencyOption,
+                    form.addOns as AddOnId[]
+                );
+                setQuote(result);
+                if (onQuoteCalculated) {
+                    const cleanInput: CleaningQuoteInput = {
+                        firstName: form.firstName,
+                        lastName: form.lastName,
+                        phone: form.phone,
+                        email: form.email,
+                        postalCode: form.postalCode,
+                        homeType: form.homeType as ServiceHomeType,
+                        serviceType: form.serviceType as ServiceType,
+                        squareFootage: form.squareFootage as SquareFootageOption,
+                        cleaningFrequency: form.cleaningFrequency as CleaningFrequencyOption,
+                        addOns: form.addOns as AddOnId[],
+                        addOnFrequency: form.addOnFrequency as AddOnFrequencyOption | undefined,
+                    };
+                    onQuoteCalculated(result, cleanInput);
+                }
+            } catch (error) {
+                console.error("Error calculating quote:", error);
+                // Don't show error to user for real-time calculation
+                // Only set quote to null so it doesn't show stale data
+                setQuote(null);
+            } finally {
+                setIsCalculatingQuote(false);
+            }
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timeoutId);
+    }, [
+        form.serviceType,
+        form.squareFootage,
+        form.cleaningFrequency,
+        form.addOns,
+        isMoveOut,
+        onQuoteCalculated,
+    ]);
 
     const labelClass =
         "block text-xs font-semibold uppercase tracking-wide mb-1 " +
@@ -295,52 +368,122 @@ export default function CleaningQuoteForm({
                 addOnFrequency: isMoveOut ? undefined : (form.addOnFrequency || undefined),
             };
 
-            // For Standard Cleaning: Calculate quote immediately and show it
+            // For Standard Cleaning: Calculate quote and navigate to /book
             if (!isMoveOut) {
-                const result = calculateCleaningQuote(cleanInput);
+                const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
 
-                // Store quote in sessionStorage for /book page
-                try {
-                    sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
-                } catch (e) {
-                    console.warn("Failed to store quote in sessionStorage:", e);
+                if (isStaging) {
+                    console.log("[STAGING] Starting quote calculation for submission");
                 }
 
-                // Store complete form data for potential resubmission on /payment
                 try {
-                    const formDataForStorage = {
-                        first_name: cleanInput.firstName,
-                        last_name: cleanInput.lastName,
+                    // Wrap Supabase RPC call with timeout (10s)
+                    const supabasePromise = getQuotePricingFromSupabase(
+                        cleanInput.serviceType,
+                        cleanInput.squareFootage,
+                        cleaningFrequency,
+                        cleanInput.addOns
+                    );
+
+                    const timeoutPromise = new Promise<never>((_, reject) => {
+                        setTimeout(() => reject(new Error("Quote calculation timeout after 10 seconds")), 10000);
+                    });
+
+                    if (isStaging) {
+                        console.log("[STAGING] Calling Supabase RPC with params:", {
+                            serviceType: cleanInput.serviceType,
+                            squareFootage: cleanInput.squareFootage,
+                            frequency: cleaningFrequency,
+                            addOns: cleanInput.addOns,
+                        });
+                    }
+
+                    const supabaseResult = await Promise.race([
+                        supabasePromise,
+                        timeoutPromise,
+                    ]);
+
+                    if (isStaging) {
+                        console.log("[STAGING] Supabase RPC success:", supabaseResult);
+                    }
+
+                    const result = convertSupabaseResultToQuoteResult(
+                        supabaseResult,
+                        cleanInput.serviceType,
+                        cleaningFrequency,
+                        cleanInput.addOns
+                    );
+
+                    // Store quote in localStorage for /book page
+                    try {
+                        if (isStaging) {
+                            console.log("[STAGING] Storing quote to localStorage/sessionStorage", {
+                                recurring_price: result.recurring_price,
+                                frequency_label: result.frequency_label,
+                                discount_label: result.discount_label,
+                                price_breakdown: result.price_breakdown
+                            });
+                        }
+                        localStorage.setItem("cleaning_quote", JSON.stringify(result));
+                        // Also store in sessionStorage for backward compatibility
+                        sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
+                    } catch (e) {
+                        console.warn("Failed to store quote:", e);
+                    }
+
+                    // Store complete form data for potential resubmission on /payment
+                    try {
+                        const formDataForStorage = {
+                            first_name: cleanInput.firstName,
+                            last_name: cleanInput.lastName,
+                            phone: cleanInput.phone,
+                            email: cleanInput.email,
+                            postal_code: cleanInput.postalCode,
+                            home_type: cleanInput.homeType,
+                            service_type: cleanInput.serviceType,
+                            approximate_square_footage: cleanInput.squareFootage,
+                            cleaning_frequency: cleaningFrequency,
+                            preferred_service_date: cleanInput.preferredServiceDate || undefined,
+                            extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
+                            addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
+                            street_address: form.streetAddress.trim() || undefined,
+                            estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
+                        };
+                        sessionStorage.setItem("alloy_lead_form_data", JSON.stringify(formDataForStorage));
+                        if (isStaging) {
+                            console.log("[STAGING] Stored form data:", formDataForStorage);
+                        }
+                    } catch (e) {
+                        console.warn("Failed to store form data in sessionStorage:", e);
+                    }
+
+                    // Build booking URL with all prefill parameters to ensure GHL matches existing contact
+                    const bookingUrl = buildBookingUrl({
                         phone: cleanInput.phone,
                         email: cleanInput.email,
-                        postal_code: cleanInput.postalCode,
-                        home_type: cleanInput.homeType,
-                        service_type: cleanInput.serviceType,
-                        approximate_square_footage: cleanInput.squareFootage,
-                        cleaning_frequency: cleaningFrequency,
-                        preferred_service_date: cleanInput.preferredServiceDate || undefined,
-                        extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
-                        addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
-                        street_address: form.streetAddress.trim() || undefined,
-                        estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
-                    };
-                    sessionStorage.setItem("alloy_lead_form_data", JSON.stringify(formDataForStorage));
-                    console.log("Stored form data for potential resubmission:", formDataForStorage);
-                } catch (e) {
-                    console.warn("Failed to store form data in sessionStorage:", e);
+                        firstName: cleanInput.firstName,
+                        lastName: cleanInput.lastName,
+                        estimatedPrice: result.estimated_price ?? undefined,
+                    });
+
+                    // Navigate to /book page
+                    router.push(bookingUrl);
+                    return; // Exit early, don't continue with backend submission
+                } catch (error) {
+                    if (isStaging) {
+                        console.error("[STAGING] Error calculating quote:", error);
+                        console.error("[STAGING] Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                    } else {
+                        console.error("Error calculating quote for submission:", error);
+                    }
+                    // If quote calculation fails, show error and stop submission
+                    setErrors((prev) => ({
+                        ...prev,
+                        submit: "Failed to calculate quote. Please try again or contact us directly.",
+                    }));
+                    setIsSubmitting(false);
+                    return;
                 }
-
-                // Build booking URL with all prefill parameters to ensure GHL matches existing contact
-                const bookingUrl = buildBookingUrl({
-                    phone: cleanInput.phone,
-                    email: cleanInput.email,
-                    firstName: cleanInput.firstName,
-                    lastName: cleanInput.lastName,
-                    estimatedPrice: result.estimated_price ?? undefined,
-                });
-
-                // Redirect to booking page immediately (don't wait for backend)
-                router.push(bookingUrl);
             }
 
             // Submit to backend in background (non-blocking)
@@ -403,7 +546,7 @@ export default function CleaningQuoteForm({
                                 // Read existing prefill data or create new
                                 const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
                                 let prefillData: any = {};
-                                
+
                                 if (existingPrefill) {
                                     try {
                                         prefillData = JSON.parse(existingPrefill);
@@ -411,7 +554,7 @@ export default function CleaningQuoteForm({
                                         console.warn("Failed to parse existing prefill data:", e);
                                     }
                                 }
-                                
+
                                 // Store ghl_contact_id as PRIMARY identifier (set first)
                                 prefillData.ghl_contact_id = backendResult.contact_id;
                                 // Also store supporting data for fallback
@@ -419,12 +562,12 @@ export default function CleaningQuoteForm({
                                 prefillData.email = form.email;
                                 prefillData.first_name = form.firstName;
                                 prefillData.last_name = form.lastName;
-                                
+
                                 // Store in both sessionStorage and localStorage for persistence
                                 const jsonData = JSON.stringify(prefillData);
                                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                                 localStorage.setItem("alloy_booking_prefill", jsonData);
-                                
+
                                 console.log("Lead submission: Stored ghl_contact_id as primary identifier", {
                                     ghl_contact_id: backendResult.contact_id,
                                     phone: form.phone,
@@ -437,17 +580,27 @@ export default function CleaningQuoteForm({
 
                         // If booking_url is provided, redirect to it
                         if (backendResult.booking_url) {
-                            console.log("Redirecting to booking URL:", backendResult.booking_url);
-                            window.location.href = backendResult.booking_url;
+                            try {
+                                const targetPath = new URL(backendResult.booking_url).pathname;
+                                console.log("Redirecting to booking URL (pathname only):", targetPath);
+                                router.push(targetPath);
+                            } catch (e) {
+                                console.warn("Invalid booking_url, falling back to /payment", backendResult.booking_url);
+                                router.push("/payment");
+                            }
                             return;
                         }
 
                         // Fallback: Handle Move-Out with success message
                         if (isMoveOut) {
                             setShowMoveOutSuccess(true);
+                            // Call onSuccess callback if provided (e.g., to close modal)
+                            if (onSuccess) {
+                                onSuccess();
+                            }
                             setTimeout(() => {
                                 router.push("/");
-                            }, 2000);
+                            }, REDIRECT_DELAY_MS);
                         }
                     }
                 })
@@ -458,9 +611,13 @@ export default function CleaningQuoteForm({
                         // Fallback: Handle Move-Out with success message
                         if (isMoveOut) {
                             setShowMoveOutSuccess(true);
+                            // Call onSuccess callback if provided (e.g., to close modal)
+                            if (onSuccess) {
+                                onSuccess();
+                            }
                             setTimeout(() => {
                                 router.push("/");
-                            }, 2000);
+                            }, REDIRECT_DELAY_MS);
                         }
                     } else {
                         console.warn("Backend submission error (non-blocking):", error);
@@ -474,13 +631,30 @@ export default function CleaningQuoteForm({
         }
     };
 
-    const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
-
     const hasReadyQuote =
         quote &&
         quote.status === "ready" &&
         typeof quote.first_clean_price === "number" &&
         quote.first_clean_price > 0;
+
+    // If Move-Out success, only show thank-you message
+    if (showMoveOutSuccess) {
+        return (
+            <div className="space-y-4">
+                <div className="rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
+                    <p className="text-lg font-semibold text-alloy-midnight mb-2">
+                        Thanks — your inquiry has been submitted.
+                    </p>
+                    <p className="text-sm text-alloy-midnight/80 mb-4">
+                        Our team will review and reach out shortly with an estimate.
+                    </p>
+                    <p className="text-xs text-alloy-midnight/60">
+                        Redirecting to homepage...
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -650,9 +824,9 @@ export default function CleaningQuoteForm({
                         >
                             <option value="">Select a frequency</option>
                             <option value="One-time">One-time</option>
-                            <option value="Weekly (40% Off)">Weekly (40% Off)</option>
-                            <option value="Bi-Weekly (30% Off)">Bi-Weekly (30% Off)</option>
-                            <option value="Monthly (20% Off)">Monthly (20% Off)</option>
+                            <option value="Weekly (30% Off)">Weekly (30% Off)</option>
+                            <option value="Bi-Weekly (20% Off)">Bi-Weekly (20% Off)</option>
+                            <option value="Monthly (10% Off)">Monthly (10% Off)</option>
                         </select>
                         {errors.cleaningFrequency && (
                             <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequency}</p>
@@ -847,147 +1021,15 @@ export default function CleaningQuoteForm({
                             {isSubmitting ? "Submitting…" : "Get my quote"}
                         </button>
                     ) : (
-                        <PrimaryButton type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
-                            {isSubmitting ? "Submitting…" : "Get my quote"}
-                        </PrimaryButton>
+                        <div className="flex justify-center">
+                            <PrimaryButton type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
+                                {isSubmitting ? "Submitting…" : "Get my quote"}
+                            </PrimaryButton>
+                        </div>
                     )}
                 </div>
             </form>
 
-            {/* Quote summary (local, instant) - condensed layout */}
-            {quote && (
-                <div className="mt-4 rounded-xl border border-alloy-stone/30 bg-white p-3 md:p-4 shadow-sm">
-                    {hasReadyQuote && quote.first_clean_price != null && quote.first_clean_price > 0 ? (
-                        <div className="space-y-2.5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {/* First Cleaning */}
-                                <div className="rounded-lg border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                        First Cleaning
-                                    </p>
-                                    <p className="text-2xl md:text-3xl font-bold text-alloy-blue leading-tight">
-                                        ${quote.first_clean_price.toFixed(2)}
-                                    </p>
-                                </div>
-
-                                {/* Recurring (if any) */}
-                                {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label ? (
-                                    <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                            {quote.frequency_label} Cleaning
-                                            {quote.discount_label && (
-                                                <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
-                                                    ({quote.discount_label})
-                                                </span>
-                                            )}
-                                        </p>
-                                        <div className="flex items-baseline gap-1">
-                                            <p className="text-2xl md:text-3xl font-bold text-alloy-juniper leading-tight">
-                                                ${quote.recurring_price.toFixed(2)}
-                                            </p>
-                                            <span className="text-[11px] text-alloy-midnight/60">per visit</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-2.5 min-h-[80px] flex flex-col justify-center">
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                            Recurring Cleaning
-                                        </p>
-                                        <p className="text-sm text-alloy-midnight/70">One-time service</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Add-ons list (compact) */}
-                            {quote.addons && quote.addons.length > 0 && (
-                                <div className="pt-1 border-t border-alloy-stone/20">
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1.5">
-                                        Add-ons
-                                    </p>
-                                    <div className="space-y-1">
-                                        {quote.addons.map((addon, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="flex justify-between items-center text-sm text-alloy-midnight/85"
-                                            >
-                                                <span>{addon.name}</span>
-                                                <span className="font-medium">
-                                                    {addon.price != null && addon.price > 0
-                                                        ? `$${addon.price.toFixed(2)}`
-                                                        : "Included in quote"}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Breakdown link */}
-                            {quote.price_breakdown && (
-                                <details className="mt-1">
-                                    <summary className="text-xs text-alloy-midnight/70 cursor-pointer hover:text-alloy-midnight">
-                                        See full price breakdown
-                                    </summary>
-                                    <pre className="mt-1.5 whitespace-pre-line text-xs text-alloy-midnight/80 leading-relaxed">
-                                        {quote.price_breakdown}
-                                    </pre>
-                                </details>
-                            )}
-
-                            {/* Continue to booking CTA */}
-                            {form.phone && form.email && form.firstName && form.lastName && (
-                                <div className="pt-2 border-t border-alloy-stone/20">
-                                    <PrimaryButton
-                                        onClick={() => {
-                                            const bookingUrl = buildBookingUrl({
-                                                phone: form.phone,
-                                                email: form.email,
-                                                firstName: form.firstName,
-                                                lastName: form.lastName,
-                                                estimatedPrice: quote?.estimated_price ?? undefined,
-                                            });
-                                            router.push(bookingUrl);
-                                        }}
-                                        className="w-full md:w-auto"
-                                    >
-                                        Continue to booking
-                                    </PrimaryButton>
-                                </div>
-                            )}
-                        </div>
-                    ) : quote.status === "pending" ? (
-                        <div className="py-3">
-                            <p className="text-sm font-medium text-alloy-midnight">
-                                Generating your quote…
-                            </p>
-                            <p className="text-xs text-alloy-midnight/70 mt-1">
-                                Please wait a moment while we calculate your pricing.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="py-3">
-                            <p className="text-sm font-medium text-alloy-midnight">
-                                We&apos;re reviewing your details and will confirm your quote shortly.
-                            </p>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Move-Out success message */}
-            {showMoveOutSuccess && (
-                <div className="mt-4 rounded-lg border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-center">
-                    <p className="text-lg font-semibold text-alloy-midnight mb-2">
-                        Thanks — your inquiry has been submitted.
-                    </p>
-                    <p className="text-sm text-alloy-midnight/80 mb-4">
-                        Our team will review and reach out shortly with an estimate.
-                    </p>
-                    <p className="text-xs text-alloy-midnight/60">
-                        Redirecting to homepage...
-                    </p>
-                </div>
-            )}
         </div>
     );
 }

@@ -4,9 +4,9 @@ export type ServiceType = "Standard Cleaning" | "Move-Out / Heavy Clean";
 
 export type CleaningFrequencyOption =
     | "One-time"
-    | "Weekly (40% Off)"
-    | "Bi-Weekly (30% Off)"
-    | "Monthly (20% Off)";
+    | "Weekly (30% Off)"
+    | "Bi-Weekly (20% Off)"
+    | "Monthly (10% Off)";
 
 export type SquareFootageOption =
     | "Under 1500 sq ft"
@@ -53,7 +53,7 @@ export interface CleaningQuoteInput {
 
 export interface CleaningQuoteResult {
     status: "ready" | "pending";
-    source: "local_pricing";
+    source: "local_pricing" | "supabase";
     service: string;
     estimated_price: number | null;
     first_clean_price: number | null;
@@ -61,7 +61,8 @@ export interface CleaningQuoteResult {
     frequency_label: string | null;
     discount_label: string | null;
     addons: Array<{ name: string; price: number | null }>;
-    price_breakdown?: string;
+    price_breakdown?: string | null;
+    is_manual_quote?: boolean;
 }
 
 // Simple v1 pricing tables – safe to tweak later.
@@ -82,20 +83,20 @@ const FREQUENCY_CONFIG: Record<
     { label: string; discountPercent: number | null; discountLabel: string | null }
 > = {
     "One-time": { label: "One-time", discountPercent: null, discountLabel: null },
-    "Weekly (40% Off)": {
+    "Weekly (30% Off)": {
         label: "Weekly",
-        discountPercent: 0.4,
-        discountLabel: "40% off",
-    },
-    "Bi-Weekly (30% Off)": {
-        label: "Bi-Weekly",
         discountPercent: 0.3,
         discountLabel: "30% off",
     },
-    "Monthly (20% Off)": {
-        label: "Monthly",
+    "Bi-Weekly (20% Off)": {
+        label: "Bi-Weekly",
         discountPercent: 0.2,
         discountLabel: "20% off",
+    },
+    "Monthly (10% Off)": {
+        label: "Monthly",
+        discountPercent: 0.1,
+        discountLabel: "10% off",
     },
 };
 
@@ -113,7 +114,7 @@ const RECURRING_PRICES: Record<
         "4,001-5,500 sq ft": null,
         "Over 5,500 sq ft": null,
     },
-    "Weekly (40% Off)": {
+    "Weekly (30% Off)": {
         "Under 1500 sq ft": 120,
         "1501–2,000 sq ft": 130,
         "2,001-2,600 sq ft": 145,
@@ -122,7 +123,7 @@ const RECURRING_PRICES: Record<
         "4,001-5,500 sq ft": 185,
         "Over 5,500 sq ft": 210,
     },
-    "Bi-Weekly (30% Off)": {
+    "Bi-Weekly (20% Off)": {
         "Under 1500 sq ft": 140,
         "1501–2,000 sq ft": 150,
         "2,001-2,600 sq ft": 170,
@@ -131,7 +132,7 @@ const RECURRING_PRICES: Record<
         "4,001-5,500 sq ft": 215,
         "Over 5,500 sq ft": 245,
     },
-    "Monthly (20% Off)": {
+    "Monthly (10% Off)": {
         "Under 1500 sq ft": 160,
         "1501–2,000 sq ft": 170,
         "2,001-2,600 sq ft": 190,

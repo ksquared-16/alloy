@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Section from "@/components/Section";
+import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
 function clearBookingPrefill() {
     try {
@@ -16,7 +17,8 @@ function clearBookingPrefill() {
 export default function PaymentSuccessClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [countdown, setCountdown] = useState(5);
+    const redirectSeconds = Math.ceil(REDIRECT_DELAY_MS / 1000);
+    const [countdown, setCountdown] = useState(redirectSeconds);
 
     const phone = searchParams?.get("phone");
     const email = searchParams?.get("email");
@@ -28,7 +30,7 @@ export default function PaymentSuccessClient() {
     }, []);
 
     useEffect(() => {
-        // Auto-redirect after 5 seconds
+        // Auto-redirect after delay
         const redirectTimer = setInterval(() => {
             setCountdown((prev) => {
                 if (prev <= 1) {

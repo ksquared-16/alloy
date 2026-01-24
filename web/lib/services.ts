@@ -20,9 +20,9 @@ export const SERVICES: Service[] = [
   {
     id: "gutter",
     name: "Gutter Cleaning",
-    description: "Coming soon",
-    status: "coming_soon",
-    href: "#",
+    description: "Sign up early and get $25 off your first service when we launch.",
+    status: "available",
+    href: "/gutters",
   },
   {
     id: "HVAC",

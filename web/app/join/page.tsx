@@ -1,8 +1,21 @@
+"use client";
+
 import Section from "@/components/Section";
 import GhlEmbed from "@/components/GhlEmbed";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
 export default function JoinPage() {
+  const [ghlFormUrl, setGhlFormUrl] = useState<string>("");
+
+  useEffect(() => {
+    // Use window.location.origin to ensure staging stays on staging domain
+    if (typeof window !== "undefined") {
+      const redirectUrl = `${window.location.origin}/join-thank-you`;
+      const formUrl = `https://api.leadconnectorhq.com/widget/form/S4ajOQFaanzumo8eyadC?redirectUrl=${encodeURIComponent(redirectUrl)}`;
+      setGhlFormUrl(formUrl);
+    }
+  }, []);
   const benefits = [
     "Pick your own jobs and set your schedule",
     "We handle the busywork, so you can focus on what you're best at",
@@ -132,11 +145,13 @@ export default function JoinPage() {
           <p className="text-center text-alloy-midnight/80 mb-8">
             Fill out the form below. We'll review your application and be in touch soon.
           </p>
-          <GhlEmbed
-            src="https://api.leadconnectorhq.com/widget/form/S4ajOQFaanzumo8eyadC?redirectUrl=https://www.workwithalloy.com/join-thank-you"
-            title="Subcontractor Onboarding"
-            height={1845}
-          />
+          {ghlFormUrl && (
+            <GhlEmbed
+              src={ghlFormUrl}
+              title="Subcontractor Onboarding"
+              height={1845}
+            />
+          )}
         </div>
       </Section>
     </div>
