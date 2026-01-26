@@ -113,8 +113,9 @@ function validate(form: FormState): ValidationErrors {
         }
     }
 
-    // Add-ons frequency only required if add-ons are selected (and not Move-Out)
-    if (!isMoveOut && form.addOns.length > 0 && !form.addOnFrequency) {
+    // Add-ons frequency only required if add-ons are selected (and not Move-Out, and not One-time)
+    const isOneTime = form.cleaningFrequency === "One-time";
+    if (!isMoveOut && !isOneTime && form.addOns.length > 0 && !form.addOnFrequency) {
         errors.addOnFrequency = "Please select how often you want add-ons.";
     }
 
@@ -365,7 +366,11 @@ export default function CleaningQuoteForm({
                 cleaningFrequency: cleaningFrequency,
                 preferredServiceDate: form.preferredServiceDate?.trim() || undefined,
                 addOns: isMoveOut ? [] : form.addOns,
-                addOnFrequency: isMoveOut ? undefined : (form.addOnFrequency || undefined),
+                addOnFrequency: isMoveOut
+                    ? undefined
+                    : (form.cleaningFrequency === "One-time" && form.addOns.length > 0
+                        ? "First cleaning only"
+                        : (form.addOnFrequency || undefined)),
             };
 
             // For Standard Cleaning: Calculate quote and navigate to /book
@@ -445,7 +450,11 @@ export default function CleaningQuoteForm({
                             cleaning_frequency: cleaningFrequency,
                             preferred_service_date: cleanInput.preferredServiceDate || undefined,
                             extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
-                            addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
+                            addons__frequency: isMoveOut
+                                ? undefined
+                                : (cleanInput.cleaningFrequency === "One-time" && cleanInput.addOns.length > 0
+                                    ? "First cleaning only"
+                                    : (cleanInput.addOnFrequency || undefined)),
                             street_address: form.streetAddress.trim() || undefined,
                             estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
                         };
@@ -505,8 +514,14 @@ export default function CleaningQuoteForm({
             if (!isMoveOut && cleanInput.addOns.length > 0) {
                 formData.append("extras_add_ons", JSON.stringify(cleanInput.addOns));
             }
-            if (!isMoveOut && cleanInput.addOnFrequency) {
-                formData.append("addons__frequency", cleanInput.addOnFrequency);
+            if (!isMoveOut && cleanInput.addOns.length > 0) {
+                // For one-time cleaning, set to "First cleaning only"; otherwise use selected value
+                const addonFreq = cleanInput.cleaningFrequency === "One-time"
+                    ? "First cleaning only"
+                    : cleanInput.addOnFrequency;
+                if (addonFreq) {
+                    formData.append("addons__frequency", addonFreq);
+                }
             }
             if (form.streetAddress.trim()) {
                 formData.append("street_address", form.streetAddress.trim());
@@ -952,8 +967,8 @@ export default function CleaningQuoteForm({
                             </div>
                         </div>
 
-                        {/* Add-on Frequency – only when add-ons selected */}
-                        {form.addOns.length > 0 && (
+                        {/* Add-on Frequency – only when add-ons selected AND not One-time */}
+                        {form.addOns.length > 0 && form.cleaningFrequency !== "One-time" && (
                             <div>
                                 <label className={labelClass}>
                                     Add-ons Frequency<span className="text-alloy-ember ml-0.5">*</span>
