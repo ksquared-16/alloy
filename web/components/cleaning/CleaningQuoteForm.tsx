@@ -125,7 +125,7 @@ function validate(form: FormState): ValidationErrors {
 interface CleaningQuoteFormProps {
     onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
     variant?: "light" | "dark";
-    onSuccess?: () => void;
+    onSuccess?: (bookingUrl?: string) => void;
     mode?: "page" | "modal";
 }
 
@@ -470,14 +470,22 @@ export default function CleaningQuoteForm({
                         console.warn("Failed to store form data in sessionStorage:", e);
                     }
 
-                    // If in modal mode, call onQuoteCalculated and return (don't navigate)
-                    // This triggers the modal to transition to "submitted" state
+                    // If in modal mode, build booking URL and call onSuccess to close modal and navigate
                     if (mode === "modal") {
-                        if (onQuoteCalculated && result.status === "ready") {
-                            onQuoteCalculated(result, cleanInput);
-                        }
+                        // Build booking URL with all prefill parameters
+                        const bookingUrl = buildBookingUrl({
+                            phone: cleanInput.phone,
+                            email: cleanInput.email,
+                            firstName: cleanInput.firstName,
+                            lastName: cleanInput.lastName,
+                            estimatedPrice: result.estimated_price ?? undefined,
+                        });
                         setIsSubmitting(false);
-                        return; // Exit early, modal will handle the transition
+                        // Call onSuccess with booking URL - modal will close and navigate
+                        if (onSuccess) {
+                            onSuccess(bookingUrl);
+                        }
+                        return; // Exit early, modal will handle navigation
                     }
 
                     // Build booking URL with all prefill parameters to ensure GHL matches existing contact
