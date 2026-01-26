@@ -5,10 +5,9 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import PrimaryButton from "@/components/PrimaryButton";
-import { useQuoteModal } from "@/lib/quoteModal";
+import GetQuoteButton from "@/components/GetQuoteButton";
 
 export default function Navbar() {
-  const { openModal } = useQuoteModal();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
   const servicesDropdownRef = useRef<HTMLDivElement>(null);
@@ -129,14 +128,7 @@ export default function Navbar() {
             })}
 
             {/* Get a Quote CTA */}
-            <button
-              onClick={openModal}
-              className="!px-4 !py-2 !text-sm"
-            >
-              <PrimaryButton className="!px-4 !py-2 !text-sm">
-                Get a Quote
-              </PrimaryButton>
-            </button>
+            <GetQuoteButton className="!px-4 !py-2 !text-sm" />
           </div>
         </div>
 
@@ -220,15 +212,9 @@ export default function Navbar() {
                 );
               })}
               <div className="pt-2">
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openModal();
-                  }}
-                  className="w-full"
-                >
-                  <PrimaryButton className="w-full">Get a Quote</PrimaryButton>
-                </button>
+                <div onClick={() => setMobileMenuOpen(false)} className="w-full">
+                  <GetQuoteButton className="w-full" />
+                </div>
               </div>
             </div>
           </div>

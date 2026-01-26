@@ -137,13 +137,14 @@ export default function CleaningPage() {
   };
 
   // Reusable CTA component for sections
-  const GetQuoteCTA = () => (
-    <div className="flex justify-center mt-8">
-      <button onClick={scrollToQuoteForm} className="w-full md:w-auto">
-        <PrimaryButton className="w-full md:w-auto">Get a Quote</PrimaryButton>
-      </button>
-    </div>
-  );
+  const GetQuoteCTA = () => {
+    const GetQuoteButton = require("@/components/GetQuoteButton").default;
+    return (
+      <div className="flex justify-center mt-8">
+        <GetQuoteButton className="w-full md:w-auto" />
+      </div>
+    );
+  };
 
   // Handle hash-based expansion and ?open=1 param from CTA
   // Optional: Warm-up API on page load (fire-and-forget)
