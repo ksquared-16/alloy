@@ -8,19 +8,34 @@ import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
 type SelectedVertical = "cleaning" | "gutters" | null;
+type ModalStep = "picker" | "form" | "submitted";
 
 interface QuoteModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultService?: "cleaning" | "gutters" | null;
 }
 
-export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
+export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteModalProps) {
   const [selectedVertical, setSelectedVertical] = useState<SelectedVertical>(null);
+  const [modalStep, setModalStep] = useState<ModalStep>("picker");
   const [mounted, setMounted] = useState(false);
+  const [submittedQuote, setSubmittedQuote] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Initialize selectedVertical from defaultService when modal opens
+  useEffect(() => {
+    if (isOpen && defaultService) {
+      setSelectedVertical(defaultService);
+      setModalStep("form");
+    } else if (isOpen && !defaultService) {
+      setSelectedVertical(null);
+      setModalStep("picker");
+    }
+  }, [isOpen, defaultService]);
 
   useEffect(() => {
     if (isOpen) {
@@ -35,8 +50,10 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
       document.body.style.overflow = "";
       document.body.style.paddingRight = "";
       document.documentElement.style.overflow = "";
-      // Reset selection when modal closes
+      // Reset state when modal closes
       setSelectedVertical(null);
+      setModalStep("picker");
+      setSubmittedQuote(null);
     }
 
     return () => {
@@ -83,11 +100,15 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
         {/* Sticky Header */}
         <div className="sticky top-0 bg-white border-b border-alloy-stone/20 px-4 sm:px-6 py-4 flex items-center justify-between z-10 shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-alloy-midnight">
-            {selectedVertical === null
-              ? "What service do you need?"
-              : selectedVertical === "cleaning"
-                ? "Get a cleaning quote"
-                : "Get early access"}
+            {modalStep === "submitted"
+              ? selectedVertical === "cleaning"
+                ? "Your Quote"
+                : "Thank You!"
+              : selectedVertical === null
+                ? "What service do you need?"
+                : selectedVertical === "cleaning"
+                  ? "Get a cleaning quote"
+                  : "Get early access"}
           </h2>
           <button
             type="button"
@@ -114,7 +135,64 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
           <div className="p-4 sm:p-6">
-            {selectedVertical === null ? (
+            {modalStep === "submitted" ? (
+              // Submitted/Quote View
+              <div className="space-y-6">
+                {selectedVertical === "cleaning" ? (
+                  <>
+                    <div className="text-center">
+                      <div className="mb-4">
+                        <svg
+                          className="w-16 h-16 mx-auto text-alloy-juniper"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      </div>
+                      <h3 className="text-2xl font-bold text-alloy-midnight mb-2">
+                        Quote Calculated Successfully!
+                      </h3>
+                      <p className="text-alloy-midnight/70 mb-6">
+                        Your quote has been calculated and saved. You&apos;ll be redirected to the booking page shortly.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-center">
+                      <div className="mb-4">
+                        <svg
+                          className="w-16 h-16 mx-auto text-alloy-juniper"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      </div>
+                      <h3 className="text-2xl font-bold text-alloy-midnight mb-2">
+                        Thank You!
+                      </h3>
+                      <p className="text-alloy-midnight/70 mb-6">
+                        We&apos;ve received your request. We&apos;ll be in touch soon!
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : selectedVertical === null ? (
               // Service Selection
               <div className="space-y-6">
                 <p className="text-alloy-midnight/80 text-center">
@@ -124,7 +202,10 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                   {/* Cleaning Option */}
                   <button
                     type="button"
-                    onClick={() => setSelectedVertical("cleaning")}
+                    onClick={() => {
+                      setSelectedVertical("cleaning");
+                      setModalStep("form");
+                    }}
                     className="bg-white rounded-lg shadow-md p-4 sm:p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
                   >
                     <div className="mb-4 flex items-center justify-center">
@@ -150,7 +231,10 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                   {/* Gutter Cleaning Option */}
                   <button
                     type="button"
-                    onClick={() => setSelectedVertical("gutters")}
+                    onClick={() => {
+                      setSelectedVertical("gutters");
+                      setModalStep("form");
+                    }}
                     className="bg-white rounded-lg shadow-md p-4 sm:p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
                   >
                     <div className="mb-4 flex items-center justify-center">
@@ -174,39 +258,52 @@ export default function QuoteModal({ isOpen, onClose }: QuoteModalProps) {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : modalStep === "form" ? (
               // Form Display
               <div>
-                {/* Back button */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedVertical(null)}
-                  className="text-sm text-alloy-midnight/70 hover:text-alloy-midnight transition-colors flex items-center gap-2 mb-4 sm:mb-6"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back to service selection
-                </button>
+                {/* Back button - only show if not opened with defaultService */}
+                {!defaultService && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedVertical(null);
+                      setModalStep("picker");
+                    }}
+                    className="text-sm text-alloy-midnight/70 hover:text-alloy-midnight transition-colors flex items-center gap-2 mb-4 sm:mb-6"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to service selection
+                  </button>
+                )}
 
                 {/* Form */}
                 {selectedVertical === "cleaning" ? (
-                  <CleaningQuoteForm onSuccess={() => {
-                    // Close modal after successful submission
-                    setTimeout(() => {
-                      onClose();
-                    }, REDIRECT_DELAY_MS);
-                  }} />
+                  <CleaningQuoteForm
+                    onSuccess={() => {
+                      // Transition to submitted state
+                      setModalStep("submitted");
+                      // Close modal and navigate after delay
+                      setTimeout(() => {
+                        onClose();
+                      }, REDIRECT_DELAY_MS);
+                    }}
+                  />
                 ) : (
-                  <GutterLeadForm onSuccess={() => {
-                    // Close modal after successful submission
-                    setTimeout(() => {
-                      onClose();
-                    }, REDIRECT_DELAY_MS);
-                  }} />
+                  <GutterLeadForm
+                    onSuccess={() => {
+                      // Transition to submitted state
+                      setModalStep("submitted");
+                      // Close modal after delay
+                      setTimeout(() => {
+                        onClose();
+                      }, REDIRECT_DELAY_MS);
+                    }}
+                  />
                 )}
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

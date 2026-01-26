@@ -4,6 +4,7 @@ import { useRef } from "react";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
+import GetQuoteButton from "@/components/GetQuoteButton";
 
 export default function GuttersPage() {
   const formRef = useRef<HTMLDivElement>(null);
@@ -39,14 +40,9 @@ export default function GuttersPage() {
                   <li>Protect your home from water damage</li>
                 </ul>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <button
-                    onClick={scrollToForm}
-                    className="w-full sm:w-auto"
-                  >
-                    <PrimaryButton className="w-full sm:w-auto">
-                      Request gutter quote
-                    </PrimaryButton>
-                  </button>
+                  <GetQuoteButton defaultService="gutters" className="w-full sm:w-auto">
+                    Request gutter quote
+                  </GetQuoteButton>
                 </div>
               </div>
             </div>

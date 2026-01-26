@@ -2,9 +2,12 @@
 
 import { createContext, useContext, useState, ReactNode } from "react";
 
+type DefaultService = "cleaning" | "gutters" | null;
+
 interface QuoteModalContextType {
   isOpen: boolean;
-  openModal: () => void;
+  defaultService: DefaultService;
+  openModal: (options?: { defaultService?: "cleaning" | "gutters" }) => void;
   closeModal: () => void;
 }
 
@@ -12,12 +15,21 @@ const QuoteModalContext = createContext<QuoteModalContextType | undefined>(undef
 
 export function QuoteModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [defaultService, setDefaultService] = useState<DefaultService>(null);
 
-  const openModal = () => setIsOpen(true);
-  const closeModal = () => setIsOpen(false);
+  const openModal = (options?: { defaultService?: "cleaning" | "gutters" }) => {
+    setDefaultService(options?.defaultService || null);
+    setIsOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsOpen(false);
+    // Reset defaultService when modal closes
+    setDefaultService(null);
+  };
 
   return (
-    <QuoteModalContext.Provider value={{ isOpen, openModal, closeModal }}>
+    <QuoteModalContext.Provider value={{ isOpen, defaultService, openModal, closeModal }}>
       {children}
     </QuoteModalContext.Provider>
   );

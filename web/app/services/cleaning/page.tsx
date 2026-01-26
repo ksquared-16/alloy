@@ -141,7 +141,7 @@ export default function CleaningPage() {
     const GetQuoteButton = require("@/components/GetQuoteButton").default;
     return (
       <div className="flex justify-center mt-8">
-        <GetQuoteButton className="w-full md:w-auto" />
+        <GetQuoteButton className="w-full md:w-auto" defaultService="cleaning" />
       </div>
     );
   };

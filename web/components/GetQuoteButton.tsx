@@ -8,6 +8,7 @@ interface GetQuoteButtonProps {
   children?: ReactNode;
   className?: string;
   variant?: "primary" | "secondary";
+  defaultService?: "cleaning" | "gutters";
 }
 
 /**
@@ -17,14 +18,15 @@ interface GetQuoteButtonProps {
 export default function GetQuoteButton({ 
   children, 
   className,
-  variant = "primary"
+  variant = "primary",
+  defaultService
 }: GetQuoteButtonProps) {
   const { openModal } = useQuoteModal();
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    openModal();
+    openModal({ defaultService });
   };
 
   if (variant === "secondary") {
