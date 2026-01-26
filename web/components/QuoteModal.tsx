@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
+import { buildBookingUrl } from "@/lib/booking";
+import type { CleaningQuoteResult, CleaningQuoteInput } from "@/lib/pricing/cleaningPricing";
 
 type SelectedVertical = "cleaning" | "gutters" | null;
 type ModalStep = "picker" | "form" | "submitted";
@@ -17,10 +20,12 @@ interface QuoteModalProps {
 }
 
 export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteModalProps) {
+  const router = useRouter();
   const [selectedVertical, setSelectedVertical] = useState<SelectedVertical>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("picker");
   const [mounted, setMounted] = useState(false);
-  const [submittedQuote, setSubmittedQuote] = useState<any>(null);
+  const [submittedQuote, setSubmittedQuote] = useState<CleaningQuoteResult | null>(null);
+  const [submittedFormInput, setSubmittedFormInput] = useState<CleaningQuoteInput | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -54,6 +59,7 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
       setSelectedVertical(null);
       setModalStep("picker");
       setSubmittedQuote(null);
+      setSubmittedFormInput(null);
     }
 
     return () => {
@@ -133,12 +139,12 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
+        <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }} data-modal-content>
           <div className="p-4 sm:p-6">
             {modalStep === "submitted" ? (
               // Submitted/Quote View
               <div className="space-y-6">
-                {selectedVertical === "cleaning" ? (
+                {selectedVertical === "cleaning" && submittedQuote ? (
                   <>
                     <div className="text-center">
                       <div className="mb-4">
@@ -157,11 +163,72 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                         </svg>
                       </div>
                       <h3 className="text-2xl font-bold text-alloy-midnight mb-2">
-                        Quote Calculated Successfully!
+                        Your Quote is Ready!
                       </h3>
                       <p className="text-alloy-midnight/70 mb-6">
-                        Your quote has been calculated and saved. You&apos;ll be redirected to the booking page shortly.
+                        Your quote has been calculated and saved.
                       </p>
+                    </div>
+                    
+                    {/* Quote Summary */}
+                    {submittedQuote && (
+                      <div className="bg-alloy-stone/30 rounded-lg p-4 mb-6">
+                        <div className="space-y-3">
+                          {submittedQuote.first_clean_price && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-alloy-midnight/70">First Cleaning</span>
+                              <span className="text-lg font-bold text-alloy-midnight">
+                                ${submittedQuote.first_clean_price.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {submittedQuote.recurring_price && submittedQuote.recurring_price > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-alloy-midnight/70">
+                                {submittedQuote.frequency_label || "Recurring"} Cleaning
+                                {submittedQuote.discount_label && (
+                                  <span className="text-sm ml-1">({submittedQuote.discount_label})</span>
+                                )}
+                              </span>
+                              <span className="text-lg font-bold text-alloy-midnight">
+                                ${submittedQuote.recurring_price.toFixed(2)} per visit
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {submittedFormInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const bookingUrl = buildBookingUrl({
+                              phone: submittedFormInput.phone,
+                              email: submittedFormInput.email,
+                              firstName: submittedFormInput.firstName,
+                              lastName: submittedFormInput.lastName,
+                              estimatedPrice: submittedQuote?.estimated_price ?? undefined,
+                            });
+                            onClose();
+                            router.push(bookingUrl);
+                          }}
+                          className="flex-1"
+                        >
+                          <PrimaryButton className="w-full">
+                            Book Now
+                          </PrimaryButton>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-6 py-3 text-alloy-midnight/70 hover:text-alloy-midnight transition-colors font-medium"
+                      >
+                        Close
+                      </button>
                     </div>
                   </>
                 ) : (
@@ -188,6 +255,13 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                       <p className="text-alloy-midnight/70 mb-6">
                         We&apos;ve received your request. We&apos;ll be in touch soon!
                       </p>
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                      >
+                        Close
+                      </button>
                     </div>
                   </>
                 )}
@@ -281,13 +355,30 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                 {/* Form */}
                 {selectedVertical === "cleaning" ? (
                   <CleaningQuoteForm
+                    mode="modal"
+                    onQuoteCalculated={(quote, input) => {
+                      // When quote is ready and we're in form step, transition to submitted state
+                      // This is called both during real-time calculation and on submit
+                      // Only transition if we're still in form step (not already submitted)
+                      if (quote.status === "ready" && modalStep === "form") {
+                        setSubmittedQuote(quote);
+                        setSubmittedFormInput(input);
+                        setModalStep("submitted");
+                        // Scroll to top of modal content to show quote
+                        setTimeout(() => {
+                          const modalContent = document.querySelector('[data-modal-content]');
+                          if (modalContent) {
+                            modalContent.scrollTo({ top: 0, behavior: "smooth" });
+                          }
+                        }, 100);
+                      }
+                    }}
                     onSuccess={() => {
-                      // Transition to submitted state
-                      setModalStep("submitted");
-                      // Close modal and navigate after delay
-                      setTimeout(() => {
-                        onClose();
-                      }, REDIRECT_DELAY_MS);
+                      // This is called after form submission completes
+                      // If we haven't transitioned yet (e.g., quote wasn't ready), transition now
+                      if (modalStep === "form") {
+                        setModalStep("submitted");
+                      }
                     }}
                   />
                 ) : (

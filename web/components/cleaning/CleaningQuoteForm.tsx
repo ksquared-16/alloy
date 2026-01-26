@@ -126,12 +126,14 @@ interface CleaningQuoteFormProps {
     onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
     variant?: "light" | "dark";
     onSuccess?: () => void;
+    mode?: "page" | "modal";
 }
 
 export default function CleaningQuoteForm({
     onQuoteCalculated,
     variant = "light",
     onSuccess,
+    mode = "page",
 }: CleaningQuoteFormProps) {
     const router = useRouter();
     const [form, setForm] = useState<FormState>(INITIAL_FORM);
@@ -174,7 +176,9 @@ export default function CleaningQuoteForm({
                     form.addOns as AddOnId[]
                 );
                 setQuote(result);
-                if (onQuoteCalculated) {
+                // Only call onQuoteCalculated in page mode during real-time calculation
+                // In modal mode, onQuoteCalculated is called on submit to trigger transition
+                if (onQuoteCalculated && mode === "page") {
                     const cleanInput: CleaningQuoteInput = {
                         firstName: form.firstName,
                         lastName: form.lastName,
@@ -466,6 +470,16 @@ export default function CleaningQuoteForm({
                         console.warn("Failed to store form data in sessionStorage:", e);
                     }
 
+                    // If in modal mode, call onQuoteCalculated and return (don't navigate)
+                    // This triggers the modal to transition to "submitted" state
+                    if (mode === "modal") {
+                        if (onQuoteCalculated && result.status === "ready") {
+                            onQuoteCalculated(result, cleanInput);
+                        }
+                        setIsSubmitting(false);
+                        return; // Exit early, modal will handle the transition
+                    }
+
                     // Build booking URL with all prefill parameters to ensure GHL matches existing contact
                     const bookingUrl = buildBookingUrl({
                         phone: cleanInput.phone,
@@ -475,7 +489,7 @@ export default function CleaningQuoteForm({
                         estimatedPrice: result.estimated_price ?? undefined,
                     });
 
-                    // Navigate to /book page
+                    // Navigate to /book page (page mode only)
                     router.push(bookingUrl);
                     return; // Exit early, don't continue with backend submission
                 } catch (error) {
