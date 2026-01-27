@@ -2,6 +2,7 @@
 Lead submission routes.
 """
 import logging
+import os
 from typing import List as TypingList
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
@@ -272,6 +273,117 @@ async def submit_cleaning_lead(
             {"ok": False, "status": "error", "message": "Failed to create contact"},
             status_code=500,
         )
+    
+    # PHASE 1: Write to Supabase (system of record) - non-blocking
+    try:
+        from .supabase_client import (
+            upsert_contact,
+            create_opportunity,
+            upsert_external_mapping,
+            get_vertical_id_by_slug,
+            resolve_contact_id_from_ghl,
+        )
+        from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+        
+        if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+            # 1. Upsert contact in Supabase
+            supabase_contact_payload = {
+                "first_name": first_name.strip(),
+                "last_name": last_name.strip(),
+                "email": email.strip().lower() if email else None,
+                "phone": phone_normalized,
+                "contact_type": "lead",
+                "metadata": {
+                    "postal_code": postal_code,
+                    "home_type": home_type,
+                    "service_type": service_type,
+                    "approximate_square_footage": approximate_square_footage,
+                    "cleaning_frequency": cleaning_frequency,
+                    "preferred_service_date": preferred_service_date,
+                    "street_address": street_address,
+                    "extras_add_ons": extras_add_ons,
+                    "addons__frequency": addons__frequency,
+                    "estimated_price": str(calculated_estimated_price),
+                    "price_breakdown": calculated_price_breakdown,
+                    "recurring_price": str(calculated_recurring_price) if calculated_recurring_price else None,
+                    "vertical": vertical_key,
+                    "app_env": os.getenv("NEXT_PUBLIC_APP_ENV") or "production",
+                },
+            }
+            
+            supabase_contact = upsert_contact(supabase_contact_payload)
+            supabase_contact_id = supabase_contact.get("id")
+            
+            logger.info(
+                "SUPABASE_CONTACT_UPSERTED contact_id=%s ghl_contact_id=%s",
+                supabase_contact_id,
+                contact_id
+            )
+            
+            # 2. Create external_mapping for contact (GHL ID → Supabase UUID)
+            mapping_payload = {
+                "source": "ghl",
+                "entity_type": "contact",
+                "external_id": contact_id,
+                "internal_table": "contacts",
+                "internal_id": supabase_contact_id,
+                "raw": {"ghl_contact_id": contact_id},  # Store minimal GHL reference
+            }
+            upsert_external_mapping(mapping_payload)
+            
+            # 3. Get vertical_id for "cleaning"
+            vertical_id = get_vertical_id_by_slug("cleaning")
+            if not vertical_id:
+                logger.warning("SUPABASE_VERTICAL_NOT_FOUND slug=cleaning, skipping opportunity creation")
+            else:
+                # 4. Create opportunity in Supabase
+                opportunity_name = f"{first_name} {last_name} — {service_type}"
+                opportunity_metadata = {
+                    "vertical": vertical_key,
+                    "app_env": os.getenv("NEXT_PUBLIC_APP_ENV") or "production",
+                    "intake": {
+                        "postal_code": postal_code,
+                        "home_type": home_type,
+                        "service_type": service_type,
+                        "approximate_square_footage": approximate_square_footage,
+                        "cleaning_frequency": cleaning_frequency,
+                        "preferred_service_date": preferred_service_date,
+                        "street_address": street_address,
+                        "extras_add_ons": extras_add_ons,
+                        "addons__frequency": addons__frequency,
+                    },
+                    "estimated_price": str(calculated_estimated_price),
+                    "price_breakdown": calculated_price_breakdown,
+                    "recurring_price": str(calculated_recurring_price) if calculated_recurring_price else None,
+                    "ghl_contact_id": contact_id,  # Store GHL contact ID for reference
+                }
+                
+                opportunity_payload = {
+                    "vertical_id": vertical_id,
+                    "primary_contact_id": supabase_contact_id,
+                    "name": opportunity_name,
+                    "status": "open",
+                    "source": "website",
+                    "monetary_value_cents": int(calculated_estimated_price * 100) if calculated_estimated_price else None,
+                    "metadata": opportunity_metadata,
+                }
+                
+                supabase_opportunity = create_opportunity(opportunity_payload)
+                supabase_opportunity_id = supabase_opportunity.get("id")
+                
+                logger.info(
+                    "SUPABASE_OPPORTUNITY_CREATED opportunity_id=%s contact_id=%s",
+                    supabase_opportunity_id,
+                    supabase_contact_id
+                )
+                
+                # Note: GHL opportunity_id will be created later when booking happens
+                # We'll create that external_mapping in the dispatch webhook
+        else:
+            logger.debug("SUPABASE_NOT_CONFIGURED skipping Supabase writes")
+    except Exception as e:
+        # Non-blocking: log error but don't fail the request
+        logger.error("SUPABASE_WRITE_ERROR in submit_cleaning_lead: %s", e, exc_info=True)
     
     # Build booking URL
     booking_url = build_booking_url(

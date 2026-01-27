@@ -152,3 +152,14 @@ OPP_RECURRING_CONTRACTOR_PAY_AMOUNT = os.getenv("OPP_RECURRING_CONTRACTOR_PAY_AM
 JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY = os.getenv("JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY", "contractor_pay_amount").strip()
 JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY = os.getenv("JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY", "recurring_contractor_pay_amount").strip()
 
+# Supabase settings (for system of record)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+# Supabase is optional for now (graceful degradation if not configured)
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    logger.warning(
+        "SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY not set. "
+        "Supabase writes will be skipped. Set these env vars to enable Supabase-first writes."
+    )
+
