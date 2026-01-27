@@ -377,6 +377,167 @@ async def dispatch(request: Request):
         logger.warning("OFFER_CODE_CREATED code=%s external_job_id=%s job_record_id=None (will resolve on acceptance) opportunity_id=%s",
                       offer_code, external_job_id_used, opportunity_id)
 
+    # PHASE 1: Write to Supabase (system of record) - non-blocking
+    # Note: This runs after offer_code and external_job_id_used are defined
+    logger.info(
+        "SUPA_WRITE_ATTEMPT route=/dispatch ghl_opportunity_id=%s external_job_id=%s offer_code=%s",
+        opportunity_id,
+        external_job_id_used or (candidates[0] if candidates else None),
+        offer_code
+    )
+    
+    try:
+        from ..supabase_client import (
+            upsert_job,
+            upsert_external_mapping,
+            resolve_opportunity_id_from_ghl,
+            find_external_mapping,
+        )
+        from ..settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+        
+        has_url = bool(SUPABASE_URL)
+        has_key = bool(SUPABASE_SERVICE_ROLE_KEY)
+        
+        logger.info(
+            "SUPA_WRITE_ATTEMPT route=/dispatch config_check has_url=%s has_key=%s has_opportunity_id=%s",
+            has_url,
+            has_key,
+            bool(opportunity_id)
+        )
+        
+        if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and opportunity_id:
+            # Resolve Supabase opportunity UUID from GHL opportunity_id
+            supabase_opportunity_id = resolve_opportunity_id_from_ghl(opportunity_id)
+            
+            logger.info(
+                "SUPA_WRITE_ATTEMPT route=/dispatch step=opportunity_resolve ghl_opportunity_id=%s supabase_opportunity_id=%s",
+                opportunity_id,
+                supabase_opportunity_id
+            )
+            
+            if supabase_opportunity_id:
+                # Extract schedule info from job_summary
+                start_time_iso = job_summary.get("start_time_iso") or job_summary.get("start_time")
+                end_time = job_summary.get("end_time")
+                
+                # Parse timezone (default to America/Los_Angeles if not specified)
+                timezone_str = "America/Los_Angeles"  # Default, can be extracted from payload if available
+                
+                # Build job payload
+                job_title = f"{job_summary.get('customer_name', 'Unknown')} — {job_summary.get('service_type', 'Cleaning')}"
+                job_description = f"Service: {job_summary.get('service_type', 'Cleaning')}\n"
+                if job_summary.get("full_address"):
+                    job_description += f"Address: {job_summary.get('full_address')}\n"
+                if job_summary.get("postal_code"):
+                    job_description += f"ZIP: {job_summary.get('postal_code')}\n"
+                if job_summary.get("access_method"):
+                    job_description += f"Access: {job_summary.get('access_method')}\n"
+                if job_summary.get("access_notes"):
+                    job_description += f"Access Notes: {job_summary.get('access_notes')}\n"
+                
+                # Store schedule info in metadata
+                job_metadata = {
+                    "ghl_opportunity_id": opportunity_id,
+                    "ghl_contact_id": job_summary.get("contact_id"),
+                    "ghl_external_job_id": external_job_id_used or (candidates[0] if candidates else None),
+                    "ghl_job_record_id": job_record_id,
+                    "schedule": {
+                        "start_at": start_time_iso,
+                        "end_at": end_time,
+                        "timezone": timezone_str,
+                        "status": "scheduled",  # Initial status
+                    },
+                    "service_type": job_summary.get("service_type"),
+                    "estimated_price": job_summary.get("estimated_price"),
+                    "price_breakdown": job_summary.get("price_breakdown"),
+                    "full_address": job_summary.get("full_address"),
+                    "postal_code": job_summary.get("postal_code"),
+                    "access_method": job_summary.get("access_method"),
+                    "access_notes": job_summary.get("access_notes"),
+                    "offer_code": offer_code,
+                    "dispatched_at": job_summary.get("dispatched_at"),
+                }
+                
+                job_payload = {
+                    "opportunity_id": supabase_opportunity_id,
+                    "title": job_title,
+                    "description": job_description.strip(),
+                    "metadata": job_metadata,
+                }
+                
+                # Check if job already exists via external_mapping
+                existing_job_mapping = None
+                if external_job_id_used:
+                    existing_job_mapping = find_external_mapping("ghl", "job", external_job_id_used, "jobs")
+                
+                supabase_job_id = None
+                if existing_job_mapping:
+                    supabase_job_id = existing_job_mapping.get("internal_id")
+                    # Update existing job
+                    supabase_job = upsert_job(job_payload, supabase_job_id)
+                    logger.info(
+                        "SUPA_WRITE_SUCCESS route=/dispatch step=job_update supabase_job_id=%s supabase_opportunity_id=%s ghl_job_id=%s offer_code=%s",
+                        supabase_job.get("id"),
+                        supabase_opportunity_id,
+                        external_job_id_used,
+                        offer_code
+                    )
+                else:
+                    # Create new job
+                    supabase_job = upsert_job(job_payload)
+                    supabase_job_id = supabase_job.get("id")
+                    logger.info(
+                        "SUPA_WRITE_SUCCESS route=/dispatch step=job_create supabase_job_id=%s supabase_opportunity_id=%s ghl_job_id=%s offer_code=%s",
+                        supabase_job_id,
+                        supabase_opportunity_id,
+                        external_job_id_used,
+                        offer_code
+                    )
+                
+                # Create external_mapping for job (GHL job/appointment ID → Supabase job UUID)
+                if external_job_id_used and supabase_job_id:
+                    job_mapping_payload = {
+                        "source": "ghl",
+                        "entity_type": "job",
+                        "external_id": external_job_id_used,
+                        "internal_table": "jobs",
+                        "internal_id": supabase_job_id,
+                        "raw": {
+                            "ghl_opportunity_id": opportunity_id,
+                            "ghl_contact_id": job_summary.get("contact_id"),
+                            "ghl_job_record_id": job_record_id,
+                            "appointment_id": external_job_id_used,
+                        },
+                    }
+                    upsert_external_mapping(job_mapping_payload)
+                    logger.info(
+                        "SUPA_WRITE_SUCCESS route=/dispatch step=external_mapping_job supabase_job_id=%s ghl_job_id=%s",
+                        supabase_job_id,
+                        external_job_id_used
+                    )
+            else:
+                logger.warning(
+                    "SUPA_WRITE_FAILED route=/dispatch step=opportunity_resolve ghl_opportunity_id=%s error=mapping_not_found, skipping job creation",
+                    opportunity_id
+                )
+        else:
+            logger.warning(
+                "SUPA_WRITE_FAILED route=/dispatch error=config_or_opportunity_missing has_url=%s has_key=%s has_opportunity_id=%s",
+                has_url,
+                has_key,
+                bool(opportunity_id)
+            )
+    except Exception as e:
+        # Non-blocking: log error but don't fail the request
+        logger.error(
+            "SUPA_WRITE_FAILED route=/dispatch ghl_opportunity_id=%s external_job_id=%s offer_code=%s error=%s",
+            opportunity_id,
+            external_job_id_used or (candidates[0] if candidates else None),
+            offer_code,
+            str(e),
+            exc_info=True
+        )
+
     # Fetch customer contact to get bedrooms/bathrooms
     bedrooms = None
     bathrooms = None

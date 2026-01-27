@@ -622,3 +622,83 @@ def debug_ghl_contact(phone: Optional[str] = None, email: Optional[str] = None):
             "traceback": traceback.format_exc(),
         }, status_code=200)
 
+
+@router.get("/debug/supabase")
+def debug_supabase():
+    """
+    Debug endpoint to validate Supabase connectivity (staging/dev only).
+    
+    Returns:
+        JSON with:
+        - has_url: Boolean indicating SUPABASE_URL is set
+        - has_service_key: Boolean indicating SUPABASE_SERVICE_ROLE_KEY is set
+        - query_result: Result of a simple query (select 1 row from verticals)
+        - error: Error message if any
+        - base_url: PostgREST base URL (without secrets)
+    
+    Security: Returns 404 in production environments.
+    """
+    import os
+    from ..settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+    
+    # Block in production
+    app_env = os.getenv("NEXT_PUBLIC_APP_ENV", "").lower()
+    is_production = app_env == "production" or (not app_env and "production" in os.getenv("RENDER", "").lower())
+    
+    if is_production:
+        return JSONResponse({
+            "error": "This endpoint is disabled in production",
+        }, status_code=404)
+    
+    has_url = bool(SUPABASE_URL)
+    has_service_key = bool(SUPABASE_SERVICE_ROLE_KEY)
+    
+    # Build base URL for display (no secrets)
+    base_url = None
+    if SUPABASE_URL:
+        base_url = SUPABASE_URL.rstrip("/") + "/rest/v1"
+    
+    result = {
+        "has_url": has_url,
+        "has_service_key": has_service_key,
+        "base_url": base_url,
+        "query_result": None,
+        "error": None,
+    }
+    
+    if not has_url or not has_service_key:
+        result["error"] = f"Missing env vars: has_url={has_url}, has_service_key={has_service_key}"
+        return JSONResponse(result, status_code=200)
+    
+    # Try a simple query: select 1 row from verticals
+    try:
+        from ..supabase_client import _get_base_url, _get_headers
+        import requests
+        
+        url = f"{_get_base_url()}/verticals"
+        params = {"select": "id,slug", "limit": "1"}
+        
+        response = requests.get(url, headers=_get_headers(), params=params, timeout=10)
+        
+        if response.ok:
+            data = response.json()
+            result["query_result"] = {
+                "status": "success",
+                "row_count": len(data) if isinstance(data, list) else 0,
+                "sample_row": data[0] if data and len(data) > 0 else None,
+            }
+        else:
+            result["error"] = f"Query failed: {response.status_code} - {response.text[:500]}"
+            result["query_result"] = {
+                "status": "failed",
+                "status_code": response.status_code,
+            }
+    except Exception as e:
+        result["error"] = str(e)
+        result["query_result"] = {
+            "status": "exception",
+            "exception_type": type(e).__name__,
+        }
+    
+    return JSONResponse(result, status_code=200)
+

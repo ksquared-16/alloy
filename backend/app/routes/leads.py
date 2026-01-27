@@ -275,8 +275,20 @@ async def submit_cleaning_lead(
         )
     
     # PHASE 1: Write to Supabase (system of record) - non-blocking
+    # Mask PII for logging
+    email_masked = (email or "")[:3] + "***" if email else None
+    phone_masked = (phone_normalized or "")[:4] + "***" if phone_normalized else None
+    
+    logger.info(
+        "SUPA_WRITE_ATTEMPT route=/leads/cleaning ghl_contact_id=%s email=%s phone=%s vertical_key=%s",
+        contact_id,
+        email_masked,
+        phone_masked,
+        vertical_key
+    )
+    
     try:
-        from .supabase_client import (
+        from ..supabase_client import (
             upsert_contact,
             create_opportunity,
             upsert_external_mapping,
@@ -284,6 +296,15 @@ async def submit_cleaning_lead(
             resolve_contact_id_from_ghl,
         )
         from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+        
+        has_url = bool(SUPABASE_URL)
+        has_key = bool(SUPABASE_SERVICE_ROLE_KEY)
+        
+        logger.info(
+            "SUPA_WRITE_ATTEMPT route=/leads/cleaning config_check has_url=%s has_key=%s",
+            has_url,
+            has_key
+        )
         
         if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
             # 1. Upsert contact in Supabase
@@ -315,9 +336,11 @@ async def submit_cleaning_lead(
             supabase_contact_id = supabase_contact.get("id")
             
             logger.info(
-                "SUPABASE_CONTACT_UPSERTED contact_id=%s ghl_contact_id=%s",
+                "SUPA_WRITE_SUCCESS route=/leads/cleaning step=contact_upsert supabase_contact_id=%s ghl_contact_id=%s email=%s phone=%s",
                 supabase_contact_id,
-                contact_id
+                contact_id,
+                email_masked,
+                phone_masked
             )
             
             # 2. Create external_mapping for contact (GHL ID → Supabase UUID)
@@ -331,10 +354,16 @@ async def submit_cleaning_lead(
             }
             upsert_external_mapping(mapping_payload)
             
+            logger.info(
+                "SUPA_WRITE_SUCCESS route=/leads/cleaning step=external_mapping_contact supabase_contact_id=%s ghl_contact_id=%s",
+                supabase_contact_id,
+                contact_id
+            )
+            
             # 3. Get vertical_id for "cleaning"
             vertical_id = get_vertical_id_by_slug("cleaning")
             if not vertical_id:
-                logger.warning("SUPABASE_VERTICAL_NOT_FOUND slug=cleaning, skipping opportunity creation")
+                logger.warning("SUPA_WRITE_FAILED route=/leads/cleaning step=vertical_lookup slug=cleaning error=not_found, skipping opportunity creation")
             else:
                 # 4. Create opportunity in Supabase
                 opportunity_name = f"{first_name} {last_name} — {service_type}"
@@ -372,18 +401,32 @@ async def submit_cleaning_lead(
                 supabase_opportunity_id = supabase_opportunity.get("id")
                 
                 logger.info(
-                    "SUPABASE_OPPORTUNITY_CREATED opportunity_id=%s contact_id=%s",
+                    "SUPA_WRITE_SUCCESS route=/leads/cleaning step=opportunity_create supabase_opportunity_id=%s supabase_contact_id=%s ghl_contact_id=%s vertical_key=%s",
                     supabase_opportunity_id,
-                    supabase_contact_id
+                    supabase_contact_id,
+                    contact_id,
+                    vertical_key
                 )
                 
                 # Note: GHL opportunity_id will be created later when booking happens
                 # We'll create that external_mapping in the dispatch webhook
         else:
-            logger.debug("SUPABASE_NOT_CONFIGURED skipping Supabase writes")
+            logger.warning(
+                "SUPA_WRITE_FAILED route=/leads/cleaning error=config_missing has_url=%s has_key=%s ghl_contact_id=%s",
+                has_url,
+                has_key,
+                contact_id
+            )
     except Exception as e:
         # Non-blocking: log error but don't fail the request
-        logger.error("SUPABASE_WRITE_ERROR in submit_cleaning_lead: %s", e, exc_info=True)
+        logger.error(
+            "SUPA_WRITE_FAILED route=/leads/cleaning ghl_contact_id=%s email=%s phone=%s error=%s",
+            contact_id,
+            email_masked,
+            phone_masked,
+            str(e),
+            exc_info=True
+        )
     
     # Build booking URL
     booking_url = build_booking_url(
