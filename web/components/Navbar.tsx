@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import PrimaryButton from "@/components/PrimaryButton";
-import { useQuoteModal } from "@/lib/quoteModal";
+import GetQuoteButton from "@/components/GetQuoteButton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Navbar() {
-  const { openModal } = useQuoteModal();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
-  const servicesDropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
 
   const servicesLinks = [
     { href: "/services/cleaning", label: "Home Cleaning" },
@@ -23,23 +27,6 @@ export default function Navbar() {
     { href: "/join", label: "Join Our Team" },
     { href: "/about", label: "About" },
   ];
-
-  // Close Services dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(event.target as Node)) {
-        setServicesDropdownOpen(false);
-      }
-    };
-
-    if (servicesDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [servicesDropdownOpen]);
 
   return (
     <nav className="sticky top-0 z-50 bg-alloy-stone shadow-sm border-b border-alloy-stone/60">
@@ -61,55 +48,45 @@ export default function Navbar() {
           {/* Navigation Links - Right Aligned */}
           <div className="flex items-center space-x-8">
             {/* Services Dropdown */}
-            <div
-              className="relative"
-              ref={servicesDropdownRef}
-              onMouseEnter={() => setServicesDropdownOpen(true)}
-              onMouseLeave={() => setServicesDropdownOpen(false)}
-            >
-              <button
-                onClick={() => setServicesDropdownOpen(!servicesDropdownOpen)}
+            <DropdownMenu>
+              <DropdownMenuTrigger
                 className={`
                   text-alloy-midnight hover:text-alloy-juniper 
                   transition-colors font-medium pb-1 relative flex items-center gap-1
+                  outline-none focus:outline-none
                   ${pathname?.startsWith("/services/") || pathname === "/gutters"
                     ? "border-b-2 border-alloy-juniper"
                     : ""}
                 `}
-                aria-expanded={servicesDropdownOpen}
-                aria-haspopup="true"
               >
                 Services
                 <svg
-                  className={`w-4 h-4 transition-transform ${servicesDropdownOpen ? "rotate-180" : ""}`}
+                  className="w-4 h-4 transition-transform data-[state=open]:rotate-180"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-              </button>
-              {servicesDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-alloy-stone/30 py-2 z-50">
-                  {servicesLinks.map((link) => {
-                    const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
-                    return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setServicesDropdownOpen(false)}
-                        className={`
-                          block px-4 py-2 text-sm text-alloy-midnight hover:bg-alloy-stone/50 transition-colors
-                          ${isActive ? "bg-alloy-juniper/10 text-alloy-juniper font-medium" : ""}
-                        `}
-                      >
-                        {link.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                {servicesLinks.map((link) => {
+                  const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
+                  return (
+                    <DropdownMenuItem
+                      key={link.href}
+                      onClick={() => router.push(link.href)}
+                      className={`
+                        cursor-pointer
+                        ${isActive ? "bg-alloy-juniper/10 text-alloy-juniper font-medium" : ""}
+                      `}
+                    >
+                      {link.label}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {navLinks.map((link) => {
               const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
@@ -129,14 +106,7 @@ export default function Navbar() {
             })}
 
             {/* Get a Quote CTA */}
-            <button
-              onClick={openModal}
-              className="!px-4 !py-2 !text-sm"
-            >
-              <PrimaryButton className="!px-4 !py-2 !text-sm">
-                Get a Quote
-              </PrimaryButton>
-            </button>
+            <GetQuoteButton className="!px-4 !py-2 !text-sm" />
           </div>
         </div>
 
@@ -220,15 +190,9 @@ export default function Navbar() {
                 );
               })}
               <div className="pt-2">
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openModal();
-                  }}
-                  className="w-full"
-                >
-                  <PrimaryButton className="w-full">Get a Quote</PrimaryButton>
-                </button>
+                <div onClick={() => setMobileMenuOpen(false)} className="w-full">
+                  <GetQuoteButton className="w-full" />
+                </div>
               </div>
             </div>
           </div>

@@ -7,6 +7,7 @@ import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
+import GetQuoteButton from "@/components/GetQuoteButton";
 
 export default function CleaningPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -137,13 +138,14 @@ export default function CleaningPage() {
   };
 
   // Reusable CTA component for sections
-  const GetQuoteCTA = () => (
-    <div className="flex justify-center mt-8">
-      <button onClick={scrollToQuoteForm} className="w-full md:w-auto">
-        <PrimaryButton className="w-full md:w-auto">Get a Quote</PrimaryButton>
-      </button>
-    </div>
-  );
+  const GetQuoteCTA = () => {
+    const GetQuoteButton = require("@/components/GetQuoteButton").default;
+    return (
+      <div className="flex justify-center mt-8">
+        <GetQuoteButton className="w-full md:w-auto" defaultService="cleaning" />
+      </div>
+    );
+  };
 
   // Handle hash-based expansion and ?open=1 param from CTA
   // Optional: Warm-up API on page load (fire-and-forget)
@@ -210,17 +212,9 @@ export default function CleaningPage() {
                   Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <button
-                    onClick={handleToggle}
-                    aria-expanded={isOpen}
-                    aria-controls="quote-form-content"
-                    aria-label={isOpen ? "Hide form" : "Get a quote"}
-                    className="w-full sm:w-auto"
-                  >
-                    <PrimaryButton className="w-full sm:w-auto">
-                      {isOpen ? "Hide form" : "Get a quote"}
-                    </PrimaryButton>
-                  </button>
+                  <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
+                    Get a quote
+                  </GetQuoteButton>
                 </div>
               </div>
             </div>
@@ -505,22 +499,9 @@ export default function CleaningPage() {
             Submit your quote request above. We'll text you shortly to confirm details.
           </p>
           <div className="flex justify-center">
-            <button
-              onClick={() => {
-                if (!isOpen) {
-                  handleToggle();
-                } else {
-                  formRef.current?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-                }
-              }}
-            >
-              <PrimaryButton className="bg-white !text-alloy-midnight hover:bg-alloy-stone hover:!text-alloy-midnight">
-                Start my quote
-              </PrimaryButton>
-            </button>
+            <GetQuoteButton defaultService="cleaning" className="bg-white !text-alloy-midnight hover:bg-alloy-stone hover:!text-alloy-midnight">
+              Start my quote
+            </GetQuoteButton>
           </div>
         </div>
       </Section>

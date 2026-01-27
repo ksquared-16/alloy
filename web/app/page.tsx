@@ -9,10 +9,9 @@ import ServiceCard from "@/components/ServiceCard";
 import Accordion from "@/components/Accordion";
 import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
-import { useQuoteModal } from "@/lib/quoteModal";
+import GetQuoteButton from "@/components/GetQuoteButton";
 
 export default function Home() {
-  const { openModal } = useQuoteModal();
   const howItWorksSteps = [
     {
       number: "1",
@@ -144,11 +143,9 @@ export default function Home() {
                   Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <button onClick={openModal} className="w-full sm:w-auto">
-                    <PrimaryButton className="w-full sm:w-auto">
-                      Get a quote
-                    </PrimaryButton>
-                  </button>
+                  <GetQuoteButton>
+                    Get a quote
+                  </GetQuoteButton>
                   <Link href="#how-it-works">
                     <SecondaryButton className="!bg-white/20 backdrop-blur-md !border !border-white/50 !text-white hover:!bg-white/30 w-full sm:w-auto">
                       See how Alloy works
@@ -280,11 +277,9 @@ export default function Home() {
             ))}
           </div>
           <div className="text-center">
-            <Link href="/quote">
-              <PrimaryButton className="w-full sm:w-auto">
-                Get a quote
-              </PrimaryButton>
-            </Link>
+            <GetQuoteButton className="w-full sm:w-auto">
+              Get a quote
+            </GetQuoteButton>
             <p className="text-sm text-alloy-midnight/60 mt-6">
               Had a great experience?{" "}
               <a
@@ -322,11 +317,9 @@ export default function Home() {
             Select a service to get a quote.
           </p>
           <div className="flex justify-center">
-            <button onClick={openModal}>
-              <PrimaryButton className="!bg-alloy-juniper hover:!bg-alloy-juniper/90 !text-white">
-                Get a Quote
-              </PrimaryButton>
-            </button>
+            <GetQuoteButton className="!bg-alloy-juniper hover:!bg-alloy-juniper/90 !text-white">
+              Get a Quote
+            </GetQuoteButton>
           </div>
         </div>
       </Section>

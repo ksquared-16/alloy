@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
+import { useQuoteModal } from "@/lib/quoteModal";
 
 type SelectedService = "cleaning" | "gutters" | null;
 
 export default function QuoteSelectionPage() {
+  const { openModal } = useQuoteModal();
   const [selectedService, setSelectedService] = useState<SelectedService>(null);
+
+  // Auto-open modal when page loads
+  useEffect(() => {
+    openModal();
+  }, [openModal]);
 
   return (
     <div className="min-h-screen">

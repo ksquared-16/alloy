@@ -113,8 +113,9 @@ function validate(form: FormState): ValidationErrors {
         }
     }
 
-    // Add-ons frequency only required if add-ons are selected (and not Move-Out)
-    if (!isMoveOut && form.addOns.length > 0 && !form.addOnFrequency) {
+    // Add-ons frequency only required if add-ons are selected (and not Move-Out, and not One-time)
+    const isOneTime = form.cleaningFrequency === "One-time";
+    if (!isMoveOut && !isOneTime && form.addOns.length > 0 && !form.addOnFrequency) {
         errors.addOnFrequency = "Please select how often you want add-ons.";
     }
 
@@ -124,13 +125,15 @@ function validate(form: FormState): ValidationErrors {
 interface CleaningQuoteFormProps {
     onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
     variant?: "light" | "dark";
-    onSuccess?: () => void;
+    onSuccess?: (bookingUrl?: string) => void;
+    mode?: "page" | "modal";
 }
 
 export default function CleaningQuoteForm({
     onQuoteCalculated,
     variant = "light",
     onSuccess,
+    mode = "page",
 }: CleaningQuoteFormProps) {
     const router = useRouter();
     const [form, setForm] = useState<FormState>(INITIAL_FORM);
@@ -173,7 +176,9 @@ export default function CleaningQuoteForm({
                     form.addOns as AddOnId[]
                 );
                 setQuote(result);
-                if (onQuoteCalculated) {
+                // Only call onQuoteCalculated in page mode during real-time calculation
+                // In modal mode, onQuoteCalculated is called on submit to trigger transition
+                if (onQuoteCalculated && mode === "page") {
                     const cleanInput: CleaningQuoteInput = {
                         firstName: form.firstName,
                         lastName: form.lastName,
@@ -365,7 +370,11 @@ export default function CleaningQuoteForm({
                 cleaningFrequency: cleaningFrequency,
                 preferredServiceDate: form.preferredServiceDate?.trim() || undefined,
                 addOns: isMoveOut ? [] : form.addOns,
-                addOnFrequency: isMoveOut ? undefined : (form.addOnFrequency || undefined),
+                addOnFrequency: isMoveOut
+                    ? undefined
+                    : (form.cleaningFrequency === "One-time" && form.addOns.length > 0
+                        ? "First cleaning only"
+                        : (form.addOnFrequency || undefined)),
             };
 
             // For Standard Cleaning: Calculate quote and navigate to /book
@@ -445,7 +454,11 @@ export default function CleaningQuoteForm({
                             cleaning_frequency: cleaningFrequency,
                             preferred_service_date: cleanInput.preferredServiceDate || undefined,
                             extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
-                            addons__frequency: isMoveOut ? undefined : (cleanInput.addOnFrequency || undefined),
+                            addons__frequency: isMoveOut
+                                ? undefined
+                                : (cleanInput.cleaningFrequency === "One-time" && cleanInput.addOns.length > 0
+                                    ? "First cleaning only"
+                                    : (cleanInput.addOnFrequency || undefined)),
                             street_address: form.streetAddress.trim() || undefined,
                             estimated_price: result.estimated_price ? result.estimated_price.toFixed(2) : undefined,
                         };
@@ -457,6 +470,24 @@ export default function CleaningQuoteForm({
                         console.warn("Failed to store form data in sessionStorage:", e);
                     }
 
+                    // If in modal mode, build booking URL and call onSuccess to close modal and navigate
+                    if (mode === "modal") {
+                        // Build booking URL with all prefill parameters
+                        const bookingUrl = buildBookingUrl({
+                            phone: cleanInput.phone,
+                            email: cleanInput.email,
+                            firstName: cleanInput.firstName,
+                            lastName: cleanInput.lastName,
+                            estimatedPrice: result.estimated_price ?? undefined,
+                        });
+                        setIsSubmitting(false);
+                        // Call onSuccess with booking URL - modal will close and navigate
+                        if (onSuccess) {
+                            onSuccess(bookingUrl);
+                        }
+                        return; // Exit early, modal will handle navigation
+                    }
+
                     // Build booking URL with all prefill parameters to ensure GHL matches existing contact
                     const bookingUrl = buildBookingUrl({
                         phone: cleanInput.phone,
@@ -466,7 +497,7 @@ export default function CleaningQuoteForm({
                         estimatedPrice: result.estimated_price ?? undefined,
                     });
 
-                    // Navigate to /book page
+                    // Navigate to /book page (page mode only)
                     router.push(bookingUrl);
                     return; // Exit early, don't continue with backend submission
                 } catch (error) {
@@ -505,8 +536,14 @@ export default function CleaningQuoteForm({
             if (!isMoveOut && cleanInput.addOns.length > 0) {
                 formData.append("extras_add_ons", JSON.stringify(cleanInput.addOns));
             }
-            if (!isMoveOut && cleanInput.addOnFrequency) {
-                formData.append("addons__frequency", cleanInput.addOnFrequency);
+            if (!isMoveOut && cleanInput.addOns.length > 0) {
+                // For one-time cleaning, set to "First cleaning only"; otherwise use selected value
+                const addonFreq = cleanInput.cleaningFrequency === "One-time"
+                    ? "First cleaning only"
+                    : cleanInput.addOnFrequency;
+                if (addonFreq) {
+                    formData.append("addons__frequency", addonFreq);
+                }
             }
             if (form.streetAddress.trim()) {
                 formData.append("street_address", form.streetAddress.trim());
@@ -952,8 +989,8 @@ export default function CleaningQuoteForm({
                             </div>
                         </div>
 
-                        {/* Add-on Frequency – only when add-ons selected */}
-                        {form.addOns.length > 0 && (
+                        {/* Add-on Frequency – only when add-ons selected AND not One-time */}
+                        {form.addOns.length > 0 && form.cleaningFrequency !== "One-time" && (
                             <div>
                                 <label className={labelClass}>
                                     Add-ons Frequency<span className="text-alloy-ember ml-0.5">*</span>
