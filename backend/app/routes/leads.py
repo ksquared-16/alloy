@@ -295,7 +295,7 @@ async def submit_cleaning_lead(
             get_vertical_id_by_slug,
             resolve_contact_id_from_ghl,
         )
-        from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+        from ..settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
         
         has_url = bool(SUPABASE_URL)
         has_key = bool(SUPABASE_SERVICE_ROLE_KEY)
