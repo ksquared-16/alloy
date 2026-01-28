@@ -42,6 +42,8 @@ class ValidateDiscountResponse(BaseModel):
 class RedeemDiscountRequest(BaseModel):
     code: str
     ghl_contact_id: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     opportunity_id: Optional[str] = None
     job_id: Optional[str] = None
     quote_subtotal: float
@@ -431,8 +433,8 @@ async def redeem_discount(request: RedeemDiscountRequest):
         # 1. Resolve contact_id
         contact_id = resolve_contact_id_for_discount(
             ghl_contact_id=request.ghl_contact_id,
-            email=None,
-            phone=None,
+            email=request.email,
+            phone=request.phone,
         )
 
         if not contact_id:
@@ -490,10 +492,31 @@ async def redeem_discount(request: RedeemDiscountRequest):
             # Check for UNIQUE violation (already redeemed)
             if "23505" in error_text or "unique" in error_text.lower():
                 logger.info(
-                    "DISCOUNT_REDEEM: Already redeemed code=%s contact_id=%s",
+                    "DISCOUNT_REDEEM: Already redeemed code=%s contact_id=%s (idempotent - redemption exists)",
                     code_normalized,
                     contact_id
                 )
+                # Still apply tag even if already redeemed (idempotent)
+                if ghl_tag:
+                    tag_name = ghl_tag
+                else:
+                    tag_name = f"discount:{code_normalized}"
+                
+                logger.info(
+                    "DISCOUNT_REDEEM: applying_ghl_tag tag=%s contact_id=%s code=%s (already_redeemed)",
+                    tag_name,
+                    request.ghl_contact_id,
+                    code_normalized
+                )
+                tag_success = ensure_contact_has_tag(request.ghl_contact_id, tag_name)
+                logger.info(
+                    "DISCOUNT_REDEEM: applied_ghl_tag success=%s code=%s ghl_contact_id=%s tag=%s (already_redeemed)",
+                    tag_success,
+                    code_normalized,
+                    request.ghl_contact_id,
+                    tag_name
+                )
+                
                 return JSONResponse({
                     "success": False,
                     "reason": "already_used"
@@ -510,16 +533,24 @@ async def redeem_discount(request: RedeemDiscountRequest):
             })
 
         # 4. Add GHL tag (use ghl_tag from schema if present, otherwise default format)
+        # Determine tag name
         if ghl_tag:
             tag_name = ghl_tag
         else:
             tag_name = f"discount:{code_normalized}"
         
+        logger.info(
+            "DISCOUNT_REDEEM: applying_ghl_tag tag=%s contact_id=%s code=%s",
+            tag_name,
+            request.ghl_contact_id,
+            code_normalized
+        )
+        
         tag_success = ensure_contact_has_tag(request.ghl_contact_id, tag_name)
         
         if tag_success:
             logger.info(
-                "DISCOUNT_REDEEM: Tag added code=%s discount_code_id=%s ghl_contact_id=%s tag=%s",
+                "DISCOUNT_REDEEM: applied_ghl_tag success=true code=%s discount_code_id=%s ghl_contact_id=%s tag=%s",
                 code_normalized,
                 discount_code_id,
                 request.ghl_contact_id,
@@ -527,7 +558,7 @@ async def redeem_discount(request: RedeemDiscountRequest):
             )
         else:
             logger.warning(
-                "DISCOUNT_REDEEM: Failed to add tag code=%s discount_code_id=%s ghl_contact_id=%s tag=%s",
+                "DISCOUNT_REDEEM: applied_ghl_tag success=false code=%s discount_code_id=%s ghl_contact_id=%s tag=%s",
                 code_normalized,
                 discount_code_id,
                 request.ghl_contact_id,

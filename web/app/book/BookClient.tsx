@@ -225,6 +225,8 @@ export default function BookClient() {
                             body: JSON.stringify({
                                 code: discountCode.trim().toUpperCase(),
                                 ghl_contact_id: ghlContactId,
+                                email: emailParam,
+                                phone: phoneParam,
                                 opportunity_id: null,
                                 job_id: null,
                                 quote_subtotal: quoteSubtotal,
@@ -304,6 +306,27 @@ export default function BookClient() {
                         ? quote.estimated_price
                         : 0;
 
+            // Get email/phone from prefill or search params for fallback contact resolution
+            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                localStorage.getItem("alloy_booking_prefill");
+            let emailParam: string | undefined;
+            let phoneParam: string | undefined;
+
+            if (prefill) {
+                try {
+                    const prefillData = JSON.parse(prefill);
+                    emailParam = prefillData.email || email || undefined;
+                    phoneParam = prefillData.phone || phone || undefined;
+                } catch (e) {
+                    console.warn("Failed to parse prefill for discount redeem:", e);
+                }
+            }
+
+            if (!emailParam && !phoneParam) {
+                emailParam = email || undefined;
+                phoneParam = phone || undefined;
+            }
+
             const response = await fetch(`${apiBaseUrl}/discounts/redeem`, {
                 method: "POST",
                 headers: {
@@ -312,6 +335,8 @@ export default function BookClient() {
                 body: JSON.stringify({
                     code: discountData.code,
                     ghl_contact_id: ghlContactId,
+                    email: emailParam,
+                    phone: phoneParam,
                     opportunity_id: opportunityId,
                     job_id: null,
                     quote_subtotal: quoteSubtotal,

@@ -344,21 +344,29 @@ async def submit_cleaning_lead(
             )
             
             # 2. Create external_mapping for contact (GHL ID → Supabase UUID)
-            mapping_payload = {
-                "source": "ghl",
-                "entity_type": "contact",
-                "external_id": contact_id,
-                "internal_table": "contacts",
-                "internal_id": supabase_contact_id,
-                "raw": {"ghl_contact_id": contact_id},  # Store minimal GHL reference
-            }
-            upsert_external_mapping(mapping_payload)
-            
-            logger.info(
-                "SUPA_WRITE_SUCCESS route=/leads/cleaning step=external_mapping_contact supabase_contact_id=%s ghl_contact_id=%s",
-                supabase_contact_id,
-                contact_id
-            )
+            try:
+                upsert_external_mapping(
+                    source="ghl",
+                    entity_type="contact",
+                    external_id=contact_id,
+                    internal_id=supabase_contact_id,
+                    internal_table="contacts",
+                    raw={"ghl_contact_id": contact_id},  # Store minimal GHL reference
+                )
+                logger.info(
+                    "SUPA_WRITE_SUCCESS route=/leads/cleaning step=external_mapping_contact supabase_contact_id=%s ghl_contact_id=%s",
+                    supabase_contact_id,
+                    contact_id
+                )
+            except Exception as e:
+                logger.error(
+                    "SUPA_WRITE_FAILED route=/leads/cleaning step=external_mapping_contact supabase_contact_id=%s ghl_contact_id=%s error=%s",
+                    supabase_contact_id,
+                    contact_id,
+                    str(e),
+                    exc_info=True
+                )
+                # Continue - external mapping failure should not abort opportunity creation
             
             # 3. Get vertical_id for "cleaning"
             vertical_id = get_vertical_id_by_slug("cleaning")

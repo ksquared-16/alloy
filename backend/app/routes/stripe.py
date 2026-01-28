@@ -463,6 +463,11 @@ async def stripe_webhook(request: Request):
     if event_type == "setup_intent.succeeded":
         setup_intent_obj = event.get("data", {}).get("object", {})
         setup_intent_id = setup_intent_obj.get("id")
+        logger.info(
+            "stripe_webhook: handling setup_intent.succeeded event_id=%s setup_intent_id=%s",
+            event_id,
+            setup_intent_id
+        )
         metadata = setup_intent_obj.get("metadata", {})
         
         ghl_contact_id = metadata.get("ghl_contact_id")

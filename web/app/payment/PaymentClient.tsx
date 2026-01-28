@@ -472,6 +472,13 @@ export default function PaymentClient() {
             );
 
             if (confirmError) {
+                const errorDetails = {
+                    message: confirmError.message || "Card setup failed",
+                    code: confirmError.code || null,
+                    decline_code: confirmError.decline_code || null,
+                    type: confirmError.type || null,
+                };
+                console.error("[PAYMENT] Card setup failed:", errorDetails);
                 throw new Error(confirmError.message || "Card setup failed");
             }
 
