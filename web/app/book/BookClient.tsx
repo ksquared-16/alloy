@@ -22,6 +22,13 @@ interface QuoteResponse {
     addons?: Array<{ name: string; price: number | null }>;
 }
 
+interface DiscountData {
+    code: string;
+    discount_code_id: string;
+    discount_amount: number;
+    quote_total: number;
+}
+
 type FetchStatus = "idle" | "loading" | "ready" | "timeout" | "error";
 
 function isQuoteReady(data: QuoteResponse | null): boolean {
@@ -53,6 +60,12 @@ export default function BookClient() {
     const [contactIdError, setContactIdError] = useState<string | null>(null);
     const [resolvedContactId, setResolvedContactId] = useState<string | null>(null);
 
+    // Discount code state
+    const [discountCode, setDiscountCode] = useState("");
+    const [discountData, setDiscountData] = useState<DiscountData | null>(null);
+    const [discountError, setDiscountError] = useState<string | null>(null);
+    const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
+
     useEffect(() => {
         // Read quote from localStorage or sessionStorage (prefer localStorage)
         try {
@@ -72,12 +85,205 @@ export default function BookClient() {
                 setFetchStatus("error");
                 setQuote(null);
             }
+
+            // Load discount data from prefill
+            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                localStorage.getItem("alloy_booking_prefill");
+            if (prefill) {
+                try {
+                    const prefillData = JSON.parse(prefill);
+                    if (prefillData.discount_code && prefillData.discount_code_id && prefillData.discount_amount) {
+                        setDiscountData({
+                            code: prefillData.discount_code,
+                            discount_code_id: prefillData.discount_code_id,
+                            discount_amount: prefillData.discount_amount,
+                            quote_total: prefillData.quote_total || 0,
+                        });
+                        setDiscountCode(prefillData.discount_code);
+                    }
+                } catch (e) {
+                    console.warn("Failed to load discount from prefill:", e);
+                }
+            }
         } catch (e) {
             console.error("Failed to load quote from storage:", e);
             setFetchStatus("error");
             setQuote(null);
         }
     }, []);
+
+    // Validate discount code
+    const handleValidateDiscount = async () => {
+        if (!discountCode.trim()) {
+            setDiscountError("Please enter a discount code");
+            return;
+        }
+
+        setIsValidatingDiscount(true);
+        setDiscountError(null);
+
+        try {
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+            
+            // Get quote subtotal (first cleaning price)
+            const quoteSubtotal = 
+                (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0)
+                    ? quote.first_clean_price
+                    : (typeof quote?.estimated_price === "number" && quote.estimated_price > 0)
+                        ? quote.estimated_price
+                        : 0;
+
+            if (quoteSubtotal === 0) {
+                setDiscountError("Quote price not available");
+                setIsValidatingDiscount(false);
+                return;
+            }
+
+            // Get contact info from prefill or search params
+            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                localStorage.getItem("alloy_booking_prefill");
+            let ghlContactId: string | undefined;
+            let emailParam: string | undefined;
+            let phoneParam: string | undefined;
+
+            if (prefill) {
+                try {
+                    const prefillData = JSON.parse(prefill);
+                    ghlContactId = prefillData.ghl_contact_id;
+                    emailParam = prefillData.email || email || undefined;
+                    phoneParam = prefillData.phone || phone || undefined;
+                } catch (e) {
+                    console.warn("Failed to parse prefill for discount validation:", e);
+                }
+            }
+
+            if (!emailParam && !phoneParam) {
+                emailParam = email || undefined;
+                phoneParam = phone || undefined;
+            }
+
+            const response = await fetch(`${apiBaseUrl}/discounts/validate`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    code: discountCode.trim(),
+                    ghl_contact_id: ghlContactId,
+                    email: emailParam,
+                    phone: phoneParam,
+                    quote_subtotal: quoteSubtotal,
+                    vertical_key: "cleaning",
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.valid) {
+                setDiscountData({
+                    code: discountCode.trim().toUpperCase(),
+                    discount_code_id: data.discount_code_id,
+                    discount_amount: data.discount_amount,
+                    quote_total: data.quote_total,
+                });
+                setDiscountError(null);
+
+                // Store in prefill
+                const existingPrefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                    localStorage.getItem("alloy_booking_prefill");
+                let prefillData: any = {};
+                if (existingPrefill) {
+                    try {
+                        prefillData = JSON.parse(existingPrefill);
+                    } catch (e) {
+                        console.warn("Failed to parse prefill:", e);
+                    }
+                }
+                prefillData.discount_code = discountCode.trim().toUpperCase();
+                prefillData.discount_code_id = data.discount_code_id;
+                prefillData.discount_amount = data.discount_amount;
+                prefillData.quote_total = data.quote_total;
+                const jsonData = JSON.stringify(prefillData);
+                sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                localStorage.setItem("alloy_booking_prefill", jsonData);
+            } else {
+                if (data.reason === "already_used") {
+                    setDiscountError("This discount code has already been used");
+                } else if (data.reason === "contact_required") {
+                    setDiscountError("Please complete your contact information first");
+                } else {
+                    setDiscountError("Invalid discount code");
+                }
+                setDiscountData(null);
+            }
+        } catch (error) {
+            console.error("Failed to validate discount code:", error);
+            setDiscountError("Failed to validate discount code. Please try again.");
+            setDiscountData(null);
+        } finally {
+            setIsValidatingDiscount(false);
+        }
+    };
+
+    // Redeem discount code after lead submission
+    const redeemDiscount = async (ghlContactId: string, opportunityId?: string) => {
+        if (!discountData) return;
+
+        try {
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+            
+            const quoteSubtotal = 
+                (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0)
+                    ? quote.first_clean_price
+                    : (typeof quote?.estimated_price === "number" && quote.estimated_price > 0)
+                        ? quote.estimated_price
+                        : 0;
+
+            const response = await fetch(`${apiBaseUrl}/discounts/redeem`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    code: discountData.code,
+                    ghl_contact_id: ghlContactId,
+                    opportunity_id: opportunityId,
+                    job_id: null,
+                    quote_subtotal: quoteSubtotal,
+                    discount_amount: discountData.discount_amount,
+                    quote_total: discountData.quote_total,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!data.success && data.reason === "already_used") {
+                // Remove discount from UI and storage
+                setDiscountData(null);
+                setDiscountCode("");
+                setDiscountError("This discount code has already been used");
+                
+                const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                    localStorage.getItem("alloy_booking_prefill");
+                if (prefill) {
+                    try {
+                        const prefillData = JSON.parse(prefill);
+                        delete prefillData.discount_code;
+                        delete prefillData.discount_code_id;
+                        delete prefillData.discount_amount;
+                        delete prefillData.quote_total;
+                        const jsonData = JSON.stringify(prefillData);
+                        sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                        localStorage.setItem("alloy_booking_prefill", jsonData);
+                    } catch (e) {
+                        console.warn("Failed to remove discount from prefill:", e);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to redeem discount code:", error);
+        }
+    };
 
     // Initialize alloy_booking_prefill from alloy_lead_form_data if it doesn't exist
     // This ensures phone/email are available for PaymentClient even if query params are missing
@@ -269,6 +475,11 @@ export default function BookClient() {
                     const backendResult = await response.json();
                     if (isStaging) {
                         console.log("[STAGING] Lead submission successful, contact_id:", backendResult.contact_id);
+                    }
+
+                    // Redeem discount if present
+                    if (backendResult.contact_id && discountData) {
+                        await redeemDiscount(backendResult.contact_id, backendResult.opportunity_id);
                     }
 
                     // Store ghl_contact_id in prefill
@@ -477,6 +688,11 @@ export default function BookClient() {
                             contact_id: backendResult.contact_id,
                             status: backendResult.status
                         });
+                    }
+
+                    // Redeem discount if present
+                    if (backendResult.contact_id && discountData) {
+                        await redeemDiscount(backendResult.contact_id, backendResult.opportunity_id);
                     }
 
                     // Store ghl_contact_id as PRIMARY identifier
@@ -772,7 +988,7 @@ export default function BookClient() {
                                                 First Cleaning
                                             </p>
                                             {(() => {
-                                                const price =
+                                                const basePrice =
                                                     (typeof quote.first_clean_price === "number" &&
                                                         quote.first_clean_price > 0
                                                         ? quote.first_clean_price
@@ -780,14 +996,108 @@ export default function BookClient() {
                                                             quote.estimated_price > 0
                                                             ? quote.estimated_price
                                                             : null);
-                                                return price != null && price > 0 ? (
-                                                    <p className="text-2xl font-bold text-alloy-blue leading-tight">
-                                                        ${price.toFixed(2)}
-                                                    </p>
-                                                ) : (
-                                                    <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                                
+                                                if (basePrice == null || basePrice <= 0) {
+                                                    return (
+                                                        <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                                    );
+                                                }
+
+                                                const displayPrice = discountData?.quote_total ?? basePrice;
+                                                const showDiscount = discountData && discountData.discount_amount > 0;
+
+                                                return (
+                                                    <div>
+                                                        {showDiscount && (
+                                                            <div className="mb-1">
+                                                                <span className="text-sm text-alloy-midnight/60 line-through">
+                                                                    ${basePrice.toFixed(2)}
+                                                                </span>
+                                                                <span className="text-xs text-green-600 ml-2 font-semibold">
+                                                                    -${discountData.discount_amount.toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <p className="text-2xl font-bold text-alloy-blue leading-tight">
+                                                            ${displayPrice.toFixed(2)}
+                                                        </p>
+                                                    </div>
                                                 );
                                             })()}
+                                        </div>
+
+                                        {/* Discount Code Input */}
+                                        <div className="pt-2 border-t border-alloy-stone/20">
+                                            {discountData ? (
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs text-green-600 font-semibold">
+                                                            Discount Applied: {discountData.code}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => {
+                                                                setDiscountData(null);
+                                                                setDiscountCode("");
+                                                                setDiscountError(null);
+                                                                // Remove from prefill
+                                                                const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                                                                    localStorage.getItem("alloy_booking_prefill");
+                                                                if (prefill) {
+                                                                    try {
+                                                                        const prefillData = JSON.parse(prefill);
+                                                                        delete prefillData.discount_code;
+                                                                        delete prefillData.discount_code_id;
+                                                                        delete prefillData.discount_amount;
+                                                                        delete prefillData.quote_total;
+                                                                        const jsonData = JSON.stringify(prefillData);
+                                                                        sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                                                                        localStorage.setItem("alloy_booking_prefill", jsonData);
+                                                                    } catch (e) {
+                                                                        console.warn("Failed to remove discount from prefill:", e);
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="text-xs text-alloy-midnight/60 hover:text-alloy-midnight underline"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                                        Discount Code
+                                                    </label>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={discountCode}
+                                                            onChange={(e) => {
+                                                                setDiscountCode(e.target.value.toUpperCase());
+                                                                setDiscountError(null);
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") {
+                                                                    handleValidateDiscount();
+                                                                }
+                                                            }}
+                                                            placeholder="Enter code"
+                                                            className="flex-1 text-sm px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                                                            disabled={isValidatingDiscount}
+                                                        />
+                                                        <button
+                                                            onClick={handleValidateDiscount}
+                                                            disabled={isValidatingDiscount || !discountCode.trim()}
+                                                            className="px-4 py-2 bg-alloy-blue text-white text-sm font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {isValidatingDiscount ? "..." : "Apply"}
+                                                        </button>
+                                                    </div>
+                                                    {discountError && (
+                                                        <p className="text-xs text-red-600">{discountError}</p>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Recurring Cleaning - stacked vertically */}
