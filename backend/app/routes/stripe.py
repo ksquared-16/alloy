@@ -396,10 +396,10 @@ async def create_setup_intent(request: Request):
         if stripe_customer_id:
             try:
                 link_stripe_customer_to_supabase(
+                    stripe_customer_id,
                     ghl_contact_id=resolved_ghl_contact_id,
                     email=email,
                     phone=phone,
-                    stripe_customer_id=stripe_customer_id,
                     setup_intent_id=setup_intent.id,
                 )
             except Exception as e:
@@ -662,10 +662,10 @@ async def stripe_webhook(request: Request):
             if stripe_customer_id:
                 try:
                     link_stripe_customer_to_supabase(
+                        stripe_customer_id,
                         ghl_contact_id=ghl_contact_id,
                         email=email,
                         phone=phone,
-                        stripe_customer_id=stripe_customer_id,
                         setup_intent_id=setup_intent_id,
                         payment_method_id=payment_method_id,
                         payment_method_brand=payment_method_brand,

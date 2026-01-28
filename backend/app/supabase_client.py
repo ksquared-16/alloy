@@ -454,10 +454,11 @@ def resolve_contact_id_from_ghl(ghl_contact_id: str) -> Optional[str]:
     return None
 
 def link_stripe_customer_to_supabase(
+    stripe_customer_id: str,
+    *,
     ghl_contact_id: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
-    stripe_customer_id: str,
     setup_intent_id: Optional[str] = None,
     payment_method_id: Optional[str] = None,
     payment_method_brand: Optional[str] = None,
