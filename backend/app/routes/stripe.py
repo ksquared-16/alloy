@@ -23,14 +23,14 @@ from ..ghl_client import (
 )
 from ..supabase_client import link_stripe_customer_to_supabase
 
+logger = logging.getLogger("alloy-dispatcher")
+
 # Initialize Stripe
 stripe.api_key = STRIPE_SECRET_KEY
 
 # Log Stripe mode at startup (without exposing secrets)
 stripe_mode = "live" if STRIPE_SECRET_KEY.startswith("sk_live_") else "test" if STRIPE_SECRET_KEY.startswith("sk_test_") else "unknown"
 logger.info("STRIPE_MODE=%s (key prefix: %s)", stripe_mode, STRIPE_SECRET_KEY[:7] + "***" if STRIPE_SECRET_KEY else "None")
-
-logger = logging.getLogger("alloy-dispatcher")
 
 router = APIRouter()
 
