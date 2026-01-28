@@ -206,6 +206,71 @@ export default function BookClient() {
                 const jsonData = JSON.stringify(prefillData);
                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                 localStorage.setItem("alloy_booking_prefill", jsonData);
+
+                // Immediately redeem if ghl_contact_id exists
+                if (ghlContactId) {
+                    console.log("[DISCOUNT] Applying discount, immediately redeeming...", {
+                        code: discountCode.trim().toUpperCase(),
+                        ghl_contact_id: ghlContactId,
+                        discount_amount: data.discount_amount,
+                        quote_total: data.quote_total,
+                    });
+                    
+                    try {
+                        const redeemResponse = await fetch(`${apiBaseUrl}/discounts/redeem`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                code: discountCode.trim().toUpperCase(),
+                                ghl_contact_id: ghlContactId,
+                                opportunity_id: null,
+                                job_id: null,
+                                quote_subtotal: quoteSubtotal,
+                                discount_amount: data.discount_amount,
+                                quote_total: data.quote_total,
+                            }),
+                        });
+
+                        const redeemData = await redeemResponse.json();
+                        console.log("[DISCOUNT] Redeem response:", {
+                            status: redeemResponse.status,
+                            success: redeemData.success,
+                            reason: redeemData.reason,
+                        });
+
+                        if (!redeemData.success && redeemData.reason === "already_used") {
+                            // Remove discount from UI and storage
+                            setDiscountData(null);
+                            setDiscountCode("");
+                            setDiscountError("This discount code has already been used");
+                            
+                            // Remove from prefill
+                            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                                localStorage.getItem("alloy_booking_prefill");
+                            if (prefill) {
+                                try {
+                                    const prefillData = JSON.parse(prefill);
+                                    delete prefillData.discount_code;
+                                    delete prefillData.discount_code_id;
+                                    delete prefillData.discount_amount;
+                                    delete prefillData.quote_total;
+                                    const jsonData = JSON.stringify(prefillData);
+                                    sessionStorage.setItem("alloy_booking_prefill", jsonData);
+                                    localStorage.setItem("alloy_booking_prefill", jsonData);
+                                } catch (e) {
+                                    console.warn("Failed to remove discount from prefill:", e);
+                                }
+                            }
+                        }
+                    } catch (redeemError) {
+                        console.error("[DISCOUNT] Failed to redeem discount:", redeemError);
+                        // Don't fail the validation - redemption can happen later
+                    }
+                } else {
+                    console.log("[DISCOUNT] Discount validated but ghl_contact_id not available yet, will redeem after lead submission");
+                }
             } else {
                 if (data.reason === "already_used") {
                     setDiscountError("This discount code has already been used");
@@ -1035,13 +1100,73 @@ export default function BookClient() {
                                                             Discount Applied: {discountData.code}
                                                         </span>
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={async () => {
+                                                                // Unredeem discount in Supabase
+                                                                const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                                                                    localStorage.getItem("alloy_booking_prefill");
+                                                                let ghlContactId: string | undefined;
+                                                                let emailParam: string | undefined;
+                                                                let phoneParam: string | undefined;
+
+                                                                if (prefill) {
+                                                                    try {
+                                                                        const prefillData = JSON.parse(prefill);
+                                                                        ghlContactId = prefillData.ghl_contact_id;
+                                                                        emailParam = prefillData.email || email || undefined;
+                                                                        phoneParam = prefillData.phone || phone || undefined;
+                                                                    } catch (e) {
+                                                                        console.warn("Failed to parse prefill for unredeem:", e);
+                                                                    }
+                                                                }
+
+                                                                if (!emailParam && !phoneParam) {
+                                                                    emailParam = email || undefined;
+                                                                    phoneParam = phone || undefined;
+                                                                }
+
+                                                                if (ghlContactId || emailParam || phoneParam) {
+                                                                    try {
+                                                                        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+                                                                        console.log("[DISCOUNT] Unredeeming discount...", {
+                                                                            code: discountData.code,
+                                                                            ghl_contact_id: ghlContactId,
+                                                                        });
+
+                                                                        const response = await fetch(`${apiBaseUrl}/discounts/unredeem`, {
+                                                                            method: "POST",
+                                                                            headers: {
+                                                                                "Content-Type": "application/json",
+                                                                            },
+                                                                            body: JSON.stringify({
+                                                                                code: discountData.code,
+                                                                                ghl_contact_id: ghlContactId,
+                                                                                email: emailParam,
+                                                                                phone: phoneParam,
+                                                                            }),
+                                                                        });
+
+                                                                        const data = await response.json();
+                                                                        console.log("[DISCOUNT] Unredeem response:", {
+                                                                            status: response.status,
+                                                                            released: data.released,
+                                                                            reason: data.reason,
+                                                                        });
+
+                                                                        if (!data.released && data.reason === "not_found_or_linked") {
+                                                                            console.log("[DISCOUNT] Redemption already linked to opportunity/job, cannot unredeem");
+                                                                        }
+                                                                    } catch (error) {
+                                                                        console.error("[DISCOUNT] Failed to unredeem discount:", error);
+                                                                        // Continue with UI removal even if unredeem fails
+                                                                    }
+                                                                }
+
+                                                                // Remove from UI and storage
                                                                 setDiscountData(null);
                                                                 setDiscountCode("");
                                                                 setDiscountError(null);
+                                                                
                                                                 // Remove from prefill
-                                                                const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
-                                                                    localStorage.getItem("alloy_booking_prefill");
                                                                 if (prefill) {
                                                                     try {
                                                                         const prefillData = JSON.parse(prefill);

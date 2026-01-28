@@ -54,6 +54,18 @@ class RedeemDiscountResponse(BaseModel):
     reason: Optional[str] = None
 
 
+class UnredeemDiscountRequest(BaseModel):
+    code: str
+    ghl_contact_id: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class UnredeemDiscountResponse(BaseModel):
+    released: bool
+    reason: Optional[str] = None
+
+
 def _get_supabase_headers():
     """Get PostgREST headers for Supabase."""
     if not SUPABASE_SERVICE_ROLE_KEY:
@@ -544,6 +556,143 @@ async def redeem_discount(request: RedeemDiscountRequest):
         )
         return JSONResponse(
             {"success": False, "reason": "service_error"},
+            status_code=500
+        )
+
+
+@router.post("/discounts/unredeem", response_model=UnredeemDiscountResponse)
+async def unredeem_discount(request: UnredeemDiscountRequest):
+    """
+    Release a discount redemption (delete from discount_redemptions).
+    Only releases redemptions where opportunity_id IS NULL AND job_id IS NULL.
+    
+    Returns:
+        - released: true if redemption was deleted
+        - reason: error reason if failed
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.error("DISCOUNT_UNREDEEM: Supabase not configured")
+        return JSONResponse(
+            {"released": False, "reason": "service_unavailable"},
+            status_code=503
+        )
+
+    # Normalize code
+    code_normalized = request.code.strip().upper()
+    
+    logger.info(
+        "DISCOUNT_UNREDEEM: Releasing redemption code=%s ghl_contact_id=%s",
+        code_normalized,
+        request.ghl_contact_id
+    )
+
+    try:
+        base_url = _get_supabase_base_url()
+        headers = _get_supabase_headers()
+
+        # 1. Resolve contact_id
+        contact_id = resolve_contact_id_for_discount(
+            ghl_contact_id=request.ghl_contact_id,
+            email=request.email,
+            phone=request.phone,
+        )
+
+        if not contact_id:
+            logger.warning(
+                "DISCOUNT_UNREDEEM: Cannot resolve contact_id code=%s ghl_contact_id=%s email=%s phone=%s",
+                code_normalized,
+                request.ghl_contact_id,
+                request.email[:3] + "***" if request.email else None,
+                request.phone[:4] + "***" if request.phone else None
+            )
+            return JSONResponse({
+                "released": False,
+                "reason": "contact_not_found"
+            })
+
+        # 2. Resolve discount_code_id
+        discount_url = f"{base_url}/discount_codes"
+        discount_params = {
+            "select": "id",
+            "code": f"eq.{code_normalized}",
+            "limit": "1",
+        }
+
+        discount_response = requests.get(
+            discount_url, headers=headers, params=discount_params, timeout=10
+        )
+
+        if not discount_response.ok or not discount_response.json():
+            logger.warning("DISCOUNT_UNREDEEM: Discount code not found code=%s", code_normalized)
+            return JSONResponse({
+                "released": False,
+                "reason": "invalid_code"
+            })
+
+        discount_code_id = discount_response.json()[0].get("id")
+
+        # 3. Delete redemption where opportunity_id IS NULL AND job_id IS NULL
+        redemption_url = f"{base_url}/discount_redemptions"
+        delete_params = {
+            "contact_id": f"eq.{contact_id}",
+            "discount_code_id": f"eq.{discount_code_id}",
+            "opportunity_id": "is.null",
+            "job_id": "is.null",
+        }
+
+        # Use Prefer: return=representation to get deleted rows back
+        delete_headers = headers.copy()
+        delete_headers["Prefer"] = "return=representation"
+        
+        delete_response = requests.delete(
+            redemption_url, headers=delete_headers, params=delete_params, timeout=10
+        )
+
+        if not delete_response.ok:
+            logger.error(
+                "DISCOUNT_UNREDEEM: Failed to delete redemption status=%d error=%s",
+                delete_response.status_code,
+                delete_response.text[:200]
+            )
+            return JSONResponse({
+                "released": False,
+                "reason": "delete_failed"
+            })
+
+        # Check if any rows were deleted (PostgREST returns deleted rows in response body)
+        deleted_rows = delete_response.json() if delete_response.text else []
+        
+        if deleted_rows and len(deleted_rows) > 0:
+            logger.info(
+                "DISCOUNT_UNREDEEM: Released redemption code=%s discount_code_id=%s contact_id=%s",
+                code_normalized,
+                discount_code_id,
+                contact_id
+            )
+            return JSONResponse({
+                "released": True
+            })
+        else:
+            logger.info(
+                "DISCOUNT_UNREDEEM: No matching redemption found (may already be linked to opportunity/job) code=%s discount_code_id=%s contact_id=%s",
+                code_normalized,
+                discount_code_id,
+                contact_id
+            )
+            return JSONResponse({
+                "released": False,
+                "reason": "not_found_or_linked"
+            })
+
+    except Exception as e:
+        logger.error(
+            "DISCOUNT_UNREDEEM: Exception code=%s error=%s",
+            code_normalized,
+            str(e),
+            exc_info=True
+        )
+        return JSONResponse(
+            {"released": False, "reason": "service_error"},
             status_code=500
         )
 
