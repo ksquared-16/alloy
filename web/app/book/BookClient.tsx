@@ -6,59 +6,8 @@ import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
 
-// GHL Booking Iframe Component
-// Note: form_embed.js is loaded globally via GhlScript in layout.tsx
-function GhlBookingIframe({
-    phone,
-    email,
-    firstName,
-    lastName,
-    contactId,
-}: {
-    phone: string | null;
-    email: string | null;
-    firstName: string | null;
-    lastName: string | null;
-    contactId: string | null;
-}) {
-    // Build GHL booking widget URL with prefill parameters
-    // Redirect to payment page after calendar selection
-    const buildBookingUrl = () => {
-        const baseUrl = "https://api.leadconnectorhq.com/widget/booking/GficiTFm4cbAbQ05IHwz";
-        // Use window.location.origin to ensure staging stays on staging domain
-        const redirectUrl = typeof window !== "undefined"
-            ? `${window.location.origin}/payment`
-            : "/payment"; // Fallback for SSR
-        const params = new URLSearchParams({
-            redirectUrl,
-        });
-
-        // Add prefill parameters if available (for contact matching)
-        if (phone) params.append("phone", phone);
-        if (email) params.append("email", email);
-        if (firstName) params.append("first_name", firstName);
-        if (lastName) params.append("last_name", lastName);
-        if (contactId) params.append("lead_contact_id", contactId);
-
-        return `${baseUrl}?${params.toString()}`;
-    };
-
-    // Generate unique ID for iframe (static ID as per GHL requirements)
-    const iframeId = "GficiTFm4cbAbQ05IHwz_1767381006867";
-
-    return (
-        <>
-            <iframe
-                src={buildBookingUrl()}
-                style={{ width: "100%", border: "none", overflow: "hidden" }}
-                scrolling="no"
-                id={iframeId}
-                title="Booking Calendar"
-                className="min-h-[1200px] md:min-h-[900px]"
-            />
-        </>
-    );
-}
+// Import clean React-safe GHL booking embed component
+import GhlBookingEmbed from "@/components/GhlBookingEmbed";
 
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
@@ -932,7 +881,7 @@ export default function BookClient() {
                                 if (quote && quote.service === "Move-Out / Heavy Clean") {
                                     return (
                                         <>
-                                            <GhlBookingIframe
+                                            <GhlBookingEmbed
                                                 phone={phone}
                                                 email={email}
                                                 firstName={firstName}
@@ -1003,7 +952,7 @@ export default function BookClient() {
                                 if (contactIdReady) {
                                     return (
                                         <>
-                                            <GhlBookingIframe
+                                            <GhlBookingEmbed
                                                 phone={phone}
                                                 email={email}
                                                 firstName={firstName}
