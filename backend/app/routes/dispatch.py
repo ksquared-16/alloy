@@ -391,6 +391,7 @@ async def dispatch(request: Request):
             upsert_job,
             upsert_external_mapping,
             resolve_opportunity_id_from_ghl,
+            resolve_contact_id_from_ghl,
             find_external_mapping,
         )
         from ..settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -406,7 +407,7 @@ async def dispatch(request: Request):
         )
         
         if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and opportunity_id:
-            # Resolve Supabase opportunity UUID from GHL opportunity_id
+            # Resolve Supabase opportunity UUID from GHL opportunity_id (check if mapping exists)
             supabase_opportunity_id = resolve_opportunity_id_from_ghl(opportunity_id)
             
             logger.info(
@@ -414,6 +415,74 @@ async def dispatch(request: Request):
                 opportunity_id,
                 supabase_opportunity_id
             )
+            
+            # If mapping doesn't exist, try to find existing Supabase opportunity for this contact
+            # (created in /leads/cleaning) and create the mapping
+            if not supabase_opportunity_id:
+                import requests
+                
+                # Resolve contact_id from GHL contact_id in job_summary
+                ghl_contact_id = job_summary.get("contact_id") or job_summary.get("customer_contact_id")
+                if ghl_contact_id:
+                    supabase_contact_id = resolve_contact_id_from_ghl(ghl_contact_id)
+                    if supabase_contact_id:
+                        # Look for existing opportunity for this contact (created in /leads/cleaning)
+                        from ..supabase_client import _get_base_url, _get_headers
+                        base_url = _get_base_url()
+                        headers = _get_headers()
+                        opportunities_url = f"{base_url}/opportunities"
+                        opportunities_params = {
+                            "select": "id",
+                            "primary_contact_id": f"eq.{supabase_contact_id}",
+                            "status": "eq.open",
+                            "order": "created_at.desc",
+                            "limit": "1",
+                        }
+                        
+                        try:
+                            opp_response = requests.get(
+                                opportunities_url, headers=headers, params=opportunities_params, timeout=10
+                            )
+                            if opp_response.ok:
+                                opp_data = opp_response.json()
+                                if opp_data and len(opp_data) > 0:
+                                    supabase_opportunity_id = opp_data[0].get("id")
+                                    logger.info(
+                                        "SUPA_WRITE_ATTEMPT route=/dispatch step=opportunity_found_for_contact ghl_opportunity_id=%s supabase_opportunity_id=%s supabase_contact_id=%s",
+                                        opportunity_id,
+                                        supabase_opportunity_id,
+                                        supabase_contact_id
+                                    )
+                                    
+                                    # Create the external mapping
+                                    try:
+                                        upsert_external_mapping(
+                                            source="ghl",
+                                            entity_type="opportunity",
+                                            external_id=opportunity_id,
+                                            internal_id=supabase_opportunity_id,
+                                            internal_table="opportunities",
+                                            raw={"ghl_opportunity_id": opportunity_id},
+                                        )
+                                        logger.info(
+                                            "SUPA_WRITE_SUCCESS route=/dispatch step=opportunity_mapping_create ghl_opportunity_id=%s supabase_opportunity_id=%s",
+                                            opportunity_id,
+                                            supabase_opportunity_id
+                                        )
+                                    except Exception as e:
+                                        logger.error(
+                                            "SUPA_WRITE_FAILED route=/dispatch step=opportunity_mapping_create ghl_opportunity_id=%s supabase_opportunity_id=%s error=%s",
+                                            opportunity_id,
+                                            supabase_opportunity_id,
+                                            str(e),
+                                            exc_info=True
+                                        )
+                        except Exception as e:
+                            logger.warning(
+                                "SUPA_WRITE_FAILED route=/dispatch step=opportunity_lookup_for_contact ghl_contact_id=%s error=%s",
+                                ghl_contact_id,
+                                str(e)
+                            )
             
             if supabase_opportunity_id:
                 # Extract schedule info from job_summary

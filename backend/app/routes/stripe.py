@@ -696,12 +696,22 @@ async def stripe_webhook(request: Request):
     elif event_type == "setup_intent.setup_failed":
         setup_intent = event.get("data", {}).get("object", {})
         setup_intent_id = setup_intent.get("id")
-        failure_reason = setup_intent.get("last_setup_error", {}).get("message", "Unknown")
+        last_setup_error = setup_intent.get("last_setup_error", {})
+        error_code = last_setup_error.get("code")
+        error_decline_code = last_setup_error.get("decline_code")
+        error_type = last_setup_error.get("type")
+        error_message = last_setup_error.get("message", "Unknown")
+        payment_method_id = setup_intent.get("payment_method")
+        
         logger.warning(
-            "stripe_webhook: setup_intent.setup_failed setup_intent_id=%s reason=%s event_id=%s",
+            "stripe_webhook: setup_intent.setup_failed event_id=%s setup_intent_id=%s error_code=%s error_decline_code=%s error_type=%s error_message=%s payment_method_id=%s",
+            event_id,
             setup_intent_id,
-            failure_reason,
-            event_id
+            error_code,
+            error_decline_code,
+            error_type,
+            error_message,
+            payment_method_id[:8] + "***" if payment_method_id else "None"
         )
     
     # Ignore other event types
