@@ -580,6 +580,17 @@ export default function CleaningQuoteForm({
                         // This is the PRIMARY identifier for contact resolution
                         if (backendResult.contact_id) {
                             try {
+                                const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+                                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+                                
+                                if (isStaging) {
+                                    console.log("[STAGING DEBUG] CleaningQuoteForm: Writing session data", {
+                                        api_base_url: apiBaseUrl,
+                                        contact_id: backendResult.contact_id,
+                                        storage_key: "alloy_booking_prefill"
+                                    });
+                                }
+                                
                                 // Read existing prefill data or create new
                                 const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
                                 let prefillData: any = {};
@@ -605,12 +616,28 @@ export default function CleaningQuoteForm({
                                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                                 localStorage.setItem("alloy_booking_prefill", jsonData);
 
+                                if (isStaging) {
+                                    console.log("[STAGING DEBUG] CleaningQuoteForm: Session data written successfully", {
+                                        storage_key: "alloy_booking_prefill",
+                                        has_session_storage: typeof sessionStorage !== "undefined",
+                                        has_local_storage: typeof localStorage !== "undefined",
+                                        data_keys: Object.keys(prefillData)
+                                    });
+                                }
+
                                 console.log("Lead submission: Stored ghl_contact_id as primary identifier", {
                                     ghl_contact_id: backendResult.contact_id,
                                     phone: form.phone,
                                     email: form.email
                                 });
                             } catch (e) {
+                                const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
+                                if (isStaging) {
+                                    console.error("[STAGING DEBUG] CleaningQuoteForm: Failed to write session data", {
+                                        error: String(e),
+                                        storage_key: "alloy_booking_prefill"
+                                    });
+                                }
                                 console.warn("Failed to persist contact_id:", e);
                             }
                         }

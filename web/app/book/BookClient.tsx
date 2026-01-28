@@ -97,7 +97,7 @@ export default function BookClient() {
     const firstName = searchParams?.get("first_name");
     const lastName = searchParams?.get("last_name");
     const estimatedPrice = searchParams?.get("estimated_price");
-    
+
     // State for ensuring ghl_contact_id exists before showing booking widget
     const [isEnsuringContactId, setIsEnsuringContactId] = useState(false);
     const [contactIdReady, setContactIdReady] = useState(false);
@@ -172,6 +172,12 @@ export default function BookClient() {
                     localStorage.setItem("alloy_booking_prefill", jsonData);
 
                     if (isStaging) {
+                        console.log("[STAGING DEBUG] BookClient: Initialized alloy_booking_prefill from alloy_lead_form_data", {
+                            storage_key: "alloy_booking_prefill",
+                            has_session_storage: typeof sessionStorage !== "undefined",
+                            has_local_storage: typeof localStorage !== "undefined",
+                            data_keys: Object.keys(cleanedData)
+                        });
                         console.log("[STAGING] Initialized alloy_booking_prefill from alloy_lead_form_data", cleanedData);
                     }
                 } else {
@@ -185,6 +191,12 @@ export default function BookClient() {
                 }
             }
         } catch (e) {
+            if (isStaging) {
+                console.error("[STAGING DEBUG] BookClient: Failed to initialize from form data", {
+                    error: String(e),
+                    storage_key: "alloy_booking_prefill"
+                });
+            }
             console.warn("Failed to initialize alloy_booking_prefill from form data:", e);
         }
     }, []);
@@ -192,7 +204,7 @@ export default function BookClient() {
     // Ensure ghl_contact_id exists before showing booking widget (Standard Cleaning only)
     useEffect(() => {
         const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
-        
+
         // Only for Standard Cleaning
         if (!quote || quote.service === "Move-Out / Heavy Clean") {
             // For Move-Out, allow widget to show immediately
@@ -203,8 +215,8 @@ export default function BookClient() {
         // Check if contact_id already exists
         let existingPrefill: any = null;
         try {
-            const stored = sessionStorage.getItem("alloy_booking_prefill") || 
-                          localStorage.getItem("alloy_booking_prefill");
+            const stored = sessionStorage.getItem("alloy_booking_prefill") ||
+                localStorage.getItem("alloy_booking_prefill");
             if (stored) {
                 existingPrefill = JSON.parse(stored);
                 if (existingPrefill.ghl_contact_id) {
@@ -270,6 +282,15 @@ export default function BookClient() {
         if (formData.street_address) submitFormData.append("street_address", formData.street_address);
 
         // Submit with 10 second timeout
+        if (isStaging) {
+            console.log("[STAGING DEBUG] BookClient: About to submit lead", {
+                api_base_url: apiBaseUrl,
+                endpoint: `${apiBaseUrl}/leads/cleaning`,
+                has_phone: !!formData.phone,
+                has_email: !!formData.email
+            });
+        }
+
         const submitPromise = fetch(`${apiBaseUrl}/leads/cleaning`, {
             method: "POST",
             body: submitFormData,
@@ -304,6 +325,14 @@ export default function BookClient() {
                     // Store ghl_contact_id in prefill
                     if (backendResult.contact_id) {
                         try {
+                            if (isStaging) {
+                                console.log("[STAGING DEBUG] BookClient: Writing session data after contact_id resolution", {
+                                    api_base_url: apiBaseUrl,
+                                    contact_id: backendResult.contact_id,
+                                    storage_key: "alloy_booking_prefill"
+                                });
+                            }
+
                             const prefillData = {
                                 ...existingPrefill,
                                 ghl_contact_id: backendResult.contact_id,
@@ -317,6 +346,15 @@ export default function BookClient() {
                             sessionStorage.setItem("alloy_booking_prefill", jsonData);
                             localStorage.setItem("alloy_booking_prefill", jsonData);
 
+                            if (isStaging) {
+                                console.log("[STAGING DEBUG] BookClient: Session data written successfully", {
+                                    storage_key: "alloy_booking_prefill",
+                                    has_session_storage: typeof sessionStorage !== "undefined",
+                                    has_local_storage: typeof localStorage !== "undefined",
+                                    data_keys: Object.keys(prefillData)
+                                });
+                            }
+
                             setResolvedContactId(backendResult.contact_id);
                             setContactIdReady(true);
                             setIsEnsuringContactId(false);
@@ -325,6 +363,12 @@ export default function BookClient() {
                                 console.log("[STAGING] ghl_contact_id stored, widget ready to show");
                             }
                         } catch (e) {
+                            if (isStaging) {
+                                console.error("[STAGING DEBUG] BookClient: Failed to write session data", {
+                                    error: String(e),
+                                    storage_key: "alloy_booking_prefill"
+                                });
+                            }
                             console.warn("Failed to store ghl_contact_id:", e);
                             setContactIdError("Contact created but failed to save. Please refresh and try again.");
                             setIsEnsuringContactId(false);
@@ -337,6 +381,15 @@ export default function BookClient() {
                 }
             })
             .catch((error) => {
+                if (isStaging) {
+                    console.error("[STAGING DEBUG] BookClient: Lead submission failed", {
+                        api_base_url: apiBaseUrl,
+                        endpoint: `${apiBaseUrl}/leads/cleaning`,
+                        error_type: error.message === "timeout" ? "timeout" : "error",
+                        error_message: String(error)
+                    });
+                }
+
                 if (error.message === "timeout") {
                     const errorMsg = "Request timed out. Please try again.";
                     setContactIdError(errorMsg);
