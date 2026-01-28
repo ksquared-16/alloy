@@ -208,9 +208,9 @@ def upsert_external_mapping(
     internal_id: str,
     internal_table: str = "contacts",
     raw: Optional[Dict] = None
-) -> Dict:
+) -> Dict[str, Any]:
     """
-    Upsert an external mapping record.
+    Upsert an external mapping record (idempotent).
     
     Args:
         source: Source system (e.g., 'ghl')
@@ -221,8 +221,17 @@ def upsert_external_mapping(
         raw: Optional raw JSON data from external system
     
     Returns:
-        Mapping dict with 'id' field
+        Dict with 'status' ('created'|'updated'|'already_exists') and 'mapping' (dict with 'id' field)
     """
+    logger.info(
+        "SUPA_MAPPING_UPSERT_ATTEMPT source=%s entity_type=%s external_id=%s internal_id=%s internal_table=%s",
+        source,
+        entity_type,
+        external_id[:8] + "***" if len(external_id) > 8 else external_id,
+        internal_id[:8] + "***" if len(internal_id) > 8 else internal_id,
+        internal_table
+    )
+    
     base_url = _get_base_url()
     url = f"{base_url}/external_mappings"
     
@@ -239,22 +248,69 @@ def upsert_external_mapping(
     
     # Use upsert via on_conflict (requires unique index)
     headers = _get_headers()
-    headers["Prefer"] = "resolution=merge-duplicates"
+    headers["Prefer"] = "resolution=merge-duplicates,return=representation"
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
-        if response.ok:
-            data = response.json()
-            if isinstance(data, list) and len(data) > 0:
-                return data[0]
-            elif isinstance(data, dict):
-                return data
-            else:
-                raise ValueError("Unexpected response format")
+        
+        # Handle 201 Created, 200 OK, 204 No Content
+        if response.status_code in (200, 201):
+            # Try to parse JSON, but handle empty body gracefully
+            try:
+                if response.text.strip():
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        mapping = data[0]
+                        status = "created" if response.status_code == 201 else "updated"
+                        logger.info(
+                            "SUPA_MAPPING_UPSERT_SUCCESS status=%s id=%s source=%s entity_type=%s external_id=%s",
+                            status,
+                            mapping.get("id"),
+                            source,
+                            entity_type,
+                            external_id[:8] + "***" if len(external_id) > 8 else external_id
+                        )
+                        return {"status": status, "mapping": mapping}
+                    elif isinstance(data, dict):
+                        status = "created" if response.status_code == 201 else "updated"
+                        logger.info(
+                            "SUPA_MAPPING_UPSERT_SUCCESS status=%s id=%s source=%s entity_type=%s external_id=%s",
+                            status,
+                            data.get("id"),
+                            source,
+                            entity_type,
+                            external_id[:8] + "***" if len(external_id) > 8 else external_id
+                        )
+                        return {"status": status, "mapping": data}
+                else:
+                    # Empty body - do a GET to fetch the existing mapping
+                    logger.debug("SUPA_MAPPING_UPSERT: Empty response body, fetching existing mapping")
+                    return _fetch_existing_mapping(base_url, headers, source, entity_type, external_id, internal_table)
+            except ValueError as e:
+                # JSONDecodeError - empty body or invalid JSON
+                logger.debug("SUPA_MAPPING_UPSERT: JSON decode error (likely empty body), fetching existing mapping: %s", e)
+                return _fetch_existing_mapping(base_url, headers, source, entity_type, external_id, internal_table)
+        
+        elif response.status_code == 204:
+            # No Content - mapping already exists, fetch it
+            logger.debug("SUPA_MAPPING_UPSERT: 204 No Content, fetching existing mapping")
+            return _fetch_existing_mapping(base_url, headers, source, entity_type, external_id, internal_table)
+        
+        elif response.status_code == 409:
+            # Conflict - duplicate key violation (already exists)
+            logger.info(
+                "SUPA_MAPPING_UPSERT: 409 Conflict (duplicate), fetching existing mapping source=%s entity_type=%s external_id=%s",
+                source,
+                entity_type,
+                external_id[:8] + "***" if len(external_id) > 8 else external_id
+            )
+            return _fetch_existing_mapping(base_url, headers, source, entity_type, external_id, internal_table)
+        
         else:
-            error_text = response.text[:500]
+            # Other error status
+            error_text = response.text[:500] if response.text else "No error message"
             logger.error(
-                "SUPA_WRITE_FAILED entity=external_mapping action=upsert status=%d error=%s source=%s entity_type=%s external_id=%s",
+                "SUPA_MAPPING_UPSERT_FAILED status_code=%d body=%s source=%s entity_type=%s external_id=%s",
                 response.status_code,
                 error_text,
                 source,
@@ -262,9 +318,74 @@ def upsert_external_mapping(
                 external_id[:8] + "***" if len(external_id) > 8 else external_id
             )
             raise RuntimeError(f"Failed to upsert external mapping: {response.status_code} {error_text}")
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(
+            "SUPA_MAPPING_UPSERT_FAILED error=%s source=%s entity_type=%s external_id=%s",
+            str(e),
+            source,
+            entity_type,
+            external_id[:8] + "***" if len(external_id) > 8 else external_id,
+            exc_info=True
+        )
+        raise
     except Exception as e:
         logger.error(
-            "SUPA_WRITE_FAILED entity=external_mapping action=upsert error=%s source=%s entity_type=%s external_id=%s",
+            "SUPA_MAPPING_UPSERT_FAILED error=%s source=%s entity_type=%s external_id=%s",
+            str(e),
+            source,
+            entity_type,
+            external_id[:8] + "***" if len(external_id) > 8 else external_id,
+            exc_info=True
+        )
+        raise
+
+
+def _fetch_existing_mapping(
+    base_url: str,
+    headers: Dict[str, str],
+    source: str,
+    entity_type: str,
+    external_id: str,
+    internal_table: str
+) -> Dict[str, Any]:
+    """Fetch existing mapping after 409/204/empty body."""
+    url = f"{base_url}/external_mappings"
+    params = {
+        "select": "*",
+        "source": f"eq.{source}",
+        "entity_type": f"eq.{entity_type}",
+        "external_id": f"eq.{external_id}",
+        "internal_table": f"eq.{internal_table}",
+        "limit": "1",
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        if response.ok:
+            data = response.json()
+            if data and len(data) > 0:
+                mapping = data[0]
+                logger.info(
+                    "SUPA_MAPPING_UPSERT_SUCCESS status=already_exists id=%s source=%s entity_type=%s external_id=%s",
+                    mapping.get("id"),
+                    source,
+                    entity_type,
+                    external_id[:8] + "***" if len(external_id) > 8 else external_id
+                )
+                return {"status": "already_exists", "mapping": mapping}
+        
+        # If GET fails or returns empty, something is wrong
+        logger.error(
+            "SUPA_MAPPING_UPSERT_FAILED reason=fetch_after_conflict_failed source=%s entity_type=%s external_id=%s",
+            source,
+            entity_type,
+            external_id[:8] + "***" if len(external_id) > 8 else external_id
+        )
+        raise RuntimeError(f"Failed to fetch existing mapping after conflict")
+    except Exception as e:
+        logger.error(
+            "SUPA_MAPPING_UPSERT_FAILED reason=fetch_exception error=%s source=%s entity_type=%s external_id=%s",
             str(e),
             source,
             entity_type,
@@ -302,6 +423,89 @@ def get_vertical_id_by_slug(slug: str) -> Optional[str]:
         logger.debug(f"Error searching vertical by slug: {e}")
     
     return None
+
+def find_or_create_opportunity(
+    opportunity_payload: Dict,
+    ghl_opportunity_id: Optional[str] = None,
+    supabase_contact_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Find or create an opportunity (idempotent).
+    
+    Deduplication strategy:
+    1. If ghl_opportunity_id provided: check external_mappings first
+    2. If not found and supabase_contact_id provided: check recent opportunities (10 min window)
+    3. Otherwise: create new
+    
+    Returns:
+        Dict with 'status' ('found'|'created') and 'opportunity' (dict with 'id')
+    """
+    base_url = _get_base_url()
+    headers = _get_headers()
+    
+    # Strategy 1: Check external_mappings if ghl_opportunity_id provided
+    if ghl_opportunity_id:
+        mapping = find_external_mapping("ghl", "opportunity", ghl_opportunity_id, "opportunities")
+        if mapping:
+            existing_opp_id = mapping.get("internal_id")
+            if existing_opp_id:
+                # Fetch the opportunity
+                opp_url = f"{base_url}/opportunities"
+                opp_params = {
+                    "select": "*",
+                    "id": f"eq.{existing_opp_id}",
+                    "limit": "1",
+                }
+                try:
+                    opp_response = requests.get(opp_url, headers=headers, params=opp_params, timeout=30)
+                    if opp_response.ok:
+                        opp_data = opp_response.json()
+                        if opp_data and len(opp_data) > 0:
+                            logger.info(
+                                "SUPA_OPP_RESOLVE path=mapping opportunity_id=%s ghl_opportunity_id=%s",
+                                existing_opp_id,
+                                ghl_opportunity_id[:8] + "***" if len(ghl_opportunity_id) > 8 else ghl_opportunity_id
+                            )
+                            return {"status": "found", "opportunity": opp_data[0]}
+                except Exception as e:
+                    logger.warning("SUPA_OPP_RESOLVE: Failed to fetch mapped opportunity: %s", e)
+    
+    # Strategy 2: Check recent opportunities for same contact (10 minute window)
+    if supabase_contact_id:
+        from datetime import datetime, timedelta
+        import pytz
+        
+        # Calculate 10 minutes ago in UTC
+        ten_min_ago = (datetime.now(pytz.UTC) - timedelta(minutes=10)).isoformat()
+        
+        opp_url = f"{base_url}/opportunities"
+        opp_params = {
+            "select": "*",
+            "primary_contact_id": f"eq.{supabase_contact_id}",
+            "status": "in.(open,new,lead)",
+            "created_at": f"gte.{ten_min_ago}",
+            "order": "created_at.desc",
+            "limit": "1",
+        }
+        
+        try:
+            opp_response = requests.get(opp_url, headers=headers, params=opp_params, timeout=30)
+            if opp_response.ok:
+                opp_data = opp_response.json()
+                if opp_data and len(opp_data) > 0:
+                    existing_opp = opp_data[0]
+                    logger.info(
+                        "SUPA_OPP_RESOLVE path=recent_contact_window opportunity_id=%s contact_id=%s",
+                        existing_opp.get("id"),
+                        supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id
+                    )
+                    return {"status": "found", "opportunity": existing_opp}
+        except Exception as e:
+            logger.warning("SUPA_OPP_RESOLVE: Failed to check recent opportunities: %s", e)
+    
+    # Strategy 3: Create new opportunity
+    return create_opportunity(opportunity_payload)
+
 
 def create_opportunity(opportunity_payload: Dict) -> Dict:
     """
@@ -502,24 +706,44 @@ def link_stripe_customer_to_supabase(
         base_url = _get_base_url()
         headers = _get_headers()
         
-        # 1. Resolve Supabase contact_id
+        # 1. Resolve Supabase contact_id using deterministic order
         supabase_contact_id = None
+        contact_resolution_path = None
         
         # Priority 1: GHL contact_id via external_mappings
         if ghl_contact_id:
             supabase_contact_id = resolve_contact_id_from_ghl(ghl_contact_id)
+            if supabase_contact_id:
+                contact_resolution_path = "mapping"
+                logger.info(
+                    "CONTACT_RESOLVE path=mapping contact_id=%s ghl_contact_id=%s",
+                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    ghl_contact_id[:8] + "***" if len(ghl_contact_id) > 8 else ghl_contact_id
+                )
         
         # Priority 2: Email lookup
         if not supabase_contact_id and email:
             contact = find_contact_by_email(email.strip().lower())
             if contact:
                 supabase_contact_id = contact.get("id")
+                contact_resolution_path = "email"
+                logger.info(
+                    "CONTACT_RESOLVE path=email contact_id=%s email=%s",
+                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    email[:3] + "***"
+                )
         
         # Priority 3: Phone lookup
         if not supabase_contact_id and phone:
             contact = find_contact_by_phone(phone.strip())
             if contact:
                 supabase_contact_id = contact.get("id")
+                contact_resolution_path = "phone"
+                logger.info(
+                    "CONTACT_RESOLVE path=phone contact_id=%s phone=%s",
+                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    phone[:4] + "***"
+                )
         
         if not supabase_contact_id:
             logger.warning(
@@ -588,7 +812,12 @@ def link_stripe_customer_to_supabase(
                 customers_data = customers_response.json()
                 if customers_data and len(customers_data) > 0:
                     customer_id = customers_data[0].get("id")
-                    logger.info("SUPA_STRIPE_LINK_ATTEMPT: Found existing customer_id=%s by stripe_customer_id", customer_id)
+                    customer_resolution_path = "stripe_customer_id"
+                    logger.info(
+                        "CUSTOMER_RESOLVE path=stripe_customer_id customer_id=%s stripe_customer_id=%s",
+                        customer_id[:8] + "***" if len(customer_id) > 8 else customer_id,
+                        stripe_customer_id[:8] + "***" if len(stripe_customer_id) > 8 else stripe_customer_id
+                    )
         
         # Option C: Create new customer
         if not customer_id:
@@ -621,7 +850,13 @@ def link_stripe_customer_to_supabase(
                     customer_id = customer_data[0].get("id")
                 elif isinstance(customer_data, dict):
                     customer_id = customer_data.get("id")
-                logger.info("SUPA_STRIPE_LINK_ATTEMPT: Created new customer_id=%s", customer_id)
+                customer_resolution_path = "created"
+                logger.info(
+                    "CUSTOMER_RESOLVE path=created customer_id=%s contact_id=%s stripe_customer_id=%s",
+                    customer_id[:8] + "***" if len(customer_id) > 8 else customer_id,
+                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    stripe_customer_id[:8] + "***" if len(stripe_customer_id) > 8 else stripe_customer_id
+                )
             else:
                 error_text = customer_response.text[:500]
                 logger.error(

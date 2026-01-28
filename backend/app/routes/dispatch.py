@@ -456,7 +456,7 @@ async def dispatch(request: Request):
                                     
                                     # Create the external mapping
                                     try:
-                                        upsert_external_mapping(
+                                        mapping_result = upsert_external_mapping(
                                             source="ghl",
                                             entity_type="opportunity",
                                             external_id=opportunity_id,
@@ -465,7 +465,8 @@ async def dispatch(request: Request):
                                             raw={"ghl_opportunity_id": opportunity_id},
                                         )
                                         logger.info(
-                                            "SUPA_WRITE_SUCCESS route=/dispatch step=opportunity_mapping_create ghl_opportunity_id=%s supabase_opportunity_id=%s",
+                                            "SUPA_WRITE_SUCCESS route=/dispatch step=opportunity_mapping_create status=%s ghl_opportunity_id=%s supabase_opportunity_id=%s",
+                                            mapping_result.get("status"),
                                             opportunity_id,
                                             supabase_opportunity_id
                                         )
@@ -565,25 +566,35 @@ async def dispatch(request: Request):
                 
                 # Create external_mapping for job (GHL job/appointment ID → Supabase job UUID)
                 if external_job_id_used and supabase_job_id:
-                    job_mapping_payload = {
-                        "source": "ghl",
-                        "entity_type": "job",
-                        "external_id": external_job_id_used,
-                        "internal_table": "jobs",
-                        "internal_id": supabase_job_id,
-                        "raw": {
-                            "ghl_opportunity_id": opportunity_id,
-                            "ghl_contact_id": job_summary.get("contact_id"),
-                            "ghl_job_record_id": job_record_id,
-                            "appointment_id": external_job_id_used,
-                        },
-                    }
-                    upsert_external_mapping(job_mapping_payload)
-                    logger.info(
-                        "SUPA_WRITE_SUCCESS route=/dispatch step=external_mapping_job supabase_job_id=%s ghl_job_id=%s",
-                        supabase_job_id,
-                        external_job_id_used
-                    )
+                    try:
+                        job_mapping_result = upsert_external_mapping(
+                            source="ghl",
+                            entity_type="job",
+                            external_id=external_job_id_used,
+                            internal_id=supabase_job_id,
+                            internal_table="jobs",
+                            raw={
+                                "ghl_opportunity_id": opportunity_id,
+                                "ghl_contact_id": job_summary.get("contact_id"),
+                                "ghl_job_record_id": job_record_id,
+                                "appointment_id": external_job_id_used,
+                            },
+                        )
+                        logger.info(
+                            "SUPA_WRITE_SUCCESS route=/dispatch step=external_mapping_job status=%s supabase_job_id=%s ghl_job_id=%s",
+                            job_mapping_result.get("status"),
+                            supabase_job_id,
+                            external_job_id_used
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "SUPA_WRITE_FAILED route=/dispatch step=external_mapping_job supabase_job_id=%s ghl_job_id=%s error=%s",
+                            supabase_job_id,
+                            external_job_id_used,
+                            str(e),
+                            exc_info=True
+                        )
+                        # Continue - mapping failure should not abort the flow
             else:
                 logger.warning(
                     "SUPA_WRITE_FAILED route=/dispatch step=opportunity_resolve ghl_opportunity_id=%s error=mapping_not_found, skipping job creation",

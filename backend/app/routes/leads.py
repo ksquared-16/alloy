@@ -290,7 +290,7 @@ async def submit_cleaning_lead(
     try:
         from ..supabase_client import (
             upsert_contact,
-            create_opportunity,
+            find_or_create_opportunity,
             upsert_external_mapping,
             get_vertical_id_by_slug,
             resolve_contact_id_from_ghl,
@@ -307,7 +307,52 @@ async def submit_cleaning_lead(
         )
         
         if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
-            # 1. Upsert contact in Supabase
+            # 1. Resolve Supabase contact_id using deterministic order:
+            # Priority 1: GHL contact_id via external_mappings
+            # Priority 2: Email lookup
+            # Priority 3: Phone lookup
+            # Priority 4: Create new
+            from ..supabase_client import find_contact_by_email, find_contact_by_phone
+            
+            supabase_contact_id = None
+            contact_resolution_path = None
+            
+            # Priority 1: GHL contact_id mapping
+            if contact_id:
+                supabase_contact_id = resolve_contact_id_from_ghl(contact_id)
+                if supabase_contact_id:
+                    contact_resolution_path = "mapping"
+                    logger.info(
+                        "CONTACT_RESOLVE path=mapping contact_id=%s ghl_contact_id=%s",
+                        supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                        contact_id
+                    )
+            
+            # Priority 2: Email lookup
+            if not supabase_contact_id and email:
+                existing_contact = find_contact_by_email(email.strip().lower())
+                if existing_contact:
+                    supabase_contact_id = existing_contact.get("id")
+                    contact_resolution_path = "email"
+                    logger.info(
+                        "CONTACT_RESOLVE path=email contact_id=%s email=%s",
+                        supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                        email[:3] + "***"
+                    )
+            
+            # Priority 3: Phone lookup
+            if not supabase_contact_id and phone_normalized:
+                existing_contact = find_contact_by_phone(phone_normalized)
+                if existing_contact:
+                    supabase_contact_id = existing_contact.get("id")
+                    contact_resolution_path = "phone"
+                    logger.info(
+                        "CONTACT_RESOLVE path=phone contact_id=%s phone=%s",
+                        supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                        phone_normalized[:4] + "***"
+                    )
+            
+            # Priority 4: Create new contact
             supabase_contact_payload = {
                 "first_name": first_name.strip(),
                 "last_name": last_name.strip(),
@@ -332,20 +377,34 @@ async def submit_cleaning_lead(
                 },
             }
             
-            supabase_contact = upsert_contact(supabase_contact_payload)
-            supabase_contact_id = supabase_contact.get("id")
+            if supabase_contact_id:
+                # Update existing contact
+                supabase_contact = upsert_contact(supabase_contact_payload, internal_id=supabase_contact_id)
+            else:
+                # Create new contact
+                supabase_contact = upsert_contact(supabase_contact_payload)
+                supabase_contact_id = supabase_contact.get("id")
+                contact_resolution_path = "created"
+                logger.info(
+                    "CONTACT_RESOLVE path=created contact_id=%s email=%s phone=%s",
+                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    email[:3] + "***" if email else "None",
+                    phone_normalized[:4] + "***" if phone_normalized else "None"
+                )
             
             logger.info(
-                "SUPA_WRITE_SUCCESS route=/leads/cleaning step=contact_upsert supabase_contact_id=%s ghl_contact_id=%s email=%s phone=%s",
+                "SUPA_WRITE_SUCCESS route=/leads/cleaning step=contact_upsert path=%s supabase_contact_id=%s ghl_contact_id=%s email=%s phone=%s",
+                contact_resolution_path or "unknown",
                 supabase_contact_id,
                 contact_id,
                 email_masked,
                 phone_masked
             )
             
-            # 2. Create external_mapping for contact (GHL ID → Supabase UUID)
+            # 2. Ensure external_mapping exists for contact (GHL ID → Supabase UUID)
+            # This is idempotent - safe to call even if mapping already exists
             try:
-                upsert_external_mapping(
+                mapping_result = upsert_external_mapping(
                     source="ghl",
                     entity_type="contact",
                     external_id=contact_id,
@@ -354,7 +413,8 @@ async def submit_cleaning_lead(
                     raw={"ghl_contact_id": contact_id},  # Store minimal GHL reference
                 )
                 logger.info(
-                    "SUPA_WRITE_SUCCESS route=/leads/cleaning step=external_mapping_contact supabase_contact_id=%s ghl_contact_id=%s",
+                    "SUPA_WRITE_SUCCESS route=/leads/cleaning step=external_mapping_contact status=%s supabase_contact_id=%s ghl_contact_id=%s",
+                    mapping_result.get("status"),
                     supabase_contact_id,
                     contact_id
                 )
@@ -405,11 +465,19 @@ async def submit_cleaning_lead(
                     "metadata": opportunity_metadata,
                 }
                 
-                supabase_opportunity = create_opportunity(opportunity_payload)
+                # Use idempotent find_or_create (checks mapping first, then recent window)
+                opp_result = find_or_create_opportunity(
+                    opportunity_payload,
+                    ghl_opportunity_id=None,  # Not available at lead time
+                    supabase_contact_id=supabase_contact_id,
+                )
+                supabase_opportunity = opp_result.get("opportunity")
                 supabase_opportunity_id = supabase_opportunity.get("id")
+                opp_status = opp_result.get("status")
                 
                 logger.info(
-                    "SUPA_WRITE_SUCCESS route=/leads/cleaning step=opportunity_create supabase_opportunity_id=%s supabase_contact_id=%s ghl_contact_id=%s vertical_key=%s",
+                    "SUPA_WRITE_SUCCESS route=/leads/cleaning step=opportunity_create status=%s supabase_opportunity_id=%s supabase_contact_id=%s ghl_contact_id=%s vertical_key=%s",
+                    opp_status,
                     supabase_opportunity_id,
                     supabase_contact_id,
                     contact_id,
