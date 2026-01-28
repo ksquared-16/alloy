@@ -65,6 +65,8 @@ export default function PaymentClient() {
     const [resolvedPhone, setResolvedPhone] = useState<string | null>(null);
     const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
     const [resolvedGhlContactId, setResolvedGhlContactId] = useState<string | null>(null);
+    const [resolvedFirstName, setResolvedFirstName] = useState<string | null>(null);
+    const [resolvedLastName, setResolvedLastName] = useState<string | null>(null);
 
     useEffect(() => {
         setMounted(true);
@@ -78,6 +80,8 @@ export default function PaymentClient() {
         let phone = searchParams?.get("phone");
         let email = searchParams?.get("email");
         let ghlContactId = searchParams?.get("ghl_contact_id");
+        let firstName: string | null = null;
+        let lastName: string | null = null;
 
         // Priority 2: sessionStorage fallback (ghl_contact_id takes priority)
         if (typeof window !== "undefined") {
@@ -93,6 +97,8 @@ export default function PaymentClient() {
                     // Fallback to phone/email if not in URL
                     if (!phone && parsed.phone) phone = parsed.phone;
                     if (!email && parsed.email) email = parsed.email;
+                    if (!firstName && parsed.first_name) firstName = parsed.first_name;
+                    if (!lastName && parsed.last_name) lastName = parsed.last_name;
                 }
             } catch (e) {
                 console.warn("Failed to read from sessionStorage:", e);
@@ -113,6 +119,8 @@ export default function PaymentClient() {
                     // Fallback to phone/email if not in URL or sessionStorage
                     if (!phone && parsed.phone) phone = parsed.phone;
                     if (!email && parsed.email) email = parsed.email;
+                    if (!firstName && parsed.first_name) firstName = parsed.first_name;
+                    if (!lastName && parsed.last_name) lastName = parsed.last_name;
                 }
             } catch (e) {
                 console.warn("Failed to read from localStorage:", e);
@@ -122,6 +130,8 @@ export default function PaymentClient() {
         setResolvedPhone(phone);
         setResolvedEmail(email);
         setResolvedGhlContactId(ghlContactId);
+        setResolvedFirstName(firstName);
+        setResolvedLastName(lastName);
         
         // Load quote from storage if available
         if (typeof window !== "undefined") {
@@ -461,12 +471,54 @@ export default function PaymentClient() {
 
             const { client_secret } = await response.json();
 
+            // Build billing_details with available user data
+            // Stripe will automatically extract postal_code from the card element and merge it
+            const billingDetails: {
+                email?: string;
+                phone?: string;
+                name?: string;
+                address?: {
+                    postal_code?: string;
+                };
+            } = {};
+            
+            if (resolvedEmail) {
+                billingDetails.email = resolvedEmail;
+            }
+            if (resolvedPhone) {
+                billingDetails.phone = resolvedPhone;
+            }
+            if (resolvedFirstName && resolvedLastName) {
+                billingDetails.name = `${resolvedFirstName} ${resolvedLastName}`;
+            } else if (resolvedFirstName) {
+                billingDetails.name = resolvedFirstName;
+            } else if (resolvedLastName) {
+                billingDetails.name = resolvedLastName;
+            }
+            
+            // Get postal_code from stored form data if available
+            // Stripe will also extract it from the card element automatically and merge
+            try {
+                const storedFormData = sessionStorage.getItem("alloy_lead_form_data");
+                if (storedFormData) {
+                    const formData = JSON.parse(storedFormData);
+                    if (formData.postal_code) {
+                        billingDetails.address = {
+                            postal_code: formData.postal_code,
+                        };
+                    }
+                }
+            } catch (e) {
+                // Ignore - postal_code will be extracted by Stripe from card element
+            }
+
             // Confirm the SetupIntent with Stripe
             const { error: confirmError } = await stripe.confirmCardSetup(
                 client_secret,
                 {
                     payment_method: {
                         card: card,
+                        billing_details: billingDetails,
                     },
                 }
             );
