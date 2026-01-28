@@ -21,6 +21,7 @@ from ..ghl_client import (
     create_contact_note,
     update_opportunity_stage,
 )
+from ..supabase_client import link_stripe_customer_to_supabase
 
 # Initialize Stripe
 stripe.api_key = STRIPE_SECRET_KEY
@@ -391,6 +392,23 @@ async def create_setup_intent(request: Request):
         if stripe_customer_id:
             response_data["customer_id"] = stripe_customer_id
         
+        # Link Stripe customer to Supabase (non-blocking)
+        if stripe_customer_id:
+            try:
+                link_stripe_customer_to_supabase(
+                    ghl_contact_id=resolved_ghl_contact_id,
+                    email=email,
+                    phone=phone,
+                    stripe_customer_id=stripe_customer_id,
+                    setup_intent_id=setup_intent.id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "create_setup_intent: Failed to link Stripe customer to Supabase (non-blocking): %s",
+                    str(e)
+                )
+                # Continue - payment setup succeeds even if Supabase link fails
+        
         return JSONResponse(response_data, status_code=200)
     except stripe.error.StripeError as e:
         logger.error("create_setup_intent: Stripe error: %s", e)
@@ -579,9 +597,14 @@ async def stripe_webhook(request: Request):
                     )
             
             # 3. Attach payment method to customer and set as default (idempotent)
+            # Initialize payment method details (will be populated if available)
+            payment_method_brand = None
+            payment_method_last4 = None
+            billing_address = None
+            
             if stripe_customer_id and payment_method_id:
                 try:
-                    # Retrieve payment method to check if already attached
+                    # Retrieve payment method to check if already attached and get details
                     pm = stripe.PaymentMethod.retrieve(payment_method_id)
                     if pm.customer != stripe_customer_id:
                         # Attach payment method to customer
@@ -604,6 +627,29 @@ async def stripe_webhook(request: Request):
                         stripe_customer_id[:8] + "***",
                         event_id
                     )
+                    
+                    # Extract payment method details
+                    if hasattr(pm, 'card') and pm.card:
+                        payment_method_brand = getattr(pm.card, 'brand', None)
+                        payment_method_last4 = getattr(pm.card, 'last4', None)
+                    
+                    # Extract billing address if available
+                    if hasattr(pm, 'billing_details') and pm.billing_details:
+                        billing_details = pm.billing_details
+                        if hasattr(billing_details, 'address') and billing_details.address:
+                            addr = billing_details.address
+                            billing_address = {
+                                "line1": getattr(addr, 'line1', None),
+                                "line2": getattr(addr, 'line2', None),
+                                "city": getattr(addr, 'city', None),
+                                "state": getattr(addr, 'state', None),
+                                "postal_code": getattr(addr, 'postal_code', None),
+                                "country": getattr(addr, 'country', None),
+                            }
+                            # Remove None values
+                            billing_address = {k: v for k, v in billing_address.items() if v is not None}
+                            if not billing_address:
+                                billing_address = None
                 except stripe.error.StripeError as e:
                     logger.warning(
                         "stripe_webhook: failed to attach/set default payment method: %s event_id=%s",
@@ -611,6 +657,28 @@ async def stripe_webhook(request: Request):
                         event_id
                     )
                     # Non-fatal - continue
+            
+            # 4. Link Stripe customer to Supabase (non-blocking)
+            if stripe_customer_id:
+                try:
+                    link_stripe_customer_to_supabase(
+                        ghl_contact_id=ghl_contact_id,
+                        email=email,
+                        phone=phone,
+                        stripe_customer_id=stripe_customer_id,
+                        setup_intent_id=setup_intent_id,
+                        payment_method_id=payment_method_id,
+                        payment_method_brand=payment_method_brand,
+                        payment_method_last4=payment_method_last4,
+                        billing_address=billing_address,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "stripe_webhook: Failed to link Stripe customer to Supabase (non-blocking): %s event_id=%s",
+                        str(e),
+                        event_id
+                    )
+                    # Continue - webhook succeeds even if Supabase link fails
         else:
             logger.warning(
                 "stripe_webhook: could not find contact for setup_intent_id=%s metadata=%s event_id=%s (tried ghl_contact_id, phone, email)",
