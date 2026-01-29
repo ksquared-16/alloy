@@ -1,0 +1,364 @@
+"use client";
+
+import { useState } from "react";
+import DataTable from "@/components/admin/DataTable";
+import Drawer from "@/components/admin/Drawer";
+import PrimaryButton from "@/components/PrimaryButton";
+
+interface Discount {
+  id: string;
+  code: string;
+  is_active: boolean;
+  discount_type: string;
+  discount_value: number;
+  first_job_only: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  applies_to_vertical_slug: string | null;
+  ghl_tag: string | null;
+  created_at: string;
+}
+
+interface DiscountsClientProps {
+  initialData: Discount[];
+  error?: string;
+}
+
+export default function DiscountsClient({
+  initialData,
+  error,
+}: DiscountsClientProps) {
+  const [selectedRow, setSelectedRow] = useState<Discount | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [formData, setFormData] = useState<Partial<Discount>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const columns = [
+    { key: "created_at", label: "Created", sortable: true },
+    { key: "code", label: "Code", sortable: true },
+    {
+      key: "is_active",
+      label: "Active",
+      sortable: true,
+      render: (value: boolean) => (value ? "Yes" : "No"),
+    },
+    { key: "discount_type", label: "Type", sortable: true },
+    {
+      key: "discount_value",
+      label: "Value",
+      sortable: true,
+      render: (value: number, row: Discount) =>
+        row.discount_type === "percent"
+          ? `${value}%`
+          : `$${(value / 100).toFixed(2)}`,
+    },
+    {
+      key: "first_job_only",
+      label: "First Job Only",
+      sortable: true,
+      render: (value: boolean) => (value ? "Yes" : "No"),
+    },
+    { key: "starts_at", label: "Starts", sortable: true },
+    { key: "ends_at", label: "Ends", sortable: true },
+    {
+      key: "applies_to_vertical_slug",
+      label: "Vertical",
+      sortable: true,
+    },
+  ];
+
+  const filters = [
+    {
+      key: "is_active",
+      label: "Active",
+      type: "select" as const,
+      options: [
+        { value: "true", label: "Yes" },
+        { value: "false", label: "No" },
+      ],
+    },
+    {
+      key: "discount_type",
+      label: "Type",
+      type: "select" as const,
+      options: [
+        { value: "percent", label: "Percent" },
+        { value: "fixed", label: "Fixed" },
+      ],
+    },
+  ];
+
+  const handleEdit = (row: Discount) => {
+    setSelectedRow(row);
+    setFormData(row);
+    setIsEditing(true);
+    setIsCreating(false);
+  };
+
+  const handleCreate = () => {
+    setSelectedRow(null);
+    setFormData({
+      code: "",
+      is_active: true,
+      discount_type: "percent",
+      discount_value: 0,
+      first_job_only: false,
+      starts_at: null,
+      ends_at: null,
+      applies_to_vertical_slug: null,
+      ghl_tag: null,
+    });
+    setIsCreating(true);
+    setIsEditing(false);
+  };
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const url = isCreating
+        ? "/api/admin/discounts"
+        : `/api/admin/discounts/${selectedRow?.id}`;
+      const method = isCreating ? "POST" : "PATCH";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save discount");
+      }
+
+      // Refresh page to show updated data
+      window.location.reload();
+    } catch (err: any) {
+      setSubmitError(err.message || "Failed to save discount");
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold text-alloy-midnight">Discounts</h1>
+        <PrimaryButton onClick={handleCreate}>Create Discount</PrimaryButton>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+          Error: {error}
+        </div>
+      )}
+
+      <DataTable
+        data={initialData}
+        columns={columns}
+        filters={filters}
+        onRowClick={handleEdit}
+      />
+
+      <Drawer
+        isOpen={isEditing || isCreating}
+        onClose={() => {
+          setIsEditing(false);
+          setIsCreating(false);
+          setSelectedRow(null);
+          setFormData({});
+          setSubmitError(null);
+        }}
+        title={isCreating ? "Create Discount" : `Edit Discount: ${selectedRow?.code}`}
+      >
+        <div className="space-y-4">
+          {submitError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+              {submitError}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              Code *
+            </label>
+            <input
+              type="text"
+              value={formData.code || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, code: e.target.value.toUpperCase() })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={formData.is_active ?? false}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_active: e.target.checked })
+                }
+                className="rounded"
+              />
+              <span className="text-sm font-medium text-alloy-midnight/70">
+                Active
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              Type *
+            </label>
+            <select
+              value={formData.discount_type || "percent"}
+              onChange={(e) =>
+                setFormData({ ...formData, discount_type: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+            >
+              <option value="percent">Percent</option>
+              <option value="fixed">Fixed Amount</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              Value * ({formData.discount_type === "percent" ? "%" : "cents"})
+            </label>
+            <input
+              type="number"
+              value={formData.discount_value ?? 0}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  discount_value: parseFloat(e.target.value) || 0,
+                })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={formData.first_job_only ?? false}
+                onChange={(e) =>
+                  setFormData({ ...formData, first_job_only: e.target.checked })
+                }
+                className="rounded"
+              />
+              <span className="text-sm font-medium text-alloy-midnight/70">
+                First Job Only
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              Starts At
+            </label>
+            <input
+              type="datetime-local"
+              value={
+                formData.starts_at
+                  ? new Date(formData.starts_at).toISOString().slice(0, 16)
+                  : ""
+              }
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  starts_at: e.target.value ? new Date(e.target.value).toISOString() : null,
+                })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              Ends At
+            </label>
+            <input
+              type="datetime-local"
+              value={
+                formData.ends_at
+                  ? new Date(formData.ends_at).toISOString().slice(0, 16)
+                  : ""
+              }
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  ends_at: e.target.value ? new Date(e.target.value).toISOString() : null,
+                })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              Applies To Vertical Slug
+            </label>
+            <input
+              type="text"
+              value={formData.applies_to_vertical_slug || ""}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  applies_to_vertical_slug: e.target.value || null,
+                })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              placeholder="e.g., cleaning"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">
+              GHL Tag
+            </label>
+            <input
+              type="text"
+              value={formData.ghl_tag || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, ghl_tag: e.target.value || null })
+              }
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+            />
+          </div>
+
+          <div className="flex gap-4 pt-4">
+            <PrimaryButton
+              onClick={handleSubmit}
+              disabled={isSubmitting || !formData.code}
+            >
+              {isSubmitting ? "Saving..." : "Save"}
+            </PrimaryButton>
+            <button
+              onClick={() => {
+                setIsEditing(false);
+                setIsCreating(false);
+                setSelectedRow(null);
+                setFormData({});
+                setSubmitError(null);
+              }}
+              className="px-4 py-2 border border-alloy-stone/80 rounded-md hover:bg-alloy-stone transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Drawer>
+    </div>
+  );
+}
+

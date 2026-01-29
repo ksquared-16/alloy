@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabaseServer";
-import AdminClient from "./AdminClient";
 
 export default async function AdminPage() {
   const supabase = await createClient();
@@ -12,6 +11,7 @@ export default async function AdminPage() {
     redirect("/login");
   }
 
-  return <AdminClient userEmail={user.email || "Unknown"} />;
+  // Redirect to opportunities page by default
+  redirect("/admin/opportunities");
 }
 
