@@ -70,7 +70,7 @@ export default function ContactsClient({
       <Drawer
         isOpen={!!selectedRow}
         onClose={() => setSelectedRow(null)}
-        title={`Contact: ${selectedRow?.first_name || ""} ${selectedRow?.last_name || ""}`.trim() || selectedRow?.id}
+        title={`Contact: ${selectedRow?.first_name || ""} ${selectedRow?.last_name || ""}`.trim() || selectedRow?.id || "Contact"}
       >
         {selectedRow && (
           <div className="space-y-4">
