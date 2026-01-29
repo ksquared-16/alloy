@@ -471,6 +471,14 @@ async def redeem_discount(request: RedeemDiscountRequest):
         ghl_tag = discount_code_row.get("ghl_tag")
 
         # 3. Insert redemption (idempotent via UNIQUE constraint)
+        # Guard: Warn if values look incorrectly scaled (e.g., subtotal < 10 when expected > 100)
+        if request.quote_subtotal > 0 and request.quote_subtotal < 10:
+            logger.warning(
+                "DISCOUNT_REDEEM: Potential scaling issue detected code=%s quote_subtotal=%.2f (expected > 10 for typical quotes)",
+                code_normalized,
+                request.quote_subtotal
+            )
+        
         redemption_url = f"{base_url}/discount_redemptions"
         redemption_payload = {
             "discount_code_id": discount_code_id,

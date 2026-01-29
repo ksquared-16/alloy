@@ -1,9 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+
 export default function StagingBanner() {
   const appEnv = process.env.NEXT_PUBLIC_APP_ENV;
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin");
 
-  if (appEnv !== "staging") {
+  if (appEnv !== "staging" || isAdminRoute) {
     return null;
   }
 

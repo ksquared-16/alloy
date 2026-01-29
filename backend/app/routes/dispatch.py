@@ -393,6 +393,8 @@ async def dispatch(request: Request):
             resolve_opportunity_id_from_ghl,
             resolve_contact_id_from_ghl,
             find_external_mapping,
+            create_opportunity,
+            get_vertical_id_by_slug,
         )
         from ..settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
         
@@ -484,14 +486,126 @@ async def dispatch(request: Request):
                                 ghl_contact_id,
                                 str(e)
                             )
+                    
+                    # If still no opportunity found, create one with external_id = ghl_opportunity_id
+                    if not supabase_opportunity_id and supabase_contact_id:
+                        try:
+                            # Determine vertical from service_type (default to "cleaning")
+                            service_type = job_summary.get("service_type", "Cleaning").lower()
+                            vertical_slug = "cleaning"  # Default, can be enhanced later
+                            if "gutter" in service_type:
+                                vertical_slug = "gutters"
+                            
+                            vertical_id = get_vertical_id_by_slug(vertical_slug)
+                            if not vertical_id:
+                                logger.warning(
+                                    "SUPA_WRITE_FAILED route=/dispatch step=vertical_lookup slug=%s error=not_found",
+                                    vertical_slug
+                                )
+                            else:
+                                # Extract opportunity data from job_summary
+                                customer_name = job_summary.get("customer_name", "Unknown")
+                                estimated_price = job_summary.get("estimated_price")
+                                price_breakdown = job_summary.get("price_breakdown")
+                                
+                                # Build opportunity payload
+                                opportunity_name = f"{customer_name} — {job_summary.get('service_type', 'Cleaning')}"
+                                opportunity_metadata = {
+                                    "vertical": vertical_slug,
+                                    "ghl_opportunity_id": opportunity_id,
+                                    "ghl_contact_id": ghl_contact_id,
+                                    "service_type": job_summary.get("service_type"),
+                                    "estimated_price": str(estimated_price) if estimated_price else None,
+                                    "price_breakdown": price_breakdown,
+                                    "full_address": job_summary.get("full_address"),
+                                    "postal_code": job_summary.get("postal_code"),
+                                }
+                                
+                                opportunity_payload = {
+                                    "vertical_id": vertical_id,
+                                    "primary_contact_id": supabase_contact_id,
+                                    "name": opportunity_name,
+                                    "status": "open",
+                                    "source": "ghl",
+                                    "external_id": opportunity_id,  # Store GHL opportunity_id as external_id
+                                    "metadata": opportunity_metadata,
+                                }
+                                
+                                # Add monetary value if available
+                                if estimated_price:
+                                    try:
+                                        price_float = float(estimated_price) if isinstance(estimated_price, str) else estimated_price
+                                        opportunity_payload["monetary_value_cents"] = int(price_float * 100)
+                                    except (ValueError, TypeError):
+                                        pass
+                                
+                                # Create opportunity
+                                created_opp = create_opportunity(opportunity_payload)
+                                supabase_opportunity_id = created_opp.get("id")
+                                
+                                logger.info(
+                                    "SUPA_WRITE_SUCCESS route=/dispatch step=opportunity_create ghl_opportunity_id=%s supabase_opportunity_id=%s supabase_contact_id=%s vertical_slug=%s job_date=%s quote_total=%s estimated_price_cents=%s",
+                                    opportunity_id,
+                                    supabase_opportunity_id,
+                                    supabase_contact_id,
+                                    vertical_slug,
+                                    job_summary.get("job_date"),
+                                    job_summary.get("quote_total"),
+                                    opportunity_payload.get("monetary_value_cents"),
+                                )
+                                
+                                # Create the external mapping
+                                try:
+                                    mapping_result = upsert_external_mapping(
+                                        source="ghl",
+                                        entity_type="opportunity",
+                                        external_id=opportunity_id,
+                                        internal_id=supabase_opportunity_id,
+                                        internal_table="opportunities",
+                                        raw={"ghl_opportunity_id": opportunity_id},
+                                    )
+                                    logger.info(
+                                        "SUPA_WRITE_SUCCESS route=/dispatch step=opportunity_mapping_create status=%s ghl_opportunity_id=%s supabase_opportunity_id=%s",
+                                        mapping_result.get("status"),
+                                        opportunity_id,
+                                        supabase_opportunity_id
+                                    )
+                                except Exception as e:
+                                    logger.error(
+                                        "SUPA_WRITE_FAILED route=/dispatch step=opportunity_mapping_create ghl_opportunity_id=%s supabase_opportunity_id=%s error=%s",
+                                        opportunity_id,
+                                        supabase_opportunity_id,
+                                        str(e),
+                                        exc_info=True
+                                    )
+                        except Exception as e:
+                            logger.error(
+                                "SUPA_WRITE_FAILED route=/dispatch step=opportunity_create ghl_opportunity_id=%s error=%s",
+                                opportunity_id,
+                                str(e),
+                                exc_info=True
+                            )
             
             if supabase_opportunity_id:
                 # Extract schedule info from job_summary
                 start_time_iso = job_summary.get("start_time_iso") or job_summary.get("start_time")
                 end_time = job_summary.get("end_time")
+                job_date = job_summary.get("job_date")
+                job_time_window = job_summary.get("job_time_window")
                 
                 # Parse timezone (default to America/Los_Angeles if not specified)
                 timezone_str = "America/Los_Angeles"  # Default, can be extracted from payload if available
+                
+                # Extract pricing info for structured logging
+                estimated_price = job_summary.get("estimated_price")
+                quote_total = job_summary.get("quote_total")
+                estimated_price_cents = None
+                if estimated_price:
+                    try:
+                        price_float = float(estimated_price) if isinstance(estimated_price, str) else estimated_price
+                        estimated_price_cents = int(price_float * 100)
+                    except (ValueError, TypeError):
+                        pass
                 
                 # Build job payload
                 job_title = f"{job_summary.get('customer_name', 'Unknown')} — {job_summary.get('service_type', 'Cleaning')}"
@@ -557,11 +671,15 @@ async def dispatch(request: Request):
                     supabase_job = upsert_job(job_payload)
                     supabase_job_id = supabase_job.get("id")
                     logger.info(
-                        "SUPA_WRITE_SUCCESS route=/dispatch step=job_create supabase_job_id=%s supabase_opportunity_id=%s ghl_job_id=%s offer_code=%s",
+                        "SUPA_WRITE_SUCCESS route=/dispatch step=job_create supabase_job_id=%s supabase_opportunity_id=%s ghl_job_id=%s offer_code=%s job_date=%s job_time_window=%s quote_total=%s estimated_price_cents=%s",
                         supabase_job_id,
                         supabase_opportunity_id,
                         external_job_id_used,
-                        offer_code
+                        offer_code,
+                        job_date,
+                        job_time_window,
+                        quote_total,
+                        estimated_price_cents
                     )
                 
                 # Create external_mapping for job (GHL job/appointment ID → Supabase job UUID)
@@ -597,7 +715,7 @@ async def dispatch(request: Request):
                         # Continue - mapping failure should not abort the flow
             else:
                 logger.warning(
-                    "SUPA_WRITE_FAILED route=/dispatch step=opportunity_resolve ghl_opportunity_id=%s error=mapping_not_found, skipping job creation",
+                    "SUPA_WRITE_FAILED route=/dispatch step=opportunity_resolve ghl_opportunity_id=%s error=mapping_not_found_and_creation_failed, skipping job creation",
                     opportunity_id
                 )
         else:

@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import GhlScript from "@/components/GhlScript";
 import StagingBanner from "@/components/StagingBanner";
-import LayoutWrapper from "@/components/LayoutWrapper";
 import { QuoteModalProvider } from "@/lib/quoteModal";
-import QuoteModalWrapper from "@/components/QuoteModalWrapper";
+import ConditionalSiteLayout from "@/components/ConditionalSiteLayout";
 
 const poppins = Poppins({
   weight: ["300", "400", "500", "600", "700"],
@@ -35,12 +32,7 @@ export default function RootLayout({
         <GhlScript />
         <StagingBanner />
         <QuoteModalProvider>
-          <LayoutWrapper>
-            <Navbar />
-            <main>{children}</main>
-            <Footer />
-            <QuoteModalWrapper />
-          </LayoutWrapper>
+          <ConditionalSiteLayout>{children}</ConditionalSiteLayout>
         </QuoteModalProvider>
       </body>
     </html>

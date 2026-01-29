@@ -67,7 +67,7 @@ export default function VerticalsClient({
       name: "",
       slug: "",
       is_active: true,
-      settings: null,
+      settings: {},
     });
     setIsCreating(true);
     setIsEditing(false);
@@ -83,10 +83,18 @@ export default function VerticalsClient({
         : `/api/admin/verticals/${selectedRow?.id}`;
       const method = isCreating ? "POST" : "PATCH";
 
+      // Ensure settings is always an object, never null
+      const payload = {
+        ...formData,
+        settings: formData.settings && typeof formData.settings === 'object' 
+          ? formData.settings 
+          : {},
+      };
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -195,13 +203,13 @@ export default function VerticalsClient({
               value={
                 formData.settings
                   ? JSON.stringify(formData.settings, null, 2)
-                  : ""
+                  : "{}"
               }
               onChange={(e) => {
                 try {
-                  const parsed = e.target.value
+                  const parsed = e.target.value.trim()
                     ? JSON.parse(e.target.value)
-                    : null;
+                    : {};
                   setFormData({ ...formData, settings: parsed });
                 } catch {
                   // Invalid JSON, keep as is for now

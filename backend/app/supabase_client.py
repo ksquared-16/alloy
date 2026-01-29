@@ -473,10 +473,10 @@ def find_or_create_opportunity(
     # Strategy 2: Check recent opportunities for same contact (10 minute window)
     if supabase_contact_id:
         from datetime import datetime, timedelta
-        import pytz
+        from zoneinfo import ZoneInfo
         
         # Calculate 10 minutes ago in UTC
-        ten_min_ago = (datetime.now(pytz.UTC) - timedelta(minutes=10)).isoformat()
+        ten_min_ago = (datetime.now(ZoneInfo("UTC")) - timedelta(minutes=10)).isoformat()
         
         opp_url = f"{base_url}/opportunities"
         opp_params = {

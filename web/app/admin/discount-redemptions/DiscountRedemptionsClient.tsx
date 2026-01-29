@@ -37,21 +37,21 @@ export default function DiscountRedemptionsClient({
       label: "Subtotal",
       sortable: true,
       render: (value: number | null) =>
-        value ? `$${(value / 100).toFixed(2)}` : "-",
+        value ? `$${value.toFixed(2)}` : "-",
     },
     {
       key: "discount_amount",
       label: "Discount",
       sortable: true,
       render: (value: number | null) =>
-        value ? `$${(value / 100).toFixed(2)}` : "-",
+        value ? `$${value.toFixed(2)}` : "-",
     },
     {
       key: "quote_total",
       label: "Total",
       sortable: true,
       render: (value: number | null) =>
-        value ? `$${(value / 100).toFixed(2)}` : "-",
+        value ? `$${value.toFixed(2)}` : "-",
     },
     { key: "contact_id", label: "Contact ID", sortable: false },
     { key: "opportunity_id", label: "Opportunity ID", sortable: false },
@@ -98,19 +98,19 @@ export default function DiscountRedemptionsClient({
             <div>
               <strong className="text-alloy-midnight/70">Subtotal:</strong>{" "}
               {selectedRow.quote_subtotal
-                ? `$${(selectedRow.quote_subtotal / 100).toFixed(2)}`
+                ? `$${selectedRow.quote_subtotal.toFixed(2)}`
                 : "-"}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Discount Amount:</strong>{" "}
               {selectedRow.discount_amount
-                ? `$${(selectedRow.discount_amount / 100).toFixed(2)}`
+                ? `$${selectedRow.discount_amount.toFixed(2)}`
                 : "-"}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Total:</strong>{" "}
               {selectedRow.quote_total
-                ? `$${(selectedRow.quote_total / 100).toFixed(2)}`
+                ? `$${selectedRow.quote_total.toFixed(2)}`
                 : "-"}
             </div>
             <div>

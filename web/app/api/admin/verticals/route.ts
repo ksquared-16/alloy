@@ -6,9 +6,19 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     const body = await request.json();
 
+    // Ensure settings is never null - use empty object if missing/invalid
+    const safeSettings = (body.settings && typeof body.settings === 'object') 
+      ? body.settings 
+      : {};
+    
+    const insertPayload = {
+      ...body,
+      settings: safeSettings,
+    };
+
     const { data, error } = await supabase
       .from("verticals")
-      .insert([body])
+      .insert([insertPayload])
       .select()
       .single();
 
