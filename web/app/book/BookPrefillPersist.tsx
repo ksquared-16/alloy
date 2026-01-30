@@ -27,11 +27,21 @@ export default function BookPrefillPersist() {
             });
         }
 
-        // Only persist if we have required fields (phone + email)
-        if (phone && email) {
+        // Decode URL-encoded phone (e.g., %2B1... -> +1...)
+        let decodedPhone = phone;
+        if (decodedPhone) {
+            try {
+                decodedPhone = decodeURIComponent(decodedPhone);
+            } catch (e) {
+                // If decoding fails, use original
+            }
+        }
+
+        // Persist whatever data exists (partial data is fine)
+        if (decodedPhone || email || firstName || lastName) {
             const prefillData = {
-                phone,
-                email,
+                phone: decodedPhone || undefined,
+                email: email || undefined,
                 first_name: firstName || undefined,
                 last_name: lastName || undefined,
                 estimated_price: estimatedPrice || undefined,
@@ -68,9 +78,11 @@ export default function BookPrefillPersist() {
             }
         } else {
             if (isStaging) {
-                console.log("[STAGING DEBUG] BookPrefillPersist: Skipping write - missing phone or email", {
-                    has_phone: !!phone,
-                    has_email: !!email
+                console.log("[STAGING DEBUG] BookPrefillPersist: No data to persist", {
+                    has_phone: !!decodedPhone,
+                    has_email: !!email,
+                    has_first_name: !!firstName,
+                    has_last_name: !!lastName
                 });
             }
         }

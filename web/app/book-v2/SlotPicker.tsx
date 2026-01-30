@@ -2,6 +2,27 @@
 
 import { useState, useEffect, useMemo } from "react";
 
+// Helper to format date label - only call after mount to avoid hydration issues
+const formatDateLabel = (date: Date, timezone: string): { full: string; short: string } => {
+    try {
+        const full = date.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            timeZone: timezone,
+        });
+        const short = date.toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            timeZone: timezone,
+        });
+        return { full, short };
+    } catch {
+        return { full: "Invalid date", short: "Invalid" };
+    }
+};
+
 export interface TimeSlot {
     start: Date;
     end: Date;
@@ -38,9 +59,15 @@ export default function SlotPicker({
     const [slotError, setSlotError] = useState<string | null>(null);
     const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
     const [apiTimezone, setApiTimezone] = useState<string>(timezone);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Helper to format time in timezone
     const formatTime = (date: Date): string => {
+        if (!mounted) return ""; // Avoid hydration mismatch
         try {
             return date.toLocaleTimeString("en-US", {
                 hour: "numeric",
@@ -50,27 +77,6 @@ export default function SlotPicker({
             });
         } catch {
             return "Invalid time";
-        }
-    };
-
-    // Helper to format date label
-    const formatDateLabel = (date: Date): { full: string; short: string } => {
-        try {
-            const full = date.toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                timeZone: timezone,
-            });
-            const short = date.toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                timeZone: timezone,
-            });
-            return { full, short };
-        } catch {
-            return { full: "Invalid date", short: "Invalid" };
         }
     };
 
@@ -148,10 +154,16 @@ export default function SlotPicker({
                     return acc;
                 }
                 
-                // Create a date key (YYYY-MM-DD in timezone)
-                const dateKey = slot.start.toLocaleDateString("en-CA", {
-                    timeZone: timezone,
-                }); // en-CA gives YYYY-MM-DD format
+                // Create a date key (YYYY-MM-DD in timezone) - only after mount to avoid hydration issues
+                let dateKey: string;
+                if (mounted) {
+                    dateKey = slot.start.toLocaleDateString("en-CA", {
+                        timeZone: timezone,
+                    }); // en-CA gives YYYY-MM-DD format
+                } else {
+                    // Fallback: use ISO date string for grouping during SSR
+                    dateKey = slot.start.toISOString().split("T")[0];
+                }
                 
                 if (!acc[dateKey]) {
                     acc[dateKey] = [];
@@ -166,7 +178,7 @@ export default function SlotPicker({
         // Convert to array and sort by date
         Object.entries(grouped).forEach(([dateKey, dateSlots]) => {
             if (dateSlots.length > 0) {
-                const labels = formatDateLabel(dateSlots[0].start);
+                const labels = mounted ? formatDateLabel(dateSlots[0].start, timezone) : { full: dateKey, short: dateKey };
                 groups.push({
                     dateKey,
                     dateLabel: labels.full,
@@ -180,7 +192,7 @@ export default function SlotPicker({
         groups.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
         
         return groups;
-    }, [slots, timezone]);
+    }, [slots, timezone, mounted]);
 
     // Set default selected date to first available date
     useEffect(() => {
@@ -196,8 +208,9 @@ export default function SlotPicker({
         return group?.slots || [];
     }, [dateGroups, selectedDateKey]);
 
-    // Format timezone label
+    // Format timezone label - only after mount to avoid hydration issues
     const timezoneLabel = useMemo(() => {
+        if (!mounted) return timezone; // Return raw timezone during SSR
         try {
             // Get timezone abbreviation or name
             const formatter = new Intl.DateTimeFormat("en-US", {
@@ -210,7 +223,7 @@ export default function SlotPicker({
         } catch {
             return timezone;
         }
-    }, [timezone]);
+    }, [timezone, mounted]);
 
     if (loading || isLoading) {
         return (

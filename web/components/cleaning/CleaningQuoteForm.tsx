@@ -436,10 +436,22 @@ export default function CleaningQuoteForm({
                         // Store in multiple keys for compatibility
                         const quoteJson = JSON.stringify(result);
                         localStorage.setItem("cleaning_quote", quoteJson);
-                        localStorage.setItem("alloy_quote_v1", quoteJson); // Shared key for /book-v2
                         // Also store in sessionStorage for backward compatibility
                         sessionStorage.setItem("alloy_cleaning_quote", quoteJson);
                         sessionStorage.setItem("cleaning_quote", quoteJson);
+                        
+                        // Store enhanced quote with prefill data in alloy_quote_v1 (canonical key for /book-v2)
+                        const enhancedQuote = {
+                            ...result,
+                            // Include customer prefill fields if available
+                            email: cleanInput.email || undefined,
+                            phone: cleanInput.phone || undefined,
+                            first_name: cleanInput.firstName || undefined,
+                            last_name: cleanInput.lastName || undefined,
+                        };
+                        const enhancedQuoteJson = JSON.stringify(enhancedQuote);
+                        localStorage.setItem("alloy_quote_v1", enhancedQuoteJson);
+                        sessionStorage.setItem("alloy_quote_v1", enhancedQuoteJson);
                     } catch (e) {
                         console.warn("Failed to store quote:", e);
                     }

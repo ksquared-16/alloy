@@ -197,16 +197,24 @@ export default function BookV2Client() {
             }
 
             if (storedQuote) {
-                const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
-                console.log("[BOOK_V2] Loaded quote from storage:", parsedQuote);
-                setQuote(parsedQuote);
-                const ready = isQuoteReady(parsedQuote);
-                setHasQuote(ready);
-                if (ready) {
-                    setCurrentStep("slot_selection");
+                try {
+                    const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
+                    console.log("[BOOK_V2] Loaded quote from storage:", parsedQuote);
+                    setQuote(parsedQuote);
+                    const ready = isQuoteReady(parsedQuote);
+                    setHasQuote(ready);
+                    if (ready) {
+                        setCurrentStep("slot_selection");
+                    } else {
+                        console.warn("[BOOK_V2] Quote loaded but not ready - missing required pricing fields");
+                    }
+                } catch (e) {
+                    console.error("[BOOK_V2] Failed to parse quote from storage:", e);
+                    setHasQuote(false);
                 }
             } else {
                 console.warn("[BOOK_V2] No quote found in storage");
+                setHasQuote(false);
             }
 
             // Load discount data from prefill
@@ -912,12 +920,12 @@ export default function BookV2Client() {
                                                             <strong>Selected:</strong> {selectedSlot.timeWindow}
                                                         </p>
                                                         <p className="text-xs text-alloy-midnight/60">
-                                                            {selectedSlot.start.toLocaleDateString("en-US", {
+                                                            {mounted ? selectedSlot.start.toLocaleDateString("en-US", {
                                                                 weekday: "long",
                                                                 month: "long",
                                                                 day: "numeric",
                                                                 timeZone: timezone,
-                                                            })}
+                                                            }) : selectedSlot.start.toISOString().split("T")[0]}
                                                         </p>
                                                     </div>
                                                     <button
@@ -933,12 +941,12 @@ export default function BookV2Client() {
                                         <div className="bg-alloy-stone/10 rounded-lg p-4">
                                             <p className="text-sm text-alloy-midnight/70">
                                                 <strong>{selectedSlot?.timeWindow}</strong> on{" "}
-                                                {selectedSlot?.start.toLocaleDateString("en-US", {
+                                                {mounted ? selectedSlot?.start.toLocaleDateString("en-US", {
                                                     weekday: "long",
                                                     month: "long",
                                                     day: "numeric",
                                                     timeZone: timezone,
-                                                })}
+                                                }) : selectedSlot?.start.toISOString().split("T")[0]}
                                             </p>
                                             <button
                                                 onClick={handleChangeSlot}
@@ -1043,12 +1051,12 @@ export default function BookV2Client() {
                                     {selectedSlot.timeWindow}
                                 </p>
                                 <p className="text-sm text-alloy-midnight/60 mt-1">
-                                    {selectedSlot.start.toLocaleDateString("en-US", {
+                                    {mounted ? selectedSlot.start.toLocaleDateString("en-US", {
                                         weekday: "long",
                                         month: "long",
                                         day: "numeric",
                                         timeZone: timezone,
-                                    })}
+                                    }) : selectedSlot.start.toISOString().split("T")[0]}
                                 </p>
                             </div>
                         )}
