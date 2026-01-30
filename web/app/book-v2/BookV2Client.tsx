@@ -31,16 +31,56 @@ interface DiscountData {
 
 type BookingStep = "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
 
-function isQuoteReady(data: QuoteResponse | null): boolean {
-    if (!data) return false;
+/**
+ * Normalizes quote data and sets defaults for one-time bookings
+ */
+function normalizeQuote(data: QuoteResponse): QuoteResponse {
+    const normalized = { ...data };
+    
+    // For one-time bookings: if frequency_label is missing/empty and recurring_price is null/undefined,
+    // set default frequency_label to "One-time"
+    const hasFrequencyLabel = normalized.frequency_label && 
+        typeof normalized.frequency_label === "string" && 
+        normalized.frequency_label.trim().length > 0;
+    const hasRecurringPrice = normalized.recurring_price !== null && 
+        normalized.recurring_price !== undefined && 
+        typeof normalized.recurring_price === "number" &&
+        normalized.recurring_price > 0;
+    
+    if (!hasFrequencyLabel && !hasRecurringPrice) {
+        // One-time booking: set default frequency_label
+        normalized.frequency_label = "One-time";
+    }
+    
+    return normalized;
+}
+
+/**
+ * Checks if quote has required pricing fields.
+ * Only blocks if estimated_price is missing/invalid.
+ * One-time bookings (no frequency_label) are allowed.
+ */
+function isQuoteReady(data: QuoteResponse | null): { ready: boolean; missingFields: string[] } {
+    if (!data) {
+        return { ready: false, missingFields: ["quote object"] };
+    }
+    
+    const missingFields: string[] = [];
+    
+    // Required: must have estimated_price or first_clean_price
     const hasFirst =
         typeof data.first_clean_price === "number" ||
         typeof data.estimated_price === "number";
-    const hasRecurring = typeof data.recurring_price === "number";
-    const hasFrequency =
-        typeof data.frequency_label === "string" &&
-        data.frequency_label.trim().length > 0;
-    return hasFirst && hasRecurring && hasFrequency;
+    if (!hasFirst) {
+        missingFields.push("estimated_price or first_clean_price");
+    }
+    
+    // Optional: recurring_price (one-time bookings don't have this)
+    // Optional: frequency_label (one-time bookings may have null, which is normalized to "One-time")
+    
+    const ready = hasFirst;
+    
+    return { ready, missingFields };
 }
 
 export default function BookV2Client() {
@@ -200,13 +240,22 @@ export default function BookV2Client() {
                 try {
                     const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
                     console.log("[BOOK_V2] Loaded quote from storage:", parsedQuote);
-                    setQuote(parsedQuote);
-                    const ready = isQuoteReady(parsedQuote);
+                    
+                    // Normalize quote (set default frequency_label for one-time bookings)
+                    const normalizedQuote = normalizeQuote(parsedQuote);
+                    console.log("[BOOK_V2] Normalized quote:", normalizedQuote);
+                    
+                    setQuote(normalizedQuote);
+                    
+                    // Check readiness
+                    const { ready, missingFields } = isQuoteReady(normalizedQuote);
                     setHasQuote(ready);
+                    
                     if (ready) {
                         setCurrentStep("slot_selection");
                     } else {
-                        console.warn("[BOOK_V2] Quote loaded but not ready - missing required pricing fields");
+                        console.warn("[BOOK_V2] Quote loaded but not ready - missing required fields:", missingFields);
+                        console.warn("[BOOK_V2] Normalized quote object:", JSON.stringify(normalizedQuote, null, 2));
                     }
                 } catch (e) {
                     console.error("[BOOK_V2] Failed to parse quote from storage:", e);
