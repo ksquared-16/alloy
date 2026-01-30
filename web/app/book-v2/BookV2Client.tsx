@@ -63,25 +63,67 @@ export default function BookV2Client() {
     const email = searchParams?.get("email");
     const firstName = searchParams?.get("first_name");
     const lastName = searchParams?.get("last_name");
+    const debug = searchParams?.get("debug") === "1";
 
     // Default timezone (can be enhanced to detect from user location)
     const timezone = "America/Los_Angeles";
 
+    // Debug mode: Use mocked quote to bypass quote requirement
+    const mockQuote: QuoteResponse = {
+        status: "ready",
+        source: "local_pricing",
+        estimated_price: 150,
+        first_clean_price: 150,
+        recurring_price: 120,
+        frequency_label: "Every 2 Weeks",
+        service: "Standard Cleaning",
+        price_breakdown: "Mock quote for testing",
+        addons: [],
+    };
+
     useEffect(() => {
-        // Load quote from storage (same as /book)
+        // Debug bypass: Skip quote loading and use mock quote
+        if (debug) {
+            console.log("[BOOK_V2_DEBUG] Debug mode enabled, using mock quote");
+            setQuote(mockQuote);
+            setHasQuote(true);
+            setStep("slot_selection");
+            return;
+        }
+
+        // Load quote from storage (try multiple keys for compatibility)
         try {
-            let storedQuote = localStorage.getItem("cleaning_quote");
+            // Try shared key first (alloy_quote_v1)
+            let storedQuote = localStorage.getItem("alloy_quote_v1");
+            
+            // Fallback to original keys
+            if (!storedQuote) {
+                storedQuote = localStorage.getItem("cleaning_quote");
+            }
             if (!storedQuote) {
                 storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
+            }
+            if (!storedQuote) {
+                storedQuote = sessionStorage.getItem("cleaning_quote");
             }
 
             if (storedQuote) {
                 const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
+                console.log("[BOOK_V2] Loaded quote from storage:", parsedQuote);
                 setQuote(parsedQuote);
-                setHasQuote(isQuoteReady(parsedQuote));
-                if (isQuoteReady(parsedQuote)) {
+                const ready = isQuoteReady(parsedQuote);
+                setHasQuote(ready);
+                if (ready) {
                     setStep("slot_selection");
+                } else {
+                    console.warn("[BOOK_V2] Quote loaded but not ready:", {
+                        hasFirst: typeof parsedQuote.first_clean_price === "number" || typeof parsedQuote.estimated_price === "number",
+                        hasRecurring: typeof parsedQuote.recurring_price === "number",
+                        hasFrequency: typeof parsedQuote.frequency_label === "string" && parsedQuote.frequency_label.trim().length > 0,
+                    });
                 }
+            } else {
+                console.warn("[BOOK_V2] No quote found in storage");
             }
 
             // Load discount data from prefill
@@ -286,8 +328,8 @@ export default function BookV2Client() {
     return (
         <div className="min-h-screen py-6 md:py-10">
             <Section className="max-w-7xl">
-                {/* Fallback message if no quote found */}
-                {!hasQuote && step === "quote" && (
+                {/* Fallback message if no quote found (skip in debug mode) */}
+                {!hasQuote && step === "quote" && !debug && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 text-center">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
                             Please start your quote first
@@ -295,12 +337,17 @@ export default function BookV2Client() {
                         <p className="text-sm text-alloy-midnight/80 mb-6">
                             To book a cleaning, please fill out the quote form first.
                         </p>
-                        <a
-                            href="/services/cleaning?open=1#quote-form"
-                            className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
-                        >
-                            Get a Quote
-                        </a>
+                        <div className="space-y-3">
+                            <a
+                                href="/services/cleaning?open=1#quote-form"
+                                className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                            >
+                                Get a Quote
+                            </a>
+                            <div className="text-xs text-alloy-midnight/60">
+                                <p className="mb-2">Debug: Add <code className="bg-alloy-stone/30 px-2 py-1 rounded">?debug=1</code> to test booking UI</p>
+                            </div>
+                        </div>
                     </div>
                 )}
 

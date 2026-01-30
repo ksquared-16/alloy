@@ -423,7 +423,7 @@ export default function CleaningQuoteForm({
                         cleanInput.addOns
                     );
 
-                    // Store quote in localStorage for /book page
+                    // Store quote in localStorage for /book and /book-v2 pages
                     try {
                         if (isStaging) {
                             console.log("[STAGING] Storing quote to localStorage/sessionStorage", {
@@ -433,9 +433,13 @@ export default function CleaningQuoteForm({
                                 price_breakdown: result.price_breakdown
                             });
                         }
-                        localStorage.setItem("cleaning_quote", JSON.stringify(result));
+                        // Store in multiple keys for compatibility
+                        const quoteJson = JSON.stringify(result);
+                        localStorage.setItem("cleaning_quote", quoteJson);
+                        localStorage.setItem("alloy_quote_v1", quoteJson); // Shared key for /book-v2
                         // Also store in sessionStorage for backward compatibility
-                        sessionStorage.setItem("alloy_cleaning_quote", JSON.stringify(result));
+                        sessionStorage.setItem("alloy_cleaning_quote", quoteJson);
+                        sessionStorage.setItem("cleaning_quote", quoteJson);
                     } catch (e) {
                         console.warn("Failed to store quote:", e);
                     }
