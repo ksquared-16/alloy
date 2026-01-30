@@ -90,7 +90,7 @@ export default function ServiceDetailsForm({
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div>
                 <h3 className="text-lg font-semibold text-alloy-midnight mb-1">
                     A few details to round out your booking
@@ -100,33 +100,34 @@ export default function ServiceDetailsForm({
                 </p>
             </div>
 
-            <div className="space-y-4">
-                {/* Address */}
-                <div>
-                    <label className="block text-sm font-medium text-alloy-midnight mb-2">
-                        Address <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        value={formData.address}
-                        onChange={(e) => handleChange("address", e.target.value)}
-                        placeholder="123 Main Street"
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
-                    />
-                </div>
+            <div className="space-y-3">
+                {/* Address and City on same row */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                            Address <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.address}
+                            onChange={(e) => handleChange("address", e.target.value)}
+                            placeholder="123 Main Street"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                        />
+                    </div>
 
-                {/* City */}
-                <div>
-                    <label className="block text-sm font-medium text-alloy-midnight mb-2">
-                        City <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        value={formData.city}
-                        onChange={(e) => handleChange("city", e.target.value)}
-                        placeholder="Los Angeles"
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
-                    />
+                    <div>
+                        <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                            City <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.city}
+                            onChange={(e) => handleChange("city", e.target.value)}
+                            placeholder="Los Angeles"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                        />
+                    </div>
                 </div>
 
                 {/* Bedrooms and Bathrooms */}
@@ -167,60 +168,21 @@ export default function ServiceDetailsForm({
                     </div>
                 </div>
 
-                {/* Access Method */}
+                {/* Access Method - Dropdown */}
                 <div>
                     <label className="block text-sm font-medium text-alloy-midnight mb-2">
                         How will your cleaner get into your home? <span className="text-red-500">*</span>
                     </label>
-                    <div className="space-y-2">
-                        <label className="flex items-center p-3 border border-alloy-stone/30 rounded-lg cursor-pointer hover:bg-alloy-stone/10 transition-colors">
-                            <input
-                                type="radio"
-                                name="access_method"
-                                value="home"
-                                checked={formData.access_method === "home"}
-                                onChange={() => handleAccessMethodChange("home")}
-                                className="mr-3 text-alloy-blue focus:ring-alloy-blue"
-                            />
-                            <span className="text-sm text-alloy-midnight">I will be home</span>
-                        </label>
-
-                        <label className="flex items-center p-3 border border-alloy-stone/30 rounded-lg cursor-pointer hover:bg-alloy-stone/10 transition-colors">
-                            <input
-                                type="radio"
-                                name="access_method"
-                                value="code"
-                                checked={formData.access_method === "code"}
-                                onChange={() => handleAccessMethodChange("code")}
-                                className="mr-3 text-alloy-blue focus:ring-alloy-blue"
-                            />
-                            <span className="text-sm text-alloy-midnight">Door/Garage Code</span>
-                        </label>
-
-                        <label className="flex items-center p-3 border border-alloy-stone/30 rounded-lg cursor-pointer hover:bg-alloy-stone/10 transition-colors">
-                            <input
-                                type="radio"
-                                name="access_method"
-                                value="key"
-                                checked={formData.access_method === "key"}
-                                onChange={() => handleAccessMethodChange("key")}
-                                className="mr-3 text-alloy-blue focus:ring-alloy-blue"
-                            />
-                            <span className="text-sm text-alloy-midnight">Hidden Key</span>
-                        </label>
-
-                        <label className="flex items-center p-3 border border-alloy-stone/30 rounded-lg cursor-pointer hover:bg-alloy-stone/10 transition-colors">
-                            <input
-                                type="radio"
-                                name="access_method"
-                                value="building"
-                                checked={formData.access_method === "building"}
-                                onChange={() => handleAccessMethodChange("building")}
-                                className="mr-3 text-alloy-blue focus:ring-alloy-blue"
-                            />
-                            <span className="text-sm text-alloy-midnight">Building / Front Desk</span>
-                        </label>
-                    </div>
+                    <select
+                        value={formData.access_method}
+                        onChange={(e) => handleAccessMethodChange(e.target.value as ServiceDetails["access_method"])}
+                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent bg-white"
+                    >
+                        <option value="home">I will be home</option>
+                        <option value="code">Door/Garage Code</option>
+                        <option value="key">Hidden Key</option>
+                        <option value="building">Building / Front Desk</option>
+                    </select>
                 </div>
 
                 {/* Access Note (conditional) */}

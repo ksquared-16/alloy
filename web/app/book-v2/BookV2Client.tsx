@@ -48,8 +48,11 @@ export default function BookV2Client() {
     const [hasQuote, setHasQuote] = useState(false);
     const [currentStep, setCurrentStep] = useState<BookingStep>("slot_selection");
     const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+    const [slotConfirmed, setSlotConfirmed] = useState(false);
     const [serviceDetails, setServiceDetails] = useState<ServiceDetails | null>(null);
     const [serviceDetailsValid, setServiceDetailsValid] = useState(false);
+    const [serviceDetailsConfirmed, setServiceDetailsConfirmed] = useState(false);
+    const [serviceDetailsSnapshot, setServiceDetailsSnapshot] = useState<ServiceDetails | null>(null);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [bookingResult, setBookingResult] = useState<{
         schedule_id: string;
@@ -157,8 +160,8 @@ export default function BookV2Client() {
         }
     }, [debug]);
 
-    // Check if payment is unlocked
-    const isPaymentUnlocked = selectedSlot !== null && serviceDetailsValid;
+    // Check if payment is unlocked (requires both steps to be confirmed)
+    const isPaymentUnlocked = slotConfirmed && serviceDetailsConfirmed;
 
     // Initialize Stripe when payment is unlocked
     useEffect(() => {
@@ -212,40 +215,69 @@ export default function BookV2Client() {
         initializeStripe();
     }, [mounted, isPaymentUnlocked, email, phone]);
 
-    // Mount card element
+    // Mount card element when both card and ref are ready
     useEffect(() => {
-        if (card && cardElementRef.current) {
-            card.mount(cardElementRef.current);
+        if (card && cardElementRef.current && isPaymentUnlocked) {
+            // Check if already mounted
+            if (!cardElementRef.current.hasChildNodes()) {
+                card.mount(cardElementRef.current);
+            }
             return () => {
                 try {
-                    card.unmount();
+                    if (cardElementRef.current && cardElementRef.current.hasChildNodes()) {
+                        card.unmount();
+                    }
                 } catch (e) {
                     // Ignore unmount errors
                 }
             };
         }
-    }, [card]);
+    }, [card, isPaymentUnlocked]);
 
-    // Step progression logic - allow manual navigation
-    // Steps unlock sequentially but user can scroll back to edit
+    // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
-        // Auto-advance to payment when service details are valid
-        if (isPaymentUnlocked && currentStep === "service_details") {
-            setCurrentStep("payment");
+        if (serviceDetailsConfirmed && serviceDetailsSnapshot && serviceDetails) {
+            const hasChanged = JSON.stringify(serviceDetails) !== JSON.stringify(serviceDetailsSnapshot);
+            if (hasChanged) {
+                setServiceDetailsConfirmed(false);
+                setServiceDetailsSnapshot(null);
+            }
         }
-    }, [isPaymentUnlocked, currentStep]);
+    }, [serviceDetails, serviceDetailsConfirmed, serviceDetailsSnapshot]);
 
     const handleSelectSlot = (slot: TimeSlot) => {
         setSelectedSlot(slot);
         setBookingError(null);
-        if (currentStep === "slot_selection") {
+        // Don't auto-advance - require explicit confirmation
+    };
+
+    const handleConfirmSlot = () => {
+        if (selectedSlot) {
+            setSlotConfirmed(true);
             setCurrentStep("service_details");
         }
+    };
+
+    const handleChangeSlot = () => {
+        setSelectedSlot(null);
+        setSlotConfirmed(false);
+        setCurrentStep("slot_selection");
+        // Reset later steps
+        setServiceDetailsConfirmed(false);
+        setServiceDetailsSnapshot(null);
     };
 
     const handleServiceDetailsChange = (data: ServiceDetails, isValid: boolean) => {
         setServiceDetails(data);
         setServiceDetailsValid(isValid);
+    };
+
+    const handleConfirmServiceDetails = () => {
+        if (serviceDetails && serviceDetailsValid) {
+            setServiceDetailsConfirmed(true);
+            setServiceDetailsSnapshot({ ...serviceDetails });
+            setCurrentStep("payment");
+        }
     };
 
     const handleValidateDiscount = async () => {
@@ -498,9 +530,9 @@ export default function BookV2Client() {
                 {/* Two-column layout: Quote (left, sticky) + Steps (right) */}
                 {hasQuote && currentStep !== "confirmed" && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                        {/* Left column: Quote panel (1/3 width, sticky) */}
+                        {/* Left column: Quote panel (1/3 width, sticky on desktop) */}
                         <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6 space-y-6">
+                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 lg:sticky lg:top-24 space-y-6">
                                 {/* Quote Summary */}
                                 <div className="space-y-4">
                                     <h2 className="text-lg font-bold text-alloy-midnight">
@@ -689,10 +721,19 @@ export default function BookV2Client() {
                                                 <label className="block text-xs font-medium text-alloy-midnight mb-2">
                                                     Card Information
                                                 </label>
-                                                <div
-                                                    ref={cardElementRef}
-                                                    className="px-4 py-3 border border-alloy-stone/30 rounded-lg"
-                                                />
+                                                {!stripe || !card ? (
+                                                    <div className="px-4 py-8 border border-alloy-stone/30 rounded-lg bg-alloy-stone/10 flex items-center justify-center">
+                                                        <div className="text-center">
+                                                            <div className="w-6 h-6 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                                            <p className="text-xs text-alloy-midnight/60">Loading payment form...</p>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        ref={cardElementRef}
+                                                        className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                    />
+                                                )}
                                             </div>
                                             
                                             {paymentError && (
@@ -721,38 +762,63 @@ export default function BookV2Client() {
                                 <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                                     <div className="flex items-center gap-3 mb-6">
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
-                                            selectedSlot 
+                                            slotConfirmed 
                                                 ? "bg-alloy-juniper text-white" 
                                                 : currentStep === "slot_selection"
                                                     ? "bg-alloy-blue text-white"
                                                     : "bg-alloy-stone/30 text-alloy-midnight/60"
                                         }`}>
-                                            {selectedSlot ? "✓" : "1"}
+                                            {slotConfirmed ? "✓" : "1"}
                                         </div>
                                         <div>
                                             <h2 className="text-xl font-bold text-alloy-midnight">
                                                 Select a Time Slot
                                             </h2>
-                                            {selectedSlot && (
+                                            {slotConfirmed && selectedSlot && (
                                                 <p className="text-sm text-alloy-midnight/60 mt-1">
-                                                    Selected: {selectedSlot.timeWindow}
+                                                    Confirmed: {selectedSlot.timeWindow}
                                                 </p>
                                             )}
                                         </div>
                                     </div>
 
-                                    {currentStep === "slot_selection" || !selectedSlot ? (
-                                        <SlotPicker
-                                            selectedSlot={selectedSlot}
-                                            onSelectSlot={handleSelectSlot}
-                                            timezone={timezone}
-                                            error={bookingError}
-                                        />
+                                    {!slotConfirmed ? (
+                                        <>
+                                            <SlotPicker
+                                                selectedSlot={selectedSlot}
+                                                onSelectSlot={handleSelectSlot}
+                                                timezone={timezone}
+                                                error={bookingError}
+                                            />
+                                            {selectedSlot && (
+                                                <div className="mt-6 pt-6 border-t border-alloy-stone/20">
+                                                    <div className="bg-alloy-stone/10 rounded-lg p-4 mb-4">
+                                                        <p className="text-sm text-alloy-midnight/70 mb-1">
+                                                            <strong>Selected:</strong> {selectedSlot.timeWindow}
+                                                        </p>
+                                                        <p className="text-xs text-alloy-midnight/60">
+                                                            {selectedSlot.start.toLocaleDateString("en-US", {
+                                                                weekday: "long",
+                                                                month: "long",
+                                                                day: "numeric",
+                                                                timeZone: timezone,
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleConfirmSlot}
+                                                        className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                                                    >
+                                                        Confirm Time Slot
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
                                     ) : (
                                         <div className="bg-alloy-stone/10 rounded-lg p-4">
                                             <p className="text-sm text-alloy-midnight/70">
-                                                <strong>{selectedSlot.timeWindow}</strong> on{" "}
-                                                {selectedSlot.start.toLocaleDateString("en-US", {
+                                                <strong>{selectedSlot?.timeWindow}</strong> on{" "}
+                                                {selectedSlot?.start.toLocaleDateString("en-US", {
                                                     weekday: "long",
                                                     month: "long",
                                                     day: "numeric",
@@ -760,10 +826,7 @@ export default function BookV2Client() {
                                                 })}
                                             </p>
                                             <button
-                                                onClick={() => {
-                                                    setSelectedSlot(null);
-                                                    setCurrentStep("slot_selection");
-                                                }}
+                                                onClick={handleChangeSlot}
                                                 className="text-xs text-alloy-blue hover:underline mt-2"
                                             >
                                                 Change time slot
@@ -773,25 +836,25 @@ export default function BookV2Client() {
                                 </div>
 
                                 {/* Step 2: Service Details */}
-                                {selectedSlot && (
+                                {slotConfirmed && (
                                     <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                                         <div className="flex items-center gap-3 mb-6">
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
-                                                serviceDetailsValid 
+                                                serviceDetailsConfirmed 
                                                     ? "bg-alloy-juniper text-white" 
-                                                    : currentStep === "service_details"
+                                                    : currentStep === "service_details" || currentStep === "payment"
                                                         ? "bg-alloy-blue text-white"
                                                         : "bg-alloy-stone/30 text-alloy-midnight/60"
                                             }`}>
-                                                {serviceDetailsValid ? "✓" : "2"}
+                                                {serviceDetailsConfirmed ? "✓" : "2"}
                                             </div>
                                             <div>
                                                 <h2 className="text-xl font-bold text-alloy-midnight">
                                                     Service Details
                                                 </h2>
-                                                {serviceDetailsValid && (
+                                                {serviceDetailsConfirmed && (
                                                     <p className="text-sm text-alloy-midnight/60 mt-1">
-                                                        Details complete
+                                                        Details confirmed
                                                     </p>
                                                 )}
                                             </div>
@@ -800,30 +863,25 @@ export default function BookV2Client() {
                                         <ServiceDetailsForm
                                             onDataChange={handleServiceDetailsChange}
                                         />
-                                    </div>
-                                )}
 
-                                {/* Step 3: Payment Confirmation */}
-                                {isPaymentUnlocked && (
-                                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                                        <div className="flex items-center gap-3 mb-6">
-                                            <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm bg-alloy-blue text-white">
-                                                3
+                                        {serviceDetailsValid && !serviceDetailsConfirmed && (
+                                            <div className="mt-6 pt-6 border-t border-alloy-stone/20">
+                                                <button
+                                                    onClick={handleConfirmServiceDetails}
+                                                    className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                                                >
+                                                    Confirm Details
+                                                </button>
                                             </div>
-                                            <div>
-                                                <h2 className="text-xl font-bold text-alloy-midnight">
-                                                    Complete Payment
-                                                </h2>
-                                                <p className="text-sm text-alloy-midnight/60 mt-1">
-                                                    Review and complete your booking
+                                        )}
+
+                                        {serviceDetailsConfirmed && (
+                                            <div className="mt-4 bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
+                                                <p className="text-sm text-alloy-midnight/70 text-center">
+                                                    Payment unlocked — complete your booking in the left panel.
                                                 </p>
                                             </div>
-                                        </div>
-                                        <div className="bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
-                                            <p className="text-sm text-alloy-midnight/70 text-center">
-                                                Complete your payment in the left panel to finalize your booking
-                                            </p>
-                                        </div>
+                                        )}
                                     </div>
                                 )}
 
