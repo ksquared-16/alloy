@@ -29,7 +29,7 @@ interface DiscountData {
     quote_total: number;
 }
 
-type BookingStep = "slot_selection" | "service_details" | "payment" | "confirming" | "confirmed" | "error";
+type BookingStep = "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
 
 function isQuoteReady(data: QuoteResponse | null): boolean {
     if (!data) return false;
@@ -478,7 +478,7 @@ export default function BookV2Client() {
 
         setIsProcessingPayment(true);
         setPaymentError(null);
-        setCurrentStep("confirming");
+        // Don't change currentStep - keep processing state in payment area only
 
         try {
             // Get quote subtotal
@@ -584,7 +584,7 @@ export default function BookV2Client() {
         } catch (err: any) {
             console.error("Payment/booking failed:", err);
             setPaymentError(err.message || "Failed to complete booking. Please try again.");
-            setCurrentStep("payment");
+            // Keep current step - error shows in payment area
         } finally {
             setIsProcessingPayment(false);
         }
@@ -815,6 +815,16 @@ export default function BookV2Client() {
                                         </div>
                                     ) : (
                                         <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                                            {/* No charge today note */}
+                                            <div className="bg-alloy-juniper/10 border border-alloy-juniper/20 rounded-lg p-3">
+                                                <p className="text-xs font-semibold text-alloy-midnight mb-1">
+                                                    No charge today.
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/70 leading-relaxed">
+                                                    We'll save your card to hold your appointment. You'll only be charged after the cleaning is completed and confirmed.
+                                                </p>
+                                            </div>
+
                                             <div>
                                                 <label className="block text-xs font-medium text-alloy-midnight mb-2">
                                                     Card Information
@@ -847,6 +857,13 @@ export default function BookV2Client() {
                                             >
                                                 {isProcessingPayment ? "Processing..." : "Complete Booking"}
                                             </button>
+
+                                            {isProcessingPayment && (
+                                                <div className="flex items-center justify-center gap-2 text-xs text-alloy-midnight/60">
+                                                    <div className="w-4 h-4 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin"></div>
+                                                    <span>Finalizing booking...</span>
+                                                </div>
+                                            )}
                                         </form>
                                     )}
                                 </div>
@@ -990,17 +1007,6 @@ export default function BookV2Client() {
                                     </div>
                                 )}
 
-                                {/* Confirming State */}
-                                {currentStep === "confirming" && (
-                                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-12">
-                                        <div className="flex items-center justify-center py-12">
-                                            <div className="text-center">
-                                                <div className="w-12 h-12 border-4 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                                                <p className="text-alloy-midnight font-semibold">Processing your booking...</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>
