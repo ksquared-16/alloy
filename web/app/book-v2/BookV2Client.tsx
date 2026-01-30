@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { loadStripe, Stripe, StripeElements, StripeCardElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
+import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
@@ -26,7 +28,7 @@ interface DiscountData {
     quote_total: number;
 }
 
-type BookingStep = "quote" | "slot_selection" | "confirming" | "confirmed" | "error";
+type BookingStep = "slot_selection" | "service_details" | "payment" | "confirming" | "confirmed" | "error";
 
 function isQuoteReady(data: QuoteResponse | null): boolean {
     if (!data) return false;
@@ -44,8 +46,10 @@ export default function BookV2Client() {
     const searchParams = useSearchParams();
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
     const [hasQuote, setHasQuote] = useState(false);
-    const [step, setStep] = useState<BookingStep>("quote");
+    const [currentStep, setCurrentStep] = useState<BookingStep>("slot_selection");
     const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+    const [serviceDetails, setServiceDetails] = useState<ServiceDetails | null>(null);
+    const [serviceDetailsValid, setServiceDetailsValid] = useState(false);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [bookingResult, setBookingResult] = useState<{
         schedule_id: string;
@@ -53,11 +57,20 @@ export default function BookV2Client() {
         opportunity_id: string;
     } | null>(null);
 
-    // Discount code state (reused from /book)
+    // Discount code state
     const [discountCode, setDiscountCode] = useState("");
     const [discountData, setDiscountData] = useState<DiscountData | null>(null);
     const [discountError, setDiscountError] = useState<string | null>(null);
     const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
+
+    // Stripe state
+    const [mounted, setMounted] = useState(false);
+    const [stripe, setStripe] = useState<Stripe | null>(null);
+    const [elements, setElements] = useState<StripeElements | null>(null);
+    const [card, setCard] = useState<StripeCardElement | null>(null);
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [paymentError, setPaymentError] = useState<string | null>(null);
+    const cardElementRef = useRef<HTMLDivElement>(null);
 
     const phone = searchParams?.get("phone");
     const email = searchParams?.get("email");
@@ -65,7 +78,7 @@ export default function BookV2Client() {
     const lastName = searchParams?.get("last_name");
     const debug = searchParams?.get("debug") === "1";
 
-    // Default timezone (can be enhanced to detect from user location)
+    // Default timezone
     const timezone = "America/Los_Angeles";
 
     // Debug mode: Use mocked quote to bypass quote requirement
@@ -82,21 +95,21 @@ export default function BookV2Client() {
     };
 
     useEffect(() => {
-        // Debug bypass: Skip quote loading and use mock quote
+        setMounted(true);
+    }, []);
+
+    // Load quote from storage
+    useEffect(() => {
         if (debug) {
             console.log("[BOOK_V2_DEBUG] Debug mode enabled, using mock quote");
             setQuote(mockQuote);
             setHasQuote(true);
-            setStep("slot_selection");
+            setCurrentStep("slot_selection");
             return;
         }
 
-        // Load quote from storage (try multiple keys for compatibility)
         try {
-            // Try shared key first (alloy_quote_v1)
             let storedQuote = localStorage.getItem("alloy_quote_v1");
-            
-            // Fallback to original keys
             if (!storedQuote) {
                 storedQuote = localStorage.getItem("cleaning_quote");
             }
@@ -114,13 +127,7 @@ export default function BookV2Client() {
                 const ready = isQuoteReady(parsedQuote);
                 setHasQuote(ready);
                 if (ready) {
-                    setStep("slot_selection");
-                } else {
-                    console.warn("[BOOK_V2] Quote loaded but not ready:", {
-                        hasFirst: typeof parsedQuote.first_clean_price === "number" || typeof parsedQuote.estimated_price === "number",
-                        hasRecurring: typeof parsedQuote.recurring_price === "number",
-                        hasFrequency: typeof parsedQuote.frequency_label === "string" && parsedQuote.frequency_label.trim().length > 0,
-                    });
+                    setCurrentStep("slot_selection");
                 }
             } else {
                 console.warn("[BOOK_V2] No quote found in storage");
@@ -148,79 +155,99 @@ export default function BookV2Client() {
         } catch (e) {
             console.error("Failed to load quote from storage:", e);
         }
-    }, []);
+    }, [debug]);
+
+    // Check if payment is unlocked
+    const isPaymentUnlocked = selectedSlot !== null && serviceDetailsValid;
+
+    // Initialize Stripe when payment is unlocked
+    useEffect(() => {
+        if (!mounted || !isPaymentUnlocked) return;
+        if (!email || !phone) {
+            console.warn("[BOOK_V2] Email/phone missing, cannot initialize Stripe");
+            return;
+        }
+
+        const initializeStripe = async () => {
+            const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE;
+            
+            if (!publishableKey || publishableKey.trim() === "") {
+                console.error("[BOOK_V2] Stripe publishable key missing");
+                setPaymentError("Payment is not configured. Please contact support.");
+                return;
+            }
+
+            try {
+                const stripeInstance = await loadStripe(publishableKey);
+                if (!stripeInstance) {
+                    throw new Error("Failed to load Stripe");
+                }
+                
+                setStripe(stripeInstance);
+                const elementsInstance = stripeInstance.elements();
+                setElements(elementsInstance);
+                
+                const cardElement = elementsInstance.create("card", {
+                    style: {
+                        base: {
+                            fontSize: "16px",
+                            color: "#1a1a1a",
+                            "::placeholder": {
+                                color: "#9ca3af",
+                            },
+                        },
+                        invalid: {
+                            color: "#ef4444",
+                        },
+                    },
+                });
+                
+                setCard(cardElement);
+            } catch (err) {
+                console.error("Failed to initialize Stripe:", err);
+                setPaymentError("Failed to load payment form. Please refresh the page.");
+            }
+        };
+
+        initializeStripe();
+    }, [mounted, isPaymentUnlocked, email, phone]);
+
+    // Mount card element
+    useEffect(() => {
+        if (card && cardElementRef.current) {
+            card.mount(cardElementRef.current);
+            return () => {
+                try {
+                    card.unmount();
+                } catch (e) {
+                    // Ignore unmount errors
+                }
+            };
+        }
+    }, [card]);
+
+    // Step progression logic - allow manual navigation
+    // Steps unlock sequentially but user can scroll back to edit
+    useEffect(() => {
+        // Auto-advance to payment when service details are valid
+        if (isPaymentUnlocked && currentStep === "service_details") {
+            setCurrentStep("payment");
+        }
+    }, [isPaymentUnlocked, currentStep]);
 
     const handleSelectSlot = (slot: TimeSlot) => {
         setSelectedSlot(slot);
         setBookingError(null);
-    };
-
-    const handleConfirmBooking = async () => {
-        if (!selectedSlot || !quote) {
-            setBookingError("Please select a time slot");
-            return;
-        }
-
-        setStep("confirming");
-        setBookingError(null);
-
-        try {
-            // Get quote subtotal
-            const quoteSubtotal =
-                (typeof quote.first_clean_price === "number" && quote.first_clean_price > 0)
-                    ? quote.first_clean_price
-                    : (typeof quote.estimated_price === "number" && quote.estimated_price > 0)
-                        ? quote.estimated_price
-                        : 0;
-
-            // Get contact info from prefill
-            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
-                localStorage.getItem("alloy_booking_prefill");
-            let prefillData: any = {};
-            if (prefill) {
-                try {
-                    prefillData = JSON.parse(prefill);
-                } catch (e) {
-                    console.warn("Failed to parse prefill:", e);
-                }
-            }
-
-            const response = await fetch("/api/book-v2/confirm", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    slot_start: selectedSlot.isoStart,
-                    slot_end: selectedSlot.isoEnd,
-                    timezone: timezone,
-                    quote_subtotal: quoteSubtotal,
-                    discount_amount: discountData?.discount_amount || 0,
-                    quote_total: discountData?.quote_total || quoteSubtotal,
-                    discount_code_id: discountData?.discount_code_id || null,
-                    contact_email: email || prefillData.email,
-                    contact_phone: phone || prefillData.phone,
-                    contact_first_name: firstName || prefillData.first_name,
-                    contact_last_name: lastName || prefillData.last_name,
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Failed to confirm booking");
-            }
-
-            const result = await response.json();
-            setBookingResult(result);
-            setStep("confirmed");
-        } catch (err: any) {
-            console.error("Booking confirmation failed:", err);
-            setBookingError(err.message || "Failed to confirm booking. Please try again.");
-            setStep("slot_selection");
+        if (currentStep === "slot_selection") {
+            setCurrentStep("service_details");
         }
     };
 
-    // Validate discount code (reused from /book)
+    const handleServiceDetailsChange = (data: ServiceDetails, isValid: boolean) => {
+        setServiceDetails(data);
+        setServiceDetailsValid(isValid);
+    };
+
     const handleValidateDiscount = async () => {
         if (!discountCode.trim() || !quote) {
             setDiscountError("Please enter a discount code");
@@ -325,11 +352,133 @@ export default function BookV2Client() {
         }
     };
 
+    const handlePaymentSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (!selectedSlot || !serviceDetails || !serviceDetailsValid || !stripe || !card) {
+            setPaymentError("Please complete all steps before submitting payment");
+            return;
+        }
+
+        setIsProcessingPayment(true);
+        setPaymentError(null);
+        setCurrentStep("confirming");
+
+        try {
+            // Get quote subtotal
+            const quoteSubtotal =
+                (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0)
+                    ? quote.first_clean_price
+                    : (typeof quote?.estimated_price === "number" && quote.estimated_price > 0)
+                        ? quote.estimated_price
+                        : 0;
+
+            // Get contact info from prefill
+            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                localStorage.getItem("alloy_booking_prefill");
+            let prefillData: any = {};
+            if (prefill) {
+                try {
+                    prefillData = JSON.parse(prefill);
+                } catch (e) {
+                    console.warn("Failed to parse prefill:", e);
+                }
+            }
+
+            // Step 1: Create SetupIntent
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+            const setupIntentResponse = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    phone: phone || prefillData.phone,
+                    email: email || prefillData.email,
+                    ghl_contact_id: prefillData.ghl_contact_id || null,
+                }),
+            });
+
+            if (!setupIntentResponse.ok) {
+                throw new Error("Failed to create payment setup");
+            }
+
+            const { client_secret } = await setupIntentResponse.json();
+
+            // Step 2: Confirm SetupIntent with Stripe
+            const { error: confirmError } = await stripe.confirmCardSetup(client_secret, {
+                payment_method: {
+                    card,
+                    billing_details: {
+                        name: `${firstName || prefillData.first_name || ""} ${lastName || prefillData.last_name || ""}`.trim() || undefined,
+                        email: email || prefillData.email,
+                        phone: phone || prefillData.phone,
+                    },
+                },
+            });
+
+            if (confirmError) {
+                throw new Error(confirmError.message || "Payment setup failed");
+            }
+
+            // Step 3: Confirm booking in Supabase
+            const bookingResponse = await fetch("/api/book-v2/confirm", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    slot_start: selectedSlot.isoStart,
+                    slot_end: selectedSlot.isoEnd,
+                    timezone: timezone,
+                    quote_subtotal: quoteSubtotal,
+                    discount_amount: discountData?.discount_amount || 0,
+                    quote_total: discountData?.quote_total || quoteSubtotal,
+                    discount_code_id: discountData?.discount_code_id || null,
+                    contact_email: email || prefillData.email,
+                    contact_phone: phone || prefillData.phone,
+                    contact_first_name: firstName || prefillData.first_name,
+                    contact_last_name: lastName || prefillData.last_name,
+                    // Service details
+                    address: serviceDetails.address,
+                    city: serviceDetails.city,
+                    bedrooms: serviceDetails.bedrooms,
+                    bathrooms: serviceDetails.bathrooms,
+                    access_method: serviceDetails.access_method,
+                    access_note: serviceDetails.access_note,
+                    additional_notes: serviceDetails.additional_notes,
+                }),
+            });
+
+            if (!bookingResponse.ok) {
+                const errorData = await bookingResponse.json();
+                throw new Error(errorData.error || "Failed to confirm booking");
+            }
+
+            const result = await bookingResponse.json();
+            setBookingResult(result);
+            setCurrentStep("confirmed");
+
+            // Clear service details from storage
+            try {
+                localStorage.removeItem("alloy_book_v2_service_details");
+            } catch (e) {
+                // Ignore
+            }
+        } catch (err: any) {
+            console.error("Payment/booking failed:", err);
+            setPaymentError(err.message || "Failed to complete booking. Please try again.");
+            setCurrentStep("payment");
+        } finally {
+            setIsProcessingPayment(false);
+        }
+    };
+
     return (
         <div className="min-h-screen py-6 md:py-10">
             <Section className="max-w-7xl">
-                {/* Fallback message if no quote found (skip in debug mode) */}
-                {!hasQuote && step === "quote" && !debug && (
+                {/* Fallback message if no quote found */}
+                {!hasQuote && !debug && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 text-center">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
                             Please start your quote first
@@ -337,28 +486,24 @@ export default function BookV2Client() {
                         <p className="text-sm text-alloy-midnight/80 mb-6">
                             To book a cleaning, please fill out the quote form first.
                         </p>
-                        <div className="space-y-3">
-                            <a
-                                href="/services/cleaning?open=1#quote-form"
-                                className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
-                            >
-                                Get a Quote
-                            </a>
-                            <div className="text-xs text-alloy-midnight/60">
-                                <p className="mb-2">Debug: Add <code className="bg-alloy-stone/30 px-2 py-1 rounded">?debug=1</code> to test booking UI</p>
-                            </div>
-                        </div>
+                        <a
+                            href="/services/cleaning?open=1#quote-form"
+                            className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                        >
+                            Get a Quote
+                        </a>
                     </div>
                 )}
 
-                {/* Two-column layout: Quote (1/4) + Slot Picker (3/4) */}
-                {hasQuote && step !== "confirmed" && (
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-                        {/* Left column: Quote panel (1/4 width) - reused from /book */}
+                {/* Two-column layout: Quote (left, sticky) + Steps (right) */}
+                {hasQuote && currentStep !== "confirmed" && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                        {/* Left column: Quote panel (1/3 width, sticky) */}
                         <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6">
-                                <div className="space-y-4 text-left">
-                                    <h2 className="text-lg font-bold text-alloy-midnight mb-3">
+                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 sticky top-6 space-y-6">
+                                {/* Quote Summary */}
+                                <div className="space-y-4">
+                                    <h2 className="text-lg font-bold text-alloy-midnight">
                                         Your Quote
                                     </h2>
 
@@ -525,59 +670,171 @@ export default function BookV2Client() {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Payment Section */}
+                                <div className="pt-4 border-t border-alloy-stone/20">
+                                    <h3 className="text-sm font-semibold text-alloy-midnight mb-3">
+                                        Payment
+                                    </h3>
+                                    
+                                    {!isPaymentUnlocked ? (
+                                        <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                            <p className="text-xs text-alloy-midnight/60">
+                                                Complete the steps on the right to unlock payment
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                    Card Information
+                                                </label>
+                                                <div
+                                                    ref={cardElementRef}
+                                                    className="px-4 py-3 border border-alloy-stone/30 rounded-lg"
+                                                />
+                                            </div>
+                                            
+                                            {paymentError && (
+                                                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                                    <p className="text-xs text-red-800">{paymentError}</p>
+                                                </div>
+                                            )}
+                                            
+                                            <button
+                                                type="submit"
+                                                disabled={isProcessingPayment || !stripe || !card}
+                                                className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isProcessingPayment ? "Processing..." : "Complete Booking"}
+                                            </button>
+                                        </form>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
-                        {/* Right column: Slot Picker (3/4 width) */}
-                        <div className="lg:col-span-3">
-                            <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                                <h2 className="text-xl font-bold text-alloy-midnight mb-6">
-                                    Select a Time Slot
-                                </h2>
+                        {/* Right column: Progressive Steps (2/3 width) */}
+                        <div className="lg:col-span-2">
+                            <div className="space-y-6">
+                                {/* Step 1: Slot Selection */}
+                                <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                            selectedSlot 
+                                                ? "bg-alloy-juniper text-white" 
+                                                : currentStep === "slot_selection"
+                                                    ? "bg-alloy-blue text-white"
+                                                    : "bg-alloy-stone/30 text-alloy-midnight/60"
+                                        }`}>
+                                            {selectedSlot ? "✓" : "1"}
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-alloy-midnight">
+                                                Select a Time Slot
+                                            </h2>
+                                            {selectedSlot && (
+                                                <p className="text-sm text-alloy-midnight/60 mt-1">
+                                                    Selected: {selectedSlot.timeWindow}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                {step === "slot_selection" && (
-                                    <>
+                                    {currentStep === "slot_selection" || !selectedSlot ? (
                                         <SlotPicker
                                             selectedSlot={selectedSlot}
                                             onSelectSlot={handleSelectSlot}
                                             timezone={timezone}
                                             error={bookingError}
                                         />
+                                    ) : (
+                                        <div className="bg-alloy-stone/10 rounded-lg p-4">
+                                            <p className="text-sm text-alloy-midnight/70">
+                                                <strong>{selectedSlot.timeWindow}</strong> on{" "}
+                                                {selectedSlot.start.toLocaleDateString("en-US", {
+                                                    weekday: "long",
+                                                    month: "long",
+                                                    day: "numeric",
+                                                    timeZone: timezone,
+                                                })}
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedSlot(null);
+                                                    setCurrentStep("slot_selection");
+                                                }}
+                                                className="text-xs text-alloy-blue hover:underline mt-2"
+                                            >
+                                                Change time slot
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
 
-                                        {selectedSlot && (
-                                            <div className="mt-6 pt-6 border-t border-alloy-stone/20">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div>
-                                                        <p className="text-sm text-alloy-midnight/70">
-                                                            Selected: <strong>{selectedSlot.timeWindow}</strong>
-                                                        </p>
-                                                        <p className="text-xs text-alloy-midnight/60 mt-1">
-                                                            {selectedSlot.start.toLocaleDateString("en-US", {
-                                                                weekday: "long",
-                                                                month: "long",
-                                                                day: "numeric",
-                                                                timeZone: timezone,
-                                                            })}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={handleConfirmBooking}
-                                                        disabled={step !== "slot_selection"}
-                                                        className="px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {step !== "slot_selection" ? "Confirming..." : "Confirm Booking"}
-                                                    </button>
-                                                </div>
+                                {/* Step 2: Service Details */}
+                                {selectedSlot && (
+                                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                                serviceDetailsValid 
+                                                    ? "bg-alloy-juniper text-white" 
+                                                    : currentStep === "service_details"
+                                                        ? "bg-alloy-blue text-white"
+                                                        : "bg-alloy-stone/30 text-alloy-midnight/60"
+                                            }`}>
+                                                {serviceDetailsValid ? "✓" : "2"}
                                             </div>
-                                        )}
-                                    </>
+                                            <div>
+                                                <h2 className="text-xl font-bold text-alloy-midnight">
+                                                    Service Details
+                                                </h2>
+                                                {serviceDetailsValid && (
+                                                    <p className="text-sm text-alloy-midnight/60 mt-1">
+                                                        Details complete
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <ServiceDetailsForm
+                                            onDataChange={handleServiceDetailsChange}
+                                        />
+                                    </div>
                                 )}
 
-                                {step === "confirming" && (
-                                    <div className="flex items-center justify-center py-12">
-                                        <div className="text-center">
-                                            <div className="w-12 h-12 border-4 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                                            <p className="text-alloy-midnight font-semibold">Confirming your booking...</p>
+                                {/* Step 3: Payment Confirmation */}
+                                {isPaymentUnlocked && (
+                                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm bg-alloy-blue text-white">
+                                                3
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-bold text-alloy-midnight">
+                                                    Complete Payment
+                                                </h2>
+                                                <p className="text-sm text-alloy-midnight/60 mt-1">
+                                                    Review and complete your booking
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
+                                            <p className="text-sm text-alloy-midnight/70 text-center">
+                                                Complete your payment in the left panel to finalize your booking
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Confirming State */}
+                                {currentStep === "confirming" && (
+                                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-12">
+                                        <div className="flex items-center justify-center py-12">
+                                            <div className="text-center">
+                                                <div className="w-12 h-12 border-4 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                                <p className="text-alloy-midnight font-semibold">Processing your booking...</p>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -587,7 +844,7 @@ export default function BookV2Client() {
                 )}
 
                 {/* Confirmation Screen */}
-                {step === "confirmed" && bookingResult && (
+                {currentStep === "confirmed" && bookingResult && (
                     <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-8 md:p-12 text-center">
                         <div className="mb-6">
                             <svg
@@ -638,4 +895,3 @@ export default function BookV2Client() {
         </div>
     );
 }
-

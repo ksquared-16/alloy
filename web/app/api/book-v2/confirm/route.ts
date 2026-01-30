@@ -18,6 +18,13 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * - contact_phone: string
  * - contact_first_name: string (optional)
  * - contact_last_name: string (optional)
+ * - address: string (optional)
+ * - city: string (optional)
+ * - bedrooms: string (optional)
+ * - bathrooms: string (optional)
+ * - access_method: string (optional)
+ * - access_note: string (optional)
+ * - additional_notes: string (optional)
  */
 export async function POST(request: NextRequest) {
     try {
@@ -34,6 +41,13 @@ export async function POST(request: NextRequest) {
             contact_phone,
             contact_first_name,
             contact_last_name,
+            address,
+            city,
+            bedrooms,
+            bathrooms,
+            access_method,
+            access_note,
+            additional_notes,
         } = body;
 
         // Validation
@@ -188,6 +202,13 @@ export async function POST(request: NextRequest) {
                     metadata: {
                         booking_source: "book-v2",
                         timezone,
+                        address: address || null,
+                        city: city || null,
+                        bedrooms: bedrooms || null,
+                        bathrooms: bathrooms || null,
+                        access_method: access_method || null,
+                        access_note: access_note || null,
+                        additional_notes: additional_notes || null,
                     },
                 })
                 .select("id")
@@ -249,6 +270,13 @@ export async function POST(request: NextRequest) {
                         quote_subtotal,
                         discount_amount,
                         quote_total,
+                        address: address || null,
+                        city: city || null,
+                        bedrooms: bedrooms || null,
+                        bathrooms: bathrooms || null,
+                        access_method: access_method || null,
+                        access_note: access_note || null,
+                        additional_notes: additional_notes || null,
                     },
                 })
                 .select("id")
