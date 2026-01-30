@@ -5,6 +5,11 @@
  * @param params - Contact information for booking prefill
  * @returns Booking URL with query parameters
  */
+
+// Easily reversible: change this to "/book" to switch back to GHL calendar
+// Set via environment variable for easy toggling: NEXT_PUBLIC_BOOKING_ROUTE
+const BOOKING_ROUTE = process.env.NEXT_PUBLIC_BOOKING_ROUTE || "/book-v2";
+
 export function buildBookingUrl(params: {
     phone: string;
     email: string;
@@ -37,7 +42,7 @@ export function buildBookingUrl(params: {
     }
 
     // Build full URL
-    const baseUrl = "/book";
+    const baseUrl = BOOKING_ROUTE;
     return `${baseUrl}?${queryParams.toString()}`;
 }
 

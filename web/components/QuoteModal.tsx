@@ -260,12 +260,13 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                   <CleaningQuoteForm
                     mode="modal"
                     onSuccess={(bookingUrl) => {
-                      // Close modal and navigate to /book immediately
+                      // Close modal and navigate to booking page immediately
                       onClose();
                       if (bookingUrl) {
                         router.push(bookingUrl);
                       } else {
-                        router.push("/book");
+                        // Fallback: use /book-v2 (same as buildBookingUrl default)
+                        router.push("/book-v2");
                       }
                     }}
                   />
