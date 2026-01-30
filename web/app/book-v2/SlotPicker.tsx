@@ -321,7 +321,7 @@ export default function SlotPicker({
                                     Select a time slot
                                 </p>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
                                 {selectedDateSlots.map((slot) => {
                                     const isSelected = selectedSlot?.isoStart === slot.isoStart;
                                     return (
@@ -329,7 +329,7 @@ export default function SlotPicker({
                                             key={slot.isoStart}
                                             onClick={() => onSelectSlot(slot)}
                                             className={`
-                                                px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all
+                                                px-3 sm:px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all min-h-[44px] flex items-center justify-center
                                                 ${
                                                     isSelected
                                                         ? "border-alloy-blue bg-alloy-blue text-white shadow-md"

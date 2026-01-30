@@ -7,6 +7,7 @@ import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
+import ServiceDetailsSummary from "./ServiceDetailsSummary";
 
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
@@ -75,11 +76,13 @@ export default function BookV2Client() {
     const [paymentError, setPaymentError] = useState<string | null>(null);
     const cardElementRef = useRef<HTMLDivElement>(null);
 
-    const phone = searchParams?.get("phone");
-    const email = searchParams?.get("email");
-    const firstName = searchParams?.get("first_name");
-    const lastName = searchParams?.get("last_name");
     const debug = searchParams?.get("debug") === "1";
+    
+    // Resolve email/phone with priority: query params > localStorage > debug mock
+    const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
+    const [resolvedPhone, setResolvedPhone] = useState<string | null>(null);
+    const [resolvedFirstName, setResolvedFirstName] = useState<string | null>(null);
+    const [resolvedLastName, setResolvedLastName] = useState<string | null>(null);
 
     // Default timezone
     const timezone = "America/Los_Angeles";
@@ -100,6 +103,76 @@ export default function BookV2Client() {
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // Resolve email/phone from multiple sources
+    useEffect(() => {
+        if (debug) {
+            // Debug mode: use mock contact info
+            setResolvedEmail("test@example.com");
+            setResolvedPhone("+15415551234");
+            setResolvedFirstName("Test");
+            setResolvedLastName("User");
+            return;
+        }
+
+        // Priority 1: Query params
+        const queryEmail = searchParams?.get("email");
+        const queryPhone = searchParams?.get("phone");
+        const queryFirstName = searchParams?.get("first_name");
+        const queryLastName = searchParams?.get("last_name");
+
+        if (queryEmail && queryPhone) {
+            setResolvedEmail(queryEmail);
+            setResolvedPhone(queryPhone);
+            setResolvedFirstName(queryFirstName || null);
+            setResolvedLastName(queryLastName || null);
+            return;
+        }
+
+        // Priority 2: localStorage prefill
+        try {
+            const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
+                localStorage.getItem("alloy_booking_prefill");
+            if (prefill) {
+                const prefillData = JSON.parse(prefill);
+                if (prefillData.email && prefillData.phone) {
+                    setResolvedEmail(prefillData.email);
+                    setResolvedPhone(prefillData.phone);
+                    setResolvedFirstName(prefillData.first_name || null);
+                    setResolvedLastName(prefillData.last_name || null);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to load prefill:", e);
+        }
+
+        // Priority 3: Quote storage (may contain contact info)
+        try {
+            let storedQuote = localStorage.getItem("alloy_quote_v1") ||
+                localStorage.getItem("cleaning_quote") ||
+                sessionStorage.getItem("alloy_cleaning_quote") ||
+                sessionStorage.getItem("cleaning_quote");
+            if (storedQuote) {
+                const parsedQuote = JSON.parse(storedQuote);
+                if (parsedQuote.email && parsedQuote.phone) {
+                    setResolvedEmail(parsedQuote.email);
+                    setResolvedPhone(parsedQuote.phone);
+                    setResolvedFirstName(parsedQuote.first_name || null);
+                    setResolvedLastName(parsedQuote.last_name || null);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to load contact from quote:", e);
+        }
+
+        // No contact info found
+        setResolvedEmail(null);
+        setResolvedPhone(null);
+        setResolvedFirstName(null);
+        setResolvedLastName(null);
+    }, [debug, searchParams]);
 
     // Load quote from storage
     useEffect(() => {
@@ -163,13 +236,16 @@ export default function BookV2Client() {
     // Check if payment is unlocked (requires both steps to be confirmed)
     const isPaymentUnlocked = slotConfirmed && serviceDetailsConfirmed;
 
-    // Initialize Stripe when payment is unlocked
+    // Initialize Stripe when payment is unlocked (only on client, only once)
     useEffect(() => {
         if (!mounted || !isPaymentUnlocked) return;
-        if (!email || !phone) {
+        if (!resolvedEmail || !resolvedPhone) {
             console.warn("[BOOK_V2] Email/phone missing, cannot initialize Stripe");
             return;
         }
+
+        // Prevent re-initialization if already initialized
+        if (stripe) return;
 
         const initializeStripe = async () => {
             const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE;
@@ -213,26 +289,34 @@ export default function BookV2Client() {
         };
 
         initializeStripe();
-    }, [mounted, isPaymentUnlocked, email, phone]);
+    }, [mounted, isPaymentUnlocked, resolvedEmail, resolvedPhone, stripe]);
 
-    // Mount card element when both card and ref are ready
+    // Mount card element when both card and ref are ready (only on client, only once)
     useEffect(() => {
-        if (card && cardElementRef.current && isPaymentUnlocked) {
-            // Check if already mounted
-            if (!cardElementRef.current.hasChildNodes()) {
-                card.mount(cardElementRef.current);
-            }
-            return () => {
-                try {
-                    if (cardElementRef.current && cardElementRef.current.hasChildNodes()) {
-                        card.unmount();
-                    }
-                } catch (e) {
-                    // Ignore unmount errors
-                }
-            };
+        if (!mounted) return;
+        if (!card || !cardElementRef.current || !isPaymentUnlocked) return;
+        
+        // Check if already mounted
+        if (cardElementRef.current.hasChildNodes()) {
+            return;
         }
-    }, [card, isPaymentUnlocked]);
+
+        try {
+            card.mount(cardElementRef.current);
+        } catch (e) {
+            console.error("Failed to mount Stripe card:", e);
+        }
+
+        return () => {
+            try {
+                if (cardElementRef.current && cardElementRef.current.hasChildNodes()) {
+                    card.unmount();
+                }
+            } catch (e) {
+                // Ignore unmount errors
+            }
+        };
+    }, [mounted, card, isPaymentUnlocked]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
@@ -280,6 +364,11 @@ export default function BookV2Client() {
         }
     };
 
+    const handleEditServiceDetails = () => {
+        setServiceDetailsConfirmed(false);
+        setServiceDetailsSnapshot(null);
+    };
+
     const handleValidateDiscount = async () => {
         if (!discountCode.trim() || !quote) {
             setDiscountError("Please enter a discount code");
@@ -306,22 +395,17 @@ export default function BookV2Client() {
 
             const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
                 localStorage.getItem("alloy_booking_prefill");
-            let emailParam: string | undefined;
-            let phoneParam: string | undefined;
+            let emailParam: string | undefined = resolvedEmail || undefined;
+            let phoneParam: string | undefined = resolvedPhone || undefined;
 
             if (prefill) {
                 try {
                     const prefillData = JSON.parse(prefill);
-                    emailParam = prefillData.email || email || undefined;
-                    phoneParam = prefillData.phone || phone || undefined;
+                    emailParam = prefillData.email || emailParam;
+                    phoneParam = prefillData.phone || phoneParam;
                 } catch (e) {
                     console.warn("Failed to parse prefill:", e);
                 }
-            }
-
-            if (!emailParam && !phoneParam) {
-                emailParam = email || undefined;
-                phoneParam = phone || undefined;
             }
 
             const response = await fetch(`${apiBaseUrl}/discounts/validate`, {
@@ -425,8 +509,8 @@ export default function BookV2Client() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    phone: phone || prefillData.phone,
-                    email: email || prefillData.email,
+                    phone: resolvedPhone || prefillData.phone,
+                    email: resolvedEmail || prefillData.email,
                     ghl_contact_id: prefillData.ghl_contact_id || null,
                 }),
             });
@@ -442,9 +526,9 @@ export default function BookV2Client() {
                 payment_method: {
                     card,
                     billing_details: {
-                        name: `${firstName || prefillData.first_name || ""} ${lastName || prefillData.last_name || ""}`.trim() || undefined,
-                        email: email || prefillData.email,
-                        phone: phone || prefillData.phone,
+                        name: `${resolvedFirstName || prefillData.first_name || ""} ${resolvedLastName || prefillData.last_name || ""}`.trim() || undefined,
+                        email: resolvedEmail || prefillData.email,
+                        phone: resolvedPhone || prefillData.phone,
                     },
                 },
             });
@@ -467,10 +551,10 @@ export default function BookV2Client() {
                     discount_amount: discountData?.discount_amount || 0,
                     quote_total: discountData?.quote_total || quoteSubtotal,
                     discount_code_id: discountData?.discount_code_id || null,
-                    contact_email: email || prefillData.email,
-                    contact_phone: phone || prefillData.phone,
-                    contact_first_name: firstName || prefillData.first_name,
-                    contact_last_name: lastName || prefillData.last_name,
+                    contact_email: resolvedEmail || prefillData.email,
+                    contact_phone: resolvedPhone || prefillData.phone,
+                    contact_first_name: resolvedFirstName || prefillData.first_name,
+                    contact_last_name: resolvedLastName || prefillData.last_name,
                     // Service details
                     address: serviceDetails.address,
                     city: serviceDetails.city,
@@ -528,6 +612,7 @@ export default function BookV2Client() {
                 )}
 
                 {/* Two-column layout: Quote (left, sticky) + Steps (right) */}
+                {/* Mobile: single column, desktop: 2-column with sticky left */}
                 {hasQuote && currentStep !== "confirmed" && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                         {/* Left column: Quote panel (1/3 width, sticky on desktop) */}
@@ -715,6 +800,19 @@ export default function BookV2Client() {
                                                 Complete the steps on the right to unlock payment
                                             </p>
                                         </div>
+                                    ) : !mounted ? (
+                                        <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                            <p className="text-xs text-alloy-midnight/60">Loading...</p>
+                                        </div>
+                                    ) : !resolvedEmail || !resolvedPhone ? (
+                                        <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                            <p className="text-xs text-alloy-midnight/60 mb-2">
+                                                Enter your email + phone to load payment.
+                                            </p>
+                                            <p className="text-xs text-alloy-midnight/50">
+                                                Please add ?email=your@email.com&phone=+1234567890 to the URL or complete the quote form.
+                                            </p>
+                                        </div>
                                     ) : (
                                         <form onSubmit={handlePaymentSubmit} className="space-y-4">
                                             <div>
@@ -744,7 +842,7 @@ export default function BookV2Client() {
                                             
                                             <button
                                                 type="submit"
-                                                disabled={isProcessingPayment || !stripe || !card}
+                                                disabled={isProcessingPayment || !stripe || !card || !resolvedEmail || !resolvedPhone}
                                                 className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {isProcessingPayment ? "Processing..." : "Complete Booking"}
@@ -860,27 +958,34 @@ export default function BookV2Client() {
                                             </div>
                                         </div>
 
-                                        <ServiceDetailsForm
-                                            onDataChange={handleServiceDetailsChange}
-                                        />
-
-                                        {serviceDetailsValid && !serviceDetailsConfirmed && (
-                                            <div className="mt-6 pt-6 border-t border-alloy-stone/20">
-                                                <button
-                                                    onClick={handleConfirmServiceDetails}
-                                                    className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
-                                                >
-                                                    Confirm Details
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {serviceDetailsConfirmed && (
-                                            <div className="mt-4 bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
-                                                <p className="text-sm text-alloy-midnight/70 text-center">
-                                                    Payment unlocked — complete your booking in the left panel.
-                                                </p>
-                                            </div>
+                                        {serviceDetailsConfirmed && serviceDetails ? (
+                                            <>
+                                                <ServiceDetailsSummary
+                                                    details={serviceDetails}
+                                                    onEdit={handleEditServiceDetails}
+                                                />
+                                                <div className="mt-4 bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
+                                                    <p className="text-sm text-alloy-midnight/70 text-center">
+                                                        Payment unlocked — complete your booking in the left panel.
+                                                    </p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ServiceDetailsForm
+                                                    onDataChange={handleServiceDetailsChange}
+                                                />
+                                                {serviceDetailsValid && (
+                                                    <div className="mt-6 pt-6 border-t border-alloy-stone/20">
+                                                        <button
+                                                            onClick={handleConfirmServiceDetails}
+                                                            className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                                                        >
+                                                            Confirm Details
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 )}
