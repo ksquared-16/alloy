@@ -30,18 +30,72 @@ export default function SlotPicker({
     const [loading, setLoading] = useState(true);
     const [slotError, setSlotError] = useState<string | null>(null);
 
+    // Helper to format time in timezone
+    const formatTime = (date: Date): string => {
+        try {
+            return date.toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                timeZone: timezone,
+                hour12: true,
+            });
+        } catch {
+            return "Invalid time";
+        }
+    };
+
     useEffect(() => {
         async function fetchSlots() {
             setLoading(true);
             setSlotError(null);
             try {
                 const response = await fetch(`/api/book-v2/availability?timezone=${encodeURIComponent(timezone)}`);
+                
                 if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(data.error || "Failed to fetch available slots");
+                    let errorMessage = "Failed to fetch available slots";
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch {
+                        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+                    }
+                    throw new Error(errorMessage);
                 }
+                
                 const data = await response.json();
-                setSlots(data.slots || []);
+                
+                // Normalize slots: parse ISO strings to Date objects
+                const normalizedSlots: TimeSlot[] = (data.slots || []).map((slot: any) => {
+                    try {
+                        // Parse start and end from ISO strings to Date objects
+                        const startDate = slot.start instanceof Date 
+                            ? slot.start 
+                            : new Date(slot.start || slot.isoStart);
+                        const endDate = slot.end instanceof Date 
+                            ? slot.end 
+                            : new Date(slot.end || slot.isoEnd);
+                        
+                        // Validate dates
+                        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                            console.warn("Invalid date in slot:", slot);
+                            return null;
+                        }
+                        
+                        return {
+                            start: startDate,
+                            end: endDate,
+                            display: slot.display || formatTime(startDate),
+                            timeWindow: slot.timeWindow || `${formatTime(startDate)} - ${formatTime(endDate)}`,
+                            isoStart: slot.isoStart || startDate.toISOString(),
+                            isoEnd: slot.isoEnd || endDate.toISOString(),
+                        };
+                    } catch (err) {
+                        console.warn("Failed to parse slot:", slot, err);
+                        return null;
+                    }
+                }).filter((slot: TimeSlot | null): slot is TimeSlot => slot !== null);
+                
+                setSlots(normalizedSlots);
             } catch (err: any) {
                 setSlotError(err.message || "Failed to load available slots");
                 console.error("Failed to fetch slots:", err);
@@ -51,6 +105,7 @@ export default function SlotPicker({
         }
 
         fetchSlots();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timezone]);
 
     if (loading || isLoading) {
@@ -86,18 +141,29 @@ export default function SlotPicker({
         );
     }
 
-    // Group slots by date
+    // Group slots by date (with guards for invalid dates)
     const slotsByDate = slots.reduce((acc, slot) => {
-        const dateKey = slot.start.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            timeZone: timezone,
-        });
-        if (!acc[dateKey]) {
-            acc[dateKey] = [];
+        try {
+            // Guard: ensure start is a valid Date object
+            if (!(slot.start instanceof Date) || isNaN(slot.start.getTime())) {
+                console.warn("Invalid start date in slot:", slot);
+                return acc;
+            }
+            
+            const dateKey = slot.start.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                timeZone: timezone,
+            });
+            
+            if (!acc[dateKey]) {
+                acc[dateKey] = [];
+            }
+            acc[dateKey].push(slot);
+        } catch (err) {
+            console.warn("Failed to group slot by date:", slot, err);
         }
-        acc[dateKey].push(slot);
         return acc;
     }, {} as Record<string, TimeSlot[]>);
 
