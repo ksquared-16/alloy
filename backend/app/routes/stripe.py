@@ -21,7 +21,7 @@ from ..ghl_client import (
     create_contact_note,
     update_opportunity_stage,
 )
-from ..supabase_client import link_stripe_customer_to_supabase
+from ..supabase_client import link_stripe_customer_to_supabase, get_or_create_stripe_customer_for_customer
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -118,12 +118,44 @@ async def get_card_status(
             "last4": None,
         })
     
-    # Extract Stripe Customer ID from GHL contact
-    stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+    # Get Stripe Customer ID from Supabase (ignore GHL)
+    stripe_customer_id = None
+    customer_id_from_supabase = None
+    
+    # Try to resolve Supabase customer_id from GHL contact_id
+    if resolved_ghl_contact_id:
+        from ..supabase_client import resolve_contact_id_from_ghl, find_contact_by_email, find_contact_by_phone
+        supabase_contact_id = resolve_contact_id_from_ghl(resolved_ghl_contact_id)
+        if supabase_contact_id:
+            # Get contact to find customer_id
+            supabase_contact = None
+            if email:
+                supabase_contact = find_contact_by_email(email)
+            if not supabase_contact and phone:
+                supabase_contact = find_contact_by_phone(phone)
+            
+            if supabase_contact and supabase_contact.get("customer_id"):
+                customer_id_from_supabase = supabase_contact.get("customer_id")
+    
+    # Use Supabase-first function
+    stripe_customer_id = get_or_create_stripe_customer_for_customer(
+        customer_id=customer_id_from_supabase,
+        email=email,
+        phone=phone,
+    )
+    
+    # Log if GHL had a customer ID but we ignored it
+    if contact:
+        ghl_stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+        if ghl_stripe_customer_id and ghl_stripe_customer_id != stripe_customer_id:
+            logger.info(
+                "get_card_status: ignoring Stripe Customer ID from GHL source=ignored_ghl ghl_stripe_customer_id=%s (using Supabase-first)",
+                ghl_stripe_customer_id[:8] + "***"
+            )
     
     if not stripe_customer_id:
         logger.info(
-            "get_card_status: no stripe_customer_id found contact_id=%s resolution_path=%s",
+            "get_card_status: no stripe_customer_id found in Supabase contact_id=%s resolution_path=%s",
             resolved_ghl_contact_id,
             resolution_path
         )
@@ -134,6 +166,11 @@ async def get_card_status(
             "brand": None,
             "last4": None,
         })
+    
+    logger.info(
+        "get_card_status: got Stripe Customer ID from Supabase source=supa stripe_customer_id=%s",
+        stripe_customer_id[:8] + "***"
+    )
     
     # Retrieve Stripe customer and check for default payment method
     try:
@@ -313,54 +350,62 @@ async def create_setup_intent(request: Request):
     
     if not contact:
         logger.warning("create_setup_intent: could not resolve GHL contact for phone=%s email=%s", phone[:4] + "***", email[:10] + "***")
-        # Continue anyway - we'll create SetupIntent without customer
+        # Continue anyway - we'll create SetupIntent using Supabase-first approach
     
-    # Get or create Stripe Customer
+    # Get or create Stripe Customer (Supabase-first, ignore GHL)
     stripe_customer_id = None
+    customer_id_from_supabase = None
+    
+    # Try to get customer_id from Supabase contact
     if contact:
-        # Try to get existing Stripe Customer ID from GHL
-        stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
-        if stripe_customer_id:
-            logger.info("create_setup_intent: found existing Stripe Customer ID=%s in GHL", stripe_customer_id[:8] + "***")
-        else:
-            # Create new Stripe Customer
-            try:
-                # Get name from contact if available
-                first_name = contact.get("firstName", "")
-                last_name = contact.get("lastName", "")
-                name = None
-                if first_name or last_name:
-                    name = f"{first_name} {last_name}".strip()
+        # Try to resolve Supabase contact_id from GHL contact_id
+        from ..supabase_client import resolve_contact_id_from_ghl, find_contact_by_email, find_contact_by_phone
+        if resolved_ghl_contact_id:
+            supabase_contact_id = resolve_contact_id_from_ghl(resolved_ghl_contact_id)
+            if supabase_contact_id:
+                # Get contact to find customer_id
+                supabase_contact = None
+                if email:
+                    supabase_contact = find_contact_by_email(email)
+                if not supabase_contact and phone:
+                    supabase_contact = find_contact_by_phone(phone)
                 
-                customer = stripe.Customer.create(
-                    email=email,
-                    phone=phone,
-                    name=name,
-                    metadata={
-                        "ghl_contact_id": resolved_ghl_contact_id or "",
-                    }
-                )
-                stripe_customer_id = customer.id
-                logger.info("create_setup_intent: created Stripe Customer ID=%s", stripe_customer_id[:8] + "***")
-                
-                # Sync to GHL contact custom field
-                if resolved_ghl_contact_id:
-                    stripe_cf_id = CUSTOM_FIELD_IDS.get("stripe_customer_id")
-                    if stripe_cf_id:
-                        success = update_contact_custom_field(
-                            resolved_ghl_contact_id,
-                            "stripe_customer_id",
-                            stripe_customer_id
-                        )
-                        if success:
-                            logger.info("create_setup_intent: synced Stripe Customer ID to GHL contact_id=%s", resolved_ghl_contact_id)
-                        else:
-                            logger.warning("create_setup_intent: failed to sync Stripe Customer ID to GHL contact_id=%s", resolved_ghl_contact_id)
-                    else:
-                        logger.warning("create_setup_intent: GHL_STRIPE_CUSTOMER_ID not configured, skipping sync")
-            except stripe.error.StripeError as e:
-                logger.error("create_setup_intent: failed to create Stripe Customer: %s", e)
-                # Continue without customer - SetupIntent can still be created
+                if supabase_contact and supabase_contact.get("customer_id"):
+                    customer_id_from_supabase = supabase_contact.get("customer_id")
+    
+    # Get name from GHL contact if available (for Stripe customer creation)
+    name = None
+    if contact:
+        first_name = contact.get("firstName", "")
+        last_name = contact.get("lastName", "")
+        if first_name or last_name:
+            name = f"{first_name} {last_name}".strip()
+    
+    # Ignore any Stripe customer ID from GHL (legacy data)
+    ghl_stripe_customer_id = None
+    if contact:
+        ghl_stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+        if ghl_stripe_customer_id:
+            logger.info(
+                "create_setup_intent: ignoring Stripe Customer ID from GHL source=ignored_ghl ghl_stripe_customer_id=%s (using Supabase-first)",
+                ghl_stripe_customer_id[:8] + "***"
+            )
+    
+    # Use Supabase-first function to get or create Stripe customer
+    stripe_customer_id = get_or_create_stripe_customer_for_customer(
+        customer_id=customer_id_from_supabase,
+        email=email,
+        phone=phone,
+        name=name,
+    )
+    
+    if stripe_customer_id:
+        logger.info(
+            "create_setup_intent: got Stripe Customer ID source=supa stripe_customer_id=%s",
+            stripe_customer_id[:8] + "***"
+        )
+    else:
+        logger.warning("create_setup_intent: failed to get/create Stripe Customer from Supabase - will create SetupIntent without customer")
     
     # Build metadata for webhook matching
     metadata = {
@@ -896,20 +941,53 @@ async def charge_customer(
         initial_fallback_path
     )
     
-    # If stripe_customer_id is missing and ghl_contact_id is provided, try to extract from GHL contact
+    # If stripe_customer_id is missing, use Supabase-first approach (ignore GHL)
     resolution_path = "direct"
-    if not stripe_customer_id and ghl_contact_id:
-        logger.info("charge_customer: stripe_customer_id missing, attempting to extract from GHL contact_id=%s", ghl_contact_id)
-        contact = get_contact_by_id(ghl_contact_id)
-        if contact:
-            stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+    if not stripe_customer_id:
+        # Try to get from Supabase using email/phone or ghl_contact_id
+        email_for_lookup = body.get("email")
+        phone_for_lookup = body.get("phone")
+        customer_id_from_supabase = None
+        
+        # Try to resolve Supabase customer_id from GHL contact_id
+        if ghl_contact_id:
+            from ..supabase_client import resolve_contact_id_from_ghl, find_contact_by_email, find_contact_by_phone
+            supabase_contact_id = resolve_contact_id_from_ghl(ghl_contact_id)
+            if supabase_contact_id:
+                # Get contact to find customer_id
+                supabase_contact = None
+                if email_for_lookup:
+                    supabase_contact = find_contact_by_email(email_for_lookup)
+                if not supabase_contact and phone_for_lookup:
+                    supabase_contact = find_contact_by_phone(phone_for_lookup)
+                
+                if supabase_contact and supabase_contact.get("customer_id"):
+                    customer_id_from_supabase = supabase_contact.get("customer_id")
+        
+        # Use Supabase-first function
+        if email_for_lookup or phone_for_lookup:
+            stripe_customer_id = get_or_create_stripe_customer_for_customer(
+                customer_id=customer_id_from_supabase,
+                email=email_for_lookup,
+                phone=phone_for_lookup,
+            )
             if stripe_customer_id:
-                resolution_path = "ghl_contact_fallback"
-                logger.info("charge_customer: extracted stripe_customer_id=%s from GHL contact_id=%s", stripe_customer_id[:8] + "***", ghl_contact_id)
-            else:
-                logger.warning("charge_customer: GHL contact_id=%s found but no Stripe Customer ID in custom fields", ghl_contact_id)
-        else:
-            logger.warning("charge_customer: GHL contact_id=%s not found", ghl_contact_id)
+                resolution_path = "supabase"
+                logger.info(
+                    "charge_customer: got Stripe Customer ID from Supabase source=supa stripe_customer_id=%s",
+                    stripe_customer_id[:8] + "***"
+                )
+        
+        # Log if GHL had a customer ID but we ignored it
+        if ghl_contact_id:
+            contact = get_contact_by_id(ghl_contact_id)
+            if contact:
+                ghl_stripe_customer_id = _extract_stripe_customer_id_from_contact(contact)
+                if ghl_stripe_customer_id and ghl_stripe_customer_id != stripe_customer_id:
+                    logger.info(
+                        "charge_customer: ignoring Stripe Customer ID from GHL source=ignored_ghl ghl_stripe_customer_id=%s (using Supabase-first)",
+                        ghl_stripe_customer_id[:8] + "***"
+                    )
     
     # If amount is missing and opportunity_id is provided, try to extract from GHL opportunity
     amount_resolution_path = "direct"
