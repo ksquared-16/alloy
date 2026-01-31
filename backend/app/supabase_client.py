@@ -4,6 +4,7 @@ Uses service role key to bypass RLS.
 """
 import logging
 import requests
+import re
 from typing import Dict, Optional, Any
 from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY
 import stripe
@@ -31,6 +32,48 @@ def _get_headers() -> Dict[str, str]:
         "Content-Type": "application/json",
         "Prefer": "return=representation",
     }
+
+def normalize_phone(phone: Optional[str]) -> Optional[str]:
+    """
+    Normalize phone number to E.164 format.
+    
+    Args:
+        phone: Phone number (may include spaces, dashes, parentheses, etc.)
+    
+    Returns:
+        Normalized phone in E.164 format (e.g., +16022904816) or None if empty/invalid
+        - If 10 digits, assumes US and prefixes +1
+        - If 11 digits starting with 1, prefixes +
+        - Preserves leading + if provided
+        - Strips all non-digit characters except leading +
+    """
+    if not phone:
+        return None
+    
+    phone_trimmed = phone.strip()
+    if not phone_trimmed:
+        return None
+    
+    # Extract digits
+    digits = re.sub(r"\D", "", phone_trimmed)
+    
+    if not digits:
+        return phone_trimmed  # Return original if no digits found
+    
+    # If already starts with +, preserve it
+    if phone_trimmed.startswith("+"):
+        return "+" + digits
+    
+    # If 10 digits, assume US and prefix +1
+    if len(digits) == 10:
+        return "+1" + digits
+    
+    # If 11 digits starting with 1, prefix +
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    
+    # Otherwise, prefix with +
+    return "+" + digits
 
 def find_contact_by_email(email: str) -> Optional[Dict]:
     """Find contact by email (case-insensitive)."""
