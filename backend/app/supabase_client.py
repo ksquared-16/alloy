@@ -666,6 +666,7 @@ def link_stripe_customer_to_supabase(
     stripe_customer_id: str,
     *,
     ghl_contact_id: Optional[str] = None,
+    supabase_contact_id: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
     setup_intent_id: Optional[str] = None,
@@ -677,12 +678,13 @@ def link_stripe_customer_to_supabase(
     """
     Link Stripe customer to Supabase contact/customer.
     
-    Resolves Supabase contact_id from ghl_contact_id (via external_mappings) or email/phone fallback.
+    Resolves Supabase contact_id from supabase_contact_id (preferred), ghl_contact_id (via external_mappings), or email/phone fallback.
     Upserts customers row and updates contacts.customer_id.
     Updates address fields from Stripe billing_details if provided.
     
     Args:
-        ghl_contact_id: GHL contact ID (preferred)
+        supabase_contact_id: Supabase contact UUID (preferred, direct lookup)
+        ghl_contact_id: GHL contact ID (fallback, resolved via external_mappings)
         email: Email address (fallback)
         phone: Phone number (fallback)
         stripe_customer_id: Stripe customer ID (cus_...)
@@ -712,47 +714,68 @@ def link_stripe_customer_to_supabase(
         headers = _get_headers()
         
         # 1. Resolve Supabase contact_id using deterministic order
-        supabase_contact_id = None
+        resolved_supabase_contact_id = None
         contact_resolution_path = None
         
-        # Priority 1: GHL contact_id via external_mappings
-        if ghl_contact_id:
-            supabase_contact_id = resolve_contact_id_from_ghl(ghl_contact_id)
-            if supabase_contact_id:
+        # Priority 1: Direct Supabase contact UUID (preferred)
+        if supabase_contact_id:
+            # Validate it exists
+            contact_url = f"{base_url}/contacts"
+            contact_params = {
+                "select": "id",
+                "id": f"eq.{supabase_contact_id}",
+                "limit": "1",
+            }
+            contact_check = requests.get(contact_url, headers=headers, params=contact_params, timeout=30)
+            if contact_check.ok:
+                contact_data = contact_check.json()
+                if contact_data and len(contact_data) > 0:
+                    resolved_supabase_contact_id = supabase_contact_id
+                    contact_resolution_path = "direct_uuid"
+                    logger.info(
+                        "CONTACT_RESOLVE path=direct_uuid contact_id=%s",
+                        resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id
+                    )
+        
+        # Priority 2: GHL contact_id via external_mappings
+        if not resolved_supabase_contact_id and ghl_contact_id:
+            resolved_supabase_contact_id = resolve_contact_id_from_ghl(ghl_contact_id)
+            if resolved_supabase_contact_id:
                 contact_resolution_path = "mapping"
                 logger.info(
                     "CONTACT_RESOLVE path=mapping contact_id=%s ghl_contact_id=%s",
-                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
                     ghl_contact_id[:8] + "***" if len(ghl_contact_id) > 8 else ghl_contact_id
                 )
         
-        # Priority 2: Email lookup
-        if not supabase_contact_id and email:
+        # Priority 3: Email lookup
+        if not resolved_supabase_contact_id and email:
             contact = find_contact_by_email(email.strip().lower())
             if contact:
-                supabase_contact_id = contact.get("id")
+                resolved_supabase_contact_id = contact.get("id")
                 contact_resolution_path = "email"
                 logger.info(
                     "CONTACT_RESOLVE path=email contact_id=%s email=%s",
-                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
                     email[:3] + "***"
                 )
         
-        # Priority 3: Phone lookup
-        if not supabase_contact_id and phone:
+        # Priority 4: Phone lookup
+        if not resolved_supabase_contact_id and phone:
             contact = find_contact_by_phone(phone.strip())
             if contact:
-                supabase_contact_id = contact.get("id")
+                resolved_supabase_contact_id = contact.get("id")
                 contact_resolution_path = "phone"
                 logger.info(
                     "CONTACT_RESOLVE path=phone contact_id=%s phone=%s",
-                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
                     phone[:4] + "***"
                 )
         
-        if not supabase_contact_id:
+        if not resolved_supabase_contact_id:
             logger.warning(
-                "SUPA_STRIPE_LINK_FAILED reason=contact_not_found ghl_contact_id=%s email=%s phone=%s",
+                "SUPA_STRIPE_LINK_FAILED reason=contact_not_found supabase_contact_id=%s ghl_contact_id=%s email=%s phone=%s",
+                supabase_contact_id or "None",
                 ghl_contact_id or "None",
                 email[:3] + "***" if email else "None",
                 phone[:4] + "***" if phone else "None"
@@ -763,22 +786,23 @@ def link_stripe_customer_to_supabase(
         contact_url = f"{base_url}/contacts"
         contact_params = {
             "select": "id,first_name,last_name,email,phone,customer_id,address_line1,address_line2,city,state,postal_code,country,address_source",
-            "id": f"eq.{supabase_contact_id}",
+            "id": f"eq.{resolved_supabase_contact_id}",
             "limit": "1",
         }
         
         contact_response = requests.get(contact_url, headers=headers, params=contact_params, timeout=30)
         if not contact_response.ok:
             logger.error(
-                "SUPA_STRIPE_LINK_FAILED reason=contact_fetch_failed contact_id=%s status=%d",
-                supabase_contact_id,
-                contact_response.status_code
+                "SUPA_STRIPE_LINK_FAILED reason=contact_fetch_failed contact_id=%s status=%d response=%s",
+                resolved_supabase_contact_id,
+                contact_response.status_code,
+                contact_response.text[:200]
             )
             return None
         
         contact_data = contact_response.json()
         if not contact_data or len(contact_data) == 0:
-            logger.error("SUPA_STRIPE_LINK_FAILED reason=contact_not_found contact_id=%s", supabase_contact_id)
+            logger.error("SUPA_STRIPE_LINK_FAILED reason=contact_not_found contact_id=%s", resolved_supabase_contact_id)
             return None
         
         contact_row = contact_data[0]
@@ -828,7 +852,7 @@ def link_stripe_customer_to_supabase(
         if not customer_id:
             customer_payload = {
                 "stripe_customer_id": stripe_customer_id,
-                "primary_contact_id": supabase_contact_id,
+                "primary_contact_id": resolved_supabase_contact_id,
             }
             
             if customer_name:
@@ -859,17 +883,18 @@ def link_stripe_customer_to_supabase(
                 logger.info(
                     "CUSTOMER_RESOLVE path=created customer_id=%s contact_id=%s stripe_customer_id=%s",
                     customer_id[:8] + "***" if len(customer_id) > 8 else customer_id,
-                    supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                    resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
                     stripe_customer_id[:8] + "***" if len(stripe_customer_id) > 8 else stripe_customer_id
                 )
             else:
                 error_text = customer_response.text[:500]
                 logger.error(
-                    "SUPA_STRIPE_LINK_FAILED reason=customer_create_failed contact_id=%s stripe_customer_id=%s status=%d error=%s",
-                    supabase_contact_id,
+                    "SUPA_STRIPE_LINK_FAILED reason=customer_create_failed contact_id=%s stripe_customer_id=%s status=%d error=%s payload_keys=%s",
+                    resolved_supabase_contact_id,
                     stripe_customer_id[:8] + "***",
                     customer_response.status_code,
-                    error_text
+                    error_text,
+                    list(customer_payload.keys())
                 )
                 return None
         
@@ -898,12 +923,12 @@ def link_stripe_customer_to_supabase(
         # 6. Update contact.customer_id if not already set
         if contact_row.get("customer_id") != customer_id:
             contact_update_payload = {"customer_id": customer_id}
-            contact_update_url = f"{base_url}/contacts?id=eq.{supabase_contact_id}"
+            contact_update_url = f"{base_url}/contacts?id=eq.{resolved_supabase_contact_id}"
             contact_update_response = requests.patch(contact_update_url, headers=headers, json=contact_update_payload, timeout=30)
             if not contact_update_response.ok:
                 logger.warning(
                     "SUPA_STRIPE_LINK_ATTEMPT: Failed to update contact.customer_id contact_id=%s customer_id=%s status=%d",
-                    supabase_contact_id,
+                    resolved_supabase_contact_id,
                     customer_id,
                     contact_update_response.status_code
                 )
@@ -935,23 +960,23 @@ def link_stripe_customer_to_supabase(
                     address_payload["country"] = billing_address.get("country")
                 
                 if len(address_payload) > 1:  # More than just address_source
-                    address_update_url = f"{base_url}/contacts?id=eq.{supabase_contact_id}"
+                    address_update_url = f"{base_url}/contacts?id=eq.{resolved_supabase_contact_id}"
                     address_update_response = requests.patch(address_update_url, headers=headers, json=address_payload, timeout=30)
                     if address_update_response.ok:
                         logger.info(
                             "SUPA_STRIPE_LINK_ATTEMPT: Updated address from Stripe billing_details contact_id=%s",
-                            supabase_contact_id
+                            resolved_supabase_contact_id
                         )
                     else:
                         logger.warning(
                             "SUPA_STRIPE_LINK_ATTEMPT: Failed to update address contact_id=%s status=%d",
-                            supabase_contact_id,
+                            resolved_supabase_contact_id,
                             address_update_response.status_code
                         )
         
         logger.info(
             "SUPA_STRIPE_LINK_SUCCESS contact_id=%s customer_id=%s stripe_customer_id=%s payment_method_id=%s last4=%s brand=%s",
-            supabase_contact_id,
+            resolved_supabase_contact_id,
             customer_id,
             stripe_customer_id[:8] + "***",
             payment_method_id[:8] + "***" if payment_method_id and len(payment_method_id) > 8 else payment_method_id or "None",
@@ -960,7 +985,7 @@ def link_stripe_customer_to_supabase(
         )
         
         return {
-            "contact_id": supabase_contact_id,
+            "contact_id": resolved_supabase_contact_id,
             "customer_id": customer_id,
             "stripe_customer_id": stripe_customer_id,
         }
@@ -1173,6 +1198,8 @@ def get_or_create_stripe_customer_for_customer(
                 customer_payload["email"] = email
             if phone:
                 customer_payload["phone"] = phone
+            if contact_id:
+                customer_payload["primary_contact_id"] = contact_id
             
             customers_url = f"{base_url}/customers"
             try:
@@ -1199,9 +1226,12 @@ def get_or_create_stripe_customer_for_customer(
                         except Exception as e:
                             logger.warning("get_or_create_stripe_customer: failed to link contact to customer: %s", e)
                 else:
-                    logger.warning(
-                        "get_or_create_stripe_customer: failed to create customer in Supabase status=%d",
-                        create_response.status_code
+                    error_text = create_response.text[:500]
+                    logger.error(
+                        "get_or_create_stripe_customer: failed to create customer in Supabase status=%d error=%s payload_keys=%s",
+                        create_response.status_code,
+                        error_text,
+                        list(customer_payload.keys())
                     )
             except Exception as e:
                 logger.warning("get_or_create_stripe_customer: exception creating customer: %s", e)
