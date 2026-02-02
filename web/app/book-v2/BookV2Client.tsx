@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { loadStripe, Stripe, StripeElements, StripeCardElement } from "@stripe/stripe-js";
+import { loadStripe, Stripe, StripeElements, StripeCardNumberElement, StripeCardExpiryElement, StripeCardCvcElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
@@ -112,10 +112,15 @@ export default function BookV2Client() {
     const [mounted, setMounted] = useState(false);
     const [stripe, setStripe] = useState<Stripe | null>(null);
     const [elements, setElements] = useState<StripeElements | null>(null);
-    const [card, setCard] = useState<StripeCardElement | null>(null);
+    const [cardNumber, setCardNumber] = useState<StripeCardNumberElement | null>(null);
+    const [cardExpiry, setCardExpiry] = useState<StripeCardExpiryElement | null>(null);
+    const [cardCvc, setCardCvc] = useState<StripeCardCvcElement | null>(null);
+    const [postalCode, setPostalCode] = useState<string>("");
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
-    const cardElementRef = useRef<HTMLDivElement>(null);
+    const cardNumberRef = useRef<HTMLDivElement>(null);
+    const cardExpiryRef = useRef<HTMLDivElement>(null);
+    const cardCvcRef = useRef<HTMLDivElement>(null);
 
     const debug = searchParams?.get("debug") === "1";
     
@@ -324,22 +329,26 @@ export default function BookV2Client() {
                 const elementsInstance = stripeInstance.elements();
                 setElements(elementsInstance);
                 
-                const cardElement = elementsInstance.create("card", {
-                    style: {
-                        base: {
-                            fontSize: "16px",
-                            color: "#1a1a1a",
-                            "::placeholder": {
-                                color: "#9ca3af",
-                            },
-                        },
-                        invalid: {
-                            color: "#ef4444",
+                const elementStyle = {
+                    base: {
+                        fontSize: "16px",
+                        color: "#1a1a1a",
+                        "::placeholder": {
+                            color: "#9ca3af",
                         },
                     },
-                });
+                    invalid: {
+                        color: "#ef4444",
+                    },
+                };
                 
-                setCard(cardElement);
+                const cardNumberElement = elementsInstance.create("cardNumber", { style: elementStyle });
+                const cardExpiryElement = elementsInstance.create("cardExpiry", { style: elementStyle });
+                const cardCvcElement = elementsInstance.create("cardCvc", { style: elementStyle });
+                
+                setCardNumber(cardNumberElement);
+                setCardExpiry(cardExpiryElement);
+                setCardCvc(cardCvcElement);
             } catch (err) {
                 console.error("Failed to initialize Stripe:", err);
                 setPaymentError("Failed to load payment form. Please refresh the page.");
@@ -349,32 +358,41 @@ export default function BookV2Client() {
         initializeStripe();
     }, [mounted, isPaymentUnlocked, resolvedEmail, resolvedPhone, stripe]);
 
-    // Mount card element when both card and ref are ready (only on client, only once)
+    // Mount Stripe elements when ready (only on client, only once)
     useEffect(() => {
         if (!mounted) return;
-        if (!card || !cardElementRef.current || !isPaymentUnlocked) return;
+        if (!cardNumber || !cardExpiry || !cardCvc || !isPaymentUnlocked) return;
+        if (!cardNumberRef.current || !cardExpiryRef.current || !cardCvcRef.current) return;
         
         // Check if already mounted
-        if (cardElementRef.current.hasChildNodes()) {
+        if (cardNumberRef.current.hasChildNodes()) {
             return;
         }
 
         try {
-            card.mount(cardElementRef.current);
+            cardNumber.mount(cardNumberRef.current);
+            cardExpiry.mount(cardExpiryRef.current);
+            cardCvc.mount(cardCvcRef.current);
         } catch (e) {
-            console.error("Failed to mount Stripe card:", e);
+            console.error("Failed to mount Stripe elements:", e);
         }
 
         return () => {
             try {
-                if (cardElementRef.current && cardElementRef.current.hasChildNodes()) {
-                    card.unmount();
+                if (cardNumber && cardNumberRef.current?.hasChildNodes()) {
+                    cardNumber.unmount();
+                }
+                if (cardExpiry && cardExpiryRef.current?.hasChildNodes()) {
+                    cardExpiry.unmount();
+                }
+                if (cardCvc && cardCvcRef.current?.hasChildNodes()) {
+                    cardCvc.unmount();
                 }
             } catch (e) {
                 // Ignore unmount errors
             }
         };
-    }, [mounted, card, isPaymentUnlocked]);
+    }, [mounted, cardNumber, cardExpiry, cardCvc, isPaymentUnlocked]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
@@ -529,7 +547,7 @@ export default function BookV2Client() {
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!selectedSlot || !serviceDetails || !serviceDetailsValid || !stripe || !card) {
+        if (!selectedSlot || !serviceDetails || !serviceDetailsValid || !stripe || !cardNumber || !cardExpiry || !cardCvc) {
             setPaymentError("Please complete all steps before submitting payment");
             return;
         }
@@ -582,11 +600,14 @@ export default function BookV2Client() {
             // Step 2: Confirm SetupIntent with Stripe
             const { error: confirmError } = await stripe.confirmCardSetup(client_secret, {
                 payment_method: {
-                    card,
+                    card: cardNumber,
                     billing_details: {
                         name: `${resolvedFirstName || prefillData.first_name || ""} ${resolvedLastName || prefillData.last_name || ""}`.trim() || undefined,
                         email: resolvedEmail || prefillData.email,
                         phone: resolvedPhone || prefillData.phone,
+                        address: {
+                            postal_code: postalCode || undefined,
+                        },
                     },
                 },
             });
@@ -898,11 +919,8 @@ export default function BookV2Client() {
                                                 </p>
                                             </div>
 
-                                            <div>
-                                                <label className="block text-xs font-medium text-alloy-midnight mb-2">
-                                                    Card Information
-                                                </label>
-                                                {!stripe || !card ? (
+                                            <div className="space-y-4">
+                                                {!stripe || !cardNumber || !cardExpiry || !cardCvc ? (
                                                     <div className="px-4 py-8 border border-alloy-stone/30 rounded-lg bg-alloy-stone/10 flex items-center justify-center">
                                                         <div className="text-center">
                                                             <div className="w-6 h-6 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
@@ -910,10 +928,50 @@ export default function BookV2Client() {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div
-                                                        ref={cardElementRef}
-                                                        className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
-                                                    />
+                                                    <>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                                Card Number
+                                                            </label>
+                                                            <div
+                                                                ref={cardNumberRef}
+                                                                className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                            />
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                                    Expiration
+                                                                </label>
+                                                                <div
+                                                                    ref={cardExpiryRef}
+                                                                    className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                                    CVC
+                                                                </label>
+                                                                <div
+                                                                    ref={cardCvcRef}
+                                                                    className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                                ZIP Code
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={postalCode}
+                                                                onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                                                                placeholder="12345"
+                                                                className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                                                                maxLength={5}
+                                                            />
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
                                             
@@ -925,7 +983,7 @@ export default function BookV2Client() {
                                             
                                             <button
                                                 type="submit"
-                                                disabled={isProcessingPayment || !stripe || !card || !resolvedEmail || !resolvedPhone}
+                                                disabled={isProcessingPayment || !stripe || !cardNumber || !cardExpiry || !cardCvc || !resolvedEmail || !resolvedPhone}
                                                 className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {isProcessingPayment ? "Processing..." : "Complete Booking"}

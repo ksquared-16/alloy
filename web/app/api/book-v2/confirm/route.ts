@@ -1,37 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-
-/**
- * Normalize email: trim + lowercase
- */
-function normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
-}
-
-/**
- * Normalize phone: strip non-digits, preserve leading +, convert to E.164 when possible
- */
-function normalizePhone(phone: string): string {
-    const trimmed = phone.trim();
-    const digits = trimmed.replace(/\D/g, "");
-    
-    if (!digits) {
-        return trimmed; // Return original if no digits
-    }
-    
-    // If already starts with +, preserve it
-    if (trimmed.startsWith("+")) {
-        return "+" + digits;
-    }
-    
-    // If 10 digits, assume US and prefix +1
-    if (digits.length === 10) {
-        return "+1" + digits;
-    }
-    
-    // Otherwise, prefix with +
-    return "+" + digits;
-}
+import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 
 /**
  * POST /api/book-v2/confirm
@@ -93,10 +62,6 @@ export async function POST(request: NextRequest) {
 
         const supabase = createAdminClient();
 
-        // Normalize email and phone
-        const normalizedEmail = normalizeEmail(contact_email);
-        const normalizedPhone = normalizePhone(contact_phone);
-
         // Parse dates
         const slotStartDate = new Date(slot_start);
         const slotEndDate = new Date(slot_end);
@@ -117,154 +82,36 @@ export async function POST(request: NextRequest) {
             hour12: true,
         })}`;
 
-        // Step 1: Find or create contact (with deduplication)
+        // Step 1: Resolve or create contact and customer (guaranteed linking)
         let contactId: string;
-        const { data: existingContact, error: contactSearchError } = await supabase
-            .from("contacts")
-            .select("id, first_name, last_name, customer_id, email, phone")
-            .or(`email.ilike.${normalizedEmail},phone.eq.${normalizedPhone}`)
-            .limit(1)
-            .maybeSingle();
+        let customerId: string;
 
-        if (contactSearchError) {
-            console.error("[BOOK_V2_CONFIRM] Error searching for contact:", contactSearchError);
+        try {
+            const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
+                first_name: contact_first_name,
+                last_name: contact_last_name,
+                email: contact_email,
+                phone: contact_phone,
+                postal_code: undefined, // Not provided in booking flow
+                timezone: timezone,
+                address: address,
+                city: city,
+                state: undefined, // Not provided in booking flow
+                vertical_key: "cleaning",
+            });
+
+            contactId = resolverResult.contact_id;
+            customerId = resolverResult.customer_id;
+
+            console.log(
+                `[BOOK_V2_CONFIRM] Contact/Customer resolved: contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
+            );
+        } catch (error: any) {
+            console.error("[BOOK_V2_CONFIRM] Failed to resolve contact/customer:", error);
             return NextResponse.json(
-                { error: "Failed to search for contact" },
+                { error: `Failed to resolve contact/customer: ${error.message}` },
                 { status: 500 }
             );
-        }
-
-        if (existingContact) {
-            contactId = existingContact.id;
-            console.log(`[BOOK_V2_CONFIRM] Found existing contact: ${contactId}`);
-
-            // Update contact with any new information
-            const updatePayload: Record<string, any> = {};
-            if (contact_first_name && !existingContact.first_name) {
-                updatePayload.first_name = contact_first_name;
-            }
-            if (contact_last_name && !existingContact.last_name) {
-                updatePayload.last_name = contact_last_name;
-            }
-            // Ensure normalized email/phone are stored
-            if (normalizedEmail !== existingContact.email) {
-                updatePayload.email = normalizedEmail;
-            }
-            if (normalizedPhone !== existingContact.phone) {
-                updatePayload.phone = normalizedPhone;
-            }
-
-            if (Object.keys(updatePayload).length > 0) {
-                const { error: updateError } = await supabase
-                    .from("contacts")
-                    .update(updatePayload)
-                    .eq("id", contactId);
-
-                if (updateError) {
-                    console.error("[BOOK_V2_CONFIRM] Failed to update contact:", updateError);
-                    return NextResponse.json(
-                        { error: "Failed to update contact" },
-                        { status: 500 }
-                    );
-                }
-            }
-        } else {
-            const { data: newContact, error: contactError } = await supabase
-                .from("contacts")
-                .insert({
-                    email: normalizedEmail,
-                    phone: normalizedPhone,
-                    first_name: contact_first_name || null,
-                    last_name: contact_last_name || null,
-                    contact_type: "lead",
-                })
-                .select("id")
-                .single();
-
-            if (contactError || !newContact) {
-                console.error("[BOOK_V2_CONFIRM] Failed to create contact:", contactError);
-                return NextResponse.json(
-                    { error: "Failed to create contact" },
-                    { status: 500 }
-                );
-            }
-
-            contactId = newContact.id;
-            console.log(`[BOOK_V2_CONFIRM] Created new contact: ${contactId}`);
-        }
-
-        // Step 2: Ensure customer exists and is linked
-        let customerId: string | null = null;
-
-        // Get contact with customer_id
-        const { data: contactWithCustomer, error: contactFetchError } = await supabase
-            .from("contacts")
-            .select("customer_id")
-            .eq("id", contactId)
-            .single();
-
-        if (contactFetchError) {
-            console.error("[BOOK_V2_CONFIRM] Failed to fetch contact:", contactFetchError);
-            return NextResponse.json(
-                { error: "Failed to fetch contact" },
-                { status: 500 }
-            );
-        }
-
-        customerId = contactWithCustomer?.customer_id || null;
-
-        // If no customer_id, create customer
-        if (!customerId) {
-            // Determine customer name with safe fallback
-            let customerName: string;
-            if (contact_first_name && contact_last_name) {
-                customerName = `${contact_first_name} ${contact_last_name}`.trim();
-            } else if (contact_first_name) {
-                customerName = contact_first_name;
-            } else if (normalizedEmail) {
-                customerName = normalizedEmail;
-            } else if (normalizedPhone) {
-                customerName = normalizedPhone;
-            } else {
-                customerName = "New Customer";
-            }
-
-            const { data: newCustomer, error: customerError } = await supabase
-                .from("customers")
-                .insert({
-                    name: customerName,
-                    email: normalizedEmail || null,
-                    phone: normalizedPhone || null,
-                })
-                .select("id")
-                .single();
-
-            if (customerError || !newCustomer) {
-                console.error("[BOOK_V2_CONFIRM] Failed to create customer:", customerError);
-                return NextResponse.json(
-                    { error: "Failed to create customer" },
-                    { status: 500 }
-                );
-            }
-
-            customerId = newCustomer.id;
-            console.log(`[BOOK_V2_CONFIRM] Created new customer: ${customerId}`);
-
-            // Link contact to customer
-            const { error: linkError } = await supabase
-                .from("contacts")
-                .update({ customer_id: customerId })
-                .eq("id", contactId);
-
-            if (linkError) {
-                console.error("[BOOK_V2_CONFIRM] Failed to link contact to customer:", linkError);
-                return NextResponse.json(
-                    { error: "Failed to link contact to customer" },
-                    { status: 500 }
-                );
-            }
-        } else {
-            console.log(`[BOOK_V2_CONFIRM] Using existing customer: ${customerId}`);
         }
 
         // Step 3: Get vertical_id for "cleaning"
@@ -318,7 +165,14 @@ export async function POST(request: NextRequest) {
         let opportunityId: string;
         if (existingOpp) {
             opportunityId = existingOpp.id;
-            console.log(`[BOOK_V2_CONFIRM] Found existing opportunity: ${opportunityId}`);
+            console.log(`[BOOK_V2_CONFIRM] Found existing opportunity: ${opportunityId} (reused)`);
+
+            // Get existing opportunity data to check what needs backfilling
+            const { data: existingOppData } = await supabase
+                .from("opportunities")
+                .select("vertical_id, customer_id, primary_contact_id")
+                .eq("id", opportunityId)
+                .single();
 
             // Update opportunity with booking details and backfill links
             const estimatedPriceCents = quote_subtotal ? Math.round(quote_subtotal * 100) : null;
@@ -332,6 +186,11 @@ export async function POST(request: NextRequest) {
                 customer_id: customerId,
                 primary_contact_id: contactId,
             };
+
+            // Backfill vertical_id if missing
+            if (existingOppData && !existingOppData.vertical_id) {
+                updatePayload.vertical_id = verticalId;
+            }
 
             const { error: oppUpdateError } = await supabase
                 .from("opportunities")
@@ -408,18 +267,44 @@ export async function POST(request: NextRequest) {
         }
 
         let jobId: string;
+        const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
+
         if (existingJob) {
             jobId = existingJob.id;
-            console.log(`[BOOK_V2_CONFIRM] Found existing job: ${jobId}`);
+            console.log(`[BOOK_V2_CONFIRM] Found existing job: ${jobId} (reused)`);
 
-            // Update job and backfill links
+            // Get existing job data to check what needs backfilling
+            const { data: existingJobData } = await supabase
+                .from("jobs")
+                .select("vertical_id, estimated_total_cents, gross_price_cents")
+                .eq("id", jobId)
+                .single();
+
+            // Update job and backfill all links and fields
+            const jobUpdatePayload: Record<string, any> = {
+                scheduled_at: slot_start,
+                customer_id: customerId,
+                primary_contact_id: contactId,
+            };
+
+            // Backfill vertical_id if missing
+            if (existingJobData && !existingJobData.vertical_id) {
+                jobUpdatePayload.vertical_id = verticalId;
+            }
+
+            // Backfill pricing if missing
+            if (quoteTotalCents) {
+                if (!existingJobData?.estimated_total_cents) {
+                    jobUpdatePayload.estimated_total_cents = quoteTotalCents;
+                }
+                if (!existingJobData?.gross_price_cents) {
+                    jobUpdatePayload.gross_price_cents = quoteTotalCents;
+                }
+            }
+
             const { error: jobUpdateError } = await supabase
                 .from("jobs")
-                .update({
-                    scheduled_at: slot_start,
-                    customer_id: customerId,
-                    primary_contact_id: contactId,
-                })
+                .update(jobUpdatePayload)
                 .eq("id", jobId);
 
             if (jobUpdateError) {
@@ -431,30 +316,40 @@ export async function POST(request: NextRequest) {
             }
         } else {
             // Create new job
+            const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
+            const jobPayload: Record<string, any> = {
+                opportunity_id: opportunityId,
+                customer_id: customerId,
+                primary_contact_id: contactId,
+                vertical_id: verticalId,
+                title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
+                description: `Scheduled cleaning service`,
+                scheduled_at: slot_start,
+                metadata: {
+                    booking_source: "book-v2",
+                    timezone,
+                    quote_subtotal,
+                    discount_amount,
+                    quote_total,
+                    address: address || null,
+                    city: city || null,
+                    bedrooms: bedrooms || null,
+                    bathrooms: bathrooms || null,
+                    access_method: access_method || null,
+                    access_note: access_note || null,
+                    additional_notes: additional_notes || null,
+                },
+            };
+
+            // Set pricing fields
+            if (quoteTotalCents) {
+                jobPayload.estimated_total_cents = quoteTotalCents;
+                jobPayload.gross_price_cents = quoteTotalCents;
+            }
+
             const { data: newJob, error: jobError } = await supabase
                 .from("jobs")
-                .insert({
-                    opportunity_id: opportunityId,
-                    customer_id: customerId,
-                    primary_contact_id: contactId,
-                    title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
-                    description: `Scheduled cleaning service`,
-                    scheduled_at: slot_start,
-                    metadata: {
-                        booking_source: "book-v2",
-                        timezone,
-                        quote_subtotal,
-                        discount_amount,
-                        quote_total,
-                        address: address || null,
-                        city: city || null,
-                        bedrooms: bedrooms || null,
-                        bathrooms: bathrooms || null,
-                        access_method: access_method || null,
-                        access_note: access_note || null,
-                        additional_notes: additional_notes || null,
-                    },
-                })
+                .insert(jobPayload)
                 .select("id")
                 .single();
 
@@ -595,21 +490,105 @@ export async function POST(request: NextRequest) {
 
         // Step 8: Check if customer has saved payment method
         let hasSavedPaymentMethod = false;
+        let paymentMethodBrand: string | null = null;
+        let paymentMethodLast4: string | null = null;
+
         if (customerId) {
             const { data: customer, error: customerFetchError } = await supabase
                 .from("customers")
-                .select("default_payment_method_id, stripe_customer_id")
+                .select("default_payment_method_id, stripe_customer_id, payment_method_brand, payment_method_last4")
                 .eq("id", customerId)
                 .maybeSingle();
 
             if (!customerFetchError && customer) {
                 hasSavedPaymentMethod = !!customer.default_payment_method_id;
+                paymentMethodBrand = customer.payment_method_brand || null;
+                paymentMethodLast4 = customer.payment_method_last4 || null;
             }
         }
 
+        // Step 9: Integrity check - verify all linkages
+        const { data: integrityCheck, error: integrityError } = await supabase
+            .from("schedules")
+            .select(`
+                id,
+                job_id,
+                start_at,
+                end_at,
+                timezone,
+                duration_minutes,
+                jobs!inner(
+                    id,
+                    customer_id,
+                    primary_contact_id,
+                    opportunity_id,
+                    vertical_id,
+                    opportunities!inner(
+                        id,
+                        customer_id,
+                        primary_contact_id,
+                        vertical_id
+                    )
+                )
+            `)
+            .eq("id", scheduleId)
+            .single();
+
+        if (integrityError || !integrityCheck) {
+            console.error(
+                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] schedule_id=${scheduleId} error=${integrityError?.message || "not found"}`
+            );
+            return NextResponse.json(
+                { error: "Booking integrity check failed" },
+                { status: 500 }
+            );
+        }
+
+        const job = integrityCheck.jobs as any;
+        const opportunity = job?.opportunities as any;
+
+        // Verify linkages
+        const integrityIssues: string[] = [];
+        if (job?.customer_id !== customerId) {
+            integrityIssues.push(`job.customer_id mismatch: expected=${customerId} actual=${job?.customer_id}`);
+        }
+        if (job?.primary_contact_id !== contactId) {
+            integrityIssues.push(`job.primary_contact_id mismatch: expected=${contactId} actual=${job?.primary_contact_id}`);
+        }
+        if (job?.opportunity_id !== opportunityId) {
+            integrityIssues.push(`job.opportunity_id mismatch: expected=${opportunityId} actual=${job?.opportunity_id}`);
+        }
+        if (opportunity?.customer_id !== customerId) {
+            integrityIssues.push(`opportunity.customer_id mismatch: expected=${customerId} actual=${opportunity?.customer_id}`);
+        }
+        if (opportunity?.primary_contact_id !== contactId) {
+            integrityIssues.push(`opportunity.primary_contact_id mismatch: expected=${contactId} actual=${opportunity?.primary_contact_id}`);
+        }
+        if (job?.id !== jobId) {
+            integrityIssues.push(`schedule.job_id mismatch: expected=${jobId} actual=${job?.id}`);
+        }
+        if (!integrityCheck.start_at || !integrityCheck.end_at || !integrityCheck.timezone) {
+            integrityIssues.push(`schedule missing required fields: start_at=${!!integrityCheck.start_at} end_at=${!!integrityCheck.end_at} timezone=${!!integrityCheck.timezone}`);
+        }
+
+        if (integrityIssues.length > 0) {
+            console.error(
+                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} issues=${JSON.stringify(integrityIssues)}`
+            );
+            return NextResponse.json(
+                { error: `Booking integrity check failed: ${integrityIssues.join("; ")}` },
+                { status: 500 }
+            );
+        }
+
+        // Log integrity success
+        console.log(
+            `[BOOK_V2_CONFIRM_INTEGRITY_OK] schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
+        );
+
         // Structured logging
         console.log(
-            `[BOOK_V2_CONFIRM_SUCCESS] contact_id=${contactId} customer_id=${customerId || "null"} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
+            `[BOOK_V2_CONFIRM_SUCCESS] contact_id=${contactId} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
         );
 
         return NextResponse.json({
@@ -620,6 +599,8 @@ export async function POST(request: NextRequest) {
             job_id: jobId,
             schedule_id: scheduleId,
             has_saved_payment_method: hasSavedPaymentMethod,
+            payment_method_brand: paymentMethodBrand,
+            payment_method_last4: paymentMethodLast4,
         });
     } catch (error: any) {
         console.error("[BOOK_V2_CONFIRM_ERROR]", error);

@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
             return candidate;
         };
 
-        // Minimum start time: 48 hours from now
+        // Minimum start time: 48 hours from now (for booking safety, but we'll generate all slots)
         const minStartTime = new Date(now.getTime() + minimumLeadTimeHours * 60 * 60 * 1000);
 
         // Generate slots for each day
@@ -137,27 +137,26 @@ export async function GET(request: NextRequest) {
 
             if (!hours) continue; // Skip closed days
 
-            // Generate slots for this day
+            // Generate ALL slots for this day (regardless of current time)
+            // The 48-hour minimum will be enforced at booking time, not here
             for (let hour = hours.start; hour < hours.end; hour++) {
                 for (let minute = 0; minute < 60; minute += slotIncrementMinutes) {
                     const slotStart = createLocalTimeInTimezone(year, month, day, hour, minute);
                     const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
 
-                    // Check minimum lead time (48 hours from now)
-                    if (slotStart >= minStartTime) {
-                        const startTimeStr = formatTime(slotStart);
-                        const endTimeStr = formatTime(slotEnd);
-                        const timeWindow = `${startTimeStr} - ${endTimeStr}`;
+                    // Generate all slots for the day - filtering by current time happens in UI
+                    const startTimeStr = formatTime(slotStart);
+                    const endTimeStr = formatTime(slotEnd);
+                    const timeWindow = `${startTimeStr} - ${endTimeStr}`;
 
-                        slots.push({
-                            start: slotStart,
-                            end: slotEnd,
-                            display: startTimeStr,
-                            timeWindow,
-                            isoStart: slotStart.toISOString(),
-                            isoEnd: slotEnd.toISOString(),
-                        });
-                    }
+                    slots.push({
+                        start: slotStart,
+                        end: slotEnd,
+                        display: startTimeStr,
+                        timeWindow,
+                        isoStart: slotStart.toISOString(),
+                        isoEnd: slotEnd.toISOString(),
+                    });
                 }
             }
         }
