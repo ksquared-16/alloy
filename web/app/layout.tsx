@@ -5,6 +5,7 @@ import GhlScript from "@/components/GhlScript";
 import StagingBanner from "@/components/StagingBanner";
 import { QuoteModalProvider } from "@/lib/quoteModal";
 import ConditionalSiteLayout from "@/components/ConditionalSiteLayout";
+import MetaPixel from "@/components/MetaPixel";
 
 const poppins = Poppins({
   weight: ["300", "400", "500", "600", "700"],
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${poppins.variable} font-sans antialiased`}>
+        <MetaPixel />
         <GhlScript />
         <StagingBanner />
         <QuoteModalProvider>

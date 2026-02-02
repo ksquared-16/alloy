@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
+import { trackMetaEvent } from "@/lib/metaPixel";
 import {
     type CleaningQuoteInput,
     type CleaningQuoteResult,
@@ -590,6 +591,15 @@ export default function CleaningQuoteForm({
                         if (!response.ok || (backendResult.ok === false)) {
                             console.warn("Backend submission warning:", backendResult.message || "Unknown error");
                             return;
+                        }
+
+                        // Track Lead event when quote completes
+                        if (quote && quote.status === "ready") {
+                            trackMetaEvent("Lead", {
+                                vertical: "cleaning",
+                                flow: "quote",
+                                estimated_price: quote.first_clean_price || quote.estimated_price || undefined,
+                            });
                         }
 
                         // Persist contact_id to booking prefill storage if available

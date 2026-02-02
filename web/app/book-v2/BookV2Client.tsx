@@ -8,6 +8,7 @@ import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
+import { trackMetaEvent } from "@/lib/metaPixel";
 
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
@@ -631,6 +632,21 @@ export default function BookV2Client() {
             const result = await bookingResponse.json();
             setBookingResult(result);
             setCurrentStep("confirmed");
+
+            // Track InitiateCheckout when booking is confirmed
+            trackMetaEvent("InitiateCheckout", {
+                vertical: "cleaning",
+                flow: "book",
+            });
+
+            // Track Purchase/CompleteRegistration when payment is saved and booking is complete
+            const finalTotal = discountData?.quote_total || quoteSubtotal;
+            trackMetaEvent("Purchase", {
+                vertical: "cleaning",
+                flow: "book",
+                value: finalTotal,
+                currency: "USD",
+            });
 
             // Clear service details from storage
             try {
