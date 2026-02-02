@@ -7,6 +7,7 @@ import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
+import { getBookingPath } from "@/lib/booking";
 
 type SelectedVertical = "cleaning" | "gutters" | null;
 type ModalStep = "picker" | "form" | "submitted";
@@ -265,8 +266,8 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                       if (bookingUrl) {
                         router.push(bookingUrl);
                       } else {
-                        // Fallback: use /book-v2 (same as buildBookingUrl default)
-                        router.push("/book-v2");
+                        // Fallback: use env-controlled booking path
+                        router.push(getBookingPath());
                       }
                     }}
                   />

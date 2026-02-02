@@ -6,9 +6,18 @@
  * @returns Booking URL with query parameters
  */
 
-// Easily reversible: change this to "/book" to switch back to GHL calendar
-// Set via environment variable for easy toggling: NEXT_PUBLIC_BOOKING_ROUTE
-const BOOKING_ROUTE = process.env.NEXT_PUBLIC_BOOKING_ROUTE || "/book-v2";
+/**
+ * Get the booking path from environment variable.
+ * Safe for client-side usage.
+ * Defaults to "/book" (production).
+ * Set NEXT_PUBLIC_BOOKING_PATH in Vercel to override (e.g., "/book-v2" for staging).
+ */
+export function getBookingPath(): string {
+  // Safe for client: process.env.NEXT_PUBLIC_* vars are replaced at build time
+  return process.env.NEXT_PUBLIC_BOOKING_PATH || "/book";
+}
+
+const BOOKING_ROUTE = getBookingPath();
 
 export function buildBookingUrl(params: {
     phone: string;
