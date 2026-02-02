@@ -642,6 +642,7 @@ export default function BookV2Client() {
                     access_method: serviceDetails.access_method,
                     access_note: serviceDetails.access_note,
                     additional_notes: serviceDetails.additional_notes,
+                    frequency_label: quote?.frequency_label || "One-time",
                 }),
             });
 

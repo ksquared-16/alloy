@@ -120,14 +120,14 @@ export async function resolve_or_create_contact_and_customer(
     }
   }
 
-  // Priority 2: Search by phone (exact match) if email didn't find
-  if (!existingContact && normalizedPhone) {
-    const { data: phoneContact, error: phoneError } = await supabase
-      .from("contacts")
-      .select("id, first_name, last_name, email, phone, customer_id, timezone, address_line1, city, state, postal_code")
-      .eq("phone", normalizedPhone)
-      .limit(1)
-      .maybeSingle();
+    // Priority 2: Search by phone (exact match) if email didn't find
+    if (!existingContact && normalizedPhone) {
+      const { data: phoneContact, error: phoneError } = await supabase
+        .from("contacts")
+        .select("id, first_name, last_name, email, phone, customer_id, timezone, address_line1, city, state, postal_code, address_source, metadata")
+        .eq("phone", normalizedPhone)
+        .limit(1)
+        .maybeSingle();
 
     if (!phoneError && phoneContact) {
       existingContact = phoneContact;
@@ -144,35 +144,110 @@ export async function resolve_or_create_contact_and_customer(
 
     // Update contact with any new information (idempotent)
     const updatePayload: Record<string, any> = {};
+    const metadataUpdates: Record<string, any> = {};
+    let metadataChanged = false;
+    
     if (first_name && !existingContact.first_name) {
       updatePayload.first_name = first_name;
     }
     if (last_name && !existingContact.last_name) {
       updatePayload.last_name = last_name;
     }
-    // Ensure normalized email/phone are stored
+    // Ensure normalized email is stored
     if (normalizedEmail && normalizedEmail !== existingContact.email) {
       updatePayload.email = normalizedEmail;
     }
-    if (normalizedPhone && normalizedPhone !== existingContact.phone) {
-      updatePayload.phone = normalizedPhone;
+    
+    // Phone overwrite rule: only set if NULL/empty, or if matches existing
+    // If incoming differs from existing, store candidate in metadata
+    if (normalizedPhone) {
+      const existingPhone = existingContact.phone;
+      if (!existingPhone || existingPhone.trim() === "") {
+        // Contact has no phone - set it
+        updatePayload.phone = normalizedPhone;
+      } else if (normalizedPhone === existingPhone) {
+        // Phones match - no change needed
+      } else {
+        // Phones differ - keep existing, store candidate in metadata
+        const existingMetadata = existingContact.metadata || {};
+        metadataUpdates.phone_candidate = normalizedPhone;
+        metadataUpdates.phone_candidate_seen_at = new Date().toISOString();
+        metadataChanged = true;
+        console.warn(
+          `[BOOKING_RESOLVER] Phone mismatch: keeping_existing_phone=${existingPhone.substring(0, 4)}*** candidate_phone=${normalizedPhone.substring(0, 4)}*** contact_id=${contactId}`
+        );
+      }
     }
+    
     // Update timezone if missing
     if (timezone && !existingContact.timezone) {
       updatePayload.timezone = timezone;
     }
-    // Update address fields if missing
-    if (address && !existingContact.address_line1) {
+    
+    // Address backfill rule: only fill missing fields, don't overwrite
+    // Build incoming address object
+    const incomingAddress: Record<string, string> = {};
+    if (address) incomingAddress.address_line1 = address;
+    if (city) incomingAddress.city = city;
+    if (state) incomingAddress.state = state;
+    if (postal_code) incomingAddress.postal_code = postal_code;
+    
+    let addressSourceChanged = false;
+    const addressConflicts: Record<string, { existing: string; incoming: string }> = {};
+    
+    // Only set each field if currently NULL/empty
+    if (address && (!existingContact.address_line1 || existingContact.address_line1.trim() === "")) {
       updatePayload.address_line1 = address;
+      addressSourceChanged = true;
+    } else if (address && existingContact.address_line1 && address !== existingContact.address_line1) {
+      addressConflicts.address_line1 = { existing: existingContact.address_line1, incoming: address };
     }
-    if (city && !existingContact.city) {
+    
+    if (city && (!existingContact.city || existingContact.city.trim() === "")) {
       updatePayload.city = city;
+      addressSourceChanged = true;
+    } else if (city && existingContact.city && city !== existingContact.city) {
+      addressConflicts.city = { existing: existingContact.city, incoming: city };
     }
-    if (state && !existingContact.state) {
+    
+    if (state && (!existingContact.state || existingContact.state.trim() === "")) {
       updatePayload.state = state;
+      addressSourceChanged = true;
+    } else if (state && existingContact.state && state !== existingContact.state) {
+      addressConflicts.state = { existing: existingContact.state, incoming: state };
     }
-    if (postal_code && !existingContact.postal_code) {
+    
+    if (postal_code && (!existingContact.postal_code || existingContact.postal_code.trim() === "")) {
       updatePayload.postal_code = postal_code;
+      addressSourceChanged = true;
+    } else if (postal_code && existingContact.postal_code && postal_code !== existingContact.postal_code) {
+      addressConflicts.postal_code = { existing: existingContact.postal_code, incoming: postal_code };
+    }
+    
+    // If there are address conflicts, store candidate in metadata
+    if (Object.keys(addressConflicts).length > 0) {
+      const existingMetadata = existingContact.metadata || {};
+      metadataUpdates.address_candidate = incomingAddress;
+      metadataUpdates.address_candidate_seen_at = new Date().toISOString();
+      metadataChanged = true;
+      console.warn(
+        `[BOOKING_RESOLVER] Address mismatch: keeping_existing=${JSON.stringify(Object.fromEntries(Object.entries(addressConflicts).map(([k, v]) => [k, v.existing])))} candidate=${JSON.stringify(incomingAddress)} contact_id=${contactId}`
+      );
+    }
+    
+    // Set address_source if we filled any missing fields
+    // Only update if address_source is NULL or currently 'stripe' and we changed something
+    if (addressSourceChanged) {
+      const currentAddressSource = existingContact.address_source;
+      if (!currentAddressSource || currentAddressSource === "stripe") {
+        updatePayload.address_source = "booking";
+      }
+    }
+    
+    // Update metadata if there are changes
+    if (metadataChanged) {
+      const existingMetadata = existingContact.metadata || {};
+      updatePayload.metadata = { ...existingMetadata, ...metadataUpdates };
     }
 
     if (Object.keys(updatePayload).length > 0) {

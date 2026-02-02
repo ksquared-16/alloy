@@ -3,6 +3,35 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 
 /**
+ * Normalize frequency label to service_frequency_key
+ */
+function normalizeFrequencyKey(frequencyLabel: string | null | undefined): string {
+    if (!frequencyLabel) return "one_time";
+    
+    const normalized = frequencyLabel.toLowerCase().trim();
+    
+    // Map common frequency labels to canonical keys
+    if (normalized.includes("one-time") || normalized.includes("one time") || normalized === "one-time") {
+        return "one_time";
+    }
+    if (normalized.includes("weekly") || normalized === "weekly") {
+        return "weekly";
+    }
+    if (normalized.includes("bi-weekly") || normalized.includes("biweekly") || normalized.includes("every 2 weeks")) {
+        return "biweekly";
+    }
+    if (normalized.includes("monthly") || normalized === "monthly") {
+        return "monthly";
+    }
+    if (normalized.includes("quarterly") || normalized === "quarterly") {
+        return "quarterly";
+    }
+    
+    // Default fallback
+    return "one_time";
+}
+
+/**
  * POST /api/book-v2/confirm
  * 
  * Creates/updates Opportunity, Job, and Schedule records in Supabase.
@@ -27,6 +56,7 @@ import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
  * - access_method: string (optional)
  * - access_note: string (optional)
  * - additional_notes: string (optional)
+ * - frequency_label: string (optional, defaults to "One-time")
  */
 export async function POST(request: NextRequest) {
     try {
@@ -50,6 +80,7 @@ export async function POST(request: NextRequest) {
             access_method,
             access_note,
             additional_notes,
+            frequency_label = "One-time",
         } = body;
 
         // Validation
@@ -170,7 +201,7 @@ export async function POST(request: NextRequest) {
             // Get existing opportunity data to check what needs backfilling
             const { data: existingOppData } = await supabase
                 .from("opportunities")
-                .select("vertical_id, customer_id, primary_contact_id")
+                .select("vertical_id, customer_id, primary_contact_id, monetary_value_cents")
                 .eq("id", opportunityId)
                 .single();
 
@@ -190,6 +221,12 @@ export async function POST(request: NextRequest) {
             // Backfill vertical_id if missing
             if (existingOppData && !existingOppData.vertical_id) {
                 updatePayload.vertical_id = verticalId;
+            }
+            
+            // Backfill monetary_value_cents if missing
+            if (estimatedPriceCents && !existingOppData?.monetary_value_cents) {
+                updatePayload.monetary_value_cents = estimatedPriceCents;
+                console.log(`[BOOK_V2_CONFIRM] Backfilled opportunity.monetary_value_cents=${estimatedPriceCents} opportunity_id=${opportunityId}`);
             }
 
             const { error: oppUpdateError } = await supabase
@@ -222,6 +259,7 @@ export async function POST(request: NextRequest) {
                     discount_amount: discount_amount || null,
                     quote_total: quote_total || null,
                     estimated_price_cents: estimatedPriceCents,
+                    monetary_value_cents: estimatedPriceCents, // Set on create
                     metadata: {
                         booking_source: "book-v2",
                         timezone,
@@ -276,7 +314,7 @@ export async function POST(request: NextRequest) {
             // Get existing job data to check what needs backfilling
             const { data: existingJobData } = await supabase
                 .from("jobs")
-                .select("vertical_id, estimated_total_cents, gross_price_cents")
+                .select("vertical_id, estimated_total_cents, gross_price_cents, service_frequency_key")
                 .eq("id", jobId)
                 .single();
 
@@ -300,6 +338,13 @@ export async function POST(request: NextRequest) {
                 if (!existingJobData?.gross_price_cents) {
                     jobUpdatePayload.gross_price_cents = quoteTotalCents;
                 }
+            }
+            
+            // Backfill service_frequency_key if missing
+            if (!existingJobData?.service_frequency_key) {
+                const frequencyKey = normalizeFrequencyKey(frequency_label);
+                jobUpdatePayload.service_frequency_key = frequencyKey;
+                console.log(`[BOOK_V2_CONFIRM] Backfilled job.service_frequency_key=${frequencyKey} job_id=${jobId}`);
             }
 
             const { error: jobUpdateError } = await supabase
@@ -346,6 +391,10 @@ export async function POST(request: NextRequest) {
                 jobPayload.estimated_total_cents = quoteTotalCents;
                 jobPayload.gross_price_cents = quoteTotalCents;
             }
+            
+            // Set service_frequency_key
+            const frequencyKey = normalizeFrequencyKey(frequency_label);
+            jobPayload.service_frequency_key = frequencyKey;
 
             const { data: newJob, error: jobError } = await supabase
                 .from("jobs")
