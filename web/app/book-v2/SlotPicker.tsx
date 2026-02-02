@@ -145,7 +145,33 @@ export default function SlotPicker({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timezone]);
 
-    // Group slots by date
+    // Calculate minimum bookable date: today + 2 days (date-based only, timezone-aware)
+    const minBookableDateStr = useMemo(() => {
+        if (!mounted) return ""; // Avoid hydration issues
+        try {
+            const now = new Date();
+            // Get current date in target timezone
+            const nowInTz = new Intl.DateTimeFormat("en-CA", {
+                timeZone: timezone,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(now);
+            
+            // Parse and add 2 days
+            const [year, month, day] = nowInTz.split("-").map(Number);
+            const todayInTz = new Date(year, month - 1, day);
+            const minBookableDate = new Date(todayInTz);
+            minBookableDate.setDate(minBookableDate.getDate() + 2);
+            
+            // Format as YYYY-MM-DD
+            return `${minBookableDate.getFullYear()}-${String(minBookableDate.getMonth() + 1).padStart(2, "0")}-${String(minBookableDate.getDate()).padStart(2, "0")}`;
+        } catch {
+            return "";
+        }
+    }, [mounted, timezone]);
+
+    // Group slots by date and filter out dates before minimum bookable date
     const dateGroups = useMemo(() => {
         const groups: DateGroup[] = [];
         const grouped = slots.reduce((acc, slot) => {
@@ -163,6 +189,11 @@ export default function SlotPicker({
                 } else {
                     // Fallback: use ISO date string for grouping during SSR
                     dateKey = slot.start.toISOString().split("T")[0];
+                }
+                
+                // Filter out dates before minimum bookable date (date-based only)
+                if (mounted && minBookableDateStr && dateKey < minBookableDateStr) {
+                    return acc;
                 }
                 
                 if (!acc[dateKey]) {
@@ -192,7 +223,7 @@ export default function SlotPicker({
         groups.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
         
         return groups;
-    }, [slots, timezone, mounted]);
+    }, [slots, timezone, mounted, minBookableDateStr]);
 
     // Set default selected date to first available date
     useEffect(() => {

@@ -110,8 +110,34 @@ export async function GET(request: NextRequest) {
             return candidate;
         };
 
-        // Minimum start time: 48 hours from now (for booking safety, but we'll generate all slots)
-        const minStartTime = new Date(now.getTime() + minimumLeadTimeHours * 60 * 60 * 1000);
+        // Calculate minimum bookable date: today + 2 days (date-based only, timezone-aware)
+        // Get current date in target timezone
+        const nowInTz = new Intl.DateTimeFormat("en-CA", {
+            timeZone: timezone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        }).format(now);
+        
+        // Parse current date parts
+        const nowParts = nowInTz.split("-");
+        const nowYear = parseInt(nowParts[0]);
+        const nowMonth = parseInt(nowParts[1]) - 1;
+        const nowDay = parseInt(nowParts[2]);
+        
+        // Create date object for today in target timezone (at midnight)
+        const todayInTz = createLocalTimeInTimezone(nowYear, nowMonth, nowDay, 0, 0);
+        
+        // Add 2 days to get minimum bookable date
+        const minBookableDate = new Date(todayInTz.getTime() + 2 * 24 * 60 * 60 * 1000);
+        
+        // Get date string for minimum bookable date in target timezone (YYYY-MM-DD format)
+        const minBookableDateStr = new Intl.DateTimeFormat("en-CA", {
+            timeZone: timezone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        }).format(minBookableDate);
 
         // Generate slots for each day
         for (let dayOffset = 0; dayOffset < daysAhead; dayOffset++) {
@@ -132,19 +158,32 @@ export async function GET(request: NextRequest) {
             const month = parseInt(dateParts.find(p => p.type === "month")!.value) - 1;
             const day = parseInt(dateParts.find(p => p.type === "day")!.value);
             
+            // Get date string for this day in target timezone (YYYY-MM-DD format)
+            const dayDateStr = new Intl.DateTimeFormat("en-CA", {
+                timeZone: timezone,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(targetDate);
+            
+            // Skip dates before minimum bookable date (date-based only)
+            if (dayDateStr < minBookableDateStr) {
+                continue;
+            }
+            
             const dayName = getDayName(targetDate);
             const hours = workingHours[dayName];
 
             if (!hours) continue; // Skip closed days
 
             // Generate ALL slots for this day (regardless of current time)
-            // The 48-hour minimum will be enforced at booking time, not here
+            // Date-based filtering already applied above
             for (let hour = hours.start; hour < hours.end; hour++) {
                 for (let minute = 0; minute < 60; minute += slotIncrementMinutes) {
                     const slotStart = createLocalTimeInTimezone(year, month, day, hour, minute);
                     const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
 
-                    // Generate all slots for the day - filtering by current time happens in UI
+                    // Generate all slots for the day - full day shown for valid dates
                     const startTimeStr = formatTime(slotStart);
                     const endTimeStr = formatTime(slotEnd);
                     const timeWindow = `${startTimeStr} - ${endTimeStr}`;
