@@ -345,7 +345,7 @@ export default function SlotPicker({
             </div>
 
             {/* Desktop: 2-column grid, 280px sidebar, both panels 520px tall. Times are sibling column only. */}
-            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-6 lg:items-stretch">
+            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_220px] lg:gap-6 lg:items-stretch">
                 {/* Left: Month calendar — fixed height on desktop */}
                 <div className="lg:h-[520px] lg:min-h-[520px] flex flex-col">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-2 shrink-0">Select a date</h3>
@@ -432,20 +432,21 @@ export default function SlotPicker({
                                         {selectedDateSlots.map((slot) => {
                                             const isSelected = selectedSlot?.isoStart === slot.isoStart;
                                             return (
-                                                <button
-                                                    key={slot.isoStart}
-                                                    type="button"
-                                                    onClick={() => onSelectSlot(slot)}
-                                                    className={`
-                                                        w-full min-h-[40px] px-3 py-2 rounded-lg border-2 text-[13px] font-medium transition-all text-left
-                                                        ${isSelected
-                                                            ? "border-alloy-blue bg-alloy-blue text-white shadow-sm"
-                                                            : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
-                                                        }
-                                                    `}
-                                                >
-                                                    {slot.display}
-                                                </button>
+                                                <div key={slot.isoStart} className="w-full flex justify-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onSelectSlot(slot)}
+                                                        className={`
+                                                            w-full lg:w-[180px] lg:max-w-[180px] min-h-[40px] px-3 py-2 rounded-md border-2 text-sm font-medium transition-all text-center
+                                                            ${isSelected
+                                                                ? "border-alloy-blue bg-alloy-blue text-white shadow-sm"
+                                                                : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
+                                                            }
+                                                        `}
+                                                    >
+                                                        {slot.display}
+                                                    </button>
+                                                </div>
                                             );
                                         })}
                                     </div>
