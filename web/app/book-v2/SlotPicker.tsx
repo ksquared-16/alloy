@@ -464,7 +464,7 @@ export default function SlotPicker({
                     </div>
                     {/* Footer: CTA at bottom; centered on desktop */}
                     {onConfirmTime != null && (
-                        <div className="shrink-0 mt-auto p-4 border-t border-alloy-stone/20 flex justify-center">
+                        <div className="shrink-0 p-4 border-t border-alloy-stone/20 flex justify-center">
                             <button
                                 type="button"
                                 onClick={onConfirmTime}
