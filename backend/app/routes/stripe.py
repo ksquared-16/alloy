@@ -439,11 +439,13 @@ async def create_setup_intent(request: Request):
         setup_intent = stripe.SetupIntent.create(**setup_intent_params)
         
         logger.info(
-            "create_setup_intent: created setup_intent_id=%s phone=%s email=%s ghl_contact_id=%s customer_id=%s",
+            "create_setup_intent: created setup_intent_id=%s phone=%s email=%s ghl_contact_id=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s",
             setup_intent.id,
             phone[:4] + "***" if len(phone) > 4 else "***",
             email[:10] + "***" if len(email) > 10 else "***",
             resolved_ghl_contact_id or "None",
+            supabase_contact_id[:8] + "***" if supabase_contact_id else "None",
+            customer_id_from_supabase[:8] + "***" if customer_id_from_supabase else "None",
             stripe_customer_id[:8] + "***" if stripe_customer_id else "None"
         )
         

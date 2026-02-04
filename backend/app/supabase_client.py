@@ -893,13 +893,17 @@ def link_stripe_customer_to_supabase(
         
         # Option C: Create new customer
         if not customer_id:
+            # Customer payload: only valid columns (NO email/phone - those don't exist in customers table)
             customer_payload = {
                 "stripe_customer_id": stripe_customer_id,
                 "primary_contact_id": resolved_supabase_contact_id,
+                "status": "active",
             }
             
             if customer_name:
                 customer_payload["name"] = customer_name
+            else:
+                customer_payload["name"] = "New Customer"
             
             if setup_intent_id:
                 customer_payload["setup_intent_id"] = setup_intent_id
@@ -1018,9 +1022,9 @@ def link_stripe_customer_to_supabase(
                         )
         
         logger.info(
-            "SUPA_STRIPE_LINK_SUCCESS contact_id=%s customer_id=%s stripe_customer_id=%s payment_method_id=%s last4=%s brand=%s",
-            resolved_supabase_contact_id,
-            customer_id,
+            "SUPA_STRIPE_LINK_SUCCESS supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s payment_method_id=%s last4=%s brand=%s",
+            resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
+            customer_id[:8] + "***" if len(customer_id) > 8 else customer_id,
             stripe_customer_id[:8] + "***",
             payment_method_id[:8] + "***" if payment_method_id and len(payment_method_id) > 8 else payment_method_id or "None",
             payment_method_last4 or "None",
@@ -1074,13 +1078,13 @@ def get_or_create_stripe_customer_for_customer(
     headers = _get_headers()
     
     # Step 1: Find Supabase customer row
-    customer_row = None
+    supa_customer_row = None
     
     if customer_id:
-        # Lookup by customer_id
+        # Lookup by customer_id (Supabase UUID)
         customers_url = f"{base_url}/customers"
         params = {
-            "select": "id,stripe_customer_id,name,email,phone",
+            "select": "id,stripe_customer_id,name,primary_contact_id",
             "id": f"eq.{customer_id}",
             "limit": "1",
         }
@@ -1089,26 +1093,26 @@ def get_or_create_stripe_customer_for_customer(
             if response.ok:
                 data = response.json()
                 if data and len(data) > 0:
-                    customer_row = data[0]
+                    supa_customer_row = data[0]
                     logger.info(
-                        "get_or_create_stripe_customer: found customer by id customer_id=%s stripe_customer_id=%s",
+                        "get_or_create_stripe_customer: found customer by id supa_customer_id=%s stripe_customer_id=%s",
                         customer_id[:8] + "***" if len(customer_id) > 8 else customer_id,
-                        customer_row.get("stripe_customer_id")[:8] + "***" if customer_row.get("stripe_customer_id") else "None"
+                        supa_customer_row.get("stripe_customer_id")[:8] + "***" if supa_customer_row.get("stripe_customer_id") else "None"
                     )
         except Exception as e:
             logger.warning("get_or_create_stripe_customer: failed to lookup by customer_id: %s", e)
     
-    # Fallback: lookup by email or phone
-    if not customer_row:
+    # Fallback: lookup by email or phone via contact
+    if not supa_customer_row:
         if email:
             # Find contact by email, then get customer_id
             contact = find_contact_by_email(email)
             if contact and contact.get("customer_id"):
-                customer_id_from_contact = contact.get("customer_id")
+                supa_customer_id_from_contact = contact.get("customer_id")
                 customers_url = f"{base_url}/customers"
                 params = {
-                    "select": "id,stripe_customer_id,name,email,phone",
-                    "id": f"eq.{customer_id_from_contact}",
+                    "select": "id,stripe_customer_id,name,primary_contact_id",
+                    "id": f"eq.{supa_customer_id_from_contact}",
                     "limit": "1",
                 }
                 try:
@@ -1116,23 +1120,23 @@ def get_or_create_stripe_customer_for_customer(
                     if response.ok:
                         data = response.json()
                         if data and len(data) > 0:
-                            customer_row = data[0]
+                            supa_customer_row = data[0]
                             logger.info(
-                                "get_or_create_stripe_customer: found customer via contact email customer_id=%s",
-                                customer_id_from_contact[:8] + "***" if len(customer_id_from_contact) > 8 else customer_id_from_contact
+                                "get_or_create_stripe_customer: found customer via contact email supa_customer_id=%s",
+                                supa_customer_id_from_contact[:8] + "***" if len(supa_customer_id_from_contact) > 8 else supa_customer_id_from_contact
                             )
                 except Exception as e:
                     logger.warning("get_or_create_stripe_customer: failed to lookup customer via email: %s", e)
         
-        if not customer_row and phone:
+        if not supa_customer_row and phone:
             # Find contact by phone, then get customer_id
             contact = find_contact_by_phone(phone)
             if contact and contact.get("customer_id"):
-                customer_id_from_contact = contact.get("customer_id")
+                supa_customer_id_from_contact = contact.get("customer_id")
                 customers_url = f"{base_url}/customers"
                 params = {
-                    "select": "id,stripe_customer_id,name,email,phone",
-                    "id": f"eq.{customer_id_from_contact}",
+                    "select": "id,stripe_customer_id,name,primary_contact_id",
+                    "id": f"eq.{supa_customer_id_from_contact}",
                     "limit": "1",
                 }
                 try:
@@ -1140,21 +1144,21 @@ def get_or_create_stripe_customer_for_customer(
                     if response.ok:
                         data = response.json()
                         if data and len(data) > 0:
-                            customer_row = data[0]
+                            supa_customer_row = data[0]
                             logger.info(
-                                "get_or_create_stripe_customer: found customer via contact phone customer_id=%s",
-                                customer_id_from_contact[:8] + "***" if len(customer_id_from_contact) > 8 else customer_id_from_contact
+                                "get_or_create_stripe_customer: found customer via contact phone supa_customer_id=%s",
+                                supa_customer_id_from_contact[:8] + "***" if len(supa_customer_id_from_contact) > 8 else supa_customer_id_from_contact
                             )
                 except Exception as e:
                     logger.warning("get_or_create_stripe_customer: failed to lookup customer via phone: %s", e)
     
     # Step 2: Check if customer has stripe_customer_id
-    if customer_row:
-        existing_stripe_customer_id = customer_row.get("stripe_customer_id")
+    if supa_customer_row:
+        existing_stripe_customer_id = supa_customer_row.get("stripe_customer_id")
         if existing_stripe_customer_id and existing_stripe_customer_id.startswith("cus_"):
             logger.info(
-                "get_or_create_stripe_customer: found existing stripe_customer_id source=supa customer_id=%s stripe_customer_id=%s",
-                customer_row.get("id")[:8] + "***" if customer_row.get("id") else "None",
+                "get_or_create_stripe_customer: found existing stripe_customer_id source=supa supa_customer_id=%s stripe_customer_id=%s",
+                supa_customer_row.get("id")[:8] + "***" if supa_customer_row.get("id") else "None",
                 existing_stripe_customer_id[:8] + "***"
             )
             return existing_stripe_customer_id
@@ -1165,16 +1169,21 @@ def get_or_create_stripe_customer_for_customer(
         return None
     
     try:
-        # Get name from customer_row if available
+        # Get name from supa_customer_row if available
         customer_name = name
-        if not customer_name and customer_row:
-            customer_name = customer_row.get("name")
-        if not customer_name and customer_row:
+        if not customer_name and supa_customer_row:
+            customer_name = supa_customer_row.get("name")
+        if not customer_name:
             # Try to get from contact
-            contact_email = customer_row.get("email") or email
-            contact_phone = customer_row.get("phone") or phone
-            if contact_email:
-                contact = find_contact_by_email(contact_email)
+            if email:
+                contact = find_contact_by_email(email)
+                if contact:
+                    first_name = contact.get("first_name", "")
+                    last_name = contact.get("last_name", "")
+                    if first_name or last_name:
+                        customer_name = f"{first_name} {last_name}".strip()
+            if not customer_name and phone:
+                contact = find_contact_by_phone(phone)
                 if contact:
                     first_name = contact.get("first_name", "")
                     last_name = contact.get("last_name", "")
@@ -1187,7 +1196,7 @@ def get_or_create_stripe_customer_for_customer(
             phone=phone,
             name=customer_name,
             metadata={
-                "supabase_customer_id": customer_row.get("id") if customer_row else None,
+                "supabase_customer_id": supa_customer_row.get("id") if supa_customer_row else None,
             }
         )
         stripe_customer_id = stripe_customer.id
@@ -1197,30 +1206,30 @@ def get_or_create_stripe_customer_for_customer(
         )
         
         # Step 4: Save stripe_customer_id to Supabase
-        if customer_row:
+        if supa_customer_row:
             # Update existing customer
-            customer_id_to_update = customer_row.get("id")
-            customers_url = f"{base_url}/customers?id=eq.{customer_id_to_update}"
+            supa_customer_id_to_update = supa_customer_row.get("id")
+            customers_url = f"{base_url}/customers?id=eq.{supa_customer_id_to_update}"
             update_payload = {"stripe_customer_id": stripe_customer_id}
             try:
                 update_response = requests.patch(customers_url, headers=headers, json=update_payload, timeout=30)
                 if update_response.ok:
                     logger.info(
-                        "get_or_create_stripe_customer: saved stripe_customer_id to Supabase customer_id=%s stripe_customer_id=%s",
-                        customer_id_to_update[:8] + "***" if len(customer_id_to_update) > 8 else customer_id_to_update,
+                        "get_or_create_stripe_customer: saved stripe_customer_id to Supabase supa_customer_id=%s stripe_customer_id=%s",
+                        supa_customer_id_to_update[:8] + "***" if len(supa_customer_id_to_update) > 8 else supa_customer_id_to_update,
                         stripe_customer_id[:8] + "***"
                     )
                 else:
                     logger.warning(
-                        "get_or_create_stripe_customer: failed to save stripe_customer_id to Supabase customer_id=%s status=%d",
-                        customer_id_to_update[:8] + "***" if len(customer_id_to_update) > 8 else customer_id_to_update,
+                        "get_or_create_stripe_customer: failed to save stripe_customer_id to Supabase supa_customer_id=%s status=%d",
+                        supa_customer_id_to_update[:8] + "***" if len(supa_customer_id_to_update) > 8 else supa_customer_id_to_update,
                         update_response.status_code
                     )
             except Exception as e:
                 logger.warning("get_or_create_stripe_customer: exception saving stripe_customer_id: %s", e)
         else:
             # Create new customer row in Supabase
-            # First, find or create contact
+            # First, find or create contact (required for customer creation)
             contact_id = None
             if email:
                 contact = find_contact_by_email(email)
@@ -1232,17 +1241,36 @@ def get_or_create_stripe_customer_for_customer(
                 if contact:
                     contact_id = contact.get("id")
             
+            # If no contact found, we cannot create customer (contact is required)
+            if not contact_id:
+                logger.warning(
+                    "get_or_create_stripe_customer: cannot create customer - no contact found for email=%s phone=%s",
+                    email[:10] + "***" if email else "None",
+                    phone[:4] + "***" if phone else "None"
+                )
+                return stripe_customer_id  # Return Stripe customer ID even if we can't save it
+            
+            # Customer payload: only valid columns (NO email/phone - those don't exist in customers table)
             customer_payload = {
                 "stripe_customer_id": stripe_customer_id,
+                "primary_contact_id": contact_id,
+                "status": "active",
             }
             if customer_name:
                 customer_payload["name"] = customer_name
-            if email:
-                customer_payload["email"] = email
-            if phone:
-                customer_payload["phone"] = phone
-            if contact_id:
-                customer_payload["primary_contact_id"] = contact_id
+            else:
+                # Fallback name from contact
+                if contact:
+                    first_name = contact.get("first_name", "")
+                    last_name = contact.get("last_name", "")
+                    if first_name or last_name:
+                        customer_payload["name"] = f"{first_name} {last_name}".strip()
+                    elif email:
+                        customer_payload["name"] = email
+                    elif phone:
+                        customer_payload["name"] = phone
+                    else:
+                        customer_payload["name"] = "New Customer"
             
             customers_url = f"{base_url}/customers"
             try:
@@ -1262,7 +1290,7 @@ def get_or_create_stripe_customer_for_customer(
                         try:
                             requests.patch(contacts_url, headers=headers, json=contact_update, timeout=30)
                             logger.info(
-                                "get_or_create_stripe_customer: created new customer and linked contact customer_id=%s contact_id=%s",
+                                "get_or_create_stripe_customer: created new customer and linked contact supa_customer_id=%s supa_contact_id=%s",
                                 new_customer_id[:8] + "***" if len(new_customer_id) > 8 else new_customer_id,
                                 contact_id[:8] + "***" if len(contact_id) > 8 else contact_id
                             )

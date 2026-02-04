@@ -1054,7 +1054,7 @@ export default function BookV2Client() {
                                                     </div>
                                                     <button
                                                         onClick={handleConfirmSlot}
-                                                        className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                                                        className="w-full sm:w-auto sm:px-6 px-4 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
                                                     >
                                                         Confirm Time Slot
                                                     </button>
@@ -1128,7 +1128,7 @@ export default function BookV2Client() {
                                                     <div className="mt-6 pt-6 border-t border-alloy-stone/20">
                                                         <button
                                                             onClick={handleConfirmServiceDetails}
-                                                            className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                                                            className="w-full sm:w-auto sm:px-6 px-4 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
                                                         >
                                                             Confirm Details
                                                         </button>

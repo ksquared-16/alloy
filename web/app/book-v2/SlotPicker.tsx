@@ -291,81 +291,76 @@ export default function SlotPicker({
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {/* Timezone label */}
             <div className="text-xs text-alloy-midnight/60 text-center">
                 Times shown in {timezoneLabel}
             </div>
 
-            {/* Date list + Time grid layout */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Left: Date selector */}
-                <div className="md:col-span-1">
-                    <div className="bg-alloy-stone/20 rounded-lg p-2 space-y-1">
-                        <div className="text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide px-3 py-2">
-                            Select Date
+            {/* Calendar grid + Time sidebar layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr,280px] gap-4">
+                {/* Left: Calendar grid (compact month view style) */}
+                <div>
+                    <div className="mb-2">
+                        <h3 className="text-sm font-semibold text-alloy-midnight mb-1">Select a date</h3>
+                    </div>
+                    <div className="grid grid-cols-7 gap-2">
+                        {/* Calendar header (day names) */}
+                        <div className="col-span-7 grid grid-cols-7 gap-2 mb-1">
+                            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                                <div key={day} className="text-xs font-medium text-alloy-midnight/60 text-center py-1">
+                                    {day}
+                                </div>
+                            ))}
                         </div>
-                        <div className="max-h-[400px] overflow-y-auto space-y-1">
-                            {dateGroups.map((group) => {
-                                const isSelected = selectedDateKey === group.dateKey;
-                                return (
-                                    <button
-                                        key={group.dateKey}
-                                        onClick={() => setSelectedDateKey(group.dateKey)}
-                                        className={`
-                                            w-full text-left px-3 py-3 rounded-md transition-all
-                                            ${
-                                                isSelected
-                                                    ? "bg-alloy-blue text-white shadow-sm"
-                                                    : "bg-white text-alloy-midnight hover:bg-alloy-stone/40"
-                                            }
-                                        `}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <div className={`font-medium ${isSelected ? "text-white" : "text-alloy-midnight"}`}>
-                                                    {group.dateShort}
-                                                </div>
-                                                <div className={`text-xs mt-0.5 ${isSelected ? "text-white/90" : "text-alloy-midnight/60"}`}>
-                                                    {group.slots.length} {group.slots.length === 1 ? "slot" : "slots"}
-                                                </div>
-                                            </div>
-                                            {isSelected && (
-                                                <svg
-                                                    className="w-5 h-5 text-white"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M5 13l4 4L19 7"
-                                                    />
-                                                </svg>
-                                            )}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        {/* Calendar dates - compact grid */}
+                        {dateGroups.map((group) => {
+                            const isSelected = selectedDateKey === group.dateKey;
+                            // Extract day number from dateShort (e.g., "Wed, Jan 15" -> "15")
+                            const dayNumber = group.dateShort.split(", ")[1]?.split(" ")[1] || group.dateShort.split(" ")[1] || "";
+                            const dayName = group.dateShort.split(", ")[0]?.substring(0, 3) || "";
+                            
+                            return (
+                                <button
+                                    key={group.dateKey}
+                                    onClick={() => setSelectedDateKey(group.dateKey)}
+                                    className={`
+                                        aspect-square rounded-lg border-2 transition-all flex flex-col items-center justify-center p-1 min-h-[60px]
+                                        ${
+                                            isSelected
+                                                ? "border-alloy-blue bg-alloy-blue text-white shadow-md"
+                                                : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
+                                        }
+                                    `}
+                                >
+                                    <span className={`text-xs font-medium ${isSelected ? "text-white" : "text-alloy-midnight/60"}`}>
+                                        {dayName}
+                                    </span>
+                                    <span className={`text-base font-semibold ${isSelected ? "text-white" : "text-alloy-midnight"}`}>
+                                        {dayNumber}
+                                    </span>
+                                    <span className={`text-[10px] ${isSelected ? "text-white/90" : "text-alloy-midnight/50"}`}>
+                                        {group.slots.length}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* Right: Time slots for selected date */}
-                <div className="md:col-span-2">
+                {/* Right: Time slots sidebar (or below on mobile) */}
+                <div className="lg:border-l lg:border-alloy-stone/20 lg:pl-4">
                     {selectedDateKey && selectedDateSlots.length > 0 ? (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             <div>
-                                <h3 className="text-lg font-semibold text-alloy-midnight mb-1">
+                                <h3 className="text-sm font-semibold text-alloy-midnight mb-1">
                                     {dateGroups.find(g => g.dateKey === selectedDateKey)?.dateLabel}
                                 </h3>
-                                <p className="text-sm text-alloy-midnight/60">
-                                    Select a time slot
+                                <p className="text-xs text-alloy-midnight/60 mb-3">
+                                    Available times
                                 </p>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                 {selectedDateSlots.map((slot) => {
                                     const isSelected = selectedSlot?.isoStart === slot.isoStart;
                                     return (
@@ -373,11 +368,11 @@ export default function SlotPicker({
                                             key={slot.isoStart}
                                             onClick={() => onSelectSlot(slot)}
                                             className={`
-                                                px-3 sm:px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all min-h-[44px] flex items-center justify-center
+                                                w-full px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-all text-left
                                                 ${
                                                     isSelected
-                                                        ? "border-alloy-blue bg-alloy-blue text-white shadow-md"
-                                                        : "border-alloy-stone/40 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/20 hover:shadow-sm"
+                                                        ? "border-alloy-blue bg-alloy-blue text-white shadow-sm"
+                                                        : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
                                                 }
                                             `}
                                         >
@@ -388,8 +383,8 @@ export default function SlotPicker({
                             </div>
                         </div>
                     ) : (
-                        <div className="text-center py-12">
-                            <p className="text-alloy-midnight/70">No slots available for selected date.</p>
+                        <div className="text-center py-8">
+                            <p className="text-sm text-alloy-midnight/60">No slots available for selected date.</p>
                         </div>
                     )}
                 </div>
