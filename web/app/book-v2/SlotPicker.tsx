@@ -417,17 +417,33 @@ export default function SlotPicker({
                             })}
                         </div>
                     </div>
-                    {/* CTA directly below calendar — same level as last time slots */}
-                    {onConfirmTime != null && (
-                        <div className="shrink-0 pt-4 flex justify-center border-t border-alloy-stone/20">
-                            <button
-                                type="button"
-                                onClick={onConfirmTime}
-                                disabled={!selectedSlot}
-                                className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
-                            >
-                                Confirm time
-                            </button>
+                    {/* CTA and selection summary — only visible when a time is selected */}
+                    {onConfirmTime != null && selectedSlot != null && (
+                        <div className="shrink-0 pt-4 border-t border-alloy-stone/20 space-y-3">
+                            <div className="bg-alloy-stone/10 rounded-lg px-3 py-2 text-center">
+                                <p className="text-sm font-medium text-alloy-midnight">
+                                    <strong>Selected:</strong> {selectedSlot.timeWindow}
+                                </p>
+                                <p className="text-xs text-alloy-midnight/60 mt-0.5">
+                                    {mounted
+                                        ? selectedSlot.start.toLocaleDateString("en-US", {
+                                            weekday: "long",
+                                            month: "long",
+                                            day: "numeric",
+                                            timeZone: timezone,
+                                          })
+                                        : selectedSlot.start.toISOString().split("T")[0]}
+                                </p>
+                            </div>
+                            <div className="flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={onConfirmTime}
+                                    className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm shadow-sm"
+                                >
+                                    Confirm time
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
