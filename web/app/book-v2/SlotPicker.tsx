@@ -66,10 +66,6 @@ export default function SlotPicker({
         setMounted(true);
     }, []);
 
-    useEffect(() => {
-        console.log("[SLOTPICKER] loaded build v2026-02-04-1");
-    }, []);
-
     const formatTime = (date: Date): string => {
         if (!mounted) return "";
         try {
@@ -344,10 +340,6 @@ export default function SlotPicker({
 
     return (
         <div className="space-y-3">
-            {/* TEMP debug marker — remove after confirming deploy */}
-            <div className="bg-yellow-200 text-black px-2 py-1 rounded text-sm font-medium inline-block">
-                SLOTPICKER_BUILD: v2026-02-04-1
-            </div>
             <div className="text-xs text-alloy-midnight/60 text-center">
                 Times shown in {timezoneLabel}
             </div>
@@ -425,18 +417,18 @@ export default function SlotPicker({
                     </div>
                 </div>
 
-                {/* Right: Times panel — sibling to calendar only; fixed 520px on desktop; list scrolls inside */}
-                <div className="h-full lg:h-[520px] lg:min-h-[520px] flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
+                {/* Right: Times panel — exactly 520px on desktop; list scrolls inside; bottom aligns with calendar */}
+                <div className="h-full lg:h-[520px] lg:min-h-[520px] lg:max-h-[520px] lg:overflow-hidden flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-1 shrink-0">
                         {selectedDateKey ? (dateGroups.find(g => g.dateKey === selectedDateKey)?.dateLabel ?? selectedDateKey) : "Select a date"}
                     </h3>
-                    {/* Scrollable times list — only scrolling region in right panel */}
+                    {/* Scrollable times list — only scrolling region; header + footer are shrink-0 */}
                     <div className="flex-1 min-h-0 flex flex-col">
                         {selectedDateKey ? (
                             selectedDateSlots.length > 0 ? (
                                 <>
-                                    <div className="text-xs text-alloy-midnight/60 mb-2 shrink-0">Available times</div>
-                                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 pr-1">
+                                    <div className="text-xs text-alloy-midnight/60 mb-1.5 shrink-0">Available times</div>
+                                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1 pr-1">
                                         {selectedDateSlots.map((slot) => {
                                             const isSelected = selectedSlot?.isoStart === slot.isoStart;
                                             return (
@@ -445,7 +437,7 @@ export default function SlotPicker({
                                                     type="button"
                                                     onClick={() => onSelectSlot(slot)}
                                                     className={`
-                                                        w-full px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-all text-left
+                                                        w-full min-h-[40px] px-3 py-2 rounded-lg border-2 text-[13px] font-medium transition-all text-left
                                                         ${isSelected
                                                             ? "border-alloy-blue bg-alloy-blue text-white shadow-sm"
                                                             : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
