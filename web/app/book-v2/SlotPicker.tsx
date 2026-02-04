@@ -344,12 +344,12 @@ export default function SlotPicker({
                 Times shown in {timezoneLabel}
             </div>
 
-            {/* Desktop: 2-column grid, equal height. Mobile: stack. */}
-            <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-6 lg:items-stretch">
-                {/* Left: Month calendar — only calendar, no times */}
-                <div className="flex flex-col">
-                    <h3 className="text-sm font-semibold text-alloy-midnight mb-2">Select a date</h3>
-                    <div className="flex items-center justify-between mb-2">
+            {/* Desktop: 2-column grid, equal height. Narrower sidebar so calendar is larger. */}
+            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-stretch">
+                {/* Left: Month calendar — fixed height on desktop so right panel matches */}
+                <div className="flex flex-col lg:h-[520px] lg:min-h-[520px]">
+                    <h3 className="text-sm font-semibold text-alloy-midnight mb-2 shrink-0">Select a date</h3>
+                    <div className="flex items-center justify-between mb-2 shrink-0">
                         <button
                             type="button"
                             onClick={goPrev}
@@ -373,12 +373,14 @@ export default function SlotPicker({
                             <span aria-hidden>&gt;</span>
                         </button>
                     </div>
-                    <div className="grid grid-cols-7 gap-1">
+                    <div className="grid grid-cols-7 gap-1 shrink-0">
                         {WEEKDAY_LABELS.map((day) => (
                             <div key={day} className="text-xs font-medium text-alloy-midnight/60 text-center py-1">
                                 {day}
                             </div>
                         ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 flex-1 min-h-0 content-start">
                         {monthGridCells.map((cell, idx) => {
                             if (cell.type === "blank") {
                                 return <div key={`blank-${idx}`} className="aspect-square" />;
@@ -459,14 +461,14 @@ export default function SlotPicker({
                             </div>
                         )}
                     </div>
-                    {/* Sticky footer: CTA always visible at bottom of right panel on desktop */}
+                    {/* Footer: CTA at bottom of right panel; centered on desktop */}
                     {onConfirmTime != null && (
-                        <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-alloy-stone/20 p-4 mt-auto shrink-0">
+                        <div className="bg-white/95 backdrop-blur-sm border-t border-alloy-stone/20 p-4 mt-auto shrink-0 flex justify-center">
                             <button
                                 type="button"
                                 onClick={onConfirmTime}
                                 disabled={!selectedSlot}
-                                className="w-full lg:w-fit px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                                className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
                             >
                                 Confirm time
                             </button>
