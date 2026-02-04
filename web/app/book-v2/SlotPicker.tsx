@@ -344,55 +344,56 @@ export default function SlotPicker({
                 Times shown in {timezoneLabel}
             </div>
 
-            {/* Desktop: 2-column grid, 280px sidebar, both panels 520px tall. Times are sibling column only. */}
+            {/* Desktop: left column = calendar + CTA (2 rows); right column = times list. Same total height. */}
             <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_220px] lg:gap-6 lg:items-stretch">
-                {/* Left: Month calendar — fixed height on desktop */}
-                <div className="lg:h-[520px] lg:min-h-[520px] flex flex-col">
-                    <h3 className="text-sm font-semibold text-alloy-midnight mb-2 shrink-0">Select a date</h3>
-                    <div className="flex items-center justify-between mb-2 shrink-0">
-                        <button
-                            type="button"
-                            onClick={goPrev}
-                            disabled={!canGoPrev}
-                            className="p-2 rounded-lg border border-alloy-stone/30 text-alloy-midnight disabled:opacity-40 disabled:cursor-not-allowed hover:bg-alloy-stone/10 transition-colors"
-                            aria-label="Previous month"
-                        >
-                            <span className="sr-only">Previous</span>
-                            <span aria-hidden>&lt;</span>
-                        </button>
-                        <span className="text-sm font-semibold text-alloy-midnight tabular-nums">
-                            {visibleMonthLabel || "—"}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={goNext}
-                            className="p-2 rounded-lg border border-alloy-stone/30 text-alloy-midnight hover:bg-alloy-stone/10 transition-colors"
-                            aria-label="Next month"
-                        >
-                            <span className="sr-only">Next</span>
-                            <span aria-hidden>&gt;</span>
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 shrink-0">
-                        {WEEKDAY_LABELS.map((day) => (
-                            <div key={day} className="text-xs font-medium text-alloy-midnight/60 text-center py-1">
-                                {day}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 flex-1 min-h-0 content-start">
-                        {monthGridCells.map((cell, idx) => {
-                            if (cell.type === "blank") {
-                                return <div key={`blank-${idx}`} className="aspect-square" />;
-                            }
-                            const showBadge = !cell.disabled && cell.slotCount > 0;
-                            return (
-                                <button
-                                    key={cell.dateKey}
-                                    type="button"
-                                    disabled={cell.disabled}
-                                    onClick={() => !cell.disabled && setSelectedDateKey(cell.dateKey)}
-                                    className={`
+                {/* Left column: calendar then CTA — CTA in-line with bottom of times list */}
+                <div className="flex flex-col lg:h-[520px] lg:min-h-[520px] lg:max-h-[520px]">
+                    <div className="flex flex-col flex-1 min-h-0">
+                        <h3 className="text-sm font-semibold text-alloy-midnight mb-2 shrink-0">Select a date</h3>
+                        <div className="flex items-center justify-between mb-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={goPrev}
+                                disabled={!canGoPrev}
+                                className="p-2 rounded-lg border border-alloy-stone/30 text-alloy-midnight disabled:opacity-40 disabled:cursor-not-allowed hover:bg-alloy-stone/10 transition-colors"
+                                aria-label="Previous month"
+                            >
+                                <span className="sr-only">Previous</span>
+                                <span aria-hidden>&lt;</span>
+                            </button>
+                            <span className="text-sm font-semibold text-alloy-midnight tabular-nums">
+                                {visibleMonthLabel || "—"}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={goNext}
+                                className="p-2 rounded-lg border border-alloy-stone/30 text-alloy-midnight hover:bg-alloy-stone/10 transition-colors"
+                                aria-label="Next month"
+                            >
+                                <span className="sr-only">Next</span>
+                                <span aria-hidden>&gt;</span>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 shrink-0">
+                            {WEEKDAY_LABELS.map((day) => (
+                                <div key={day} className="text-xs font-medium text-alloy-midnight/60 text-center py-1">
+                                    {day}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 flex-1 min-h-0 content-start">
+                            {monthGridCells.map((cell, idx) => {
+                                if (cell.type === "blank") {
+                                    return <div key={`blank-${idx}`} className="aspect-square" />;
+                                }
+                                const showBadge = !cell.disabled && cell.slotCount > 0;
+                                return (
+                                    <button
+                                        key={cell.dateKey}
+                                        type="button"
+                                        disabled={cell.disabled}
+                                        onClick={() => !cell.disabled && setSelectedDateKey(cell.dateKey)}
+                                        className={`
                                         aspect-square rounded-lg border-2 text-sm font-medium transition-all flex flex-col items-center justify-center min-h-[44px] relative
                                         ${cell.disabled
                                             ? "border-transparent bg-alloy-stone/10 text-alloy-midnight/40 cursor-not-allowed"
@@ -401,28 +402,41 @@ export default function SlotPicker({
                                                 : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
                                         }
                                     `}
-                                >
-                                    <span>{cell.day}</span>
-                                    {showBadge && (
-                                        <span className={`
+                                    >
+                                        <span>{cell.day}</span>
+                                        {showBadge && (
+                                            <span className={`
                                             text-[10px] font-normal mt-0.5
                                             ${selectedDateKey === cell.dateKey ? "text-white/90" : "text-alloy-midnight/60"}
                                         `}>
-                                            {cell.slotCount}
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
+                                                {cell.slotCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
+                    {/* CTA directly below calendar — same level as last time slots */}
+                    {onConfirmTime != null && (
+                        <div className="shrink-0 pt-4 flex justify-center border-t border-alloy-stone/20">
+                            <button
+                                type="button"
+                                onClick={onConfirmTime}
+                                disabled={!selectedSlot}
+                                className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                            >
+                                Confirm time
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                {/* Right: Times panel — exactly 520px on desktop; list scrolls inside; bottom aligns with calendar */}
+                {/* Right column: times list only — full height, scrolls inside */}
                 <div className="h-full lg:h-[520px] lg:min-h-[520px] lg:max-h-[520px] lg:overflow-hidden flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-1 shrink-0">
                         {selectedDateKey ? (dateGroups.find(g => g.dateKey === selectedDateKey)?.dateLabel ?? selectedDateKey) : "Select a date"}
                     </h3>
-                    {/* Scrollable times list — only scrolling region; header + footer are shrink-0 */}
                     <div className="flex-1 min-h-0 flex flex-col">
                         {selectedDateKey ? (
                             selectedDateSlots.length > 0 ? (
@@ -462,19 +476,6 @@ export default function SlotPicker({
                             </div>
                         )}
                     </div>
-                    {/* Footer: CTA at bottom; centered on desktop */}
-                    {onConfirmTime != null && (
-                        <div className="shrink-0 p-4 border-t border-alloy-stone/20 flex justify-center">
-                            <button
-                                type="button"
-                                onClick={onConfirmTime}
-                                disabled={!selectedSlot}
-                                className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
-                            >
-                                Confirm time
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

@@ -1030,37 +1030,13 @@ export default function BookV2Client() {
                                     </div>
 
                                     {!slotConfirmed ? (
-                                        <>
-                                            <SlotPicker
-                                                selectedSlot={selectedSlot}
-                                                onSelectSlot={handleSelectSlot}
-                                                timezone={timezone}
-                                                error={bookingError}
-                                            />
-                                            {selectedSlot && (
-                                                <div className="mt-6 pt-6 border-t border-alloy-stone/20">
-                                                    <div className="bg-alloy-stone/10 rounded-lg p-4 mb-4">
-                                                        <p className="text-sm text-alloy-midnight/70 mb-1">
-                                                            <strong>Selected:</strong> {selectedSlot.timeWindow}
-                                                        </p>
-                                                        <p className="text-xs text-alloy-midnight/60">
-                                                            {mounted ? selectedSlot.start.toLocaleDateString("en-US", {
-                                                                weekday: "long",
-                                                                month: "long",
-                                                                day: "numeric",
-                                                                timeZone: timezone,
-                                                            }) : selectedSlot.start.toISOString().split("T")[0]}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={handleConfirmSlot}
-                                                        className="w-full sm:w-auto sm:px-6 px-4 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
-                                                    >
-                                                        Confirm Time Slot
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </>
+                                        <SlotPicker
+                                            selectedSlot={selectedSlot}
+                                            onSelectSlot={handleSelectSlot}
+                                            onConfirmTime={handleConfirmSlot}
+                                            timezone={timezone}
+                                            error={bookingError}
+                                        />
                                     ) : (
                                         <div className="bg-alloy-stone/10 rounded-lg p-4">
                                             <p className="text-sm text-alloy-midnight/70">
