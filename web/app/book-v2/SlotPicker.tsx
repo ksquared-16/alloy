@@ -66,6 +66,10 @@ export default function SlotPicker({
         setMounted(true);
     }, []);
 
+    useEffect(() => {
+        console.log("[SLOTPICKER] loaded build v2026-02-04-1");
+    }, []);
+
     const formatTime = (date: Date): string => {
         if (!mounted) return "";
         try {
@@ -340,14 +344,18 @@ export default function SlotPicker({
 
     return (
         <div className="space-y-3">
+            {/* TEMP debug marker — remove after confirming deploy */}
+            <div className="bg-yellow-200 text-black px-2 py-1 rounded text-sm font-medium inline-block">
+                SLOTPICKER_BUILD: v2026-02-04-1
+            </div>
             <div className="text-xs text-alloy-midnight/60 text-center">
                 Times shown in {timezoneLabel}
             </div>
 
-            {/* Desktop: 2-column grid, equal height. Narrower sidebar so calendar is larger. */}
-            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-stretch">
-                {/* Left: Month calendar — fixed height on desktop so right panel matches */}
-                <div className="flex flex-col lg:h-[520px] lg:min-h-[520px]">
+            {/* Desktop: 2-column grid, 280px sidebar, both panels 520px tall. Times are sibling column only. */}
+            <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-6 lg:items-stretch">
+                {/* Left: Month calendar — fixed height on desktop */}
+                <div className="lg:h-[520px] lg:min-h-[520px] flex flex-col">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-2 shrink-0">Select a date</h3>
                     <div className="flex items-center justify-between mb-2 shrink-0">
                         <button
@@ -417,18 +425,18 @@ export default function SlotPicker({
                     </div>
                 </div>
 
-                {/* Right: Times panel — flex column, list scrolls, sticky CTA footer on desktop */}
-                <div className="flex flex-col h-full min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
+                {/* Right: Times panel — sibling to calendar only; fixed 520px on desktop; list scrolls inside */}
+                <div className="h-full lg:h-[520px] lg:min-h-[520px] flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-1 shrink-0">
                         {selectedDateKey ? (dateGroups.find(g => g.dateKey === selectedDateKey)?.dateLabel ?? selectedDateKey) : "Select a date"}
                     </h3>
-                    {/* Scrollable times list — flex-1 so footer stays at bottom on desktop */}
+                    {/* Scrollable times list — only scrolling region in right panel */}
                     <div className="flex-1 min-h-0 flex flex-col">
                         {selectedDateKey ? (
                             selectedDateSlots.length > 0 ? (
                                 <>
                                     <div className="text-xs text-alloy-midnight/60 mb-2 shrink-0">Available times</div>
-                                    <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 space-y-1.5 pr-1">
+                                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 pr-1">
                                         {selectedDateSlots.map((slot) => {
                                             const isSelected = selectedSlot?.isoStart === slot.isoStart;
                                             return (
@@ -461,9 +469,9 @@ export default function SlotPicker({
                             </div>
                         )}
                     </div>
-                    {/* Footer: CTA at bottom of right panel; centered on desktop */}
+                    {/* Footer: CTA at bottom; centered on desktop */}
                     {onConfirmTime != null && (
-                        <div className="bg-white/95 backdrop-blur-sm border-t border-alloy-stone/20 p-4 mt-auto shrink-0 flex justify-center">
+                        <div className="shrink-0 mt-auto p-4 border-t border-alloy-stone/20 flex justify-center">
                             <button
                                 type="button"
                                 onClick={onConfirmTime}
