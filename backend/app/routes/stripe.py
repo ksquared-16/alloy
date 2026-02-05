@@ -321,146 +321,109 @@ async def create_setup_intent(request: Request):
         logger.error("create_setup_intent: missing required fields (phone=%s, email=%s)", bool(phone), bool(email))
         raise HTTPException(status_code=400, detail="phone and email are required")
     
-    # Step 1: Resolve contact in Supabase FIRST (Supabase-first approach)
-    from ..supabase_client import find_contact_by_email, find_contact_by_phone, normalize_phone as normalize_phone_supa
-    from ..utils import normalize_phone as normalize_phone_ghl
-    
-    normalized_email = email.strip().lower()
+    # Step 1: Normalize and resolve or create Supabase contact + customer (idempotent, Supabase-first)
+    from ..supabase_client import resolve_or_create_contact_and_customer, normalize_phone as normalize_phone_supa
+
+    normalized_email = email.strip().lower() if email else None
     normalized_phone = normalize_phone_supa(phone) if phone else None
-    
-    supabase_contact = None
-    supabase_contact_id = None
-    customer_id_from_supabase = None
     name = None
-    
-    # Priority 1: Find contact by email in Supabase
-    if normalized_email:
-        supabase_contact = find_contact_by_email(normalized_email)
-        if supabase_contact:
-            supabase_contact_id = supabase_contact.get("id")
-            customer_id_from_supabase = supabase_contact.get("customer_id")
-            first_name = supabase_contact.get("first_name", "")
-            last_name = supabase_contact.get("last_name", "")
-            if first_name or last_name:
-                name = f"{first_name} {last_name}".strip()
-            logger.info("create_setup_intent: found Supabase contact by email contact_id=%s customer_id=%s", 
-                       supabase_contact_id[:8] + "***" if supabase_contact_id else "None",
-                       customer_id_from_supabase[:8] + "***" if customer_id_from_supabase else "None")
-    
-    # Priority 2: Find contact by phone in Supabase (if email didn't match)
-    if not supabase_contact and normalized_phone:
-        supabase_contact = find_contact_by_phone(normalized_phone)
-        if supabase_contact:
-            supabase_contact_id = supabase_contact.get("id")
-            customer_id_from_supabase = supabase_contact.get("customer_id")
-            first_name = supabase_contact.get("first_name", "")
-            last_name = supabase_contact.get("last_name", "")
-            if first_name or last_name:
-                name = f"{first_name} {last_name}".strip()
-            logger.info("create_setup_intent: found Supabase contact by phone contact_id=%s customer_id=%s",
-                       supabase_contact_id[:8] + "***" if supabase_contact_id else "None",
-                       customer_id_from_supabase[:8] + "***" if customer_id_from_supabase else "None")
-    
-    # Priority 3: Fallback to GHL lookup ONLY if Supabase has no match
-    resolved_ghl_contact_id = None
-    ghl_contact = None
-    if not supabase_contact and ghl_contact_id:
+    if ghl_contact_id:
         ghl_contact = get_contact_by_id(ghl_contact_id)
         if ghl_contact:
-            resolved_ghl_contact_id = ghl_contact_id
-            logger.info("create_setup_intent: found GHL contact (Supabase lookup failed) ghl_contact_id=%s", ghl_contact_id)
-            # Try to resolve Supabase contact_id from GHL
-            from ..supabase_client import resolve_contact_id_from_ghl
-            resolved_supabase_id = resolve_contact_id_from_ghl(ghl_contact_id)
-            if resolved_supabase_id:
-                # Re-fetch contact from Supabase
-                if normalized_email:
-                    supabase_contact = find_contact_by_email(normalized_email)
-                if not supabase_contact and normalized_phone:
-                    supabase_contact = find_contact_by_phone(normalized_phone)
-                if supabase_contact:
-                    supabase_contact_id = supabase_contact.get("id")
-                    customer_id_from_supabase = supabase_contact.get("customer_id")
-                    first_name = supabase_contact.get("first_name", "")
-                    last_name = supabase_contact.get("last_name", "")
-                    if first_name or last_name:
-                        name = f"{first_name} {last_name}".strip()
-    
-    # If still no name, try to get from GHL contact
-    if not name and ghl_contact:
-        first_name = ghl_contact.get("firstName", "")
-        last_name = ghl_contact.get("lastName", "")
-        if first_name or last_name:
-            name = f"{first_name} {last_name}".strip()
-    
-    # Step 2: Ensure customer exists in Supabase before Stripe calls
-    # If we have a contact but no customer_id, we need to create customer first
-    # This should have been done in /book-v2/confirm, but we'll handle it here too
-    if supabase_contact_id and not customer_id_from_supabase:
-        # Customer should be created by booking confirm route, but if missing, create it
-        logger.warning("create_setup_intent: contact exists but no customer_id, customer should be created by booking flow")
-        # We'll let get_or_create_stripe_customer_for_customer handle customer creation
-    
-    # Step 3: Get or create Stripe Customer (Supabase-first)
-    stripe_customer_id = get_or_create_stripe_customer_for_customer(
-        customer_id=customer_id_from_supabase,
+            first_name = ghl_contact.get("firstName", "")
+            last_name = ghl_contact.get("lastName", "")
+            if first_name or last_name:
+                name = f"{first_name} {last_name}".strip()
+
+    supabase_contact_id, supa_customer_id, resolution_path = resolve_or_create_contact_and_customer(
         email=normalized_email,
         phone=normalized_phone,
         name=name,
     )
-    
+
+    if not supabase_contact_id or not supa_customer_id:
+        logger.error(
+            "create_setup_intent: could not resolve or create contact/customer resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+            resolution_path,
+            supabase_contact_id or "None",
+            supa_customer_id or "None",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Could not resolve or create contact; check email and phone.",
+        )
+
+    logger.info(
+        "create_setup_intent: contact+customer ready resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+        resolution_path,
+        supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+        supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
+    )
+
+    # Step 2: Get or create Stripe customer (ensure customers.stripe_customer_id)
+    stripe_customer_id = get_or_create_stripe_customer_for_customer(
+        customer_id=supa_customer_id,
+        email=normalized_email,
+        phone=normalized_phone,
+        name=name,
+    )
+
     if stripe_customer_id:
         logger.info(
-            "create_setup_intent: got Stripe Customer ID source=supa stripe_customer_id=%s",
-            stripe_customer_id[:8] + "***"
+            "create_setup_intent: got Stripe customer stripe_customer_id=%s supa_customer_id=%s",
+            stripe_customer_id[:8] + "***",
+            supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
         )
     else:
-        logger.warning("create_setup_intent: failed to get/create Stripe Customer from Supabase - will create SetupIntent without customer")
+        logger.warning(
+            "create_setup_intent: failed to get/create Stripe customer for supa_customer_id=%s - will create SetupIntent without customer",
+            supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
+        )
     
     # Build metadata for webhook matching
     metadata = {
         "phone": phone,
         "email": email,
     }
-    if resolved_ghl_contact_id:
-        metadata["ghl_contact_id"] = resolved_ghl_contact_id
-    
+    if ghl_contact_id:
+        metadata["ghl_contact_id"] = ghl_contact_id
+
     try:
         # Create SetupIntent (not PaymentIntent - no charge)
         setup_intent_params = {
             "usage": "off_session",  # For future charges
             "metadata": metadata,
         }
-        
-        # Add customer if we have one
+
         if stripe_customer_id:
             setup_intent_params["customer"] = stripe_customer_id
-        
+
         setup_intent = stripe.SetupIntent.create(**setup_intent_params)
-        
+
         logger.info(
-            "create_setup_intent: created setup_intent_id=%s phone=%s email=%s ghl_contact_id=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s",
+            "create_setup_intent: created setup_intent_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s",
             setup_intent.id,
-            phone[:4] + "***" if len(phone) > 4 else "***",
-            email[:10] + "***" if len(email) > 10 else "***",
-            resolved_ghl_contact_id or "None",
-            supabase_contact_id[:8] + "***" if supabase_contact_id else "None",
-            customer_id_from_supabase[:8] + "***" if customer_id_from_supabase else "None",
-            stripe_customer_id[:8] + "***" if stripe_customer_id else "None"
+            resolution_path,
+            supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+            supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
+            stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
         )
-        
-        response_data = {"client_secret": setup_intent.client_secret}
+
+        response_data = {
+            "client_secret": setup_intent.client_secret,
+            "supa_contact_id": supabase_contact_id,
+            "supa_customer_id": supa_customer_id,
+        }
         if stripe_customer_id:
-            response_data["customer_id"] = stripe_customer_id
-        
-        # Link Stripe customer to Supabase (non-blocking)
-        # Pass internal contact UUID if available, otherwise use ghl_contact_id
+            response_data["customer_id"] = stripe_customer_id  # Stripe cus_* for client use
+
+        # Update Supabase: customers.stripe_customer_id (if new), customers.setup_intent_id
         if stripe_customer_id:
             try:
                 link_stripe_customer_to_supabase(
                     stripe_customer_id,
-                    ghl_contact_id=resolved_ghl_contact_id,
-                    supabase_contact_id=supabase_contact_id,  # Pass internal UUID
+                    ghl_contact_id=ghl_contact_id,
+                    supabase_contact_id=supabase_contact_id,
                     email=normalized_email,
                     phone=normalized_phone,
                     setup_intent_id=setup_intent.id,
@@ -468,10 +431,9 @@ async def create_setup_intent(request: Request):
             except Exception as e:
                 logger.warning(
                     "create_setup_intent: Failed to link Stripe customer to Supabase (non-blocking): %s",
-                    str(e)
+                    str(e),
                 )
-                # Continue - payment setup succeeds even if Supabase link fails
-        
+
         return JSONResponse(response_data, status_code=200)
     except stripe.error.StripeError as e:
         logger.error("create_setup_intent: Stripe error: %s", e)

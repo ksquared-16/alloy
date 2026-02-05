@@ -5,7 +5,7 @@ Uses service role key to bypass RLS.
 import logging
 import requests
 import re
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple
 from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY
 import stripe
 
@@ -120,6 +120,155 @@ def find_contact_by_phone(phone: str) -> Optional[Dict]:
         logger.debug(f"Error searching contact by phone: {e}")
     
     return None
+
+
+def resolve_or_create_contact_and_customer(
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    name: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str], str]:
+    """
+    Resolve or create Supabase contact and ensure customer exists (idempotent).
+    Used by /stripe/setup-intent so flow never requires a pre-existing contact.
+
+    Steps:
+    1. Normalize email (case-insensitive) and phone (E.164).
+    2. Find contact by email, then by phone.
+    3. If not found, create contact (POST contacts).
+    4. Ensure contact has customer_id; if not, create customer and set
+       contacts.customer_id and customers.primary_contact_id.
+    5. Return (supa_contact_id, supa_customer_id, resolution_path).
+
+    resolution_path: "found_by_email" | "found_by_phone" | "created" | "missing"
+
+    Returns:
+        (contact_id, customer_id, resolution_path); (None, None, "missing") if no email/phone.
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.warning("resolve_or_create_contact_and_customer: Supabase not configured")
+        return None, None, "missing"
+
+    normalized_email = email.strip().lower() if (email and isinstance(email, str)) else None
+    normalized_phone = normalize_phone(phone) if phone else None
+    if not normalized_email and not normalized_phone:
+        logger.warning("resolve_or_create_contact_and_customer: no email or phone provided")
+        return None, None, "missing"
+
+    base_url = _get_base_url()
+    headers = _get_headers()
+
+    def ensure_customer_for_contact(contact_row: Dict, resolution_path: str) -> Tuple[Optional[str], Optional[str], str]:
+        contact_id = contact_row.get("id")
+        existing_customer_id = contact_row.get("customer_id")
+        if existing_customer_id:
+            return contact_id, existing_customer_id, resolution_path
+        first_name = contact_row.get("first_name", "") or ""
+        last_name = contact_row.get("last_name", "") or ""
+        customer_name = (first_name + " " + last_name).strip() if (first_name or last_name) else name
+        if not customer_name:
+            customer_name = normalized_email or normalized_phone or "New Customer"
+        customer_payload = {
+            "name": customer_name,
+            "primary_contact_id": contact_id,
+            "status": "active",
+        }
+        try:
+            create_resp = requests.post(f"{base_url}/customers", headers=headers, json=customer_payload, timeout=30)
+            if not create_resp.ok:
+                logger.error(
+                    "resolve_or_create_contact_and_customer: failed to create customer status=%d contact_id=%s",
+                    create_resp.status_code, contact_id
+                )
+                return contact_id, None, resolution_path
+            customer_data = create_resp.json()
+            new_customer_id = None
+            if isinstance(customer_data, list) and len(customer_data) > 0:
+                new_customer_id = customer_data[0].get("id")
+            elif isinstance(customer_data, dict):
+                new_customer_id = customer_data.get("id")
+            if new_customer_id:
+                patch_resp = requests.patch(
+                    f"{base_url}/contacts?id=eq.{contact_id}",
+                    headers=headers,
+                    json={"customer_id": new_customer_id},
+                    timeout=30,
+                )
+                if patch_resp.ok:
+                    logger.info(
+                        "resolve_or_create_contact_and_customer: created customer and linked contact supa_customer_id=%s supa_contact_id=%s",
+                        new_customer_id[:8] + "***" if len(new_customer_id) > 8 else new_customer_id,
+                        contact_id[:8] + "***" if len(contact_id) > 8 else contact_id,
+                    )
+                    return contact_id, new_customer_id, resolution_path
+                logger.warning("resolve_or_create_contact_and_customer: failed to set contact.customer_id")
+            return contact_id, None, resolution_path
+        except Exception as e:
+            logger.warning("resolve_or_create_contact_and_customer: exception creating customer: %s", e)
+            return contact_id, None, resolution_path
+
+    contact = None
+    resolution_path = None
+
+    if normalized_email:
+        contact = find_contact_by_email(normalized_email)
+        if contact:
+            resolution_path = "found_by_email"
+    if not contact and normalized_phone:
+        contact = find_contact_by_phone(normalized_phone)
+        if contact:
+            resolution_path = "found_by_phone"
+
+    if contact:
+        contact_id, customer_id, path = ensure_customer_for_contact(contact, resolution_path)
+        logger.info(
+            "resolve_or_create_contact_and_customer: resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+            path,
+            contact_id[:8] + "***" if contact_id and len(contact_id) > 8 else contact_id or "None",
+            customer_id[:8] + "***" if customer_id and len(customer_id) > 8 else customer_id or "None",
+        )
+        return contact_id, customer_id, path
+
+    first_name, last_name = "", ""
+    if name and isinstance(name, str):
+        parts = name.strip().split(None, 1)
+        first_name = parts[0] if parts else ""
+        last_name = parts[1] if len(parts) > 1 else ""
+    contact_payload = {"first_name": first_name, "last_name": last_name}
+    if normalized_email:
+        contact_payload["email"] = normalized_email
+    if normalized_phone:
+        contact_payload["phone"] = normalized_phone
+    try:
+        create_contact_resp = requests.post(f"{base_url}/contacts", headers=headers, json=contact_payload, timeout=30)
+        if not create_contact_resp.ok:
+            logger.error(
+                "resolve_or_create_contact_and_customer: failed to create contact status=%s",
+                create_contact_resp.status_code,
+            )
+            return None, None, "created"
+        contact_data = create_contact_resp.json()
+        new_contact_id = None
+        if isinstance(contact_data, list) and len(contact_data) > 0:
+            new_contact_id = contact_data[0].get("id")
+        elif isinstance(contact_data, dict):
+            new_contact_id = contact_data.get("id")
+        if not new_contact_id:
+            return None, None, "created"
+        new_contact_row = contact_data[0] if isinstance(contact_data, list) else contact_data
+        contact_id, customer_id, _ = ensure_customer_for_contact(
+            {"id": new_contact_id, "customer_id": None, "first_name": first_name, "last_name": last_name},
+            "created",
+        )
+        logger.info(
+            "resolve_or_create_contact_and_customer: resolution_path=created supa_contact_id=%s supa_customer_id=%s",
+            contact_id[:8] + "***" if contact_id and len(contact_id) > 8 else contact_id or "None",
+            customer_id[:8] + "***" if customer_id and len(customer_id) > 8 else customer_id or "None",
+        )
+        return contact_id, customer_id, "created"
+    except Exception as e:
+        logger.warning("resolve_or_create_contact_and_customer: exception creating contact: %s", e)
+        return None, None, "created"
+
 
 def upsert_contact(contact_payload: Dict, internal_id: Optional[str] = None) -> Dict:
     """
