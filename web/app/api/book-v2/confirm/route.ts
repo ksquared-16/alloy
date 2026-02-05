@@ -59,8 +59,10 @@ function normalizeFrequencyKey(frequencyLabel: string | null | undefined): strin
  * - frequency_label: string (optional, defaults to "One-time")
  */
 export async function POST(request: NextRequest) {
+    let bookingAttemptId: string | null = null;
     try {
         const body = await request.json();
+        bookingAttemptId = body.booking_attempt_id ?? null;
         const {
             slot_start,
             slot_end,
@@ -81,12 +83,15 @@ export async function POST(request: NextRequest) {
             access_note,
             additional_notes,
             frequency_label = "One-time",
+            booking_attempt_id = bookingAttemptId,
         } = body;
+
+        console.log("[BOOK_V2_CONFIRM] start booking_attempt_id=%s slot_start=%s contact_email=%s", booking_attempt_id ?? "None", slot_start, contact_email ? `${contact_email.slice(0, 3)}***` : "None");
 
         // Validation
         if (!slot_start || !slot_end || !timezone || !contact_email || !contact_phone) {
             return NextResponse.json(
-                { error: "Missing required fields" },
+                { ok: false, message: "Missing required fields", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 400 }
             );
         }
@@ -135,12 +140,12 @@ export async function POST(request: NextRequest) {
             customerId = resolverResult.customer_id;
 
             console.log(
-                `[BOOK_V2_CONFIRM] Contact/Customer resolved: contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
+                `[BOOK_V2_CONFIRM] Contact/Customer resolved booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
             );
         } catch (error: any) {
-            console.error("[BOOK_V2_CONFIRM] Failed to resolve contact/customer:", error);
+            console.error("[BOOK_V2_CONFIRM] Failed to resolve contact/customer booking_attempt_id=", booking_attempt_id, error);
             return NextResponse.json(
-                { error: `Failed to resolve contact/customer: ${error.message}` },
+                { ok: false, message: `Failed to resolve contact/customer: ${error.message}`, booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -155,17 +160,17 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         if (verticalError) {
-            console.error("[BOOK_V2_CONFIRM] Error fetching vertical:", verticalError);
+            console.error("[BOOK_V2_CONFIRM] Error fetching vertical booking_attempt_id=", booking_attempt_id, verticalError);
             return NextResponse.json(
-                { error: "Failed to fetch service" },
+                { ok: false, message: "Failed to fetch service", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
 
         if (!vertical) {
-            console.error("[BOOK_V2_CONFIRM] Vertical 'cleaning' not found");
+            console.error("[BOOK_V2_CONFIRM] Vertical 'cleaning' not found booking_attempt_id=", booking_attempt_id);
             return NextResponse.json(
-                { error: "Service not available" },
+                { ok: false, message: "Service not available", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -186,9 +191,9 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         if (oppSearchError) {
-            console.error("[BOOK_V2_CONFIRM] Error searching for opportunity:", oppSearchError);
+            console.error("[BOOK_V2_CONFIRM] Error searching for opportunity booking_attempt_id=", booking_attempt_id, oppSearchError);
             return NextResponse.json(
-                { error: "Failed to search for opportunity" },
+                { ok: false, message: "Failed to search for opportunity", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -196,7 +201,7 @@ export async function POST(request: NextRequest) {
         let opportunityId: string;
         if (existingOpp) {
             opportunityId = existingOpp.id;
-            console.log(`[BOOK_V2_CONFIRM] Found existing opportunity: ${opportunityId} (reused)`);
+            console.log(`[BOOK_V2_CONFIRM] Found existing opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId} (reused)`);
 
             // Get existing opportunity data to check what needs backfilling
             const { data: existingOppData } = await supabase
@@ -235,9 +240,9 @@ export async function POST(request: NextRequest) {
                 .eq("id", opportunityId);
 
             if (oppUpdateError) {
-                console.error("[BOOK_V2_CONFIRM] Failed to update opportunity:", oppUpdateError);
+                console.error("[BOOK_V2_CONFIRM] Failed to update opportunity booking_attempt_id=", booking_attempt_id, oppUpdateError);
                 return NextResponse.json(
-                    { error: "Failed to update opportunity" },
+                    { ok: false, message: "Failed to update opportunity", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
@@ -276,15 +281,15 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (oppError || !newOpp) {
-                console.error("[BOOK_V2_CONFIRM] Failed to create opportunity:", oppError);
+                console.error("[BOOK_V2_CONFIRM] Failed to create opportunity booking_attempt_id=", booking_attempt_id, oppError);
                 return NextResponse.json(
-                    { error: "Failed to create opportunity" },
+                    { ok: false, message: "Failed to create opportunity", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
 
             opportunityId = newOpp.id;
-            console.log(`[BOOK_V2_CONFIRM] Created new opportunity: ${opportunityId}`);
+            console.log(`[BOOK_V2_CONFIRM] Created new opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId}`);
         }
 
         // Step 5: Create or update job
@@ -297,9 +302,9 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         if (jobSearchError) {
-            console.error("[BOOK_V2_CONFIRM] Error searching for job:", jobSearchError);
+            console.error("[BOOK_V2_CONFIRM] Error searching for job booking_attempt_id=", booking_attempt_id, jobSearchError);
             return NextResponse.json(
-                { error: "Failed to search for job" },
+                { ok: false, message: "Failed to search for job", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -309,7 +314,7 @@ export async function POST(request: NextRequest) {
 
         if (existingJob) {
             jobId = existingJob.id;
-            console.log(`[BOOK_V2_CONFIRM] Found existing job: ${jobId} (reused)`);
+            console.log(`[BOOK_V2_CONFIRM] Found existing job booking_attempt_id=${booking_attempt_id ?? "None"} job_id=${jobId} (reused)`);
 
             // Get existing job data to check what needs backfilling
             const { data: existingJobData } = await supabase
@@ -353,9 +358,9 @@ export async function POST(request: NextRequest) {
                 .eq("id", jobId);
 
             if (jobUpdateError) {
-                console.error("[BOOK_V2_CONFIRM] Failed to update job:", jobUpdateError);
+                console.error("[BOOK_V2_CONFIRM] Failed to update job booking_attempt_id=", booking_attempt_id, jobUpdateError);
                 return NextResponse.json(
-                    { error: "Failed to update job" },
+                    { ok: false, message: "Failed to update job", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
@@ -403,22 +408,22 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (jobError || !newJob) {
-                console.error("[BOOK_V2_CONFIRM] Failed to create job:", jobError);
+                console.error("[BOOK_V2_CONFIRM] Failed to create job booking_attempt_id=", booking_attempt_id, jobError);
                 return NextResponse.json(
-                    { error: "Failed to create job" },
+                    { ok: false, message: "Failed to create job", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
 
             jobId = newJob.id;
-            console.log(`[BOOK_V2_CONFIRM] Created new job: ${jobId}`);
+            console.log(`[BOOK_V2_CONFIRM] Created new job booking_attempt_id=${booking_attempt_id ?? "None"} job_id=${jobId}`);
         }
 
         // Guard: Ensure job_id exists
         if (!jobId) {
-            console.error("[BOOK_V2_CONFIRM] job_id missing, aborting");
+            console.error("[BOOK_V2_CONFIRM] job_id missing, aborting booking_attempt_id=", booking_attempt_id);
             return NextResponse.json(
-                { error: "Job creation failed" },
+                { ok: false, message: "Job creation failed", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -433,9 +438,9 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         if (scheduleSearchError) {
-            console.error("[BOOK_V2_CONFIRM] Error searching for schedule:", scheduleSearchError);
+            console.error("[BOOK_V2_CONFIRM] Error searching for schedule booking_attempt_id=", booking_attempt_id, scheduleSearchError);
             return NextResponse.json(
-                { error: "Failed to search for schedule" },
+                { ok: false, message: "Failed to search for schedule", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -443,7 +448,7 @@ export async function POST(request: NextRequest) {
         let scheduleId: string;
         if (existingSchedule) {
             scheduleId = existingSchedule.id;
-            console.log(`[BOOK_V2_CONFIRM] Found existing schedule: ${scheduleId}`);
+            console.log(`[BOOK_V2_CONFIRM] Found existing schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
 
             // Update schedule
             const { error: scheduleUpdateError } = await supabase
@@ -457,9 +462,9 @@ export async function POST(request: NextRequest) {
                 .eq("id", scheduleId);
 
             if (scheduleUpdateError) {
-                console.error("[BOOK_V2_CONFIRM] Failed to update schedule:", scheduleUpdateError);
+                console.error("[BOOK_V2_CONFIRM] Failed to update schedule booking_attempt_id=", booking_attempt_id, scheduleUpdateError);
                 return NextResponse.json(
-                    { error: "Failed to update schedule" },
+                    { ok: false, message: "Failed to update schedule", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
@@ -480,30 +485,30 @@ export async function POST(request: NextRequest) {
             if (scheduleError) {
                 // Check if it's a conflict error
                 if (scheduleError.code === "23505" || scheduleError.message?.includes("conflict")) {
-                    console.error("[BOOK_V2_CONFIRM] Schedule conflict detected:", scheduleError);
+                    console.error("[BOOK_V2_CONFIRM] Schedule conflict detected booking_attempt_id=", booking_attempt_id, scheduleError);
                     return NextResponse.json(
-                        { error: "This time slot is no longer available. Please select another time." },
+                        { ok: false, message: "This time slot is no longer available. Please select another time.", booking_attempt_id: booking_attempt_id ?? null },
                         { status: 409 }
                     );
                 }
 
-                console.error("[BOOK_V2_CONFIRM] Failed to create schedule:", scheduleError);
+                console.error("[BOOK_V2_CONFIRM] Failed to create schedule booking_attempt_id=", booking_attempt_id, scheduleError);
                 return NextResponse.json(
-                    { error: "Failed to create schedule" },
+                    { ok: false, message: "Failed to create schedule", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
 
             if (!newSchedule) {
-                console.error("[BOOK_V2_CONFIRM] Schedule creation returned no data");
+                console.error("[BOOK_V2_CONFIRM] Schedule creation returned no data booking_attempt_id=", booking_attempt_id);
                 return NextResponse.json(
-                    { error: "Failed to create schedule" },
+                    { ok: false, message: "Failed to create schedule", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
 
             scheduleId = newSchedule.id;
-            console.log(`[BOOK_V2_CONFIRM] Created new schedule: ${scheduleId}`);
+            console.log(`[BOOK_V2_CONFIRM] Created new schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
         }
 
         // Step 7: Update discount redemption if discount_code_id provided
@@ -585,10 +590,10 @@ export async function POST(request: NextRequest) {
 
         if (integrityError || !integrityCheck) {
             console.error(
-                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] schedule_id=${scheduleId} error=${integrityError?.message || "not found"}`
+                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} error=${integrityError?.message || "not found"}`
             );
             return NextResponse.json(
-                { error: "Booking integrity check failed" },
+                { ok: false, message: "Booking integrity check failed", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
@@ -622,22 +627,22 @@ export async function POST(request: NextRequest) {
 
         if (integrityIssues.length > 0) {
             console.error(
-                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} issues=${JSON.stringify(integrityIssues)}`
+                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} issues=${JSON.stringify(integrityIssues)}`
             );
             return NextResponse.json(
-                { error: `Booking integrity check failed: ${integrityIssues.join("; ")}` },
+                { ok: false, message: `Booking integrity check failed: ${integrityIssues.join("; ")}`, booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }
 
         // Log integrity success
         console.log(
-            `[BOOK_V2_CONFIRM_INTEGRITY_OK] schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
+            `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
         );
 
         // Structured logging
         console.log(
-            `[BOOK_V2_CONFIRM_SUCCESS] contact_id=${contactId} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
+            `[BOOK_V2_CONFIRM_SUCCESS] booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
         );
 
         return NextResponse.json({
@@ -650,13 +655,15 @@ export async function POST(request: NextRequest) {
             has_saved_payment_method: hasSavedPaymentMethod,
             payment_method_brand: paymentMethodBrand,
             payment_method_last4: paymentMethodLast4,
+            booking_attempt_id: booking_attempt_id ?? null,
         });
     } catch (error: any) {
-        console.error("[BOOK_V2_CONFIRM_ERROR]", error);
+        console.error("[BOOK_V2_CONFIRM_ERROR] booking_attempt_id=", bookingAttemptId, error);
         return NextResponse.json(
             {
                 ok: false,
-                error: error.message || "Failed to confirm booking",
+                message: error.message || "Failed to confirm booking",
+                booking_attempt_id: bookingAttemptId,
             },
             { status: 500 }
         );

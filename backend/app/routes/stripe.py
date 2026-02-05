@@ -316,9 +316,10 @@ async def create_setup_intent(request: Request):
     phone = body.get("phone")
     email = body.get("email")
     ghl_contact_id = body.get("ghl_contact_id")
-    
+    booking_attempt_id = body.get("booking_attempt_id")
+
     if not phone or not email:
-        logger.error("create_setup_intent: missing required fields (phone=%s, email=%s)", bool(phone), bool(email))
+        logger.error("create_setup_intent: missing required fields booking_attempt_id=%s (phone=%s, email=%s)", booking_attempt_id or "None", bool(phone), bool(email))
         raise HTTPException(status_code=400, detail="phone and email are required")
     
     # Step 1: Normalize and resolve or create Supabase contact + customer (idempotent, Supabase-first)
@@ -343,7 +344,8 @@ async def create_setup_intent(request: Request):
 
     if not supabase_contact_id or not supa_customer_id:
         logger.error(
-            "create_setup_intent: could not resolve or create contact/customer resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+            "create_setup_intent: could not resolve or create contact/customer booking_attempt_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+            booking_attempt_id or "None",
             resolution_path,
             supabase_contact_id or "None",
             supa_customer_id or "None",
@@ -354,7 +356,8 @@ async def create_setup_intent(request: Request):
         )
 
     logger.info(
-        "create_setup_intent: contact+customer ready resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+        "create_setup_intent: contact+customer ready booking_attempt_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+        booking_attempt_id or "None",
         resolution_path,
         supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
         supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
@@ -370,13 +373,15 @@ async def create_setup_intent(request: Request):
 
     if stripe_customer_id:
         logger.info(
-            "create_setup_intent: got Stripe customer stripe_customer_id=%s supa_customer_id=%s",
+            "create_setup_intent: got Stripe customer booking_attempt_id=%s stripe_customer_id=%s supa_customer_id=%s",
+            booking_attempt_id or "None",
             stripe_customer_id[:8] + "***",
             supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
         )
     else:
         logger.warning(
-            "create_setup_intent: failed to get/create Stripe customer for supa_customer_id=%s - will create SetupIntent without customer",
+            "create_setup_intent: failed to get/create Stripe customer booking_attempt_id=%s supa_customer_id=%s - will create SetupIntent without customer",
+            booking_attempt_id or "None",
             supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
         )
     
@@ -401,7 +406,8 @@ async def create_setup_intent(request: Request):
         setup_intent = stripe.SetupIntent.create(**setup_intent_params)
 
         logger.info(
-            "create_setup_intent: created setup_intent_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s",
+            "create_setup_intent: created booking_attempt_id=%s setup_intent_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s",
+            booking_attempt_id or "None",
             setup_intent.id,
             resolution_path,
             supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
@@ -427,10 +433,12 @@ async def create_setup_intent(request: Request):
                     email=normalized_email,
                     phone=normalized_phone,
                     setup_intent_id=setup_intent.id,
+                    booking_attempt_id=booking_attempt_id,
                 )
             except Exception as e:
                 logger.warning(
-                    "create_setup_intent: Failed to link Stripe customer to Supabase (non-blocking): %s",
+                    "create_setup_intent: Failed to link Stripe customer to Supabase (non-blocking) booking_attempt_id=%s: %s",
+                    booking_attempt_id or "None",
                     str(e),
                 )
 

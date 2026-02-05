@@ -31,6 +31,7 @@ class ValidateDiscountRequest(BaseModel):
     phone: Optional[str] = None
     quote_subtotal: float
     vertical_key: str = "cleaning"
+    booking_attempt_id: Optional[str] = None
 
 
 class ValidateDiscountResponse(BaseModel):
@@ -164,12 +165,16 @@ async def validate_discount(request: ValidateDiscountRequest):
 
     # Normalize code
     code_normalized = request.code.strip().upper()
-    
+    booking_attempt_id = request.booking_attempt_id
+
     logger.info(
-        "DISCOUNT_VALIDATE: Validating code=%s quote_subtotal=%.2f vertical_key=%s",
+        "DISCOUNT_VALIDATE booking_attempt_id=%s code=%s email=%s phone=%s quote_subtotal=%.2f vertical_key=%s",
+        booking_attempt_id or "None",
         code_normalized,
+        (request.email or "")[:3] + "***" if request.email else "None",
+        (request.phone or "")[:4] + "***" if request.phone else "None",
         request.quote_subtotal,
-        request.vertical_key
+        request.vertical_key,
     )
 
     try:
@@ -349,14 +354,21 @@ async def validate_discount(request: ValidateDiscountRequest):
                 redemption_data = redemption_response.json()
                 if redemption_data and len(redemption_data) > 0:
                     logger.info(
-                        "DISCOUNT_VALIDATE: Code already used code=%s contact_id=%s",
-                        code_normalized,
+                        "DISCOUNT_VALIDATE_ALREADY_USED booking_attempt_id=%s supa_contact_id=%s discount_code_id=%s code=%s",
+                        booking_attempt_id or "None",
                         supabase_contact_id[:8] + "***",
+                        discount_code_id,
+                        code_normalized,
                     )
-                    return JSONResponse({
-                        "valid": False,
-                        "reason": "already_used"
-                    })
+                    return JSONResponse(
+                        {
+                            "ok": False,
+                            "reason": "discount_already_used",
+                            "message": "That promo code has already been used for this customer.",
+                            "booking_attempt_id": booking_attempt_id,
+                        },
+                        status_code=409,
+                    )
         else:
             logger.warning(
                 "DISCOUNT_VALIDATE: no contact (missing email+phone), skipping uniqueness enforcement code=%s",

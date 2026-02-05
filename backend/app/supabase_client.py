@@ -866,6 +866,7 @@ def link_stripe_customer_to_supabase(
     payment_method_brand: Optional[str] = None,
     payment_method_last4: Optional[str] = None,
     billing_address: Optional[Dict[str, Any]] = None,
+    booking_attempt_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Link Stripe customer to Supabase contact/customer.
@@ -894,7 +895,8 @@ def link_stripe_customer_to_supabase(
         return None
     
     logger.info(
-        "SUPA_STRIPE_LINK_ATTEMPT ghl_contact_id=%s email=%s phone=%s stripe_customer_id=%s",
+        "SUPA_STRIPE_LINK_ATTEMPT booking_attempt_id=%s ghl_contact_id=%s email=%s phone=%s stripe_customer_id=%s",
+        booking_attempt_id or "None",
         ghl_contact_id[:8] + "***" if ghl_contact_id and len(ghl_contact_id) > 8 else ghl_contact_id or "None",
         email[:3] + "***" if email else "None",
         phone[:4] + "***" if phone else "None",
@@ -966,7 +968,8 @@ def link_stripe_customer_to_supabase(
         
         if not resolved_supabase_contact_id:
             logger.warning(
-                "SUPA_STRIPE_LINK_FAILED reason=contact_not_found supabase_contact_id=%s ghl_contact_id=%s email=%s phone=%s",
+                "SUPA_STRIPE_LINK_FAILED reason=contact_not_found booking_attempt_id=%s supabase_contact_id=%s ghl_contact_id=%s email=%s phone=%s",
+                booking_attempt_id or "None",
                 supabase_contact_id or "None",
                 ghl_contact_id or "None",
                 email[:3] + "***" if email else "None",
@@ -985,7 +988,8 @@ def link_stripe_customer_to_supabase(
         contact_response = requests.get(contact_url, headers=headers, params=contact_params, timeout=30)
         if not contact_response.ok:
             logger.error(
-                "SUPA_STRIPE_LINK_FAILED reason=contact_fetch_failed contact_id=%s status=%d response=%s",
+                "SUPA_STRIPE_LINK_FAILED reason=contact_fetch_failed booking_attempt_id=%s contact_id=%s status=%d response=%s",
+                booking_attempt_id or "None",
                 resolved_supabase_contact_id,
                 contact_response.status_code,
                 contact_response.text[:200]
@@ -994,7 +998,7 @@ def link_stripe_customer_to_supabase(
         
         contact_data = contact_response.json()
         if not contact_data or len(contact_data) == 0:
-            logger.error("SUPA_STRIPE_LINK_FAILED reason=contact_not_found contact_id=%s", resolved_supabase_contact_id)
+            logger.error("SUPA_STRIPE_LINK_FAILED reason=contact_not_found booking_attempt_id=%s contact_id=%s", booking_attempt_id or "None", resolved_supabase_contact_id)
             return None
         
         contact_row = contact_data[0]
@@ -1085,7 +1089,8 @@ def link_stripe_customer_to_supabase(
             else:
                 error_text = customer_response.text[:500]
                 logger.error(
-                    "SUPA_STRIPE_LINK_FAILED reason=customer_create_failed contact_id=%s stripe_customer_id=%s status=%d error=%s payload_keys=%s",
+                    "SUPA_STRIPE_LINK_FAILED reason=customer_create_failed booking_attempt_id=%s contact_id=%s stripe_customer_id=%s status=%d error=%s payload_keys=%s",
+                    booking_attempt_id or "None",
                     resolved_supabase_contact_id,
                     stripe_customer_id[:8] + "***",
                     customer_response.status_code,
@@ -1171,7 +1176,8 @@ def link_stripe_customer_to_supabase(
                         )
         
         logger.info(
-            "SUPA_STRIPE_LINK_SUCCESS supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s payment_method_id=%s last4=%s brand=%s",
+            "SUPA_STRIPE_LINK_SUCCESS booking_attempt_id=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s payment_method_id=%s last4=%s brand=%s",
+            booking_attempt_id or "None",
             resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
             customer_id[:8] + "***" if len(customer_id) > 8 else customer_id,
             stripe_customer_id[:8] + "***",
@@ -1188,7 +1194,8 @@ def link_stripe_customer_to_supabase(
     
     except Exception as e:
         logger.error(
-            "SUPA_STRIPE_LINK_FAILED reason=exception ghl_contact_id=%s email=%s phone=%s stripe_customer_id=%s error=%s",
+            "SUPA_STRIPE_LINK_FAILED reason=exception booking_attempt_id=%s ghl_contact_id=%s email=%s phone=%s stripe_customer_id=%s error=%s",
+            booking_attempt_id or "None",
             ghl_contact_id or "None",
             email[:3] + "***" if email else "None",
             phone[:4] + "***" if phone else "None",
