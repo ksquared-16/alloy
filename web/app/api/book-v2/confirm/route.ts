@@ -86,7 +86,17 @@ export async function POST(request: NextRequest) {
             booking_attempt_id = bookingAttemptId,
         } = body;
 
-        console.log("[BOOK_V2_CONFIRM] start booking_attempt_id=%s slot_start=%s contact_email=%s", booking_attempt_id ?? "None", slot_start, contact_email ? `${contact_email.slice(0, 3)}***` : "None");
+        const service_frequency_key = normalizeFrequencyKey(frequency_label);
+        console.log(
+            "[BOOK_V2_CONFIRM_START] booking_attempt_id=%s email=%s phone=%s slot_start=%s slot_end=%s frequency_label=%s service_frequency_key=%s",
+            booking_attempt_id ?? "None",
+            contact_email ?? "None",
+            contact_phone ?? "None",
+            slot_start ?? "None",
+            slot_end ?? "None",
+            frequency_label ?? "None",
+            service_frequency_key
+        );
 
         // Validation
         if (!slot_start || !slot_end || !timezone || !contact_email || !contact_phone) {
@@ -178,11 +188,11 @@ export async function POST(request: NextRequest) {
         const verticalId = vertical.id;
 
         // Step 4: Find or create opportunity
-        // Check for existing opportunity for this contact (recent, open status)
+        // Reuse only if existing opportunity has same booking_attempt_id (idempotent retry). Otherwise create new.
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        const { data: existingOpp, error: oppSearchError } = await supabase
+        const { data: existingOppRow, error: oppSearchError } = await supabase
             .from("opportunities")
-            .select("id, customer_id, primary_contact_id")
+            .select("id, customer_id, primary_contact_id, metadata")
             .eq("primary_contact_id", contactId)
             .eq("status", "open")
             .gte("created_at", tenMinutesAgo)
@@ -198,6 +208,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const existingOpp =
+            existingOppRow &&
+            booking_attempt_id &&
+            (existingOppRow.metadata as Record<string, unknown> | null)?.booking_attempt_id === booking_attempt_id
+                ? existingOppRow
+                : null;
+
         let opportunityId: string;
         if (existingOpp) {
             opportunityId = existingOpp.id;
@@ -212,6 +229,7 @@ export async function POST(request: NextRequest) {
 
             // Update opportunity with booking details and backfill links
             const estimatedPriceCents = quote_subtotal ? Math.round(quote_subtotal * 100) : null;
+            const existingMeta = ((existingOpp as { metadata?: Record<string, unknown> })?.metadata) || {};
             const updatePayload: Record<string, any> = {
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
@@ -221,6 +239,7 @@ export async function POST(request: NextRequest) {
                 estimated_price_cents: estimatedPriceCents,
                 customer_id: customerId,
                 primary_contact_id: contactId,
+                metadata: { ...existingMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
 
             // Backfill vertical_id if missing
@@ -267,6 +286,7 @@ export async function POST(request: NextRequest) {
                     monetary_value_cents: estimatedPriceCents, // Set on create
                     metadata: {
                         booking_source: "book-v2",
+                        booking_attempt_id: booking_attempt_id ?? undefined,
                         timezone,
                         address: address || null,
                         city: city || null,
@@ -293,10 +313,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 5: Create or update job
-        // Check for existing job for this opportunity
-        const { data: existingJob, error: jobSearchError } = await supabase
+        // Reuse only if existing job has same booking_attempt_id (idempotent retry). Otherwise create new.
+        const { data: existingJobRow, error: jobSearchError } = await supabase
             .from("jobs")
-            .select("id, customer_id, primary_contact_id")
+            .select("id, customer_id, primary_contact_id, metadata")
             .eq("opportunity_id", opportunityId)
             .limit(1)
             .maybeSingle();
@@ -308,6 +328,13 @@ export async function POST(request: NextRequest) {
                 { status: 500 }
             );
         }
+
+        const existingJob =
+            existingJobRow &&
+            booking_attempt_id &&
+            (existingJobRow.metadata as Record<string, unknown> | null)?.booking_attempt_id === booking_attempt_id
+                ? existingJobRow
+                : null;
 
         let jobId: string;
         const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
@@ -323,11 +350,18 @@ export async function POST(request: NextRequest) {
                 .eq("id", jobId)
                 .single();
 
-            // Update job and backfill all links and fields
+            // Update job and backfill all links and fields; persist metadata for this attempt
+            const jobMeta = ((existingJob as { metadata?: Record<string, unknown> })?.metadata) || {};
             const jobUpdatePayload: Record<string, any> = {
                 scheduled_at: slot_start,
                 customer_id: customerId,
                 primary_contact_id: contactId,
+                metadata: {
+                    ...jobMeta,
+                    booking_attempt_id: booking_attempt_id ?? undefined,
+                    frequency_label: frequency_label ?? undefined,
+                    service_frequency_key: service_frequency_key,
+                },
             };
 
             // Backfill vertical_id if missing
@@ -347,9 +381,8 @@ export async function POST(request: NextRequest) {
             
             // Backfill service_frequency_key if missing
             if (!existingJobData?.service_frequency_key) {
-                const frequencyKey = normalizeFrequencyKey(frequency_label);
-                jobUpdatePayload.service_frequency_key = frequencyKey;
-                console.log(`[BOOK_V2_CONFIRM] Backfilled job.service_frequency_key=${frequencyKey} job_id=${jobId}`);
+                jobUpdatePayload.service_frequency_key = service_frequency_key;
+                console.log(`[BOOK_V2_CONFIRM] Backfilled job.service_frequency_key=${service_frequency_key} job_id=${jobId}`);
             }
 
             const { error: jobUpdateError } = await supabase
@@ -377,6 +410,9 @@ export async function POST(request: NextRequest) {
                 scheduled_at: slot_start,
                 metadata: {
                     booking_source: "book-v2",
+                    booking_attempt_id: booking_attempt_id ?? undefined,
+                    frequency_label: frequency_label ?? undefined,
+                    service_frequency_key: service_frequency_key,
                     timezone,
                     quote_subtotal,
                     discount_amount,
@@ -397,9 +433,7 @@ export async function POST(request: NextRequest) {
                 jobPayload.gross_price_cents = quoteTotalCents;
             }
             
-            // Set service_frequency_key
-            const frequencyKey = normalizeFrequencyKey(frequency_label);
-            jobPayload.service_frequency_key = frequencyKey;
+            jobPayload.service_frequency_key = service_frequency_key;
 
             const { data: newJob, error: jobError } = await supabase
                 .from("jobs")
@@ -429,13 +463,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 6: Create schedule
-        // Check for existing schedule for this job (idempotency)
-        const { data: existingSchedule, error: scheduleSearchError } = await supabase
+        // Reuse only if same start_at, end_at, timezone AND metadata.booking_attempt_id === booking_attempt_id. Otherwise create new row.
+        const { data: existingSchedules, error: scheduleSearchError } = await supabase
             .from("schedules")
-            .select("id")
-            .eq("job_id", jobId)
-            .limit(1)
-            .maybeSingle();
+            .select("id, start_at, end_at, timezone, metadata")
+            .eq("job_id", jobId);
 
         if (scheduleSearchError) {
             console.error("[BOOK_V2_CONFIRM] Error searching for schedule booking_attempt_id=", booking_attempt_id, scheduleSearchError);
@@ -445,12 +477,23 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const existingSchedule =
+            existingSchedules?.find(
+                (s) =>
+                    s.start_at === slot_start &&
+                    s.end_at === slot_end &&
+                    s.timezone === timezone &&
+                    booking_attempt_id &&
+                    (s.metadata as Record<string, unknown> | null)?.booking_attempt_id === booking_attempt_id
+            ) ?? null;
+
         let scheduleId: string;
         if (existingSchedule) {
             scheduleId = existingSchedule.id;
             console.log(`[BOOK_V2_CONFIRM] Found existing schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
 
-            // Update schedule
+            // Update schedule (keep metadata.booking_attempt_id)
+            const existingScheduleMeta = (existingSchedule.metadata as Record<string, unknown>) || {};
             const { error: scheduleUpdateError } = await supabase
                 .from("schedules")
                 .update({
@@ -458,6 +501,7 @@ export async function POST(request: NextRequest) {
                     end_at: slot_end,
                     duration_minutes: 120,
                     timezone,
+                    metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
                 })
                 .eq("id", scheduleId);
 
@@ -478,6 +522,7 @@ export async function POST(request: NextRequest) {
                     end_at: slot_end,
                     duration_minutes: 120,
                     timezone,
+                    metadata: { booking_attempt_id: booking_attempt_id ?? undefined },
                 })
                 .select("id")
                 .single();

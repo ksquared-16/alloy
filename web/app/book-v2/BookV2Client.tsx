@@ -685,13 +685,30 @@ export default function BookV2Client() {
                 }),
             });
 
-            const result = await bookingResponse.json();
+            const rawBody = await bookingResponse.text();
+            console.log("[BOOK_V2_FLOW] confirm_response booking_attempt_id=", attemptId, "status=", bookingResponse.status, "body=", rawBody);
+            let result: {
+                ok?: boolean;
+                message?: string;
+                error?: string;
+                detail?: string | unknown;
+                job_id?: string;
+                opportunity_id?: string;
+                schedule_id?: string;
+            } = {};
+            try {
+                if (rawBody) result = JSON.parse(rawBody);
+            } catch {
+                // non-JSON response (e.g. HTML error page)
+            }
             if (process.env.NODE_ENV !== "production") {
                 console.log("[BOOK_V2_FLOW] confirm_finished booking_attempt_id=", attemptId, "status=", bookingResponse.status, "body=", result);
             }
 
             if (!bookingResponse.ok || result.ok === false) {
-                const message = result.message || result.error || "Failed to confirm booking";
+                const detailStr =
+                    result.detail == null ? null : typeof result.detail === "string" ? result.detail : JSON.stringify(result.detail);
+                const message = result.message ?? result.error ?? detailStr ?? "Failed to confirm booking";
                 setPaymentError(`${message}${attemptId ? ` (ID: ${attemptId})` : ""}`);
                 return;
             }
@@ -701,7 +718,11 @@ export default function BookV2Client() {
                 return;
             }
 
-            setBookingResult(result);
+            setBookingResult({
+                schedule_id: result.schedule_id,
+                job_id: result.job_id,
+                opportunity_id: result.opportunity_id,
+            });
             setCurrentStep("confirmed");
             resetBookingAttemptId();
 
