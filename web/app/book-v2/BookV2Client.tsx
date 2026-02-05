@@ -528,6 +528,13 @@ export default function BookV2Client() {
                 console.log("[BOOK_V2_DISCOUNT] booking_attempt_id=", attemptId, "status=", response.status, "body=", data);
             }
 
+            if (response.status === 409) {
+                const message = data.message ?? "That promo code has already been used for this customer.";
+                setDiscountError(message);
+                setDiscountData(null);
+                return;
+            }
+
             if (data.valid === true) {
                 setDiscountData({
                     code: discountCode.trim().toUpperCase(),
@@ -556,7 +563,7 @@ export default function BookV2Client() {
                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                 localStorage.setItem("alloy_booking_prefill", jsonData);
             } else {
-                const message = data.message || (data.reason === "already_used" ? "This discount code has already been used" : "Invalid discount code");
+                const message = data.message ?? (data.reason === "discount_already_used" ? "That promo code has already been used for this customer." : "Invalid discount code");
                 setDiscountError(message);
                 setDiscountData(null);
             }
