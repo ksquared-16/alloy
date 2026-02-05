@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
             discount_amount = 0,
             quote_total,
             discount_code_id = null,
+            discount_code = null,
             contact_email,
             contact_phone,
             contact_first_name,
@@ -160,6 +161,32 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Step 2: If discount used, check redemption not already recorded (enforce "once per customer")
+        if (discount_code_id && customerId) {
+            const { data: existingRedemption, error: redemptionCheckError } = await supabase
+                .from("discount_redemptions")
+                .select("id")
+                .eq("discount_code_id", discount_code_id)
+                .eq("customer_id", customerId)
+                .limit(1)
+                .maybeSingle();
+
+            if (redemptionCheckError) {
+                console.error("[BOOK_V2_CONFIRM] Error checking discount redemption booking_attempt_id=", booking_attempt_id, redemptionCheckError);
+                return NextResponse.json(
+                    { ok: false, message: "Failed to check discount usage", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
+            }
+            if (existingRedemption) {
+                console.log("[BOOK_V2_CONFIRM_REDEMPTION_ALREADY_USED] booking_attempt_id=%s customer_id=%s discount_code_id=%s", booking_attempt_id ?? "None", customerId, discount_code_id);
+                return NextResponse.json(
+                    { ok: false, message: "That promo code has already been used for this customer.", reason: "discount_already_used", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 409 }
+                );
+            }
+        }
+
         // Step 3: Get vertical_id for "cleaning"
         const { data: vertical, error: verticalError } = await supabase
             .from("verticals")
@@ -234,13 +261,18 @@ export async function POST(request: NextRequest) {
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
                 quote_subtotal: quote_subtotal || null,
-                discount_amount: discount_amount || null,
+                discount_amount: discount_amount ?? null,
                 quote_total: quote_total || null,
                 estimated_price_cents: estimatedPriceCents,
                 customer_id: customerId,
                 primary_contact_id: contactId,
                 metadata: { ...existingMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
+            if (discount_code_id != null) {
+                updatePayload.discount_code_id = discount_code_id;
+                if (discount_code != null) updatePayload.discount_code = discount_code;
+                updatePayload.discount_amount = discount_amount ?? null;
+            }
 
             // Backfill vertical_id if missing
             if (existingOppData && !existingOppData.vertical_id) {
@@ -280,10 +312,15 @@ export async function POST(request: NextRequest) {
                     job_date: jobDate,
                     job_time_window: jobTimeWindow,
                     quote_subtotal: quote_subtotal || null,
-                    discount_amount: discount_amount || null,
+                    discount_amount: discount_amount ?? null,
                     quote_total: quote_total || null,
                     estimated_price_cents: estimatedPriceCents,
                     monetary_value_cents: estimatedPriceCents, // Set on create
+                    ...(discount_code_id != null && {
+                        discount_code_id,
+                        discount_code: discount_code ?? null,
+                        discount_amount: discount_amount ?? null,
+                    }),
                     metadata: {
                         booking_source: "book-v2",
                         booking_attempt_id: booking_attempt_id ?? undefined,
@@ -363,6 +400,12 @@ export async function POST(request: NextRequest) {
                     service_frequency_key: service_frequency_key,
                 },
             };
+            if (discount_code_id != null) {
+                jobUpdatePayload.discounted = true;
+                jobUpdatePayload.discount_code_id = discount_code_id;
+                jobUpdatePayload.discount_code = discount_code ?? null;
+                jobUpdatePayload.discount_amount = discount_amount ?? null;
+            }
 
             // Backfill vertical_id if missing
             if (existingJobData && !existingJobData.vertical_id) {
@@ -408,6 +451,12 @@ export async function POST(request: NextRequest) {
                 title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 description: `Scheduled cleaning service`,
                 scheduled_at: slot_start,
+                ...(discount_code_id != null && {
+                    discounted: true,
+                    discount_code_id,
+                    discount_code: discount_code ?? null,
+                    discount_amount: discount_amount ?? null,
+                }),
                 metadata: {
                     booking_source: "book-v2",
                     booking_attempt_id: booking_attempt_id ?? undefined,
@@ -556,35 +605,35 @@ export async function POST(request: NextRequest) {
             console.log(`[BOOK_V2_CONFIRM] Created new schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
         }
 
-        // Step 7: Update discount redemption if discount_code_id provided
+        // Step 7: Persist discount redemption (one per customer per code)
         if (discount_code_id) {
-            // Find redemption by discount_code_id and contact_id
-            const { data: redemption, error: redemptionSearchError } = await supabase
+            const { data: redemptionRow, error: redemptionInsertError } = await supabase
                 .from("discount_redemptions")
+                .insert({
+                    discount_code_id,
+                    customer_id: customerId,
+                    contact_id: contactId,
+                    job_id: jobId,
+                    booking_attempt_id: booking_attempt_id || null,
+                })
                 .select("id")
-                .eq("discount_code_id", discount_code_id)
-                .eq("contact_id", contactId)
-                .limit(1)
-                .maybeSingle();
+                .single();
 
-            if (redemptionSearchError) {
-                console.error("[BOOK_V2_CONFIRM] Error searching for discount redemption:", redemptionSearchError);
-                // Non-fatal, continue
-            } else if (redemption) {
-                // Update redemption with opportunity_id and job_id
-                const { error: redemptionUpdateError } = await supabase
-                    .from("discount_redemptions")
-                    .update({
-                        opportunity_id: opportunityId,
-                        job_id: jobId,
-                    })
-                    .eq("id", redemption.id);
-
-                if (redemptionUpdateError) {
-                    console.error("[BOOK_V2_CONFIRM] Failed to update discount redemption:", redemptionUpdateError);
-                    // Non-fatal, continue
+            if (redemptionInsertError) {
+                if (redemptionInsertError.code === "23505" || redemptionInsertError.message?.includes("unique") || redemptionInsertError.message?.includes("duplicate")) {
+                    console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_CONFLICT] booking_attempt_id=%s customer_id=%s discount_code_id=%s (already redeemed)", booking_attempt_id ?? "None", customerId, discount_code_id);
+                    return NextResponse.json(
+                        { ok: false, message: "That promo code has already been used for this customer.", reason: "discount_already_used", booking_attempt_id: booking_attempt_id ?? null },
+                        { status: 409 }
+                    );
                 }
+                console.error("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_FAIL] booking_attempt_id=", booking_attempt_id, redemptionInsertError);
+                return NextResponse.json(
+                    { ok: false, message: "Failed to record discount redemption.", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
             }
+            console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_OK] booking_attempt_id=%s redemption_id=%s customer_id=%s discount_code_id=%s", booking_attempt_id ?? "None", redemptionRow?.id ?? "?", customerId, discount_code_id);
         }
 
         // Step 8: Check if customer has saved payment method

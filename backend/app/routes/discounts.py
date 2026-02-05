@@ -338,13 +338,13 @@ async def validate_discount(request: ValidateDiscountRequest):
                 supa_customer_id[:8] + "***" if supa_customer_id and len(supa_customer_id) > 8 else (supa_customer_id or "None"),
             )
 
-        # 3. Enforce uniqueness (only when we have a contact)
-        if supabase_contact_id:
+        # 3. Enforce uniqueness: one redemption per (discount_code_id, customer_id)
+        if supabase_contact_id and supa_customer_id:
             redemption_url = f"{base_url}/discount_redemptions"
             redemption_params = {
                 "select": "id",
-                "contact_id": f"eq.{supabase_contact_id}",
                 "discount_code_id": f"eq.{discount_code_id}",
+                "customer_id": f"eq.{supa_customer_id}",
                 "limit": "1",
             }
             redemption_response = requests.get(
@@ -354,9 +354,9 @@ async def validate_discount(request: ValidateDiscountRequest):
                 redemption_data = redemption_response.json()
                 if redemption_data and len(redemption_data) > 0:
                     logger.info(
-                        "DISCOUNT_VALIDATE_ALREADY_USED booking_attempt_id=%s supa_contact_id=%s discount_code_id=%s code=%s",
+                        "DISCOUNT_VALIDATE_ALREADY_USED booking_attempt_id=%s customer_id=%s discount_code_id=%s code=%s",
                         booking_attempt_id or "None",
-                        supabase_contact_id[:8] + "***",
+                        supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
                         discount_code_id,
                         code_normalized,
                     )
@@ -369,6 +369,11 @@ async def validate_discount(request: ValidateDiscountRequest):
                         },
                         status_code=409,
                     )
+        elif supabase_contact_id:
+            logger.warning(
+                "DISCOUNT_VALIDATE: no customer_id, skipping uniqueness enforcement code=%s",
+                code_normalized,
+            )
         else:
             logger.warning(
                 "DISCOUNT_VALIDATE: no contact (missing email+phone), skipping uniqueness enforcement code=%s",
