@@ -3,6 +3,8 @@
 import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
+import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 
 interface Job {
     id: string;
@@ -15,6 +17,9 @@ interface Job {
     contractor_payout_cents: number | null;
     offer_code: string | null;
     external_id: string | null;
+    opportunity_id: string | null;
+    primary_contact_id: string | null;
+    customer_id: string | null;
 }
 
 interface JobsClientProps {
@@ -27,6 +32,7 @@ export default function JobsClient({
     error,
 }: JobsClientProps) {
     const [selectedRow, setSelectedRow] = useState<Job | null>(null);
+    const { openDrawer } = useAdminDrawer();
 
     const columns = [
         { key: "created_at", label: "Created", sortable: true },
@@ -136,9 +142,34 @@ export default function JobsClient({
                             {selectedRow.offer_code || "-"}
                         </div>
                         <div>
+                            <strong className="text-alloy-midnight/70">Opportunity:</strong>{" "}
+                            {selectedRow.opportunity_id ? (
+                                <button type="button" onClick={() => openDrawer({ type: "opportunities", id: selectedRow.opportunity_id! })} className="text-alloy-blue hover:underline">
+                                    {selectedRow.opportunity_id.slice(0, 8)}…
+                                </button>
+                            ) : "-"}
+                        </div>
+                        <div>
+                            <strong className="text-alloy-midnight/70">Primary Contact:</strong>{" "}
+                            {selectedRow.primary_contact_id ? (
+                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: selectedRow.primary_contact_id! })} className="text-alloy-blue hover:underline">
+                                    {selectedRow.primary_contact_id.slice(0, 8)}…
+                                </button>
+                            ) : "-"}
+                        </div>
+                        <div>
+                            <strong className="text-alloy-midnight/70">Customer:</strong>{" "}
+                            {selectedRow.customer_id ? (
+                                <button type="button" onClick={() => openDrawer({ type: "customers", id: selectedRow.customer_id! })} className="text-alloy-blue hover:underline">
+                                    {selectedRow.customer_id.slice(0, 8)}…
+                                </button>
+                            ) : "-"}
+                        </div>
+                        <div>
                             <strong className="text-alloy-midnight/70">External ID:</strong>{" "}
                             {selectedRow.external_id || "-"}
                         </div>
+                        <RelatedRecordsTabs entityType="job" entityId={selectedRow.id} />
                     </div>
                 )}
             </Drawer>

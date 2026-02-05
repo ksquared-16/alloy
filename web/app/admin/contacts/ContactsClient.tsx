@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
+import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 
 interface Contact {
   id: string;
@@ -110,6 +111,7 @@ export default function ContactsClient({
               <strong className="text-alloy-midnight/70">External ID:</strong>{" "}
               {selectedRow.external_id || "-"}
             </div>
+            <RelatedRecordsTabs entityType="contact" entityId={selectedRow.id} />
           </div>
         )}
       </Drawer>

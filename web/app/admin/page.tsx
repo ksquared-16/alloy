@@ -11,7 +11,7 @@ export default async function AdminPage() {
     redirect("/login");
   }
 
-  // Redirect to opportunities page by default
-  redirect("/admin/opportunities");
+  // Redirect to dashboard
+  redirect("/admin/dashboard");
 }
 
