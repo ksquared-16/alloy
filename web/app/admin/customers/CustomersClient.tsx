@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
+import { useAdminVertical } from "@/contexts/AdminVerticalContext";
+import { formatDateTime } from "@/lib/adminFormatters";
 
 interface Customer {
   id: string;
@@ -26,9 +28,14 @@ export default function CustomersClient({
   error,
 }: CustomersClientProps) {
   const [selectedRow, setSelectedRow] = useState<Customer | null>(null);
+  const { selectedVerticalId } = useAdminVertical();
+  const data = useMemo(() => {
+    if (!selectedVerticalId) return initialData;
+    return initialData.filter((r) => r.vertical_id === selectedVerticalId);
+  }, [initialData, selectedVerticalId]);
 
   const columns = [
-    { key: "created_at", label: "Created", sortable: true },
+    { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
     { key: "name", label: "Name", sortable: true },
     { key: "status", label: "Status", sortable: true },
     { key: "stripe_customer_id", label: "Stripe Customer ID", sortable: false },
@@ -64,7 +71,7 @@ export default function CustomersClient({
       )}
 
       <DataTable
-        data={initialData}
+        data={data}
         columns={columns}
         filters={filters}
         onRowClick={setSelectedRow}
@@ -83,7 +90,7 @@ export default function CustomersClient({
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-              {new Date(selectedRow.created_at).toLocaleString()}
+              {formatDateTime(selectedRow.created_at)}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Name:</strong>{" "}

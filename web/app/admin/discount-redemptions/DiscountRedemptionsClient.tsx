@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
+import { formatDateTime, formatMoney } from "@/lib/adminFormatters";
 
 interface DiscountRedemption {
   id: string;
@@ -30,29 +31,11 @@ export default function DiscountRedemptionsClient({
   );
 
   const columns = [
-    { key: "created_at", label: "Created", sortable: true },
+    { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
     { key: "discount_code", label: "Discount Code", sortable: true },
-    {
-      key: "quote_subtotal",
-      label: "Subtotal",
-      sortable: true,
-      render: (value: number | null) =>
-        value ? `$${value.toFixed(2)}` : "-",
-    },
-    {
-      key: "discount_amount",
-      label: "Discount",
-      sortable: true,
-      render: (value: number | null) =>
-        value ? `$${value.toFixed(2)}` : "-",
-    },
-    {
-      key: "quote_total",
-      label: "Total",
-      sortable: true,
-      render: (value: number | null) =>
-        value ? `$${value.toFixed(2)}` : "-",
-    },
+    { key: "quote_subtotal", label: "Subtotal", sortable: true, render: (v: number | null) => formatMoney(v) },
+    { key: "discount_amount", label: "Discount", sortable: true, render: (v: number | null) => formatMoney(v) },
+    { key: "quote_total", label: "Total", sortable: true, render: (v: number | null) => formatMoney(v) },
     { key: "contact_id", label: "Contact ID", sortable: false },
     { key: "opportunity_id", label: "Opportunity ID", sortable: false },
     { key: "job_id", label: "Job ID", sortable: false },
@@ -89,7 +72,7 @@ export default function DiscountRedemptionsClient({
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-              {new Date(selectedRow.created_at).toLocaleString()}
+              {formatDateTime(selectedRow.created_at)}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Discount Code:</strong>{" "}
@@ -97,21 +80,15 @@ export default function DiscountRedemptionsClient({
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Subtotal:</strong>{" "}
-              {selectedRow.quote_subtotal
-                ? `$${selectedRow.quote_subtotal.toFixed(2)}`
-                : "-"}
+              {formatMoney(selectedRow.quote_subtotal)}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Discount Amount:</strong>{" "}
-              {selectedRow.discount_amount
-                ? `$${selectedRow.discount_amount.toFixed(2)}`
-                : "-"}
+              {formatMoney(selectedRow.discount_amount)}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Total:</strong>{" "}
-              {selectedRow.quote_total
-                ? `$${selectedRow.quote_total.toFixed(2)}`
-                : "-"}
+              {formatMoney(selectedRow.quote_total)}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Contact ID:</strong>{" "}

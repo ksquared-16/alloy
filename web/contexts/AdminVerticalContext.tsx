@@ -1,0 +1,60 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+
+const STORAGE_KEY = "admin_selected_vertical_id";
+
+interface Vertical {
+    id: string;
+    name: string | null;
+    slug: string | null;
+}
+
+interface AdminVerticalContextValue {
+    verticals: Vertical[];
+    selectedVerticalId: string | null;
+    setSelectedVerticalId: (id: string | null) => void;
+    loading: boolean;
+}
+
+const AdminVerticalContext = createContext<AdminVerticalContextValue | null>(null);
+
+export function useAdminVertical() {
+    const ctx = useContext(AdminVerticalContext);
+    if (!ctx) throw new Error("useAdminVertical must be used within AdminVerticalProvider");
+    return ctx;
+}
+
+export function AdminVerticalProvider({ children }: { children: ReactNode }) {
+    const [verticals, setVerticals] = useState<Vertical[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedVerticalId, setSelectedVerticalIdState] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetch("/api/admin/verticals")
+            .then((res) => res.ok ? res.json() : [])
+            .then((data: Vertical[]) => setVerticals(Array.isArray(data) ? data : []))
+            .catch(() => setVerticals([]))
+            .finally(() => setLoading(false));
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const stored = localStorage.getItem(STORAGE_KEY);
+        setSelectedVerticalIdState(stored || null);
+    }, []);
+
+    const setSelectedVerticalId = useCallback((id: string | null) => {
+        setSelectedVerticalIdState(id);
+        if (typeof window !== "undefined") {
+            if (id) localStorage.setItem(STORAGE_KEY, id);
+            else localStorage.removeItem(STORAGE_KEY);
+        }
+    }, []);
+
+    return (
+        <AdminVerticalContext.Provider value={{ verticals, selectedVerticalId, setSelectedVerticalId, loading }}>
+            {children}
+        </AdminVerticalContext.Provider>
+    );
+}

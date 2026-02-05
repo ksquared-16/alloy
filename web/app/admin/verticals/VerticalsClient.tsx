@@ -4,6 +4,7 @@ import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import PrimaryButton from "@/components/PrimaryButton";
+import { formatDateTime } from "@/lib/adminFormatters";
 
 interface Vertical {
   id: string;
@@ -31,7 +32,12 @@ export default function VerticalsClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const columns = [
-    { key: "created_at", label: "Created", sortable: true },
+    {
+      key: "created_at",
+      label: "Created",
+      sortable: true,
+      render: (value: string) => formatDateTime(value),
+    },
     { key: "name", label: "Name", sortable: true },
     { key: "slug", label: "Slug", sortable: true },
     {

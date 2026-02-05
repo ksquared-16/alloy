@@ -4,6 +4,7 @@ import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
+import { formatDateTime } from "@/lib/adminFormatters";
 
 interface Contact {
   id: string;
@@ -29,7 +30,7 @@ export default function ContactsClient({
   const [selectedRow, setSelectedRow] = useState<Contact | null>(null);
 
   const columns = [
-    { key: "created_at", label: "Created", sortable: true },
+    { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
     { key: "first_name", label: "First Name", sortable: true },
     { key: "last_name", label: "Last Name", sortable: true },
     { key: "email", label: "Email", sortable: true },
@@ -81,7 +82,7 @@ export default function ContactsClient({
             </div>
             <div>
               <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-              {new Date(selectedRow.created_at).toLocaleString()}
+              {formatDateTime(selectedRow.created_at)}
             </div>
             <div>
               <strong className="text-alloy-midnight/70">First Name:</strong>{" "}

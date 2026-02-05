@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminVertical } from "@/contexts/AdminVerticalContext";
+import { formatDate, formatDateTime, formatMoney } from "@/lib/adminFormatters";
 
 interface Job {
     id: string;
@@ -20,6 +22,7 @@ interface Job {
     opportunity_id: string | null;
     primary_contact_id: string | null;
     customer_id: string | null;
+    vertical_id: string | null;
 }
 
 interface JobsClientProps {
@@ -33,32 +36,20 @@ export default function JobsClient({
 }: JobsClientProps) {
     const [selectedRow, setSelectedRow] = useState<Job | null>(null);
     const { openDrawer } = useAdminDrawer();
+    const { selectedVerticalId } = useAdminVertical();
+    const data = useMemo(() => {
+        if (!selectedVerticalId) return initialData;
+        return initialData.filter((r) => r.vertical_id === selectedVerticalId);
+    }, [initialData, selectedVerticalId]);
 
     const columns = [
-        { key: "created_at", label: "Created", sortable: true },
+        { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
         { key: "title", label: "Title", sortable: true },
-        {
-            key: "is_recurring",
-            label: "Recurring",
-            sortable: true,
-            render: (value: boolean | null) => (value ? "Yes" : "No"),
-        },
-        { key: "scheduled_at", label: "Scheduled", sortable: true },
+        { key: "is_recurring", label: "Recurring", sortable: true, render: (value: boolean | null) => (value ? "Yes" : "No") },
+        { key: "scheduled_at", label: "Scheduled", sortable: true, render: (v: string) => formatDateTime(v) },
         { key: "job_status_id", label: "Status ID", sortable: false },
-        {
-            key: "gross_price_cents",
-            label: "Gross Price",
-            sortable: true,
-            render: (value: number | null) =>
-                value ? `$${(value / 100).toFixed(2)}` : "-",
-        },
-        {
-            key: "contractor_payout_cents",
-            label: "Payout",
-            sortable: true,
-            render: (value: number | null) =>
-                value ? `$${(value / 100).toFixed(2)}` : "-",
-        },
+        { key: "gross_price_cents", label: "Gross Price", sortable: true, render: (v: number | null) => formatMoney(v, "gross_price_cents") },
+        { key: "contractor_payout_cents", label: "Payout", sortable: true, render: (v: number | null) => formatMoney(v, "contractor_payout_cents") },
         { key: "offer_code", label: "Offer Code", sortable: false },
         { key: "external_id", label: "External ID", sortable: false },
     ];
@@ -86,7 +77,7 @@ export default function JobsClient({
             )}
 
             <DataTable
-                data={initialData}
+                data={data}
                 columns={columns}
                 filters={filters}
                 onRowClick={setSelectedRow}
@@ -105,7 +96,7 @@ export default function JobsClient({
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-                            {new Date(selectedRow.created_at).toLocaleString()}
+                            {formatDateTime(selectedRow.created_at)}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Title:</strong>{" "}
@@ -117,9 +108,7 @@ export default function JobsClient({
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Scheduled:</strong>{" "}
-                            {selectedRow.scheduled_at
-                                ? new Date(selectedRow.scheduled_at).toLocaleString()
-                                : "-"}
+                            {formatDateTime(selectedRow.scheduled_at)}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Status ID:</strong>{" "}
@@ -127,15 +116,11 @@ export default function JobsClient({
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Gross Price:</strong>{" "}
-                            {selectedRow.gross_price_cents
-                                ? `$${(selectedRow.gross_price_cents / 100).toFixed(2)}`
-                                : "-"}
+                            {formatMoney(selectedRow.gross_price_cents, "gross_price_cents")}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Payout:</strong>{" "}
-                            {selectedRow.contractor_payout_cents
-                                ? `$${(selectedRow.contractor_payout_cents / 100).toFixed(2)}`
-                                : "-"}
+                            {formatMoney(selectedRow.contractor_payout_cents, "contractor_payout_cents")}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Offer Code:</strong>{" "}

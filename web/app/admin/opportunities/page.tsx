@@ -7,7 +7,7 @@ export default async function OpportunitiesPage() {
     const { data: opportunities, error } = await supabase
         .from("opportunities")
         .select(
-            "id, created_at, name, status, job_date, job_time_window, quote_total, customer_id, primary_contact_id, external_id"
+            "id, created_at, name, status, job_date, job_time_window, quote_total, customer_id, primary_contact_id, external_id, vertical_id"
         )
         .order("created_at", { ascending: false })
         .limit(1000);

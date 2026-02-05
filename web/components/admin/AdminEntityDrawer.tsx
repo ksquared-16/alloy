@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { formatMoney, formatDate, formatDateTime } from "@/lib/adminFormatters";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
     return (
@@ -12,9 +13,20 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
-function DrawerLink({ label, id, type }: { label: string; id: string | null; type: "contacts" | "customers" | "opportunities" | "jobs" }) {
+function DrawerLinkWithName({
+    label,
+    id,
+    type,
+    displayName,
+}: {
+    label: string;
+    id: string | null;
+    type: "contacts" | "customers" | "opportunities" | "jobs";
+    displayName: string | null | undefined;
+}) {
     const { openDrawer } = useAdminDrawer();
     if (!id) return <Field label={label} value="-" />;
+    const name = (displayName && displayName.trim()) ? displayName.trim() : null;
     return (
         <div>
             <strong className="text-alloy-midnight/70">{label}:</strong>{" "}
@@ -23,8 +35,9 @@ function DrawerLink({ label, id, type }: { label: string; id: string | null; typ
                 onClick={() => openDrawer({ type, id })}
                 className="text-alloy-blue hover:underline"
             >
-                {id.slice(0, 8)}…
+                {name ?? `${id.slice(0, 8)}…`}
             </button>
+            {name && <p className="text-xs text-alloy-midnight/50 mt-0.5 ml-0">{id}</p>}
         </div>
     );
 }
@@ -84,20 +97,20 @@ export default function AdminEntityDrawer() {
                     {drawer.type === "contacts" && (
                         <>
                             <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={data.created_at ? new Date(data.created_at as string).toLocaleString() : null} />
+                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="First Name" value={data.first_name as string} />
                             <Field label="Last Name" value={data.last_name as string} />
                             <Field label="Email" value={data.email as string} />
                             <Field label="Phone" value={data.phone as string} />
                             <Field label="Status" value={data.status as string} />
-                            <DrawerLink label="Customer" id={(data.customer_id as string) ?? null} type="customers" />
+                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <Field label="External ID" value={data.external_id as string} />
                         </>
                     )}
                     {drawer.type === "customers" && (
                         <>
                             <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={data.created_at ? new Date(data.created_at as string).toLocaleString() : null} />
+                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Name" value={data.name as string} />
                             <Field label="Status" value={data.status as string} />
                             <Field label="Stripe Customer ID" value={data.stripe_customer_id as string} />
@@ -109,30 +122,30 @@ export default function AdminEntityDrawer() {
                     {drawer.type === "opportunities" && (
                         <>
                             <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={data.created_at ? new Date(data.created_at as string).toLocaleString() : null} />
+                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Name" value={data.name as string} />
                             <Field label="Status" value={data.status as string} />
-                            <Field label="Job Date" value={data.job_date as string} />
+                            <Field label="Job Date" value={formatDate(data.job_date as string)} />
                             <Field label="Time Window" value={data.job_time_window as string} />
-                            <Field label="Quote Total" value={data.quote_total != null ? `$${((data.quote_total as number) / 100).toFixed(2)}` : null} />
-                            <DrawerLink label="Customer" id={(data.customer_id as string) ?? null} type="customers" />
-                            <DrawerLink label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" />
+                            <Field label="Quote Total" value={formatMoney(data.quote_total as number, "quote_total")} />
+                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                            <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
                             <Field label="External ID" value={data.external_id as string} />
                         </>
                     )}
                     {drawer.type === "jobs" && (
                         <>
                             <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={data.created_at ? new Date(data.created_at as string).toLocaleString() : null} />
+                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Title" value={data.title as string} />
                             <Field label="Recurring" value={data.is_recurring ? "Yes" : "No"} />
-                            <Field label="Scheduled" value={data.scheduled_at ? new Date(data.scheduled_at as string).toLocaleString() : null} />
+                            <Field label="Scheduled" value={formatDateTime(data.scheduled_at as string)} />
                             <Field label="Status ID" value={data.job_status_id as string} />
-                            <Field label="Gross Price" value={data.gross_price_cents != null ? `$${((data.gross_price_cents as number) / 100).toFixed(2)}` : null} />
-                            <Field label="Payout" value={data.contractor_payout_cents != null ? `$${((data.contractor_payout_cents as number) / 100).toFixed(2)}` : null} />
-                            <DrawerLink label="Opportunity" id={(data.opportunity_id as string) ?? null} type="opportunities" />
-                            <DrawerLink label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" />
-                            <DrawerLink label="Customer" id={(data.customer_id as string) ?? null} type="customers" />
+                            <Field label="Gross Price" value={formatMoney(data.gross_price_cents as number, "gross_price_cents")} />
+                            <Field label="Payout" value={formatMoney(data.contractor_payout_cents as number, "contractor_payout_cents")} />
+                            <DrawerLinkWithName label="Opportunity" id={(data.opportunity_id as string) ?? null} type="opportunities" displayName={data._opportunity_name as string} />
+                            <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <Field label="Offer Code" value={data.offer_code as string} />
                             <Field label="External ID" value={data.external_id as string} />
                         </>
@@ -141,8 +154,8 @@ export default function AdminEntityDrawer() {
                         <>
                             <Field label="ID" value={data.id as string} />
                             <Field label="Job ID" value={data.job_id as string} />
-                            <Field label="Start" value={data.start_at ? new Date(data.start_at as string).toLocaleString() : null} />
-                            <Field label="End" value={data.end_at ? new Date(data.end_at as string).toLocaleString() : null} />
+                            <Field label="Start" value={formatDateTime(data.start_at as string)} />
+                            <Field label="End" value={formatDateTime(data.end_at as string)} />
                             <Field label="Timezone" value={data.timezone as string} />
                         </>
                     )}

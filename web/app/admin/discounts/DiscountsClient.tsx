@@ -4,6 +4,7 @@ import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import PrimaryButton from "@/components/PrimaryButton";
+import { formatDateTime, formatMoney } from "@/lib/adminFormatters";
 
 interface Discount {
   id: string;
@@ -36,7 +37,12 @@ export default function DiscountsClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const columns = [
-    { key: "created_at", label: "Created", sortable: true },
+    {
+      key: "created_at",
+      label: "Created",
+      sortable: true,
+      render: (value: string) => formatDateTime(value),
+    },
     { key: "code", label: "Code", sortable: true },
     {
       key: "is_active",
@@ -52,7 +58,7 @@ export default function DiscountsClient({
       render: (value: number, row: Discount) =>
         row.discount_type === "percent"
           ? `${value}%`
-          : `$${(value / 100).toFixed(2)}`,
+          : formatMoney(value, "discount_value_cents"),
     },
     {
       key: "first_job_only",
@@ -60,8 +66,18 @@ export default function DiscountsClient({
       sortable: true,
       render: (value: boolean) => (value ? "Yes" : "No"),
     },
-    { key: "starts_at", label: "Starts", sortable: true },
-    { key: "ends_at", label: "Ends", sortable: true },
+    {
+      key: "starts_at",
+      label: "Starts",
+      sortable: true,
+      render: (value: string | null) => (value ? formatDateTime(value) : "-"),
+    },
+    {
+      key: "ends_at",
+      label: "Ends",
+      sortable: true,
+      render: (value: string | null) => (value ? formatDateTime(value) : "-"),
+    },
     {
       key: "applies_to_vertical_slug",
       label: "Vertical",

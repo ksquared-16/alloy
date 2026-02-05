@@ -18,12 +18,36 @@ export async function GET(
         if (type === "jobs") {
             const { data, error } = await supabase.from("jobs").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            return NextResponse.json(data);
+            const out: Record<string, unknown> = { ...data };
+            if (data.opportunity_id) {
+                const opp = await supabase.from("opportunities").select("name").eq("id", data.opportunity_id).single();
+                out._opportunity_name = opp.data?.name ?? null;
+            }
+            if (data.primary_contact_id) {
+                const contact = await supabase.from("contacts").select("first_name, last_name").eq("id", data.primary_contact_id).single();
+                const c = contact.data;
+                out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+            }
+            if (data.customer_id) {
+                const customer = await supabase.from("customers").select("name").eq("id", data.customer_id).single();
+                out._customer_name = customer.data?.name ?? null;
+            }
+            return NextResponse.json(out);
         }
         if (type === "opportunities") {
             const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            return NextResponse.json(data);
+            const out: Record<string, unknown> = { ...data };
+            if (data.customer_id) {
+                const customer = await supabase.from("customers").select("name").eq("id", data.customer_id).single();
+                out._customer_name = customer.data?.name ?? null;
+            }
+            if (data.primary_contact_id) {
+                const contact = await supabase.from("contacts").select("first_name, last_name").eq("id", data.primary_contact_id).single();
+                const c = contact.data;
+                out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+            }
+            return NextResponse.json(out);
         }
         if (type === "contacts") {
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).single();
