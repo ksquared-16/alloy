@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadStripe, Stripe, StripeElements, StripeCardNumberElement, StripeCardExpiryElement, StripeCardCvcElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
@@ -61,20 +61,6 @@ function normalizeQuote(data: QuoteResponse): QuoteResponse {
  * Only blocks if estimated_price is missing/invalid.
  * One-time bookings (no frequency_label) are allowed.
  */
-const BOOKING_ATTEMPT_KEY = "alloy_booking_attempt_id";
-
-function getOrCreateBookingAttemptId(): string {
-    if (typeof sessionStorage === "undefined") {
-        return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `attempt-${Date.now()}`;
-    }
-    let id = sessionStorage.getItem(BOOKING_ATTEMPT_KEY);
-    if (!id) {
-        id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `attempt-${Date.now()}`;
-        sessionStorage.setItem(BOOKING_ATTEMPT_KEY, id);
-    }
-    return id;
-}
-
 function isQuoteReady(data: QuoteResponse | null): { ready: boolean; missingFields: string[] } {
     if (!data) {
         return { ready: false, missingFields: ["quote object"] };
@@ -132,6 +118,22 @@ export default function BookV2Client() {
     const [postalCode, setPostalCode] = useState<string>("");
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
+
+    // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
+    const bookingAttemptIdRef = useRef<string | null>(null);
+    const [bookingAttemptId, setBookingAttemptId] = useState<string | null>(null);
+    const getBookingAttemptId = useCallback((): string => {
+        if (bookingAttemptIdRef.current) return bookingAttemptIdRef.current;
+        const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `attempt-${Date.now()}`;
+        bookingAttemptIdRef.current = id;
+        setBookingAttemptId(id);
+        return id;
+    }, []);
+    const resetBookingAttemptId = useCallback(() => {
+        bookingAttemptIdRef.current = null;
+        setBookingAttemptId(null);
+    }, []);
+    const confirmInFlightRef = useRef(false);
     const cardNumberRef = useRef<HTMLDivElement>(null);
     const cardExpiryRef = useRef<HTMLDivElement>(null);
     const cardCvcRef = useRef<HTMLDivElement>(null);
@@ -427,6 +429,10 @@ export default function BookV2Client() {
 
     const handleConfirmSlot = () => {
         if (selectedSlot) {
+            // Start a new booking attempt: fresh correlation id for this flow
+            const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `attempt-${Date.now()}`;
+            bookingAttemptIdRef.current = id;
+            setBookingAttemptId(id);
             setSlotConfirmed(true);
             setCurrentStep("service_details");
         }
@@ -467,9 +473,9 @@ export default function BookV2Client() {
 
         setIsValidatingDiscount(true);
         setDiscountError(null);
-        const bookingAttemptId = getOrCreateBookingAttemptId();
+        const attemptId = getBookingAttemptId();
         if (process.env.NODE_ENV !== "production") {
-            console.log("[BOOK_V2] booking_attempt_id=", bookingAttemptId);
+            console.log("[BOOK_V2] booking_attempt_id=", attemptId);
         }
 
         try {
@@ -513,13 +519,13 @@ export default function BookV2Client() {
                     phone: phoneParam,
                     quote_subtotal: quoteSubtotal,
                     vertical_key: "cleaning",
-                    booking_attempt_id: bookingAttemptId,
+                    booking_attempt_id: attemptId,
                 }),
             });
 
             const data = await response.json();
             if (process.env.NODE_ENV !== "production") {
-                console.log("[BOOK_V2_DISCOUNT] booking_attempt_id=", bookingAttemptId, "status=", response.status, "body=", data);
+                console.log("[BOOK_V2_DISCOUNT] booking_attempt_id=", attemptId, "status=", response.status, "body=", data);
             }
 
             if (data.valid === true) {
@@ -570,12 +576,14 @@ export default function BookV2Client() {
             setPaymentError("Please complete all steps before submitting payment");
             return;
         }
+        if (confirmInFlightRef.current) return;
+        confirmInFlightRef.current = true;
 
         setIsProcessingPayment(true);
         setPaymentError(null);
-        const bookingAttemptId = getOrCreateBookingAttemptId();
+        const attemptId = getBookingAttemptId();
         if (process.env.NODE_ENV !== "production") {
-            console.log("[BOOK_V2] booking_attempt_id=", bookingAttemptId);
+            console.log("[BOOK_V2] booking_attempt_id=", attemptId);
         }
 
         try {
@@ -610,13 +618,13 @@ export default function BookV2Client() {
                     phone: resolvedPhone || prefillData.phone,
                     email: resolvedEmail || prefillData.email,
                     ghl_contact_id: prefillData.ghl_contact_id || null,
-                    booking_attempt_id: bookingAttemptId,
+                    booking_attempt_id: attemptId,
                 }),
             });
 
             const setupIntentData = await setupIntentResponse.json();
             if (process.env.NODE_ENV !== "production") {
-                console.log("[BOOK_V2_SETUP_INTENT] booking_attempt_id=", bookingAttemptId, "status=", setupIntentResponse.status, "body=", setupIntentData);
+                console.log("[BOOK_V2_SETUP_INTENT] booking_attempt_id=", attemptId, "status=", setupIntentResponse.status, "body=", setupIntentData);
             }
 
             if (!setupIntentResponse.ok) {
@@ -644,7 +652,10 @@ export default function BookV2Client() {
                 throw new Error(confirmError.message || "Payment setup failed");
             }
 
-            // Step 3: Confirm booking in Supabase
+            // Step 3: Confirm booking in Supabase (always run after successful Stripe setup)
+            if (process.env.NODE_ENV !== "production") {
+                console.log("[BOOK_V2_FLOW] about_to_call_confirm booking_attempt_id=", attemptId);
+            }
             const bookingResponse = await fetch("/api/book-v2/confirm", {
                 method: "POST",
                 headers: {
@@ -670,28 +681,29 @@ export default function BookV2Client() {
                     access_note: serviceDetails.access_note,
                     additional_notes: serviceDetails.additional_notes,
                     frequency_label: quote?.frequency_label || "One-time",
-                    booking_attempt_id: bookingAttemptId,
+                    booking_attempt_id: attemptId,
                 }),
             });
 
             const result = await bookingResponse.json();
             if (process.env.NODE_ENV !== "production") {
-                console.log("[BOOK_V2_CONFIRM_UI] booking_attempt_id=", bookingAttemptId, "status=", bookingResponse.status, "body=", result);
+                console.log("[BOOK_V2_FLOW] confirm_finished booking_attempt_id=", attemptId, "status=", bookingResponse.status, "body=", result);
             }
 
             if (!bookingResponse.ok || result.ok === false) {
                 const message = result.message || result.error || "Failed to confirm booking";
-                setPaymentError(`${message}${bookingAttemptId ? ` (ID: ${bookingAttemptId})` : ""}`);
+                setPaymentError(`${message}${attemptId ? ` (ID: ${attemptId})` : ""}`);
                 return;
             }
 
             if (!result.job_id || !result.opportunity_id || !result.schedule_id) {
-                setPaymentError(`Booking did not complete correctly. Please contact support. (ID: ${bookingAttemptId})`);
+                setPaymentError(`Booking did not complete correctly. Please contact support. (ID: ${attemptId})`);
                 return;
             }
 
             setBookingResult(result);
             setCurrentStep("confirmed");
+            resetBookingAttemptId();
 
             // Track InitiateCheckout when booking is confirmed
             trackMetaEvent("InitiateCheckout", {
@@ -716,9 +728,10 @@ export default function BookV2Client() {
             }
         } catch (err: any) {
             console.error("Payment/booking failed:", err);
-            setPaymentError(err.message || "Failed to complete booking. Please try again.");
-            // Keep current step - error shows in payment area
+            const msg = err.message || "Failed to complete booking. Please try again.";
+            setPaymentError(attemptId ? `${msg} (ID: ${attemptId})` : msg);
         } finally {
+            confirmInFlightRef.current = false;
             setIsProcessingPayment(false);
         }
     };
