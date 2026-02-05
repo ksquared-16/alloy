@@ -13,6 +13,8 @@ from ..supabase_client import (
     resolve_contact_id_from_ghl,
     find_contact_by_email,
     find_contact_by_phone,
+    resolve_or_create_contact_and_customer,
+    normalize_phone as normalize_phone_supa,
 )
 from ..ghl_client import ensure_contact_has_tag
 from ..settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -37,6 +39,8 @@ class ValidateDiscountResponse(BaseModel):
     discount_code_id: Optional[str] = None
     discount_amount: Optional[float] = None
     quote_total: Optional[float] = None
+    supa_contact_id: Optional[str] = None
+    supa_customer_id: Optional[str] = None
 
 
 class RedeemDiscountRequest(BaseModel):
@@ -312,49 +316,52 @@ async def validate_discount(request: ValidateDiscountRequest):
                 "reason": "service_error"
             })
 
-        # 2. Resolve contact_id
-        contact_id = resolve_contact_id_for_discount(
-            ghl_contact_id=request.ghl_contact_id,
-            email=request.email,
-            phone=request.phone,
+        # 2. Resolve or create contact (so we can enforce uniqueness)
+        normalized_email = request.email.strip().lower() if request.email else None
+        normalized_phone = normalize_phone_supa(request.phone) if request.phone else None
+        supabase_contact_id, supa_customer_id, resolution_path = resolve_or_create_contact_and_customer(
+            email=normalized_email,
+            phone=normalized_phone,
+            name=None,
         )
 
-        if not contact_id:
-            # Cannot enforce uniqueness without contact_id
-            logger.warning(
-                "DISCOUNT_VALIDATE: Cannot resolve contact_id, cannot enforce uniqueness code=%s",
-                code_normalized
+        if supabase_contact_id:
+            logger.info(
+                "DISCOUNT_VALIDATE: resolved contact resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+                resolution_path,
+                supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+                supa_customer_id[:8] + "***" if supa_customer_id and len(supa_customer_id) > 8 else (supa_customer_id or "None"),
             )
-            return JSONResponse({
-                "valid": False,
-                "reason": "contact_required"
-            })
 
-        # 3. Check if already redeemed
-        redemption_url = f"{base_url}/discount_redemptions"
-        redemption_params = {
-            "select": "id",
-            "contact_id": f"eq.{contact_id}",
-            "discount_code_id": f"eq.{discount_code_id}",
-            "limit": "1",
-        }
-
-        redemption_response = requests.get(
-            redemption_url, headers=headers, params=redemption_params, timeout=10
-        )
-
-        if redemption_response.ok:
-            redemption_data = redemption_response.json()
-            if redemption_data and len(redemption_data) > 0:
-                logger.info(
-                    "DISCOUNT_VALIDATE: Code already used code=%s contact_id=%s",
-                    code_normalized,
-                    contact_id
-                )
-                return JSONResponse({
-                    "valid": False,
-                    "reason": "already_used"
-                })
+        # 3. Enforce uniqueness (only when we have a contact)
+        if supabase_contact_id:
+            redemption_url = f"{base_url}/discount_redemptions"
+            redemption_params = {
+                "select": "id",
+                "contact_id": f"eq.{supabase_contact_id}",
+                "discount_code_id": f"eq.{discount_code_id}",
+                "limit": "1",
+            }
+            redemption_response = requests.get(
+                redemption_url, headers=headers, params=redemption_params, timeout=10
+            )
+            if redemption_response.ok:
+                redemption_data = redemption_response.json()
+                if redemption_data and len(redemption_data) > 0:
+                    logger.info(
+                        "DISCOUNT_VALIDATE: Code already used code=%s contact_id=%s",
+                        code_normalized,
+                        supabase_contact_id[:8] + "***",
+                    )
+                    return JSONResponse({
+                        "valid": False,
+                        "reason": "already_used"
+                    })
+        else:
+            logger.warning(
+                "DISCOUNT_VALIDATE: no contact (missing email+phone), skipping uniqueness enforcement code=%s",
+                code_normalized,
+            )
 
         # 4. Calculate discount
         if discount_type == "percent":
@@ -379,12 +386,17 @@ async def validate_discount(request: ValidateDiscountRequest):
             quote_total
         )
 
-        return JSONResponse({
+        payload = {
             "valid": True,
             "discount_code_id": discount_code_id,
             "discount_amount": round(discount_amount, 2),
             "quote_total": round(quote_total, 2),
-        })
+        }
+        if supabase_contact_id:
+            payload["supa_contact_id"] = supabase_contact_id
+        if supa_customer_id:
+            payload["supa_customer_id"] = supa_customer_id
+        return JSONResponse(payload)
 
     except Exception as e:
         logger.error(
