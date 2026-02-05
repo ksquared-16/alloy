@@ -4,7 +4,7 @@ import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import PrimaryButton from "@/components/PrimaryButton";
-import { formatDateTime, formatMoney } from "@/lib/adminFormatters";
+import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 
 interface Discount {
   id: string;
@@ -58,7 +58,7 @@ export default function DiscountsClient({
       render: (value: number, row: Discount) =>
         row.discount_type === "percent"
           ? `${value}%`
-          : formatMoney(value, "discount_value_cents"),
+          : formatMoneyFromCents(value),
     },
     {
       key: "first_job_only",

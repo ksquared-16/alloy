@@ -3,11 +3,32 @@
  * Use these for consistent date and currency display in tables and drawers.
  */
 
+const usdOptions: Intl.NumberFormatOptions = {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+};
+
+/** Format a value stored in cents as USD (value/100). */
+export function formatMoneyFromCents(value: number | string | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    if (Number.isNaN(num)) return "-";
+    return new Intl.NumberFormat("en-US", usdOptions).format(num / 100);
+}
+
+/** Format a value already in dollars as USD (no conversion). */
+export function formatMoneyFromDollars(value: number | string | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    if (Number.isNaN(num)) return "-";
+    return new Intl.NumberFormat("en-US", usdOptions).format(num);
+}
+
 /**
  * Format a value as USD.
- * - If fieldName ends with _cents or is quote_total, value is treated as cents (value/100).
- * - If value is numeric and not a cents field, treat as dollars (display as-is with 2 decimals).
- * - If value is string (e.g. "232.50"), display as USD.
+ * Only treats as cents when fieldName ends with _cents (no special-case for quote_total etc).
  */
 export function formatMoney(
     value: number | string | null | undefined,
@@ -16,14 +37,9 @@ export function formatMoney(
     if (value === null || value === undefined) return "-";
     const num = typeof value === "string" ? parseFloat(value) : value;
     if (Number.isNaN(num)) return "-";
-    const isCents = fieldName?.endsWith("_cents") || fieldName === "quote_total" || false;
+    const isCents = fieldName?.endsWith("_cents") ?? false;
     const dollars = isCents ? num / 100 : num;
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(dollars);
+    return new Intl.NumberFormat("en-US", usdOptions).format(dollars);
 }
 
 /** Display as MM/DD/YYYY (local date only). */

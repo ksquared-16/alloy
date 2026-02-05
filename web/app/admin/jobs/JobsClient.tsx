@@ -6,7 +6,7 @@ import Drawer from "@/components/admin/Drawer";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { formatDate, formatDateTime, formatMoney } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 
 interface Job {
     id: string;
@@ -48,8 +48,8 @@ export default function JobsClient({
         { key: "is_recurring", label: "Recurring", sortable: true, render: (value: boolean | null) => (value ? "Yes" : "No") },
         { key: "scheduled_at", label: "Scheduled", sortable: true, render: (v: string) => formatDateTime(v) },
         { key: "job_status_id", label: "Status ID", sortable: false },
-        { key: "gross_price_cents", label: "Gross Price", sortable: true, render: (v: number | null) => formatMoney(v, "gross_price_cents") },
-        { key: "contractor_payout_cents", label: "Payout", sortable: true, render: (v: number | null) => formatMoney(v, "contractor_payout_cents") },
+        { key: "gross_price_cents", label: "Gross Price", sortable: true, render: (v: number | null) => formatMoneyFromCents(v) },
+        { key: "contractor_payout_cents", label: "Payout", sortable: true, render: (v: number | null) => formatMoneyFromCents(v) },
         { key: "offer_code", label: "Offer Code", sortable: false },
         { key: "external_id", label: "External ID", sortable: false },
     ];
@@ -116,11 +116,11 @@ export default function JobsClient({
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Gross Price:</strong>{" "}
-                            {formatMoney(selectedRow.gross_price_cents, "gross_price_cents")}
+                            {formatMoneyFromCents(selectedRow.gross_price_cents)}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Payout:</strong>{" "}
-                            {formatMoney(selectedRow.contractor_payout_cents, "contractor_payout_cents")}
+                            {formatMoneyFromCents(selectedRow.contractor_payout_cents)}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Offer Code:</strong>{" "}

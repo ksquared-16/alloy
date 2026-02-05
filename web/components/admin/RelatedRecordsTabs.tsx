@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { formatMoneyFromDollars } from "@/lib/adminFormatters";
 
 type EntityKind = "contact" | "customer" | "opportunity" | "job";
 
@@ -50,7 +51,7 @@ export default function RelatedRecordsTabs({
                 { key: "name", label: "Name" },
                 { key: "status", label: "Status" },
                 { key: "job_date", label: "Job Date" },
-                { key: "quote_total", label: "Quote", render: (v) => v != null ? `$${((v as number) / 100).toFixed(2)}` : "-" },
+                { key: "quote_total", label: "Quote", render: (v) => formatMoneyFromDollars(v as number) },
             ]},
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
@@ -75,7 +76,7 @@ export default function RelatedRecordsTabs({
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
                 { key: "name", label: "Name" },
                 { key: "status", label: "Status" },
-                { key: "quote_total", label: "Quote", render: (v) => v != null ? `$${((v as number) / 100).toFixed(2)}` : "-" },
+                { key: "quote_total", label: "Quote", render: (v) => formatMoneyFromDollars(v as number) },
             ]},
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },

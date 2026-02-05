@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { formatMoney, formatDate, formatDateTime } from "@/lib/adminFormatters";
+import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
     return (
@@ -127,7 +127,7 @@ export default function AdminEntityDrawer() {
                             <Field label="Status" value={data.status as string} />
                             <Field label="Job Date" value={formatDate(data.job_date as string)} />
                             <Field label="Time Window" value={data.job_time_window as string} />
-                            <Field label="Quote Total" value={formatMoney(data.quote_total as number, "quote_total")} />
+                            <Field label="Quote Total" value={formatMoneyFromDollars(data.quote_total as number)} />
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
                             <Field label="External ID" value={data.external_id as string} />
@@ -141,8 +141,8 @@ export default function AdminEntityDrawer() {
                             <Field label="Recurring" value={data.is_recurring ? "Yes" : "No"} />
                             <Field label="Scheduled" value={formatDateTime(data.scheduled_at as string)} />
                             <Field label="Status ID" value={data.job_status_id as string} />
-                            <Field label="Gross Price" value={formatMoney(data.gross_price_cents as number, "gross_price_cents")} />
-                            <Field label="Payout" value={formatMoney(data.contractor_payout_cents as number, "contractor_payout_cents")} />
+                            <Field label="Gross Price" value={formatMoneyFromCents(data.gross_price_cents as number)} />
+                            <Field label="Payout" value={formatMoneyFromCents(data.contractor_payout_cents as number)} />
                             <DrawerLinkWithName label="Opportunity" id={(data.opportunity_id as string) ?? null} type="opportunities" displayName={data._opportunity_name as string} />
                             <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />

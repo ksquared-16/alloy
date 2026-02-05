@@ -6,7 +6,7 @@ import Drawer from "@/components/admin/Drawer";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { formatDate, formatDateTime, formatMoney } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
 
 interface Opportunity {
     id: string;
@@ -45,7 +45,7 @@ export default function OpportunitiesClient({
         { key: "status", label: "Status", sortable: true },
         { key: "job_date", label: "Job Date", sortable: true, render: (v: string) => formatDate(v) },
         { key: "job_time_window", label: "Time Window", sortable: false },
-        { key: "quote_total", label: "Quote Total", sortable: true, render: (v: number | null) => formatMoney(v, "quote_total") },
+        { key: "quote_total", label: "Quote Total", sortable: true, render: (v: number | null) => formatMoneyFromDollars(v) },
         { key: "customer_id", label: "Customer ID", sortable: false },
         { key: "primary_contact_id", label: "Contact ID", sortable: false },
         { key: "external_id", label: "External ID", sortable: false },
@@ -117,7 +117,7 @@ export default function OpportunitiesClient({
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Quote Total:</strong>{" "}
-                            {formatMoney(selectedRow.quote_total, "quote_total")}
+                            {formatMoneyFromDollars(selectedRow.quote_total)}
                         </div>
                         <div>
                             <strong className="text-alloy-midnight/70">Customer:</strong>{" "}
