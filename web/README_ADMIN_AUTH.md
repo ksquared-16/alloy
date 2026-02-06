@@ -42,7 +42,7 @@ values ('<auth.users.id>', 'admin');
 
 ### Not used for admin access
 
-- **`ALLOWED_ADMIN_EMAILS`** – No longer used; access is determined by `user_profiles.role` only.
+- **`ALLOWED_ADMIN_EMAILS`** – Removed. Admin access is controlled only by `user_profiles.role` (admin/ops). Do not use email allowlists.
 
 ## How It Works
 

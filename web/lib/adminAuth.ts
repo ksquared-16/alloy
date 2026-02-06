@@ -1,7 +1,7 @@
 /**
  * Admin portal auth: role-based access using public.user_profiles.role.
- * V1 roles: admin (full access), ops (read-only).
- * Use in server layout (role check + redirect) and API routes (requireAdmin for mutations).
+ * This is the single source of truth for admin access — no email allowlist.
+ * V1 roles: admin (full access), ops (read-only). All other roles (e.g. customer, contractor) are denied.
  */
 
 import { NextResponse } from "next/server";

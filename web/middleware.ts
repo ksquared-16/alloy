@@ -47,7 +47,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // No session - redirect to login (role check is done in admin layout via user_profiles)
+  // No session → login. Role check (admin/ops only) is the single gate and is done in admin layout via user_profiles.
   if (!user) {
     return NextResponse.redirect(new URL("/login", request.url));
   }

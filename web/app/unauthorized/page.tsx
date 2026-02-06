@@ -6,7 +6,7 @@ export default function UnauthorizedPage() {
             <div className="max-w-md w-full bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-8 text-center">
                 <h1 className="text-2xl font-bold text-alloy-midnight mb-2">Access denied</h1>
                 <p className="text-alloy-midnight/70 mb-6">
-                    You don’t have permission to access the admin portal. If you believe this is an error, contact your administrator.
+                    You don’t have permission to access the admin portal.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <Link
