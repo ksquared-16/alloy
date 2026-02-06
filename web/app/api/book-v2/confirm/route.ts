@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /**
  * Normalize frequency label to service_frequency_key
@@ -757,6 +758,37 @@ export async function POST(request: NextRequest) {
         console.log(
             `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
         );
+
+        // Step 10: Auto-run booking_confirmed workflows
+        const { data: bookingWorkflows } = await supabase
+            .from("workflows")
+            .select("id")
+            .eq("enabled", true)
+            .eq("event_type", "booking_confirmed")
+            .eq("entity_type", "job");
+        if (bookingWorkflows?.length) {
+            const { data: jobRow } = await supabase.from("jobs").select("id, title, scheduled_at, service_frequency_key, opportunity_id, primary_contact_id, customer_id").eq("id", jobId).single();
+            const sched = integrityCheck as Record<string, unknown>;
+            const { data: oppRow } = await supabase.from("opportunities").select("id, name, job_date, job_time_window, pipeline_stage_id").eq("id", opportunityId).single();
+            const { data: contactRow } = await supabase.from("contacts").select("id, first_name, last_name, email, phone").eq("id", contactId).single();
+            const { data: customerRow } = await supabase.from("customers").select("id, name").eq("id", customerId).single();
+            const eventPayload: Record<string, unknown> = {
+                job: jobRow ? { id: jobRow.id, title: jobRow.title, scheduled_at: jobRow.scheduled_at, service_frequency_key: jobRow.service_frequency_key, opportunity_id: jobRow.opportunity_id, primary_contact_id: jobRow.primary_contact_id, customer_id: jobRow.customer_id } : { id: jobId, title: null, scheduled_at: slot_start, service_frequency_key, opportunity_id: opportunityId, primary_contact_id: contactId, customer_id: customerId },
+                schedule: { id: scheduleId, start_at: sched.start_at ?? slot_start, end_at: sched.end_at ?? slot_end, timezone: sched.timezone ?? timezone, duration_minutes: sched.duration_minutes ?? 120 },
+                contact: contactRow ? { id: contactRow.id, first_name: contactRow.first_name, last_name: contactRow.last_name, email: contactRow.email, phone: contactRow.phone } : { id: contactId, first_name: null, last_name: null, email: null, phone: null },
+                customer: customerRow ? { id: customerRow.id, name: customerRow.name } : { id: customerId, name: null },
+                opportunity: oppRow ? { id: oppRow.id, name: oppRow.name, job_date: oppRow.job_date, job_time_window: oppRow.job_time_window, pipeline_stage_id: oppRow.pipeline_stage_id ?? null } : { id: opportunityId, name: null, job_date: jobDate, job_time_window: jobTimeWindow, pipeline_stage_id: null },
+            };
+            for (const wf of bookingWorkflows) {
+                try {
+                    const runResult = await executeWorkflowRun(supabase, wf.id, eventPayload);
+                    console.log(`[BOOK_V2_CONFIRM_WORKFLOW] workflow_id=${wf.id} run_id=${runResult.workflow_run_id} status=${runResult.status}`);
+                } catch (wfErr: unknown) {
+                    console.error("[BOOK_V2_CONFIRM_WORKFLOW_ERROR]", wf.id, wfErr);
+                    // Don't fail the booking; log and continue
+                }
+            }
+        }
 
         // Structured logging
         console.log(

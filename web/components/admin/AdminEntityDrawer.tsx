@@ -9,6 +9,8 @@ import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTim
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows"] as const;
 const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exists", "gt", "gte", "lt", "lte"] as const;
+const WORKFLOW_ENTITY_TYPES = ["job", "opportunity", "contact", "customer", "schedule"] as const;
+const WORKFLOW_EVENT_TYPES = ["booking_confirmed", "job_rescheduled", "job_canceled", "job_completed", "payment_succeeded", "payment_failed"] as const;
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
 }
@@ -531,8 +533,8 @@ export default function AdminEntityDrawer() {
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name *</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Description</label><input value={String(formData.description ?? "")} onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                     <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.enabled} onChange={(e) => setFormData((f) => ({ ...f, enabled: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Enabled</label></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><input value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><input value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><select value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_EVENT_TYPES.map((ev) => <option key={ev} value={ev}>{ev}</option>)}</select></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><select value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}</select></div>
                                     <div className="flex gap-2">
                                         <button type="button" disabled={createSaving || !(formData.name as string)?.trim()} onClick={async () => {
                                             setCreateSaving(true); setCreateError(null);
@@ -571,8 +573,8 @@ export default function AdminEntityDrawer() {
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Description</label><input value={String(formData.description ?? "")} onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                             <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.enabled} onChange={(e) => setFormData((f) => ({ ...f, enabled: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Enabled</label></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><input value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><input value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><select value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_EVENT_TYPES.map((ev) => <option key={ev} value={ev}>{ev}</option>)}</select></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><select value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}</select></div>
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Conditions</strong>
                                                 {workflowConditions.map((c, i) => (
@@ -616,6 +618,9 @@ export default function AdminEntityDrawer() {
                                                         <textarea value={typeof a.payload === "object" ? JSON.stringify(a.payload, null, 2) : "{}"} onChange={(e) => {
                                                             try { const v = e.target.value.trim() ? JSON.parse(e.target.value) : {}; setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: v } : p)); } catch { /* invalid */ }
                                                         }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={3} />
+                                                        {a.action_type === "create_message" && (
+                                                            <p className="text-xs text-alloy-midnight/50 mt-1">Template variables: <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{contact.first_name}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{contact.phone}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{job.title}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{schedule.start_at}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{opportunity.job_time_window}}"}</code></p>
+                                                        )}
                                                     </div>
                                                 ))}
                                                 <button type="button" onClick={() => setWorkflowActions((prev) => [...prev, { action_type: "log", payload: {} }])} className="text-sm text-alloy-blue hover:underline">Add action</button>
