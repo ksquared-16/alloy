@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows"] as const;
 
 export async function GET(
     request: NextRequest,
@@ -74,6 +74,20 @@ export async function GET(
             const { data, error } = await supabase.from("discount_redemptions").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             return NextResponse.json(data);
+        }
+        if (type === "workflows") {
+            if (id === "new") {
+                return NextResponse.json({ _create: true });
+            }
+            const { data: wf, error: wErr } = await supabase.from("workflows").select("*").eq("id", id).single();
+            if (wErr || !wf) return NextResponse.json(wErr?.message || "Not found", { status: wErr?.code === "PGRST116" ? 404 : 500 });
+            const { data: cond } = await supabase.from("workflow_conditions").select("*").eq("workflow_id", id);
+            const { data: acts } = await supabase.from("workflow_actions").select("*").eq("workflow_id", id).order("action_order", { ascending: true });
+            return NextResponse.json({
+                ...wf,
+                _conditions: cond ?? [],
+                _actions: acts ?? [],
+            });
         }
 
         return NextResponse.json({ error: "Invalid type" }, { status: 400 });

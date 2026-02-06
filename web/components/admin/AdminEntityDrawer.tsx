@@ -7,7 +7,8 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows"] as const;
+const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exists", "gt", "gte", "lt", "lte"] as const;
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
 }
@@ -50,7 +51,7 @@ function DrawerLinkWithName({
 }
 
 export default function AdminEntityDrawer() {
-    const { drawer, closeDrawer } = useAdminDrawer();
+    const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
     const router = useRouter();
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
@@ -66,6 +67,15 @@ export default function AdminEntityDrawer() {
     const [rescheduleError, setRescheduleError] = useState<string | null>(null);
     const [pipelines, setPipelines] = useState<{ id: string; name: string }[]>([]);
     const [stages, setStages] = useState<{ id: string; pipeline_id: string; name: string; position: number }[]>([]);
+    const [workflowConditions, setWorkflowConditions] = useState<{ field: string; operator: string; value: string }[]>([]);
+    const [workflowActions, setWorkflowActions] = useState<{ action_type: string; target_entity?: string; payload?: Record<string, unknown> }[]>([]);
+    const [runModalOpen, setRunModalOpen] = useState(false);
+    const [runPayload, setRunPayload] = useState("{}");
+    const [runResult, setRunResult] = useState<{ status: string; workflow_run_id: string; error?: string; logs?: string[] } | null>(null);
+    const [runLoading, setRunLoading] = useState(false);
+    const [runJsonError, setRunJsonError] = useState<string | null>(null);
+    const [createSaving, setCreateSaving] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
 
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -126,6 +136,32 @@ export default function AdminEntityDrawer() {
             setStages(Array.isArray(st) ? st : []);
         }).catch(() => { setPipelines([]); setStages([]); });
     }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "workflows" || !data) return;
+        if ((data as { _create?: boolean })._create) {
+            setWorkflowConditions([]);
+            setWorkflowActions([]);
+            setFormData({ name: "", description: "", enabled: true, event_type: "", entity_type: "" });
+            return;
+        }
+        if (data._conditions) {
+            const cond = (data._conditions as { field?: string; operator?: string; value?: string }[]).map((c) => ({
+                field: c.field ?? "",
+                operator: c.operator ?? "equals",
+                value: c.value ?? "",
+            }));
+            setWorkflowConditions(cond);
+        }
+        if (data._actions) {
+            const acts = (data._actions as { action_type?: string; target_entity?: string; payload?: unknown }[]).map((a) => ({
+                action_type: a.action_type ?? "log",
+                target_entity: a.target_entity ?? undefined,
+                payload: a.payload && typeof a.payload === "object" ? a.payload as Record<string, unknown> : {},
+            }));
+            setWorkflowActions(acts);
+        }
+    }, [drawer.type, data]);
 
     const openReschedule = useCallback((s: { id: string; start_at: string; end_at: string; timezone: string }) => {
         setRescheduleScheduleId(s.id);
@@ -207,6 +243,14 @@ export default function AdminEntityDrawer() {
                 end_at: data.end_at ? new Date(data.end_at as string).toISOString().slice(0, 16) : "",
                 timezone: data.timezone ?? "",
             });
+        } else if (drawer.type === "workflows" && !(data as { _create?: boolean })._create) {
+            setFormData({
+                name: data.name ?? "",
+                description: data.description ?? "",
+                enabled: data.enabled ?? true,
+                event_type: data.event_type ?? "",
+                entity_type: data.entity_type ?? "",
+            });
         }
         setSaveError(null);
         setIsEditing(true);
@@ -217,6 +261,29 @@ export default function AdminEntityDrawer() {
         setSaving(true);
         setSaveError(null);
         try {
+            if (drawer.type === "workflows") {
+                const wfPayload = {
+                    name: formData.name ?? "",
+                    description: (formData.description as string) || null,
+                    enabled: !!formData.enabled,
+                    event_type: (formData.event_type as string) || null,
+                    entity_type: (formData.entity_type as string) || null,
+                };
+                const res = await fetch(`/api/admin/workflows/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(wfPayload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save workflow failed");
+                const condRes = await fetch(`/api/admin/workflows/${drawer.id}/conditions`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conditions: workflowConditions }) });
+                const condJson = await condRes.json().catch(() => ({}));
+                if (!condRes.ok) throw new Error((condJson.error as string) || "Save conditions failed");
+                const actRes = await fetch(`/api/admin/workflows/${drawer.id}/actions`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actions: workflowActions }) });
+                const actJson = await actRes.json().catch(() => ({}));
+                if (!actRes.ok) throw new Error((actJson.error as string) || "Save actions failed");
+                setData((prev) => prev ? { ...prev, ...json, _conditions: workflowConditions, _actions: workflowActions } : prev);
+                refetch();
+                setIsEditing(false);
+                router.refresh();
+                return;
+            }
             const url = `/api/admin/${drawer.type}/${drawer.id}`;
             const payload: Record<string, unknown> = { ...formData };
             if (drawer.type === "opportunities" && "notes" in payload) {
@@ -245,7 +312,7 @@ export default function AdminEntityDrawer() {
         } finally {
             setSaving(false);
         }
-    }, [drawer.type, drawer.id, formData, refetch, router]);
+    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -262,7 +329,11 @@ export default function AdminEntityDrawer() {
                     ? `Schedule: ${drawer.id}`
                     : drawer.type === "discount_redemptions"
                       ? `Redemption: ${(data.discount_code as string) || drawer.id}`
-                      : "Details"
+                      : drawer.type === "workflows"
+                        ? (data as { _create?: boolean })._create
+                          ? "New workflow"
+                          : `Workflow: ${(data.name as string) || drawer.id}`
+                        : "Details"
         : loading
           ? "Loading…"
           : "Details";
@@ -448,6 +519,152 @@ export default function AdminEntityDrawer() {
                                     <Field label="Start" value={formatDateTime(data.start_at as string)} />
                                     <Field label="End" value={formatDateTime(data.end_at as string)} />
                                     <Field label="Timezone" value={data.timezone as string} />
+                                </>
+                            )}
+                        </>
+                    )}
+                    {drawer.type === "workflows" && data && (
+                        <>
+                            {(data as { _create?: boolean })._create ? (
+                                <div className="space-y-4">
+                                    {createError && <p className="text-red-600 text-sm">{createError}</p>}
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name *</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Description</label><input value={String(formData.description ?? "")} onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.enabled} onChange={(e) => setFormData((f) => ({ ...f, enabled: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Enabled</label></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><input value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><input value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div className="flex gap-2">
+                                        <button type="button" disabled={createSaving || !(formData.name as string)?.trim()} onClick={async () => {
+                                            setCreateSaving(true); setCreateError(null);
+                                            try {
+                                                const res = await fetch("/api/admin/workflows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: (formData.name as string)?.trim(), description: (formData.description as string) || null, enabled: !!formData.enabled, event_type: (formData.event_type as string) || null, entity_type: (formData.entity_type as string) || null }) });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Create failed");
+                                                const newId = (json as { id: string }).id;
+                                                if (newId) { openDrawer({ type: "workflows", id: newId }); router.refresh(); }
+                                                else setCreateError("No id returned");
+                                            } catch (e: unknown) { setCreateError((e as Error).message); }
+                                            setCreateSaving(false);
+                                        }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">{createSaving ? "Creating…" : "Create"}</button>
+                                        <button type="button" onClick={closeDrawer} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {canEditInDrawer(drawer.type) && (
+                                        <div className="flex gap-2 pb-2 border-b border-alloy-stone/20">
+                                            {!isEditing ? (
+                                                <>
+                                                    <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                                    {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                                    <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                    {isEditing ? (
+                                        <>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Description</label><input value={String(formData.description ?? "")} onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.enabled} onChange={(e) => setFormData((f) => ({ ...f, enabled: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Enabled</label></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><input value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><input value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                                <strong className="text-alloy-midnight/70 block mb-2">Conditions</strong>
+                                                {workflowConditions.map((c, i) => (
+                                                    <div key={i} className="flex gap-2 items-center mb-2">
+                                                        <input placeholder="field" value={c.field} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
+                                                        <select value={c.operator} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, operator: e.target.value } : p))} className="w-28 px-2 py-1.5 border rounded text-sm">
+                                                            {WORKFLOW_CONDITION_OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
+                                                        </select>
+                                                        <input placeholder="value" value={c.value} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
+                                                        <button type="button" onClick={() => setWorkflowConditions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>
+                                                    </div>
+                                                ))}
+                                                <button type="button" onClick={() => setWorkflowConditions((prev) => [...prev, { field: "", operator: "equals", value: "" }])} className="text-sm text-alloy-blue hover:underline">Add condition</button>
+                                            </div>
+                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                                <strong className="text-alloy-midnight/70 block mb-2">Actions</strong>
+                                                {workflowActions.map((a, i) => (
+                                                    <div key={i} className="border border-alloy-stone/30 rounded p-2 mb-2">
+                                                        <div className="flex gap-2 items-center mb-1">
+                                                            <select value={a.action_type} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, action_type: e.target.value } : p))} className="px-2 py-1.5 border rounded text-sm">
+                                                                <option value="log">log</option>
+                                                                <option value="create_message">create_message</option>
+                                                                <option value="update_entity">update_entity</option>
+                                                            </select>
+                                                            <input placeholder="target_entity (optional)" value={a.target_entity ?? ""} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, target_entity: e.target.value || undefined } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
+                                                            <button type="button" onClick={() => setWorkflowActions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>
+                                                            <button type="button" onClick={() => setWorkflowActions((prev) => {
+                                                                if (i <= 0) return prev;
+                                                                const next = [...prev];
+                                                                [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                                                return next;
+                                                            })} className="text-sm">↑</button>
+                                                            <button type="button" onClick={() => setWorkflowActions((prev) => {
+                                                                if (i >= prev.length - 1) return prev;
+                                                                const next = [...prev];
+                                                                [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                                                return next;
+                                                            })} className="text-sm">↓</button>
+                                                        </div>
+                                                        <label className="block text-xs text-alloy-midnight/60 mb-0.5">Payload (JSON)</label>
+                                                        <textarea value={typeof a.payload === "object" ? JSON.stringify(a.payload, null, 2) : "{}"} onChange={(e) => {
+                                                            try { const v = e.target.value.trim() ? JSON.parse(e.target.value) : {}; setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: v } : p)); } catch { /* invalid */ }
+                                                        }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={3} />
+                                                    </div>
+                                                ))}
+                                                <button type="button" onClick={() => setWorkflowActions((prev) => [...prev, { action_type: "log", payload: {} }])} className="text-sm text-alloy-blue hover:underline">Add action</button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Field label="ID" value={data.id as string} />
+                                            <Field label="Name" value={data.name as string} />
+                                            <Field label="Description" value={(data.description as string) ?? "-"} />
+                                            <Field label="Enabled" value={data.enabled ? "Yes" : "No"} />
+                                            <Field label="Event type" value={(data.event_type as string) ?? "-"} />
+                                            <Field label="Entity type" value={(data.entity_type as string) ?? "-"} />
+                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                                <strong className="text-alloy-midnight/70 block mb-1">Conditions</strong>
+                                                {(data._conditions as { field: string; operator: string; value: string }[] | undefined)?.length ? (data._conditions as { field: string; operator: string; value: string }[]).map((c, i) => <div key={i} className="text-sm">{c.field} {c.operator} {c.value}</div>) : <div className="text-sm text-alloy-midnight/60">None</div>}
+                                            </div>
+                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                                <strong className="text-alloy-midnight/70 block mb-1">Actions</strong>
+                                                {(data._actions as { action_order: number; action_type: string; payload?: unknown }[] | undefined)?.length ? (data._actions as { action_order: number; action_type: string; payload?: unknown }[]).map((a, i) => <div key={i} className="text-sm">{(a.action_order ?? i + 1)}. {a.action_type} {a.payload && typeof a.payload === "object" ? JSON.stringify(a.payload) : ""}</div>) : <div className="text-sm text-alloy-midnight/60">None</div>}
+                                            </div>
+                                        </>
+                                    )}
+                                    {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                                    {runModalOpen && drawer.id && drawer.id !== "new" && (
+                                        <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onClick={() => setRunModalOpen(false)}>
+                                            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-auto p-4" onClick={(e) => e.stopPropagation()}>
+                                                <h3 className="font-semibold text-alloy-midnight mb-2">Run workflow</h3>
+                                                <label className="block text-sm text-alloy-midnight/70 mb-1">Event payload (JSON)</label>
+                                                <textarea value={runPayload} onChange={(e) => { setRunPayload(e.target.value); setRunJsonError(null); }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={8} />
+                                                {runJsonError && <p className="text-red-600 text-sm mt-1">{runJsonError}</p>}
+                                                {runResult && <div className={`mt-2 p-2 rounded text-sm ${runResult.status === "completed" || runResult.status === "skipped" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>{runResult.status} {runResult.workflow_run_id} {runResult.error ?? ""} {runResult.logs?.length ? <pre className="mt-1 text-xs">{runResult.logs.join("\n")}</pre> : null}</div>}
+                                                <div className="flex gap-2 mt-3">
+                                                    <button type="button" disabled={runLoading} onClick={async () => {
+                                                        let pl: unknown; try { pl = JSON.parse(runPayload); } catch { setRunJsonError("Invalid JSON"); return; }
+                                                        setRunJsonError(null); setRunLoading(true); setRunResult(null);
+                                                        try {
+                                                            const res = await fetch(`/api/admin/workflows/${drawer.id}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_payload: pl }) });
+                                                            const json = await res.json().catch(() => ({}));
+                                                            setRunResult({ status: json.status ?? (res.ok ? "completed" : "failed"), workflow_run_id: json.workflow_run_id ?? "", error: json.error, logs: json.logs });
+                                                            if (!res.ok) setRunResult((r) => r ? { ...r, error: json.error || "Run failed" } : r);
+                                                        } catch (e: unknown) { setRunResult({ status: "failed", workflow_run_id: "", error: (e as Error).message }); }
+                                                        setRunLoading(false);
+                                                    }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">{runLoading ? "Running…" : "Run"}</button>
+                                                    <button type="button" onClick={() => setRunModalOpen(false)} className="px-3 py-1.5 text-sm border rounded-md">Close</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </>
