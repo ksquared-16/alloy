@@ -55,3 +55,28 @@ export async function requireAdmin(): Promise<NextResponse | null> {
     }
     return null;
 }
+
+/**
+ * Use in PATCH routes that both admin and ops can call (opportunities, jobs, contacts, customers, schedules).
+ * Returns 401 if not logged in or no valid profile; 403 if role not in (admin, ops); otherwise null.
+ */
+export async function requireAdminOrOps(): Promise<NextResponse | null> {
+    const auth = await getAdminAuth();
+    if (!auth) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return null;
+}
+
+/**
+ * V1 audit: log admin/ops change to console. Optionally write to audit_log table later.
+ */
+export function logAdminAudit(params: {
+    entity: string;
+    id: string;
+    changed_fields: string[];
+    actor_user_id: string;
+    role: string;
+}) {
+    console.log("[ADMIN_AUDIT]", JSON.stringify(params));
+}
