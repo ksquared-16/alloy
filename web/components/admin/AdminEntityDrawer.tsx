@@ -6,11 +6,15 @@ import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
+import {
+    WORKFLOW_ENTITY_TYPES,
+    WORKFLOW_EVENT_TYPES,
+    WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE,
+    WORKFLOW_ENTITY_ID_QUICK_FILL,
+} from "@/lib/workflowVocab";
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows"] as const;
 const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exists", "gt", "gte", "lt", "lte"] as const;
-const WORKFLOW_ENTITY_TYPES = ["job", "opportunity", "contact", "customer", "schedule"] as const;
-const WORKFLOW_EVENT_TYPES = ["booking_confirmed", "job_rescheduled", "job_canceled", "job_completed", "payment_succeeded", "payment_failed"] as const;
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
 }
@@ -78,6 +82,7 @@ export default function AdminEntityDrawer() {
     const [runJsonError, setRunJsonError] = useState<string | null>(null);
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
 
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -355,7 +360,10 @@ export default function AdminEntityDrawer() {
                     {canEditInDrawer(drawer.type) && (
                         <div className="flex gap-2 pb-2 border-b border-alloy-stone/20">
                             {!isEditing ? (
-                                <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                <>
+                                    <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                    {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
+                                </>
                             ) : (
                                 <>
                                     <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
@@ -553,21 +561,6 @@ export default function AdminEntityDrawer() {
                                 </div>
                             ) : (
                                 <>
-                                    {canEditInDrawer(drawer.type) && (
-                                        <div className="flex gap-2 pb-2 border-b border-alloy-stone/20">
-                                            {!isEditing ? (
-                                                <>
-                                                    <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                                                    {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                                    <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
                                     {isEditing ? (
                                         <>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -577,29 +570,41 @@ export default function AdminEntityDrawer() {
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><select value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}</select></div>
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Conditions</strong>
-                                                {workflowConditions.map((c, i) => (
-                                                    <div key={i} className="flex gap-2 items-center mb-2">
-                                                        <input placeholder="field" value={c.field} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
-                                                        <select value={c.operator} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, operator: e.target.value } : p))} className="w-28 px-2 py-1.5 border rounded text-sm">
-                                                            {WORKFLOW_CONDITION_OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
-                                                        </select>
-                                                        <input placeholder="value" value={c.value} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
-                                                        <button type="button" onClick={() => setWorkflowConditions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>
-                                                    </div>
-                                                ))}
+                                                {workflowConditions.map((c, i) => {
+                                                    const entityType = (formData.entity_type as string) || "job";
+                                                    const fieldOptions = WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE[entityType] ?? WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE.job ?? [];
+                                                    return (
+                                                        <div key={i} className="flex gap-2 items-center mb-2">
+                                                            <select value={c.field} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm">
+                                                                <option value="">Select field…</option>
+                                                                {fieldOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                            </select>
+                                                            <select value={c.operator} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, operator: e.target.value } : p))} className="w-28 px-2 py-1.5 border rounded text-sm">
+                                                                {WORKFLOW_CONDITION_OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
+                                                            </select>
+                                                            <input placeholder="value" value={c.value} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
+                                                            <button type="button" onClick={() => setWorkflowConditions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>
+                                                        </div>
+                                                    );
+                                                })}
                                                 <button type="button" onClick={() => setWorkflowConditions((prev) => [...prev, { field: "", operator: "equals", value: "" }])} className="text-sm text-alloy-blue hover:underline">Add condition</button>
                                             </div>
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Actions</strong>
                                                 {workflowActions.map((a, i) => (
                                                     <div key={i} className="border border-alloy-stone/30 rounded p-2 mb-2">
-                                                        <div className="flex gap-2 items-center mb-1">
+                                                        <div className="flex gap-2 items-center mb-1 flex-wrap">
                                                             <select value={a.action_type} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, action_type: e.target.value } : p))} className="px-2 py-1.5 border rounded text-sm">
                                                                 <option value="log">log</option>
                                                                 <option value="create_message">create_message</option>
                                                                 <option value="update_entity">update_entity</option>
                                                             </select>
-                                                            <input placeholder="target_entity (optional)" value={a.target_entity ?? ""} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, target_entity: e.target.value || undefined } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
+                                                            {a.action_type === "update_entity" && (
+                                                                <select value={a.target_entity ?? ""} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, target_entity: e.target.value || undefined } : p))} className="px-2 py-1.5 border rounded text-sm">
+                                                                    <option value="">— Entity —</option>
+                                                                    {WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}
+                                                                </select>
+                                                            )}
                                                             <button type="button" onClick={() => setWorkflowActions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>
                                                             <button type="button" onClick={() => setWorkflowActions((prev) => {
                                                                 if (i <= 0) return prev;
@@ -614,12 +619,85 @@ export default function AdminEntityDrawer() {
                                                                 return next;
                                                             })} className="text-sm">↓</button>
                                                         </div>
-                                                        <label className="block text-xs text-alloy-midnight/60 mb-0.5">Payload (JSON)</label>
-                                                        <textarea value={typeof a.payload === "object" ? JSON.stringify(a.payload, null, 2) : "{}"} onChange={(e) => {
-                                                            try { const v = e.target.value.trim() ? JSON.parse(e.target.value) : {}; setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: v } : p)); } catch { /* invalid */ }
-                                                        }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={3} />
-                                                        {a.action_type === "create_message" && (
-                                                            <p className="text-xs text-alloy-midnight/50 mt-1">Template variables: <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{contact.first_name}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{contact.phone}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{job.title}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{schedule.start_at}}"}</code>, <code className="bg-alloy-stone/20 px-0.5 rounded">{"{{opportunity.job_time_window}}"}</code></p>
+                                                        {a.action_type === "create_message" ? (
+                                                            <>
+                                                                <div className="flex justify-end">
+                                                                    <button type="button" onClick={() => setWorkflowActionAdvanced((prev) => ({ ...prev, [i]: !prev[i] }))} className="text-xs text-alloy-blue hover:underline">
+                                                                        {workflowActionAdvanced[i] ? "Basic mode" : "Advanced (JSON)"}
+                                                                    </button>
+                                                                </div>
+                                                                {workflowActionAdvanced[i] ? (
+                                                                    <>
+                                                                        <label className="block text-xs text-alloy-midnight/60 mb-0.5">Payload (JSON)</label>
+                                                                        <textarea value={typeof a.payload === "object" ? JSON.stringify(a.payload, null, 2) : "{}"} onChange={(e) => {
+                                                                            try { const v = e.target.value.trim() ? JSON.parse(e.target.value) : {}; setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: v } : p)); } catch { /* invalid */ }
+                                                                        }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={4} />
+                                                                    </>
+                                                                ) : (() => {
+                                                                    const pl = (a.payload && typeof a.payload === "object" ? a.payload : {}) as Record<string, unknown>;
+                                                                    return (
+                                                                        <div className="space-y-2">
+                                                                            <div>
+                                                                                <label className="block text-xs text-alloy-midnight/60 mb-0.5">Channel</label>
+                                                                                <select value={String(pl.channel ?? "email")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), channel: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm">
+                                                                                    <option value="email">email</option>
+                                                                                    <option value="sms">sms</option>
+                                                                                </select>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs text-alloy-midnight/60 mb-0.5">To (supports {"{{contact.phone}}"} etc.)</label>
+                                                                                <input value={String(pl.to_value ?? "")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), to_value: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="e.g. {{contact.phone}}" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="block text-xs text-alloy-midnight/60 mb-0.5">Body (supports templates)</label>
+                                                                                <textarea value={String(pl.body ?? "")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), body: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm" rows={3} placeholder="e.g. Booked: {{job.title}} at {{schedule.start_at}}" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <span className="block text-xs text-alloy-midnight/60 mb-1">Attach to records</span>
+                                                                                <div className="flex flex-wrap gap-3">
+                                                                                    {(["contact_id", "customer_id", "job_id", "opportunity_id"] as const).map((key) => {
+                                                                                        const template = key === "contact_id" ? "{{contact.id}}" : key === "customer_id" ? "{{customer.id}}" : key === "job_id" ? "{{job.id}}" : "{{opportunity.id}}";
+                                                                                        const checked = pl[key] === template;
+                                                                                        return (
+                                                                                            <label key={key} className="flex items-center gap-1 text-sm">
+                                                                                                <input type="checkbox" checked={!!checked} onChange={(e) => {
+                                                                                                    const next = { ...(typeof a.payload === "object" && a.payload ? a.payload : {}) } as Record<string, unknown>;
+                                                                                                    next[key] = e.target.checked ? template : undefined;
+                                                                                                    setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: next } : p));
+                                                                                                }} className="rounded" />
+                                                                                                {key.replace(/_id$/, "")}
+                                                                                            </label>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </>
+                                                        ) : a.action_type === "update_entity" ? (
+                                                            <>
+                                                                <p className="text-xs text-alloy-midnight/50 mb-1">Payload: <code>entity_type</code>, <code>entity_id</code> (path or literal), <code>patch</code> (object).</p>
+                                                                <div className="flex flex-wrap gap-1 mb-1">
+                                                                    {WORKFLOW_ENTITY_ID_QUICK_FILL.map((opt) => (
+                                                                        <button key={opt.value} type="button" onClick={() => {
+                                                                            const pl = (a.payload && typeof a.payload === "object" ? a.payload : {}) as Record<string, unknown>;
+                                                                            setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...pl, entity_id: opt.value } } : p));
+                                                                        }} className="px-2 py-0.5 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">{opt.label}</button>
+                                                                    ))}
+                                                                </div>
+                                                                <label className="block text-xs text-alloy-midnight/60 mb-0.5">Payload (JSON)</label>
+                                                                <textarea value={typeof a.payload === "object" ? JSON.stringify(a.payload, null, 2) : "{}"} onChange={(e) => {
+                                                                    try { const v = e.target.value.trim() ? JSON.parse(e.target.value) : {}; setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: v } : p)); } catch { /* invalid */ }
+                                                                }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={3} />
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <label className="block text-xs text-alloy-midnight/60 mb-0.5">Payload (JSON)</label>
+                                                                <textarea value={typeof a.payload === "object" ? JSON.stringify(a.payload, null, 2) : "{}"} onChange={(e) => {
+                                                                    try { const v = e.target.value.trim() ? JSON.parse(e.target.value) : {}; setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: v } : p)); } catch { /* invalid */ }
+                                                                }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={3} />
+                                                            </>
                                                         )}
                                                     </div>
                                                 ))}
