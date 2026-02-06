@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import DataTable from "@/components/admin/DataTable";
-import Drawer from "@/components/admin/Drawer";
-import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 
@@ -27,7 +26,7 @@ export default function CustomersClient({
   initialData,
   error,
 }: CustomersClientProps) {
-  const [selectedRow, setSelectedRow] = useState<Customer | null>(null);
+  const { openDrawer } = useAdminDrawer();
   const { selectedVerticalId } = useAdminVertical();
   const data = useMemo(() => {
     if (!selectedVerticalId) return initialData;
@@ -74,52 +73,8 @@ export default function CustomersClient({
         data={data}
         columns={columns}
         filters={filters}
-        onRowClick={setSelectedRow}
+        onRowClick={(row) => openDrawer({ type: "customers", id: row.id })}
       />
-
-      <Drawer
-        isOpen={!!selectedRow}
-        onClose={() => setSelectedRow(null)}
-        title={`Customer: ${selectedRow?.name || selectedRow?.id}`}
-      >
-        {selectedRow && (
-          <div className="space-y-4">
-            <div>
-              <strong className="text-alloy-midnight/70">ID:</strong>{" "}
-              {selectedRow.id}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-              {formatDateTime(selectedRow.created_at)}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Name:</strong>{" "}
-              {selectedRow.name || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Status:</strong>{" "}
-              {selectedRow.status || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Stripe Customer ID:</strong>{" "}
-              {selectedRow.stripe_customer_id || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Payment Method ID:</strong>{" "}
-              {selectedRow.default_payment_method_id || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Vertical ID:</strong>{" "}
-              {selectedRow.vertical_id || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">External ID:</strong>{" "}
-              {selectedRow.external_id || "-"}
-            </div>
-            <RelatedRecordsTabs entityType="customer" entityId={selectedRow.id} />
-          </div>
-        )}
-      </Drawer>
     </div>
   );
 }

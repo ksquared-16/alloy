@@ -1,5 +1,5 @@
-import ComingSoon from "@/components/admin/ComingSoon";
+import SettingsClient from "./SettingsClient";
 
 export default function AdminSettingsPage() {
-    return <ComingSoon title="Settings" />;
+    return <SettingsClient />;
 }

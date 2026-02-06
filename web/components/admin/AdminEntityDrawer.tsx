@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules"] as const;
@@ -63,6 +64,8 @@ export default function AdminEntityDrawer() {
     const [rescheduleScheduleId, setRescheduleScheduleId] = useState<string | null>(null);
     const [rescheduleSaving, setRescheduleSaving] = useState(false);
     const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+    const [pipelines, setPipelines] = useState<{ id: string; name: string }[]>([]);
+    const [stages, setStages] = useState<{ id: string; pipeline_id: string; name: string; position: number }[]>([]);
 
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -108,6 +111,21 @@ export default function AdminEntityDrawer() {
             .then((json: { schedules?: { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] }) => setJobSchedules(json.schedules ?? []))
             .catch(() => setJobSchedules([]));
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities") {
+            setPipelines([]);
+            setStages([]);
+            return;
+        }
+        Promise.all([
+            fetch("/api/admin/pipelines").then((r) => r.ok ? r.json() : []),
+            fetch("/api/admin/pipeline-stages").then((r) => r.ok ? r.json() : []),
+        ]).then(([pl, st]) => {
+            setPipelines(Array.isArray(pl) ? pl : []);
+            setStages(Array.isArray(st) ? st : []);
+        }).catch(() => { setPipelines([]); setStages([]); });
+    }, [drawer.type]);
 
     const openReschedule = useCallback((s: { id: string; start_at: string; end_at: string; timezone: string }) => {
         setRescheduleScheduleId(s.id);
@@ -156,6 +174,7 @@ export default function AdminEntityDrawer() {
                 job_date: (data.job_date as string)?.slice(0, 10) ?? "",
                 job_time_window: data.job_time_window ?? "",
                 status: data.status ?? "",
+                pipeline_stage_id: data.pipeline_stage_id ?? "",
                 vertical_id: data.vertical_id ?? "",
                 quote_total: data.quote_total ?? "",
                 notes: (meta.notes as string) ?? "",
@@ -239,7 +258,11 @@ export default function AdminEntityDrawer() {
                 ? `Opportunity: ${(data.name as string) || drawer.id}`
                 : drawer.type === "jobs"
                   ? `Job: ${(data.title as string) || drawer.id}`
-                  : `Schedule: ${drawer.id}`
+                  : drawer.type === "schedules"
+                    ? `Schedule: ${drawer.id}`
+                    : drawer.type === "discount_redemptions"
+                      ? `Redemption: ${(data.discount_code as string) || drawer.id}`
+                      : "Details"
         : loading
           ? "Loading…"
           : "Details";
@@ -324,14 +347,25 @@ export default function AdminEntityDrawer() {
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><input value={String(formData.status ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div>
+                                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Stage</label>
+                                        <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm">
+                                            <option value="">— None —</option>
+                                            {pipelines.map((p) => {
+                                                const pipelineStages = stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position);
+                                                return pipelineStages.map((s) => (
+                                                    <option key={s.id} value={s.id}>{p.name}: {s.name}</option>
+                                                ));
+                                            })}
+                                        </select>
+                                    </div>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Vertical ID</label><input value={String(formData.vertical_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
                                 </>
                             ) : (
                                 <>
-                                    <Field label="Status" value={data.status as string} />
+                                    <Field label="Stage" value={(data._stage_name as string) ?? (data.status as string) ?? "-"} />
                                     <Field label="Job Date" value={formatDate(data.job_date as string)} />
                                     <Field label="Time Window" value={data.job_time_window as string} />
                                     <Field label="Quote Total" value={formatMoneyFromDollars(data.quote_total as number)} />
@@ -418,6 +452,23 @@ export default function AdminEntityDrawer() {
                             )}
                         </>
                     )}
+                    {drawer.type === "discount_redemptions" && (
+                        <>
+                            <Field label="ID" value={data.id as string} />
+                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
+                            <Field label="Discount Code" value={data.discount_code as string} />
+                            <Field label="Subtotal" value={formatMoneyFromDollars(data.quote_subtotal as number)} />
+                            <Field label="Discount Amount" value={formatMoneyFromDollars(data.discount_amount as number)} />
+                            <Field label="Total" value={formatMoneyFromDollars(data.quote_total as number)} />
+                            <Field label="Contact ID" value={data.contact_id as string} />
+                            <Field label="Opportunity ID" value={data.opportunity_id as string} />
+                            <Field label="Job ID" value={data.job_id as string} />
+                        </>
+                    )}
+                    {drawer.type === "contacts" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="contact" entityId={drawer.id} /></div>}
+                    {drawer.type === "customers" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="customer" entityId={drawer.id} /></div>}
+                    {drawer.type === "opportunities" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="opportunity" entityId={drawer.id} /></div>}
+                    {drawer.type === "jobs" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="job" entityId={drawer.id} /></div>}
                 </div>
             )}
         </Drawer>

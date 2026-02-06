@@ -1,12 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import DataTable from "@/components/admin/DataTable";
-import Drawer from "@/components/admin/Drawer";
-import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { formatDate, formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 
 interface Job {
     id: string;
@@ -34,7 +32,6 @@ export default function JobsClient({
     initialData,
     error,
 }: JobsClientProps) {
-    const [selectedRow, setSelectedRow] = useState<Job | null>(null);
     const { openDrawer } = useAdminDrawer();
     const { selectedVerticalId } = useAdminVertical();
     const data = useMemo(() => {
@@ -80,84 +77,8 @@ export default function JobsClient({
                 data={data}
                 columns={columns}
                 filters={filters}
-                onRowClick={setSelectedRow}
+                onRowClick={(row) => openDrawer({ type: "jobs", id: row.id })}
             />
-
-            <Drawer
-                isOpen={!!selectedRow}
-                onClose={() => setSelectedRow(null)}
-                title={`Job: ${selectedRow?.title || selectedRow?.id}`}
-            >
-                {selectedRow && (
-                    <div className="space-y-4">
-                        <div>
-                            <strong className="text-alloy-midnight/70">ID:</strong>{" "}
-                            {selectedRow.id}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-                            {formatDateTime(selectedRow.created_at)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Title:</strong>{" "}
-                            {selectedRow.title || "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Recurring:</strong>{" "}
-                            {selectedRow.is_recurring ? "Yes" : "No"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Scheduled:</strong>{" "}
-                            {formatDateTime(selectedRow.scheduled_at)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Status ID:</strong>{" "}
-                            {selectedRow.job_status_id || "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Gross Price:</strong>{" "}
-                            {formatMoneyFromCents(selectedRow.gross_price_cents)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Payout:</strong>{" "}
-                            {formatMoneyFromCents(selectedRow.contractor_payout_cents)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Offer Code:</strong>{" "}
-                            {selectedRow.offer_code || "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Opportunity:</strong>{" "}
-                            {selectedRow.opportunity_id ? (
-                                <button type="button" onClick={() => openDrawer({ type: "opportunities", id: selectedRow.opportunity_id! })} className="text-alloy-blue hover:underline">
-                                    {selectedRow.opportunity_id.slice(0, 8)}…
-                                </button>
-                            ) : "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Primary Contact:</strong>{" "}
-                            {selectedRow.primary_contact_id ? (
-                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: selectedRow.primary_contact_id! })} className="text-alloy-blue hover:underline">
-                                    {selectedRow.primary_contact_id.slice(0, 8)}…
-                                </button>
-                            ) : "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Customer:</strong>{" "}
-                            {selectedRow.customer_id ? (
-                                <button type="button" onClick={() => openDrawer({ type: "customers", id: selectedRow.customer_id! })} className="text-alloy-blue hover:underline">
-                                    {selectedRow.customer_id.slice(0, 8)}…
-                                </button>
-                            ) : "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">External ID:</strong>{" "}
-                            {selectedRow.external_id || "-"}
-                        </div>
-                        <RelatedRecordsTabs entityType="job" entityId={selectedRow.id} />
-                    </div>
-                )}
-            </Drawer>
         </div>
     );
 }

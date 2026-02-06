@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
-const ALLOWED_KEYS = ["job_date", "job_time_window", "status", "vertical_id", "quote_total", "notes"] as const;
+const ALLOWED_KEYS = ["job_date", "job_time_window", "status", "vertical_id", "quote_total", "notes", "pipeline_stage_id"] as const;
 
 export async function PATCH(
     request: NextRequest,
@@ -25,6 +25,7 @@ export async function PATCH(
             let val = body[key];
             if (key === "vertical_id" && val === "") val = null;
             if (key === "quote_total" && (val === "" || val === null)) val = null;
+            if (key === "pipeline_stage_id" && (val === "" || val === null)) val = null;
             updates[key] = val;
         }
         if (body.notes !== undefined) {

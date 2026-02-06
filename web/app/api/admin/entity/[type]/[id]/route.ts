@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions"] as const;
 
 export async function GET(
     request: NextRequest,
@@ -47,6 +47,12 @@ export async function GET(
                 const c = contact.data;
                 out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
             }
+            if ((data as { pipeline_stage_id?: string }).pipeline_stage_id) {
+                const stage = await supabase.from("pipeline_stages").select("name").eq("id", (data as { pipeline_stage_id: string }).pipeline_stage_id).single();
+                out._stage_name = stage.data?.name ?? null;
+            } else {
+                out._stage_name = null;
+            }
             return NextResponse.json(out);
         }
         if (type === "contacts") {
@@ -61,6 +67,11 @@ export async function GET(
         }
         if (type === "schedules") {
             const { data, error } = await supabase.from("schedules").select("*").eq("id", id).single();
+            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            return NextResponse.json(data);
+        }
+        if (type === "discount_redemptions") {
+            const { data, error } = await supabase.from("discount_redemptions").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             return NextResponse.json(data);
         }

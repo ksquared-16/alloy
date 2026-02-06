@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
-import Drawer from "@/components/admin/Drawer";
-import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 
 interface Contact {
@@ -27,7 +25,7 @@ export default function ContactsClient({
   initialData,
   error,
 }: ContactsClientProps) {
-  const [selectedRow, setSelectedRow] = useState<Contact | null>(null);
+  const { openDrawer } = useAdminDrawer();
 
   const columns = [
     { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
@@ -66,56 +64,8 @@ export default function ContactsClient({
         data={initialData}
         columns={columns}
         filters={filters}
-        onRowClick={setSelectedRow}
+        onRowClick={(row) => openDrawer({ type: "contacts", id: row.id })}
       />
-
-      <Drawer
-        isOpen={!!selectedRow}
-        onClose={() => setSelectedRow(null)}
-        title={`Contact: ${selectedRow?.first_name || ""} ${selectedRow?.last_name || ""}`.trim() || selectedRow?.id || "Contact"}
-      >
-        {selectedRow && (
-          <div className="space-y-4">
-            <div>
-              <strong className="text-alloy-midnight/70">ID:</strong>{" "}
-              {selectedRow.id}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-              {formatDateTime(selectedRow.created_at)}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">First Name:</strong>{" "}
-              {selectedRow.first_name || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Last Name:</strong>{" "}
-              {selectedRow.last_name || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Email:</strong>{" "}
-              {selectedRow.email || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Phone:</strong>{" "}
-              {selectedRow.phone || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Status:</strong>{" "}
-              {selectedRow.status || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">Customer ID:</strong>{" "}
-              {selectedRow.customer_id || "-"}
-            </div>
-            <div>
-              <strong className="text-alloy-midnight/70">External ID:</strong>{" "}
-              {selectedRow.external_id || "-"}
-            </div>
-            <RelatedRecordsTabs entityType="contact" entityId={selectedRow.id} />
-          </div>
-        )}
-      </Drawer>
     </div>
   );
 }

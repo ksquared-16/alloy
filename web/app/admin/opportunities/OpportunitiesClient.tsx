@@ -1,9 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import DataTable from "@/components/admin/DataTable";
-import Drawer from "@/components/admin/Drawer";
-import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDate, formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
@@ -20,18 +18,26 @@ interface Opportunity {
     primary_contact_id: string | null;
     external_id: string | null;
     vertical_id: string | null;
+    pipeline_stage_id?: string | null;
+}
+
+interface Stage {
+    id: string;
+    name: string;
+    pipeline_id: string;
 }
 
 interface OpportunitiesClientProps {
     initialData: Opportunity[];
+    stages?: Stage[];
     error?: string;
 }
 
 export default function OpportunitiesClient({
     initialData,
+    stages = [],
     error,
 }: OpportunitiesClientProps) {
-    const [selectedRow, setSelectedRow] = useState<Opportunity | null>(null);
     const { openDrawer } = useAdminDrawer();
     const { selectedVerticalId } = useAdminVertical();
     const data = useMemo(() => {
@@ -39,10 +45,17 @@ export default function OpportunitiesClient({
         return initialData.filter((r) => r.vertical_id === selectedVerticalId);
     }, [initialData, selectedVerticalId]);
 
+    const stageById = useMemo(() => {
+        const m: Record<string, string> = {};
+        stages.forEach((s) => { m[s.id] = s.name; });
+        return m;
+    }, [stages]);
+
     const columns = [
         { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
         { key: "name", label: "Name", sortable: true },
         { key: "status", label: "Status", sortable: true },
+        { key: "pipeline_stage_id", label: "Stage", sortable: false, render: (v: string | null) => (v && stageById[v]) || "-" },
         { key: "job_date", label: "Job Date", sortable: true, render: (v: string) => formatDate(v) },
         { key: "job_time_window", label: "Time Window", sortable: false },
         { key: "quote_total", label: "Quote Total", sortable: true, render: (v: number | null) => formatMoneyFromDollars(v) },
@@ -81,68 +94,8 @@ export default function OpportunitiesClient({
                 data={data}
                 columns={columns}
                 filters={filters}
-                onRowClick={setSelectedRow}
+                onRowClick={(row) => openDrawer({ type: "opportunities", id: row.id })}
             />
-
-            <Drawer
-                isOpen={!!selectedRow}
-                onClose={() => setSelectedRow(null)}
-                title={`Opportunity: ${selectedRow?.name || selectedRow?.id}`}
-            >
-                {selectedRow && (
-                    <div className="space-y-4">
-                        <div>
-                            <strong className="text-alloy-midnight/70">ID:</strong>{" "}
-                            {selectedRow.id}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Created:</strong>{" "}
-                            {formatDateTime(selectedRow.created_at)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Name:</strong>{" "}
-                            {selectedRow.name || "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Status:</strong>{" "}
-                            {selectedRow.status || "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Job Date:</strong>{" "}
-                            {formatDate(selectedRow.job_date)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Time Window:</strong>{" "}
-                            {selectedRow.job_time_window || "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Quote Total:</strong>{" "}
-                            {formatMoneyFromDollars(selectedRow.quote_total)}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Customer:</strong>{" "}
-                            {selectedRow.customer_id ? (
-                                <button type="button" onClick={() => openDrawer({ type: "customers", id: selectedRow.customer_id! })} className="text-alloy-blue hover:underline">
-                                    {selectedRow.customer_id.slice(0, 8)}…
-                                </button>
-                            ) : "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">Primary Contact:</strong>{" "}
-                            {selectedRow.primary_contact_id ? (
-                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: selectedRow.primary_contact_id! })} className="text-alloy-blue hover:underline">
-                                    {selectedRow.primary_contact_id.slice(0, 8)}…
-                                </button>
-                            ) : "-"}
-                        </div>
-                        <div>
-                            <strong className="text-alloy-midnight/70">External ID:</strong>{" "}
-                            {selectedRow.external_id || "-"}
-                        </div>
-                        <RelatedRecordsTabs entityType="opportunity" entityId={selectedRow.id} />
-                    </div>
-                )}
-            </Drawer>
         </div>
     );
 }
