@@ -47,40 +47,9 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // No session - redirect to login
+  // No session - redirect to login (role check is done in admin layout via user_profiles)
   if (!user) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  // Check allowlist (only in staging)
-  const appEnv = process.env.NEXT_PUBLIC_APP_ENV || "production";
-  if (appEnv === "staging") {
-    const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS;
-    if (allowedEmails) {
-      const emailList = allowedEmails.split(",").map((e) => e.trim().toLowerCase());
-      const userEmail = user.email?.toLowerCase();
-      if (!userEmail || !emailList.includes(userEmail)) {
-        return NextResponse.redirect(
-          new URL("/login?error=unauthorized", request.url)
-        );
-      }
-    }
-  } else {
-    // In production, still require allowlist for safety
-    // This can be changed if you want production to be completely inaccessible
-    const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS;
-    if (allowedEmails) {
-      const emailList = allowedEmails.split(",").map((e) => e.trim().toLowerCase());
-      const userEmail = user.email?.toLowerCase();
-      if (!userEmail || !emailList.includes(userEmail)) {
-        return NextResponse.redirect(
-          new URL("/login?error=unauthorized", request.url)
-        );
-      }
-    } else {
-      // If no allowlist is set in production, deny access
-      return NextResponse.redirect(new URL("/", request.url));
-    }
   }
 
   return response;

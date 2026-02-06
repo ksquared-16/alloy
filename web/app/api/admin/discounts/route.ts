@@ -1,7 +1,10 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { requireAdmin } from "@/lib/adminAuth";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
   try {
     const supabase = createAdminClient();
     const body = await request.json();

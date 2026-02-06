@@ -1,110 +1,67 @@
 # Admin Authentication Setup
 
-This document describes how to set up admin authentication for the staging environment.
+This document describes how admin authentication and role-based access work for the admin portal.
 
 ## Overview
 
-- **Login Page**: `/login` - Email/password authentication
-- **Admin Page**: `/admin` - Protected route (placeholder UI)
-- **Auth Provider**: Supabase Auth
-- **Protection**: Middleware-based route protection with email allowlist
+- **Login Page**: `/login` – Email/password via Supabase Auth
+- **Admin Portal**: `/admin/*` – Protected by session + role in `public.user_profiles`
+- **Protection**: Middleware requires a valid session; server layout requires a `user_profiles` row with role `admin` or `ops`
+- **Unauthorized**: Users without a valid profile or allowed role are redirected to `/unauthorized`
+
+## Roles (V1)
+
+| Role   | Access | Mutations (create/edit/delete) |
+|--------|--------|--------------------------------|
+| `admin` | Full access to all admin pages | Yes (discounts, verticals, etc.) |
+| `ops`   | View all admin pages and records | No (read-only) |
+
+Roles are stored in `public.user_profiles.role`. Only `admin` and `ops` are allowed to access the admin portal.
+
+## Database: user_profiles
+
+Ensure the table exists and has a row per admin/ops user:
+
+- **`id`** (uuid, PK) – matches `auth.users.id`
+- **`role`** (text) – `admin` or `ops`
+
+Example (after creating a user in Supabase Auth):
+
+```sql
+insert into public.user_profiles (id, role)
+values ('<auth.users.id>', 'admin');
+```
 
 ## Environment Variables
 
-Add these to your Vercel project (staging environment):
-
 ### Required
 
-The code supports both naming conventions (with fallbacks):
+- **`SUPABASE_URL`** (or `NEXT_PUBLIC_SUPABASE_URL`) – Supabase project URL
+- **`SUPABASE_ANON_KEY`** (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`) – Supabase anon/public key (for auth)
+- **`SUPABASE_SERVICE_ROLE_KEY`** – Used server-side for admin API and reading `user_profiles` (do not expose to client)
 
-1. **`SUPABASE_URL`** (or `NEXT_PUBLIC_SUPABASE_URL`)
-   - Your Supabase project URL
-   - Example: `https://xxxxx.supabase.co`
-   - **Note**: Code checks `NEXT_PUBLIC_SUPABASE_URL` first, then falls back to `SUPABASE_URL`
+### Not used for admin access
 
-2. **`SUPABASE_ANON_KEY`** (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
-   - Your Supabase anonymous/public key (NOT the service role key)
-   - Found in: Supabase Dashboard → Settings → API → Project API keys → `anon` `public`
-   - **Note**: Code checks `NEXT_PUBLIC_SUPABASE_ANON_KEY` first, then falls back to `SUPABASE_ANON_KEY`
-   - **Important**: Do NOT use `SUPABASE_SERVICE_ROLE_KEY` for auth - that's for admin database operations
-
-### Optional (for allowlist protection)
-
-3. **`ALLOWED_ADMIN_EMAILS`** (recommended for staging)
-   - Comma-separated list of allowed admin email addresses
-   - Example: `admin@example.com,another@example.com`
-   - **Staging**: Required for access
-   - **Production**: If not set, `/admin` redirects to homepage. If set, only listed emails can access.
-
-4. **`NEXT_PUBLIC_APP_ENV`**
-   - Set to `"staging"` for staging environment
-   - Used to determine if allowlist should be enforced
-
-## Creating Admin Users in Supabase
-
-1. Go to your Supabase Dashboard
-2. Navigate to **Authentication** → **Users**
-3. Click **"Add user"** → **"Create new user"**
-4. Enter:
-   - **Email**: The admin email address
-   - **Password**: A secure password (user can change this later)
-   - **Auto Confirm User**: ✅ Check this box (or manually confirm via email)
-5. Click **"Create user"**
-
-The user can now sign in at `/login` with their email and password.
+- **`ALLOWED_ADMIN_EMAILS`** – No longer used; access is determined by `user_profiles.role` only.
 
 ## How It Works
 
-1. **Login Flow**:
-   - User visits `/login`
-   - Enters email/password
-   - Supabase Auth validates credentials
-   - On success, redirects to `/admin`
+1. **Middleware** (`web/middleware.ts`): For `/admin/*`, checks for a valid Supabase session. If no user → redirect to `/login`.
+2. **Admin layout** (`web/app/admin/layout.tsx`): Calls `getAdminAuth()` (user + `user_profiles.role`). If no profile or role not in `admin`/`ops` → redirect to `/unauthorized`.
+3. **API mutations**: POST/PATCH/DELETE on admin routes (e.g. `/api/admin/discounts`, `/api/admin/verticals`) use `requireAdmin()` and return 403 if role is not `admin`. GET routes allow both `admin` and `ops`.
+4. **UI**: `AdminAuthContext` exposes `canMutate` (true only for `admin`). Create/edit buttons are hidden for `ops`; drawers show read-only forms for `ops`.
 
-2. **Route Protection**:
-   - Middleware intercepts requests to `/admin/*`
-   - Checks for valid Supabase session
-   - If no session → redirects to `/login`
-   - If session exists:
-     - **Staging**: Checks email against `ALLOWED_ADMIN_EMAILS`
-     - **Production**: Checks email against `ALLOWED_ADMIN_EMAILS` (if set), otherwise denies access
-   - If email not in allowlist → redirects to `/login?error=unauthorized`
+## Creating Admin Users
 
-3. **Sign Out**:
-   - Click "Sign Out" button on `/admin` page
-   - Clears Supabase session
-   - Redirects to `/login`
+1. In Supabase Dashboard: **Authentication** → **Users** → **Add user** → create user (email/password, confirm).
+2. In SQL or Table Editor: insert a row into `public.user_profiles` with that user’s `id` and `role` = `admin` or `ops`.
 
-## Security Notes
+The user signs in at `/login`; after that, access is determined by their `user_profiles.role`.
 
-- **Staging**: Allowlist is enforced when `NEXT_PUBLIC_APP_ENV=staging`
-- **Production**: 
-  - If `ALLOWED_ADMIN_EMAILS` is set, only listed emails can access
-  - If `ALLOWED_ADMIN_EMAILS` is not set, `/admin` redirects to homepage (denied)
-  - This prevents accidental exposure in production
+## Files
 
-## Troubleshooting
-
-### "You are not authorized" error
-- Check that the user's email is in `ALLOWED_ADMIN_EMAILS`
-- Verify email is lowercase and matches exactly (case-insensitive comparison)
-
-### "Server configuration error" or config error message
-- Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`) are set
-- Check that values are correct in Vercel environment variables
-- Ensure you're using the **anon key**, not the service role key
-
-### Can't sign in
-- Verify user exists in Supabase Auth
-- Check that user is confirmed (not pending email confirmation)
-- Verify email/password are correct
-
-## Files Created
-
-- `web/lib/supabaseClient.ts` - Client-side Supabase auth helper
-- `web/lib/supabaseServer.ts` - Server-side Supabase auth helper
-- `web/middleware.ts` - Route protection middleware
-- `web/app/login/page.tsx` - Login page
-- `web/app/admin/page.tsx` - Admin page (server component)
-- `web/app/admin/AdminClient.tsx` - Admin page (client component)
-
+- `web/lib/adminAuth.ts` – `getAdminAuth()`, `requireAdmin()` for server layout and API routes
+- `web/contexts/AdminAuthContext.tsx` – Client context for `userEmail`, `role`, `canMutate`
+- `web/middleware.ts` – Session check for `/admin/*`
+- `web/app/admin/layout.tsx` – Role check and redirect to `/unauthorized`
+- `web/app/unauthorized/page.tsx` – “Access denied” page

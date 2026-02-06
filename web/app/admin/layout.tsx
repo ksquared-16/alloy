@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabaseServer";
+import { getAdminAuth } from "@/lib/adminAuth";
 import AdminLayout from "@/components/admin/AdminLayout";
 
 export default async function AdminLayoutWrapper({
@@ -7,17 +7,14 @@ export default async function AdminLayoutWrapper({
 }: {
     children: React.ReactNode;
 }) {
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    const auth = await getAdminAuth();
 
-    if (!user) {
-        redirect("/login");
+    if (!auth) {
+        redirect("/unauthorized");
     }
 
     return (
-        <AdminLayout userEmail={user.email || "Unknown"}>
+        <AdminLayout userEmail={auth.user.email || "Unknown"} role={auth.role}>
             {children}
         </AdminLayout>
     );

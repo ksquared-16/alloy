@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 import { ReactNode, useCallback, useEffect, useState } from "react";
+import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
@@ -41,9 +42,10 @@ function getInitials(email: string): string {
 interface AdminLayoutProps {
     children: ReactNode;
     userEmail: string;
+    role: string;
 }
 
-function AdminLayoutInner({ children, userEmail }: AdminLayoutProps) {
+function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
@@ -184,8 +186,10 @@ function AdminLayoutInner({ children, userEmail }: AdminLayoutProps) {
 
 export default function AdminLayout(props: AdminLayoutProps) {
     return (
-        <AdminVerticalProvider>
-            <AdminLayoutInner {...props} />
-        </AdminVerticalProvider>
+        <AdminAuthProvider userEmail={props.userEmail} role={props.role}>
+            <AdminVerticalProvider>
+                <AdminLayoutInner {...props} />
+            </AdminVerticalProvider>
+        </AdminAuthProvider>
     );
 }

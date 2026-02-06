@@ -4,6 +4,7 @@ import { useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import PrimaryButton from "@/components/PrimaryButton";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 
 interface Discount {
@@ -29,12 +30,14 @@ export default function DiscountsClient({
   initialData,
   error,
 }: DiscountsClientProps) {
+  const { canMutate } = useAdminAuth();
   const [selectedRow, setSelectedRow] = useState<Discount | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState<Partial<Discount>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const readOnly = !canMutate;
 
   const columns = [
     {
@@ -163,7 +166,9 @@ export default function DiscountsClient({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-alloy-midnight">Discounts</h1>
-        <PrimaryButton onClick={handleCreate}>Create Discount</PrimaryButton>
+        {canMutate && (
+          <PrimaryButton onClick={handleCreate}>Create Discount</PrimaryButton>
+        )}
       </div>
 
       {error && (
@@ -188,10 +193,10 @@ export default function DiscountsClient({
           setFormData({});
           setSubmitError(null);
         }}
-        title={isCreating ? "Create Discount" : `Edit Discount: ${selectedRow?.code}`}
+        title={readOnly ? `View Discount: ${selectedRow?.code}` : isCreating ? "Create Discount" : `Edit Discount: ${selectedRow?.code}`}
       >
         <div className="space-y-4">
-          {submitError && (
+          {submitError && !readOnly && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
               {submitError}
             </div>
@@ -207,7 +212,8 @@ export default function DiscountsClient({
               onChange={(e) =>
                 setFormData({ ...formData, code: e.target.value.toUpperCase() })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
               required
             />
           </div>
@@ -220,6 +226,7 @@ export default function DiscountsClient({
                 onChange={(e) =>
                   setFormData({ ...formData, is_active: e.target.checked })
                 }
+                disabled={readOnly}
                 className="rounded"
               />
               <span className="text-sm font-medium text-alloy-midnight/70">
@@ -237,7 +244,8 @@ export default function DiscountsClient({
               onChange={(e) =>
                 setFormData({ ...formData, discount_type: e.target.value })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
             >
               <option value="percent">Percent</option>
               <option value="fixed">Fixed Amount</option>
@@ -257,7 +265,8 @@ export default function DiscountsClient({
                   discount_value: parseFloat(e.target.value) || 0,
                 })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
               required
             />
           </div>
@@ -270,6 +279,7 @@ export default function DiscountsClient({
                 onChange={(e) =>
                   setFormData({ ...formData, first_job_only: e.target.checked })
                 }
+                disabled={readOnly}
                 className="rounded"
               />
               <span className="text-sm font-medium text-alloy-midnight/70">
@@ -295,7 +305,8 @@ export default function DiscountsClient({
                   starts_at: e.target.value ? new Date(e.target.value).toISOString() : null,
                 })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -316,7 +327,8 @@ export default function DiscountsClient({
                   ends_at: e.target.value ? new Date(e.target.value).toISOString() : null,
                 })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -333,7 +345,8 @@ export default function DiscountsClient({
                   applies_to_vertical_slug: e.target.value || null,
                 })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
               placeholder="e.g., cleaning"
             />
           </div>
@@ -348,29 +361,47 @@ export default function DiscountsClient({
               onChange={(e) =>
                 setFormData({ ...formData, ghl_tag: e.target.value || null })
               }
-              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+              disabled={readOnly}
+              className="w-full px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue disabled:bg-alloy-stone/20 disabled:cursor-not-allowed"
             />
           </div>
 
           <div className="flex gap-4 pt-4">
-            <PrimaryButton
-              onClick={handleSubmit}
-              disabled={isSubmitting || !formData.code}
-            >
-              {isSubmitting ? "Saving..." : "Save"}
-            </PrimaryButton>
-            <button
-              onClick={() => {
-                setIsEditing(false);
-                setIsCreating(false);
-                setSelectedRow(null);
-                setFormData({});
-                setSubmitError(null);
-              }}
-              className="px-4 py-2 border border-alloy-stone/80 rounded-md hover:bg-alloy-stone transition-colors"
-            >
-              Cancel
-            </button>
+            {readOnly ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  setIsCreating(false);
+                  setSelectedRow(null);
+                  setFormData({});
+                }}
+                className="px-4 py-2 border border-alloy-stone/80 rounded-md hover:bg-alloy-stone transition-colors"
+              >
+                Close
+              </button>
+            ) : (
+              <>
+                <PrimaryButton
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !formData.code}
+                >
+                  {isSubmitting ? "Saving..." : "Save"}
+                </PrimaryButton>
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setIsCreating(false);
+                    setSelectedRow(null);
+                    setFormData({});
+                    setSubmitError(null);
+                  }}
+                  className="px-4 py-2 border border-alloy-stone/80 rounded-md hover:bg-alloy-stone transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
           </div>
         </div>
       </Drawer>

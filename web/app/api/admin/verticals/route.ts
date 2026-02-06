@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { requireAdmin } from "@/lib/adminAuth";
 import { NextRequest, NextResponse } from "next/server";
 
 /** GET: list verticals for admin dropdown (id, name, slug). */
@@ -17,6 +18,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const forbidden = await requireAdmin();
+  if (forbidden) return forbidden;
   try {
     const supabase = createAdminClient();
     const body = await request.json();
