@@ -40,6 +40,15 @@ export default function Footer() {
             <p className="text-alloy-stone mb-4">
               Connecting homeowners with trusted local service professionals.
             </p>
+            <p className="text-alloy-stone text-sm">
+              Contact:{" "}
+              <a
+                href="mailto:support@workwithalloy.com"
+                className="text-alloy-juniper hover:underline"
+              >
+                support@workwithalloy.com
+              </a>
+            </p>
           </div>
 
           {/* Services */}
