@@ -4,7 +4,7 @@ FastAPI application setup and route registration.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import leads, dispatch, quote, debug, webhooks, stripe, discounts
+from .routes import leads, dispatch, quote, debug, webhooks, stripe, discounts, messages_sender
 from .ghl_client import fetch_contractors
 
 # Create FastAPI app
@@ -31,7 +31,7 @@ app.include_router(debug.router)
 app.include_router(webhooks.router)
 app.include_router(stripe.router)
 app.include_router(discounts.router)
-
+app.include_router(messages_sender.router, prefix="/internal")
 
 # Root and utility routes
 @app.get("/")
