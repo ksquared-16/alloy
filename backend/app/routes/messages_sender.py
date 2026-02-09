@@ -4,6 +4,8 @@ Secured with INTERNAL_CRON_TOKEN via header x-cron-token.
 """
 import json
 import logging
+from typing import Optional
+
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from ..settings import (
@@ -23,15 +25,15 @@ def _log_env_sanity() -> None:
     """Log presence of env vars (booleans only, no values)."""
     logger.info(
         "ENV_SANITY TWILIO_ACCOUNT_SID=%s TWILIO_AUTH_TOKEN=%s TWILIO_FROM_NUMBER=%s INTERNAL_CRON_TOKEN=%s",
-        TWILIO_ACCOUNT_SID != "",
-        TWILIO_AUTH_TOKEN != "",
-        TWILIO_FROM_NUMBER != "",
-        INTERNAL_CRON_TOKEN != "",
+        bool(TWILIO_ACCOUNT_SID),
+        bool(TWILIO_AUTH_TOKEN),
+        bool(TWILIO_FROM_NUMBER),
+        bool(INTERNAL_CRON_TOKEN),
     )
 
 
 @router.post("/messages/process")
-async def post_process_messages(request: Request, x_cron_token: str | None = Header(None, alias="x-cron-token")):
+async def post_process_messages(request: Request, x_cron_token: Optional[str] = Header(None, alias="x-cron-token")):
     """
     Process queued outbound SMS messages: fetch from Supabase, send via Twilio, update rows.
     Requires header: x-cron-token: <INTERNAL_CRON_TOKEN>.
@@ -41,8 +43,15 @@ async def post_process_messages(request: Request, x_cron_token: str | None = Hea
 
     if not INTERNAL_CRON_TOKEN:
         raise HTTPException(status_code=501, detail="INTERNAL_CRON_TOKEN is not configured")
-    if x_cron_token is None or x_cron_token.strip() != INTERNAL_CRON_TOKEN:
+    token = (INTERNAL_CRON_TOKEN or "").strip()
+    if x_cron_token is None or (x_cron_token or "").strip() != token:
         raise HTTPException(status_code=401, detail="Invalid or missing x-cron-token")
+
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_FROM_NUMBER:
+        raise HTTPException(
+            status_code=500,
+            detail="Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)",
+        )
 
     try:
         raw = await request.body()

@@ -38,15 +38,18 @@ def send_sms(to_number: str, body: str) -> Dict[str, Any]:
     if not body or not str(body).strip():
         raise ValueError("body is required and cannot be empty")
 
-    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
+    sid_val = (TWILIO_ACCOUNT_SID or "").strip()
+    token_val = (TWILIO_AUTH_TOKEN or "").strip()
+    from_val = (TWILIO_FROM_NUMBER or "").strip()
+    if not sid_val or not token_val:
         raise RuntimeError("TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN must be set")
-    if not TWILIO_FROM_NUMBER:
+    if not from_val:
         raise RuntimeError("TWILIO_FROM_NUMBER must be set")
 
-    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    client = Client(sid_val, token_val)
     message = client.messages.create(
         body=body.strip(),
-        from_=TWILIO_FROM_NUMBER.strip(),
+        from_=from_val,
         to=to_number.strip(),
     )
     sid = message.sid or ""
