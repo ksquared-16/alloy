@@ -377,30 +377,38 @@ export async function POST(request: NextRequest) {
 
     if (shouldReuse && existingOpp) {
       opportunityId = existingOpp.id;
-      await supabase
-        .from("opportunities")
-        .update({
-          metadata: {
-            quote_input,
-            quote_output: quoteOutput,
-            source: "web_quote",
-            quote_started_at,
-          },
-          ...(quote_output_estimated_cents(quoteOutput) != null && {
-            estimated_price_cents: quote_output_estimated_cents(quoteOutput),
-            monetary_value_cents: quote_output_estimated_cents(quoteOutput),
-          }),
-        })
-        .eq("id", opportunityId);
+      const updatePayload: Record<string, unknown> = {
+        metadata: {
+          quote_input,
+          quote_output: quoteOutput,
+          source: "web_quote",
+          quote_started_at,
+        },
+        ...(quote_output_estimated_cents(quoteOutput) != null && {
+          estimated_price_cents: quote_output_estimated_cents(quoteOutput),
+          monetary_value_cents: quote_output_estimated_cents(quoteOutput),
+        }),
+      };
+      if (customerId) {
+        const { data: oppRow } = await supabase.from("opportunities").select("customer_id").eq("id", opportunityId).single();
+        if (oppRow && !(oppRow as { customer_id: string | null }).customer_id) {
+          (updatePayload as Record<string, unknown>).customer_id = customerId;
+        }
+      }
+      await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
     } else {
       const estimatedPriceCents = quoteOutput.estimated_price != null ? Math.round(quoteOutput.estimated_price * 100) : null;
+      const opportunityName =
+        [first_name, last_name].filter(Boolean).join(" ").trim()
+          ? `${[first_name, last_name].filter(Boolean).join(" ")} — Quote`
+          : (emailForLookup ? `${emailForLookup} — Quote` : "Quote");
       const { data: newOpp, error: oppError } = await supabase
         .from("opportunities")
         .insert({
           vertical_id: verticalId,
           primary_contact_id: contactId,
           customer_id: customerId,
-          name: `${first_name ?? ""} ${last_name ?? ""} — Quote`.trim() || "Quote",
+          name: opportunityName,
           status: "open",
           source: "website",
           pipeline_stage_id: quoteStartedStageId,

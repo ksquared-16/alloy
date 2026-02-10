@@ -18,6 +18,7 @@ interface CleaningQuickQuoteFormProps {
 
 export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuoteFormProps) {
   const [form, setForm] = useState({
+    first_name: "",
     zip: "",
     home_type: "",
     square_footage: "",
@@ -30,7 +31,11 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { zip, home_type, square_footage, cleaning_frequency, email, phone } = form;
+    const { first_name, zip, home_type, square_footage, cleaning_frequency, email, phone } = form;
+    if (!first_name?.trim()) {
+      setError("First name is required");
+      return;
+    }
     if (!zip.trim()) {
       setError("ZIP code is required");
       return;
@@ -50,6 +55,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          first_name: first_name.trim(),
           zip: zip.trim(),
           home_type: home_type || undefined,
           square_footage: square_footage.trim(),
@@ -81,7 +87,8 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         frequency_label: qo?.frequency_label ?? "One-time",
         service: "Standard Cleaning",
         price_breakdown: undefined,
-        addons: [],
+        addons: qo?.addons ?? [],
+        quote_input: { zip: zip.trim(), home_type: home_type || undefined, square_footage: square_footage.trim(), cleaning_frequency: cleaning_frequency || "one_time" },
       };
       const quoteJson = JSON.stringify(storedQuote);
       localStorage.setItem("alloy_quote_v1", quoteJson);
@@ -97,6 +104,17 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">First name *</label>
+        <input
+          type="text"
+          value={form.first_name}
+          onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
+          placeholder="e.g. Jamie"
+          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+          maxLength={80}
+        />
+      </div>
       <div>
         <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">ZIP code *</label>
         <input

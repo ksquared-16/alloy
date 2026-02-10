@@ -10,6 +10,13 @@ import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
 
+interface QuoteInputStored {
+    zip?: string;
+    home_type?: string;
+    square_footage?: string;
+    cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
+}
+
 interface QuoteResponse {
     status?: "ready" | "pending" | "not_found" | "error";
     source?: "local_pricing" | "supabase";
@@ -21,6 +28,7 @@ interface QuoteResponse {
     discount_label?: string;
     price_breakdown?: string;
     addons?: Array<{ name: string; price: number | null }>;
+    quote_input?: QuoteInputStored;
 }
 
 interface DiscountData {
@@ -30,7 +38,7 @@ interface DiscountData {
     quote_total: number;
 }
 
-type BookingStep = "quote_start" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
+type BookingStep = "quote_start" | "refine_quote" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
 
 /**
  * Normalizes quote data and sets defaults for one-time bookings
@@ -96,6 +104,18 @@ const SQUARE_FOOTAGE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const PREFILL_ATTEMPTED_KEY = "alloy_quote_start_attempted_v1";
+const QUOTE_REFINED_KEY = "alloy_quote_refined_v1";
+
+/** Add-on IDs for cleaning (must match quote-refine API) */
+const ADDON_IDS = [
+  "Fridge",
+  "Oven",
+  "Cabinets",
+  "Windows & Blinds",
+  "Pet Hair",
+  "Baseboards",
+] as const;
+type AddOnId = (typeof ADDON_IDS)[number];
 
 /**
  * Fire-and-forget: create contact/opportunity via quote-start when user lands with
@@ -217,6 +237,11 @@ export default function BookV2Client() {
     const [quoteStartSubmitting, setQuoteStartSubmitting] = useState(false);
     const [quoteStartError, setQuoteStartError] = useState<string | null>(null);
     const [quoteJustSaved, setQuoteJustSaved] = useState(false);
+
+    // Refine quote step: frequency and add-ons (synced from quote when step is refine_quote)
+    const [refineFrequency, setRefineFrequency] = useState<"one_time" | "weekly" | "biweekly" | "monthly">("one_time");
+    const [refineAddOns, setRefineAddOns] = useState<AddOnId[]>([]);
+    const [refineLoading, setRefineLoading] = useState(false);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -425,7 +450,12 @@ export default function BookV2Client() {
                     setHasQuote(ready);
                     
                     if (ready) {
-                        setCurrentStep("slot_selection");
+                        try {
+                            const refined = localStorage.getItem(QUOTE_REFINED_KEY);
+                            setCurrentStep(refined === "1" ? "slot_selection" : "refine_quote");
+                        } catch {
+                            setCurrentStep("refine_quote");
+                        }
                     } else {
                         setCurrentStep("quote_start");
                         console.warn("[BOOK_V2] Quote loaded but not ready - missing required fields:", missingFields);
@@ -562,6 +592,20 @@ export default function BookV2Client() {
         };
     }, [mounted, cardNumber, cardExpiry, cardCvc, isPaymentUnlocked]);
 
+    // Sync refine step state from quote when we have a quote (for refine_quote step)
+    useEffect(() => {
+        if (!quote || currentStep !== "refine_quote") return;
+        const freqLabel = (quote.frequency_label || "").toLowerCase();
+        const nextFreq: "one_time" | "weekly" | "biweekly" | "monthly" =
+            freqLabel.includes("weekly") && !freqLabel.includes("bi") ? "weekly"
+                : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
+                : freqLabel.includes("monthly") ? "monthly"
+                : "one_time";
+        setRefineFrequency(nextFreq);
+        const names = (quote.addons ?? []).map((a) => a.name);
+        setRefineAddOns(ADDON_IDS.filter((id) => names.includes(id)));
+    }, [quote, currentStep]);
+
     // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
         if (serviceDetailsConfirmed && serviceDetailsSnapshot && serviceDetails) {
@@ -572,6 +616,77 @@ export default function BookV2Client() {
             }
         }
     }, [serviceDetails, serviceDetailsConfirmed, serviceDetailsSnapshot]);
+
+    const applyRefineAndPersist = useCallback(async (frequency: "one_time" | "weekly" | "biweekly" | "monthly", addOns: AddOnId[]) => {
+        const quoteInput = quote?.quote_input;
+        const squareFootage = quoteInput?.square_footage || (quote as QuoteResponse & { quote_input?: { square_footage?: string } })?.quote_input?.square_footage;
+        if (!squareFootage?.trim()) {
+            console.warn("[BOOK_V2] Refine: no square_footage in quote_input, skip API");
+            return;
+        }
+        setRefineLoading(true);
+        try {
+            const opportunityId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
+            const res = await fetch("/api/book-v2/quote-refine", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    square_footage: squareFootage.trim(),
+                    cleaning_frequency: frequency,
+                    add_ons: addOns,
+                    opportunity_id: opportunityId || undefined,
+                    zip: quoteInput?.zip,
+                    home_type: quoteInput?.home_type,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                console.warn("[BOOK_V2] Quote refine failed:", data?.message);
+                return;
+            }
+            const qo = data.quote_output;
+            const updated: QuoteResponse = {
+                ...quote!,
+                estimated_price: qo?.estimated_price ?? quote?.estimated_price,
+                first_clean_price: qo?.first_clean_price ?? qo?.estimated_price ?? quote?.first_clean_price,
+                recurring_price: qo?.recurring_price ?? undefined,
+                frequency_label: qo?.frequency_label ?? quote?.frequency_label ?? "One-time",
+                addons: qo?.addons ?? addOns.map((id) => ({ name: id, price: null })),
+            };
+            setQuote(normalizeQuote(updated));
+            const toStore = { ...updated, quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addOns } };
+            try {
+                const json = JSON.stringify(toStore);
+                localStorage.setItem("alloy_quote_v1", json);
+                sessionStorage.setItem("alloy_quote_v1", json);
+            } catch (e) {
+                console.warn("Persist quote failed", e);
+            }
+        } finally {
+            setRefineLoading(false);
+        }
+    }, [quote]);
+
+    const handleRefineFrequencyChange = (freq: "one_time" | "weekly" | "biweekly" | "monthly") => {
+        setRefineFrequency(freq);
+        applyRefineAndPersist(freq, refineAddOns);
+    };
+
+    const handleRefineAddOnToggle = (id: AddOnId) => {
+        const next = refineAddOns.includes(id) ? refineAddOns.filter((x) => x !== id) : [...refineAddOns, id];
+        setRefineAddOns(next);
+        applyRefineAndPersist(refineFrequency, next);
+    };
+
+    const handleRefineContinue = () => {
+        try {
+            localStorage.setItem(QUOTE_REFINED_KEY, "1");
+            sessionStorage.setItem(QUOTE_REFINED_KEY, "1");
+        } catch (e) {
+            console.warn("Persist refined flag failed", e);
+        }
+        setCurrentStep("slot_selection");
+    };
 
     const handleQuoteStartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -627,7 +742,8 @@ export default function BookV2Client() {
                 frequency_label: qo?.frequency_label ?? "One-time",
                 service: "Standard Cleaning",
                 price_breakdown: undefined,
-                addons: [],
+                addons: qo?.addons ?? [],
+                quote_input: { zip: quoteStartForm.zip.trim(), home_type: quoteStartForm.home_type || undefined, square_footage: quoteStartForm.square_footage, cleaning_frequency: quoteStartForm.cleaning_frequency },
             };
             const quoteJson = JSON.stringify(storedQuote);
             localStorage.setItem("alloy_quote_v1", quoteJson);
@@ -635,7 +751,7 @@ export default function BookV2Client() {
             setQuote(normalizeQuote(storedQuote));
             setHasQuote(true);
             setQuoteJustSaved(true);
-            setCurrentStep("slot_selection");
+            setCurrentStep("refine_quote");
             setTimeout(() => setQuoteJustSaved(false), 8000);
         } catch (err) {
             console.error("Quote start failed:", err);
@@ -1098,8 +1214,89 @@ export default function BookV2Client() {
                     </div>
                 )}
 
+                {/* Refine quote step: frequency + add-ons, then continue to slot selection */}
+                {currentStep === "refine_quote" && hasQuote && quote && !debug && (
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-lg">
+                        <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
+                            Refine your quote
+                        </h2>
+                        <p className="text-sm text-alloy-midnight/80 mb-6">
+                            Review your price and add recurring cleaning or add-ons to lower the per-visit cost.
+                        </p>
+
+                        {/* Current quote summary */}
+                        <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg space-y-2">
+                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">Current quote</p>
+                            <div className="flex items-baseline justify-between">
+                                <span className="text-alloy-midnight">First cleaning</span>
+                                <span className="font-bold text-alloy-blue">
+                                    ${(quote.first_clean_price ?? quote.estimated_price ?? 0).toFixed(2)}
+                                </span>
+                            </div>
+                            {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label && (
+                                <div className="flex items-baseline justify-between">
+                                    <span className="text-alloy-midnight">Recurring ({quote.frequency_label})</span>
+                                    <span className="font-bold text-alloy-juniper">
+                                        ${quote.recurring_price.toFixed(2)}/visit
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Want recurring? */}
+                        <div className="mb-6">
+                            <p className="text-sm font-semibold text-alloy-midnight mb-3">Want recurring cleaning to lower the price?</p>
+                            <div className="flex flex-wrap gap-2">
+                                {(["one_time", "weekly", "biweekly", "monthly"] as const).map((freq) => (
+                                    <button
+                                        key={freq}
+                                        type="button"
+                                        onClick={() => handleRefineFrequencyChange(freq)}
+                                        disabled={refineLoading}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                            refineFrequency === freq
+                                                ? "bg-alloy-blue text-white"
+                                                : "bg-alloy-stone/20 text-alloy-midnight hover:bg-alloy-stone/30"
+                                        } disabled:opacity-50`}
+                                    >
+                                        {freq === "one_time" ? "One-time" : freq === "weekly" ? "Weekly" : freq === "biweekly" ? "Every 2 weeks" : "Monthly"}
+                                    </button>
+                                ))}
+                            </div>
+                            {refineLoading && <p className="text-xs text-alloy-midnight/60 mt-2">Updating price…</p>}
+                        </div>
+
+                        {/* Add-ons */}
+                        <div className="mb-6">
+                            <p className="text-sm font-semibold text-alloy-midnight mb-3">Add-ons</p>
+                            <div className="space-y-2">
+                                {ADDON_IDS.map((id) => (
+                                    <label key={id} className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={refineAddOns.includes(id)}
+                                            onChange={() => handleRefineAddOnToggle(id)}
+                                            disabled={refineLoading}
+                                            className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                                        />
+                                        <span className="text-sm text-alloy-midnight">{id}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleRefineContinue}
+                            className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                        >
+                            Continue to pick time
+                        </button>
+                    </div>
+                )}
+
                 {/* Fallback message if no quote and not on quote_start step */}
-                {!hasQuote && !debug && currentStep !== "quote_start" && (
+                {!hasQuote && !debug && currentStep !== "quote_start" && currentStep !== "refine_quote" && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 text-center">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
                             Please start your quote first
@@ -1118,7 +1315,7 @@ export default function BookV2Client() {
 
                 {/* Two-column layout: Quote (left, sticky) + Steps (right) */}
                 {/* Mobile: single column, desktop: 2-column with sticky left */}
-                {hasQuote && currentStep !== "confirmed" && (
+                {hasQuote && currentStep !== "confirmed" && currentStep !== "refine_quote" && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                         {/* Left column: Quote panel (1/3 width, sticky on desktop) */}
                         <div className="lg:col-span-1">
