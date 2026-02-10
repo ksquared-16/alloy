@@ -73,23 +73,44 @@ export interface QuoteRefineBody {
   vertical_id?: string;
 }
 
-/** Cleaning vertical id (hardcoded for now) */
-const CLEANING_VERTICAL_ID = "64cb7d29-ec79-494b-a4e7-d8e9b94f1fe2";
-
-/** Canonical add-on from DB (addon_types + vertical_addons) */
+/** Canonical add-on from DB (addon_types + pricing_addons) */
 export type DbAddon = { key: string; label: string; price: number; sort_order: number };
 
-/** Load cleaning add-ons: types/order from addon_types, prices from vertical_addons */
+/** Resolve vertical id: use body.vertical_id if it exists, else lookup by slug "cleaning" */
+async function resolveVerticalId(
+  supabase: ReturnType<typeof createAdminClient>,
+  bodyVerticalId: string | undefined
+): Promise<string> {
+  const id = bodyVerticalId?.trim();
+  if (id) {
+    const { data: existing, error } = await supabase.from("verticals").select("id").eq("id", id).maybeSingle();
+    if (!error && existing?.id) return existing.id;
+  }
+  const { data: bySlug, error } = await supabase
+    .from("verticals")
+    .select("id")
+    .eq("slug", "cleaning")
+    .maybeSingle();
+  if (error || !bySlug?.id) {
+    console.error("[QUOTE_REFINE] vertical lookup failed:", error?.message ?? "no cleaning vertical");
+    throw new Error("Could not resolve cleaning vertical");
+  }
+  return bySlug.id;
+}
+
+/** Load available add-ons: types/order from addon_types, prices from pricing_addons (both filtered by vertical_id) */
 async function loadCleaningAddonsFromDb(
-  supabase: ReturnType<typeof createAdminClient>
+  supabase: ReturnType<typeof createAdminClient>,
+  verticalId: string
 ): Promise<{ available_addons: DbAddon[]; addonPriceMap: Record<string, { label: string; price: number }> }> {
   const addonPriceMap: Record<string, { label: string; price: number }> = {};
   const available_addons: DbAddon[] = [];
 
-  type AddonTypeRow = { id: string; key: string; label: string; position: number; is_active: boolean };
+  type AddonTypeRow = { key: string; label: string; position: number };
   const { data: typeRows, error: typesError } = await supabase
     .from("addon_types")
-    .select("id, key, label, position, is_active")
+    .select("key, label, position")
+    .eq("vertical_id", verticalId)
     .eq("is_active", true)
     .order("position", { ascending: true });
   if (typesError) {
@@ -98,38 +119,31 @@ async function loadCleaningAddonsFromDb(
   }
   const types = (typeRows ?? []) as AddonTypeRow[];
 
-  type VerticalAddonRow = {
-    vertical_id: string;
-    addon_key: string;
-    addon_name: string;
-    amount_cents: number;
-    sort_order: number;
-    is_active: boolean;
-  };
-  const { data: vaRows, error: vaError } = await supabase
-    .from("vertical_addons")
-    .select("vertical_id, addon_key, addon_name, amount_cents, sort_order, is_active")
-    .eq("vertical_id", CLEANING_VERTICAL_ID)
+  type PricingAddonRow = { addon_key: string; addon_name: string; amount_cents: number; sort_order: number };
+  const { data: priceRows, error: pricesError } = await supabase
+    .from("pricing_addons")
+    .select("addon_key, addon_name, amount_cents, sort_order")
+    .eq("vertical_id", verticalId)
     .eq("is_active", true);
-  if (vaError) {
-    console.error("[QUOTE_REFINE] vertical_addons query failed:", vaError.message);
-    throw new Error(`vertical_addons query failed: ${vaError.message}`);
+  if (pricesError) {
+    console.error("[QUOTE_REFINE] pricing_addons query failed:", pricesError.message);
+    throw new Error(`pricing_addons query failed: ${pricesError.message}`);
   }
-  const vaList = (vaRows ?? []) as VerticalAddonRow[];
+  const priceList = (priceRows ?? []) as PricingAddonRow[];
   const priceByKey = new Map<string, { label: string; price: number }>();
-  for (const va of vaList) {
-    const key = String(va.addon_key ?? "").trim().toLowerCase();
+  for (const p of priceList) {
+    const key = String(p.addon_key ?? "").trim().toLowerCase();
     if (!key) continue;
-    const price = (va.amount_cents ?? 0) / 100;
-    priceByKey.set(key, { label: (va.addon_name ?? key).trim(), price });
+    const price = (p.amount_cents ?? 0) / 100;
+    priceByKey.set(key, { label: (p.addon_name ?? key).trim(), price });
   }
 
   for (const t of types) {
     const key = String(t.key ?? "").trim().toLowerCase();
     if (!key) continue;
-    const va = priceByKey.get(key);
-    const label = (t.label ?? va?.label ?? key).trim();
-    const price = va?.price ?? 0;
+    const pricing = priceByKey.get(key);
+    const label = (t.label ?? pricing?.label ?? key).trim();
+    const price = pricing?.price ?? 0;
     const position = typeof t.position === "number" ? t.position : 0;
     available_addons.push({ key, label, price, sort_order: position });
     addonPriceMap[key] = { label, price };
@@ -236,7 +250,7 @@ async function computeQuote(
 
 /**
  * POST /api/book-v2/quote-refine
- * Recalculates quote for given frequency/add-ons; add-on pricing from addon_types + vertical_addons.
+ * Recalculates quote for given frequency/add-ons; add-on pricing from addon_types + pricing_addons (by vertical_id).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -250,10 +264,12 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    let verticalId: string;
     let dbAvailableAddons: DbAddon[];
     let addonPriceMap: Record<string, { label: string; price: number }>;
     try {
-      const loaded = await loadCleaningAddonsFromDb(supabase);
+      verticalId = await resolveVerticalId(supabase, body.vertical_id);
+      const loaded = await loadCleaningAddonsFromDb(supabase, verticalId);
       dbAvailableAddons = loaded.available_addons;
       addonPriceMap = loaded.addonPriceMap;
     } catch (loadErr) {
@@ -277,11 +293,9 @@ export async function POST(request: NextRequest) {
       addonPriceMap
     );
 
-    const verticalAddonsCount = Object.keys(addonPriceMap).length;
     console.log(
-      "[QUOTE_REFINE] loaded addon_types=%s vertical_addons=%s selected=%s addons_total=%s",
+      "[QUOTE_REFINE] addons_loaded=%s selected=%s addons_total=%s",
       dbAvailableAddons.length,
-      verticalAddonsCount,
       selectedKeys.join(",") || "(none)",
       quoteOutput.addons_total.toFixed(2)
     );

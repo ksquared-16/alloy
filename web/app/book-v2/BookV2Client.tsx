@@ -247,7 +247,7 @@ export default function BookV2Client() {
     const [refineError, setRefineError] = useState<string | null>(null);
     /** When user clicks "Edit quote", we remember which step to return to after "Continue to pick time" */
     const [stepBeforeRefine, setStepBeforeRefine] = useState<BookingStep | null>(null);
-    /** Add-on pricing from DB (addon_types + vertical_addons), cached from quote-refine response */
+    /** Add-on pricing from DB (addon_types + pricing_addons), cached from quote-refine response */
     const [availableAddons, setAvailableAddons] = useState<Array<{ id: string; label: string; price: number }> | null>(null);
     const refineDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refineRequestIdRef = useRef(0);
