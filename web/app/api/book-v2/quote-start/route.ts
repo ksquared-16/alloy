@@ -17,12 +17,34 @@ const SQUARE_FOOTAGE_OPTIONS: { max: number; key: SquareFootageOption }[] = [
   { max: Infinity, key: "Over 5,500 sq ft" },
 ];
 
+const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
+  "Under 1500 sq ft",
+  "1501–2,000 sq ft",
+  "2,001-2,600 sq ft",
+  "2,601-3,200 sq ft",
+  "3,201-4,000 sq ft",
+  "4,001-5,500 sq ft",
+  "Over 5,500 sq ft",
+];
+
 function squareFootageToOption(sqft: number | null | undefined): SquareFootageOption {
   if (sqft == null || sqft <= 0) return "Under 1500 sq ft";
   for (const { max, key } of SQUARE_FOOTAGE_OPTIONS) {
     if (sqft <= max) return key;
   }
   return "Over 5,500 sq ft";
+}
+
+/** Normalize body square_footage (bucket string or number) to SquareFootageOption for get_quote_pricing. */
+function normalizeSquareFootageInput(
+  val: string | number | null | undefined
+): SquareFootageOption {
+  if (val == null) return "Under 1500 sq ft";
+  const s = typeof val === "string" ? val.trim() : null;
+  if (s && (SQUARE_FOOTAGE_KEYS as string[]).includes(s)) return s as SquareFootageOption;
+  const num = typeof val === "number" ? val : parseInt(String(val), 10);
+  if (!Number.isNaN(num)) return squareFootageToOption(num);
+  return "Under 1500 sq ft";
 }
 
 function mapApiFrequencyToOption(
@@ -177,9 +199,9 @@ export async function POST(request: NextRequest) {
     const first_name = body.first_name?.trim() || null;
     const last_name = body.last_name?.trim() || null;
     const zip = body.zip?.trim() || null;
-    const square_footage = body.square_footage ?? (body.beds != null ? (body.beds as number) * 400 : null);
+    const square_footage_raw = body.square_footage ?? (body.beds != null ? (body.beds as number) * 400 : null);
     const cleaning_frequency = mapApiFrequencyToOption(body.cleaning_frequency);
-    const squareFootageOption = squareFootageToOption(square_footage);
+    const squareFootageOption = normalizeSquareFootageInput(square_footage_raw);
 
     const supabase = createAdminClient();
 
@@ -310,7 +332,7 @@ export async function POST(request: NextRequest) {
     const quote_input = {
       zip,
       home_type: body.home_type,
-      square_footage: body.square_footage ?? square_footage,
+      square_footage: body.square_footage ?? square_footage_raw,
       beds: body.beds,
       baths: body.baths,
       cleaning_frequency: body.cleaning_frequency ?? "one_time",

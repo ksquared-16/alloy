@@ -3,17 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import Section from "@/components/Section";
 import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
-import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
-import GetQuoteButton from "@/components/GetQuoteButton";
 
 export default function CleaningPage() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [hasRendered, setHasRendered] = useState(false);
+  const router = useRouter();
   const heroRef = useRef<HTMLDivElement>(null);
-  const formRef = useRef<HTMLDivElement>(null);
   const cleaningOptions = [
     {
       type: "Standard",
@@ -101,87 +98,25 @@ export default function CleaningPage() {
     },
   ];
 
-  const handleToggle = () => {
-    if (!isOpen) {
-      setIsOpen(true);
-      setHasRendered(true);
-      // Smooth scroll to form after a brief delay
-      setTimeout(() => {
-        formRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 100);
-    } else {
-      setIsOpen(false);
-      // Smooth scroll back to hero
-      setTimeout(() => {
-        heroRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 100);
-    }
-  };
-
-  const scrollToQuoteForm = () => {
-    if (!isOpen) {
-      setIsOpen(true);
-      setHasRendered(true);
-    }
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 100);
-  };
-
-  // Reusable CTA component for sections
-  const GetQuoteCTA = () => {
-    const GetQuoteButton = require("@/components/GetQuoteButton").default;
-    return (
-      <div className="flex justify-center mt-8">
-        <GetQuoteButton className="w-full md:w-auto" defaultService="cleaning" />
-      </div>
-    );
-  };
-
-  // Handle hash-based expansion and ?open=1 param from CTA
-  // Optional: Warm-up API on page load (fire-and-forget)
+  // Legacy cleaning quote links: redirect to canonical /book-v2
   useEffect(() => {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-    // Fire-and-forget health check to reduce cold start latency
-    fetch(`${apiBaseUrl}/`, { method: "GET" }).catch(() => {
-      // Ignore errors - this is just a warm-up
-    });
-  }, []);
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get("open");
+    if (hash === "#quote-form" || open === "1") {
+      router.replace("/book-v2");
+    }
+  }, [router]);
 
-  useEffect(() => {
-    const checkHash = () => {
-      if (isOpen) return;
-
-      const { hash, search } = window.location;
-      const params = new URLSearchParams(search);
-      const shouldOpen =
-        hash === "#quote-form" || params.get("open") === "1";
-
-      if (!shouldOpen) return;
-
-      setIsOpen(true);
-      setHasRendered(true);
-      setTimeout(() => {
-        formRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 100);
-    };
-
-    checkHash();
-    window.addEventListener("hashchange", checkHash);
-    return () => window.removeEventListener("hashchange", checkHash);
-  }, [isOpen]);
+  // Reusable CTA: link to canonical quote flow
+  const GetQuoteCTA = () => (
+    <div className="flex justify-center mt-8">
+      <Link href="/book-v2" className="w-full md:w-auto inline-block">
+        <PrimaryButton className="w-full md:w-auto">Get a quote</PrimaryButton>
+      </Link>
+    </div>
+  );
 
   return (
     <div>
@@ -212,9 +147,9 @@ export default function CleaningPage() {
                   Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
-                    Get a quote
-                  </GetQuoteButton>
+                  <Link href="/book-v2" className="w-full sm:w-auto inline-block">
+                    <PrimaryButton className="w-full sm:w-auto">Get a quote</PrimaryButton>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -222,32 +157,20 @@ export default function CleaningPage() {
         </div>
       </section>
 
-      {/* Quote Form (custom Alloy form, replaces embedded GHL form) */}
-      {isOpen && (
-        <Section id="quote-form" ref={formRef} className="pt-6 pb-0 bg-white">
-          <div className="max-w-2xl md:max-w-4xl mx-auto">
-            <div className="rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm bg-white">
-              <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20">
-                <h2 className="text-xl font-bold text-alloy-midnight">
-                  Get a quote
-                </h2>
-                <button
-                  onClick={handleToggle}
-                  className="text-sm text-alloy-juniper hover:text-alloy-juniper/80 font-medium transition-colors"
-                  aria-label="Hide form"
-                  aria-expanded="true"
-                  aria-controls="quote-form-content"
-                >
-                  Hide form
-                </button>
-              </div>
-              <div id="quote-form-content" className="p-4 md:p-6">
-                {hasRendered && <CleaningQuoteForm />}
-              </div>
-            </div>
-          </div>
-        </Section>
-      )}
+      {/* CTA to canonical quote flow on /book-v2 */}
+      <Section id="quote-form" className="pt-6 pb-0 bg-white">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-xl font-bold text-alloy-midnight mb-2">
+            Get a quote in 30 seconds
+          </h2>
+          <p className="text-alloy-midnight/80 mb-4">
+            Answer a few quick questions and we&apos;ll show you your price — then pick a time when you&apos;re ready.
+          </p>
+          <Link href="/book-v2">
+            <PrimaryButton className="w-full md:w-auto">Get a quote</PrimaryButton>
+          </Link>
+        </div>
+      </Section>
 
       {/* What Makes Alloy Different */}
       <Section className="py-12 md:py-16">
@@ -496,12 +419,14 @@ export default function CleaningPage() {
         <div className="bg-alloy-pine rounded-lg p-8 md:p-12 text-center text-white">
           <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
           <p className="text-lg mb-6 opacity-90">
-            Submit your quote request above. We'll text you shortly to confirm details.
+            Get your quote and pick a time in one place.
           </p>
           <div className="flex justify-center">
-            <GetQuoteButton defaultService="cleaning" className="bg-white !text-alloy-midnight hover:bg-alloy-stone hover:!text-alloy-midnight">
-              Start my quote
-            </GetQuoteButton>
+            <Link href="/book-v2">
+              <PrimaryButton className="!bg-white !text-alloy-midnight hover:!bg-alloy-stone hover:!text-alloy-midnight">
+                Start my quote
+              </PrimaryButton>
+            </Link>
           </div>
         </div>
       </Section>

@@ -33,7 +33,7 @@ export default function ServicePicker({ variant = "button", className = "" }: Se
   }, [isOpen]);
 
   const services = [
-    { href: "/services/cleaning?open=1#quote-form", label: "Home Cleaning" },
+    { href: "/book-v2", label: "Home Cleaning" },
     { href: "/gutters#quote-form", label: "Gutter Cleaning" },
   ];
 

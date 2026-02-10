@@ -84,6 +84,17 @@ function isQuoteReady(data: QuoteResponse | null): { ready: boolean; missingFiel
     return { ready, missingFields };
 }
 
+// Same buckets as cleaning quote form / get_quote_pricing RPC (SquareFootageOption)
+const SQUARE_FOOTAGE_OPTIONS: { value: string; label: string }[] = [
+    { value: "Under 1500 sq ft", label: "Under 1,500 sq ft" },
+    { value: "1501–2,000 sq ft", label: "1,501 – 2,000 sq ft" },
+    { value: "2,001-2,600 sq ft", label: "2,001 – 2,600 sq ft" },
+    { value: "2,601-3,200 sq ft", label: "2,601 – 3,200 sq ft" },
+    { value: "3,201-4,000 sq ft", label: "3,201 – 4,000 sq ft" },
+    { value: "4,001-5,500 sq ft", label: "4,001 – 5,500 sq ft" },
+    { value: "Over 5,500 sq ft", label: "Over 5,500 sq ft" },
+];
+
 const PREFILL_ATTEMPTED_KEY = "alloy_quote_start_attempted_v1";
 
 /**
@@ -194,17 +205,18 @@ export default function BookV2Client() {
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
 
-    // Quote-start (first step) form state
+    // Quote-start (first step) form state — square_footage is bucket key (SquareFootageOption)
     const [quoteStartForm, setQuoteStartForm] = useState({
         zip: "",
         home_type: "",
-        square_footage: "",
+        square_footage: "" as string,
         cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
         email: "",
         phone: "",
     });
     const [quoteStartSubmitting, setQuoteStartSubmitting] = useState(false);
     const [quoteStartError, setQuoteStartError] = useState<string | null>(null);
+    const [quoteJustSaved, setQuoteJustSaved] = useState(false);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -568,6 +580,10 @@ export default function BookV2Client() {
             setQuoteStartError("ZIP code is required");
             return;
         }
+        if (!square_footage?.trim()) {
+            setQuoteStartError("Please select approximate square footage.");
+            return;
+        }
         if (!email?.trim() && !phone?.trim()) {
             setQuoteStartError("Please enter your email or phone so we can save your quote.");
             return;
@@ -575,14 +591,14 @@ export default function BookV2Client() {
         setQuoteStartSubmitting(true);
         setQuoteStartError(null);
         try {
-            const sqftNum = square_footage ? parseInt(String(square_footage), 10) : undefined;
+            // Send bucket key (e.g. "Under 1500 sq ft") — API accepts string or number
             const res = await fetch("/api/book-v2/quote-start", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     zip: zip.trim(),
                     home_type: home_type || undefined,
-                    square_footage: sqftNum && !Number.isNaN(sqftNum) ? sqftNum : undefined,
+                    square_footage: square_footage.trim(),
                     cleaning_frequency: cleaning_frequency || "one_time",
                     email: email?.trim() || undefined,
                     phone: phone?.trim() || undefined,
@@ -618,7 +634,9 @@ export default function BookV2Client() {
             sessionStorage.setItem("alloy_quote_v1", quoteJson);
             setQuote(normalizeQuote(storedQuote));
             setHasQuote(true);
+            setQuoteJustSaved(true);
             setCurrentStep("slot_selection");
+            setTimeout(() => setQuoteJustSaved(false), 8000);
         } catch (err) {
             console.error("Quote start failed:", err);
             setQuoteStartError("Something went wrong. Please try again.");
@@ -1021,15 +1039,19 @@ export default function BookV2Client() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage</label>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage *</label>
+                                <select
                                     value={quoteStartForm.square_footage}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, square_footage: e.target.value }))}
-                                    placeholder="e.g. 2000"
                                     className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-                                />
+                                >
+                                    <option value="">Select</option>
+                                    {SQUARE_FOOTAGE_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Cleaning frequency</label>
@@ -1086,7 +1108,7 @@ export default function BookV2Client() {
                             To book a cleaning, please fill out the quote form above or on our services page.
                         </p>
                         <a
-                            href="/services/cleaning?open=1#quote-form"
+                            href="/book-v2"
                             className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
                         >
                             Get a Quote
@@ -1393,6 +1415,13 @@ export default function BookV2Client() {
                         {/* Right column: Progressive Steps (2/3 width) */}
                         <div className="lg:col-span-2">
                             <div className="space-y-6">
+                                {quoteJustSaved && (
+                                    <div className="bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg px-4 py-3 text-alloy-midnight">
+                                        <p className="text-sm font-medium text-alloy-pine">
+                                            Quote saved — continue to pick a time.
+                                        </p>
+                                    </div>
+                                )}
                                 {/* Step 1: Slot Selection */}
                                 <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
                                     <div className="flex items-center gap-3 mb-6">

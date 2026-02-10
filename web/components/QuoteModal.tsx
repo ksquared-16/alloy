@@ -4,10 +4,8 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import PrimaryButton from "@/components/PrimaryButton";
-import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
-import { getBookingPath } from "@/lib/booking";
 
 type SelectedVertical = "cleaning" | "gutters" | null;
 type ModalStep = "picker" | "form" | "submitted";
@@ -28,16 +26,19 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
     setMounted(true);
   }, []);
 
-  // Initialize selectedVertical from defaultService when modal opens
+  // When modal opens with defaultService "cleaning", go straight to /book-v2
   useEffect(() => {
-    if (isOpen && defaultService) {
-      setSelectedVertical(defaultService);
+    if (isOpen && defaultService === "cleaning") {
+      onClose();
+      router.push("/book-v2");
+    } else if (isOpen && defaultService === "gutters") {
+      setSelectedVertical("gutters");
       setModalStep("form");
     } else if (isOpen && !defaultService) {
       setSelectedVertical(null);
       setModalStep("picker");
     }
-  }, [isOpen, defaultService]);
+  }, [isOpen, defaultService, onClose, router]);
 
   useEffect(() => {
     if (isOpen) {
@@ -177,12 +178,12 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                   Select a service to get started.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Cleaning Option */}
+                  {/* Cleaning Option — canonical quote flow is /book-v2 */}
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedVertical("cleaning");
-                      setModalStep("form");
+                      onClose();
+                      router.push("/book-v2");
                     }}
                     className="bg-white rounded-lg shadow-md p-4 sm:p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
                   >
@@ -258,19 +259,10 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
 
                 {/* Form */}
                 {selectedVertical === "cleaning" ? (
-                  <CleaningQuoteForm
-                    mode="modal"
-                    onSuccess={(bookingUrl) => {
-                      // Close modal and navigate to booking page immediately
-                      onClose();
-                      if (bookingUrl) {
-                        router.push(bookingUrl);
-                      } else {
-                        // Fallback: use env-controlled booking path
-                        router.push(getBookingPath());
-                      }
-                    }}
-                  />
+                  // Should not reach here — cleaning redirects to /book-v2
+                  <div className="py-8 text-center text-alloy-midnight/80">
+                    Taking you to get your quote…
+                  </div>
                 ) : (
                   <GutterLeadForm
                     onSuccess={() => {
