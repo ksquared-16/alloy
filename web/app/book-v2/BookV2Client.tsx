@@ -453,12 +453,8 @@ export default function BookV2Client() {
                     setHasQuote(ready);
                     
                     if (ready) {
-                        try {
-                            const refined = localStorage.getItem(QUOTE_REFINED_KEY);
-                            setCurrentStep(refined === "1" ? "slot_selection" : "refine_quote");
-                        } catch {
-                            setCurrentStep("refine_quote");
-                        }
+                        // Always show "Your Quote" step first when user has a quote (focal step before scheduling)
+                        setCurrentStep("refine_quote");
                     } else {
                         setCurrentStep("quote_start");
                         console.warn("[BOOK_V2] Quote loaded but not ready - missing required fields:", missingFields);
@@ -1230,17 +1226,17 @@ export default function BookV2Client() {
                     </div>
                 )}
 
-                {/* Refine quote step: frequency + add-ons, then continue to slot selection */}
+                {/* Your Quote step: focal step after details; inline frequency + add-ons, then confirm */}
                 {currentStep === "refine_quote" && hasQuote && quote && !debug && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-lg">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
-                            Refine your quote
+                            Your Quote
                         </h2>
                         <p className="text-sm text-alloy-midnight/80 mb-6">
-                            Review your price and add recurring cleaning or add-ons to lower the per-visit cost.
+                            Review your price below. Change frequency or add-ons as needed—the quote updates as you go. When you&apos;re ready, confirm to pick a time.
                         </p>
 
-                        {/* Quote breakdown: base, add-ons, subtotal, total */}
+                        {/* Quote breakdown: prominent at top */}
                         <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg space-y-2">
                             <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">Quote breakdown</p>
                             <div className="flex items-baseline justify-between">
@@ -1283,9 +1279,9 @@ export default function BookV2Client() {
                             )}
                         </div>
 
-                        {/* Want recurring? */}
+                        {/* Change frequency: inline */}
                         <div className="mb-6">
-                            <p className="text-sm font-semibold text-alloy-midnight mb-3">Want recurring cleaning to lower the price?</p>
+                            <p className="text-sm font-semibold text-alloy-midnight mb-3">Cleaning frequency</p>
                             <div className="flex flex-wrap gap-2">
                                 {(["one_time", "weekly", "biweekly", "monthly"] as const).map((freq) => (
                                     <button
@@ -1306,7 +1302,7 @@ export default function BookV2Client() {
                             {refineLoading && <p className="text-xs text-alloy-midnight/60 mt-2">Updating price…</p>}
                         </div>
 
-                        {/* Add-ons */}
+                        {/* Add-ons: inline */}
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Add-ons</p>
                             <div className="space-y-2">
@@ -1330,7 +1326,7 @@ export default function BookV2Client() {
                             onClick={handleRefineContinue}
                             className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
                         >
-                            Continue to pick time
+                            Confirm Quote
                         </button>
                     </div>
                 )}
@@ -1360,20 +1356,11 @@ export default function BookV2Client() {
                         {/* Left column: Quote panel (1/3 width, sticky on desktop) */}
                         <div className="lg:col-span-1">
                             <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 lg:sticky lg:top-24 space-y-6">
-                                {/* Quote Summary */}
+                                {/* Quote Summary (no prominent Edit; optional fallback link at bottom) */}
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <h2 className="text-lg font-bold text-alloy-midnight">
-                                            Your Quote
-                                        </h2>
-                                        <button
-                                            type="button"
-                                            onClick={handleEditQuote}
-                                            className="text-sm text-alloy-blue hover:underline font-medium whitespace-nowrap"
-                                        >
-                                            Edit quote
-                                        </button>
-                                    </div>
+                                    <h2 className="text-lg font-bold text-alloy-midnight">
+                                        Your Quote
+                                    </h2>
 
                                     {/* First Cleaning */}
                                     <div>
@@ -1537,6 +1524,17 @@ export default function BookV2Client() {
                                             </Accordion>
                                         </div>
                                     )}
+
+                                    {/* Fallback: change quote (not prominent) */}
+                                    <div className="pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleEditQuote}
+                                            className="text-xs text-alloy-midnight/60 hover:text-alloy-blue hover:underline"
+                                        >
+                                            Change quote
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Payment Section */}
