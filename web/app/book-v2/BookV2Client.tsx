@@ -42,6 +42,27 @@ interface DiscountData {
 
 type BookingStep = "quote_start" | "refine_quote" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
 
+const QUOTE_STORAGE_KEYS = [
+    "alloy_quote_v1",
+    "alloy_quote_refined_v1",
+    "alloy_contact_id",
+    "alloy_customer_id",
+    "alloy_opportunity_id",
+] as const;
+
+/** Clear quote-related keys from localStorage and sessionStorage (e.g. after QUOTE_ID_MISMATCH) */
+function clearQuoteStorage(): void {
+    if (typeof window === "undefined") return;
+    for (const key of QUOTE_STORAGE_KEYS) {
+        try {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        } catch {
+            // ignore
+        }
+    }
+}
+
 /**
  * Normalizes quote data and sets defaults for one-time bookings
  */
@@ -266,6 +287,7 @@ export default function BookV2Client() {
     const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
     const [refineLoading, setRefineLoading] = useState(false);
     const [refineError, setRefineError] = useState<string | null>(null);
+    const [quoteRefreshMessage, setQuoteRefreshMessage] = useState<string | null>(null);
     /** When user clicks "Edit quote", we remember which step to return to after "Continue to pick time" */
     const [stepBeforeRefine, setStepBeforeRefine] = useState<BookingStep | null>(null);
     /** Add-on pricing from DB (addon_types + pricing_addons), cached from quote-refine response */
@@ -793,6 +815,7 @@ export default function BookV2Client() {
     };
 
     const handleRefineContinue = () => {
+        setQuoteRefreshMessage(null);
         try {
             localStorage.setItem(QUOTE_REFINED_KEY, "1");
             sessionStorage.setItem(QUOTE_REFINED_KEY, "1");
@@ -1200,6 +1223,15 @@ export default function BookV2Client() {
             }
 
             if (!bookingResponse.ok || result.ok === false) {
+                if (bookingResponse.status === 409 && result.error === "QUOTE_ID_MISMATCH") {
+                    clearQuoteStorage();
+                    setQuoteRefreshMessage("We refreshed your quote — please confirm it again.");
+                    setCurrentStep("refine_quote");
+                    setPaymentError(null);
+                    setAvailableAddons(null);
+                    setAvailableFrequencies(null);
+                    return;
+                }
                 const detailStr =
                     result.detail == null ? null : typeof result.detail === "string" ? result.detail : JSON.stringify(result.detail);
                 const message = result.message ?? result.error ?? detailStr ?? "Failed to confirm booking";
@@ -1352,6 +1384,11 @@ export default function BookV2Client() {
                 {/* Your Quote step: focal step after details; inline frequency + add-ons, then confirm */}
                 {currentStep === "refine_quote" && hasQuote && quote && !debug && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-lg">
+                        {quoteRefreshMessage && (
+                            <div className="mb-6 p-4 bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg text-alloy-midnight">
+                                <p className="text-sm font-medium text-alloy-pine">{quoteRefreshMessage}</p>
+                            </div>
+                        )}
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
                             Your Quote
                         </h2>
@@ -1404,17 +1441,17 @@ export default function BookV2Client() {
                             )}
                         </div>
 
-                        {/* Change frequency: inline — one row, equal width, no wrap */}
+                        {/* Change frequency: full labels, wrap allowed */}
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Cleaning frequency</p>
-                            <div className="grid grid-cols-4 gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {(["one_time", "weekly", "biweekly", "monthly"] as const).map((freq) => (
                                     <button
                                         key={freq}
                                         type="button"
                                         onClick={() => handleRefineFrequencyChange(freq)}
                                         disabled={refineLoading}
-                                        className={`min-w-0 px-2 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap truncate ${
+                                        className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-normal break-words text-left ${
                                             refineFrequency === freq
                                                 ? "bg-alloy-blue text-white"
                                                 : "bg-alloy-stone/20 text-alloy-midnight hover:bg-alloy-stone/30"
@@ -1483,434 +1520,465 @@ export default function BookV2Client() {
                     </div>
                 )}
 
-                {/* Two-column layout: Quote (left, sticky) + Steps (right) */}
-                {/* Mobile: single column, desktop: 2-column with sticky left */}
+                {/* Single-column stacked layout: Quote → Time Slot → Service Details → Payment */}
                 {hasQuote && currentStep !== "confirmed" && currentStep !== "refine_quote" && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                        {/* Left column: Quote panel (1/3 width, sticky on desktop) */}
-                        <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 lg:sticky lg:top-24 space-y-6">
-                                {/* Quote Summary (no prominent Edit; optional fallback link at bottom) */}
-                                <div className="space-y-4">
-                                    <h2 className="text-lg font-bold text-alloy-midnight">
-                                        Your Quote
-                                    </h2>
+                    <div className="space-y-6 max-w-2xl">
+                        {quoteJustSaved && (
+                            <div className="bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg px-4 py-3 text-alloy-midnight">
+                                <p className="text-sm font-medium text-alloy-pine">
+                                    Quote saved — continue to pick a time.
+                                </p>
+                            </div>
+                        )}
 
-                                    {/* First Cleaning */}
-                                    <div>
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                            First Cleaning
-                                        </p>
-                                        {(() => {
-                                            const basePrice =
-                                                (typeof quote?.first_clean_price === "number" &&
-                                                    quote.first_clean_price > 0
-                                                    ? quote.first_clean_price
-                                                    : typeof quote?.estimated_price === "number" &&
-                                                        quote.estimated_price > 0
-                                                        ? quote.estimated_price
-                                                        : null);
+                        {/* Card 1: Your Quote */}
+                        <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5">
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-bold text-alloy-midnight">
+                                    Your Quote
+                                </h2>
 
-                                            if (basePrice == null || basePrice <= 0) {
-                                                return (
-                                                    <p className="text-sm text-alloy-midnight/70">Calculating…</p>
-                                                );
-                                            }
+                                {/* First Cleaning */}
+                                <div>
+                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                        First Cleaning
+                                    </p>
+                                    {(() => {
+                                        const basePrice =
+                                            (typeof quote?.first_clean_price === "number" &&
+                                                quote.first_clean_price > 0
+                                                ? quote.first_clean_price
+                                                : typeof quote?.estimated_price === "number" &&
+                                                    quote.estimated_price > 0
+                                                    ? quote.estimated_price
+                                                    : null);
 
-                                            const displayPrice = discountData?.quote_total ?? basePrice;
-                                            const showDiscount = discountData && discountData.discount_amount > 0;
-
+                                        if (basePrice == null || basePrice <= 0) {
                                             return (
-                                                <div>
-                                                    {showDiscount && (
-                                                        <div className="mb-1">
-                                                            <span className="text-sm text-alloy-midnight/60 line-through">
-                                                                ${basePrice.toFixed(2)}
-                                                            </span>
-                                                            <span className="text-xs text-green-600 ml-2 font-semibold">
-                                                                -${discountData.discount_amount.toFixed(2)}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                    <p className="text-2xl font-bold text-alloy-blue leading-tight">
-                                                        ${displayPrice.toFixed(2)}
-                                                    </p>
-                                                </div>
+                                                <p className="text-sm text-alloy-midnight/70">Calculating…</p>
                                             );
-                                        })()}
-                                    </div>
+                                        }
 
-                                    {/* Discount Code Input */}
-                                    <div className="pt-2 border-t border-alloy-stone/20">
-                                        {discountData ? (
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs text-green-600 font-semibold">
-                                                        Discount Applied: {discountData.code}
-                                                    </span>
-                                                    <button
-                                                        onClick={() => {
-                                                            setDiscountData(null);
-                                                            setDiscountCode("");
-                                                            setDiscountError(null);
-                                                        }}
-                                                        className="text-xs text-alloy-midnight/60 hover:text-alloy-midnight underline"
-                                                    >
-                                                        Remove
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
-                                                    Discount Code
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={discountCode}
-                                                        onChange={(e) => {
-                                                            setDiscountCode(e.target.value.toUpperCase());
-                                                            setDiscountError(null);
-                                                        }}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Enter") {
-                                                                handleValidateDiscount();
-                                                            }
-                                                        }}
-                                                        placeholder="Enter code"
-                                                        className="flex-1 text-sm px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
-                                                        disabled={isValidatingDiscount}
-                                                    />
-                                                    <button
-                                                        onClick={handleValidateDiscount}
-                                                        disabled={isValidatingDiscount || !discountCode.trim()}
-                                                        className="px-4 py-2 bg-alloy-blue text-white text-sm font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {isValidatingDiscount ? "..." : "Apply"}
-                                                    </button>
-                                                </div>
-                                                {discountError && (
-                                                    <p className="text-xs text-red-600">{discountError}</p>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
+                                        const displayPrice = discountData?.quote_total ?? basePrice;
+                                        const showDiscount = discountData && discountData.discount_amount > 0;
 
-                                    {/* Recurring Cleaning */}
-                                    {quote?.recurring_price !== undefined &&
-                                        quote.recurring_price !== null &&
-                                        quote.recurring_price > 0 &&
-                                        quote.frequency_label && (
+                                        return (
                                             <div>
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
-                                                    {quote.frequency_label.toUpperCase()} CLEANING
-                                                    {quote.discount_label && (
-                                                        <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
-                                                            ({quote.discount_label})
+                                                {showDiscount && (
+                                                    <div className="mb-1">
+                                                        <span className="text-sm text-alloy-midnight/60 line-through">
+                                                            ${basePrice.toFixed(2)}
                                                         </span>
-                                                    )}
-                                                </p>
-                                                <div className="flex items-baseline gap-1">
-                                                    <p className="text-2xl font-bold text-alloy-juniper leading-tight">
-                                                        ${quote.recurring_price.toFixed(2)}
-                                                    </p>
-                                                    <span className="text-xs text-alloy-midnight/60">
-                                                        per visit
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                    {/* Add-ons */}
-                                    {quote?.addons && quote.addons.length > 0 && (
-                                        <div>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
-                                                Add-ons
-                                            </p>
-                                            <div className="space-y-1.5">
-                                                {quote.addons.map((addon, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        className="flex justify-between items-center py-1 border-b border-alloy-stone/15 last:border-b-0"
-                                                    >
-                                                        <span className="text-xs text-alloy-midnight/85">
-                                                            {addon.name}
-                                                        </span>
-                                                        <span className="text-xs font-semibold text-alloy-midnight">
-                                                            {addon.price === null || addon.price === undefined
-                                                                ? "included"
-                                                                : `$${addon.price.toFixed(2)}`}
+                                                        <span className="text-xs text-green-600 ml-2 font-semibold">
+                                                            -${discountData.discount_amount.toFixed(2)}
                                                         </span>
                                                     </div>
-                                                ))}
+                                                )}
+                                                <p className="text-2xl font-bold text-alloy-blue leading-tight">
+                                                    ${displayPrice.toFixed(2)}
+                                                </p>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {/* Price Breakdown */}
-                                    {quote?.price_breakdown && (
-                                        <div>
-                                            <Accordion title="See full price breakdown">
-                                                <div className="text-xs text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
-                                                    {quote.price_breakdown}
-                                                </div>
-                                            </Accordion>
-                                        </div>
-                                    )}
-
-                                    {/* Fallback: change quote (not prominent) */}
-                                    <div className="pt-2">
-                                        <button
-                                            type="button"
-                                            onClick={handleEditQuote}
-                                            className="text-xs text-alloy-midnight/60 hover:text-alloy-blue hover:underline"
-                                        >
-                                            Change quote
-                                        </button>
-                                    </div>
+                                        );
+                                    })()}
                                 </div>
 
-                                {/* Payment Section */}
-                                <div className="pt-4 border-t border-alloy-stone/20">
-                                    <h3 className="text-sm font-semibold text-alloy-midnight mb-3">
-                                        Payment
-                                    </h3>
-                                    
-                                    {!isPaymentUnlocked ? (
-                                        <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
-                                            <p className="text-xs text-alloy-midnight/60">
-                                                Complete the steps on the right to unlock payment
-                                            </p>
-                                        </div>
-                                    ) : !mounted ? (
-                                        <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
-                                            <p className="text-xs text-alloy-midnight/60">Loading...</p>
-                                        </div>
-                                    ) : !resolvedEmail || !resolvedPhone ? (
-                                        <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
-                                            <p className="text-xs text-alloy-midnight/60 mb-2">
-                                                Enter your email + phone to load payment.
-                                            </p>
-                                            <p className="text-xs text-alloy-midnight/50">
-                                                Please add ?email=your@email.com&phone=+1234567890 to the URL or complete the quote form.
-                                            </p>
+                                {/* Discount Code Input */}
+                                <div className="pt-2 border-t border-alloy-stone/20">
+                                    {discountData ? (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs text-green-600 font-semibold">
+                                                    Discount Applied: {discountData.code}
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setDiscountData(null);
+                                                        setDiscountCode("");
+                                                        setDiscountError(null);
+                                                    }}
+                                                    className="text-xs text-alloy-midnight/60 hover:text-alloy-midnight underline"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
-                                        <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                                            {/* No charge today note */}
-                                            <div className="bg-alloy-juniper/10 border border-alloy-juniper/20 rounded-lg p-3">
-                                                <p className="text-xs font-semibold text-alloy-midnight mb-1">
-                                                    No charge today.
-                                                </p>
-                                                <p className="text-xs text-alloy-midnight/70 leading-relaxed">
-                                                    We'll save your card to hold your appointment. You'll only be charged after the cleaning is completed and confirmed.
-                                                </p>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                                Discount Code
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={discountCode}
+                                                    onChange={(e) => {
+                                                        setDiscountCode(e.target.value.toUpperCase());
+                                                        setDiscountError(null);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") {
+                                                            handleValidateDiscount();
+                                                        }
+                                                    }}
+                                                    placeholder="Enter code"
+                                                    className="flex-1 text-sm px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                                                    disabled={isValidatingDiscount}
+                                                />
+                                                <button
+                                                    onClick={handleValidateDiscount}
+                                                    disabled={isValidatingDiscount || !discountCode.trim()}
+                                                    className="px-4 py-2 bg-alloy-blue text-white text-sm font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {isValidatingDiscount ? "..." : "Apply"}
+                                                </button>
                                             </div>
-
-                                            <div className="space-y-4">
-                                                {!stripe || !cardNumber || !cardExpiry || !cardCvc ? (
-                                                    <div className="px-4 py-8 border border-alloy-stone/30 rounded-lg bg-alloy-stone/10 flex items-center justify-center">
-                                                        <div className="text-center">
-                                                            <div className="w-6 h-6 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                                                            <p className="text-xs text-alloy-midnight/60">Loading payment form...</p>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-alloy-midnight mb-2">
-                                                                Card Number
-                                                            </label>
-                                                            <div
-                                                                ref={cardNumberRef}
-                                                                className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
-                                                            />
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-3">
-                                                            <div>
-                                                                <label className="block text-xs font-medium text-alloy-midnight mb-2">
-                                                                    Expiration
-                                                                </label>
-                                                                <div
-                                                                    ref={cardExpiryRef}
-                                                                    className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-xs font-medium text-alloy-midnight mb-2">
-                                                                    CVC
-                                                                </label>
-                                                                <div
-                                                                    ref={cardCvcRef}
-                                                                    className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-alloy-midnight mb-2">
-                                                                ZIP Code
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                value={postalCode}
-                                                                onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                                                                placeholder="12345"
-                                                                className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
-                                                                maxLength={5}
-                                                            />
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                            
-                                            {paymentError && (
-                                                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                                    <p className="text-xs text-red-800">{paymentError}</p>
-                                                </div>
+                                            {discountError && (
+                                                <p className="text-xs text-red-600">{discountError}</p>
                                             )}
-                                            
-                                            <button
-                                                type="submit"
-                                                disabled={isProcessingPayment || !stripe || !cardNumber || !cardExpiry || !cardCvc || !resolvedEmail || !resolvedPhone}
-                                                className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {isProcessingPayment ? "Processing..." : "Complete Booking"}
-                                            </button>
-
-                                            {isProcessingPayment && (
-                                                <div className="flex items-center justify-center gap-2 text-xs text-alloy-midnight/60">
-                                                    <div className="w-4 h-4 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin"></div>
-                                                    <span>Finalizing booking...</span>
-                                                </div>
-                                            )}
-                                        </form>
+                                        </div>
                                     )}
+                                </div>
+
+                                {/* Recurring Cleaning */}
+                                {quote?.recurring_price !== undefined &&
+                                    quote.recurring_price !== null &&
+                                    quote.recurring_price > 0 &&
+                                    quote.frequency_label && (
+                                        <div>
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                                {quote.frequency_label.toUpperCase()} CLEANING
+                                                {quote.discount_label && (
+                                                    <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
+                                                        ({quote.discount_label})
+                                                    </span>
+                                                )}
+                                            </p>
+                                            <div className="flex items-baseline gap-1">
+                                                <p className="text-2xl font-bold text-alloy-juniper leading-tight">
+                                                    ${quote.recurring_price.toFixed(2)}
+                                                </p>
+                                                <span className="text-xs text-alloy-midnight/60">
+                                                    per visit
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                {/* Add-ons */}
+                                {quote?.addons && quote.addons.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                            Add-ons
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            {quote.addons.map((addon, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="flex justify-between items-center py-1 border-b border-alloy-stone/15 last:border-b-0"
+                                                >
+                                                    <span className="text-xs text-alloy-midnight/85">
+                                                        {addon.name}
+                                                    </span>
+                                                    <span className="text-xs font-semibold text-alloy-midnight">
+                                                        {addon.price === null || addon.price === undefined
+                                                            ? "included"
+                                                            : `$${addon.price.toFixed(2)}`}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Price Breakdown */}
+                                {quote?.price_breakdown && (
+                                    <div>
+                                        <Accordion title="See full price breakdown">
+                                            <div className="text-xs text-alloy-midnight/80 whitespace-pre-line leading-relaxed">
+                                                {quote.price_breakdown}
+                                            </div>
+                                        </Accordion>
+                                    </div>
+                                )}
+
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleEditQuote}
+                                        className="text-xs text-alloy-midnight/60 hover:text-alloy-blue hover:underline"
+                                    >
+                                        Change quote
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Right column: Progressive Steps (2/3 width) */}
-                        <div className="lg:col-span-2">
-                            <div className="space-y-6">
-                                {quoteJustSaved && (
-                                    <div className="bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg px-4 py-3 text-alloy-midnight">
-                                        <p className="text-sm font-medium text-alloy-pine">
-                                            Quote saved — continue to pick a time.
+                        {/* Card 2: Time Slot */}
+                        <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                    slotConfirmed 
+                                        ? "bg-alloy-juniper text-white" 
+                                        : currentStep === "slot_selection"
+                                            ? "bg-alloy-blue text-white"
+                                            : "bg-alloy-stone/30 text-alloy-midnight/60"
+                                }`}>
+                                    {slotConfirmed ? "✓" : "1"}
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-alloy-midnight">
+                                        Select a Time Slot
+                                    </h2>
+                                    {slotConfirmed && selectedSlot && (
+                                        <p className="text-sm text-alloy-midnight/60 mt-1">
+                                            Confirmed: {selectedSlot.timeWindow}
                                         </p>
-                                    </div>
-                                )}
-                                {/* Step 1: Slot Selection */}
-                                <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
-                                            slotConfirmed 
-                                                ? "bg-alloy-juniper text-white" 
-                                                : currentStep === "slot_selection"
-                                                    ? "bg-alloy-blue text-white"
-                                                    : "bg-alloy-stone/30 text-alloy-midnight/60"
-                                        }`}>
-                                            {slotConfirmed ? "✓" : "1"}
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-alloy-midnight">
-                                                Select a Time Slot
-                                            </h2>
-                                            {slotConfirmed && selectedSlot && (
-                                                <p className="text-sm text-alloy-midnight/60 mt-1">
-                                                    Confirmed: {selectedSlot.timeWindow}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {!slotConfirmed ? (
-                                        <SlotPicker
-                                            selectedSlot={selectedSlot}
-                                            onSelectSlot={handleSelectSlot}
-                                            onConfirmTime={handleConfirmSlot}
-                                            timezone={timezone}
-                                            error={bookingError}
-                                        />
-                                    ) : (
-                                        <div className="bg-alloy-stone/10 rounded-lg p-4">
-                                            <p className="text-sm text-alloy-midnight/70">
-                                                <strong>{selectedSlot?.timeWindow}</strong> on{" "}
-                                                {mounted ? selectedSlot?.start.toLocaleDateString("en-US", {
-                                                    weekday: "long",
-                                                    month: "long",
-                                                    day: "numeric",
-                                                    timeZone: timezone,
-                                                }) : selectedSlot?.start.toISOString().split("T")[0]}
-                                            </p>
-                                            <button
-                                                onClick={handleChangeSlot}
-                                                className="text-xs text-alloy-blue hover:underline mt-2"
-                                            >
-                                                Change time slot
-                                            </button>
-                                        </div>
                                     )}
                                 </div>
+                            </div>
 
-                                {/* Step 2: Service Details */}
-                                {slotConfirmed && (
-                                    <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
-                                        <div className="flex items-center gap-3 mb-6">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
-                                                serviceDetailsConfirmed 
-                                                    ? "bg-alloy-juniper text-white" 
-                                                    : currentStep === "service_details" || currentStep === "payment"
-                                                        ? "bg-alloy-blue text-white"
-                                                        : "bg-alloy-stone/30 text-alloy-midnight/60"
-                                            }`}>
-                                                {serviceDetailsConfirmed ? "✓" : "2"}
-                                            </div>
-                                            <div>
-                                                <h2 className="text-xl font-bold text-alloy-midnight">
-                                                    Service Details
-                                                </h2>
-                                                {serviceDetailsConfirmed && (
-                                                    <p className="text-sm text-alloy-midnight/60 mt-1">
-                                                        Details confirmed
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
+                            {!slotConfirmed ? (
+                                <SlotPicker
+                                    selectedSlot={selectedSlot}
+                                    onSelectSlot={handleSelectSlot}
+                                    onConfirmTime={handleConfirmSlot}
+                                    timezone={timezone}
+                                    error={bookingError}
+                                />
+                            ) : (
+                                <div className="bg-alloy-stone/10 rounded-lg p-4">
+                                    <p className="text-sm text-alloy-midnight/70">
+                                        <strong>{selectedSlot?.timeWindow}</strong> on{" "}
+                                        {mounted ? selectedSlot?.start.toLocaleDateString("en-US", {
+                                            weekday: "long",
+                                            month: "long",
+                                            day: "numeric",
+                                            timeZone: timezone,
+                                        }) : selectedSlot?.start.toISOString().split("T")[0]}
+                                    </p>
+                                    <button
+                                        onClick={handleChangeSlot}
+                                        className="text-xs text-alloy-blue hover:underline mt-2"
+                                    >
+                                        Change time slot
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
-                                        {serviceDetailsConfirmed && serviceDetails ? (
-                                            <>
-                                                <ServiceDetailsSummary
-                                                    details={serviceDetails}
-                                                    onEdit={handleEditServiceDetails}
-                                                />
-                                                <div className="mt-4 bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
-                                                    <p className="text-sm text-alloy-midnight/70 text-center">
-                                                        Payment unlocked — complete your booking in the left panel.
-                                                    </p>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <ServiceDetailsForm
-                                                    onDataChange={handleServiceDetailsChange}
-                                                />
-                                                {serviceDetailsValid && (
-                                                    <div className="mt-6 pt-6 border-t border-alloy-stone/20">
-                                                        <button
-                                                            onClick={handleConfirmServiceDetails}
-                                                            className="w-full sm:w-auto sm:px-6 px-4 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
-                                                        >
-                                                            Confirm Details
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </>
+                        {/* Card 3: Service Details */}
+                        {slotConfirmed && (
+                            <div className="bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                                        serviceDetailsConfirmed 
+                                            ? "bg-alloy-juniper text-white" 
+                                            : currentStep === "service_details" || currentStep === "payment"
+                                                ? "bg-alloy-blue text-white"
+                                                : "bg-alloy-stone/30 text-alloy-midnight/60"
+                                    }`}>
+                                        {serviceDetailsConfirmed ? "✓" : "2"}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-alloy-midnight">
+                                            Service Details
+                                        </h2>
+                                        {serviceDetailsConfirmed && (
+                                            <p className="text-sm text-alloy-midnight/60 mt-1">
+                                                Details confirmed
+                                            </p>
                                         )}
                                     </div>
-                                )}
+                                </div>
 
+                                {serviceDetailsConfirmed && serviceDetails ? (
+                                    <>
+                                        <ServiceDetailsSummary
+                                            details={serviceDetails}
+                                            onEdit={handleEditServiceDetails}
+                                        />
+                                        <div className="mt-4 bg-alloy-juniper/10 rounded-lg p-4 border border-alloy-juniper/20">
+                                            <p className="text-sm text-alloy-midnight/70 text-center">
+                                                Payment unlocked — complete your booking below.
+                                            </p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ServiceDetailsForm
+                                            onDataChange={handleServiceDetailsChange}
+                                        />
+                                        {serviceDetailsValid && (
+                                            <div className="mt-6 pt-6 border-t border-alloy-stone/20">
+                                                <button
+                                                    onClick={handleConfirmServiceDetails}
+                                                    className="w-full sm:w-auto sm:px-6 px-4 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
+                                                >
+                                                    Confirm Details
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
+                        )}
+
+                        {/* Card 4: Payment (with summary at top) */}
+                        <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5">
+                            <h3 className="text-lg font-bold text-alloy-midnight mb-4">
+                                Payment
+                            </h3>
+
+                            {!isPaymentUnlocked ? (
+                                <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                    <p className="text-xs text-alloy-midnight/60">
+                                        Complete the steps above to unlock payment
+                                    </p>
+                                </div>
+                            ) : !mounted ? (
+                                <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                    <p className="text-xs text-alloy-midnight/60">Loading...</p>
+                                </div>
+                            ) : !resolvedEmail || !resolvedPhone ? (
+                                <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                    <p className="text-xs text-alloy-midnight/60 mb-2">
+                                        Enter your email + phone to load payment.
+                                    </p>
+                                    <p className="text-xs text-alloy-midnight/50">
+                                        Please add ?email=your@email.com&phone=+1234567890 to the URL or complete the quote form.
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Payment summary: this job total + scheduled date/time */}
+                                    {(() => {
+                                        const basePrice =
+                                            (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0
+                                                ? quote.first_clean_price
+                                                : typeof quote?.estimated_price === "number" && quote.estimated_price > 0
+                                                    ? quote.estimated_price
+                                                    : null);
+                                        const firstVisitTotal = basePrice != null && basePrice > 0
+                                            ? (discountData?.quote_total ?? basePrice)
+                                            : null;
+                                        return (
+                                            <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg border border-alloy-stone/20 space-y-2">
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                                    This job total
+                                                </p>
+                                                {firstVisitTotal != null ? (
+                                                    <p className="text-xl font-bold text-alloy-blue">
+                                                        ${firstVisitTotal.toFixed(2)}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-sm text-alloy-midnight/70">Calculating…</p>
+                                                )}
+                                                {selectedSlot && (
+                                                    <p className="text-sm text-alloy-midnight/70 mt-2">
+                                                        Scheduled: {selectedSlot.timeWindow}
+                                                        {mounted && (
+                                                            <> · {selectedSlot.start.toLocaleDateString("en-US", {
+                                                                weekday: "long",
+                                                                month: "long",
+                                                                day: "numeric",
+                                                                timeZone: timezone,
+                                                            })}</>
+                                                        )}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                                        <div className="bg-alloy-juniper/10 border border-alloy-juniper/20 rounded-lg p-3">
+                                            <p className="text-xs font-semibold text-alloy-midnight mb-1">
+                                                No charge today.
+                                            </p>
+                                            <p className="text-xs text-alloy-midnight/70 leading-relaxed">
+                                                We'll save your card to hold your appointment. You'll only be charged after the cleaning is completed and confirmed.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {!stripe || !cardNumber || !cardExpiry || !cardCvc ? (
+                                                <div className="px-4 py-8 border border-alloy-stone/30 rounded-lg bg-alloy-stone/10 flex items-center justify-center">
+                                                    <div className="text-center">
+                                                        <div className="w-6 h-6 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                                        <p className="text-xs text-alloy-midnight/60">Loading payment form...</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                            Card Number
+                                                        </label>
+                                                        <div
+                                                            ref={cardNumberRef}
+                                                            className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                                Expiration
+                                                            </label>
+                                                            <div
+                                                                ref={cardExpiryRef}
+                                                                className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                                CVC
+                                                            </label>
+                                                            <div
+                                                                ref={cardCvcRef}
+                                                                className="px-4 py-3 border border-alloy-stone/30 rounded-lg min-h-[50px]"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-alloy-midnight mb-2">
+                                                            ZIP Code
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={postalCode}
+                                                            onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                                                            placeholder="12345"
+                                                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                                                            maxLength={5}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        {paymentError && (
+                                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                                <p className="text-xs text-red-800">{paymentError}</p>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="submit"
+                                            disabled={isProcessingPayment || !stripe || !cardNumber || !cardExpiry || !cardCvc || !resolvedEmail || !resolvedPhone}
+                                            className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isProcessingPayment ? "Processing..." : "Complete Booking"}
+                                        </button>
+
+                                        {isProcessingPayment && (
+                                            <div className="flex items-center justify-center gap-2 text-xs text-alloy-midnight/60">
+                                                <div className="w-4 h-4 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin"></div>
+                                                <span>Finalizing booking...</span>
+                                            </div>
+                                        )}
+                                    </form>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

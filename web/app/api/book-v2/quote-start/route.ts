@@ -342,6 +342,16 @@ export async function POST(request: NextRequest) {
     };
     const quote_started_at = new Date().toISOString();
 
+    // Ensure we have customer_id (e.g. from contact if customer create failed or was set elsewhere)
+    if (!customerId) {
+      const { data: contactRow } = await supabase
+        .from("contacts")
+        .select("customer_id")
+        .eq("id", contactId)
+        .single();
+      customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
+    }
+
     // 4) Dedupe: reuse open "Quote Started" opportunity for this contact within 10 min
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     let opportunityId: string;
@@ -379,6 +389,8 @@ export async function POST(request: NextRequest) {
 
     if (shouldReuse && existingOpp) {
       opportunityId = existingOpp.id;
+      const { data: oppRow } = await supabase.from("opportunities").select("customer_id").eq("id", opportunityId).single();
+      const existingCustomerId = (oppRow as { customer_id: string | null } | null)?.customer_id ?? null;
       const updatePayload: Record<string, unknown> = {
         metadata: {
           quote_input,
@@ -391,14 +403,18 @@ export async function POST(request: NextRequest) {
           monetary_value_cents: quote_output_estimated_cents(quoteOutput),
         }),
       };
-      if (customerId) {
-        const { data: oppRow } = await supabase.from("opportunities").select("customer_id").eq("id", opportunityId).single();
-        if (oppRow && !(oppRow as { customer_id: string | null }).customer_id) {
-          (updatePayload as Record<string, unknown>).customer_id = customerId;
-        }
+      if (customerId && !existingCustomerId) {
+        (updatePayload as Record<string, unknown>).customer_id = customerId;
       }
       await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
     } else {
+      if (!customerId) {
+        console.error("[QUOTE_START] Cannot create opportunity: customer_id is null for contact_id=", contactId);
+        return NextResponse.json(
+          { ok: false, message: "Customer required for opportunity" },
+          { status: 500 }
+        );
+      }
       const estimatedPriceCents = quoteOutput.estimated_price != null ? Math.round(quoteOutput.estimated_price * 100) : null;
       const opportunityName =
         [first_name, last_name].filter(Boolean).join(" ").trim()

@@ -189,8 +189,14 @@ export async function POST(request: NextRequest) {
                 .single();
             if (oppVerifyErr || !opp || opp.primary_contact_id !== contact_id_from_quote || opp.customer_id !== customer_id_from_quote) {
                 return NextResponse.json(
-                    { ok: false, message: "Invalid or mismatched opportunity/contact/customer from quote", booking_attempt_id: booking_attempt_id ?? null },
-                    { status: 400 }
+                    {
+                        ok: false,
+                        error: "QUOTE_ID_MISMATCH",
+                        message: "Invalid or mismatched opportunity/contact/customer from quote. Please refresh your quote and try again.",
+                        action: "CLEAR_QUOTE_AND_RESTART",
+                        booking_attempt_id: booking_attempt_id ?? null,
+                    },
+                    { status: 409 }
                 );
             }
             contactId = contact_id_from_quote;
