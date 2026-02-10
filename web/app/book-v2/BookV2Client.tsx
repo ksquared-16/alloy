@@ -240,14 +240,17 @@ export default function BookV2Client() {
     const [quoteStartError, setQuoteStartError] = useState<string | null>(null);
     const [quoteJustSaved, setQuoteJustSaved] = useState(false);
 
-    // Refine quote step: frequency and add-ons (synced from quote when step is refine_quote)
+    // Refine quote step: frequency and add-ons (optimistic UI; selectedAddonKeys = source of truth for checkboxes)
     const [refineFrequency, setRefineFrequency] = useState<"one_time" | "weekly" | "biweekly" | "monthly">("one_time");
-    const [refineAddOns, setRefineAddOns] = useState<AddOnId[]>([]);
+    const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
     const [refineLoading, setRefineLoading] = useState(false);
+    const [refineError, setRefineError] = useState<string | null>(null);
     /** When user clicks "Edit quote", we remember which step to return to after "Continue to pick time" */
     const [stepBeforeRefine, setStepBeforeRefine] = useState<BookingStep | null>(null);
-    /** Add-on pricing from DB (vertical_addons), set from quote-refine response */
+    /** Add-on pricing from DB (addon_types + pricing_addons), cached from quote-refine response */
     const [availableAddons, setAvailableAddons] = useState<Array<{ id: string; label: string; price: number }> | null>(null);
+    const refineDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const refineRequestIdRef = useRef(0);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -294,6 +297,15 @@ export default function BookV2Client() {
 
     useEffect(() => {
         setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (refineDebounceRef.current) {
+                clearTimeout(refineDebounceRef.current);
+                refineDebounceRef.current = null;
+            }
+        };
     }, []);
 
     // Resolve email/phone from multiple sources
@@ -594,7 +606,7 @@ export default function BookV2Client() {
         };
     }, [mounted, cardNumber, cardExpiry, cardCvc, isPaymentUnlocked]);
 
-    // Sync refine step state from quote when we have a quote (for refine_quote step)
+    // Sync refine step state from quote when entering refine_quote (selectedAddonKeys = source of truth for checkboxes)
     useEffect(() => {
         if (!quote || currentStep !== "refine_quote") return;
         const freqLabel = (quote.frequency_label || "").toLowerCase();
@@ -605,15 +617,16 @@ export default function BookV2Client() {
                 : "one_time";
         setRefineFrequency(nextFreq);
         const addonsList = quote.addons ?? [];
-        const selected: AddOnId[] = addonsList
+        const keys: string[] = addonsList
             .map((a) => {
                 const withId = a as { id?: string; name?: string };
-                if (withId.id && ADDON_KEY_TO_ID[withId.id]) return ADDON_KEY_TO_ID[withId.id];
-                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name)) return withId.name as AddOnId;
+                if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
+                    return ADDON_ID_TO_KEY[withId.name as AddOnId];
                 return null;
             })
-            .filter((x): x is AddOnId => x != null);
-        setRefineAddOns(selected);
+            .filter((x): x is string => x != null && x.length > 0);
+        setSelectedAddonKeys(keys);
     }, [quote, currentStep]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
@@ -627,76 +640,129 @@ export default function BookV2Client() {
         }
     }, [serviceDetails, serviceDetailsConfirmed, serviceDetailsSnapshot]);
 
-    const applyRefineAndPersist = useCallback(async (frequency: "one_time" | "weekly" | "biweekly" | "monthly", addOns: AddOnId[]) => {
-        const quoteInput = quote?.quote_input;
-        const squareFootage = quoteInput?.square_footage || (quote as QuoteResponse & { quote_input?: { square_footage?: string } })?.quote_input?.square_footage;
-        if (!squareFootage?.trim()) {
-            console.warn("[BOOK_V2] Refine: no square_footage in quote_input, skip API");
-            return;
-        }
-        setRefineLoading(true);
-        try {
-            const opportunityId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
-            const res = await fetch("/api/book-v2/quote-refine", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    square_footage: squareFootage.trim(),
-                    cleaning_frequency: frequency,
-                    add_ons: addOns,
-                    opportunity_id: opportunityId || undefined,
-                    zip: quoteInput?.zip,
-                    home_type: quoteInput?.home_type,
-                }),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.ok) {
-                console.warn("[BOOK_V2] Quote refine failed:", data?.message);
+    const applyRefineAndPersist = useCallback(
+        async (
+            frequency: "one_time" | "weekly" | "biweekly" | "monthly",
+            addonKeys: string[],
+            options?: { revertKeys?: string[] }
+        ) => {
+            const quoteInput = quote?.quote_input;
+            const squareFootage =
+                quoteInput?.square_footage ||
+                (quote as QuoteResponse & { quote_input?: { square_footage?: string } })?.quote_input?.square_footage;
+            if (!squareFootage?.trim()) {
+                console.warn("[BOOK_V2] Refine: no square_footage in quote_input, skip API");
                 return;
             }
-            if (Array.isArray(data.available_addons)) {
-                setAvailableAddons(data.available_addons);
-            }
-            const qo = data.quote_output;
-            const addonsForStore = Array.isArray(qo?.addons)
-                ? (qo.addons as Array<{ id?: string; label?: string; price?: number }>).map((a) => ({
-                    name: a.label ?? (a.id as string) ?? "",
-                    price: typeof a.price === "number" ? a.price : null,
-                    id: a.id ?? undefined,
-                  }))
-                : addOns.map((id) => ({ name: id, price: null }));
-            const updated: QuoteResponse = {
-                ...quote!,
-                estimated_price: qo?.estimated_price ?? quote?.estimated_price,
-                first_clean_price: qo?.first_clean_price ?? qo?.estimated_price ?? quote?.first_clean_price,
-                recurring_price: qo?.recurring_price ?? undefined,
-                frequency_label: qo?.frequency_label ?? quote?.frequency_label ?? "One-time",
-                addons: addonsForStore,
-                addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
-            };
-            setQuote(normalizeQuote(updated));
-            const toStore = { ...updated, quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addOns } };
+            const requestId = ++refineRequestIdRef.current;
+            setRefineError(null);
+            setRefineLoading(true);
             try {
-                const json = JSON.stringify(toStore);
-                localStorage.setItem("alloy_quote_v1", json);
-                sessionStorage.setItem("alloy_quote_v1", json);
-            } catch (e) {
-                console.warn("Persist quote failed", e);
+                const opportunityId =
+                    typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
+                const res = await fetch("/api/book-v2/quote-refine", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        square_footage: squareFootage.trim(),
+                        cleaning_frequency: frequency,
+                        add_ons: addonKeys,
+                        opportunity_id: opportunityId || undefined,
+                        zip: quoteInput?.zip,
+                        home_type: quoteInput?.home_type,
+                    }),
+                });
+                const data = await res.json();
+                if (requestId !== refineRequestIdRef.current) return;
+                if (!res.ok || !data.ok) {
+                    setRefineError(data.message || "Could not update quote.");
+                    if (options?.revertKeys != null) setSelectedAddonKeys(options.revertKeys);
+                    return;
+                }
+                if (Array.isArray(data.available_addons)) {
+                    setAvailableAddons(data.available_addons);
+                }
+                const qo = data.quote_output;
+                const addonsForStore = Array.isArray(qo?.addons)
+                    ? (qo.addons as Array<{ id?: string; label?: string; price?: number }>).map((a) => ({
+                          name: a.label ?? (a.id as string) ?? "",
+                          price: typeof a.price === "number" ? a.price : null,
+                          id: a.id ?? undefined,
+                      }))
+                    : [];
+                const updated: QuoteResponse = {
+                    ...quote!,
+                    estimated_price: qo?.estimated_price ?? quote?.estimated_price,
+                    first_clean_price: qo?.first_clean_price ?? qo?.estimated_price ?? quote?.first_clean_price,
+                    recurring_price: qo?.recurring_price ?? undefined,
+                    frequency_label: qo?.frequency_label ?? quote?.frequency_label ?? "One-time",
+                    addons: addonsForStore,
+                    addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
+                };
+                setQuote(normalizeQuote(updated));
+                const addOnIds = addonKeys
+                    .map((k) => ADDON_KEY_TO_ID[k] ?? null)
+                    .filter((x): x is AddOnId => x != null);
+                const toStore = {
+                    ...updated,
+                    quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addOnIds },
+                };
+                try {
+                    const json = JSON.stringify(toStore);
+                    localStorage.setItem("alloy_quote_v1", json);
+                    sessionStorage.setItem("alloy_quote_v1", json);
+                } catch (e) {
+                    console.warn("Persist quote failed", e);
+                }
+            } finally {
+                if (requestId === refineRequestIdRef.current) setRefineLoading(false);
             }
-        } finally {
-            setRefineLoading(false);
-        }
-    }, [quote]);
+        },
+        [quote]
+    );
+
+    // Fetch available_addons once when entering refine step (so prices show before user toggles)
+    useEffect(() => {
+        if (currentStep !== "refine_quote" || !quote || availableAddons !== null) return;
+        const squareFootage = quote.quote_input?.square_footage?.trim();
+        if (!squareFootage) return;
+        const freqLabel = (quote.frequency_label || "").toLowerCase();
+        const freq: "one_time" | "weekly" | "biweekly" | "monthly" =
+            freqLabel.includes("weekly") && !freqLabel.includes("bi") ? "weekly"
+                : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
+                : freqLabel.includes("monthly") ? "monthly"
+                : "one_time";
+        const keys = (quote.addons ?? [])
+            .map((a) => {
+                const withId = a as { id?: string; name?: string };
+                if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
+                    return ADDON_ID_TO_KEY[withId.name as AddOnId];
+                return null;
+            })
+            .filter((x): x is string => x != null && x.length > 0);
+        applyRefineAndPersist(freq, keys);
+    }, [currentStep, quote, availableAddons, applyRefineAndPersist]);
 
     const handleRefineFrequencyChange = (freq: "one_time" | "weekly" | "biweekly" | "monthly") => {
         setRefineFrequency(freq);
-        applyRefineAndPersist(freq, refineAddOns);
+        setRefineError(null);
+        applyRefineAndPersist(freq, selectedAddonKeys);
     };
 
-    const handleRefineAddOnToggle = (id: AddOnId) => {
-        const next = refineAddOns.includes(id) ? refineAddOns.filter((x) => x !== id) : [...refineAddOns, id];
-        setRefineAddOns(next);
-        applyRefineAndPersist(refineFrequency, next);
+    const handleRefineAddOnToggle = (addonKey: string) => {
+        const prev = selectedAddonKeys;
+        const next = prev.includes(addonKey) ? prev.filter((k) => k !== addonKey) : [...prev, addonKey];
+        setSelectedAddonKeys(next);
+        setRefineError(null);
+        if (refineDebounceRef.current) {
+            clearTimeout(refineDebounceRef.current);
+            refineDebounceRef.current = null;
+        }
+        refineDebounceRef.current = setTimeout(() => {
+            refineDebounceRef.current = null;
+            applyRefineAndPersist(refineFrequency, next, { revertKeys: prev });
+        }, 250);
     };
 
     const handleRefineContinue = () => {
@@ -1317,7 +1383,7 @@ export default function BookV2Client() {
                             {refineLoading && <p className="text-xs text-alloy-midnight/60 mt-2">Updating price…</p>}
                         </div>
 
-                        {/* Add-ons: inline (prices from DB via availableAddons) */}
+                        {/* Add-ons: optimistic checkboxes (selectedAddonKeys); prices from DB via availableAddons */}
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Add-ons</p>
                             <div className="space-y-2">
@@ -1329,8 +1395,8 @@ export default function BookV2Client() {
                                         <label key={id} className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
-                                                checked={refineAddOns.includes(id)}
-                                                onChange={() => handleRefineAddOnToggle(id)}
+                                                checked={selectedAddonKeys.includes(addonKey)}
+                                                onChange={() => handleRefineAddOnToggle(addonKey)}
                                                 disabled={refineLoading}
                                                 className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
                                             />
@@ -1342,6 +1408,7 @@ export default function BookV2Client() {
                                     );
                                 })}
                             </div>
+                            {refineError && <p className="text-sm text-red-600 mt-2">{refineError}</p>}
                         </div>
 
                         <button
