@@ -1127,6 +1127,17 @@ export default function BookV2Client() {
             const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
             const storedOpportunityId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
 
+            const quoteOutputForConfirm = quote
+                ? {
+                    estimated_price: quote.estimated_price,
+                    first_clean_price: quote.first_clean_price,
+                    recurring_price: quote.recurring_price ?? undefined,
+                    frequency_label: quote.frequency_label ?? "One-time",
+                    discount_label: quote.discount_label ?? undefined,
+                    addons: quote.addons ?? [],
+                    addons_total: quote.addons_total ?? undefined,
+                }
+                : undefined;
             const confirmPayload: Record<string, unknown> = {
                 slot_start: selectedSlot.isoStart,
                 slot_end: selectedSlot.isoEnd,
@@ -1150,6 +1161,8 @@ export default function BookV2Client() {
                 frequency_label: quote?.frequency_label || "One-time",
                 first_clean_price: typeof quote?.first_clean_price === "number" ? quote.first_clean_price : undefined,
                 recurring_price: typeof quote?.recurring_price === "number" ? quote.recurring_price : undefined,
+                quote_input: quote?.quote_input ?? undefined,
+                quote_output: quoteOutputForConfirm,
                 booking_attempt_id: attemptId,
             };
             if (storedOpportunityId && storedContactId && storedCustomerId) {

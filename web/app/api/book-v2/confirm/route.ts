@@ -88,6 +88,8 @@ function normalizeFrequencyKey(frequencyLabel: string | null | undefined): strin
  * - frequency_label: string (optional, defaults to "One-time")
  * - first_clean_price: number (optional; used for jobs.estimated_total_cents when provided)
  * - recurring_price: number (optional; used for jobs.recurring_total_cents when recurring)
+ * - quote_input: object (optional; persisted to opportunity.metadata.quote_input)
+ * - quote_output: object (optional; persisted to opportunity.metadata.quote_output)
  */
 export async function POST(request: NextRequest) {
     let bookingAttemptId: string | null = null;
@@ -117,6 +119,8 @@ export async function POST(request: NextRequest) {
             frequency_label = "One-time",
             first_clean_price,
             recurring_price,
+            quote_input,
+            quote_output,
             booking_attempt_id = bookingAttemptId,
             opportunity_id: opportunity_id_from_quote,
             contact_id: contact_id_from_quote,
@@ -243,12 +247,36 @@ export async function POST(request: NextRequest) {
             const slotEndDateQ = new Date(slot_end);
             jobDate = slotStartDateQ.toLocaleDateString("en-US", { timeZone: timezone });
             jobTimeWindow = `${slotStartDateQ.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone, hour12: true })} - ${slotEndDateQ.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone, hour12: true })}`;
-            const estimatedPriceCents = quote_subtotal != null ? Math.round(quote_subtotal * 100) : null;
+            const estimatedPriceCents =
+                quote_total != null ? Math.round(quote_total * 100)
+                : quote_subtotal != null ? Math.round(quote_subtotal * 100)
+                : first_clean_price != null ? Math.round(first_clean_price * 100)
+                : null;
 
             const { data: pipelines } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
             const pipelineId = pipelines?.[0]?.id ?? null;
             let bookedStageId: string | null = null;
             if (pipelineId) bookedStageId = await getOrCreateBookedStage(supabase, pipelineId);
+
+            const existingMeta = await (async () => {
+                const { data: opp } = await supabase.from("opportunities").select("metadata").eq("id", opportunityId).single();
+                return ((opp?.metadata as Record<string, unknown>) ?? {}) as Record<string, unknown>;
+            })();
+            const mergedMetadata: Record<string, unknown> = {
+                ...existingMeta,
+                booking_source: "book-v2",
+                booking_attempt_id: booking_attempt_id ?? undefined,
+                timezone,
+                address: address ?? null,
+                city: city ?? null,
+                bedrooms: bedrooms ?? null,
+                bathrooms: bathrooms ?? null,
+                access_method: access_method ?? null,
+                access_note: access_note ?? null,
+                additional_notes: additional_notes ?? null,
+            };
+            if (quote_input != null && typeof quote_input === "object") mergedMetadata.quote_input = quote_input;
+            if (quote_output != null && typeof quote_output === "object") mergedMetadata.quote_output = quote_output;
 
             const oppUpdate: Record<string, unknown> = {
                 job_date: jobDate,
@@ -258,19 +286,9 @@ export async function POST(request: NextRequest) {
                 quote_total: quote_total ?? null,
                 estimated_price_cents: estimatedPriceCents,
                 monetary_value_cents: estimatedPriceCents,
-                metadata: {
-                    booking_source: "book-v2",
-                    booking_attempt_id: booking_attempt_id ?? undefined,
-                    timezone,
-                    address: address ?? null,
-                    city: city ?? null,
-                    bedrooms: bedrooms ?? null,
-                    bathrooms: bathrooms ?? null,
-                    access_method: access_method ?? null,
-                    access_note: access_note ?? null,
-                    additional_notes: additional_notes ?? null,
-                },
+                metadata: mergedMetadata,
             };
+            if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
             if (bookedStageId) oppUpdate.pipeline_stage_id = bookedStageId;
             if (discount_code_id != null) {
                 (oppUpdate as Record<string, unknown>).discount_code_id = discount_code_id;
@@ -386,17 +404,16 @@ export async function POST(request: NextRequest) {
         const verticalId = verticalIdElse;
 
         // Step 4: Find or create opportunity
-        // Reuse only if existing opportunity has same booking_attempt_id (idempotent retry). Otherwise create new.
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        const { data: existingOppRow, error: oppSearchError } = await supabase
+        // Prefer: (1) idempotent retry same booking_attempt_id, (2) reuse recent "Quote Started" + web_quote for this contact (last 30 min), (3) create new.
+        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const { data: recentOpps, error: oppSearchError } = await supabase
             .from("opportunities")
-            .select("id, customer_id, primary_contact_id, metadata")
+            .select("id, customer_id, primary_contact_id, metadata, pipeline_stage_id")
             .eq("primary_contact_id", contactId)
             .eq("status", "open")
-            .gte("created_at", tenMinutesAgo)
+            .gte("created_at", thirtyMinutesAgo)
             .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .limit(5);
 
         if (oppSearchError) {
             console.error("[BOOK_V2_CONFIRM] Error searching for opportunity booking_attempt_id=", booking_attempt_id, oppSearchError);
@@ -406,12 +423,35 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const existingOpp =
-            existingOppRow &&
-            booking_attempt_id &&
-            (existingOppRow.metadata as Record<string, unknown> | null)?.booking_attempt_id === booking_attempt_id
-                ? existingOppRow
-                : null;
+        const list = recentOpps ?? [];
+        let existingOpp: (typeof list)[0] | null = null;
+        if (booking_attempt_id && list.length > 0) {
+            const byAttempt = list.find(
+                (o) => (o.metadata as Record<string, unknown> | null)?.booking_attempt_id === booking_attempt_id
+            );
+            if (byAttempt) existingOpp = byAttempt;
+        }
+        if (!existingOpp && list.length > 0) {
+            const { data: pipelines } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
+            const pipelineId = pipelines?.[0]?.id ?? null;
+            let quoteStartedStageId: string | null = null;
+            if (pipelineId) {
+                const { data: stage } = await supabase
+                    .from("pipeline_stages")
+                    .select("id")
+                    .eq("pipeline_id", pipelineId)
+                    .ilike("name", "Quote Started")
+                    .limit(1)
+                    .maybeSingle();
+                quoteStartedStageId = stage?.id ?? null;
+            }
+            const webQuoteOpp = list.find(
+                (o) =>
+                    (o.metadata as Record<string, unknown> | null)?.source === "web_quote" &&
+                    (quoteStartedStageId == null || o.pipeline_stage_id === quoteStartedStageId)
+            );
+            if (webQuoteOpp) existingOpp = webQuoteOpp;
+        }
 
         const { data: pipelinesForBooked } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
         const pipelineIdForBooked = pipelinesForBooked?.[0]?.id ?? null;
@@ -422,44 +462,54 @@ export async function POST(request: NextRequest) {
             opportunityId = existingOpp.id;
             console.log(`[BOOK_V2_CONFIRM] Found existing opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId} (reused)`);
 
-            // Get existing opportunity data to check what needs backfilling
             const { data: existingOppData } = await supabase
                 .from("opportunities")
-                .select("vertical_id, customer_id, primary_contact_id, monetary_value_cents")
+                .select("vertical_id, customer_id, primary_contact_id, monetary_value_cents, metadata")
                 .eq("id", opportunityId)
                 .single();
 
-            // Update opportunity with booking details and backfill links
-            const estimatedPriceCents = quote_subtotal ? Math.round(quote_subtotal * 100) : null;
-            const existingMeta = ((existingOpp as { metadata?: Record<string, unknown> })?.metadata) || {};
+            const estimatedPriceCentsElse =
+                quote_total != null ? Math.round(quote_total * 100)
+                : quote_subtotal != null ? Math.round(quote_subtotal * 100)
+                : first_clean_price != null ? Math.round(first_clean_price * 100)
+                : null;
+            const existingMetaElse = ((existingOppData?.metadata ?? existingOpp?.metadata) as Record<string, unknown>) ?? {};
+            const mergedMetaElse: Record<string, unknown> = {
+                ...existingMetaElse,
+                booking_source: "book-v2",
+                booking_attempt_id: booking_attempt_id ?? undefined,
+                timezone,
+                address: address ?? null,
+                city: city ?? null,
+                bedrooms: bedrooms ?? null,
+                bathrooms: bathrooms ?? null,
+                access_method: access_method ?? null,
+                access_note: access_note ?? null,
+                additional_notes: additional_notes ?? null,
+            };
+            if (quote_input != null && typeof quote_input === "object") mergedMetaElse.quote_input = quote_input;
+            if (quote_output != null && typeof quote_output === "object") mergedMetaElse.quote_output = quote_output;
+
             const updatePayload: Record<string, any> = {
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
-                quote_subtotal: quote_subtotal || null,
+                quote_subtotal: quote_subtotal ?? null,
                 discount_amount: discount_amount ?? null,
-                quote_total: quote_total || null,
-                estimated_price_cents: estimatedPriceCents,
+                quote_total: quote_total ?? null,
+                estimated_price_cents: estimatedPriceCentsElse,
+                monetary_value_cents: estimatedPriceCentsElse ?? undefined,
                 customer_id: customerId,
                 primary_contact_id: contactId,
-                metadata: { ...existingMeta, booking_attempt_id: booking_attempt_id ?? undefined },
+                metadata: mergedMetaElse,
             };
+            if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
             if (bookedStageIdElse) updatePayload.pipeline_stage_id = bookedStageIdElse;
             if (discount_code_id != null) {
                 updatePayload.discount_code_id = discount_code_id;
                 if (discount_code != null) updatePayload.discount_code = discount_code;
                 updatePayload.discount_amount = discount_amount ?? null;
             }
-
-            // Backfill vertical_id if missing
-            if (existingOppData && !existingOppData.vertical_id) {
-                updatePayload.vertical_id = verticalId;
-            }
-            
-            // Backfill monetary_value_cents if missing
-            if (estimatedPriceCents && !existingOppData?.monetary_value_cents) {
-                updatePayload.monetary_value_cents = estimatedPriceCents;
-                console.log(`[BOOK_V2_CONFIRM] Backfilled opportunity.monetary_value_cents=${estimatedPriceCents} opportunity_id=${opportunityId}`);
-            }
+            if (existingOppData && !existingOppData.vertical_id) updatePayload.vertical_id = verticalId;
 
             const { error: oppUpdateError } = await supabase
                 .from("opportunities")
@@ -474,8 +524,26 @@ export async function POST(request: NextRequest) {
                 );
             }
         } else {
-            // Create new opportunity
-            const estimatedPriceCents = quote_subtotal ? Math.round(quote_subtotal * 100) : null;
+            const estimatedPriceCentsNew =
+                quote_total != null ? Math.round(quote_total * 100)
+                : quote_subtotal != null ? Math.round(quote_subtotal * 100)
+                : first_clean_price != null ? Math.round(first_clean_price * 100)
+                : null;
+            const insertMeta: Record<string, unknown> = {
+                booking_source: "book-v2",
+                booking_attempt_id: booking_attempt_id ?? undefined,
+                timezone,
+                address: address ?? null,
+                city: city ?? null,
+                bedrooms: bedrooms ?? null,
+                bathrooms: bathrooms ?? null,
+                access_method: access_method ?? null,
+                access_note: access_note ?? null,
+                additional_notes: additional_notes ?? null,
+            };
+            if (quote_input != null && typeof quote_input === "object") insertMeta.quote_input = quote_input;
+            if (quote_output != null && typeof quote_output === "object") insertMeta.quote_output = quote_output;
+
             const insertPayload: Record<string, unknown> = {
                 vertical_id: verticalId,
                 primary_contact_id: contactId,
@@ -485,28 +553,18 @@ export async function POST(request: NextRequest) {
                 source: "website",
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
-                quote_subtotal: quote_subtotal || null,
+                quote_subtotal: quote_subtotal ?? null,
                 discount_amount: discount_amount ?? null,
-                quote_total: quote_total || null,
-                estimated_price_cents: estimatedPriceCents,
-                monetary_value_cents: estimatedPriceCents,
+                quote_total: quote_total ?? null,
+                estimated_price_cents: estimatedPriceCentsNew,
+                monetary_value_cents: estimatedPriceCentsNew ?? undefined,
+                ...(recurringCents != null && { recurring_price_cents: recurringCents }),
                 ...(discount_code_id != null && {
                     discount_code_id,
                     discount_code: discount_code ?? null,
                     discount_amount: discount_amount ?? null,
                 }),
-                metadata: {
-                    booking_source: "book-v2",
-                    booking_attempt_id: booking_attempt_id ?? undefined,
-                    timezone,
-                    address: address || null,
-                    city: city || null,
-                    bedrooms: bedrooms || null,
-                    bathrooms: bathrooms || null,
-                    access_method: access_method || null,
-                    access_note: access_note || null,
-                    additional_notes: additional_notes || null,
-                },
+                metadata: insertMeta,
             };
             if (bookedStageIdElse) insertPayload.pipeline_stage_id = bookedStageIdElse;
             const { data: newOpp, error: oppError } = await supabase
