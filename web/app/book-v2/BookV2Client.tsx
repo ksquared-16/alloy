@@ -84,6 +84,81 @@ function isQuoteReady(data: QuoteResponse | null): { ready: boolean; missingFiel
     return { ready, missingFields };
 }
 
+const PREFILL_ATTEMPTED_KEY = "alloy_quote_start_attempted_v1";
+
+/**
+ * Fire-and-forget: create contact/opportunity via quote-start when user lands with
+ * prefill (e.g. query params) so we don't lose quote-only leads. Does not block UI.
+ *
+ * Manual test (incognito): hit /book-v2?email=test@example.com&phone=+15551234567&first_name=Jane&last_name=Doe
+ * and confirm POST /api/book-v2/quote-start is called and a new opportunity appears in Supabase
+ * with metadata.source = web_quote.
+ */
+async function maybeCreateLeadFromPrefill(params: {
+    email?: string | null;
+    phone?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    zip?: string | null;
+    home_type?: string | null;
+    square_footage?: number | string | null;
+    cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly" | null;
+}): Promise<void> {
+    const email = params.email?.trim() || null;
+    const phone = params.phone?.trim() || null;
+    if (!email && !phone) return;
+
+    if (typeof window === "undefined") return;
+    try {
+        if (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id")) {
+            return;
+        }
+        if (sessionStorage.getItem(PREFILL_ATTEMPTED_KEY)) {
+            return;
+        }
+        sessionStorage.setItem(PREFILL_ATTEMPTED_KEY, "1");
+    } catch {
+        return;
+    }
+
+    const sqft = params.square_footage != null ? (typeof params.square_footage === "number" ? params.square_footage : parseInt(String(params.square_footage), 10)) : undefined;
+    const body: Record<string, unknown> = {
+        first_name: params.first_name?.trim() || undefined,
+        last_name: params.last_name?.trim() || undefined,
+        email: email || undefined,
+        phone: phone || undefined,
+        zip: params.zip?.trim() || undefined,
+        home_type: params.home_type?.trim() || undefined,
+        square_footage: sqft != null && !Number.isNaN(sqft) ? sqft : undefined,
+        cleaning_frequency: params.cleaning_frequency || "one_time",
+        quote_context: { source: "prefill", url: window.location.href },
+    };
+
+    console.log("[QUOTE_START_PREFILL] attempting...");
+    try {
+        const res = await fetch("/api/book-v2/quote-start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok && data.opportunity_id) {
+            try {
+                if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
+                if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
+                if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+            } catch (e) {
+                console.warn("[QUOTE_START_PREFILL] localStorage set failed", e);
+            }
+            console.log("[QUOTE_START_PREFILL] success opportunity_id=" + data.opportunity_id);
+        } else {
+            console.log("[QUOTE_START_PREFILL] failed error=" + (data?.message || res.status));
+        }
+    } catch (err) {
+        console.log("[QUOTE_START_PREFILL] failed error=" + (err instanceof Error ? err.message : String(err)));
+    }
+}
+
 export default function BookV2Client() {
     const searchParams = useSearchParams();
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
@@ -258,6 +333,47 @@ export default function BookV2Client() {
             }));
         }
     }, [resolvedEmail, resolvedPhone]);
+
+    // Background lead capture: when user lands with prefill (query params / storage) and we have
+    // email or phone but no quote-start IDs yet, call quote-start once so we don't lose the lead.
+    // Manual test: incognito → /book-v2?email=...&phone=...&first_name=... → check Network for
+    // POST /api/book-v2/quote-start and Supabase opportunity with metadata.source = web_quote.
+    useEffect(() => {
+        if (!mounted || debug) return;
+        if (!resolvedEmail && !resolvedPhone) return;
+
+        let zip: string | null = null;
+        try {
+            zip = searchParams?.get("zip") ?? searchParams?.get("postal_code") ?? null;
+            if (!zip) {
+                const prefill = sessionStorage.getItem("alloy_booking_prefill") || localStorage.getItem("alloy_booking_prefill");
+                if (prefill) {
+                    const prefillData = JSON.parse(prefill);
+                    zip = prefillData.postal_code ?? prefillData.zip ?? null;
+                }
+            }
+            if (!zip) {
+                const stored = localStorage.getItem("alloy_quote_v1") || sessionStorage.getItem("alloy_quote_v1");
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    zip = parsed.postalCode ?? parsed.zip ?? parsed.postal_code ?? null;
+                }
+            }
+        } catch {
+            // ignore
+        }
+
+        maybeCreateLeadFromPrefill({
+            email: resolvedEmail,
+            phone: resolvedPhone,
+            first_name: resolvedFirstName,
+            last_name: resolvedLastName,
+            zip,
+            home_type: quoteStartForm.home_type || undefined,
+            square_footage: quoteStartForm.square_footage || undefined,
+            cleaning_frequency: quoteStartForm.cleaning_frequency,
+        });
+    }, [mounted, debug, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName, searchParams, quoteStartForm.home_type, quoteStartForm.square_footage, quoteStartForm.cleaning_frequency]);
 
     // Load quote from storage
     useEffect(() => {
