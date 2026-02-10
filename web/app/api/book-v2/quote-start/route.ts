@@ -274,31 +274,7 @@ export async function POST(request: NextRequest) {
       created_new_contact = true;
     }
 
-    // Create customer if missing
-    if (!customerId) {
-      const name =
-        [first_name, last_name].filter(Boolean).join(" ") ||
-        emailForLookup ||
-        phoneForLookup ||
-        "Quote Lead";
-      const { data: newCustomer, error: customerError } = await supabase
-        .from("customers")
-        .insert({
-          name,
-          primary_contact_id: contactId,
-          email: emailForLookup || null,
-          phone: phoneForLookup || null,
-        })
-        .select("id")
-        .single();
-
-      if (!customerError && newCustomer) {
-        customerId = newCustomer.id;
-        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-      }
-    }
-
-    // 2) Vertical + pipeline + stage
+    // Resolve vertical first so we can set it on new customers
     let verticalId = body.vertical_id ?? null;
     if (!verticalId) {
       const { data: vert } = await supabase
@@ -316,6 +292,65 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Ensure customer exists and is linked (backfill if contact.customer_id was null)
+    let created_customer = false;
+    if (!customerId) {
+      const name =
+        [first_name, last_name].filter(Boolean).join(" ") ||
+        emailForLookup ||
+        phoneForLookup ||
+        "Quote Lead";
+      const { data: newCustomer, error: customerError } = await supabase
+        .from("customers")
+        .insert({
+          name,
+          vertical_id: verticalId,
+          primary_contact_id: contactId,
+          email: emailForLookup || null,
+          phone: phoneForLookup || null,
+        })
+        .select("id")
+        .single();
+
+      if (!customerError && newCustomer) {
+        customerId = newCustomer.id;
+        created_customer = true;
+        const { data: updatedContact, error: linkErr } = await supabase
+          .from("contacts")
+          .update({ customer_id: customerId })
+          .eq("id", contactId)
+          .select("customer_id")
+          .single();
+        if (!linkErr && updatedContact) {
+          customerId = (updatedContact as { customer_id: string | null }).customer_id ?? customerId;
+        }
+      }
+    }
+    // Re-select contact so we have the actual customer_id from DB (handles backfill or race)
+    if (customerId == null) {
+      const { data: contactRow } = await supabase
+        .from("contacts")
+        .select("customer_id")
+        .eq("id", contactId)
+        .single();
+      customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
+    }
+    console.log(
+      "[QUOTE_START] ensured_customer contact_id=%s customer_id=%s created_customer=%s",
+      contactId,
+      customerId ?? "null",
+      created_customer
+    );
+    if (!customerId) {
+      console.error("[QUOTE_START] Cannot create opportunity: customer_id is null for contact_id=", contactId);
+      return NextResponse.json(
+        { ok: false, message: "Customer required for opportunity" },
+        { status: 500 }
+      );
+    }
+
+    // 2) Pipeline + stage
 
     const { data: pipelines } = await supabase
       .from("pipelines")
@@ -341,16 +376,6 @@ export async function POST(request: NextRequest) {
       ...body.quote_context,
     };
     const quote_started_at = new Date().toISOString();
-
-    // Ensure we have customer_id (e.g. from contact if customer create failed or was set elsewhere)
-    if (!customerId) {
-      const { data: contactRow } = await supabase
-        .from("contacts")
-        .select("customer_id")
-        .eq("id", contactId)
-        .single();
-      customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
-    }
 
     // 4) Dedupe: reuse open "Quote Started" opportunity for this contact within 10 min
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -408,13 +433,7 @@ export async function POST(request: NextRequest) {
       }
       await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
     } else {
-      if (!customerId) {
-        console.error("[QUOTE_START] Cannot create opportunity: customer_id is null for contact_id=", contactId);
-        return NextResponse.json(
-          { ok: false, message: "Customer required for opportunity" },
-          { status: 500 }
-        );
-      }
+      // customerId is guaranteed non-null by ensure step above
       const estimatedPriceCents = quoteOutput.estimated_price != null ? Math.round(quoteOutput.estimated_price * 100) : null;
       const opportunityName =
         [first_name, last_name].filter(Boolean).join(" ").trim()
