@@ -1,17 +1,23 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import PrimaryButton from "@/components/PrimaryButton";
+import { useQuoteModal } from "@/lib/quoteModal";
 
 interface ServicePickerProps {
   variant?: "button" | "link";
   className?: string;
 }
 
+type ServiceAction = { type: "modal"; defaultService: "cleaning" } | { type: "href"; href: string };
+
+const services: { label: string; action: ServiceAction }[] = [
+  { label: "Home Cleaning", action: { type: "modal", defaultService: "cleaning" } },
+  { label: "Gutter Cleaning", action: { type: "href", href: "/gutters#quote-form" } },
+];
+
 export default function ServicePicker({ variant = "button", className = "" }: ServicePickerProps) {
-  const router = useRouter();
+  const { openModal } = useQuoteModal();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -32,16 +38,14 @@ export default function ServicePicker({ variant = "button", className = "" }: Se
     };
   }, [isOpen]);
 
-  const services = [
-    { href: "/book-v2", label: "Home Cleaning" },
-    { href: "/gutters#quote-form", label: "Gutter Cleaning" },
-  ];
-
-  const handleServiceClick = (href: string, e?: React.MouseEvent) => {
+  const handleServiceClick = (action: ServiceAction, e?: React.MouseEvent) => {
     e?.preventDefault();
     setIsOpen(false);
-    // Use window.location for full page navigation to ensure form state resets
-    window.location.href = href;
+    if (action.type === "modal") {
+      openModal({ defaultService: action.defaultService });
+    } else {
+      window.location.href = action.href;
+    }
   };
 
   if (variant === "link") {
@@ -67,8 +71,8 @@ export default function ServicePicker({ variant = "button", className = "" }: Se
           <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-alloy-stone/30 py-2 z-50">
             {services.map((service) => (
               <button
-                key={service.href}
-                onClick={() => handleServiceClick(service.href)}
+                key={service.label}
+                onClick={(e) => handleServiceClick(service.action, e)}
                 className="block w-full text-left px-4 py-2 text-sm text-alloy-midnight hover:bg-alloy-stone/50 transition-colors"
               >
                 {service.label}
@@ -104,8 +108,8 @@ export default function ServicePicker({ variant = "button", className = "" }: Se
         <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-alloy-stone/30 py-2 z-50">
           {services.map((service) => (
             <button
-              key={service.href}
-              onClick={() => handleServiceClick(service.href)}
+              key={service.label}
+              onClick={(e) => handleServiceClick(service.action, e)}
               className="block w-full text-left px-4 py-2 text-sm text-alloy-midnight hover:bg-alloy-stone/50 transition-colors"
             >
               {service.label}

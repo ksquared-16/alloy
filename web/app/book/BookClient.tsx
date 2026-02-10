@@ -1042,7 +1042,7 @@ export default function BookClient() {
                             To book a cleaning, please fill out the quote form first.
                         </p>
                         <a
-                            href="/book-v2"
+                            href="/services/cleaning?open=1#quote-form"
                             className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
                         >
                             Get a Quote

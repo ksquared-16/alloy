@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import Section from "@/components/Section";
-import PrimaryButton from "@/components/PrimaryButton";
 import Accordion from "@/components/Accordion";
+import GetQuoteButton from "@/components/GetQuoteButton";
+import { useQuoteModal } from "@/lib/quoteModal";
 
 export default function CleaningPage() {
-  const router = useRouter();
+  const { openModal } = useQuoteModal();
   const heroRef = useRef<HTMLDivElement>(null);
   const cleaningOptions = [
     {
@@ -98,23 +98,22 @@ export default function CleaningPage() {
     },
   ];
 
-  // Legacy cleaning quote links: redirect to canonical /book-v2
+  // Open quote modal when ?open=1 or #quote-form (no redirect)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash;
     const params = new URLSearchParams(window.location.search);
     const open = params.get("open");
     if (hash === "#quote-form" || open === "1") {
-      router.replace("/book-v2");
+      openModal({ defaultService: "cleaning" });
     }
-  }, [router]);
+  }, [openModal]);
 
-  // Reusable CTA: link to canonical quote flow
   const GetQuoteCTA = () => (
     <div className="flex justify-center mt-8">
-      <Link href="/book-v2" className="w-full md:w-auto inline-block">
-        <PrimaryButton className="w-full md:w-auto">Get a quote</PrimaryButton>
-      </Link>
+      <GetQuoteButton defaultService="cleaning" className="w-full md:w-auto">
+        Get a quote
+      </GetQuoteButton>
     </div>
   );
 
@@ -147,9 +146,9 @@ export default function CleaningPage() {
                   Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <Link href="/book-v2" className="w-full sm:w-auto inline-block">
-                    <PrimaryButton className="w-full sm:w-auto">Get a quote</PrimaryButton>
-                  </Link>
+                  <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
+                    Get a quote
+                  </GetQuoteButton>
                 </div>
               </div>
             </div>
@@ -157,7 +156,7 @@ export default function CleaningPage() {
         </div>
       </section>
 
-      {/* CTA to canonical quote flow on /book-v2 */}
+      {/* CTA opens quote modal (cleaning short form) */}
       <Section id="quote-form" className="pt-6 pb-0 bg-white">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-xl font-bold text-alloy-midnight mb-2">
@@ -166,9 +165,9 @@ export default function CleaningPage() {
           <p className="text-alloy-midnight/80 mb-4">
             Answer a few quick questions and we&apos;ll show you your price — then pick a time when you&apos;re ready.
           </p>
-          <Link href="/book-v2">
-            <PrimaryButton className="w-full md:w-auto">Get a quote</PrimaryButton>
-          </Link>
+          <GetQuoteButton defaultService="cleaning" className="w-full md:w-auto">
+            Get a quote
+          </GetQuoteButton>
         </div>
       </Section>
 
@@ -422,11 +421,9 @@ export default function CleaningPage() {
             Get your quote and pick a time in one place.
           </p>
           <div className="flex justify-center">
-            <Link href="/book-v2">
-              <PrimaryButton className="!bg-white !text-alloy-midnight hover:!bg-alloy-stone hover:!text-alloy-midnight">
-                Start my quote
-              </PrimaryButton>
-            </Link>
+            <GetQuoteButton defaultService="cleaning" className="!bg-white !text-alloy-midnight hover:!bg-alloy-stone hover:!text-alloy-midnight">
+              Start my quote
+            </GetQuoteButton>
           </div>
         </div>
       </Section>
