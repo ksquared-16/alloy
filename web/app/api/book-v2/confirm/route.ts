@@ -3,6 +3,34 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
+/** Get or create pipeline stage by name (for Booked). */
+async function getOrCreateBookedStage(
+    supabase: ReturnType<typeof createAdminClient>,
+    pipelineId: string
+): Promise<string | null> {
+    const { data: existing } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", pipelineId)
+        .ilike("name", "Booked")
+        .limit(1)
+        .maybeSingle();
+    if (existing?.id) return existing.id;
+    const { data: created, error } = await supabase
+        .from("pipeline_stages")
+        .insert({
+            pipeline_id: pipelineId,
+            name: "Booked",
+            position: 100,
+            show_in_funnel: true,
+            show_in_pie_chart: true,
+        })
+        .select("id")
+        .single();
+    if (error || !created) return null;
+    return created.id;
+}
+
 /**
  * Normalize frequency label to service_frequency_key
  */
@@ -86,6 +114,9 @@ export async function POST(request: NextRequest) {
             additional_notes,
             frequency_label = "One-time",
             booking_attempt_id = bookingAttemptId,
+            opportunity_id: opportunity_id_from_quote,
+            contact_id: contact_id_from_quote,
+            customer_id: customer_id_from_quote,
         } = body;
 
         const service_frequency_key = normalizeFrequencyKey(frequency_label);
@@ -121,15 +152,135 @@ export async function POST(request: NextRequest) {
 
         const supabase = createAdminClient();
 
+        const useQuoteIds =
+            !!(
+                opportunity_id_from_quote &&
+                contact_id_from_quote &&
+                customer_id_from_quote
+            );
+
+        let contactId!: string;
+        let customerId!: string;
+        let opportunityId!: string;
+        let verticalId!: string;
+        let jobDate!: string;
+        let jobTimeWindow!: string;
+
+        if (useQuoteIds) {
+            const { data: opp, error: oppVerifyErr } = await supabase
+                .from("opportunities")
+                .select("id, primary_contact_id, customer_id, vertical_id")
+                .eq("id", opportunity_id_from_quote)
+                .single();
+            if (oppVerifyErr || !opp || opp.primary_contact_id !== contact_id_from_quote || opp.customer_id !== customer_id_from_quote) {
+                return NextResponse.json(
+                    { ok: false, message: "Invalid or mismatched opportunity/contact/customer from quote", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 400 }
+                );
+            }
+            contactId = contact_id_from_quote;
+            customerId = customer_id_from_quote;
+            opportunityId = opportunity_id_from_quote;
+            verticalId = opp.vertical_id ?? "";
+            if (!verticalId) {
+                const { data: vert } = await supabase
+                    .from("verticals")
+                    .select("id")
+                    .eq("slug", "cleaning")
+                    .eq("is_active", true)
+                    .limit(1)
+                    .maybeSingle();
+                verticalId = vert?.id ?? "";
+            }
+            if (!verticalId) {
+                return NextResponse.json(
+                    { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
+            }
+
+            // Discount check (Step 2)
+            if (discount_code_id && customerId) {
+                const { data: existingRedemption, error: redemptionCheckError } = await supabase
+                    .from("discount_redemptions")
+                    .select("id")
+                    .eq("discount_code_id", discount_code_id)
+                    .eq("customer_id", customerId)
+                    .limit(1)
+                    .maybeSingle();
+                if (redemptionCheckError) {
+                    return NextResponse.json(
+                        { ok: false, message: "Failed to check discount usage", booking_attempt_id: booking_attempt_id ?? null },
+                        { status: 500 }
+                    );
+                }
+                if (existingRedemption) {
+                    return NextResponse.json(
+                        { ok: false, message: "That promo code has already been used for this customer.", reason: "discount_already_used", booking_attempt_id: booking_attempt_id ?? null },
+                        { status: 409 }
+                    );
+                }
+            }
+
+            const slotStartDateQ = new Date(slot_start);
+            const slotEndDateQ = new Date(slot_end);
+            jobDate = slotStartDateQ.toLocaleDateString("en-US", { timeZone: timezone });
+            jobTimeWindow = `${slotStartDateQ.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone, hour12: true })} - ${slotEndDateQ.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone, hour12: true })}`;
+            const estimatedPriceCents = quote_subtotal != null ? Math.round(quote_subtotal * 100) : null;
+
+            const { data: pipelines } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
+            const pipelineId = pipelines?.[0]?.id ?? null;
+            let bookedStageId: string | null = null;
+            if (pipelineId) bookedStageId = await getOrCreateBookedStage(supabase, pipelineId);
+
+            const oppUpdate: Record<string, unknown> = {
+                job_date: jobDate,
+                job_time_window: jobTimeWindow,
+                quote_subtotal: quote_subtotal ?? null,
+                discount_amount: discount_amount ?? null,
+                quote_total: quote_total ?? null,
+                estimated_price_cents: estimatedPriceCents,
+                monetary_value_cents: estimatedPriceCents,
+                metadata: {
+                    booking_source: "book-v2",
+                    booking_attempt_id: booking_attempt_id ?? undefined,
+                    timezone,
+                    address: address ?? null,
+                    city: city ?? null,
+                    bedrooms: bedrooms ?? null,
+                    bathrooms: bathrooms ?? null,
+                    access_method: access_method ?? null,
+                    access_note: access_note ?? null,
+                    additional_notes: additional_notes ?? null,
+                },
+            };
+            if (bookedStageId) oppUpdate.pipeline_stage_id = bookedStageId;
+            if (discount_code_id != null) {
+                (oppUpdate as Record<string, unknown>).discount_code_id = discount_code_id;
+                (oppUpdate as Record<string, unknown>).discount_code = discount_code ?? null;
+            }
+
+            const { error: oppUpdateError } = await supabase
+                .from("opportunities")
+                .update(oppUpdate)
+                .eq("id", opportunityId);
+            if (oppUpdateError) {
+                return NextResponse.json(
+                    { ok: false, message: "Failed to update opportunity", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
+            }
+            console.log(`[BOOK_V2_CONFIRM] Reused quote opportunity opportunity_id=${opportunityId} set to Booked`);
+        } else {
         // Parse dates
         const slotStartDate = new Date(slot_start);
         const slotEndDate = new Date(slot_end);
 
         // Format job_date and job_time_window in customer timezone
-        const jobDate = slotStartDate.toLocaleDateString("en-US", {
+        jobDate = slotStartDate.toLocaleDateString("en-US", {
             timeZone: timezone,
         });
-        const jobTimeWindow = `${slotStartDate.toLocaleTimeString("en-US", {
+        jobTimeWindow = `${slotStartDate.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
             timeZone: timezone,
@@ -142,9 +293,6 @@ export async function POST(request: NextRequest) {
         })}`;
 
         // Step 1: Resolve or create contact and customer (guaranteed linking)
-        let contactId: string;
-        let customerId: string;
-
         try {
             const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
                 first_name: contact_first_name,
@@ -254,7 +402,11 @@ export async function POST(request: NextRequest) {
                 ? existingOppRow
                 : null;
 
-        let opportunityId: string;
+        const { data: pipelinesForBooked } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
+        const pipelineIdForBooked = pipelinesForBooked?.[0]?.id ?? null;
+        let bookedStageIdElse: string | null = null;
+        if (pipelineIdForBooked) bookedStageIdElse = await getOrCreateBookedStage(supabase, pipelineIdForBooked);
+
         if (existingOpp) {
             opportunityId = existingOpp.id;
             console.log(`[BOOK_V2_CONFIRM] Found existing opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId} (reused)`);
@@ -280,6 +432,7 @@ export async function POST(request: NextRequest) {
                 primary_contact_id: contactId,
                 metadata: { ...existingMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
+            if (bookedStageIdElse) updatePayload.pipeline_stage_id = bookedStageIdElse;
             if (discount_code_id != null) {
                 updatePayload.discount_code_id = discount_code_id;
                 if (discount_code != null) updatePayload.discount_code = discount_code;
@@ -312,40 +465,42 @@ export async function POST(request: NextRequest) {
         } else {
             // Create new opportunity
             const estimatedPriceCents = quote_subtotal ? Math.round(quote_subtotal * 100) : null;
+            const insertPayload: Record<string, unknown> = {
+                vertical_id: verticalId,
+                primary_contact_id: contactId,
+                customer_id: customerId,
+                name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
+                status: "open",
+                source: "website",
+                job_date: jobDate,
+                job_time_window: jobTimeWindow,
+                quote_subtotal: quote_subtotal || null,
+                discount_amount: discount_amount ?? null,
+                quote_total: quote_total || null,
+                estimated_price_cents: estimatedPriceCents,
+                monetary_value_cents: estimatedPriceCents,
+                ...(discount_code_id != null && {
+                    discount_code_id,
+                    discount_code: discount_code ?? null,
+                    discount_amount: discount_amount ?? null,
+                }),
+                metadata: {
+                    booking_source: "book-v2",
+                    booking_attempt_id: booking_attempt_id ?? undefined,
+                    timezone,
+                    address: address || null,
+                    city: city || null,
+                    bedrooms: bedrooms || null,
+                    bathrooms: bathrooms || null,
+                    access_method: access_method || null,
+                    access_note: access_note || null,
+                    additional_notes: additional_notes || null,
+                },
+            };
+            if (bookedStageIdElse) insertPayload.pipeline_stage_id = bookedStageIdElse;
             const { data: newOpp, error: oppError } = await supabase
                 .from("opportunities")
-                .insert({
-                    vertical_id: verticalId,
-                    primary_contact_id: contactId,
-                    customer_id: customerId,
-                    name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
-                    status: "open",
-                    source: "website",
-                    job_date: jobDate,
-                    job_time_window: jobTimeWindow,
-                    quote_subtotal: quote_subtotal || null,
-                    discount_amount: discount_amount ?? null,
-                    quote_total: quote_total || null,
-                    estimated_price_cents: estimatedPriceCents,
-                    monetary_value_cents: estimatedPriceCents, // Set on create
-                    ...(discount_code_id != null && {
-                        discount_code_id,
-                        discount_code: discount_code ?? null,
-                        discount_amount: discount_amount ?? null,
-                    }),
-                    metadata: {
-                        booking_source: "book-v2",
-                        booking_attempt_id: booking_attempt_id ?? undefined,
-                        timezone,
-                        address: address || null,
-                        city: city || null,
-                        bedrooms: bedrooms || null,
-                        bathrooms: bathrooms || null,
-                        access_method: access_method || null,
-                        access_note: access_note || null,
-                        additional_notes: additional_notes || null,
-                    },
-                })
+                .insert(insertPayload)
                 .select("id")
                 .single();
 
@@ -360,6 +515,7 @@ export async function POST(request: NextRequest) {
             opportunityId = newOpp.id;
             console.log(`[BOOK_V2_CONFIRM] Created new opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId}`);
         }
+        } // end else (!useQuoteIds)
 
         // Step 5: Create or update job
         // Reuse only if existing job has same booking_attempt_id (idempotent retry). Otherwise create new.

@@ -30,7 +30,7 @@ interface DiscountData {
     quote_total: number;
 }
 
-type BookingStep = "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
+type BookingStep = "quote_start" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
 
 /**
  * Normalizes quote data and sets defaults for one-time bookings
@@ -88,7 +88,7 @@ export default function BookV2Client() {
     const searchParams = useSearchParams();
     const [quote, setQuote] = useState<QuoteResponse | null>(null);
     const [hasQuote, setHasQuote] = useState(false);
-    const [currentStep, setCurrentStep] = useState<BookingStep>("slot_selection");
+    const [currentStep, setCurrentStep] = useState<BookingStep>("quote_start");
     const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
     const [slotConfirmed, setSlotConfirmed] = useState(false);
     const [serviceDetails, setServiceDetails] = useState<ServiceDetails | null>(null);
@@ -118,6 +118,18 @@ export default function BookV2Client() {
     const [postalCode, setPostalCode] = useState<string>("");
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
+
+    // Quote-start (first step) form state
+    const [quoteStartForm, setQuoteStartForm] = useState({
+        zip: "",
+        home_type: "",
+        square_footage: "",
+        cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
+        email: "",
+        phone: "",
+    });
+    const [quoteStartSubmitting, setQuoteStartSubmitting] = useState(false);
+    const [quoteStartError, setQuoteStartError] = useState<string | null>(null);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -236,6 +248,17 @@ export default function BookV2Client() {
         setResolvedLastName(null);
     }, [debug, searchParams]);
 
+    // Prefill quote-start form with resolved email/phone when they become available
+    useEffect(() => {
+        if (resolvedEmail || resolvedPhone) {
+            setQuoteStartForm((f) => ({
+                ...f,
+                ...(resolvedEmail && { email: resolvedEmail }),
+                ...(resolvedPhone && { phone: resolvedPhone }),
+            }));
+        }
+    }, [resolvedEmail, resolvedPhone]);
+
     // Load quote from storage
     useEffect(() => {
         if (debug) {
@@ -276,6 +299,7 @@ export default function BookV2Client() {
                     if (ready) {
                         setCurrentStep("slot_selection");
                     } else {
+                        setCurrentStep("quote_start");
                         console.warn("[BOOK_V2] Quote loaded but not ready - missing required fields:", missingFields);
                         console.warn("[BOOK_V2] Normalized quote object:", JSON.stringify(normalizedQuote, null, 2));
                     }
@@ -420,6 +444,72 @@ export default function BookV2Client() {
             }
         }
     }, [serviceDetails, serviceDetailsConfirmed, serviceDetailsSnapshot]);
+
+    const handleQuoteStartSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const { zip, home_type, square_footage, cleaning_frequency, email, phone } = quoteStartForm;
+        if (!zip.trim()) {
+            setQuoteStartError("ZIP code is required");
+            return;
+        }
+        if (!email?.trim() && !phone?.trim()) {
+            setQuoteStartError("Please enter your email or phone so we can save your quote.");
+            return;
+        }
+        setQuoteStartSubmitting(true);
+        setQuoteStartError(null);
+        try {
+            const sqftNum = square_footage ? parseInt(String(square_footage), 10) : undefined;
+            const res = await fetch("/api/book-v2/quote-start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    zip: zip.trim(),
+                    home_type: home_type || undefined,
+                    square_footage: sqftNum && !Number.isNaN(sqftNum) ? sqftNum : undefined,
+                    cleaning_frequency: cleaning_frequency || "one_time",
+                    email: email?.trim() || undefined,
+                    phone: phone?.trim() || undefined,
+                    quote_context: { home_type, square_footage },
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                setQuoteStartError(data.message || "Could not save your quote. Please try again.");
+                return;
+            }
+            try {
+                if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
+                if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
+                if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+            } catch (e) {
+                console.warn("localStorage set failed:", e);
+            }
+            const qo = data.quote_output;
+            const storedQuote: QuoteResponse = {
+                status: "ready",
+                source: "local_pricing",
+                estimated_price: qo?.estimated_price ?? undefined,
+                first_clean_price: qo?.first_clean_price ?? qo?.estimated_price ?? undefined,
+                recurring_price: qo?.recurring_price ?? undefined,
+                frequency_label: qo?.frequency_label ?? "One-time",
+                service: "Standard Cleaning",
+                price_breakdown: undefined,
+                addons: [],
+            };
+            const quoteJson = JSON.stringify(storedQuote);
+            localStorage.setItem("alloy_quote_v1", quoteJson);
+            sessionStorage.setItem("alloy_quote_v1", quoteJson);
+            setQuote(normalizeQuote(storedQuote));
+            setHasQuote(true);
+            setCurrentStep("slot_selection");
+        } catch (err) {
+            console.error("Quote start failed:", err);
+            setQuoteStartError("Something went wrong. Please try again.");
+        } finally {
+            setQuoteStartSubmitting(false);
+        }
+    };
 
     const handleSelectSlot = (slot: TimeSlot) => {
         setSelectedSlot(slot);
@@ -663,34 +753,45 @@ export default function BookV2Client() {
             if (process.env.NODE_ENV !== "production") {
                 console.log("[BOOK_V2_FLOW] about_to_call_confirm booking_attempt_id=", attemptId);
             }
+            const storedContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
+            const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
+            const storedOpportunityId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
+
+            const confirmPayload: Record<string, unknown> = {
+                slot_start: selectedSlot.isoStart,
+                slot_end: selectedSlot.isoEnd,
+                timezone: timezone,
+                quote_subtotal: quoteSubtotal,
+                discount_amount: discountData?.discount_amount ?? 0,
+                quote_total: discountData?.quote_total ?? quoteSubtotal,
+                discount_code_id: discountData?.discount_code_id ?? null,
+                discount_code: (discountData?.code ?? discountCode.trim()) || null,
+                contact_email: resolvedEmail || prefillData.email,
+                contact_phone: resolvedPhone || prefillData.phone,
+                contact_first_name: resolvedFirstName || prefillData.first_name,
+                contact_last_name: resolvedLastName || prefillData.last_name,
+                address: serviceDetails.address,
+                city: serviceDetails.city,
+                bedrooms: serviceDetails.bedrooms,
+                bathrooms: serviceDetails.bathrooms,
+                access_method: serviceDetails.access_method,
+                access_note: serviceDetails.access_note,
+                additional_notes: serviceDetails.additional_notes,
+                frequency_label: quote?.frequency_label || "One-time",
+                booking_attempt_id: attemptId,
+            };
+            if (storedOpportunityId && storedContactId && storedCustomerId) {
+                confirmPayload.opportunity_id = storedOpportunityId;
+                confirmPayload.contact_id = storedContactId;
+                confirmPayload.customer_id = storedCustomerId;
+            }
+
             const bookingResponse = await fetch("/api/book-v2/confirm", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    slot_start: selectedSlot.isoStart,
-                    slot_end: selectedSlot.isoEnd,
-                    timezone: timezone,
-                    quote_subtotal: quoteSubtotal,
-                    discount_amount: discountData?.discount_amount ?? 0,
-                    quote_total: discountData?.quote_total ?? quoteSubtotal,
-                    discount_code_id: discountData?.discount_code_id ?? null,
-                    discount_code: (discountData?.code ?? discountCode.trim()) || null,
-                    contact_email: resolvedEmail || prefillData.email,
-                    contact_phone: resolvedPhone || prefillData.phone,
-                    contact_first_name: resolvedFirstName || prefillData.first_name,
-                    contact_last_name: resolvedLastName || prefillData.last_name,
-                    address: serviceDetails.address,
-                    city: serviceDetails.city,
-                    bedrooms: serviceDetails.bedrooms,
-                    bathrooms: serviceDetails.bathrooms,
-                    access_method: serviceDetails.access_method,
-                    access_note: serviceDetails.access_note,
-                    additional_notes: serviceDetails.additional_notes,
-                    frequency_label: quote?.frequency_label || "One-time",
-                    booking_attempt_id: attemptId,
-                }),
+                body: JSON.stringify(confirmPayload),
             });
 
             const rawBody = await bookingResponse.text();
@@ -768,14 +869,105 @@ export default function BookV2Client() {
     return (
         <div className="min-h-screen py-6 md:py-10">
             <Section className="max-w-7xl">
-                {/* Fallback message if no quote found */}
-                {!hasQuote && !debug && (
+                {/* Step 1: Get a quote in 30 seconds (no quote yet) */}
+                {currentStep === "quote_start" && !debug && (
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-lg">
+                        <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
+                            Get a quote in 30 seconds
+                        </h2>
+                        <p className="text-sm text-alloy-midnight/80 mb-6">
+                            We’ll calculate your price and save it so you can book when you’re ready.
+                        </p>
+                        <form onSubmit={handleQuoteStartSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">ZIP code *</label>
+                                <input
+                                    type="text"
+                                    value={quoteStartForm.zip}
+                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, zip: e.target.value }))}
+                                    placeholder="e.g. 97702"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                    maxLength={10}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Home type</label>
+                                <select
+                                    value={quoteStartForm.home_type}
+                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, home_type: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                >
+                                    <option value="">Select</option>
+                                    <option value="Single-Family Home">Single-Family Home</option>
+                                    <option value="Apartment / Condo">Apartment / Condo</option>
+                                    <option value="Townhome">Townhome</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={quoteStartForm.square_footage}
+                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, square_footage: e.target.value }))}
+                                    placeholder="e.g. 2000"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Cleaning frequency</label>
+                                <select
+                                    value={quoteStartForm.cleaning_frequency}
+                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly" }))}
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                >
+                                    <option value="one_time">One-time</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="biweekly">Every 2 weeks</option>
+                                    <option value="monthly">Monthly</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email (so we can save your quote)</label>
+                                <input
+                                    type="email"
+                                    value={quoteStartForm.email}
+                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, email: e.target.value }))}
+                                    placeholder="you@example.com"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone (optional)</label>
+                                <input
+                                    type="tel"
+                                    value={quoteStartForm.phone}
+                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, phone: e.target.value }))}
+                                    placeholder="(541) 555-0123"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                />
+                            </div>
+                            {quoteStartError && <p className="text-sm text-red-600">{quoteStartError}</p>}
+                            <button
+                                type="submit"
+                                disabled={quoteStartSubmitting}
+                                className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50"
+                            >
+                                {quoteStartSubmitting ? "Saving…" : "Get my quote"}
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* Fallback message if no quote and not on quote_start step */}
+                {!hasQuote && !debug && currentStep !== "quote_start" && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 text-center">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
                             Please start your quote first
                         </h2>
                         <p className="text-sm text-alloy-midnight/80 mb-6">
-                            To book a cleaning, please fill out the quote form first.
+                            To book a cleaning, please fill out the quote form above or on our services page.
                         </p>
                         <a
                             href="/services/cleaning?open=1#quote-form"
