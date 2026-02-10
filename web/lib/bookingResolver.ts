@@ -75,6 +75,8 @@ export async function resolve_or_create_contact_and_customer(
     city?: string;
     state?: string;
     vertical_key?: string;
+    /** When set, customers.vertical_id is set on create and backfilled if null */
+    vertical_id?: string | null;
   }
 ): Promise<ContactCustomerResult> {
   const {
@@ -88,6 +90,7 @@ export async function resolve_or_create_contact_and_customer(
     city,
     state,
     vertical_key = "cleaning",
+    vertical_id: verticalIdParam,
   } = params;
 
   // Normalize inputs
@@ -278,6 +281,7 @@ export async function resolve_or_create_contact_and_customer(
         last_name: existingContact.last_name || last_name,
         email: normalizedEmail,
         phone: normalizedPhone,
+        vertical_id: verticalIdParam ?? undefined,
       });
       customerResolutionPath = "created_for_existing_contact";
     }
@@ -337,6 +341,7 @@ export async function resolve_or_create_contact_and_customer(
                 last_name,
                 email: normalizedEmail,
                 phone: normalizedPhone,
+                vertical_id: verticalIdParam ?? undefined,
               });
               customerResolutionPath = "created_for_new_contact";
             }
@@ -360,6 +365,7 @@ export async function resolve_or_create_contact_and_customer(
         last_name,
         email: normalizedEmail,
         phone: normalizedPhone,
+        vertical_id: verticalIdParam ?? undefined,
       });
       customerResolutionPath = "created_for_new_contact";
     } else {
@@ -367,7 +373,27 @@ export async function resolve_or_create_contact_and_customer(
     }
   }
 
-  // Step 4: Verify customer.primary_contact_id is set
+  // Step 4: Set or backfill customers.vertical_id from opportunity vertical
+  if (verticalIdParam) {
+    const { data: custRow, error: custErr } = await supabase
+      .from("customers")
+      .select("vertical_id")
+      .eq("id", customerId)
+      .single();
+    if (!custErr && custRow && custRow.vertical_id == null) {
+      const { error: backfillErr } = await supabase
+        .from("customers")
+        .update({ vertical_id: verticalIdParam })
+        .eq("id", customerId);
+      if (backfillErr) {
+        console.error(`[BOOKING_RESOLVER] Failed to backfill customers.vertical_id: ${backfillErr.message}`);
+      } else {
+        console.log(`[BOOKING_RESOLVER] Backfilled customers.vertical_id: customer_id=${customerId}`);
+      }
+    }
+  }
+
+  // Step 5: Verify customer.primary_contact_id is set
   const { data: customerCheck, error: customerCheckError } = await supabase
     .from("customers")
     .select("primary_contact_id")
@@ -413,9 +439,10 @@ async function createAndLinkCustomer(
     last_name?: string;
     email: string;
     phone: string;
+    vertical_id?: string | null;
   }
 ): Promise<string> {
-  const { first_name, last_name, email, phone } = params;
+  const { first_name, last_name, email, phone, vertical_id } = params;
 
   // Determine customer name with safe fallback
   let customerName: string;
@@ -437,6 +464,9 @@ async function createAndLinkCustomer(
     email: email || null,
     phone: phone || null,
   };
+  if (vertical_id) {
+    customerPayload.vertical_id = vertical_id;
+  }
 
   const { data: newCustomer, error: customerError } = await supabase
     .from("customers")

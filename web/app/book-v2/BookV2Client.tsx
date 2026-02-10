@@ -119,6 +119,27 @@ const ADDON_IDS = [
 ] as const;
 type AddOnId = (typeof ADDON_IDS)[number];
 
+/** Map API frequency key to DB frequency_key (pricing_frequencies) for label lookup */
+const REFINE_FREQ_TO_DB_KEY: Record<"one_time" | "weekly" | "biweekly" | "monthly", string | null> = {
+  one_time: null,
+  weekly: "Weekly (30% Off)",
+  biweekly: "Bi-Weekly (20% Off)",
+  monthly: "Monthly (10% Off)",
+};
+
+function getFrequencyDisplayLabel(
+  freq: "one_time" | "weekly" | "biweekly" | "monthly",
+  availableFrequencies: Array<{ frequency_key: string; frequency_label: string; discount_label: string | null }> | null
+): string {
+  if (freq === "one_time") return "One-time";
+  const dbKey = REFINE_FREQ_TO_DB_KEY[freq];
+  const row = availableFrequencies?.find((f) => f.frequency_key === dbKey);
+  if (row) {
+    return row.discount_label ? `${row.frequency_label} — ${row.discount_label}` : row.frequency_label;
+  }
+  return freq === "weekly" ? "Weekly" : freq === "biweekly" ? "Bi-Weekly" : "Monthly";
+}
+
 /**
  * Fire-and-forget: create contact/opportunity via quote-start when user lands with
  * prefill (e.g. query params) so we don't lose quote-only leads. Does not block UI.
@@ -249,6 +270,8 @@ export default function BookV2Client() {
     const [stepBeforeRefine, setStepBeforeRefine] = useState<BookingStep | null>(null);
     /** Add-on pricing from DB (addon_types + pricing_addons), cached from quote-refine response */
     const [availableAddons, setAvailableAddons] = useState<Array<{ id: string; label: string; price: number }> | null>(null);
+    /** Frequency options from pricing_frequencies (frequency_label + discount_label for display) */
+    const [availableFrequencies, setAvailableFrequencies] = useState<Array<{ frequency_key: string; frequency_label: string; discount_label: string | null; is_recurring: boolean }> | null>(null);
     const refineDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refineRequestIdRef = useRef(0);
 
@@ -682,6 +705,9 @@ export default function BookV2Client() {
                 if (Array.isArray(data.available_addons)) {
                     setAvailableAddons(data.available_addons);
                 }
+                if (Array.isArray(data.available_frequencies)) {
+                    setAvailableFrequencies(data.available_frequencies);
+                }
                 const qo = data.quote_output;
                 const addonsForStore = Array.isArray(qo?.addons)
                     ? (qo.addons as Array<{ id?: string; label?: string; price?: number }>).map((a) => ({
@@ -696,6 +722,7 @@ export default function BookV2Client() {
                     first_clean_price: qo?.first_clean_price ?? qo?.estimated_price ?? quote?.first_clean_price,
                     recurring_price: qo?.recurring_price ?? undefined,
                     frequency_label: qo?.frequency_label ?? quote?.frequency_label ?? "One-time",
+                    discount_label: (qo as { discount_label?: string | null })?.discount_label ?? quote?.discount_label ?? undefined,
                     addons: addonsForStore,
                     addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
                 };
@@ -1121,6 +1148,8 @@ export default function BookV2Client() {
                 access_note: serviceDetails.access_note,
                 additional_notes: serviceDetails.additional_notes,
                 frequency_label: quote?.frequency_label || "One-time",
+                first_clean_price: typeof quote?.first_clean_price === "number" ? quote.first_clean_price : undefined,
+                recurring_price: typeof quote?.recurring_price === "number" ? quote.recurring_price : undefined,
                 booking_attempt_id: attemptId,
             };
             if (storedOpportunityId && storedContactId && storedCustomerId) {
@@ -1352,7 +1381,9 @@ export default function BookV2Client() {
                             </div>
                             {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label && (
                                 <div className="flex items-baseline justify-between pt-1">
-                                    <span className="text-alloy-midnight">Recurring ({quote.frequency_label})</span>
+                                    <span className="text-alloy-midnight">
+                                        Recurring ({quote.discount_label ? `${quote.frequency_label} — ${quote.discount_label}` : quote.frequency_label})
+                                    </span>
                                     <span className="font-bold text-alloy-juniper">
                                         ${quote.recurring_price.toFixed(2)}/visit
                                     </span>
@@ -1376,7 +1407,7 @@ export default function BookV2Client() {
                                                 : "bg-alloy-stone/20 text-alloy-midnight hover:bg-alloy-stone/30"
                                         } disabled:opacity-50`}
                                     >
-                                        {freq === "one_time" ? "One-time" : freq === "weekly" ? "Weekly" : freq === "biweekly" ? "Every 2 weeks" : "Monthly"}
+                                        {getFrequencyDisplayLabel(freq, availableFrequencies)}
                                     </button>
                                 ))}
                             </div>

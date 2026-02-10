@@ -86,6 +86,8 @@ function normalizeFrequencyKey(frequencyLabel: string | null | undefined): strin
  * - access_note: string (optional)
  * - additional_notes: string (optional)
  * - frequency_label: string (optional, defaults to "One-time")
+ * - first_clean_price: number (optional; used for jobs.estimated_total_cents when provided)
+ * - recurring_price: number (optional; used for jobs.recurring_total_cents when recurring)
  */
 export async function POST(request: NextRequest) {
     let bookingAttemptId: string | null = null;
@@ -113,6 +115,8 @@ export async function POST(request: NextRequest) {
             access_note,
             additional_notes,
             frequency_label = "One-time",
+            first_clean_price,
+            recurring_price,
             booking_attempt_id = bookingAttemptId,
             opportunity_id: opportunity_id_from_quote,
             contact_id: contact_id_from_quote,
@@ -120,6 +124,13 @@ export async function POST(request: NextRequest) {
         } = body;
 
         const service_frequency_key = normalizeFrequencyKey(frequency_label);
+        const is_recurring = service_frequency_key !== "one_time";
+        const firstCleanCents = typeof first_clean_price === "number" && first_clean_price > 0
+            ? Math.round(first_clean_price * 100)
+            : null;
+        const recurringCents = is_recurring && typeof recurring_price === "number" && recurring_price > 0
+            ? Math.round(recurring_price * 100)
+            : null;
         console.log(
             "[BOOK_V2_CONFIRM_START] booking_attempt_id=%s email=%s phone=%s slot_start=%s slot_end=%s frequency_label=%s service_frequency_key=%s discount_code_id=%s discount_code=%s discount_amount=%s",
             booking_attempt_id ?? "None",
@@ -197,6 +208,12 @@ export async function POST(request: NextRequest) {
                     { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
+            }
+
+            // Backfill customer.vertical_id when reusing quote (customer may have been created before we set vertical_id)
+            const { data: custRow } = await supabase.from("customers").select("vertical_id").eq("id", customerId).single();
+            if (custRow && custRow.vertical_id == null) {
+                await supabase.from("customers").update({ vertical_id: verticalId }).eq("id", customerId);
             }
 
             // Discount check (Step 2)
@@ -292,7 +309,24 @@ export async function POST(request: NextRequest) {
             hour12: true,
         })}`;
 
-        // Step 1: Resolve or create contact and customer (guaranteed linking)
+        // Get vertical_id first so we can pass it to resolver (customer.vertical_id set/backfill)
+        const { data: verticalElse, error: verticalElseError } = await supabase
+            .from("verticals")
+            .select("id")
+            .eq("slug", "cleaning")
+            .eq("is_active", true)
+            .limit(1)
+            .maybeSingle();
+        if (verticalElseError || !verticalElse?.id) {
+            console.error("[BOOK_V2_CONFIRM] Vertical 'cleaning' not found (else branch)", verticalElseError);
+            return NextResponse.json(
+                { ok: false, message: "Service not available", booking_attempt_id: booking_attempt_id ?? null },
+                { status: 500 }
+            );
+        }
+        const verticalIdElse = verticalElse.id;
+
+        // Step 1: Resolve or create contact and customer (guaranteed linking); set/backfill customer.vertical_id
         try {
             const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
                 first_name: contact_first_name,
@@ -305,6 +339,7 @@ export async function POST(request: NextRequest) {
                 city: city,
                 state: undefined, // Not provided in booking flow
                 vertical_key: "cleaning",
+                vertical_id: verticalIdElse,
             });
 
             contactId = resolverResult.contact_id;
@@ -347,32 +382,8 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Step 3: Get vertical_id for "cleaning"
-        const { data: vertical, error: verticalError } = await supabase
-            .from("verticals")
-            .select("id")
-            .eq("slug", "cleaning")
-            .eq("is_active", true)
-            .limit(1)
-            .maybeSingle();
-
-        if (verticalError) {
-            console.error("[BOOK_V2_CONFIRM] Error fetching vertical booking_attempt_id=", booking_attempt_id, verticalError);
-            return NextResponse.json(
-                { ok: false, message: "Failed to fetch service", booking_attempt_id: booking_attempt_id ?? null },
-                { status: 500 }
-            );
-        }
-
-        if (!vertical) {
-            console.error("[BOOK_V2_CONFIRM] Vertical 'cleaning' not found booking_attempt_id=", booking_attempt_id);
-            return NextResponse.json(
-                { ok: false, message: "Service not available", booking_attempt_id: booking_attempt_id ?? null },
-                { status: 500 }
-            );
-        }
-
-        const verticalId = vertical.id;
+        // Step 3: Use vertical_id we already fetched (else branch)
+        const verticalId = verticalIdElse;
 
         // Step 4: Find or create opportunity
         // Reuse only if existing opportunity has same booking_attempt_id (idempotent retry). Otherwise create new.
@@ -561,6 +572,9 @@ export async function POST(request: NextRequest) {
                 scheduled_at: slot_start,
                 customer_id: customerId,
                 primary_contact_id: contactId,
+                is_recurring: is_recurring,
+                service_key: "cleaning",
+                service_frequency_key: service_frequency_key,
                 metadata: {
                     ...jobMeta,
                     booking_attempt_id: booking_attempt_id ?? undefined,
@@ -580,19 +594,18 @@ export async function POST(request: NextRequest) {
                 jobUpdatePayload.vertical_id = verticalId;
             }
 
-            // Backfill pricing if missing
-            if (quoteTotalCents) {
+            // Pricing: first clean only for estimated_total_cents; recurring_total_cents when recurring
+            const effectiveFirstCleanCents = firstCleanCents ?? quoteTotalCents;
+            if (effectiveFirstCleanCents != null) {
                 if (!existingJobData?.estimated_total_cents) {
-                    jobUpdatePayload.estimated_total_cents = quoteTotalCents;
+                    jobUpdatePayload.estimated_total_cents = effectiveFirstCleanCents;
                 }
                 if (!existingJobData?.gross_price_cents) {
-                    jobUpdatePayload.gross_price_cents = quoteTotalCents;
+                    jobUpdatePayload.gross_price_cents = effectiveFirstCleanCents;
                 }
             }
-            
-            // Backfill service_frequency_key if missing
+            jobUpdatePayload.recurring_total_cents = is_recurring ? recurringCents : null;
             if (!existingJobData?.service_frequency_key) {
-                jobUpdatePayload.service_frequency_key = service_frequency_key;
                 console.log(`[BOOK_V2_CONFIRM] Backfilled job.service_frequency_key=${service_frequency_key} job_id=${jobId}`);
             }
 
@@ -611,6 +624,7 @@ export async function POST(request: NextRequest) {
         } else {
             // Create new job
             const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
+            const effectiveFirstCleanCents = firstCleanCents ?? quoteTotalCents;
             const jobPayload: Record<string, any> = {
                 opportunity_id: opportunityId,
                 customer_id: customerId,
@@ -619,6 +633,12 @@ export async function POST(request: NextRequest) {
                 title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 description: `Scheduled cleaning service`,
                 scheduled_at: slot_start,
+                is_recurring: is_recurring,
+                service_key: "cleaning",
+                service_frequency_key: service_frequency_key,
+                estimated_total_cents: effectiveFirstCleanCents,
+                recurring_total_cents: is_recurring ? recurringCents : null,
+                ...(effectiveFirstCleanCents != null && { gross_price_cents: effectiveFirstCleanCents }),
                 ...(discount_code_id != null && {
                     discounted: true,
                     discount_code_id,
@@ -643,14 +663,6 @@ export async function POST(request: NextRequest) {
                     additional_notes: additional_notes || null,
                 },
             };
-
-            // Set pricing fields
-            if (quoteTotalCents) {
-                jobPayload.estimated_total_cents = quoteTotalCents;
-                jobPayload.gross_price_cents = quoteTotalCents;
-            }
-            
-            jobPayload.service_frequency_key = service_frequency_key;
 
             const { data: newJob, error: jobError } = await supabase
                 .from("jobs")

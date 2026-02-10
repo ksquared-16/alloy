@@ -152,6 +152,30 @@ async function loadCleaningAddonsFromDb(
   return { available_addons, addonPriceMap };
 }
 
+/** Row from pricing_frequencies (source of truth for frequency display) */
+export type PricingFrequencyRow = {
+  frequency_key: string;
+  frequency_label: string;
+  discount_label: string | null;
+  is_recurring: boolean;
+};
+
+/** Load pricing_frequencies for a vertical (frequency_label + discount_label for UI) */
+async function loadPricingFrequencies(
+  supabase: ReturnType<typeof createAdminClient>,
+  verticalId: string
+): Promise<PricingFrequencyRow[]> {
+  const { data, error } = await supabase
+    .from("pricing_frequencies")
+    .select("frequency_key, frequency_label, discount_label, is_recurring")
+    .eq("vertical_id", verticalId);
+  if (error) {
+    console.warn("[QUOTE_REFINE] pricing_frequencies query failed (optional):", error.message);
+    return [];
+  }
+  return (data ?? []) as PricingFrequencyRow[];
+}
+
 /** Build addons list and total from selected addon_key list and DB price map */
 function buildAddonsFromDb(
   selectedKeys: string[],
@@ -183,6 +207,7 @@ async function computeQuote(
   first_clean_price: number | null;
   recurring_price: number | null;
   frequency_label: string;
+  discount_label: string | null;
   addons: Array<{ id: string; label: string; price: number }>;
   addons_total: number;
 }> {
@@ -207,6 +232,7 @@ async function computeQuote(
       first_clean_price: firstClean,
       recurring_price: frequencyOption !== "One-time" ? 120 : null,
       frequency_label: frequencyOption === "One-time" ? "One-time" : frequencyOption,
+      discount_label: null,
       addons,
       addons_total,
     };
@@ -221,6 +247,7 @@ async function computeQuote(
       first_clean_price: firstClean,
       recurring_price: null,
       frequency_label: "One-time",
+      discount_label: null,
       addons,
       addons_total,
     };
@@ -243,6 +270,7 @@ async function computeQuote(
     first_clean_price: firstCleanPrice,
     recurring_price: recurringPrice,
     frequency_label: frequencyLabel,
+    discount_label: null,
     addons,
     addons_total,
   };
@@ -267,11 +295,16 @@ export async function POST(request: NextRequest) {
     let verticalId: string;
     let dbAvailableAddons: DbAddon[];
     let addonPriceMap: Record<string, { label: string; price: number }>;
+    let pricingFrequencies: PricingFrequencyRow[] = [];
     try {
       verticalId = await resolveVerticalId(supabase, body.vertical_id);
-      const loaded = await loadCleaningAddonsFromDb(supabase, verticalId);
+      const [loaded, freqs] = await Promise.all([
+        loadCleaningAddonsFromDb(supabase, verticalId),
+        loadPricingFrequencies(supabase, verticalId),
+      ]);
       dbAvailableAddons = loaded.available_addons;
       addonPriceMap = loaded.addonPriceMap;
+      pricingFrequencies = freqs;
     } catch (loadErr) {
       const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
       console.error("[QUOTE_REFINE] load add-ons failed:", msg);
@@ -285,13 +318,23 @@ export async function POST(request: NextRequest) {
     const frequencyOption = mapApiFrequencyToOption(body.cleaning_frequency ?? "one_time");
     const selectedKeys = normalizeAddOnKeys(body.add_ons ?? []);
 
-    const quoteOutput = await computeQuote(
+    let quoteOutput = await computeQuote(
       supabase,
       squareFootageOption,
       frequencyOption,
       selectedKeys,
       addonPriceMap
     );
+
+    const freqByKey = new Map(pricingFrequencies.map((f) => [f.frequency_key, f]));
+    const dbFreq = freqByKey.get(frequencyOption);
+    if (dbFreq) {
+      quoteOutput = {
+        ...quoteOutput,
+        frequency_label: dbFreq.frequency_label,
+        discount_label: dbFreq.discount_label ?? null,
+      };
+    }
 
     console.log(
       "[QUOTE_REFINE] addons_loaded=%s selected=%s addons_total=%s",
@@ -335,11 +378,18 @@ export async function POST(request: NextRequest) {
     }
 
     const available_addons = dbAvailableAddons.map((a) => ({ id: a.key, label: a.label, price: a.price }));
+    const available_frequencies = pricingFrequencies.map((f) => ({
+      frequency_key: f.frequency_key,
+      frequency_label: f.frequency_label,
+      discount_label: f.discount_label ?? null,
+      is_recurring: f.is_recurring,
+    }));
 
     return NextResponse.json({
       ok: true,
       quote_output: quoteOutput,
       available_addons,
+      available_frequencies,
     });
   } catch (err) {
     console.error("[QUOTE_REFINE_ERROR]", err);
