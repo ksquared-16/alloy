@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabaseAdmin";
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
 import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
@@ -66,7 +66,7 @@ function mapApiFrequencyToOption(
  * Get or create pipeline stage by name for a pipeline.
  */
 async function getOrCreateStage(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   pipelineId: string,
   stageName: string,
   position: number
@@ -104,7 +104,7 @@ async function getOrCreateStage(
  * Compute initial quote using Supabase RPC (admin client).
  */
 async function computeQuote(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   squareFootageOption: SquareFootageOption,
   frequencyOption: CleaningFrequencyOption,
   addOns: AddOnId[] = []
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     const cleaning_frequency = mapApiFrequencyToOption(body.cleaning_frequency);
     const squareFootageOption = normalizeSquareFootageInput(square_footage_raw);
 
-    const supabase = createAdminClient();
+    const supabase = createServiceRoleClient();
 
     // 1) Upsert contact: find by email if email, else by phone
     let contactId: string;
@@ -264,7 +264,11 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (contactError || !newContact) {
-        console.error("[QUOTE_START] Contact insert failed:", contactError);
+        console.error(
+          "[QUOTE_START] Contact insert failed code=%s message=%s",
+          (contactError as { code?: string })?.code ?? "unknown",
+          contactError?.message ?? "no data"
+        );
         return NextResponse.json(
           { ok: false, message: "Failed to create contact" },
           { status: 500 }
@@ -313,7 +317,14 @@ export async function POST(request: NextRequest) {
         .select("id")
         .single();
 
-      if (!customerError && newCustomer) {
+      if (customerError) {
+        console.error(
+          "[QUOTE_START] Customer insert failed contact_id=%s code=%s message=%s",
+          contactId,
+          (customerError as { code?: string })?.code ?? "unknown",
+          customerError.message
+        );
+      } else if (newCustomer) {
         customerId = newCustomer.id;
         created_customer = true;
         const { data: updatedContact, error: linkErr } = await supabase
@@ -322,18 +333,34 @@ export async function POST(request: NextRequest) {
           .eq("id", contactId)
           .select("customer_id")
           .single();
-        if (!linkErr && updatedContact) {
+        if (linkErr) {
+          console.error(
+            "[QUOTE_START] Contact customer_id update failed contact_id=%s customer_id=%s code=%s message=%s",
+            contactId,
+            customerId,
+            (linkErr as { code?: string })?.code ?? "unknown",
+            linkErr.message
+          );
+        } else if (updatedContact) {
           customerId = (updatedContact as { customer_id: string | null }).customer_id ?? customerId;
         }
       }
     }
     // Re-select contact so we have the actual customer_id from DB (handles backfill or race)
     if (customerId == null) {
-      const { data: contactRow } = await supabase
+      const { data: contactRow, error: selectErr } = await supabase
         .from("contacts")
         .select("customer_id")
         .eq("id", contactId)
         .single();
+      if (selectErr) {
+        console.error(
+          "[QUOTE_START] Contact re-select failed contact_id=%s code=%s message=%s",
+          contactId,
+          (selectErr as { code?: string })?.code ?? "unknown",
+          selectErr.message
+        );
+      }
       customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
     }
     console.log(
@@ -343,7 +370,10 @@ export async function POST(request: NextRequest) {
       created_customer
     );
     if (!customerId) {
-      console.error("[QUOTE_START] Cannot create opportunity: customer_id is null for contact_id=", contactId);
+      console.error(
+        "[QUOTE_START] Cannot create opportunity: customer_id is null for contact_id=%s (customer insert or contact update may have been blocked)",
+        contactId
+      );
       return NextResponse.json(
         { ok: false, message: "Customer required for opportunity" },
         { status: 500 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabaseAdmin";
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
 import { mapServiceTypeToKey, mapFrequencyToKey, ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
@@ -78,7 +78,7 @@ export type DbAddon = { key: string; label: string; price: number; sort_order: n
 
 /** Resolve vertical id: use body.vertical_id if it exists, else lookup by slug "cleaning" */
 async function resolveVerticalId(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   bodyVerticalId: string | undefined
 ): Promise<string> {
   const id = bodyVerticalId?.trim();
@@ -100,7 +100,7 @@ async function resolveVerticalId(
 
 /** Load available add-ons: types/order from addon_types, prices from pricing_addons (both filtered by vertical_id) */
 async function loadCleaningAddonsFromDb(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   verticalId: string
 ): Promise<{ available_addons: DbAddon[]; addonPriceMap: Record<string, { label: string; price: number }> }> {
   const addonPriceMap: Record<string, { label: string; price: number }> = {};
@@ -162,7 +162,7 @@ export type PricingFrequencyRow = {
 
 /** Load pricing_frequencies for a vertical (frequency_label + discount_label for UI) */
 async function loadPricingFrequencies(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   verticalId: string
 ): Promise<PricingFrequencyRow[]> {
   const { data, error } = await supabase
@@ -197,7 +197,7 @@ function buildAddonsFromDb(
 }
 
 async function computeQuote(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   squareFootageOption: SquareFootageOption,
   frequencyOption: CleaningFrequencyOption,
   selectedAddonKeys: string[],
@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createAdminClient();
+    const supabase = createServiceRoleClient();
     let verticalId: string;
     let dbAvailableAddons: DbAddon[];
     let addonPriceMap: Record<string, { label: string; price: number }>;

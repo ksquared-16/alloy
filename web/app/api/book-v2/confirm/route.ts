@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabaseAdmin";
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** Get or create pipeline stage by name (for Booked). */
 async function getOrCreateBookedStage(
-    supabase: ReturnType<typeof createAdminClient>,
+    supabase: ReturnType<typeof createServiceRoleClient>,
     pipelineId: string
 ): Promise<string | null> {
     const { data: existing } = await supabase
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const supabase = createAdminClient();
+        const supabase = createServiceRoleClient();
 
         const useQuoteIds =
             !!(
