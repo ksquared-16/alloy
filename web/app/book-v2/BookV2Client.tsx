@@ -1391,17 +1391,17 @@ export default function BookV2Client() {
                             )}
                         </div>
 
-                        {/* Change frequency: inline */}
+                        {/* Change frequency: inline — one row, equal width, no wrap */}
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Cleaning frequency</p>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="grid grid-cols-4 gap-2">
                                 {(["one_time", "weekly", "biweekly", "monthly"] as const).map((freq) => (
                                     <button
                                         key={freq}
                                         type="button"
                                         onClick={() => handleRefineFrequencyChange(freq)}
                                         disabled={refineLoading}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                        className={`min-w-0 px-2 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap truncate ${
                                             refineFrequency === freq
                                                 ? "bg-alloy-blue text-white"
                                                 : "bg-alloy-stone/20 text-alloy-midnight hover:bg-alloy-stone/30"
