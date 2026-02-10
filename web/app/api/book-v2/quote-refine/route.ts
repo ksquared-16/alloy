@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
-import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
+import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys, ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
-import { ADDON_PRICE_MAP } from "@/lib/pricing/cleaningPricing";
 
 const SERVICE_TYPE = "Standard Cleaning";
 const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
@@ -39,7 +38,7 @@ function mapApiFrequencyToOption(
   }
 }
 
-/** Valid AddOnId list for cleaning */
+/** Valid AddOnId list for cleaning (UI keys) */
 const ADDON_IDS: AddOnId[] = [
   "Fridge",
   "Oven",
@@ -49,9 +48,21 @@ const ADDON_IDS: AddOnId[] = [
   "Baseboards",
 ];
 
+/** Normalize incoming add_ons to AddOnId[] (UI sends AddOnId or addon_key) */
 function parseAddOns(arr: unknown): AddOnId[] {
   if (!Array.isArray(arr)) return [];
-  return arr.filter((x): x is AddOnId => typeof x === "string" && ADDON_IDS.includes(x as AddOnId));
+  const keyToId = Object.fromEntries(
+    (Object.entries(ADDON_ID_TO_KEY) as [AddOnId, string][]).map(([id, key]) => [key, id])
+  ) as Record<string, AddOnId>;
+  return arr
+    .filter((x): x is string => typeof x === "string")
+    .map((x) => {
+      const trimmed = (x as string).trim();
+      if ((ADDON_IDS as string[]).includes(trimmed)) return trimmed as AddOnId;
+      const normalized = trimmed.toLowerCase().replace(/\s+/g, "_");
+      return keyToId[normalized] ?? null;
+    })
+    .filter((x): x is AddOnId => x != null);
 }
 
 export interface QuoteRefineBody {
@@ -61,39 +72,102 @@ export interface QuoteRefineBody {
   opportunity_id?: string;
   zip?: string;
   home_type?: string;
+  vertical_id?: string;
 }
 
-/** Build addons list with id, label, price and addons_total from ADDON_PRICE_MAP */
-function buildAddonsWithPrices(addOns: AddOnId[]): {
-  addons: Array<{ id: AddOnId; label: string; price: number }>;
+/** Row from public.vertical_addons */
+interface VerticalAddonRow {
+  addon_key: string;
+  addon_name: string;
+  amount_cents: number;
+  sort_order: number;
+  is_active: boolean;
+  vertical_id: string;
+}
+
+/** Load active add-ons for a vertical from DB; sort by sort_order asc */
+async function loadVerticalAddons(
+  supabase: ReturnType<typeof createAdminClient>,
+  verticalId: string
+): Promise<VerticalAddonRow[]> {
+  const { data, error } = await supabase
+    .from("vertical_addons")
+    .select("addon_key, addon_name, amount_cents, sort_order, is_active, vertical_id")
+    .eq("vertical_id", verticalId)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (error) {
+    console.warn("[QUOTE_REFINE] vertical_addons query failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as VerticalAddonRow[];
+}
+
+/** Get cleaning vertical id (from body or lookup by slug) */
+async function getCleaningVerticalId(
+  supabase: ReturnType<typeof createAdminClient>,
+  verticalIdFromBody: string | null | undefined
+): Promise<string | null> {
+  if (verticalIdFromBody?.trim()) {
+    const { data } = await supabase.from("verticals").select("id").eq("id", verticalIdFromBody.trim()).eq("is_active", true).maybeSingle();
+    if (data?.id) return data.id as string;
+  }
+  const { data } = await supabase
+    .from("verticals")
+    .select("id")
+    .eq("slug", "cleaning")
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  return (data?.id as string) ?? null;
+}
+
+/** Build addons list and total from DB rows; selected keys = addon_key list from UI selection */
+function buildAddonsFromDb(
+  selectedAddOns: AddOnId[],
+  dbMap: Map<string, { addon_name: string; amount_cents: number }>
+): {
+  addons: Array<{ id: string; label: string; price: number }>;
   addons_total: number;
+  available_addons: Array<{ id: string; label: string; price: number }>;
 } {
-  const addons = addOns.map((id) => ({
-    id,
-    label: id,
-    price: ADDON_PRICE_MAP[id] ?? 0,
-  }));
+  const addonKeys = mapAddOnsToKeys(selectedAddOns);
+  const addons = addonKeys
+    .map((key) => {
+      const row = dbMap.get(key);
+      if (!row) return null;
+      const price = row.amount_cents / 100;
+      return { id: key, label: row.addon_name, price };
+    })
+    .filter((a): a is { id: string; label: string; price: number } => a != null);
   const addons_total = addons.reduce((sum, a) => sum + a.price, 0);
-  return { addons, addons_total };
+  const available_addons = Array.from(dbMap.entries()).map(([key, row]) => ({
+    id: key,
+    label: row.addon_name,
+    price: row.amount_cents / 100,
+  }));
+  return { addons, addons_total, available_addons };
 }
 
 async function computeQuote(
   supabase: ReturnType<typeof createAdminClient>,
   squareFootageOption: SquareFootageOption,
   frequencyOption: CleaningFrequencyOption,
-  addOns: AddOnId[]
+  addOns: AddOnId[],
+  dbAddonMap: Map<string, { addon_name: string; amount_cents: number }>
 ): Promise<{
   estimated_price: number | null;
   first_clean_price: number | null;
   recurring_price: number | null;
   frequency_label: string;
-  addons: Array<{ id: AddOnId; label: string; price: number }>;
+  addons: Array<{ id: string; label: string; price: number }>;
   addons_total: number;
+  available_addons: Array<{ id: string; label: string; price: number }>;
 }> {
   const serviceKey = mapServiceTypeToKey(SERVICE_TYPE);
   const frequencyKey = mapFrequencyToKey(frequencyOption) ?? "";
   const addonKeys = mapAddOnsToKeys(addOns);
-  const { addons: addonsWithPrices, addons_total } = buildAddonsWithPrices(addOns);
+  const { addons, addons_total, available_addons } = buildAddonsFromDb(addOns, dbAddonMap);
 
   const { data, error } = await supabase.rpc("get_quote_pricing", {
     p_vertical_slug: "cleaning",
@@ -112,8 +186,9 @@ async function computeQuote(
       first_clean_price: firstClean,
       recurring_price: frequencyOption !== "One-time" ? 120 : null,
       frequency_label: frequencyOption === "One-time" ? "One-time" : frequencyOption,
-      addons: addonsWithPrices,
+      addons,
       addons_total,
+      available_addons,
     };
   }
 
@@ -126,17 +201,15 @@ async function computeQuote(
       first_clean_price: firstClean,
       recurring_price: null,
       frequency_label: "One-time",
-      addons: addonsWithPrices,
+      addons,
       addons_total,
+      available_addons,
     };
   }
 
   const firstCleanPrice = (row.first_clean_cents ?? 0) / 100;
-  const addonsTotalFromRpc = (row.addons_total_cents ?? 0) / 100;
-  const addons_total_resolved = addOns.length > 0 ? addons_total : addonsTotalFromRpc;
-  const estimatedPrice =
-    (row.total_first_visit_cents ?? (row.first_clean_cents ?? 0) + (row.addons_total_cents ?? 0)) / 100;
   const recurringPrice = row.recurring_cents != null ? row.recurring_cents / 100 : null;
+  const estimatedPrice = firstCleanPrice + addons_total;
   const frequencyLabel =
     frequencyOption === "One-time"
       ? "One-time"
@@ -151,14 +224,15 @@ async function computeQuote(
     first_clean_price: firstCleanPrice,
     recurring_price: recurringPrice,
     frequency_label: frequencyLabel,
-    addons: addonsWithPrices,
-    addons_total: addons_total_resolved,
+    addons,
+    addons_total,
+    available_addons,
   };
 }
 
 /**
  * POST /api/book-v2/quote-refine
- * Recalculates quote for given frequency/add-ons; optionally PATCHes opportunity metadata.
+ * Recalculates quote for given frequency/add-ons; add-on pricing from public.vertical_addons.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -171,12 +245,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = createAdminClient();
+    const verticalId = await getCleaningVerticalId(supabase, body.vertical_id);
+    if (!verticalId) {
+      return NextResponse.json(
+        { ok: false, message: "Cleaning vertical not found" },
+        { status: 500 }
+      );
+    }
+
+    const addonRows = await loadVerticalAddons(supabase, verticalId);
+    const dbAddonMap = new Map<string, { addon_name: string; amount_cents: number }>();
+    for (const row of addonRows) {
+      dbAddonMap.set(row.addon_key, { addon_name: row.addon_name, amount_cents: row.amount_cents });
+    }
+
     const squareFootageOption = normalizeSquareFootageInput(square_footage);
     const frequencyOption = mapApiFrequencyToOption(body.cleaning_frequency ?? "one_time");
     const addOns = parseAddOns(body.add_ons ?? []);
+    const selectedKeys = mapAddOnsToKeys(addOns);
 
-    const supabase = createAdminClient();
-    const quoteOutput = await computeQuote(supabase, squareFootageOption, frequencyOption, addOns);
+    const quoteOutput = await computeQuote(
+      supabase,
+      squareFootageOption,
+      frequencyOption,
+      addOns,
+      dbAddonMap
+    );
+
+    console.log(
+      "[QUOTE_REFINE] addons_loaded=%s selected=%s addons_total=%s",
+      addonRows.length,
+      selectedKeys.join(",") || "(none)",
+      quoteOutput.addons_total
+    );
 
     const opportunityId = body.opportunity_id?.trim() || null;
     if (opportunityId) {
@@ -194,13 +296,14 @@ export async function POST(request: NextRequest) {
           cleaning_frequency: body.cleaning_frequency ?? "one_time",
           add_ons: addOns,
         };
+        const { available_addons: _drop, ...quoteOutputForMeta } = quoteOutput;
         await supabase
           .from("opportunities")
           .update({
             metadata: {
               ...meta,
               quote_input,
-              quote_output: quoteOutput,
+              quote_output: quoteOutputForMeta,
               source: "web_quote",
             },
             ...(quoteOutput.estimated_price != null && {
@@ -215,6 +318,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       quote_output: quoteOutput,
+      available_addons: quoteOutput.available_addons,
     });
   } catch (err) {
     console.error("[QUOTE_REFINE_ERROR]", err);

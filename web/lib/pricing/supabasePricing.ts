@@ -82,20 +82,26 @@ export function mapFrequencyToKey(frequency: CleaningFrequencyOption): string | 
   return null;
 }
 
+/** Map UI add-on ID to Supabase addon_key (single source for key alignment with vertical_addons.addon_key) */
+export const ADDON_ID_TO_KEY: Record<AddOnId, string> = {
+  Fridge: "fridge",
+  Oven: "oven",
+  Cabinets: "cabinets",
+  "Windows & Blinds": "windows_blinds",
+  "Pet Hair": "pet_hair",
+  Baseboards: "baseboards",
+};
+
+/** Reverse: addon_key -> UI AddOnId */
+export const ADDON_KEY_TO_ID: Record<string, AddOnId> = Object.fromEntries(
+  (Object.entries(ADDON_ID_TO_KEY) as [AddOnId, string][]).map(([id, key]) => [key, id])
+) as Record<string, AddOnId>;
+
 /**
  * Map UI add-on IDs to Supabase addon_key format
  */
 export function mapAddOnsToKeys(addOns: AddOnId[]): string[] {
-  const addonKeyMap: Record<AddOnId, string> = {
-    Fridge: "fridge",
-    Oven: "oven",
-    Cabinets: "cabinets",
-    "Windows & Blinds": "windows_blinds",
-    "Pet Hair": "pet_hair",
-    Baseboards: "baseboards",
-  };
-
-  return addOns.map((addon) => addonKeyMap[addon] || addon.toLowerCase().replace(/\s+/g, "_"));
+  return addOns.map((addon) => ADDON_ID_TO_KEY[addon] || addon.toLowerCase().replace(/\s+/g, "_"));
 }
 
 /**

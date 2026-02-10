@@ -9,6 +9,7 @@ import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
+import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing";
 
 interface QuoteInputStored {
     zip?: string;
@@ -27,7 +28,7 @@ interface QuoteResponse {
     service?: string;
     discount_label?: string;
     price_breakdown?: string;
-    addons?: Array<{ name: string; price: number | null }>;
+    addons?: Array<{ name: string; price: number | null; id?: string }>;
     addons_total?: number;
     quote_input?: QuoteInputStored;
 }
@@ -245,6 +246,8 @@ export default function BookV2Client() {
     const [refineLoading, setRefineLoading] = useState(false);
     /** When user clicks "Edit quote", we remember which step to return to after "Continue to pick time" */
     const [stepBeforeRefine, setStepBeforeRefine] = useState<BookingStep | null>(null);
+    /** Add-on pricing from DB (vertical_addons), set from quote-refine response */
+    const [availableAddons, setAvailableAddons] = useState<Array<{ id: string; label: string; price: number }> | null>(null);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -601,8 +604,16 @@ export default function BookV2Client() {
                 : freqLabel.includes("monthly") ? "monthly"
                 : "one_time";
         setRefineFrequency(nextFreq);
-        const names = (quote.addons ?? []).map((a) => a.name);
-        setRefineAddOns(ADDON_IDS.filter((id) => names.includes(id)));
+        const addonsList = quote.addons ?? [];
+        const selected: AddOnId[] = addonsList
+            .map((a) => {
+                const withId = a as { id?: string; name?: string };
+                if (withId.id && ADDON_KEY_TO_ID[withId.id]) return ADDON_KEY_TO_ID[withId.id];
+                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name)) return withId.name as AddOnId;
+                return null;
+            })
+            .filter((x): x is AddOnId => x != null);
+        setRefineAddOns(selected);
     }, [quote, currentStep]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
@@ -643,11 +654,15 @@ export default function BookV2Client() {
                 console.warn("[BOOK_V2] Quote refine failed:", data?.message);
                 return;
             }
+            if (Array.isArray(data.available_addons)) {
+                setAvailableAddons(data.available_addons);
+            }
             const qo = data.quote_output;
             const addonsForStore = Array.isArray(qo?.addons)
                 ? (qo.addons as Array<{ id?: string; label?: string; price?: number }>).map((a) => ({
                     name: a.label ?? (a.id as string) ?? "",
                     price: typeof a.price === "number" ? a.price : null,
+                    id: a.id ?? undefined,
                   }))
                 : addOns.map((id) => ({ name: id, price: null }));
             const updated: QuoteResponse = {
@@ -1302,22 +1317,30 @@ export default function BookV2Client() {
                             {refineLoading && <p className="text-xs text-alloy-midnight/60 mt-2">Updating price…</p>}
                         </div>
 
-                        {/* Add-ons: inline */}
+                        {/* Add-ons: inline (prices from DB via availableAddons) */}
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Add-ons</p>
                             <div className="space-y-2">
-                                {ADDON_IDS.map((id) => (
-                                    <label key={id} className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={refineAddOns.includes(id)}
-                                            onChange={() => handleRefineAddOnToggle(id)}
-                                            disabled={refineLoading}
-                                            className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
-                                        />
-                                        <span className="text-sm text-alloy-midnight">{id}</span>
-                                    </label>
-                                ))}
+                                {ADDON_IDS.map((id) => {
+                                    const addonKey = ADDON_ID_TO_KEY[id];
+                                    const dbAddon = availableAddons?.find((a) => a.id === addonKey);
+                                    const price = dbAddon?.price ?? null;
+                                    return (
+                                        <label key={id} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={refineAddOns.includes(id)}
+                                                onChange={() => handleRefineAddOnToggle(id)}
+                                                disabled={refineLoading}
+                                                className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                                            />
+                                            <span className="text-sm text-alloy-midnight">
+                                                {dbAddon?.label ?? id}
+                                                {price != null && <span className="text-alloy-midnight/70 ml-1">— ${price.toFixed(2)}</span>}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </div>
 

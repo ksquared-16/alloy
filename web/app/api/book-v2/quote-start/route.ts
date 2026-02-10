@@ -175,6 +175,7 @@ export interface QuoteStartBody {
   baths?: number;
   cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
   vertical_id?: string;
+  add_ons?: string[];
   quote_context?: Record<string, unknown>;
 }
 
@@ -336,6 +337,7 @@ export async function POST(request: NextRequest) {
       beds: body.beds,
       baths: body.baths,
       cleaning_frequency: body.cleaning_frequency ?? "one_time",
+      add_ons: Array.isArray(body.add_ons) ? body.add_ons : [],
       ...body.quote_context,
     };
     const quote_started_at = new Date().toISOString();
