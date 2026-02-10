@@ -28,6 +28,7 @@ interface QuoteResponse {
     discount_label?: string;
     price_breakdown?: string;
     addons?: Array<{ name: string; price: number | null }>;
+    addons_total?: number;
     quote_input?: QuoteInputStored;
 }
 
@@ -242,6 +243,8 @@ export default function BookV2Client() {
     const [refineFrequency, setRefineFrequency] = useState<"one_time" | "weekly" | "biweekly" | "monthly">("one_time");
     const [refineAddOns, setRefineAddOns] = useState<AddOnId[]>([]);
     const [refineLoading, setRefineLoading] = useState(false);
+    /** When user clicks "Edit quote", we remember which step to return to after "Continue to pick time" */
+    const [stepBeforeRefine, setStepBeforeRefine] = useState<BookingStep | null>(null);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -645,13 +648,20 @@ export default function BookV2Client() {
                 return;
             }
             const qo = data.quote_output;
+            const addonsForStore = Array.isArray(qo?.addons)
+                ? (qo.addons as Array<{ id?: string; label?: string; price?: number }>).map((a) => ({
+                    name: a.label ?? (a.id as string) ?? "",
+                    price: typeof a.price === "number" ? a.price : null,
+                  }))
+                : addOns.map((id) => ({ name: id, price: null }));
             const updated: QuoteResponse = {
                 ...quote!,
                 estimated_price: qo?.estimated_price ?? quote?.estimated_price,
                 first_clean_price: qo?.first_clean_price ?? qo?.estimated_price ?? quote?.first_clean_price,
                 recurring_price: qo?.recurring_price ?? undefined,
                 frequency_label: qo?.frequency_label ?? quote?.frequency_label ?? "One-time",
-                addons: qo?.addons ?? addOns.map((id) => ({ name: id, price: null })),
+                addons: addonsForStore,
+                addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
             };
             setQuote(normalizeQuote(updated));
             const toStore = { ...updated, quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addOns } };
@@ -685,7 +695,13 @@ export default function BookV2Client() {
         } catch (e) {
             console.warn("Persist refined flag failed", e);
         }
-        setCurrentStep("slot_selection");
+        setCurrentStep(stepBeforeRefine ?? "slot_selection");
+        setStepBeforeRefine(null);
+    };
+
+    const handleEditQuote = () => {
+        setStepBeforeRefine(currentStep);
+        setCurrentStep("refine_quote");
     };
 
     const handleQuoteStartSubmit = async (e: React.FormEvent) => {
@@ -1224,17 +1240,41 @@ export default function BookV2Client() {
                             Review your price and add recurring cleaning or add-ons to lower the per-visit cost.
                         </p>
 
-                        {/* Current quote summary */}
+                        {/* Quote breakdown: base, add-ons, subtotal, total */}
                         <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg space-y-2">
-                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">Current quote</p>
+                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">Quote breakdown</p>
                             <div className="flex items-baseline justify-between">
-                                <span className="text-alloy-midnight">First cleaning</span>
+                                <span className="text-alloy-midnight">Base cleaning (first clean)</span>
+                                <span className="font-semibold text-alloy-midnight">
+                                    ${(quote.first_clean_price ?? 0).toFixed(2)}
+                                </span>
+                            </div>
+                            {quote.addons && quote.addons.length > 0 && (
+                                <>
+                                    {quote.addons.map((a, idx) => (
+                                        <div key={idx} className="flex items-baseline justify-between pl-2 text-sm">
+                                            <span className="text-alloy-midnight/90">{a.name}</span>
+                                            <span className="text-alloy-midnight/90">
+                                                {a.price != null ? `$${a.price.toFixed(2)}` : "—"}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1">
+                                        <span className="text-alloy-midnight font-medium">Add-ons subtotal</span>
+                                        <span className="font-semibold text-alloy-midnight">
+                                            ${((quote.addons_total ?? quote.addons?.reduce((s, a) => s + (a.price ?? 0), 0) ?? 0)).toFixed(2)}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
+                            <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1">
+                                <span className="text-alloy-midnight font-semibold">Total (first visit)</span>
                                 <span className="font-bold text-alloy-blue">
-                                    ${(quote.first_clean_price ?? quote.estimated_price ?? 0).toFixed(2)}
+                                    ${(quote.estimated_price ?? quote.first_clean_price ?? 0).toFixed(2)}
                                 </span>
                             </div>
                             {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label && (
-                                <div className="flex items-baseline justify-between">
+                                <div className="flex items-baseline justify-between pt-1">
                                     <span className="text-alloy-midnight">Recurring ({quote.frequency_label})</span>
                                     <span className="font-bold text-alloy-juniper">
                                         ${quote.recurring_price.toFixed(2)}/visit
@@ -1322,9 +1362,18 @@ export default function BookV2Client() {
                             <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-5 lg:sticky lg:top-24 space-y-6">
                                 {/* Quote Summary */}
                                 <div className="space-y-4">
-                                    <h2 className="text-lg font-bold text-alloy-midnight">
-                                        Your Quote
-                                    </h2>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <h2 className="text-lg font-bold text-alloy-midnight">
+                                            Your Quote
+                                        </h2>
+                                        <button
+                                            type="button"
+                                            onClick={handleEditQuote}
+                                            className="text-sm text-alloy-blue hover:underline font-medium whitespace-nowrap"
+                                        >
+                                            Edit quote
+                                        </button>
+                                    </div>
 
                                     {/* First Cleaning */}
                                     <div>

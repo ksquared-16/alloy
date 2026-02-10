@@ -4,6 +4,7 @@ import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing
 import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
+import { ADDON_PRICE_MAP } from "@/lib/pricing/cleaningPricing";
 
 const SERVICE_TYPE = "Standard Cleaning";
 const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
@@ -62,6 +63,20 @@ export interface QuoteRefineBody {
   home_type?: string;
 }
 
+/** Build addons list with id, label, price and addons_total from ADDON_PRICE_MAP */
+function buildAddonsWithPrices(addOns: AddOnId[]): {
+  addons: Array<{ id: AddOnId; label: string; price: number }>;
+  addons_total: number;
+} {
+  const addons = addOns.map((id) => ({
+    id,
+    label: id,
+    price: ADDON_PRICE_MAP[id] ?? 0,
+  }));
+  const addons_total = addons.reduce((sum, a) => sum + a.price, 0);
+  return { addons, addons_total };
+}
+
 async function computeQuote(
   supabase: ReturnType<typeof createAdminClient>,
   squareFootageOption: SquareFootageOption,
@@ -72,11 +87,13 @@ async function computeQuote(
   first_clean_price: number | null;
   recurring_price: number | null;
   frequency_label: string;
-  addons: Array<{ name: string; price: number | null }>;
+  addons: Array<{ id: AddOnId; label: string; price: number }>;
+  addons_total: number;
 }> {
   const serviceKey = mapServiceTypeToKey(SERVICE_TYPE);
   const frequencyKey = mapFrequencyToKey(frequencyOption) ?? "";
   const addonKeys = mapAddOnsToKeys(addOns);
+  const { addons: addonsWithPrices, addons_total } = buildAddonsWithPrices(addOns);
 
   const { data, error } = await supabase.rpc("get_quote_pricing", {
     p_vertical_slug: "cleaning",
@@ -88,27 +105,35 @@ async function computeQuote(
 
   if (error || !data) {
     console.warn("[QUOTE_REFINE] RPC get_quote_pricing failed:", error?.message);
+    const firstClean = 180;
+    const totalFirst = firstClean + addons_total;
     return {
-      estimated_price: 180,
-      first_clean_price: 180,
+      estimated_price: totalFirst,
+      first_clean_price: firstClean,
       recurring_price: frequencyOption !== "One-time" ? 120 : null,
       frequency_label: frequencyOption === "One-time" ? "One-time" : frequencyOption,
-      addons: addOns.map((id) => ({ name: id, price: null })),
+      addons: addonsWithPrices,
+      addons_total,
     };
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as SupabaseQuoteResult | undefined;
   if (!row) {
+    const firstClean = 180;
+    const totalFirst = firstClean + addons_total;
     return {
-      estimated_price: 180,
-      first_clean_price: 180,
+      estimated_price: totalFirst,
+      first_clean_price: firstClean,
       recurring_price: null,
       frequency_label: "One-time",
-      addons: addOns.map((id) => ({ name: id, price: null })),
+      addons: addonsWithPrices,
+      addons_total,
     };
   }
 
   const firstCleanPrice = (row.first_clean_cents ?? 0) / 100;
+  const addonsTotalFromRpc = (row.addons_total_cents ?? 0) / 100;
+  const addons_total_resolved = addOns.length > 0 ? addons_total : addonsTotalFromRpc;
   const estimatedPrice =
     (row.total_first_visit_cents ?? (row.first_clean_cents ?? 0) + (row.addons_total_cents ?? 0)) / 100;
   const recurringPrice = row.recurring_cents != null ? row.recurring_cents / 100 : null;
@@ -126,7 +151,8 @@ async function computeQuote(
     first_clean_price: firstCleanPrice,
     recurring_price: recurringPrice,
     frequency_label: frequencyLabel,
-    addons: addOns.map((id) => ({ name: id, price: null })),
+    addons: addonsWithPrices,
+    addons_total: addons_total_resolved,
   };
 }
 

@@ -155,6 +155,16 @@ const ADDON_PRICES: Record<
     Baseboards: { id: "Baseboards", name: "Baseboards", price: 30 },
 };
 
+/** Single source of truth: add-on id → flat price (USD). Used by quote-refine API and refine UI. */
+export const ADDON_PRICE_MAP: Record<AddOnId, number> = {
+    Fridge: 40,
+    Oven: 40,
+    Cabinets: 35,
+    "Windows & Blinds": 60,
+    "Pet Hair": 30,
+    Baseboards: 30,
+};
+
 function roundCurrency(value: number): number {
     return Math.round(value * 100) / 100;
 }
