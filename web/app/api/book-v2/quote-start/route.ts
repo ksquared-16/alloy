@@ -169,7 +169,6 @@ export interface QuoteStartBody {
   email?: string;
   phone?: string;
   zip?: string;
-  home_type?: string;
   square_footage?: number;
   beds?: number;
   baths?: number;
@@ -214,29 +213,30 @@ export async function POST(request: NextRequest) {
     const emailForLookup = email || "";
     const phoneForLookup = phone || "";
 
-    let existingContact: { id: string; customer_id: string | null; first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null = null;
+    type ContactRow = { id: string; customer_id: string | null; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; org_id?: string | null };
+    let existingContact: ContactRow | null = null;
+    const contactSelectCols = "id, customer_id, first_name, last_name, email, phone, org_id";
 
     if (emailForLookup) {
-      const { data: byEmail } = await supabase
-        .from("contacts")
-        .select("id, customer_id, first_name, last_name, email, phone")
-        .ilike("email", emailForLookup)
-        .limit(1)
-        .maybeSingle();
-      existingContact = byEmail;
+      let res = await supabase.from("contacts").select(contactSelectCols).ilike("email", emailForLookup).limit(1).maybeSingle();
+      if (res.error && res.error.message?.includes("org_id")) {
+        res = await supabase.from("contacts").select("id, customer_id, first_name, last_name, email, phone").ilike("email", emailForLookup).limit(1).maybeSingle();
+      }
+      existingContact = (res.data as ContactRow | null) ?? null;
     }
     if (!existingContact && phoneForLookup) {
-      const { data: byPhone } = await supabase
-        .from("contacts")
-        .select("id, customer_id, first_name, last_name, email, phone")
-        .eq("phone", phoneForLookup)
-        .limit(1)
-        .maybeSingle();
-      existingContact = byPhone;
+      let res = await supabase.from("contacts").select(contactSelectCols).eq("phone", phoneForLookup).limit(1).maybeSingle();
+      if (res.error && res.error.message?.includes("org_id")) {
+        res = await supabase.from("contacts").select("id, customer_id, first_name, last_name, email, phone").eq("phone", phoneForLookup).limit(1).maybeSingle();
+      }
+      existingContact = (res.data as ContactRow | null) ?? null;
     }
+
+    let contactOrgId: string | null = null;
 
     if (existingContact) {
       contactId = existingContact.id;
+      contactOrgId = existingContact.org_id ?? null;
       const updates: Record<string, unknown> = {};
       if (first_name && !existingContact.first_name) updates.first_name = first_name;
       if (last_name && !existingContact.last_name) updates.last_name = last_name;
@@ -250,17 +250,23 @@ export async function POST(request: NextRequest) {
         customerId = existingContact.customer_id;
       }
     } else {
+      let defaultOrgId: string | null = null;
+      const { data: defaultOrg, error: _orgErr } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
+      if (!_orgErr && defaultOrg) defaultOrgId = (defaultOrg as { id?: string }).id ?? null;
+      const contactInsert: Record<string, unknown> = {
+        email: emailForLookup || null,
+        phone: phoneForLookup || null,
+        first_name: first_name,
+        last_name: last_name,
+        postal_code: zip,
+        contact_type: "lead",
+      };
+      if (defaultOrgId) contactInsert.org_id = defaultOrgId;
+
       const { data: newContact, error: contactError } = await supabase
         .from("contacts")
-        .insert({
-          email: emailForLookup || null,
-          phone: phoneForLookup || null,
-          first_name: first_name,
-          last_name: last_name,
-          postal_code: zip,
-          contact_type: "lead",
-        })
-        .select("id")
+        .insert(contactInsert)
+        .select("id, org_id")
         .single();
 
       if (contactError || !newContact) {
@@ -274,9 +280,19 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      contactId = newContact.id;
+      contactId = (newContact as { id: string }).id;
+      contactOrgId = (newContact as { org_id?: string | null }).org_id ?? null;
       created_new_contact = true;
     }
+
+    console.log(
+      "[QUOTE_START] resolved_contact contact_id=%s org_id=%s customer_id=%s email=%s phone=%s",
+      contactId,
+      contactOrgId ?? "null",
+      customerId ?? "null",
+      emailForLookup || "null",
+      phoneForLookup ? `${phoneForLookup.slice(0, 4)}***` : "null"
+    );
 
     // Resolve vertical first so we can set it on new customers
     let verticalId = body.vertical_id ?? null;
@@ -297,36 +313,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ensure customer exists and is linked (backfill if contact.customer_id was null)
+    let defaultOrgId: string | null = null;
+    if (!contactOrgId) {
+      const { data: defaultOrg, error: _orgErr2 } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
+      if (!_orgErr2 && defaultOrg) defaultOrgId = (defaultOrg as { id?: string }).id ?? null;
+    }
+    const orgIdForWrites = contactOrgId ?? defaultOrgId;
+
+    // Ensure customer exists and is linked (backfill when contact.customer_id is null)
     let created_customer = false;
     if (!customerId) {
+      console.log("[QUOTE_START] ensure_customer path running contact_id=%s customer_id=null (will create customer)", contactId);
       const name =
         [first_name, last_name].filter(Boolean).join(" ") ||
         emailForLookup ||
         phoneForLookup ||
         "Quote Lead";
+      const customerInsertPayload: Record<string, unknown> = {
+        name,
+        vertical_id: verticalId,
+        primary_contact_id: contactId,
+        email: emailForLookup || null,
+        phone: phoneForLookup || null,
+      };
+      if (orgIdForWrites) customerInsertPayload.org_id = orgIdForWrites;
+
       const { data: newCustomer, error: customerError } = await supabase
         .from("customers")
-        .insert({
-          name,
-          vertical_id: verticalId,
-          primary_contact_id: contactId,
-          email: emailForLookup || null,
-          phone: phoneForLookup || null,
-        })
+        .insert(customerInsertPayload)
         .select("id")
         .single();
 
       if (customerError) {
+        const err = customerError as { code?: string; message?: string; details?: string; hint?: string };
         console.error(
-          "[QUOTE_START] Customer insert failed contact_id=%s code=%s message=%s",
+          "[QUOTE_START] Customer insert failed contact_id=%s code=%s message=%s details=%s hint=%s",
           contactId,
-          (customerError as { code?: string })?.code ?? "unknown",
-          customerError.message
+          err.code ?? "unknown",
+          err.message ?? "",
+          err.details ?? "",
+          err.hint ?? ""
         );
+        console.error("[QUOTE_START] Customer insert error payload (safe): %s", JSON.stringify({ code: err.code, message: err.message, details: err.details, hint: err.hint }));
+      } else if (!newCustomer) {
+        console.error("[QUOTE_START] Customer insert returned no data (no error) contact_id=%s", contactId);
       } else if (newCustomer) {
         customerId = newCustomer.id;
         created_customer = true;
+        console.log(
+          "[QUOTE_START] Customer insert success contact_id=%s new_customer_id=%s org_id=%s vertical_id=%s",
+          contactId,
+          customerId,
+          orgIdForWrites ?? "null",
+          verticalId
+        );
         const { data: updatedContact, error: linkErr } = await supabase
           .from("contacts")
           .update({ customer_id: customerId })
@@ -334,15 +374,21 @@ export async function POST(request: NextRequest) {
           .select("customer_id")
           .single();
         if (linkErr) {
+          const err = linkErr as { code?: string; message?: string; details?: string; hint?: string };
           console.error(
-            "[QUOTE_START] Contact customer_id update failed contact_id=%s customer_id=%s code=%s message=%s",
+            "[QUOTE_START] Contact customer_id update failed contact_id=%s customer_id=%s code=%s message=%s details=%s hint=%s",
             contactId,
             customerId,
-            (linkErr as { code?: string })?.code ?? "unknown",
-            linkErr.message
+            err.code ?? "unknown",
+            err.message ?? "",
+            err.details ?? "",
+            err.hint ?? ""
           );
-        } else if (updatedContact) {
-          customerId = (updatedContact as { customer_id: string | null }).customer_id ?? customerId;
+          console.error("[QUOTE_START] Contact update error payload (safe): %s", JSON.stringify({ code: err.code, message: err.message, details: err.details, hint: err.hint }));
+        } else {
+          const returnedCustomerId = (updatedContact as { customer_id: string | null } | null)?.customer_id ?? null;
+          console.log("[QUOTE_START] Contact customer_id update success contact_id=%s returned_customer_id=%s", contactId, returnedCustomerId ?? "null");
+          customerId = returnedCustomerId ?? customerId;
         }
       }
     }
@@ -354,14 +400,17 @@ export async function POST(request: NextRequest) {
         .eq("id", contactId)
         .single();
       if (selectErr) {
+        const err = selectErr as { code?: string; message?: string; details?: string; hint?: string };
         console.error(
           "[QUOTE_START] Contact re-select failed contact_id=%s code=%s message=%s",
           contactId,
-          (selectErr as { code?: string })?.code ?? "unknown",
-          selectErr.message
+          err.code ?? "unknown",
+          err.message ?? ""
         );
+        console.error("[QUOTE_START] Contact re-select error payload (safe): %s", JSON.stringify({ code: err.code, message: err.message, details: err.details, hint: err.hint }));
       }
       customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
+      console.log("[QUOTE_START] Contact re-select result contact_id=%s customer_id=%s", contactId, customerId ?? "null");
     }
     console.log(
       "[QUOTE_START] ensured_customer contact_id=%s customer_id=%s created_customer=%s",
@@ -397,7 +446,6 @@ export async function POST(request: NextRequest) {
     const quoteOutput = await computeQuote(supabase, squareFootageOption, cleaning_frequency, []);
     const quote_input = {
       zip,
-      home_type: body.home_type,
       square_footage: body.square_footage ?? square_footage_raw,
       beds: body.beds,
       baths: body.baths,
@@ -469,25 +517,27 @@ export async function POST(request: NextRequest) {
         [first_name, last_name].filter(Boolean).join(" ").trim()
           ? `${[first_name, last_name].filter(Boolean).join(" ")} — Quote`
           : (emailForLookup ? `${emailForLookup} — Quote` : "Quote");
+      const oppInsertPayload: Record<string, unknown> = {
+        vertical_id: verticalId,
+        primary_contact_id: contactId,
+        customer_id: customerId,
+        name: opportunityName,
+        status: "open",
+        source: "website",
+        pipeline_stage_id: quoteStartedStageId,
+        estimated_price_cents: estimatedPriceCents,
+        monetary_value_cents: estimatedPriceCents,
+        metadata: {
+          quote_input,
+          quote_output: quoteOutput,
+          source: "web_quote",
+          quote_started_at,
+        },
+      };
+      if (orgIdForWrites) oppInsertPayload.org_id = orgIdForWrites;
       const { data: newOpp, error: oppError } = await supabase
         .from("opportunities")
-        .insert({
-          vertical_id: verticalId,
-          primary_contact_id: contactId,
-          customer_id: customerId,
-          name: opportunityName,
-          status: "open",
-          source: "website",
-          pipeline_stage_id: quoteStartedStageId,
-          estimated_price_cents: estimatedPriceCents,
-          monetary_value_cents: estimatedPriceCents,
-          metadata: {
-            quote_input,
-            quote_output: quoteOutput,
-            source: "web_quote",
-            quote_started_at,
-          },
-        })
+        .insert(oppInsertPayload)
         .select("id")
         .single();
 

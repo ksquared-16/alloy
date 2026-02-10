@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 export interface ServiceDetails {
     address: string;
     city: string;
+    home_type: string;
     bedrooms: string;
     bathrooms: string;
     access_method: "home" | "code" | "key" | "building";
@@ -26,6 +27,7 @@ export default function ServiceDetailsForm({
     const [formData, setFormData] = useState<ServiceDetails>({
         address: initialData?.address || "",
         city: initialData?.city || "",
+        home_type: initialData?.home_type || "",
         bedrooms: initialData?.bedrooms || "",
         bathrooms: initialData?.bathrooms || "",
         access_method: initialData?.access_method || "home",
@@ -128,6 +130,25 @@ export default function ServiceDetailsForm({
                             className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
                         />
                     </div>
+                </div>
+
+                {/* Home Type - full width under Address */}
+                <div>
+                    <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                        Home type
+                    </label>
+                    <select
+                        value={formData.home_type}
+                        onChange={(e) => handleChange("home_type", e.target.value)}
+                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent bg-white"
+                    >
+                        <option value="">Select home type</option>
+                        <option value="Single-Family Home">Single-Family Home</option>
+                        <option value="Apartment / Condo">Apartment / Condo</option>
+                        <option value="Townhome">Townhome</option>
+                        <option value="Duplex">Duplex</option>
+                        <option value="Other">Other</option>
+                    </select>
                 </div>
 
                 {/* Bedrooms and Bathrooms */}

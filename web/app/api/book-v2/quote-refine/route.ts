@@ -69,7 +69,6 @@ export interface QuoteRefineBody {
   add_ons?: string[] | AddOnId[];
   opportunity_id?: string;
   zip?: string;
-  home_type?: string;
   vertical_id?: string;
 }
 
@@ -354,7 +353,6 @@ export async function POST(request: NextRequest) {
         const meta = (existing.metadata as Record<string, unknown>) ?? {};
         const quote_input = {
           zip: body.zip ?? (meta.quote_input as Record<string, unknown>)?.zip,
-          home_type: body.home_type ?? (meta.quote_input as Record<string, unknown>)?.home_type,
           square_footage: square_footage,
           cleaning_frequency: body.cleaning_frequency ?? "one_time",
           add_ons: selectedKeys,

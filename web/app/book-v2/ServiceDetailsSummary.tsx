@@ -36,6 +36,13 @@ export default function ServiceDetailsSummary({
                         </p>
                     </div>
 
+                    {/* Home type */}
+                    {details.home_type && (
+                        <p className="text-sm text-alloy-midnight/70">
+                            <strong className="text-alloy-midnight">Home type:</strong> {details.home_type}
+                        </p>
+                    )}
+
                     {/* Bedrooms / Bathrooms */}
                     <div className="flex gap-4 text-sm text-alloy-midnight/70">
                         <span>

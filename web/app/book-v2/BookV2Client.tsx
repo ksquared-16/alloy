@@ -13,9 +13,10 @@ import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing"
 
 interface QuoteInputStored {
     zip?: string;
-    home_type?: string;
     square_footage?: string;
     cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
+    /** Present only for backward compat (e.g. existing metadata); not set by quote form */
+    home_type?: string;
 }
 
 interface QuoteResponse {
@@ -175,7 +176,6 @@ async function maybeCreateLeadFromPrefill(params: {
     first_name?: string | null;
     last_name?: string | null;
     zip?: string | null;
-    home_type?: string | null;
     square_footage?: number | string | null;
     cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly" | null;
 }): Promise<void> {
@@ -203,7 +203,6 @@ async function maybeCreateLeadFromPrefill(params: {
         email: email || undefined,
         phone: phone || undefined,
         zip: params.zip?.trim() || undefined,
-        home_type: params.home_type?.trim() || undefined,
         square_footage: sqft != null && !Number.isNaN(sqft) ? sqft : undefined,
         cleaning_frequency: params.cleaning_frequency || "one_time",
         quote_context: { source: "prefill", url: window.location.href },
@@ -272,7 +271,6 @@ export default function BookV2Client() {
     // Quote-start (first step) form state — square_footage is bucket key (SquareFootageOption)
     const [quoteStartForm, setQuoteStartForm] = useState({
         zip: "",
-        home_type: "",
         square_footage: "" as string,
         cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
         email: "",
@@ -469,11 +467,10 @@ export default function BookV2Client() {
             first_name: resolvedFirstName,
             last_name: resolvedLastName,
             zip,
-            home_type: quoteStartForm.home_type || undefined,
             square_footage: quoteStartForm.square_footage || undefined,
             cleaning_frequency: quoteStartForm.cleaning_frequency,
         });
-    }, [mounted, debug, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName, searchParams, quoteStartForm.home_type, quoteStartForm.square_footage, quoteStartForm.cleaning_frequency]);
+    }, [mounted, debug, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName, searchParams, quoteStartForm.square_footage, quoteStartForm.cleaning_frequency]);
 
     // Load quote from storage
     useEffect(() => {
@@ -714,7 +711,6 @@ export default function BookV2Client() {
                         add_ons: addonKeys,
                         opportunity_id: opportunityId || undefined,
                         zip: quoteInput?.zip,
-                        home_type: quoteInput?.home_type,
                     }),
                 });
                 const data = await res.json();
@@ -833,7 +829,7 @@ export default function BookV2Client() {
 
     const handleQuoteStartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { zip, home_type, square_footage, cleaning_frequency, email, phone } = quoteStartForm;
+        const { zip, square_footage, cleaning_frequency, email, phone } = quoteStartForm;
         if (!zip.trim()) {
             setQuoteStartError("ZIP code is required");
             return;
@@ -855,12 +851,10 @@ export default function BookV2Client() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     zip: zip.trim(),
-                    home_type: home_type || undefined,
                     square_footage: square_footage.trim(),
                     cleaning_frequency: cleaning_frequency || "one_time",
                     email: email?.trim() || undefined,
                     phone: phone?.trim() || undefined,
-                    quote_context: { home_type, square_footage },
                 }),
             });
             const data = await res.json();
@@ -886,7 +880,7 @@ export default function BookV2Client() {
                 service: "Standard Cleaning",
                 price_breakdown: undefined,
                 addons: qo?.addons ?? [],
-                quote_input: { zip: quoteStartForm.zip.trim(), home_type: quoteStartForm.home_type || undefined, square_footage: quoteStartForm.square_footage, cleaning_frequency: quoteStartForm.cleaning_frequency },
+                quote_input: { zip: quoteStartForm.zip.trim(), square_footage: quoteStartForm.square_footage, cleaning_frequency: quoteStartForm.cleaning_frequency },
             };
             const quoteJson = JSON.stringify(storedQuote);
             localStorage.setItem("alloy_quote_v1", quoteJson);
@@ -1176,6 +1170,7 @@ export default function BookV2Client() {
                 contact_last_name: resolvedLastName || prefillData.last_name,
                 address: serviceDetails.address,
                 city: serviceDetails.city,
+                home_type: serviceDetails.home_type || undefined,
                 bedrooms: serviceDetails.bedrooms,
                 bathrooms: serviceDetails.bathrooms,
                 access_method: serviceDetails.access_method,
@@ -1306,20 +1301,6 @@ export default function BookV2Client() {
                                     className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
                                     maxLength={10}
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Home type</label>
-                                <select
-                                    value={quoteStartForm.home_type}
-                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, home_type: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-                                >
-                                    <option value="">Select</option>
-                                    <option value="Single-Family Home">Single-Family Home</option>
-                                    <option value="Apartment / Condo">Apartment / Condo</option>
-                                    <option value="Townhome">Townhome</option>
-                                    <option value="Other">Other</option>
-                                </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage *</label>
@@ -1806,6 +1787,7 @@ export default function BookV2Client() {
                                 ) : (
                                     <>
                                         <ServiceDetailsForm
+                                            initialData={quote?.quote_input?.home_type ? { home_type: quote.quote_input.home_type } : undefined}
                                             onDataChange={handleServiceDetailsChange}
                                         />
                                         {serviceDetailsValid && (
