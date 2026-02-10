@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
-import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys, ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
+import { mapServiceTypeToKey, mapFrequencyToKey, ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
 
@@ -48,21 +48,19 @@ const ADDON_IDS: AddOnId[] = [
   "Baseboards",
 ];
 
-/** Normalize incoming add_ons to AddOnId[] (UI sends AddOnId or addon_key) */
-function parseAddOns(arr: unknown): AddOnId[] {
+/** Normalize incoming add_ons to addon keys (client sends ["fridge","oven"] or AddOnId; return lowercase keys) */
+function normalizeAddOnKeys(arr: unknown): string[] {
   if (!Array.isArray(arr)) return [];
-  const keyToId = Object.fromEntries(
-    (Object.entries(ADDON_ID_TO_KEY) as [AddOnId, string][]).map(([id, key]) => [key, id])
-  ) as Record<string, AddOnId>;
+  const keyToKey = (s: string) => {
+    const trimmed = s.trim();
+    if (!trimmed) return null;
+    if ((ADDON_IDS as string[]).includes(trimmed)) return ADDON_ID_TO_KEY[trimmed as AddOnId];
+    return trimmed.toLowerCase().replace(/\s+/g, "_");
+  };
   return arr
     .filter((x): x is string => typeof x === "string")
-    .map((x) => {
-      const trimmed = (x as string).trim();
-      if ((ADDON_IDS as string[]).includes(trimmed)) return trimmed as AddOnId;
-      const normalized = trimmed.toLowerCase().replace(/\s+/g, "_");
-      return keyToId[normalized] ?? null;
-    })
-    .filter((x): x is AddOnId => x != null);
+    .map(keyToKey)
+    .filter((x): x is string => x != null && x.length > 0);
 }
 
 export interface QuoteRefineBody {
@@ -75,54 +73,65 @@ export interface QuoteRefineBody {
   vertical_id?: string;
 }
 
-/** Canonical add-on from DB (addon_types + pricing_addons) */
+/** Cleaning vertical id (hardcoded for now) */
+const CLEANING_VERTICAL_ID = "64cb7d29-ec79-494b-a4e7-d8e9b94f1fe2";
+
+/** Canonical add-on from DB (addon_types + vertical_addons) */
 export type DbAddon = { key: string; label: string; price: number; sort_order: number };
 
-/** Load cleaning add-ons from addon_types + pricing_addons; returns list and price map keyed by addon_key */
+/** Load cleaning add-ons: types/order from addon_types, prices from vertical_addons */
 async function loadCleaningAddonsFromDb(
   supabase: ReturnType<typeof createAdminClient>
 ): Promise<{ available_addons: DbAddon[]; addonPriceMap: Record<string, { label: string; price: number }> }> {
   const addonPriceMap: Record<string, { label: string; price: number }> = {};
   const available_addons: DbAddon[] = [];
 
-  type AddonTypeRow = { id: string; addon_key: string; addon_name?: string; name?: string; sort_order?: number; is_active?: boolean; vertical_id?: string };
+  type AddonTypeRow = { id: string; key: string; label: string; position: number; is_active: boolean };
   const { data: typeRows, error: typesError } = await supabase
     .from("addon_types")
-    .select("id, addon_key, addon_name, name, sort_order, is_active, vertical_id")
-    .order("sort_order", { ascending: true });
+    .select("id, key, label, position, is_active")
+    .eq("is_active", true)
+    .order("position", { ascending: true });
   if (typesError) {
-    console.warn("[QUOTE_REFINE] addon_types query failed:", typesError.message);
-    return { available_addons, addonPriceMap };
+    console.error("[QUOTE_REFINE] addon_types query failed:", typesError.message);
+    throw new Error(`addon_types query failed: ${typesError.message}`);
   }
   const types = (typeRows ?? []) as AddonTypeRow[];
 
-  type PricingRow = { addon_type_id?: string; addon_key?: string; amount_cents?: number; price_cents?: number; vertical_id?: string };
-  const { data: priceRows, error: pricesError } = await supabase
-    .from("pricing_addons")
-    .select("addon_type_id, addon_key, amount_cents, price_cents, vertical_id");
-  if (pricesError) {
-    console.warn("[QUOTE_REFINE] pricing_addons query failed:", pricesError.message);
+  type VerticalAddonRow = {
+    vertical_id: string;
+    addon_key: string;
+    addon_name: string;
+    amount_cents: number;
+    sort_order: number;
+    is_active: boolean;
+  };
+  const { data: vaRows, error: vaError } = await supabase
+    .from("vertical_addons")
+    .select("vertical_id, addon_key, addon_name, amount_cents, sort_order, is_active")
+    .eq("vertical_id", CLEANING_VERTICAL_ID)
+    .eq("is_active", true);
+  if (vaError) {
+    console.error("[QUOTE_REFINE] vertical_addons query failed:", vaError.message);
+    throw new Error(`vertical_addons query failed: ${vaError.message}`);
   }
-  const prices = (priceRows ?? []) as PricingRow[];
-
-  const priceByTypeId = new Map<string, number>();
-  const priceByKey = new Map<string, number>();
-  for (const p of prices) {
-    const cents = p.amount_cents ?? p.price_cents ?? 0;
-    if (p.addon_type_id) priceByTypeId.set(p.addon_type_id, cents);
-    if (p.addon_key) priceByKey.set(String(p.addon_key).trim().toLowerCase(), cents);
+  const vaList = (vaRows ?? []) as VerticalAddonRow[];
+  const priceByKey = new Map<string, { label: string; price: number }>();
+  for (const va of vaList) {
+    const key = String(va.addon_key ?? "").trim().toLowerCase();
+    if (!key) continue;
+    const price = (va.amount_cents ?? 0) / 100;
+    priceByKey.set(key, { label: (va.addon_name ?? key).trim(), price });
   }
 
   for (const t of types) {
-    const key = (t.addon_key ?? "").trim().toLowerCase();
+    const key = String(t.key ?? "").trim().toLowerCase();
     if (!key) continue;
-    const active = t.is_active;
-    if (active === false) continue;
-    const label = (t.addon_name ?? t.name ?? t.addon_key ?? key).trim();
-    const sortOrder = typeof t.sort_order === "number" ? t.sort_order : 0;
-    const cents = priceByTypeId.get(t.id) ?? priceByKey.get(key) ?? 0;
-    const price = cents / 100;
-    available_addons.push({ key, label, price, sort_order: sortOrder });
+    const va = priceByKey.get(key);
+    const label = (t.label ?? va?.label ?? key).trim();
+    const price = va?.price ?? 0;
+    const position = typeof t.position === "number" ? t.position : 0;
+    available_addons.push({ key, label, price, sort_order: position });
     addonPriceMap[key] = { label, price };
   }
 
@@ -227,7 +236,7 @@ async function computeQuote(
 
 /**
  * POST /api/book-v2/quote-refine
- * Recalculates quote for given frequency/add-ons; add-on pricing from addon_types + pricing_addons.
+ * Recalculates quote for given frequency/add-ons; add-on pricing from addon_types + vertical_addons.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -241,12 +250,24 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const { available_addons: dbAvailableAddons, addonPriceMap } = await loadCleaningAddonsFromDb(supabase);
+    let dbAvailableAddons: DbAddon[];
+    let addonPriceMap: Record<string, { label: string; price: number }>;
+    try {
+      const loaded = await loadCleaningAddonsFromDb(supabase);
+      dbAvailableAddons = loaded.available_addons;
+      addonPriceMap = loaded.addonPriceMap;
+    } catch (loadErr) {
+      const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+      console.error("[QUOTE_REFINE] load add-ons failed:", msg);
+      return NextResponse.json(
+        { ok: false, message: "Failed to load add-on pricing" },
+        { status: 500 }
+      );
+    }
 
     const squareFootageOption = normalizeSquareFootageInput(square_footage);
     const frequencyOption = mapApiFrequencyToOption(body.cleaning_frequency ?? "one_time");
-    const addOns = parseAddOns(body.add_ons ?? []);
-    const selectedKeys = mapAddOnsToKeys(addOns);
+    const selectedKeys = normalizeAddOnKeys(body.add_ons ?? []);
 
     const quoteOutput = await computeQuote(
       supabase,
@@ -256,9 +277,11 @@ export async function POST(request: NextRequest) {
       addonPriceMap
     );
 
+    const verticalAddonsCount = Object.keys(addonPriceMap).length;
     console.log(
-      "[QUOTE_REFINE] addons_loaded=%s selected=%s addons_total=%s",
+      "[QUOTE_REFINE] loaded addon_types=%s vertical_addons=%s selected=%s addons_total=%s",
       dbAvailableAddons.length,
+      verticalAddonsCount,
       selectedKeys.join(",") || "(none)",
       quoteOutput.addons_total.toFixed(2)
     );
@@ -277,7 +300,7 @@ export async function POST(request: NextRequest) {
           home_type: body.home_type ?? (meta.quote_input as Record<string, unknown>)?.home_type,
           square_footage: square_footage,
           cleaning_frequency: body.cleaning_frequency ?? "one_time",
-          add_ons: addOns,
+          add_ons: selectedKeys,
         };
         await supabase
           .from("opportunities")
