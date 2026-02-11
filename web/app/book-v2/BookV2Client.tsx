@@ -270,6 +270,8 @@ export default function BookV2Client() {
 
     // Quote-start (first step) form state — square_footage is bucket key (SquareFootageOption)
     const [quoteStartForm, setQuoteStartForm] = useState({
+        first_name: "",
+        last_name: "",
         zip: "",
         square_footage: "" as string,
         cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
@@ -421,16 +423,18 @@ export default function BookV2Client() {
         setResolvedLastName(null);
     }, [debug, searchParams]);
 
-    // Prefill quote-start form with resolved email/phone when they become available
+    // Prefill quote-start form with resolved email/phone/name when they become available
     useEffect(() => {
-        if (resolvedEmail || resolvedPhone) {
+        if (resolvedEmail || resolvedPhone || resolvedFirstName || resolvedLastName) {
             setQuoteStartForm((f) => ({
                 ...f,
                 ...(resolvedEmail && { email: resolvedEmail }),
                 ...(resolvedPhone && { phone: resolvedPhone }),
+                ...(resolvedFirstName && { first_name: resolvedFirstName }),
+                ...(resolvedLastName && { last_name: resolvedLastName }),
             }));
         }
-    }, [resolvedEmail, resolvedPhone]);
+    }, [resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName]);
 
     // Background lead capture: when user lands with prefill (query params / storage) and we have
     // email or phone but no quote-start IDs yet, call quote-start once so we don't lose the lead.
@@ -829,7 +833,15 @@ export default function BookV2Client() {
 
     const handleQuoteStartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { zip, square_footage, cleaning_frequency, email, phone } = quoteStartForm;
+        const { first_name, last_name, zip, square_footage, cleaning_frequency, email, phone } = quoteStartForm;
+        if (!first_name?.trim()) {
+            setQuoteStartError("First name is required.");
+            return;
+        }
+        if (!last_name?.trim()) {
+            setQuoteStartError("Last name is required.");
+            return;
+        }
         if (!zip.trim()) {
             setQuoteStartError("ZIP code is required");
             return;
@@ -850,6 +862,8 @@ export default function BookV2Client() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    first_name: first_name.trim(),
+                    last_name: last_name.trim(),
                     zip: zip.trim(),
                     square_footage: square_footage.trim(),
                     cleaning_frequency: cleaning_frequency || "one_time",
@@ -888,6 +902,8 @@ export default function BookV2Client() {
             setQuote(normalizeQuote(storedQuote));
             setHasQuote(true);
             setQuoteJustSaved(true);
+            setResolvedFirstName(first_name.trim());
+            setResolvedLastName(last_name.trim());
             setCurrentStep("refine_quote");
             setTimeout(() => setQuoteJustSaved(false), 8000);
         } catch (err) {
@@ -1283,7 +1299,7 @@ export default function BookV2Client() {
             <Section className="max-w-7xl">
                 {/* Step 1: Get a quote in 30 seconds (no quote yet) */}
                 {currentStep === "quote_start" && !debug && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-lg">
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
                             Get a quote in 30 seconds
                         </h2>
@@ -1291,6 +1307,30 @@ export default function BookV2Client() {
                             We’ll calculate your price and save it so you can book when you’re ready.
                         </p>
                         <form onSubmit={handleQuoteStartSubmit} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">First name *</label>
+                                    <input
+                                        type="text"
+                                        value={quoteStartForm.first_name}
+                                        onChange={(e) => setQuoteStartForm((f) => ({ ...f, first_name: e.target.value }))}
+                                        placeholder="Jane"
+                                        className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                        autoComplete="given-name"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Last name *</label>
+                                    <input
+                                        type="text"
+                                        value={quoteStartForm.last_name}
+                                        onChange={(e) => setQuoteStartForm((f) => ({ ...f, last_name: e.target.value }))}
+                                        placeholder="Doe"
+                                        className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                        autoComplete="family-name"
+                                    />
+                                </div>
+                            </div>
                             <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">ZIP code *</label>
                                 <input
@@ -1364,7 +1404,7 @@ export default function BookV2Client() {
 
                 {/* Your Quote step: focal step after details; inline frequency + add-ons, then confirm */}
                 {currentStep === "refine_quote" && hasQuote && quote && !debug && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-lg">
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full">
                         {quoteRefreshMessage && (
                             <div className="mb-6 p-4 bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg text-alloy-midnight">
                                 <p className="text-sm font-medium text-alloy-pine">{quoteRefreshMessage}</p>
@@ -1485,7 +1525,7 @@ export default function BookV2Client() {
 
                 {/* Fallback message if no quote and not on quote_start step */}
                 {!hasQuote && !debug && currentStep !== "quote_start" && currentStep !== "refine_quote" && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 text-center">
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full text-center">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
                             Please start your quote first
                         </h2>
@@ -1503,7 +1543,7 @@ export default function BookV2Client() {
 
                 {/* Single-column stacked layout: Quote → Time Slot → Service Details → Payment */}
                 {hasQuote && currentStep !== "confirmed" && currentStep !== "refine_quote" && (
-                    <div className="space-y-6 max-w-2xl">
+                    <div className="space-y-6 max-w-4xl mx-auto">
                         {quoteJustSaved && (
                             <div className="bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg px-4 py-3 text-alloy-midnight">
                                 <p className="text-sm font-medium text-alloy-pine">
