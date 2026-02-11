@@ -283,7 +283,11 @@ export async function POST(request: NextRequest) {
                 access_note: access_note ?? null,
                 additional_notes: additional_notes ?? null,
             };
-            if (quote_input != null && typeof quote_input === "object") mergedMetadata.quote_input = quote_input;
+            const normalizedQuoteInput =
+                quote_input != null && typeof quote_input === "object"
+                    ? { ...quote_input, cleaning_frequency: service_frequency_key }
+                    : { cleaning_frequency: service_frequency_key };
+            mergedMetadata.quote_input = normalizedQuoteInput;
             if (quote_output != null && typeof quote_output === "object") mergedMetadata.quote_output = quote_output;
 
             const oppUpdate: Record<string, unknown> = {
@@ -297,7 +301,10 @@ export async function POST(request: NextRequest) {
                 metadata: mergedMetadata,
             };
             if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
-            if (bookedStageId) oppUpdate.pipeline_stage_id = bookedStageId;
+            if (bookedStageId) {
+                oppUpdate.pipeline_stage_id = bookedStageId;
+                oppUpdate.status = "booked";
+            }
             if (discount_code_id != null) {
                 (oppUpdate as Record<string, unknown>).discount_code_id = discount_code_id;
                 (oppUpdate as Record<string, unknown>).discount_code = discount_code ?? null;
@@ -496,7 +503,11 @@ export async function POST(request: NextRequest) {
                 access_note: access_note ?? null,
                 additional_notes: additional_notes ?? null,
             };
-            if (quote_input != null && typeof quote_input === "object") mergedMetaElse.quote_input = quote_input;
+            const normalizedQuoteInputElse =
+                quote_input != null && typeof quote_input === "object"
+                    ? { ...quote_input, cleaning_frequency: service_frequency_key }
+                    : { cleaning_frequency: service_frequency_key };
+            mergedMetaElse.quote_input = normalizedQuoteInputElse;
             if (quote_output != null && typeof quote_output === "object") mergedMetaElse.quote_output = quote_output;
 
             const updatePayload: Record<string, any> = {
@@ -512,7 +523,10 @@ export async function POST(request: NextRequest) {
                 metadata: mergedMetaElse,
             };
             if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
-            if (bookedStageIdElse) updatePayload.pipeline_stage_id = bookedStageIdElse;
+            if (bookedStageIdElse) {
+                updatePayload.pipeline_stage_id = bookedStageIdElse;
+                updatePayload.status = "booked";
+            }
             if (discount_code_id != null) {
                 updatePayload.discount_code_id = discount_code_id;
                 if (discount_code != null) updatePayload.discount_code = discount_code;
@@ -551,7 +565,11 @@ export async function POST(request: NextRequest) {
                 access_note: access_note ?? null,
                 additional_notes: additional_notes ?? null,
             };
-            if (quote_input != null && typeof quote_input === "object") insertMeta.quote_input = quote_input;
+            const normalizedQuoteInputInsert =
+                quote_input != null && typeof quote_input === "object"
+                    ? { ...quote_input, cleaning_frequency: service_frequency_key }
+                    : { cleaning_frequency: service_frequency_key };
+            insertMeta.quote_input = normalizedQuoteInputInsert;
             if (quote_output != null && typeof quote_output === "object") insertMeta.quote_output = quote_output;
 
             const insertPayload: Record<string, unknown> = {
@@ -559,7 +577,7 @@ export async function POST(request: NextRequest) {
                 primary_contact_id: contactId,
                 customer_id: customerId,
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
-                status: "open",
+                status: bookedStageIdElse ? "booked" : "open",
                 source: "website",
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,

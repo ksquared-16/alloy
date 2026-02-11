@@ -351,10 +351,11 @@ export async function POST(request: NextRequest) {
         .single();
       if (existing) {
         const meta = (existing.metadata as Record<string, unknown>) ?? {};
+        const apiKeyFromFreq = dbFreq?.frequency_key ?? body.cleaning_frequency ?? "one_time";
         const quote_input = {
           zip: body.zip ?? (meta.quote_input as Record<string, unknown>)?.zip,
           square_footage: square_footage,
-          cleaning_frequency: body.cleaning_frequency ?? "one_time",
+          cleaning_frequency: typeof apiKeyFromFreq === "string" ? apiKeyFromFreq : "one_time",
           add_ons: selectedKeys,
         };
         await supabase

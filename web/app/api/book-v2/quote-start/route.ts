@@ -62,6 +62,14 @@ function mapApiFrequencyToOption(
   }
 }
 
+/** Map display option to API key so quote_input.cleaning_frequency matches the quote we computed. */
+function optionToApiKey(option: CleaningFrequencyOption): "one_time" | "weekly" | "biweekly" | "monthly" {
+  if (option === "Weekly (30% Off)") return "weekly";
+  if (option === "Bi-Weekly (20% Off)") return "biweekly";
+  if (option === "Monthly (10% Off)") return "monthly";
+  return "one_time";
+}
+
 /**
  * Get or create pipeline stage by name for a pipeline.
  */
@@ -524,7 +532,7 @@ export async function POST(request: NextRequest) {
       square_footage: body.square_footage ?? square_footage_raw,
       beds: body.beds,
       baths: body.baths,
-      cleaning_frequency: body.cleaning_frequency ?? "one_time",
+      cleaning_frequency: optionToApiKey(cleaning_frequency),
       add_ons: Array.isArray(body.add_ons) ? body.add_ons : [],
       ...body.quote_context,
     };
