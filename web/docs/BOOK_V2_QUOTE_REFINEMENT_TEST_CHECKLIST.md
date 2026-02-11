@@ -7,18 +7,18 @@ Use this checklist to verify the quote refinement → booking flow after impleme
 ## 1) Modal opens from services/cleaning
 
 - **Steps:** Go to `/services/cleaning`, click **Get a Quote**.
-- **Expected:** Quote modal opens (no page navigation). Short form is visible (First name, ZIP, Home type, Square footage, Cleaning frequency, Email, Phone, “Get my quote”).
+- **Expected:** Quote modal opens (no page navigation). Short form is visible: **First name**, **Last name**, ZIP, Square footage, Cleaning frequency, Email, Phone, “Get my quote”. Home type is **not** on this form (it appears only in Service Details later).
 
 ---
 
 ## 2) Modal submit → contact, customer, opportunity
 
-- **Steps:** In the modal, fill: **First name**, **Email** (or phone), **ZIP**, **Home type**, **Square footage** bucket → Submit.
+- **Steps:** In the modal, fill: **First name**, **Last name**, **Email** (or phone), **ZIP**, **Square footage** bucket → Submit.
 - **Expected:**
-  - Contact created/updated in Supabase.
+  - Contact created/updated in Supabase (first_name + last_name).
   - Customer created and linked (or existing linked). Customer name = `{first_name} {last_name}` or email if no name.
   - Opportunity created in pipeline stage **Quote Started** with:
-    - Non-empty **name** (e.g. `Jane — Quote` or `user@example.com — Quote`, not blank).
+    - Non-empty **name** (e.g. `Jane Smith — Quote` or `user@example.com — Quote`, not blank).
     - **customer_id** set (not null).
   - Redirect to `/book-v2`.
 
@@ -50,8 +50,9 @@ Use this checklist to verify the quote refinement → booking flow after impleme
 
 ## 6) Continue to slot selection and complete booking
 
-- **Steps:** Click **Continue to pick time** → choose a slot → confirm time → fill service details → confirm details → enter payment (card) → submit.
+- **Steps:** Click **Continue to pick time** → choose a slot → confirm time → **fill Service Details** (Address, City, **Home type**, Bedrooms, Bathrooms, Access) → confirm details → enter payment (card) → submit.
 - **Expected:**
+  - **Home type** is collected and saved only in the Service Details step (not on Get a Quote). It is persisted to the opportunity/job (metadata and confirm payload).
   - Opportunity moves to **Booked** (no duplicate opportunity).
   - No duplicate contact/customer.
   - Job created with correct pricing context (frequency + add-ons from refined quote).
@@ -62,7 +63,7 @@ Use this checklist to verify the quote refinement → booking flow after impleme
 ## 7) Direct /book-v2 (incognito, no storage)
 
 - **Steps:** Open `/book-v2` in incognito (or clear localStorage/sessionStorage).
-- **Expected:** **quote_start** step (long form) is shown as fallback. No redirect. User can submit to create lead and then see Refine step.
+- **Expected:** **quote_start** step is shown: First name, Last name, ZIP, Square footage, Cleaning frequency, Email, Phone (“Get my quote”). No Home type on this step. No redirect. User can submit to create lead and then see Refine step.
 
 ---
 

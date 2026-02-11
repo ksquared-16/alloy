@@ -19,8 +19,8 @@ interface CleaningQuickQuoteFormProps {
 export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuoteFormProps) {
   const [form, setForm] = useState({
     first_name: "",
+    last_name: "",
     zip: "",
-    home_type: "",
     square_footage: "",
     cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
     email: "",
@@ -31,9 +31,13 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { first_name, zip, home_type, square_footage, cleaning_frequency, email, phone } = form;
+    const { first_name, last_name, zip, square_footage, cleaning_frequency, email, phone } = form;
     if (!first_name?.trim()) {
-      setError("First name is required");
+      setError("First name is required.");
+      return;
+    }
+    if (!last_name?.trim()) {
+      setError("Last name is required.");
       return;
     }
     if (!zip.trim()) {
@@ -56,13 +60,12 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           first_name: first_name.trim(),
+          last_name: last_name.trim(),
           zip: zip.trim(),
-          home_type: home_type || undefined,
           square_footage: square_footage.trim(),
           cleaning_frequency: cleaning_frequency || "one_time",
           email: email?.trim() || undefined,
           phone: phone?.trim() || undefined,
-          quote_context: { home_type, square_footage },
         }),
       });
       const data = await res.json();
@@ -88,7 +91,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         service: "Standard Cleaning",
         price_breakdown: undefined,
         addons: qo?.addons ?? [],
-        quote_input: { zip: zip.trim(), home_type: home_type || undefined, square_footage: square_footage.trim(), cleaning_frequency: cleaning_frequency || "one_time" },
+        quote_input: { zip: zip.trim(), square_footage: square_footage.trim(), cleaning_frequency: cleaning_frequency || "one_time" },
       };
       const quoteJson = JSON.stringify(storedQuote);
       localStorage.setItem("alloy_quote_v1", quoteJson);
@@ -104,16 +107,31 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">First name *</label>
-        <input
-          type="text"
-          value={form.first_name}
-          onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
-          placeholder="e.g. Jamie"
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-          maxLength={80}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">First name *</label>
+          <input
+            type="text"
+            value={form.first_name}
+            onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
+            placeholder="e.g. Jamie"
+            className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+            maxLength={80}
+            autoComplete="given-name"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Last name *</label>
+          <input
+            type="text"
+            value={form.last_name}
+            onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
+            placeholder="e.g. Smith"
+            className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+            maxLength={80}
+            autoComplete="family-name"
+          />
+        </div>
       </div>
       <div>
         <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">ZIP code *</label>
@@ -125,20 +143,6 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
           className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
           maxLength={10}
         />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Home type</label>
-        <select
-          value={form.home_type}
-          onChange={(e) => setForm((f) => ({ ...f, home_type: e.target.value }))}
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-        >
-          <option value="">Select</option>
-          <option value="Single-Family Home">Single-Family Home</option>
-          <option value="Apartment / Condo">Apartment / Condo</option>
-          <option value="Townhome">Townhome</option>
-          <option value="Other">Other</option>
-        </select>
       </div>
       <div>
         <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage *</label>
