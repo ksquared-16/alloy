@@ -8,7 +8,7 @@ import Accordion from "@/components/Accordion";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GetQuoteButton from "@/components/GetQuoteButton";
 
-type CleaningOptionType = "standard" | "deep" | "moveout" | null;
+type OptionKey = "standard" | "deep" | "moveout";
 
 const STANDARD_INCLUDED = [
   "Clean and sanitize all countertops and surfaces",
@@ -124,9 +124,8 @@ function BulletList({ items }: { items: string[] }) {
 export default function CleaningPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [hasRendered, setHasRendered] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<CleaningOptionType>(null);
-  const [learnMoreOpen, setLearnMoreOpen] = useState(false);
-  const [learnMoreOption, setLearnMoreOption] = useState<"standard" | "deep" | "moveout" | null>(null);
+  const [activeOption, setActiveOption] = useState<OptionKey | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -190,7 +189,7 @@ export default function CleaningPage() {
   }, []);
 
   useEffect(() => {
-    if (learnMoreOpen) {
+    if (modalOpen) {
       document.body.style.overflow = "hidden";
       const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
       document.body.style.paddingRight = `${scrollbarWidth}px`;
@@ -202,34 +201,39 @@ export default function CleaningPage() {
       document.body.style.overflow = "";
       document.body.style.paddingRight = "";
     };
-  }, [learnMoreOpen]);
+  }, [modalOpen]);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && learnMoreOpen) {
-        setLearnMoreOpen(false);
-        setLearnMoreOption(null);
+      if (e.key === "Escape" && modalOpen) {
+        setModalOpen(false);
+        setActiveOption(null);
       }
     };
-    if (learnMoreOpen) document.addEventListener("keydown", handleEsc);
+    if (modalOpen) document.addEventListener("keydown", handleEsc);
     return () => document.removeEventListener("keydown", handleEsc);
-  }, [learnMoreOpen]);
+  }, [modalOpen]);
 
-  const openLearnMore = (option: "standard" | "deep" | "moveout", e: React.MouseEvent) => {
-    e.stopPropagation();
-    setLearnMoreOption(option);
-    setLearnMoreOpen(true);
+  const openOptionModal = (option: OptionKey, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setActiveOption(option);
+    setModalOpen(true);
   };
 
-  const LEARN_MORE_TITLE: Record<"standard" | "deep" | "moveout", string> = {
+  const closeOptionModal = () => {
+    setModalOpen(false);
+    setActiveOption(null);
+  };
+
+  const OPTION_TITLE: Record<OptionKey, string> = {
     standard: "Standard Cleaning",
     deep: "Deep Cleaning",
     moveout: "Move-out Cleaning",
   };
 
-  const getLearnMoreItems = (): string[] => {
-    if (!learnMoreOption) return [];
-    return learnMoreOption === "standard" ? STANDARD_INCLUDED : DEEP_INCLUDED;
+  const getModalIncludedItems = (): string[] => {
+    if (!activeOption) return [];
+    return activeOption === "standard" ? STANDARD_INCLUDED : DEEP_INCLUDED;
   };
 
   useEffect(() => {
@@ -309,20 +313,19 @@ export default function CleaningPage() {
         </Section>
       )}
 
-      {/* Cleaning Options (merged with What's Included) — appears FIRST */}
+      {/* Cleaning Options — tiles only; details in modal */}
       <Section className="py-12 md:py-16 bg-white">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
           Cleaning Options
         </h2>
 
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* 3 selectable cards — same structure: icon+title row, optional subtitle, description, optional link */}
+        <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               type="button"
-              onClick={() => setSelectedOption("standard")}
+              onClick={() => openOptionModal("standard")}
               className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
-                selectedOption === "standard"
+                modalOpen && activeOption === "standard"
                   ? "border-alloy-blue bg-alloy-stone/30"
                   : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
               }`}
@@ -342,7 +345,7 @@ export default function CleaningPage() {
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
                 <button
                   type="button"
-                  onClick={(e) => openLearnMore("standard", e)}
+                  onClick={(e) => openOptionModal("standard", e)}
                   className="text-sm text-alloy-blue hover:underline"
                 >
                   Learn more
@@ -352,9 +355,9 @@ export default function CleaningPage() {
 
             <button
               type="button"
-              onClick={() => setSelectedOption("deep")}
+              onClick={() => openOptionModal("deep")}
               className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
-                selectedOption === "deep"
+                modalOpen && activeOption === "deep"
                   ? "border-alloy-blue bg-alloy-stone/30"
                   : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
               }`}
@@ -371,7 +374,7 @@ export default function CleaningPage() {
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
                 <button
                   type="button"
-                  onClick={(e) => openLearnMore("deep", e)}
+                  onClick={(e) => openOptionModal("deep", e)}
                   className="text-sm text-alloy-blue hover:underline"
                 >
                   Learn more
@@ -381,9 +384,9 @@ export default function CleaningPage() {
 
             <button
               type="button"
-              onClick={() => setSelectedOption("moveout")}
+              onClick={() => openOptionModal("moveout")}
               className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
-                selectedOption === "moveout"
+                modalOpen && activeOption === "moveout"
                   ? "border-alloy-blue bg-alloy-stone/30"
                   : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
               }`}
@@ -400,7 +403,7 @@ export default function CleaningPage() {
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
                 <button
                   type="button"
-                  onClick={(e) => openLearnMore("moveout", e)}
+                  onClick={(e) => openOptionModal("moveout", e)}
                   className="text-sm text-alloy-blue hover:underline"
                 >
                   Learn more
@@ -408,69 +411,6 @@ export default function CleaningPage() {
               </span>
             </button>
           </div>
-
-          {selectedOption === null && (
-            <p className="text-center text-alloy-midnight/70 text-sm">
-              Select a cleaning type to see what&apos;s included.
-            </p>
-          )}
-
-          {/* What's Included content — only after user selects a card */}
-          {selectedOption !== null && (
-            <div className="bg-white rounded-lg p-6 border border-alloy-stone/30">
-              {selectedOption === "standard" && (
-                <>
-                  <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
-                    Standard Cleaning
-                  </h3>
-                  <BulletList items={STANDARD_INCLUDED} />
-                </>
-              )}
-              {(selectedOption === "deep" || selectedOption === "moveout") && (
-                <>
-                  <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
-                    Deep Clean (Top-To-Bottom Deluxe)
-                  </h3>
-                  <BulletList items={DEEP_INCLUDED} />
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Frequencies: only when Standard selected */}
-          {selectedOption === "standard" && (
-            <>
-              <h3 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
-                Cleaning Frequencies
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {FREQUENCIES.map((freq) => (
-                  <div
-                    key={freq.label}
-                    className="bg-white rounded-lg p-4 border border-alloy-stone/30 text-center"
-                  >
-                    <h4 className="font-semibold text-alloy-blue mb-1">
-                      {freq.label}
-                      {freq.discount && (
-                        <span className="block text-xs text-alloy-juniper font-normal mt-0.5">
-                          ({freq.discount})
-                        </span>
-                      )}
-                    </h4>
-                    <p className="text-sm text-alloy-midnight/80">{freq.description}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-center text-alloy-midnight/80 max-w-3xl mx-auto">
-                Recurring service discounts: Weekly and bi-weekly cleanings qualify for preferred pricing. The more consistent your schedule, the better the rate. Monthly cleanings are priced individually based on your home size.
-              </p>
-            </>
-          )}
-          {(selectedOption === "deep" || selectedOption === "moveout") && (
-            <p className="text-center text-alloy-midnight/80">
-              Deep and Move-out cleanings are typically one-time services.
-            </p>
-          )}
         </div>
         <GetQuoteCTA />
       </Section>
@@ -560,33 +500,29 @@ export default function CleaningPage() {
         </div>
       </Section>
 
-      {/* Learn more modal */}
-      {learnMoreOpen && learnMoreOption && mounted &&
+      {/* Option details modal — What's Included + (Standard: Frequencies | Deep/Move-out: one-time note) */}
+      {modalOpen && activeOption && mounted &&
         createPortal(
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-            onClick={() => {
-              setLearnMoreOpen(false);
-              setLearnMoreOption(null);
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeOptionModal();
             }}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="learn-more-title"
+            aria-labelledby="option-modal-title"
           >
             <div
               className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20 shrink-0">
-                <h2 id="learn-more-title" className="text-xl font-bold text-alloy-midnight">
-                  {LEARN_MORE_TITLE[learnMoreOption]}
+                <h2 id="option-modal-title" className="text-xl font-bold text-alloy-midnight">
+                  {OPTION_TITLE[activeOption]}
                 </h2>
                 <button
                   type="button"
-                  onClick={() => {
-                    setLearnMoreOpen(false);
-                    setLearnMoreOption(null);
-                  }}
+                  onClick={closeOptionModal}
                   className="text-alloy-midnight/60 hover:text-alloy-midnight p-2 -mr-2 transition-colors"
                   aria-label="Close"
                 >
@@ -595,11 +531,46 @@ export default function CleaningPage() {
                   </svg>
                 </button>
               </div>
-              <div className="p-4 md:p-6 overflow-y-auto">
-                <h3 className="text-sm font-semibold text-alloy-midnight/80 uppercase tracking-wide mb-3">
-                  What&apos;s Included
-                </h3>
-                <BulletList items={getLearnMoreItems()} />
+              <div className="p-4 md:p-6 overflow-y-auto space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-alloy-midnight/80 uppercase tracking-wide mb-3">
+                    What&apos;s Included
+                  </h3>
+                  <BulletList items={getModalIncludedItems()} />
+                </div>
+                {activeOption === "standard" && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-alloy-midnight/80 uppercase tracking-wide mb-3">
+                      Cleaning Frequencies
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      {FREQUENCIES.map((freq) => (
+                        <div
+                          key={freq.label}
+                          className="bg-alloy-stone/30 rounded-lg p-3 border border-alloy-stone/30 text-center"
+                        >
+                          <h4 className="font-semibold text-alloy-blue text-sm mb-0.5">
+                            {freq.label}
+                            {freq.discount && (
+                              <span className="block text-xs text-alloy-juniper font-normal mt-0.5">
+                                ({freq.discount})
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-xs text-alloy-midnight/80">{freq.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-alloy-midnight/80">
+                      Recurring service discounts: Weekly and bi-weekly cleanings qualify for preferred pricing. The more consistent your schedule, the better the rate. Monthly cleanings are priced individually based on your home size.
+                    </p>
+                  </div>
+                )}
+                {(activeOption === "deep" || activeOption === "moveout") && (
+                  <p className="text-sm text-alloy-midnight/80">
+                    Deep and Move-out cleanings are typically one-time services.
+                  </p>
+                )}
               </div>
             </div>
           </div>,
