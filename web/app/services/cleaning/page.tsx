@@ -221,13 +221,15 @@ export default function CleaningPage() {
     setLearnMoreOpen(true);
   };
 
-  const LEARN_MORE_COPY: Record<"standard" | "deep" | "moveout", { title: string; body: string }> = {
-    standard:
-      { title: "Standard Cleaning", body: "Recurring options are available so you can keep your home consistently clean. Best for regular upkeep and maintenance." },
-    deep:
-      { title: "Deep Cleaning", body: "Includes deeper detail work: baseboards, inside appliances, and detailed scrubbing. Typically booked as a one-time service." },
-    moveout:
-      { title: "Move-out Cleaning", body: "Comprehensive cleaning to prepare your home for the next residents. Typically a one-time service." },
+  const LEARN_MORE_TITLE: Record<"standard" | "deep" | "moveout", string> = {
+    standard: "Standard Cleaning",
+    deep: "Deep Cleaning",
+    moveout: "Move-out Cleaning",
+  };
+
+  const getLearnMoreItems = (): string[] => {
+    if (!learnMoreOption) return [];
+    return learnMoreOption === "standard" ? STANDARD_INCLUDED : DEEP_INCLUDED;
   };
 
   useEffect(() => {
@@ -577,7 +579,7 @@ export default function CleaningPage() {
             >
               <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20 shrink-0">
                 <h2 id="learn-more-title" className="text-xl font-bold text-alloy-midnight">
-                  {LEARN_MORE_COPY[learnMoreOption].title}
+                  {LEARN_MORE_TITLE[learnMoreOption]}
                 </h2>
                 <button
                   type="button"
@@ -594,9 +596,10 @@ export default function CleaningPage() {
                 </button>
               </div>
               <div className="p-4 md:p-6 overflow-y-auto">
-                <p className="text-alloy-midnight/80 leading-relaxed">
-                  {LEARN_MORE_COPY[learnMoreOption].body}
-                </p>
+                <h3 className="text-sm font-semibold text-alloy-midnight/80 uppercase tracking-wide mb-3">
+                  What&apos;s Included
+                </h3>
+                <BulletList items={getLearnMoreItems()} />
               </div>
             </div>
           </div>,
