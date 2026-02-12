@@ -1,74 +1,114 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import Link from "next/link";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
+import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GetQuoteButton from "@/components/GetQuoteButton";
-import { useQuoteModal } from "@/lib/quoteModal";
+
+type CleaningOptionType = "standard" | "deep" | "move-out";
+
+const STANDARD_INCLUDED = [
+  "Clean and sanitize all countertops and surfaces",
+  "Wipe down appliances (exterior)",
+  "Clean inside microwave",
+  "Sweep and mop all floors",
+  "Vacuum carpets and rugs",
+  "Clean and sanitize toilets",
+  "Scrub showers and tubs",
+  "Clean mirrors and fixtures",
+  "Dust all surfaces and furniture",
+  "Make beds",
+  "Empty trash and replace liners",
+  "Clean windowsills",
+];
+
+const DEEP_INCLUDED = [
+  "Everything in Standard Cleaning, plus:",
+  "Clean inside oven and refrigerator",
+  "Deep scrub baseboards and trim",
+  "Clean inside cabinets (exterior and interior)",
+  "Wash windows (interior)",
+  "Clean blinds and window tracks",
+  "Deep clean light fixtures and ceiling fans",
+  "Detailed scrubbing of grout and tile",
+  "Clean behind and under furniture",
+  "Wipe down doors and door frames",
+  "Clean vents and air registers",
+  "Detailed dusting of high and low areas",
+];
+
+const FREQUENCIES = [
+  { label: "One-time", description: "Perfect for special occasions or trying us out.", discount: null },
+  { label: "Weekly", description: "Keep your home consistently clean every week.", discount: "30% Off" },
+  { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "20% Off" },
+  { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "10% Off" },
+];
+
+const VALUE_TILES = [
+  {
+    title: "We don't sell your information",
+    description:
+      "Your information stays with us. We coordinate directly with a pro we know and trust. No lead blasting, no spam calls, no middleman chaos.",
+    icon: (
+      <svg className="w-8 h-8 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    ),
+  },
+  {
+    title: "We stay involved",
+    description:
+      "Alloy doesn't disappear after booking. We coordinate scheduling, handle communication, and make sure everything goes smoothly. If something's not right, we fix it.",
+    icon: (
+      <svg className="w-8 h-8 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Fair pricing, transparent costs",
+    description:
+      "You pay fair prices. Pros get fair pay. No hidden fees, no surprise charges. We're transparent about costs because trust requires honesty.",
+    icon: (
+      <svg className="w-8 h-8 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Local pros, backed by Alloy",
+    description:
+      "Every cleaner is local to Bend, vetted, insured, and background-checked. We know them personally. When you book through Alloy, you're covered by Alloy.",
+    icon: (
+      <svg className="w-8 h-8 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    ),
+  },
+];
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-2.5">
+      {items.map((item, i) => (
+        <li key={i} className="text-sm text-gray-700 flex items-start">
+          <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function CleaningPage() {
-  const { openModal } = useQuoteModal();
+  const [isOpen, setIsOpen] = useState(false);
+  const [hasRendered, setHasRendered] = useState(false);
+  const [selectedOption, setSelectedOption] = useState<CleaningOptionType>("standard");
   const heroRef = useRef<HTMLDivElement>(null);
-  const cleaningOptions = [
-    {
-      type: "Standard",
-      subtitle: "Recurring options available",
-      description:
-        "Regular maintenance cleaning to keep your home fresh and tidy.",
-    },
-    {
-      type: "Deep",
-      subtitle: null,
-      description:
-        "Thorough cleaning including baseboards, inside appliances, and detailed scrubbing.",
-    },
-    {
-      type: "Move-out",
-      subtitle: null,
-      description:
-        "Comprehensive cleaning to prepare your home for the next residents.",
-    },
-  ];
-
-  const frequencies = [
-    { label: "One-time", description: "Perfect for special occasions or trying us out.", discount: null },
-    { label: "Weekly", description: "Keep your home consistently clean every week.", discount: "30% Off" },
-    { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "20% Off" },
-    { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "10% Off" },
-  ];
-
-  const whatsIncluded = {
-    kitchen: [
-      "Clean and sanitize countertops",
-      "Wipe down appliances",
-      "Clean inside microwave",
-      "Sweep and mop floors",
-      "Take out trash",
-    ],
-    bathrooms: [
-      "Clean and sanitize toilets",
-      "Scrub showers and tubs",
-      "Clean mirrors and fixtures",
-      "Wipe down surfaces",
-      "Sweep and mop floors",
-    ],
-    living: [
-      "Dust all surfaces",
-      "Vacuum carpets and rugs",
-      "Mop hard floors",
-      "Clean windowsills",
-      "Organize and tidy",
-    ],
-    bedrooms: [
-      "Make beds",
-      "Dust furniture",
-      "Vacuum floors",
-      "Empty trash",
-      "Tidy surfaces",
-    ],
-  };
+  const formRef = useRef<HTMLDivElement>(null);
 
   const cleaningFaqs = [
     {
@@ -98,304 +138,301 @@ export default function CleaningPage() {
     },
   ];
 
-  // Open quote modal when ?open=1 or #quote-form (no redirect)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const hash = window.location.hash;
-    const params = new URLSearchParams(window.location.search);
-    const open = params.get("open");
-    if (hash === "#quote-form" || open === "1") {
-      openModal({ defaultService: "cleaning" });
+  const handleToggle = () => {
+    if (!isOpen) {
+      setIsOpen(true);
+      setHasRendered(true);
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } else {
+      setIsOpen(false);
+      setTimeout(() => {
+        heroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     }
-  }, [openModal]);
+  };
+
+  const scrollToQuoteForm = () => {
+    if (!isOpen) {
+      setIsOpen(true);
+      setHasRendered(true);
+    }
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
 
   const GetQuoteCTA = () => (
     <div className="flex justify-center mt-8">
-      <GetQuoteButton defaultService="cleaning" className="w-full md:w-auto">
-        Get a quote
-      </GetQuoteButton>
+      <GetQuoteButton className="w-full md:w-auto" defaultService="cleaning" />
     </div>
   );
+
+  useEffect(() => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    fetch(`${apiBaseUrl}/`, { method: "GET" }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const checkHash = () => {
+      if (isOpen) return;
+      const { hash, search } = window.location;
+      const params = new URLSearchParams(search);
+      const shouldOpen = hash === "#quote-form" || params.get("open") === "1";
+      if (!shouldOpen) return;
+      setIsOpen(true);
+      setHasRendered(true);
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    };
+    checkHash();
+    window.addEventListener("hashchange", checkHash);
+    return () => window.removeEventListener("hashchange", checkHash);
+  }, [isOpen]);
 
   return (
     <div>
       {/* Hero */}
       <section className="bg-alloy-stone" ref={heroRef}>
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
-          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
-            {/* Background Image */}
-            <Image
-              src="/hero/home_cleaning_hero.jpeg"
-              alt="Home cleaning service"
-              fill
-              priority
-              className="object-cover object-[70%_50%] sm:object-center"
-              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
-            />
-
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
-
-            {/* Content Overlay */}
-            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
-              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
-                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
-                  Home Cleaning You Can Actually Rely On
-                </h1>
-                <p className="text-base md:text-lg text-white/90">
-                  Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
-                    Get a quote
-                  </GetQuoteButton>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-center">
+            <div className="space-y-3 md:space-y-6">
+              <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">
+                Home Cleaning You Can Actually Rely On
+              </h1>
+              <p className="text-base md:text-lg text-white/90">
+                Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
+                  Get a quote
+                </GetQuoteButton>
               </div>
+            </div>
+            <div className="relative w-full aspect-[4/3] lg:aspect-square rounded-xl overflow-hidden bg-alloy-midnight/20">
+              <Image
+                src="/hero/home_cleaning_hero.jpeg"
+                alt="Home cleaning service"
+                fill
+                priority
+                className="object-cover"
+                sizes="(max-width: 1024px) 100vw, 50vw"
+              />
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA opens quote modal (cleaning short form) */}
-      <Section id="quote-form" className="pt-6 pb-0 bg-white">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-xl font-bold text-alloy-midnight mb-2">
-            Get a quote in 30 seconds
-          </h2>
-          <p className="text-alloy-midnight/80 mb-4">
-            Answer a few quick questions and we&apos;ll show you your price — then pick a time when you&apos;re ready.
-          </p>
-          <GetQuoteButton defaultService="cleaning" className="w-full md:w-auto">
-            Get a quote
-          </GetQuoteButton>
+      {/* Quote Form */}
+      {isOpen && (
+        <Section id="quote-form" ref={formRef} className="pt-6 pb-0 bg-white">
+          <div className="max-w-2xl md:max-w-4xl mx-auto">
+            <div className="rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm bg-white">
+              <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20">
+                <h2 className="text-xl font-bold text-alloy-midnight">Get a quote</h2>
+                <button
+                  onClick={handleToggle}
+                  className="text-sm text-alloy-juniper hover:text-alloy-juniper/80 font-medium transition-colors"
+                  aria-label="Hide form"
+                  aria-expanded="true"
+                  aria-controls="quote-form-content"
+                >
+                  Hide form
+                </button>
+              </div>
+              <div id="quote-form-content" className="p-4 md:p-6">
+                {hasRendered && <CleaningQuoteForm />}
+              </div>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* Cleaning Options (merged with What's Included) — appears FIRST */}
+      <Section className="py-12 md:py-16 bg-white">
+        <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
+          Cleaning Options
+        </h2>
+
+        <div className="max-w-4xl mx-auto space-y-8">
+          {/* 3 selectable cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              type="button"
+              onClick={() => setSelectedOption("standard")}
+              className={`rounded-lg p-6 border-2 text-left transition-colors ${
+                selectedOption === "standard"
+                  ? "border-alloy-blue bg-alloy-stone/30"
+                  : "border-gray-200 bg-alloy-stone hover:border-alloy-stone/50"
+              }`}
+            >
+              <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
+                Standard Cleaning
+              </h3>
+              <p className="text-xs text-alloy-midnight/60 mt-1 leading-tight">
+                Recurring options available
+              </p>
+              <p className="text-gray-600 text-sm mt-3 leading-relaxed">
+                Regular maintenance cleaning to keep your home fresh and tidy.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedOption("deep")}
+              className={`rounded-lg p-6 border-2 text-left transition-colors ${
+                selectedOption === "deep"
+                  ? "border-alloy-blue bg-alloy-stone/30"
+                  : "border-gray-200 bg-alloy-stone hover:border-alloy-stone/50"
+              }`}
+            >
+              <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
+                Deep Cleaning
+              </h3>
+              <p className="text-gray-600 text-sm mt-3 leading-relaxed">
+                Thorough cleaning including baseboards, inside appliances, and detailed scrubbing.
+              </p>
+            </button>
+
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => setSelectedOption("move-out")}
+                className={`rounded-lg p-6 border-2 text-left transition-colors flex-grow ${
+                  selectedOption === "move-out"
+                    ? "border-alloy-blue bg-alloy-stone/30"
+                    : "border-gray-200 bg-alloy-stone hover:border-alloy-stone/50"
+                }`}
+              >
+                <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
+                  Move-out Cleaning
+                </h3>
+                <p className="text-gray-600 text-sm mt-3 leading-relaxed">
+                  Comprehensive cleaning to prepare your home for the next residents.
+                </p>
+              </button>
+              <Link
+                href="/services/cleaning/move-out"
+                className="text-sm text-alloy-blue hover:underline mt-2 px-6 pb-1"
+              >
+                Learn more about move-out cleaning →
+              </Link>
+            </div>
+          </div>
+
+          {/* What's Included content for selected option */}
+          <div className="bg-white rounded-lg p-6 border border-gray-200">
+            {selectedOption === "standard" && (
+              <>
+                <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
+                  Standard Cleaning
+                </h3>
+                <BulletList items={STANDARD_INCLUDED} />
+              </>
+            )}
+            {(selectedOption === "deep" || selectedOption === "move-out") && (
+              <>
+                <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
+                  Deep Clean (Top-To-Bottom Deluxe)
+                </h3>
+                <BulletList items={DEEP_INCLUDED} />
+              </>
+            )}
+          </div>
+
+          {/* Frequencies: only when Standard selected */}
+          {selectedOption === "standard" && (
+            <>
+              <h3 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
+                Cleaning Frequencies
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {FREQUENCIES.map((freq) => (
+                  <div
+                    key={freq.label}
+                    className="bg-white rounded-lg p-4 border border-gray-200 text-center"
+                  >
+                    <h4 className="font-semibold text-alloy-blue mb-1">
+                      {freq.label}
+                      {freq.discount && (
+                        <span className="block text-xs text-alloy-juniper font-normal mt-0.5">
+                          ({freq.discount})
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-sm text-gray-600">{freq.description}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-center text-alloy-midnight/80 max-w-3xl mx-auto">
+                Recurring service discounts: Weekly and bi-weekly cleanings qualify for preferred pricing. The more consistent your schedule, the better the rate. Monthly cleanings are priced individually based on your home size.
+              </p>
+            </>
+          )}
+          {(selectedOption === "deep" || selectedOption === "move-out") && (
+            <p className="text-center text-alloy-midnight/80">
+              Deep and Move-out cleanings are typically one-time services.
+            </p>
+          )}
+        </div>
+        <GetQuoteCTA />
+      </Section>
+
+      {/* Image placeholder: full-width banner between Cleaning Options and What Makes Alloy Different */}
+      <Section className="py-0">
+        <div
+          className="w-full aspect-[21/9] max-h-[280px] bg-alloy-stone/40 rounded-lg flex items-center justify-center text-alloy-midnight/50 text-sm font-medium"
+          role="img"
+          aria-label="Cleaning placeholder image"
+        >
+          Cleaning Placeholder
         </div>
       </Section>
 
-      {/* What Makes Alloy Different */}
+      {/* What Makes Alloy Different — value tiles */}
       <Section className="py-12 md:py-16">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
           What Makes Alloy Different
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-          {[
-            {
-              title: "We don't sell your information",
-              description:
-                "Your information stays with us. We coordinate directly with a pro we know and trust. No lead blasting, no spam calls, no middleman chaos.",
-            },
-            {
-              title: "We stay involved",
-              description:
-                "Alloy doesn't disappear after booking. We coordinate scheduling, handle communication, and make sure everything goes smoothly. If something's not right, we fix it.",
-            },
-            {
-              title: "Fair pricing, transparent costs",
-              description:
-                "You pay fair prices. Pros get fair pay. No hidden fees, no surprise charges. We're transparent about costs because trust requires honesty.",
-            },
-            {
-              title: "Local pros, backed by Alloy",
-              description:
-                "Every cleaner is local to Bend, vetted, insured, and background-checked. We know them personally. When you book through Alloy, you're covered by Alloy.",
-            },
-          ].map((point) => (
+          {VALUE_TILES.map((tile) => (
             <div
-              key={point.title}
-              className="bg-white rounded-lg p-6 border border-gray-200"
+              key={tile.title}
+              className="bg-white rounded-lg p-6 border border-gray-200 flex gap-4"
             >
-              <h3 className="text-xl font-semibold text-alloy-blue mb-2">
-                {point.title}
-              </h3>
-              <p className="text-gray-600">{point.description}</p>
-            </div>
-          ))}
-        </div>
-        <GetQuoteCTA />
-      </Section>
-
-      {/* Cleaning Options */}
-      <Section className="py-16 bg-white">
-        <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
-          Cleaning Options
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {cleaningOptions.map((option) => {
-            const isMoveOut = option.type === "Move-out";
-            const content = (
-              <div className="bg-alloy-stone rounded-lg p-6 border border-gray-200 flex flex-col h-full">
-                <div className="mb-3">
-                  <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
-                    {option.type} Cleaning
-                  </h3>
-                  {option.subtitle && (
-                    <p className="text-xs text-alloy-midnight/60 mt-1 leading-tight">
-                      {option.subtitle}
-                    </p>
-                  )}
-                </div>
-                <p className="text-gray-600 text-sm flex-grow leading-relaxed">{option.description}</p>
+              <div className="shrink-0">{tile.icon}</div>
+              <div>
+                <h3 className="text-xl font-semibold text-alloy-blue mb-2">
+                  {tile.title}
+                </h3>
+                <p className="text-gray-600 text-sm leading-relaxed">{tile.description}</p>
               </div>
-            );
-            return isMoveOut ? (
-              <Link key={option.type} href="/services/cleaning/move-out">
-                {content}
-              </Link>
-            ) : (
-              <div key={option.type}>{content}</div>
-            );
-          })}
-        </div>
-
-        <h3 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
-          Cleaning Frequencies
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {frequencies.map((freq) => (
-            <div
-              key={freq.label}
-              className="bg-white rounded-lg p-4 border border-gray-200 text-center"
-            >
-              <h4 className="font-semibold text-alloy-blue mb-1">
-                {freq.label}
-                {freq.discount && (
-                  <span className="block text-xs text-alloy-juniper font-normal mt-0.5">
-                    ({freq.discount})
-                  </span>
-                )}
-              </h4>
-              <p className="text-sm text-gray-600">{freq.description}</p>
             </div>
           ))}
-        </div>
-        <div className="max-w-3xl mx-auto">
-          <p className="text-center text-alloy-midnight/80">
-            Recurring service discounts: Weekly and bi-weekly cleanings qualify for preferred pricing. The more consistent your schedule, the better the rate. Monthly cleanings are priced individually based on your home size.
-          </p>
         </div>
         <GetQuoteCTA />
       </Section>
 
-      {/* What's Included - 2 Column Comparison */}
-      <Section className="py-16">
-        <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
-          What's Included
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-          {/* Standard Cleaning */}
-          <div className="bg-white rounded-lg p-6 border border-gray-200">
-            <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
-              Standard Cleaning
-            </h3>
-            <ul className="space-y-2.5">
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean and sanitize all countertops and surfaces</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Wipe down appliances (exterior)</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean inside microwave</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Sweep and mop all floors</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Vacuum carpets and rugs</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean and sanitize toilets</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Scrub showers and tubs</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean mirrors and fixtures</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Dust all surfaces and furniture</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Make beds</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Empty trash and replace liners</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean windowsills</span>
-              </li>
-            </ul>
+      {/* Image placeholder: 2-image grid near bottom before final CTA */}
+      <Section className="py-12 md:py-16 bg-white">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+          <div
+            className="aspect-[4/3] bg-alloy-stone/40 rounded-lg flex items-center justify-center text-alloy-midnight/50 text-sm font-medium"
+            role="img"
+            aria-label="Cleaning placeholder image"
+          >
+            Cleaning Placeholder
           </div>
-
-          {/* Deep Clean */}
-          <div className="bg-white rounded-lg p-6 border border-gray-200">
-            <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
-              Deep Clean (Top-To-Bottom Deluxe)
-            </h3>
-            <ul className="space-y-2.5">
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Everything in Standard Cleaning, plus:</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean inside oven and refrigerator</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Deep scrub baseboards and trim</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean inside cabinets (exterior and interior)</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Wash windows (interior)</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean blinds and window tracks</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Deep clean light fixtures and ceiling fans</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Detailed scrubbing of grout and tile</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean behind and under furniture</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Wipe down doors and door frames</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Clean vents and air registers</span>
-              </li>
-              <li className="text-sm text-gray-700 flex items-start">
-                <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
-                <span>Detailed dusting of high and low areas</span>
-              </li>
-            </ul>
+          <div
+            className="aspect-[4/3] bg-alloy-stone/40 rounded-lg flex items-center justify-center text-alloy-midnight/50 text-sm font-medium"
+            role="img"
+            aria-label="Cleaning placeholder image"
+          >
+            Cleaning Placeholder
           </div>
         </div>
-        <GetQuoteCTA />
       </Section>
 
       {/* FAQ */}
@@ -418,10 +455,10 @@ export default function CleaningPage() {
         <div className="bg-alloy-pine rounded-lg p-8 md:p-12 text-center text-white">
           <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
           <p className="text-lg mb-6 opacity-90">
-            Get your quote and pick a time in one place.
+            Submit your quote request above. We'll text you shortly to confirm details.
           </p>
           <div className="flex justify-center">
-            <GetQuoteButton defaultService="cleaning" className="!bg-white !text-alloy-midnight hover:!bg-alloy-stone hover:!text-alloy-midnight">
+            <GetQuoteButton defaultService="cleaning" className="bg-white !text-alloy-midnight hover:bg-alloy-stone hover:!text-alloy-midnight">
               Start my quote
             </GetQuoteButton>
           </div>
@@ -430,4 +467,3 @@ export default function CleaningPage() {
     </div>
   );
 }
-
