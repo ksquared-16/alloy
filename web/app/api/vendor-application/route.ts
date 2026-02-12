@@ -180,11 +180,18 @@ export async function POST(request: NextRequest) {
 
     const vendorId = (vendor as { id: string }).id;
 
-    for (const verticalId of vertical_ids) {
-      await supabase.from("vendor_verticals").upsert(
-        { vendor_id: vendorId, vertical_id: verticalId },
-        { onConflict: ["vendor_id", "vertical_id"] }
-      );
+    const vendorVerticalsRows = vertical_ids.map((vertical_id) => ({
+      vendor_id: vendorId,
+      vertical_id,
+    }));
+    if (vendorVerticalsRows.length > 0) {
+      const { error: vvErr } = await supabase
+        .from("vendor_verticals")
+        .upsert(vendorVerticalsRows, { onConflict: "vendor_id,vertical_id" });
+      if (vvErr) {
+        console.error("[VENDOR_APPLICATION] Vendor verticals upsert failed:", vvErr.message);
+        return NextResponse.json({ ok: false, error: "Failed to save services" }, { status: 500 });
+      }
     }
 
     const ext = (filename: string) => {
