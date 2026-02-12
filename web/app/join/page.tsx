@@ -1,21 +1,13 @@
 "use client";
 
 import Section from "@/components/Section";
-import GhlEmbed from "@/components/GhlEmbed";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import VendorApplicationModal from "@/components/join/VendorApplicationModal";
+import PrimaryButton from "@/components/PrimaryButton";
 
 export default function JoinPage() {
-  const [ghlFormUrl, setGhlFormUrl] = useState<string>("");
-
-  useEffect(() => {
-    // Use window.location.origin to ensure staging stays on staging domain
-    if (typeof window !== "undefined") {
-      const redirectUrl = `${window.location.origin}/join-thank-you`;
-      const formUrl = `https://api.leadconnectorhq.com/widget/form/S4ajOQFaanzumo8eyadC?redirectUrl=${encodeURIComponent(redirectUrl)}`;
-      setGhlFormUrl(formUrl);
-    }
-  }, []);
+  const [modalOpen, setModalOpen] = useState(false);
   const benefits = [
     "Pick your own jobs and set your schedule",
     "We handle the busywork, so you can focus on what you're best at",
@@ -138,22 +130,20 @@ export default function JoinPage() {
 
       {/* Application Form */}
       <Section className="py-16 bg-white">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold text-alloy-midnight mb-4 text-center">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-alloy-midnight mb-4">
             Apply to work with Alloy
           </h2>
-          <p className="text-center text-alloy-midnight/80 mb-8">
-            Fill out the form below. We'll review your application and be in touch soon.
+          <p className="text-alloy-midnight/80 mb-8">
+            We&apos;ll review your application and be in touch soon.
           </p>
-          {ghlFormUrl && (
-            <GhlEmbed
-              src={ghlFormUrl}
-              title="Subcontractor Onboarding"
-              height={1845}
-            />
-          )}
+          <PrimaryButton onClick={() => setModalOpen(true)}>
+            Apply to Join
+          </PrimaryButton>
         </div>
       </Section>
+
+      <VendorApplicationModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   );
 }
