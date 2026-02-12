@@ -8,7 +8,7 @@ import Accordion from "@/components/Accordion";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GetQuoteButton from "@/components/GetQuoteButton";
 
-type CleaningOptionType = "standard" | "deep" | "move-out";
+type CleaningOptionType = "standard" | "deep" | "moveout" | null;
 
 const STANDARD_INCLUDED = [
   "Clean and sanitize all countertops and surfaces",
@@ -46,6 +46,24 @@ const FREQUENCIES = [
   { label: "Bi-Weekly", description: "Every other week for regular maintenance.", discount: "20% Off" },
   { label: "Monthly", description: "Monthly clean to keep things fresh.", discount: "10% Off" },
 ];
+
+const OPTION_CARD_ICON = {
+  standard: (
+    <svg className="w-5 h-5 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+  ),
+  deep: (
+    <svg className="w-5 h-5 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+    </svg>
+  ),
+  moveout: (
+    <svg className="w-5 h-5 text-alloy-blue shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    </svg>
+  ),
+};
 
 const VALUE_TILES = [
   {
@@ -94,7 +112,7 @@ function BulletList({ items }: { items: string[] }) {
   return (
     <ul className="space-y-2.5">
       {items.map((item, i) => (
-        <li key={i} className="text-sm text-gray-700 flex items-start">
+        <li key={i} className="text-sm text-alloy-midnight/80 flex items-start">
           <span className="text-alloy-juniper mr-2 mt-0.5">•</span>
           <span>{item}</span>
         </li>
@@ -106,7 +124,7 @@ function BulletList({ items }: { items: string[] }) {
 export default function CleaningPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [hasRendered, setHasRendered] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<CleaningOptionType>("standard");
+  const [selectedOption, setSelectedOption] = useState<CleaningOptionType>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -153,16 +171,6 @@ export default function CleaningPage() {
     }
   };
 
-  const scrollToQuoteForm = () => {
-    if (!isOpen) {
-      setIsOpen(true);
-      setHasRendered(true);
-    }
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-  };
-
   const GetQuoteCTA = () => (
     <div className="flex justify-center mt-8">
       <GetQuoteButton className="w-full md:w-auto" defaultService="cleaning" />
@@ -194,32 +202,33 @@ export default function CleaningPage() {
 
   return (
     <div>
-      {/* Hero */}
+      {/* Hero — matches homepage hero layout */}
       <section className="bg-alloy-stone" ref={heroRef}>
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-center">
-            <div className="space-y-3 md:space-y-6">
-              <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">
-                Home Cleaning You Can Actually Rely On
-              </h1>
-              <p className="text-base md:text-lg text-white/90">
-                Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
-                  Get a quote
-                </GetQuoteButton>
+          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
+            <Image
+              src="/hero/home_cleaning_hero.jpeg"
+              alt="Home cleaning service"
+              fill
+              priority
+              className="object-cover object-[70%_50%] sm:object-center"
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
+            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
+              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
+                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
+                  Home Cleaning You Can Actually Rely On
+                </h1>
+                <p className="text-base md:text-lg text-white/90">
+                  Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
+                    Get a quote
+                  </GetQuoteButton>
+                </div>
               </div>
-            </div>
-            <div className="relative w-full aspect-[4/3] lg:aspect-square rounded-xl overflow-hidden bg-alloy-midnight/20">
-              <Image
-                src="/hero/home_cleaning_hero.jpeg"
-                alt="Home cleaning service"
-                fill
-                priority
-                className="object-cover"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-              />
             </div>
           </div>
         </div>
@@ -257,24 +266,27 @@ export default function CleaningPage() {
         </h2>
 
         <div className="max-w-4xl mx-auto space-y-8">
-          {/* 3 selectable cards */}
+          {/* 3 selectable cards — same structure: icon+title row, optional subtitle, description, optional link */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               type="button"
               onClick={() => setSelectedOption("standard")}
-              className={`rounded-lg p-6 border-2 text-left transition-colors ${
+              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
                 selectedOption === "standard"
                   ? "border-alloy-blue bg-alloy-stone/30"
-                  : "border-gray-200 bg-alloy-stone hover:border-alloy-stone/50"
+                  : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
               }`}
             >
-              <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
-                Standard Cleaning
-              </h3>
+              <div className="flex items-center gap-2">
+                {OPTION_CARD_ICON.standard}
+                <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
+                  Standard Cleaning
+                </h3>
+              </div>
               <p className="text-xs text-alloy-midnight/60 mt-1 leading-tight">
                 Recurring options available
               </p>
-              <p className="text-gray-600 text-sm mt-3 leading-relaxed">
+              <p className="text-alloy-midnight/80 text-sm mt-3 leading-relaxed flex-grow">
                 Regular maintenance cleaning to keep your home fresh and tidy.
               </p>
             </button>
@@ -282,65 +294,80 @@ export default function CleaningPage() {
             <button
               type="button"
               onClick={() => setSelectedOption("deep")}
-              className={`rounded-lg p-6 border-2 text-left transition-colors ${
+              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
                 selectedOption === "deep"
                   ? "border-alloy-blue bg-alloy-stone/30"
-                  : "border-gray-200 bg-alloy-stone hover:border-alloy-stone/50"
+                  : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
               }`}
             >
-              <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
-                Deep Cleaning
-              </h3>
-              <p className="text-gray-600 text-sm mt-3 leading-relaxed">
+              <div className="flex items-center gap-2">
+                {OPTION_CARD_ICON.deep}
+                <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
+                  Deep Cleaning
+                </h3>
+              </div>
+              <p className="text-alloy-midnight/80 text-sm mt-3 leading-relaxed flex-grow">
                 Thorough cleaning including baseboards, inside appliances, and detailed scrubbing.
               </p>
             </button>
 
-            <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => setSelectedOption("move-out")}
-                className={`rounded-lg p-6 border-2 text-left transition-colors flex-grow ${
-                  selectedOption === "move-out"
-                    ? "border-alloy-blue bg-alloy-stone/30"
-                    : "border-gray-200 bg-alloy-stone hover:border-alloy-stone/50"
-                }`}
-              >
+            <button
+              type="button"
+              onClick={() => setSelectedOption("moveout")}
+              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
+                selectedOption === "moveout"
+                  ? "border-alloy-blue bg-alloy-stone/30"
+                  : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {OPTION_CARD_ICON.moveout}
                 <h3 className="text-xl font-semibold text-alloy-midnight leading-tight">
                   Move-out Cleaning
                 </h3>
-                <p className="text-gray-600 text-sm mt-3 leading-relaxed">
-                  Comprehensive cleaning to prepare your home for the next residents.
-                </p>
-              </button>
-              <Link
-                href="/services/cleaning/move-out"
-                className="text-sm text-alloy-blue hover:underline mt-2 px-6 pb-1"
-              >
-                Learn more about move-out cleaning →
-              </Link>
-            </div>
+              </div>
+              <p className="text-alloy-midnight/80 text-sm mt-3 leading-relaxed flex-grow">
+                Comprehensive cleaning to prepare your home for the next residents.
+              </p>
+              <span className="mt-4 pt-3 border-t border-alloy-stone/50">
+                <Link
+                  href="/services/cleaning/move-out"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-sm text-alloy-blue hover:underline"
+                >
+                  Learn more about move-out cleaning →
+                </Link>
+              </span>
+            </button>
           </div>
 
-          {/* What's Included content for selected option */}
-          <div className="bg-white rounded-lg p-6 border border-gray-200">
-            {selectedOption === "standard" && (
-              <>
-                <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
-                  Standard Cleaning
-                </h3>
-                <BulletList items={STANDARD_INCLUDED} />
-              </>
-            )}
-            {(selectedOption === "deep" || selectedOption === "move-out") && (
-              <>
-                <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
-                  Deep Clean (Top-To-Bottom Deluxe)
-                </h3>
-                <BulletList items={DEEP_INCLUDED} />
-              </>
-            )}
-          </div>
+          {selectedOption === null && (
+            <p className="text-center text-alloy-midnight/70 text-sm">
+              Select a cleaning type to see what&apos;s included.
+            </p>
+          )}
+
+          {/* What's Included content — only after user selects a card */}
+          {selectedOption !== null && (
+            <div className="bg-white rounded-lg p-6 border border-alloy-stone/30">
+              {selectedOption === "standard" && (
+                <>
+                  <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
+                    Standard Cleaning
+                  </h3>
+                  <BulletList items={STANDARD_INCLUDED} />
+                </>
+              )}
+              {(selectedOption === "deep" || selectedOption === "moveout") && (
+                <>
+                  <h3 className="text-xl font-semibold text-alloy-midnight mb-4">
+                    Deep Clean (Top-To-Bottom Deluxe)
+                  </h3>
+                  <BulletList items={DEEP_INCLUDED} />
+                </>
+              )}
+            </div>
+          )}
 
           {/* Frequencies: only when Standard selected */}
           {selectedOption === "standard" && (
@@ -352,7 +379,7 @@ export default function CleaningPage() {
                 {FREQUENCIES.map((freq) => (
                   <div
                     key={freq.label}
-                    className="bg-white rounded-lg p-4 border border-gray-200 text-center"
+                    className="bg-white rounded-lg p-4 border border-alloy-stone/30 text-center"
                   >
                     <h4 className="font-semibold text-alloy-blue mb-1">
                       {freq.label}
@@ -362,7 +389,7 @@ export default function CleaningPage() {
                         </span>
                       )}
                     </h4>
-                    <p className="text-sm text-gray-600">{freq.description}</p>
+                    <p className="text-sm text-alloy-midnight/80">{freq.description}</p>
                   </div>
                 ))}
               </div>
@@ -371,7 +398,7 @@ export default function CleaningPage() {
               </p>
             </>
           )}
-          {(selectedOption === "deep" || selectedOption === "move-out") && (
+          {(selectedOption === "deep" || selectedOption === "moveout") && (
             <p className="text-center text-alloy-midnight/80">
               Deep and Move-out cleanings are typically one-time services.
             </p>
@@ -400,14 +427,14 @@ export default function CleaningPage() {
           {VALUE_TILES.map((tile) => (
             <div
               key={tile.title}
-              className="bg-white rounded-lg p-6 border border-gray-200 flex gap-4"
+              className="bg-white rounded-lg p-6 border border-alloy-stone/30 flex gap-4"
             >
               <div className="shrink-0">{tile.icon}</div>
               <div>
                 <h3 className="text-xl font-semibold text-alloy-blue mb-2">
                   {tile.title}
                 </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{tile.description}</p>
+                <p className="text-alloy-midnight/80 text-sm leading-relaxed">{tile.description}</p>
               </div>
             </div>
           ))}
