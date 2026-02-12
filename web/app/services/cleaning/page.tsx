@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
-import Link from "next/link";
 import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
@@ -125,8 +125,15 @@ export default function CleaningPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [hasRendered, setHasRendered] = useState(false);
   const [selectedOption, setSelectedOption] = useState<CleaningOptionType>(null);
+  const [learnMoreOpen, setLearnMoreOpen] = useState(false);
+  const [learnMoreOption, setLearnMoreOption] = useState<"standard" | "deep" | "moveout" | null>(null);
+  const [mounted, setMounted] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cleaningFaqs = [
     {
@@ -181,6 +188,47 @@ export default function CleaningPage() {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
     fetch(`${apiBaseUrl}/`, { method: "GET" }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (learnMoreOpen) {
+      document.body.style.overflow = "hidden";
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+    };
+  }, [learnMoreOpen]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && learnMoreOpen) {
+        setLearnMoreOpen(false);
+        setLearnMoreOption(null);
+      }
+    };
+    if (learnMoreOpen) document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [learnMoreOpen]);
+
+  const openLearnMore = (option: "standard" | "deep" | "moveout", e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLearnMoreOption(option);
+    setLearnMoreOpen(true);
+  };
+
+  const LEARN_MORE_COPY: Record<"standard" | "deep" | "moveout", { title: string; body: string }> = {
+    standard:
+      { title: "Standard Cleaning", body: "Recurring options are available so you can keep your home consistently clean. Best for regular upkeep and maintenance." },
+    deep:
+      { title: "Deep Cleaning", body: "Includes deeper detail work: baseboards, inside appliances, and detailed scrubbing. Typically booked as a one-time service." },
+    moveout:
+      { title: "Move-out Cleaning", body: "Comprehensive cleaning to prepare your home for the next residents. Typically a one-time service." },
+  };
 
   useEffect(() => {
     const checkHash = () => {
@@ -289,6 +337,15 @@ export default function CleaningPage() {
               <p className="text-alloy-midnight/80 text-sm mt-3 leading-relaxed flex-grow">
                 Regular maintenance cleaning to keep your home fresh and tidy.
               </p>
+              <span className="mt-4 pt-3 border-t border-alloy-stone/50">
+                <button
+                  type="button"
+                  onClick={(e) => openLearnMore("standard", e)}
+                  className="text-sm text-alloy-blue hover:underline"
+                >
+                  Learn more
+                </button>
+              </span>
             </button>
 
             <button
@@ -309,6 +366,15 @@ export default function CleaningPage() {
               <p className="text-alloy-midnight/80 text-sm mt-3 leading-relaxed flex-grow">
                 Thorough cleaning including baseboards, inside appliances, and detailed scrubbing.
               </p>
+              <span className="mt-4 pt-3 border-t border-alloy-stone/50">
+                <button
+                  type="button"
+                  onClick={(e) => openLearnMore("deep", e)}
+                  className="text-sm text-alloy-blue hover:underline"
+                >
+                  Learn more
+                </button>
+              </span>
             </button>
 
             <button
@@ -330,13 +396,13 @@ export default function CleaningPage() {
                 Comprehensive cleaning to prepare your home for the next residents.
               </p>
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
-                <Link
-                  href="/services/cleaning/move-out"
-                  onClick={(e) => e.stopPropagation()}
+                <button
+                  type="button"
+                  onClick={(e) => openLearnMore("moveout", e)}
                   className="text-sm text-alloy-blue hover:underline"
                 >
-                  Learn more about move-out cleaning →
-                </Link>
+                  Learn more
+                </button>
               </span>
             </button>
           </div>
@@ -491,6 +557,51 @@ export default function CleaningPage() {
           </div>
         </div>
       </Section>
+
+      {/* Learn more modal */}
+      {learnMoreOpen && learnMoreOption && mounted &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              setLearnMoreOpen(false);
+              setLearnMoreOption(null);
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="learn-more-title"
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20 shrink-0">
+                <h2 id="learn-more-title" className="text-xl font-bold text-alloy-midnight">
+                  {LEARN_MORE_COPY[learnMoreOption].title}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLearnMoreOpen(false);
+                    setLearnMoreOption(null);
+                  }}
+                  className="text-alloy-midnight/60 hover:text-alloy-midnight p-2 -mr-2 transition-colors"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-4 md:p-6 overflow-y-auto">
+                <p className="text-alloy-midnight/80 leading-relaxed">
+                  {LEARN_MORE_COPY[learnMoreOption].body}
+                </p>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
