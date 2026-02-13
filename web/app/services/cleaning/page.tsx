@@ -415,14 +415,17 @@ export default function CleaningPage() {
         <GetQuoteCTA />
       </Section>
 
-      {/* Image placeholder: full-width banner between Cleaning Options and What Makes Alloy Different */}
+      {/* Full-width banner: standard cleaning */}
       <Section className="py-0">
-        <div
-          className="w-full aspect-[21/9] max-h-[280px] bg-alloy-stone/40 rounded-lg flex items-center justify-center text-alloy-midnight/50 text-sm font-medium"
-          role="img"
-          aria-label="Cleaning placeholder image"
-        >
-          Cleaning Placeholder
+        <div className="w-full aspect-[21/9] max-h-[280px] relative overflow-hidden rounded-lg bg-alloy-stone/40">
+          <Image
+            src="/services/cleaning/standard.jpeg"
+            alt="Standard cleaning"
+            fill
+            className="object-cover"
+            sizes="100vw"
+            unoptimized
+          />
         </div>
       </Section>
 
@@ -450,22 +453,28 @@ export default function CleaningPage() {
         <GetQuoteCTA />
       </Section>
 
-      {/* Image placeholder: 2-image grid near bottom before final CTA */}
+      {/* 2-image grid: deep cleaning + move-out */}
       <Section className="py-12 md:py-16 bg-white">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-          <div
-            className="aspect-[4/3] bg-alloy-stone/40 rounded-lg flex items-center justify-center text-alloy-midnight/50 text-sm font-medium"
-            role="img"
-            aria-label="Cleaning placeholder image"
-          >
-            Cleaning Placeholder
+          <div className="aspect-[4/3] relative overflow-hidden rounded-lg bg-alloy-stone/40">
+            <Image
+              src="/services/cleaning/deep-cleaning.jpeg"
+              alt="Deep cleaning"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 50vw"
+              unoptimized
+            />
           </div>
-          <div
-            className="aspect-[4/3] bg-alloy-stone/40 rounded-lg flex items-center justify-center text-alloy-midnight/50 text-sm font-medium"
-            role="img"
-            aria-label="Cleaning placeholder image"
-          >
-            Cleaning Placeholder
+          <div className="aspect-[4/3] relative overflow-hidden rounded-lg bg-alloy-stone/40">
+            <Image
+              src="/services/cleaning/moveout.jpeg"
+              alt="Move-out cleaning"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 50vw"
+              unoptimized
+            />
           </div>
         </div>
       </Section>
