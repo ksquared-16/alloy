@@ -425,7 +425,7 @@ export default function CleaningPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-stretch mb-6 md:mb-8">
             <div className="relative h-[320px] md:h-[420px] rounded-xl shadow-md overflow-hidden bg-alloy-stone/40">
               <Image
-                src="/images/cleaning/standard-1.png"
+                src="/services/cleaning/standard-1.png"
                 alt="Standard cleaning"
                 fill
                 className="object-cover"
@@ -469,7 +469,7 @@ export default function CleaningPage() {
             </div>
             <div className="relative h-[320px] md:h-[420px] rounded-xl shadow-md overflow-hidden bg-alloy-stone/40">
               <Image
-                src="/images/cleaning/standard-2.png"
+                src="/services/cleaning/standard-2.png"
                 alt="Standard cleaning"
                 fill
                 className="object-cover"
