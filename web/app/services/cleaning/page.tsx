@@ -268,13 +268,13 @@ export default function CleaningPage() {
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
               className="object-cover object-[60%_40%] z-0"
             />
-            <div className="absolute inset-0 z-10 bg-gradient-to-b from-alloy-midnight/70 via-alloy-midnight/35 to-transparent pointer-events-none" aria-hidden />
+            <div className="absolute inset-0 z-10 bg-gradient-to-b from-alloy-midnight/45 via-alloy-midnight/15 to-transparent pointer-events-none" aria-hidden />
             <div className="absolute inset-0 z-20 flex items-end md:items-center p-4 sm:p-8 md:px-10 lg:px-12">
-              <div className="w-full max-w-[520px] space-y-2 md:space-y-4 bg-alloy-midnight/35 backdrop-blur-sm rounded-xl p-4 md:bg-transparent md:backdrop-blur-none md:rounded-none md:p-0">
-                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white leading-tight">
+              <div className="max-w-[520px] space-y-2 md:space-y-4 bg-alloy-midnight/20 backdrop-blur-[2px] rounded-xl p-4 md:bg-transparent md:backdrop-blur-none md:rounded-none md:p-0">
+                <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white leading-tight [text-shadow:0_1px_3px_rgba(0,0,0,.4)]">
                   Home Cleaning You Can Actually Rely On
                 </h1>
-                <p className="text-sm md:text-lg text-white/90">
+                <p className="text-sm md:text-lg text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,.35)]">
                   Alloy provides home cleaning in Bend & Central Oregon, without the runaround.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
