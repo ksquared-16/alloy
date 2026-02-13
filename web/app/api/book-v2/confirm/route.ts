@@ -1046,6 +1046,15 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // V1: Set job status to 'scheduled' after booking_confirmed (idempotent, workflow-driven)
+        const { error: statusUpdateErr } = await supabase
+            .from("jobs")
+            .update({ job_status_id: "scheduled" })
+            .eq("id", jobId);
+        if (statusUpdateErr) {
+            console.warn("[BOOK_V2_CONFIRM] job_status_id=scheduled update failed (non-fatal)", jobId, statusUpdateErr.message);
+        }
+
         // Structured logging
         console.log(
             `[BOOK_V2_CONFIRM_SUCCESS] booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`

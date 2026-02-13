@@ -83,6 +83,7 @@ export default function AdminEntityDrawer() {
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
+    const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
 
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -512,6 +513,65 @@ export default function AdminEntityDrawer() {
                                     )}
                                 </div>
                             )}
+                            <div className="pt-4 border-t border-alloy-stone/20">
+                                <strong className="text-alloy-midnight/70 block mb-2">Status actions</strong>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={!!jobActionLoading}
+                                        onClick={async () => {
+                                            if (!drawer.id) return;
+                                            setJobActionLoading("assign_vendor");
+                                            try {
+                                                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ action: "assign_vendor" }),
+                                                });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Failed");
+                                                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                                refetch();
+                                                router.refresh();
+                                            } catch (e) {
+                                                console.error("Assign vendor failed", e);
+                                            } finally {
+                                                setJobActionLoading(null);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 text-sm bg-alloy-stone/80 text-alloy-midnight rounded-md hover:bg-alloy-stone disabled:opacity-50"
+                                    >
+                                        {jobActionLoading === "assign_vendor" ? "…" : "Assign vendor"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!!jobActionLoading}
+                                        onClick={async () => {
+                                            if (!drawer.id) return;
+                                            setJobActionLoading("mark_completed");
+                                            try {
+                                                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ action: "mark_completed" }),
+                                                });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Failed");
+                                                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                                refetch();
+                                                router.refresh();
+                                            } catch (e) {
+                                                console.error("Mark completed failed", e);
+                                            } finally {
+                                                setJobActionLoading(null);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                    >
+                                        {jobActionLoading === "mark_completed" ? "…" : "Mark completed"}
+                                    </button>
+                                </div>
+                            </div>
                         </>
                     )}
                     {drawer.type === "schedules" && (

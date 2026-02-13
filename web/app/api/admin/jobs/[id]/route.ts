@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
-const ALLOWED_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "job_status_id", "internal_notes"] as const;
+const ALLOWED_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "job_status_id", "internal_notes", "completed_at"] as const;
+
+const JOB_ACTION_PAYLOADS: Record<string, Record<string, unknown>> = {
+    assign_vendor: { job_status_id: "assigned" },
+    mark_completed: { job_status_id: "completed", completed_at: new Date().toISOString() },
+};
 
 export async function PATCH(
     request: NextRequest,
@@ -19,6 +24,12 @@ export async function PATCH(
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const updates: Record<string, unknown> = {};
+
+        const action = body.action as string | undefined;
+        if (action && JOB_ACTION_PAYLOADS[action]) {
+            Object.assign(updates, JOB_ACTION_PAYLOADS[action]);
+        }
+
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
             if (key === "internal_notes") {
