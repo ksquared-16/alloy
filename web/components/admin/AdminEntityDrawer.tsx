@@ -277,24 +277,39 @@ export default function AdminEntityDrawer() {
                 status: data.status ?? "",
             });
         } else if (drawer.type === "vendors") {
-            const days = data.days_available as string[] | null | undefined;
-            const zips = data.service_area_zip_codes as string[] | null | undefined;
+            const vendorData = data as {
+                vendor_status_id?: string | null;
+                name?: string | null;
+                phone?: string | null;
+                email?: string | null;
+                address_line1?: string | null;
+                city?: string | null;
+                state?: string | null;
+                postal_code?: string | null;
+                service_area_zip_codes?: string[] | null;
+                days_available?: string[] | null;
+                operating_hours_open?: string | null;
+                operating_hours_close?: string | null;
+                owns_supplies?: boolean | null;
+                max_daily_jobs?: number | null;
+                payout_percent?: number | null;
+            };
             const vendorForm: VendorFormData = {
-                vendor_status_id: data.vendor_status_id ?? "",
-                name: (data.name as string) ?? "",
-                phone: (data.phone as string) ?? "",
-                email: (data.email as string) ?? "",
-                address_line1: (data.address_line1 as string) ?? "",
-                city: (data.city as string) ?? "",
-                state: (data.state as string) ?? "",
-                postal_code: (data.postal_code as string) ?? "",
-                days_available: Array.isArray(days) ? days.join(", ") : "",
-                operating_hours_open: (data.operating_hours_open as string) ?? "",
-                operating_hours_close: (data.operating_hours_close as string) ?? "",
-                owns_supplies: !!data.owns_supplies,
-                max_daily_jobs: typeof data.max_daily_jobs === "number" ? data.max_daily_jobs : "",
-                payout_percent: typeof data.payout_percent === "number" ? data.payout_percent : "",
-                service_area_zip_codes: Array.isArray(zips) ? zips.join(", ") : "",
+                vendor_status_id: vendorData.vendor_status_id ?? "",
+                name: vendorData.name ?? "",
+                phone: vendorData.phone ?? "",
+                email: vendorData.email ?? "",
+                address_line1: vendorData.address_line1 ?? "",
+                city: vendorData.city ?? "",
+                state: vendorData.state ?? "",
+                postal_code: vendorData.postal_code ?? "",
+                days_available: Array.isArray(vendorData.days_available) ? vendorData.days_available.join(", ") : "",
+                operating_hours_open: vendorData.operating_hours_open ?? "",
+                operating_hours_close: vendorData.operating_hours_close ?? "",
+                owns_supplies: !!vendorData.owns_supplies,
+                max_daily_jobs: typeof vendorData.max_daily_jobs === "number" ? vendorData.max_daily_jobs : "",
+                payout_percent: typeof vendorData.payout_percent === "number" ? vendorData.payout_percent : "",
+                service_area_zip_codes: Array.isArray(vendorData.service_area_zip_codes) ? vendorData.service_area_zip_codes.join(", ") : "",
             };
             setFormData(vendorForm);
         } else if (drawer.type === "schedules") {
