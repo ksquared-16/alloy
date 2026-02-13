@@ -29,8 +29,8 @@ type VendorFormData = {
     operating_hours_open?: string;
     operating_hours_close?: string;
     owns_supplies?: boolean;
-    max_daily_jobs?: number | "" | null;
-    payout_percent?: number | "" | null;
+    max_daily_jobs?: number | "";
+    payout_percent?: number | "";
     service_area_zip_codes?: string;
 };
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
@@ -518,8 +518,8 @@ export default function AdminEntityDrawer() {
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Days available (comma-separated)</label><input value={String(formData.days_available ?? "")} onChange={(e) => setFormData((f) => ({ ...f, days_available: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                                 <div className="flex gap-4"><label className="block text-sm text-alloy-midnight/70 mb-0.5">Hours</label><input value={String(formData.operating_hours_open ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_open: e.target.value }))} placeholder="Open" className="px-2 py-1.5 border rounded text-sm w-24" /><input value={String(formData.operating_hours_close ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_close: e.target.value }))} placeholder="Close" className="px-2 py-1.5 border rounded text-sm w-24" /></div>
                                                 <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.owns_supplies} onChange={(e) => setFormData((f) => ({ ...f, owns_supplies: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Owns supplies</label></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={typeof (formData as VendorFormData).max_daily_jobs === "number" ? (formData as VendorFormData).max_daily_jobs : ""} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={typeof (formData as VendorFormData).payout_percent === "number" ? (formData as VendorFormData).payout_percent : ""} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={(formData as VendorFormData).max_daily_jobs === "" || (formData as VendorFormData).max_daily_jobs === undefined ? "" : (formData as VendorFormData).max_daily_jobs} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={(formData as VendorFormData).payout_percent === "" || (formData as VendorFormData).payout_percent === undefined ? "" : (formData as VendorFormData).payout_percent} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
                                             </>
                                         ) : (
                                             <>
