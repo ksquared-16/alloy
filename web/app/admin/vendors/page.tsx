@@ -6,7 +6,7 @@ export default async function VendorsPage() {
 
     const { data: vendors, error: vendorsError } = await supabase
         .from("vendors")
-        .select("id, created_at, submitted_at, name, email, phone, vendor_status_id, service_area_zip_codes, days_available")
+        .select("id, created_at, submitted_at, name, company_name, email, phone, vendor_status_id, service_area_zip_codes, days_available")
         .order("created_at", { ascending: false })
         .limit(1000);
 

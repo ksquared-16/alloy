@@ -133,23 +133,11 @@ export async function GET(
                 : { data: [] as unknown[] };
             out._vendor_schedules = vendorSchedules ?? [];
 
-            const { data: vcRows } = await supabase
-                .from("vendor_contacts")
-                .select("id, contact_id, role")
+            const { data: vendorContactsData } = await supabase
+                .from("contacts")
+                .select("id, first_name, last_name, email, phone, vendor_contact_role")
                 .eq("vendor_id", id);
-            const contactIds = (vcRows ?? []).map((r: { contact_id: string }) => r.contact_id);
-            const { data: linkedContactsData } = contactIds.length > 0
-                ? await supabase
-                    .from("contacts")
-                    .select("id, first_name, last_name, email, phone")
-                    .in("id", contactIds)
-                : { data: [] as ContactRow[] };
-            const linkedContactsRows = (linkedContactsData ?? []) as ContactRow[];
-            const contactsWithRole = linkedContactsRows.map((c) => {
-                const link = (vcRows ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
-                return { ...c, _role: link?.role ?? null };
-            });
-            out._vendor_contacts = contactsWithRole;
+            out._vendor_contacts = vendorContactsData ?? [];
 
             if ((vendor as { primary_contact_id?: string }).primary_contact_id) {
                 const pc = await supabase

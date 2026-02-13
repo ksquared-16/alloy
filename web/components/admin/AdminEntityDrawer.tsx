@@ -19,6 +19,7 @@ const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exist
 type VendorFormData = {
     vendor_status_id?: string | null;
     name?: string;
+    company_name?: string;
     phone?: string;
     email?: string;
     address_line1?: string;
@@ -36,6 +37,11 @@ type VendorFormData = {
 
 /** Contact drawer: vendor linked via contacts.vendor_id (from entity GET _contact_vendor). */
 type ContactVendorShape = { id: string; name: string | null; vendor_status_id: string | null; created_at: string };
+
+/** Vendor drawer: contact from contacts where vendor_id = vendor.id (entity GET _vendor_contacts). */
+type VendorDrawerContact = { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; vendor_contact_role: string | null };
+/** Vendor drawer: job row (entity GET _vendor_jobs). */
+type VendorDrawerJob = { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string };
 
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
@@ -106,11 +112,6 @@ export default function AdminEntityDrawer() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
-    const [vendorContactSearch, setVendorContactSearch] = useState("");
-    const [vendorAvailableContacts, setVendorAvailableContacts] = useState<{ id: string; first_name: string; last_name: string; email: string; phone: string }[]>([]);
-    const [vendorContactLinking, setVendorContactLinking] = useState<string | null>(null);
-    const [vendorContactRemoving, setVendorContactRemoving] = useState<string | null>(null);
-
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -143,15 +144,6 @@ export default function AdminEntityDrawer() {
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [drawer.type, drawer.id]);
-
-    useEffect(() => {
-        if (drawer.type !== "vendors") {
-            setVendorContactSearch("");
-            setVendorAvailableContacts([]);
-            setVendorContactLinking(null);
-            setVendorContactRemoving(null);
-        }
-    }, [drawer.type]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id) {
@@ -284,6 +276,7 @@ export default function AdminEntityDrawer() {
             const vendorData = data as {
                 vendor_status_id?: string | null;
                 name?: string | null;
+                company_name?: string | null;
                 phone?: string | null;
                 email?: string | null;
                 address_line1?: string | null;
@@ -301,6 +294,7 @@ export default function AdminEntityDrawer() {
             const vendorForm: VendorFormData = {
                 vendor_status_id: vendorData.vendor_status_id ?? "",
                 name: vendorData.name ?? "",
+                company_name: vendorData.company_name ?? "",
                 phone: vendorData.phone ?? "",
                 email: vendorData.email ?? "",
                 address_line1: vendorData.address_line1 ?? "",
@@ -521,62 +515,46 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "vendors" && (
                         <>
-                            <div className="space-y-4">
-                                <section>
-                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Overview</h3>
+                            <div className="space-y-0">
+                                <details open className="border-b border-alloy-stone/20 pb-4">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Overview</summary>
                                     <div className="space-y-2">
                                         <Field label="ID" value={data.id as string} />
                                         <Field label="Submitted" value={data.submitted_at ? formatDateTime(data.submitted_at as string) : formatDateTime(data.created_at as string)} />
                                         {isEditing ? (
                                             <>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="Optional" /></div>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.vendor_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vendor_status_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— None —</option>{((data._vendor_status_options as { id: string; label: string }[]) ?? []).map((opt) => (<option key={opt.id} value={opt.id}>{opt.label}</option>))}</select></div>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address</label><input value={String(formData.address_line1 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address_line1: e.target.value }))} placeholder="Line 1" className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                <div className="grid grid-cols-3 gap-2"><input value={String(formData.city ?? "")} onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.state ?? "")} onChange={(e) => setFormData((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.postal_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, postal_code: e.target.value }))} placeholder="ZIP" className="px-2 py-1.5 border rounded text-sm" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service area zips (comma-separated)</label><input value={String(formData.service_area_zip_codes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, service_area_zip_codes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Days available (comma-separated)</label><input value={String(formData.days_available ?? "")} onChange={(e) => setFormData((f) => ({ ...f, days_available: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                <div className="flex gap-4"><label className="block text-sm text-alloy-midnight/70 mb-0.5">Hours</label><input value={String(formData.operating_hours_open ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_open: e.target.value }))} placeholder="Open" className="px-2 py-1.5 border rounded text-sm w-24" /><input value={String(formData.operating_hours_close ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_close: e.target.value }))} placeholder="Close" className="px-2 py-1.5 border rounded text-sm w-24" /></div>
-                                                <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.owns_supplies} onChange={(e) => setFormData((f) => ({ ...f, owns_supplies: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Owns supplies</label></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={(formData as VendorFormData).max_daily_jobs === "" || (formData as VendorFormData).max_daily_jobs === undefined ? "" : (formData as VendorFormData).max_daily_jobs} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={(formData as VendorFormData).payout_percent === "" || (formData as VendorFormData).payout_percent === undefined ? "" : (formData as VendorFormData).payout_percent} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
                                             </>
                                         ) : (
                                             <>
                                                 <Field label="Name" value={data.name as string} />
-                                                <Field label="Status" value={(data._vendor_status_label as string) ?? "-"} />
-                                                <DrawerLinkWithName label="Primary contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
+                                                <Field label="Company name" value={(data.company_name as string)?.trim() ? (data.company_name as string) : "—"} />
                                                 <Field label="Email" value={data.email as string} />
                                                 <Field label="Phone" value={data.phone as string} />
-                                                <Field label="Address" value={[data.address_line1, data.city, data.state, data.postal_code].filter(Boolean).join(", ") as string} />
-                                                <Field label="Service area zips" value={Array.isArray(data.service_area_zip_codes) ? (data.service_area_zip_codes as string[]).join(", ") : (data.service_area_zip_codes as string) ?? "-"} />
-                                                <Field label="Days available" value={Array.isArray(data.days_available) ? (data.days_available as string[]).join(", ") : (data.days_available as string) ?? "-"} />
-                                                <Field label="Hours" value={[data.operating_hours_open, data.operating_hours_close].filter(Boolean).join(" – ") as string} />
-                                                <Field label="Owns supplies" value={data.owns_supplies ? "Yes" : "No"} />
-                                                <Field label="Max daily jobs" value={data.max_daily_jobs != null ? String(data.max_daily_jobs) : "-"} />
-                                                <Field label="Payout %" value={data.payout_percent != null ? String(data.payout_percent) : "-"} />
-                                                <Field label="Consent (agreement)" value={data.consent_contractor_agreement ? "Yes" : "No"} />
-                                                <Field label="Consent (marketing)" value={data.consent_marketing ? "Yes" : "No"} />
-                                                <Field label="Consent (legal)" value={data.consent_legal ? "Yes" : "No"} />
+                                                <Field label="Status" value={(data._vendor_status_label as string) ?? "—"} />
+                                                <DrawerLinkWithName label="Primary contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                             </>
                                         )}
                                     </div>
-                                </section>
-                                <section className="pt-4 border-t border-alloy-stone/20">
-                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Documents</h3>
+                                </details>
+                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Documents</summary>
                                     <div className="space-y-2">
                                         {(data.insurance_doc_path as string) ? <div><strong className="text-alloy-midnight/70">Insurance:</strong> <span className="text-sm font-mono">{data.insurance_doc_path as string}</span> <span className="text-xs text-alloy-midnight/50">(path; signed URL not implemented)</span></div> : <Field label="Insurance" value="—" />}
                                         {(data.drivers_license_doc_path as string) ? <div><strong className="text-alloy-midnight/70">Drivers license:</strong> <span className="text-sm font-mono">{data.drivers_license_doc_path as string}</span> <span className="text-xs text-alloy-midnight/50">(path; signed URL not implemented)</span></div> : <Field label="Drivers license" value="—" />}
                                     </div>
-                                </section>
-                                <section className="pt-4 border-t border-alloy-stone/20">
-                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Jobs & schedule</h3>
-                                    {((data._vendor_jobs as { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string }[]) ?? []).length === 0 ? (
+                                </details>
+                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Jobs & Schedule</summary>
+                                    {((data._vendor_jobs as VendorDrawerJob[]) ?? []).length === 0 ? (
                                         <p className="text-sm text-alloy-midnight/60">No jobs assigned yet.</p>
                                     ) : (
                                         <ul className="space-y-2">
-                                            {((data._vendor_jobs as { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string }[]) ?? []).map((job) => {
+                                            {((data._vendor_jobs as VendorDrawerJob[]) ?? []).map((job) => {
                                                 const scheds = ((data._vendor_schedules as { job_id: string; start_at: string; end_at: string; timezone: string }[]) ?? []).filter((s) => s.job_id === job.id);
                                                 return (
                                                     <li key={job.id} className="border border-alloy-stone/30 rounded p-2 text-sm">
@@ -591,33 +569,56 @@ export default function AdminEntityDrawer() {
                                             })}
                                         </ul>
                                     )}
-                                </section>
-                                <section className="pt-4 border-t border-alloy-stone/20">
-                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Contacts</h3>
-                                    <ul className="space-y-1 mb-3">
-                                        {((data._vendor_contacts as { id: string; first_name: string; last_name: string; email: string; phone: string; _role?: string }[]) ?? []).map((c) => (
-                                            <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-left">{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.id.slice(0, 8)}</button>
-                                                <span className="text-alloy-midnight/50 text-xs">{c._role ?? ""}</span>
-                                                <button type="button" disabled={vendorContactRemoving === c.id} onClick={async () => { setVendorContactRemoving(c.id); try { await fetch(`/api/admin/vendors/${drawer.id}/contacts/${c.id}`, { method: "DELETE" }); refetch(); } finally { setVendorContactRemoving(null); } }} className="text-red-600 hover:underline text-xs disabled:opacity-50">Remove</button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <div className="flex gap-2 items-center">
-                                        <input type="text" value={vendorContactSearch} onChange={(e) => setVendorContactSearch(e.target.value)} onFocus={() => fetch(`/api/admin/vendors/${drawer.id}/contacts/available?search=${encodeURIComponent(vendorContactSearch)}`).then((r) => r.json()).then((j: { contacts?: { id: string; first_name: string; last_name: string; email: string; phone: string }[] }) => setVendorAvailableContacts(j.contacts ?? []))} placeholder="Search contacts to link…" className="flex-1 px-2 py-1.5 border rounded text-sm" />
-                                        <button type="button" onClick={() => fetch(`/api/admin/vendors/${drawer.id}/contacts/available?search=${encodeURIComponent(vendorContactSearch)}`).then((r) => r.json()).then((j: { contacts?: { id: string; first_name: string; last_name: string; email: string; phone: string }[] }) => setVendorAvailableContacts(j.contacts ?? []))} className="px-2 py-1.5 text-sm border rounded">Search</button>
-                                    </div>
-                                    {vendorAvailableContacts.length > 0 && (
-                                        <ul className="mt-2 border border-alloy-stone/30 rounded divide-y text-sm">
-                                            {vendorAvailableContacts.slice(0, 10).map((c) => (
-                                                <li key={c.id} className="flex items-center justify-between px-2 py-1.5">
-                                                    <span>{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email}</span>
-                                                    <button type="button" disabled={vendorContactLinking === c.id} onClick={async () => { setVendorContactLinking(c.id); try { await fetch(`/api/admin/vendors/${drawer.id}/contacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contact_id: c.id }) }); setVendorAvailableContacts((prev) => prev.filter((x) => x.id !== c.id)); refetch(); } finally { setVendorContactLinking(null); } }} className="text-alloy-blue hover:underline text-xs disabled:opacity-50">Link</button>
+                                </details>
+                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">
+                                        Contacts ({((data._vendor_contacts as VendorDrawerContact[]) ?? []).length})
+                                    </summary>
+                                    <ul className="space-y-1 mt-2">
+                                        {((data._vendor_contacts as VendorDrawerContact[]) ?? []).length === 0 ? (
+                                            <li className="text-sm text-alloy-midnight/60">No contacts linked (contacts are linked via contact’s vendor_id).</li>
+                                        ) : (
+                                            ((data._vendor_contacts as VendorDrawerContact[]) ?? []).map((c) => (
+                                                <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                                                    <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-left">{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.id.slice(0, 8)}</button>
+                                                    <span className="text-alloy-midnight/50 text-xs">{c.email ?? ""}</span>
+                                                    <span className="text-alloy-midnight/50 text-xs">{c.phone ?? ""}</span>
+                                                    {c.vendor_contact_role && <span className="text-alloy-midnight/50 text-xs">({c.vendor_contact_role})</span>}
                                                 </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </section>
+                                            ))
+                                        )}
+                                    </ul>
+                                </details>
+                                <details className="pt-4 pb-2">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Operational / Settings</summary>
+                                    <div className="space-y-2 mt-2">
+                                        {isEditing ? (
+                                            <>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address</label><input value={String(formData.address_line1 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address_line1: e.target.value }))} placeholder="Line 1" className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div className="grid grid-cols-3 gap-2"><input value={String(formData.city ?? "")} onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.state ?? "")} onChange={(e) => setFormData((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.postal_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, postal_code: e.target.value }))} placeholder="ZIP" className="px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service area zips (comma-separated)</label><input value={String(formData.service_area_zip_codes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, service_area_zip_codes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Days available (comma-separated)</label><input value={String(formData.days_available ?? "")} onChange={(e) => setFormData((f) => ({ ...f, days_available: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div className="flex gap-4"><label className="block text-sm text-alloy-midnight/70 mb-0.5">Hours</label><input value={String(formData.operating_hours_open ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_open: e.target.value }))} placeholder="Open" className="px-2 py-1.5 border rounded text-sm w-24" /><input value={String(formData.operating_hours_close ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_close: e.target.value }))} placeholder="Close" className="px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.owns_supplies} onChange={(e) => setFormData((f) => ({ ...f, owns_supplies: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Owns supplies</label></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={(formData as VendorFormData).max_daily_jobs === "" || (formData as VendorFormData).max_daily_jobs === undefined ? "" : (formData as VendorFormData).max_daily_jobs} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={(formData as VendorFormData).payout_percent === "" || (formData as VendorFormData).payout_percent === undefined ? "" : (formData as VendorFormData).payout_percent} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Field label="Address" value={[data.address_line1, data.city, data.state, data.postal_code].filter(Boolean).join(", ") || "—"} />
+                                                <Field label="Service area zips" value={Array.isArray(data.service_area_zip_codes) ? (data.service_area_zip_codes as string[]).join(", ") : (data.service_area_zip_codes as string) ?? "—"} />
+                                                <Field label="Days available" value={Array.isArray(data.days_available) ? (data.days_available as string[]).join(", ") : (data.days_available as string) ?? "—"} />
+                                                <Field label="Hours" value={[data.operating_hours_open, data.operating_hours_close].filter(Boolean).join(" – ") || "—"} />
+                                                <Field label="Owns supplies" value={data.owns_supplies ? "Yes" : "No"} />
+                                                <Field label="Max daily jobs" value={data.max_daily_jobs != null ? String(data.max_daily_jobs) : "—"} />
+                                                <Field label="Payout %" value={data.payout_percent != null ? String(data.payout_percent) : "—"} />
+                                                <Field label="Consent (agreement)" value={data.consent_contractor_agreement ? "Yes" : "No"} />
+                                                <Field label="Consent (marketing)" value={data.consent_marketing ? "Yes" : "No"} />
+                                                <Field label="Consent (legal)" value={data.consent_legal ? "Yes" : "No"} />
+                                            </>
+                                        )}
+                                    </div>
+                                </details>
                             </div>
                         </>
                     )}

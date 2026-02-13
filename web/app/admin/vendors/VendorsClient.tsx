@@ -9,6 +9,7 @@ interface Vendor {
     created_at: string;
     submitted_at: string | null;
     name: string | null;
+    company_name: string | null;
     email: string | null;
     phone: string | null;
     vendor_status_id: string | null;
@@ -49,6 +50,7 @@ export default function VendorsClient({
     const columns = [
         { key: "submitted_at", label: "Submitted", sortable: true, render: (_: unknown, row: Vendor) => formatVendorDate(row) },
         { key: "name", label: "Name", sortable: true },
+        { key: "company_name", label: "Company", sortable: true, render: (_: unknown, row: Vendor) => row.company_name ?? "—" },
         { key: "email", label: "Email", sortable: true },
         { key: "phone", label: "Phone", sortable: true },
         { key: "_vendor_status_label", label: "Status", sortable: true, render: (_: unknown, row: Vendor) => row._vendor_status_label || row.vendor_status_id || "—" },

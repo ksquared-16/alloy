@@ -5,6 +5,7 @@ import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth"
 const ALLOWED_KEYS = [
     "vendor_status_id",
     "name",
+    "company_name",
     "phone",
     "email",
     "address_line1",
