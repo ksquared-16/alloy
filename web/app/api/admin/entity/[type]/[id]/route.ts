@@ -102,6 +102,53 @@ export async function GET(
             }
             const { data: statusOptions } = await supabase.from("vendor_statuses").select("id, key, label").eq("is_active", true).order("position", { ascending: true });
             out._vendor_status_options = statusOptions ?? [];
+
+            const JOBS_LIMIT = 25;
+            const { data: vendorJobs } = await supabase
+                .from("jobs")
+                .select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id")
+                .eq("vendor_id", id)
+                .order("created_at", { ascending: false })
+                .limit(JOBS_LIMIT);
+            out._vendor_jobs = vendorJobs ?? [];
+            const jobIds = (vendorJobs ?? []).map((j: { id: string }) => j.id);
+            const { data: vendorSchedules } = jobIds.length > 0
+                ? await supabase
+                    .from("schedules")
+                    .select("id, job_id, start_at, end_at, timezone")
+                    .in("job_id", jobIds)
+                    .order("start_at", { ascending: false })
+                : { data: [] as unknown[] };
+            out._vendor_schedules = vendorSchedules ?? [];
+
+            const { data: vcRows } = await supabase
+                .from("vendor_contacts")
+                .select("id, contact_id, role")
+                .eq("vendor_id", id);
+            const contactIds = (vcRows ?? []).map((r: { contact_id: string }) => r.contact_id);
+            const { data: linkedContacts } = contactIds.length > 0
+                ? await supabase
+                    .from("contacts")
+                    .select("id, first_name, last_name, email, phone")
+                    .in("id", contactIds)
+                : { data: [] as unknown[] };
+            const contactsWithRole = (linkedContacts ?? []).map((c: { id: string; first_name?: string; last_name?: string; email?: string; phone?: string }) => {
+                const link = (vcRows ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
+                return { ...c, _role: link?.role ?? null };
+            });
+            out._vendor_contacts = contactsWithRole;
+
+            if ((vendor as { primary_contact_id?: string }).primary_contact_id) {
+                const pc = await supabase
+                    .from("contacts")
+                    .select("id, first_name, last_name, email, phone")
+                    .eq("id", (vendor as { primary_contact_id: string }).primary_contact_id)
+                    .single();
+                out._primary_contact = pc.data ?? null;
+            } else {
+                out._primary_contact = null;
+            }
+
             return NextResponse.json(out);
         }
 

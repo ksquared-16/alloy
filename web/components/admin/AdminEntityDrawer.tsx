@@ -35,7 +35,7 @@ function DrawerLinkWithName({
 }: {
     label: string;
     id: string | null;
-    type: "contacts" | "customers" | "opportunities" | "jobs";
+    type: "contacts" | "customers" | "opportunities" | "jobs" | "vendors";
     displayName: string | null | undefined;
 }) {
     const { openDrawer } = useAdminDrawer();
@@ -84,6 +84,10 @@ export default function AdminEntityDrawer() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
+    const [vendorContactSearch, setVendorContactSearch] = useState("");
+    const [vendorAvailableContacts, setVendorAvailableContacts] = useState<{ id: string; first_name: string; last_name: string; email: string; phone: string }[]>([]);
+    const [vendorContactLinking, setVendorContactLinking] = useState<string | null>(null);
+    const [vendorContactRemoving, setVendorContactRemoving] = useState<string | null>(null);
 
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -117,6 +121,15 @@ export default function AdminEntityDrawer() {
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "vendors") {
+            setVendorContactSearch("");
+            setVendorAvailableContacts([]);
+            setVendorContactLinking(null);
+            setVendorContactRemoving(null);
+        }
+    }, [drawer.type]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id) {
@@ -246,8 +259,24 @@ export default function AdminEntityDrawer() {
                 status: data.status ?? "",
             });
         } else if (drawer.type === "vendors") {
+            const days = data.days_available as string[] | null | undefined;
+            const zips = data.service_area_zip_codes as string[] | null | undefined;
             setFormData({
                 vendor_status_id: data.vendor_status_id ?? "",
+                name: data.name ?? "",
+                phone: data.phone ?? "",
+                email: data.email ?? "",
+                address_line1: data.address_line1 ?? "",
+                city: data.city ?? "",
+                state: data.state ?? "",
+                postal_code: data.postal_code ?? "",
+                days_available: Array.isArray(days) ? days.join(", ") : "",
+                operating_hours_open: data.operating_hours_open ?? "",
+                operating_hours_close: data.operating_hours_close ?? "",
+                owns_supplies: !!data.owns_supplies,
+                max_daily_jobs: data.max_daily_jobs ?? "",
+                payout_percent: data.payout_percent ?? "",
+                service_area_zip_codes: Array.isArray(zips) ? zips.join(", ") : "",
             });
         } else if (drawer.type === "schedules") {
             setFormData({
@@ -312,8 +341,14 @@ export default function AdminEntityDrawer() {
                 if (payload.start_at) payload.start_at = new Date(payload.start_at as string).toISOString();
                 if (payload.end_at) payload.end_at = new Date(payload.end_at as string).toISOString();
             }
-            if (drawer.type === "vendors" && (payload.vendor_status_id === "" || payload.vendor_status_id === undefined)) {
-                payload.vendor_status_id = null;
+            if (drawer.type === "vendors") {
+                if (payload.vendor_status_id === "" || payload.vendor_status_id === undefined) payload.vendor_status_id = null;
+                const daysStr = payload.days_available as string | undefined;
+                payload.days_available = daysStr ? String(daysStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
+                const zipsStr = payload.service_area_zip_codes as string | undefined;
+                payload.service_area_zip_codes = zipsStr ? String(zipsStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
+                if (payload.max_daily_jobs === "") payload.max_daily_jobs = null;
+                if (payload.payout_percent === "") payload.payout_percent = null;
             }
             const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             const json = await res.json().catch(() => ({}));
@@ -431,27 +466,104 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "vendors" && (
                         <>
-                            <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
-                            <Field label="Name" value={data.name as string} />
-                            <Field label="Email" value={data.email as string} />
-                            {isEditing ? (
-                                <div>
-                                    <label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label>
-                                    <select value={String(formData.vendor_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vendor_status_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm">
-                                        <option value="">— None —</option>
-                                        {((data._vendor_status_options as { id: string; key: string; label: string }[]) ?? []).map((opt) => (
-                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                            <div className="space-y-4">
+                                <section>
+                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Overview</h3>
+                                    <div className="space-y-2">
+                                        <Field label="ID" value={data.id as string} />
+                                        <Field label="Submitted" value={data.submitted_at ? formatDateTime(data.submitted_at as string) : formatDateTime(data.created_at as string)} />
+                                        {isEditing ? (
+                                            <>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.vendor_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vendor_status_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— None —</option>{((data._vendor_status_options as { id: string; label: string }[]) ?? []).map((opt) => (<option key={opt.id} value={opt.id}>{opt.label}</option>))}</select></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address</label><input value={String(formData.address_line1 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address_line1: e.target.value }))} placeholder="Line 1" className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div className="grid grid-cols-3 gap-2"><input value={String(formData.city ?? "")} onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.state ?? "")} onChange={(e) => setFormData((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.postal_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, postal_code: e.target.value }))} placeholder="ZIP" className="px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service area zips (comma-separated)</label><input value={String(formData.service_area_zip_codes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, service_area_zip_codes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Days available (comma-separated)</label><input value={String(formData.days_available ?? "")} onChange={(e) => setFormData((f) => ({ ...f, days_available: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div className="flex gap-4"><label className="block text-sm text-alloy-midnight/70 mb-0.5">Hours</label><input value={String(formData.operating_hours_open ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_open: e.target.value }))} placeholder="Open" className="px-2 py-1.5 border rounded text-sm w-24" /><input value={String(formData.operating_hours_close ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_close: e.target.value }))} placeholder="Close" className="px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.owns_supplies} onChange={(e) => setFormData((f) => ({ ...f, owns_supplies: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Owns supplies</label></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={formData.max_daily_jobs === "" || formData.max_daily_jobs == null ? "" : formData.max_daily_jobs} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={formData.payout_percent === "" || formData.payout_percent == null ? "" : formData.payout_percent} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Field label="Name" value={data.name as string} />
+                                                <Field label="Status" value={(data._vendor_status_label as string) ?? "-"} />
+                                                <DrawerLinkWithName label="Primary contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
+                                                <Field label="Email" value={data.email as string} />
+                                                <Field label="Phone" value={data.phone as string} />
+                                                <Field label="Address" value={[data.address_line1, data.city, data.state, data.postal_code].filter(Boolean).join(", ") as string} />
+                                                <Field label="Service area zips" value={Array.isArray(data.service_area_zip_codes) ? (data.service_area_zip_codes as string[]).join(", ") : (data.service_area_zip_codes as string) ?? "-"} />
+                                                <Field label="Days available" value={Array.isArray(data.days_available) ? (data.days_available as string[]).join(", ") : (data.days_available as string) ?? "-"} />
+                                                <Field label="Hours" value={[data.operating_hours_open, data.operating_hours_close].filter(Boolean).join(" – ") as string} />
+                                                <Field label="Owns supplies" value={data.owns_supplies ? "Yes" : "No"} />
+                                                <Field label="Max daily jobs" value={data.max_daily_jobs != null ? String(data.max_daily_jobs) : "-"} />
+                                                <Field label="Payout %" value={data.payout_percent != null ? String(data.payout_percent) : "-"} />
+                                                <Field label="Consent (agreement)" value={data.consent_contractor_agreement ? "Yes" : "No"} />
+                                                <Field label="Consent (marketing)" value={data.consent_marketing ? "Yes" : "No"} />
+                                                <Field label="Consent (legal)" value={data.consent_legal ? "Yes" : "No"} />
+                                            </>
+                                        )}
+                                    </div>
+                                </section>
+                                <section className="pt-4 border-t border-alloy-stone/20">
+                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Documents</h3>
+                                    <div className="space-y-2">
+                                        {(data.insurance_doc_path as string) ? <div><strong className="text-alloy-midnight/70">Insurance:</strong> <span className="text-sm font-mono">{data.insurance_doc_path as string}</span> <span className="text-xs text-alloy-midnight/50">(path; signed URL not implemented)</span></div> : <Field label="Insurance" value="—" />}
+                                        {(data.drivers_license_doc_path as string) ? <div><strong className="text-alloy-midnight/70">Drivers license:</strong> <span className="text-sm font-mono">{data.drivers_license_doc_path as string}</span> <span className="text-xs text-alloy-midnight/50">(path; signed URL not implemented)</span></div> : <Field label="Drivers license" value="—" />}
+                                    </div>
+                                </section>
+                                <section className="pt-4 border-t border-alloy-stone/20">
+                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Jobs & schedule</h3>
+                                    {((data._vendor_jobs as { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string }[]) ?? []).length === 0 ? (
+                                        <p className="text-sm text-alloy-midnight/60">No jobs assigned yet.</p>
+                                    ) : (
+                                        <ul className="space-y-2">
+                                            {((data._vendor_jobs as { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string }[]) ?? []).map((job) => {
+                                                const scheds = ((data._vendor_schedules as { job_id: string; start_at: string; end_at: string; timezone: string }[]) ?? []).filter((s) => s.job_id === job.id);
+                                                return (
+                                                    <li key={job.id} className="border border-alloy-stone/30 rounded p-2 text-sm">
+                                                        <button type="button" onClick={() => openDrawer({ type: "jobs", id: job.id })} className="text-alloy-blue hover:underline font-medium">{job.title || job.id.slice(0, 8)}</button>
+                                                        <div className="text-alloy-midnight/70 mt-0.5">Scheduled: {job.scheduled_at ? formatDateTime(job.scheduled_at) : "-"} · Status: {job.job_status_id ?? "-"}</div>
+                                                        {job.gross_price_cents != null && <div>Gross: {formatMoneyFromCents(job.gross_price_cents)}</div>}
+                                                        {job.recurring_total_cents != null && <div>Recurring: {formatMoneyFromCents(job.recurring_total_cents)}</div>}
+                                                        {job.opportunity_id && <button type="button" onClick={() => openDrawer({ type: "opportunities", id: job.opportunity_id })} className="text-alloy-blue hover:underline text-xs">Opportunity</button>}
+                                                        {scheds.length > 0 && <div className="mt-1 text-xs"><strong>Schedules:</strong> {scheds.map((s) => `${formatDateTime(s.start_at)} – ${formatDateTime(s.end_at)} (${s.timezone || "-"})`).join("; ")}</div>}
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )}
+                                </section>
+                                <section className="pt-4 border-t border-alloy-stone/20">
+                                    <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-2">Contacts</h3>
+                                    <ul className="space-y-1 mb-3">
+                                        {((data._vendor_contacts as { id: string; first_name: string; last_name: string; email: string; phone: string; _role?: string }[]) ?? []).map((c) => (
+                                            <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-left">{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.id.slice(0, 8)}</button>
+                                                <span className="text-alloy-midnight/50 text-xs">{c._role ?? ""}</span>
+                                                <button type="button" disabled={vendorContactRemoving === c.id} onClick={async () => { setVendorContactRemoving(c.id); try { await fetch(`/api/admin/vendors/${drawer.id}/contacts/${c.id}`, { method: "DELETE" }); refetch(); } finally { setVendorContactRemoving(null); } }} className="text-red-600 hover:underline text-xs disabled:opacity-50">Remove</button>
+                                            </li>
                                         ))}
-                                    </select>
-                                </div>
-                            ) : (
-                                <Field label="Status" value={(data._vendor_status_label as string) ?? "-"} />
-                            )}
-                            <Field label="Insurance document" value={(data.insurance_doc_path as string) ?? "-"} />
-                            <Field label="Drivers license document" value={(data.drivers_license_doc_path as string) ?? "-"} />
-                            <Field label="Phone" value={data.phone as string} />
-                            <Field label="Submitted at" value={data.submitted_at ? formatDateTime(data.submitted_at as string) : "-"} />
+                                    </ul>
+                                    <div className="flex gap-2 items-center">
+                                        <input type="text" value={vendorContactSearch} onChange={(e) => setVendorContactSearch(e.target.value)} onFocus={() => fetch(`/api/admin/vendors/${drawer.id}/contacts/available?search=${encodeURIComponent(vendorContactSearch)}`).then((r) => r.json()).then((j: { contacts?: { id: string; first_name: string; last_name: string; email: string; phone: string }[] }) => setVendorAvailableContacts(j.contacts ?? []))} placeholder="Search contacts to link…" className="flex-1 px-2 py-1.5 border rounded text-sm" />
+                                        <button type="button" onClick={() => fetch(`/api/admin/vendors/${drawer.id}/contacts/available?search=${encodeURIComponent(vendorContactSearch)}`).then((r) => r.json()).then((j: { contacts?: { id: string; first_name: string; last_name: string; email: string; phone: string }[] }) => setVendorAvailableContacts(j.contacts ?? []))} className="px-2 py-1.5 text-sm border rounded">Search</button>
+                                    </div>
+                                    {vendorAvailableContacts.length > 0 && (
+                                        <ul className="mt-2 border border-alloy-stone/30 rounded divide-y text-sm">
+                                            {vendorAvailableContacts.slice(0, 10).map((c) => (
+                                                <li key={c.id} className="flex items-center justify-between px-2 py-1.5">
+                                                    <span>{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email}</span>
+                                                    <button type="button" disabled={vendorContactLinking === c.id} onClick={async () => { setVendorContactLinking(c.id); try { await fetch(`/api/admin/vendors/${drawer.id}/contacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contact_id: c.id }) }); setVendorAvailableContacts((prev) => prev.filter((x) => x.id !== c.id)); refetch(); } finally { setVendorContactLinking(null); } }} className="text-alloy-blue hover:underline text-xs disabled:opacity-50">Link</button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </section>
+                            </div>
                         </>
                     )}
                     {drawer.type === "opportunities" && (
