@@ -259,22 +259,22 @@ export default function CleaningPage() {
       {/* Hero — matches homepage hero layout */}
       <section className="bg-alloy-stone" ref={heroRef}>
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
-          <div className="relative min-h-[320px] sm:min-h-[380px] md:min-h-[400px] lg:min-h-[460px] h-[320px] sm:h-[380px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
+          <div className="relative min-h-[360px] sm:min-h-[420px] md:min-h-[420px] lg:min-h-[480px] h-[360px] sm:h-[420px] md:h-[420px] lg:h-[480px] overflow-hidden rounded-xl shadow-lg">
             <Image
               src="/hero/home_cleaning_hero.png"
               alt="Home cleaning service"
               fill
               priority
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
-              className="object-cover object-center z-0"
+              className="object-cover object-[60%_40%] z-0"
             />
-            <div className="absolute inset-0 z-10 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent pointer-events-none" aria-hidden />
-            <div className="absolute inset-0 z-20 flex items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
-              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
-                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
+            <div className="absolute inset-0 z-10 bg-gradient-to-b from-alloy-midnight/80 via-alloy-midnight/45 to-transparent pointer-events-none" aria-hidden />
+            <div className="absolute inset-0 z-20 flex items-end md:items-center p-5 sm:p-8 md:px-10 lg:px-12">
+              <div className="w-full max-w-[520px] space-y-4 md:space-y-6 bg-alloy-midnight/35 backdrop-blur-sm rounded-xl p-5 md:bg-transparent md:backdrop-blur-none md:rounded-none md:p-0">
+                <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight">
                   Home Cleaning You Can Actually Rely On
                 </h1>
-                <p className="text-base md:text-lg text-white/90">
+                <p className="text-base leading-6 md:text-lg text-white/90">
                   Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
