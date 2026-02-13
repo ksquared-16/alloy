@@ -1,10 +1,42 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Allowed admin path prefixes (same as nav: dashboard, jobs, contacts, customers, vendors, etc.).
+// Unknown /admin paths redirect to dashboard instead of 404.
+const ADMIN_PATH_PREFIXES = [
+  "/admin",
+  "/admin/dashboard",
+  "/admin/opportunities",
+  "/admin/jobs",
+  "/admin/schedules",
+  "/admin/customers",
+  "/admin/contacts",
+  "/admin/vendors",
+  "/admin/contractors",
+  "/admin/discounts",
+  "/admin/discount-redemptions",
+  "/admin/subscriptions",
+  "/admin/verticals",
+  "/admin/workflows",
+  "/admin/messaging",
+  "/admin/settings",
+];
+
+function isAllowedAdminPath(pathname: string): boolean {
+  return ADMIN_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
+  );
+}
+
 export async function middleware(request: NextRequest) {
   // Only protect /admin routes
   if (!request.nextUrl.pathname.startsWith("/admin")) {
     return NextResponse.next();
+  }
+
+  // Allow only known admin paths; redirect unknown paths to dashboard (avoid 404 for valid app routes)
+  if (!isAllowedAdminPath(request.nextUrl.pathname)) {
+    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
   }
 
   let response = NextResponse.next({
