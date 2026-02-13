@@ -261,7 +261,7 @@ export default function CleaningPage() {
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
           <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             <Image
-              src="/hero/home_cleaning_hero.jpeg"
+              src="/hero/home_cleaning_hero.png"
               alt="Home cleaning service"
               fill
               priority
@@ -415,42 +415,70 @@ export default function CleaningPage() {
         <GetQuoteCTA />
       </Section>
 
-      {/* Full-width banner: standard cleaning */}
-      <Section className="py-0">
-        <div className="w-full aspect-[21/9] max-h-[280px] relative overflow-hidden rounded-lg bg-alloy-stone/40">
-          <Image
-            src="/services/cleaning/standard.jpeg"
-            alt="Standard cleaning"
-            fill
-            className="object-cover"
-            sizes="100vw"
-            unoptimized
-          />
-        </div>
-      </Section>
-
-      {/* What Makes Alloy Different — value tiles */}
+      {/* What Makes Alloy Different — 2 rows: image + tiles, tiles + image */}
       <Section className="py-12 md:py-16">
-        <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
-          What Makes Alloy Different
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-          {VALUE_TILES.map((tile) => (
-            <div
-              key={tile.title}
-              className="bg-white rounded-lg p-6 border border-alloy-stone/30 flex gap-4"
-            >
-              <div className="shrink-0">{tile.icon}</div>
-              <div>
-                <h3 className="text-xl font-semibold text-alloy-blue mb-2">
-                  {tile.title}
-                </h3>
-                <p className="text-alloy-midnight/80 text-sm leading-relaxed">{tile.description}</p>
-              </div>
+        <div className="max-w-6xl mx-auto px-4 md:px-8">
+          <h2 className="text-3xl font-bold text-alloy-midnight mb-8 md:mb-10 text-center">
+            What Makes Alloy Different
+          </h2>
+          {/* Row 1: Image left, 2 tiles right */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-stretch mb-6 md:mb-8">
+            <div className="relative h-[320px] md:h-[420px] rounded-xl shadow-md overflow-hidden bg-alloy-stone/40">
+              <Image
+                src="/images/cleaning/standard-1.png"
+                alt="Standard cleaning"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
             </div>
-          ))}
+            <div className="flex flex-col gap-6">
+              {VALUE_TILES.slice(0, 2).map((tile) => (
+                <div
+                  key={tile.title}
+                  className="bg-white rounded-lg p-6 border border-alloy-stone/30 flex gap-4 flex-1 min-h-0"
+                >
+                  <div className="shrink-0">{tile.icon}</div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-alloy-blue mb-2">
+                      {tile.title}
+                    </h3>
+                    <p className="text-alloy-midnight/80 text-sm leading-relaxed">{tile.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Row 2: 2 tiles left, image right */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-stretch">
+            <div className="flex flex-col gap-6">
+              {VALUE_TILES.slice(2, 4).map((tile) => (
+                <div
+                  key={tile.title}
+                  className="bg-white rounded-lg p-6 border border-alloy-stone/30 flex gap-4 flex-1 min-h-0"
+                >
+                  <div className="shrink-0">{tile.icon}</div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-alloy-blue mb-2">
+                      {tile.title}
+                    </h3>
+                    <p className="text-alloy-midnight/80 text-sm leading-relaxed">{tile.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="relative h-[320px] md:h-[420px] rounded-xl shadow-md overflow-hidden bg-alloy-stone/40">
+              <Image
+                src="/images/cleaning/standard-2.png"
+                alt="Standard cleaning"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            </div>
+          </div>
+          <GetQuoteCTA />
         </div>
-        <GetQuoteCTA />
       </Section>
 
       {/* 2-image grid: deep cleaning + move-out */}
@@ -458,7 +486,7 @@ export default function CleaningPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
           <div className="aspect-[4/3] relative overflow-hidden rounded-lg bg-alloy-stone/40">
             <Image
-              src="/services/cleaning/deep-cleaning.jpeg"
+              src="/services/cleaning/deep-cleaning.png"
               alt="Deep cleaning"
               fill
               className="object-cover"
@@ -468,7 +496,7 @@ export default function CleaningPage() {
           </div>
           <div className="aspect-[4/3] relative overflow-hidden rounded-lg bg-alloy-stone/40">
             <Image
-              src="/services/cleaning/moveout.jpeg"
+              src="/services/cleaning/moveout.png"
               alt="Move-out cleaning"
               fill
               className="object-cover"
