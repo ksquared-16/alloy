@@ -239,6 +239,11 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", vendorId);
 
+    await supabase
+      .from("contacts")
+      .update({ vendor_id: vendorId })
+      .eq("id", contactId);
+
     return NextResponse.json({ ok: true, vendor_id: vendorId });
   } catch (err) {
     console.error("[VENDOR_APPLICATION] Error:", err);

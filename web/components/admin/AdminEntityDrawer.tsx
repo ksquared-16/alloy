@@ -33,6 +33,10 @@ type VendorFormData = {
     payout_percent?: number | "";
     service_area_zip_codes?: string;
 };
+
+/** Contact drawer: vendor linked via contacts.vendor_id (from entity GET _contact_vendor). */
+type ContactVendorShape = { id: string; name: string | null; vendor_status_id: string | null; created_at: string };
+
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
 }
@@ -475,6 +479,23 @@ export default function AdminEntityDrawer() {
                             )}
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <Field label="External ID" value={data.external_id as string} />
+                            <div className="pt-2 border-t border-alloy-stone/20">
+                                <strong className="text-alloy-midnight/70">Vendor:</strong>{" "}
+                                {(() => {
+                                    const v: ContactVendorShape | null = (data._contact_vendor as ContactVendorShape | null | undefined) ?? null;
+                                    return v ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => openDrawer({ type: "vendors", id: v.id })}
+                                            className="text-alloy-blue hover:underline text-sm"
+                                        >
+                                            {v.name || v.id}
+                                        </button>
+                                    ) : (
+                                        <span className="text-alloy-midnight/60">None</span>
+                                    );
+                                })()}
+                            </div>
                         </>
                     )}
                     {drawer.type === "customers" && (

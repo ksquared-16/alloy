@@ -60,7 +60,17 @@ export async function GET(
         if (type === "contacts") {
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            return NextResponse.json(data);
+            const contact = data as { vendor_id?: string | null };
+            let _contact_vendor: { id: string; name: string | null; vendor_status_id: string | null; created_at: string } | null = null;
+            if (contact.vendor_id) {
+                const { data: vendor } = await supabase
+                    .from("vendors")
+                    .select("id, name, vendor_status_id, created_at")
+                    .eq("id", contact.vendor_id)
+                    .single();
+                if (vendor) _contact_vendor = { id: vendor.id, name: vendor.name ?? null, vendor_status_id: vendor.vendor_status_id ?? null, created_at: vendor.created_at };
+            }
+            return NextResponse.json({ ...data, _contact_vendor });
         }
         if (type === "customers") {
             const { data, error } = await supabase.from("customers").select("*").eq("id", id).single();
