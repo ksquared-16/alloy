@@ -50,6 +50,11 @@ export default function JoinPage() {
                 <p className="text-base md:text-lg text-white/90">
                   We help you get quality jobs. We handle the busywork, so you can focus on what you're best at.
                 </p>
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <PrimaryButton onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
+                    Apply to Join
+                  </PrimaryButton>
+                </div>
               </div>
             </div>
           </div>

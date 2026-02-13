@@ -1440,7 +1440,7 @@ export default function BookClient() {
                 {/* Booking Success Modal */}
                 {showBookingSuccess && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-xl">
+                        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-xl border border-[#59678b]/40">
                             <div className="mb-4">
                                 <svg
                                     className="w-16 h-16 mx-auto text-alloy-juniper"

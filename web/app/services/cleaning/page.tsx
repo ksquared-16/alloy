@@ -561,7 +561,7 @@ export default function CleaningPage() {
             aria-labelledby="option-modal-title"
           >
             <div
-              className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col"
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col border border-[#59678b]/40"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-4 md:p-6 border-b border-alloy-stone/20 shrink-0">

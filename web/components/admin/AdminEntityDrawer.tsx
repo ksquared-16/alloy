@@ -785,7 +785,7 @@ export default function AdminEntityDrawer() {
                                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                                     {runModalOpen && drawer.id && drawer.id !== "new" && (
                                         <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onClick={() => setRunModalOpen(false)}>
-                                            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-auto p-4" onClick={(e) => e.stopPropagation()}>
+                                            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-auto p-4 border border-[#59678b]/40" onClick={(e) => e.stopPropagation()}>
                                                 <h3 className="font-semibold text-alloy-midnight mb-2">Run workflow</h3>
                                                 <label className="block text-sm text-alloy-midnight/70 mb-1">Event payload (JSON)</label>
                                                 <textarea value={runPayload} onChange={(e) => { setRunPayload(e.target.value); setRunJsonError(null); }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={8} />

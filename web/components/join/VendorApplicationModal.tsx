@@ -243,7 +243,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
       }}
       style={{ touchAction: "none" }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col" style={{ maxHeight: "90dvh" }}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col border border-[#59678b]/40" style={{ maxHeight: "90dvh" }}>
         <div className="sticky top-0 bg-white border-b border-alloy-stone/20 px-4 sm:px-6 py-4 flex items-center justify-between z-10 shrink-0">
           <h2 className="text-lg sm:text-xl font-bold text-alloy-midnight">Apply to Join</h2>
           <button

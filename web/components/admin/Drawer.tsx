@@ -36,7 +36,7 @@ export default function Drawer({ isOpen, onClose, title, children, zIndexBackdro
             />
 
             {/* Drawer */}
-            <div className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-xl overflow-y-auto" style={{ zIndex: zIndexPanel }}>
+            <div className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-xl overflow-y-auto border-l border-[#59678b]/40" style={{ zIndex: zIndexPanel }}>
                 <div className="sticky top-0 bg-white border-b border-alloy-stone/30 px-6 py-4 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-alloy-midnight">{title}</h2>
                     <button
