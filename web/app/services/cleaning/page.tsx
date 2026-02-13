@@ -259,17 +259,17 @@ export default function CleaningPage() {
       {/* Hero — matches homepage hero layout */}
       <section className="bg-alloy-stone" ref={heroRef}>
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
-          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
+          <div className="relative min-h-[320px] sm:min-h-[380px] md:min-h-[400px] lg:min-h-[460px] h-[320px] sm:h-[380px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             <Image
               src="/hero/home_cleaning_hero.png"
               alt="Home cleaning service"
               fill
               priority
-              className="object-cover object-[70%_50%] sm:object-center"
-              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
+              className="object-cover object-center z-0"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
-            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
+            <div className="absolute inset-0 z-10 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent pointer-events-none" aria-hidden />
+            <div className="absolute inset-0 z-20 flex items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
               <div className="max-w-xl space-y-3 md:space-y-6 w-full">
                 <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
                   Home Cleaning You Can Actually Rely On
