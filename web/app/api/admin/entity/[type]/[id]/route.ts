@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows", "vendors"] as const;
 
+type ContactRow = { id: string; first_name?: string; last_name?: string; email?: string; phone?: string };
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ type: string; id: string }> }
@@ -126,13 +128,14 @@ export async function GET(
                 .select("id, contact_id, role")
                 .eq("vendor_id", id);
             const contactIds = (vcRows ?? []).map((r: { contact_id: string }) => r.contact_id);
-            const { data: linkedContacts } = contactIds.length > 0
+            const { data: linkedContactsData } = contactIds.length > 0
                 ? await supabase
                     .from("contacts")
                     .select("id, first_name, last_name, email, phone")
                     .in("id", contactIds)
-                : { data: [] as unknown[] };
-            const contactsWithRole = (linkedContacts ?? []).map((c: { id: string; first_name?: string; last_name?: string; email?: string; phone?: string }) => {
+                : { data: [] as ContactRow[] };
+            const linkedContactsRows = (linkedContactsData ?? []) as ContactRow[];
+            const contactsWithRole = linkedContactsRows.map((c) => {
                 const link = (vcRows ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
                 return { ...c, _role: link?.role ?? null };
             });
