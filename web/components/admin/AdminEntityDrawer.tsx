@@ -545,8 +545,20 @@ export default function AdminEntityDrawer() {
                                 <details className="pt-4 border-b border-alloy-stone/20 pb-4">
                                     <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Documents</summary>
                                     <div className="space-y-2">
-                                        {(data.insurance_doc_path as string) ? <div><strong className="text-alloy-midnight/70">Insurance:</strong> <span className="text-sm font-mono">{data.insurance_doc_path as string}</span> <span className="text-xs text-alloy-midnight/50">(path; signed URL not implemented)</span></div> : <Field label="Insurance" value="—" />}
-                                        {(data.drivers_license_doc_path as string) ? <div><strong className="text-alloy-midnight/70">Drivers license:</strong> <span className="text-sm font-mono">{data.drivers_license_doc_path as string}</span> <span className="text-xs text-alloy-midnight/50">(path; signed URL not implemented)</span></div> : <Field label="Drivers license" value="—" />}
+                                        {(data.insurance_doc_path as string) ? (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <strong className="text-alloy-midnight/70 shrink-0">Insurance:</strong>
+                                                <span className="text-sm font-mono break-all">{data.insurance_doc_path as string}</span>
+                                                <button type="button" onClick={() => { navigator.clipboard.writeText((data.insurance_doc_path as string) ?? ""); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0">Copy path</button>
+                                            </div>
+                                        ) : <Field label="Insurance" value="—" />}
+                                        {(data.drivers_license_doc_path as string) ? (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <strong className="text-alloy-midnight/70 shrink-0">Drivers license:</strong>
+                                                <span className="text-sm font-mono break-all">{data.drivers_license_doc_path as string}</span>
+                                                <button type="button" onClick={() => { navigator.clipboard.writeText((data.drivers_license_doc_path as string) ?? ""); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0">Copy path</button>
+                                            </div>
+                                        ) : <Field label="Drivers license" value="—" />}
                                     </div>
                                 </details>
                                 <details className="pt-4 border-b border-alloy-stone/20 pb-4">

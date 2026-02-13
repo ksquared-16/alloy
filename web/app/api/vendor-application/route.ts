@@ -204,31 +204,39 @@ export async function POST(request: NextRequest) {
 
     const ext = (filename: string) => {
       const i = filename.lastIndexOf(".");
-      return i >= 0 ? filename.slice(i) : "";
+      return i >= 0 ? filename.slice(i).toLowerCase() : "";
     };
+    const contentType = (file: File) => file.type || "application/octet-stream";
 
-    const insurancePath = `vendors/${vendorId}/insurance/${uuid()}${ext(proof_of_insurance.name)}`;
-    const driversPath = `vendors/${vendorId}/drivers_license/${uuid()}${ext(drivers_license.name)}`;
+    const insurancePath = `vendors/${vendorId}/insurance/${uuid()}${ext(proof_of_insurance.name) || ".bin"}`;
+    const driversPath = `vendors/${vendorId}/drivers_license/${uuid()}${ext(drivers_license.name) || ".bin"}`;
 
-    const insuranceBuf = await proof_of_insurance.arrayBuffer();
-    const driversBuf = await drivers_license.arrayBuffer();
+    const insuranceBuf = Buffer.from(await proof_of_insurance.arrayBuffer());
+    const driversBuf = Buffer.from(await drivers_license.arrayBuffer());
 
     const { error: up1 } = await supabase.storage.from(BUCKET).upload(insurancePath, insuranceBuf, {
-      contentType: proof_of_insurance.type || "application/octet-stream",
-      upsert: true,
+      contentType: contentType(proof_of_insurance),
+      upsert: false,
     });
     if (up1) {
-      console.error("[VENDOR_APPLICATION] Insurance upload failed:", up1.message);
-      return NextResponse.json({ ok: false, error: "Failed to upload proof of insurance" }, { status: 500 });
+      console.error("[VENDOR_APPLICATION] upload failed", { which: "insurance", error: up1 });
+      return NextResponse.json({ ok: false, error: "Failed to upload proof of insurance" }, { status: 400 });
     }
 
     const { error: up2 } = await supabase.storage.from(BUCKET).upload(driversPath, driversBuf, {
-      contentType: drivers_license.type || "application/octet-stream",
-      upsert: true,
+      contentType: contentType(drivers_license),
+      upsert: false,
     });
     if (up2) {
-      console.error("[VENDOR_APPLICATION] Drivers license upload failed:", up2.message);
-      return NextResponse.json({ ok: false, error: "Failed to upload drivers license" }, { status: 500 });
+      console.error("[VENDOR_APPLICATION] upload failed", { which: "drivers_license", error: up2 });
+      await supabase
+        .from("vendors")
+        .update({
+          vendor_status_id: vendorStatusId,
+          insurance_doc_path: insurancePath,
+        })
+        .eq("id", vendorId);
+      return NextResponse.json({ ok: false, error: "Failed to upload drivers license" }, { status: 400 });
     }
 
     await supabase
@@ -238,6 +246,8 @@ export async function POST(request: NextRequest) {
         drivers_license_doc_path: driversPath,
       })
       .eq("id", vendorId);
+
+    console.log("[VENDOR_APPLICATION] uploaded docs", { vendorId, insurance_doc_path: insurancePath, drivers_license_doc_path: driversPath });
 
     await supabase
       .from("contacts")
