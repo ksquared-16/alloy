@@ -13,7 +13,7 @@ import {
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors"] as const;
 const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exists", "gt", "gte", "lt", "lte"] as const;
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
@@ -245,6 +245,10 @@ export default function AdminEntityDrawer() {
                 name: data.name ?? "",
                 status: data.status ?? "",
             });
+        } else if (drawer.type === "vendors") {
+            setFormData({
+                vendor_status_id: data.vendor_status_id ?? "",
+            });
         } else if (drawer.type === "schedules") {
             setFormData({
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
@@ -308,6 +312,9 @@ export default function AdminEntityDrawer() {
                 if (payload.start_at) payload.start_at = new Date(payload.start_at as string).toISOString();
                 if (payload.end_at) payload.end_at = new Date(payload.end_at as string).toISOString();
             }
+            if (drawer.type === "vendors" && (payload.vendor_status_id === "" || payload.vendor_status_id === undefined)) {
+                payload.vendor_status_id = null;
+            }
             const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json.error as string) || "Save failed");
@@ -341,7 +348,9 @@ export default function AdminEntityDrawer() {
                         ? (data as { _create?: boolean })._create
                           ? "New workflow"
                           : `Workflow: ${(data.name as string) || drawer.id}`
-                        : "Details"
+                        : drawer.type === "vendors"
+                          ? `Vendor: ${(data.name as string) || drawer.id}`
+                          : "Details"
         : loading
           ? "Loading…"
           : "Details";
@@ -418,6 +427,31 @@ export default function AdminEntityDrawer() {
                             <Field label="Payment Method ID" value={data.default_payment_method_id as string} />
                             <Field label="Vertical ID" value={data.vertical_id as string} />
                             <Field label="External ID" value={data.external_id as string} />
+                        </>
+                    )}
+                    {drawer.type === "vendors" && (
+                        <>
+                            <Field label="ID" value={data.id as string} />
+                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
+                            <Field label="Name" value={data.name as string} />
+                            <Field label="Email" value={data.email as string} />
+                            {isEditing ? (
+                                <div>
+                                    <label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label>
+                                    <select value={String(formData.vendor_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vendor_status_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm">
+                                        <option value="">— None —</option>
+                                        {((data._vendor_status_options as { id: string; key: string; label: string }[]) ?? []).map((opt) => (
+                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : (
+                                <Field label="Status" value={(data._vendor_status_label as string) ?? "-"} />
+                            )}
+                            <Field label="Insurance document" value={(data.insurance_doc_path as string) ?? "-"} />
+                            <Field label="Drivers license document" value={(data.drivers_license_doc_path as string) ?? "-"} />
+                            <Field label="Phone" value={data.phone as string} />
+                            <Field label="Submitted at" value={data.submitted_at ? formatDateTime(data.submitted_at as string) : "-"} />
                         </>
                     )}
                     {drawer.type === "opportunities" && (

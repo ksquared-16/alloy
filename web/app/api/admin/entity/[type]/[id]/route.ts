@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows", "vendors"] as const;
 
 export async function GET(
     request: NextRequest,
@@ -88,6 +88,21 @@ export async function GET(
                 _conditions: cond ?? [],
                 _actions: acts ?? [],
             });
+        }
+        if (type === "vendors") {
+            const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).single();
+            if (vErr || !vendor) return NextResponse.json(vErr?.message || "Not found", { status: vErr?.code === "PGRST116" ? 404 : 500 });
+            const out: Record<string, unknown> = { ...vendor };
+            const statusId = (vendor as { vendor_status_id?: string }).vendor_status_id;
+            if (statusId) {
+                const { data: statusRow } = await supabase.from("vendor_statuses").select("key, label").eq("id", statusId).single();
+                out._vendor_status_label = statusRow?.label ?? null;
+            } else {
+                out._vendor_status_label = null;
+            }
+            const { data: statusOptions } = await supabase.from("vendor_statuses").select("id, key, label").eq("is_active", true).order("position", { ascending: true });
+            out._vendor_status_options = statusOptions ?? [];
+            return NextResponse.json(out);
         }
 
         return NextResponse.json({ error: "Invalid type" }, { status: 400 });

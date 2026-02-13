@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 
-const BUCKET = "documents";
+const BUCKET = "vendor_documents";
 
 function getStr(form: FormData, key: string): string {
   const v = form.get(key);
@@ -144,11 +144,19 @@ export async function POST(request: NextRequest) {
       contactId = (newContact as { id: string }).id;
     }
 
+    const { data: pendingStatus } = await supabase
+      .from("vendor_statuses")
+      .select("id")
+      .eq("key", "pending")
+      .limit(1)
+      .maybeSingle();
+    const vendorStatusId = (pendingStatus as { id: string } | null)?.id ?? null;
+
     const vendorName = `${first_name} ${last_name}`.trim() || email;
     const vendorPayload: Record<string, unknown> = {
       org_id: orgId,
       name: vendorName,
-      status: "applied",
+      vendor_status_id: vendorStatusId,
       email,
       phone,
       primary_contact_id: contactId,
@@ -223,49 +231,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Failed to upload drivers license" }, { status: 500 });
     }
 
-    const docPayload = (
-      path: string,
-      file: File,
-      docType: string
-    ): Record<string, unknown> => ({
-      org_id: orgId,
-      owner_contact_id: contactId,
-      entity_type: "vendor",
-      entity_id: vendorId,
-      doc_type: docType,
-      original_filename: file.name,
-      mime_type: file.type || "application/octet-stream",
-      byte_size: file.size,
-      bucket: BUCKET,
-      storage_path: path,
-      status: "uploaded",
-    });
-
-    const { data: docInsurance, error: docInsErr } = await supabase
-      .from("documents")
-      .insert(docPayload(insurancePath, proof_of_insurance, "insurance"))
-      .select("id")
-      .single();
-    if (docInsErr || !docInsurance) {
-      console.error("[VENDOR_APPLICATION] Documents insert insurance failed:", docInsErr?.message);
-      return NextResponse.json({ ok: false, error: "Failed to record document" }, { status: 500 });
-    }
-
-    const { data: docDrivers, error: docDrvErr } = await supabase
-      .from("documents")
-      .insert(docPayload(driversPath, drivers_license, "drivers_license"))
-      .select("id")
-      .single();
-    if (docDrvErr || !docDrivers) {
-      console.error("[VENDOR_APPLICATION] Documents insert drivers failed:", docDrvErr?.message);
-      return NextResponse.json({ ok: false, error: "Failed to record document" }, { status: 500 });
-    }
-
     await supabase
       .from("vendors")
       .update({
-        insurance_doc_file_id: (docInsurance as { id: string }).id,
-        drivers_license_doc_file_id: (docDrivers as { id: string }).id,
+        insurance_doc_path: insurancePath,
+        drivers_license_doc_path: driversPath,
       })
       .eq("id", vendorId);
 
