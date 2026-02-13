@@ -148,7 +148,13 @@ export default function JoinPage() {
         </div>
       </Section>
 
-      <VendorApplicationModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+      <VendorApplicationModal
+        isOpen={modalOpen}
+        onClose={() => {
+          if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+          setModalOpen(false);
+        }}
+      />
     </div>
   );
 }

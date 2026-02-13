@@ -216,21 +216,28 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
         method: "POST",
         body: fd,
       });
-      const data = await res.json();
+      let data: { ok?: boolean; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
 
       if (!res.ok || !data.ok) {
         setSubmitError(data.error || "Something went wrong. Please try again.");
         return;
       }
       setSubmitSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 2000);
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setSubmitError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCloseAfterSuccess = () => {
+    onClose();
   };
 
   if (!isOpen || !mounted) return null;
@@ -268,7 +275,10 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                   </svg>
                 </div>
                 <h3 className="text-xl font-bold text-alloy-midnight mb-2">Application received</h3>
-                <p className="text-alloy-midnight/70">We&apos;ll review your application and be in touch soon.</p>
+                <p className="text-alloy-midnight/70 mb-6">We&apos;ve received your application and we&apos;re reviewing it. We&apos;ll reach out soon.</p>
+                <PrimaryButton type="button" onClick={handleCloseAfterSuccess}>
+                  Done
+                </PrimaryButton>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">

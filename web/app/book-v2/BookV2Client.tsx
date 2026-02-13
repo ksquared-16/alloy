@@ -344,6 +344,13 @@ export default function BookV2Client() {
         setMounted(true);
     }, []);
 
+    // Scroll to top when showing booking confirmation so user sees success message
+    useEffect(() => {
+        if (currentStep === "confirmed" && typeof window !== "undefined") {
+            window.scrollTo({ top: 0, behavior: "auto" });
+        }
+    }, [currentStep]);
+
     useEffect(() => {
         return () => {
             if (refineDebounceRef.current) {
