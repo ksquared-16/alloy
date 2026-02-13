@@ -7,6 +7,7 @@ import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GetQuoteButton from "@/components/GetQuoteButton";
+import heroCleaningImage from "../../../public/hero/home_cleaning_hero.jpeg";
 
 type OptionKey = "standard" | "deep" | "moveout";
 
@@ -259,9 +260,10 @@ export default function CleaningPage() {
       {/* Hero — compact on mobile, short headline + subtext + CTA */}
       <section className="bg-alloy-stone" ref={heroRef}>
         <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
+          {/* Hero image: static import from web/public/hero/home_cleaning_hero.jpeg — ensures correct path and loads on all devices */}
           <div className="relative min-h-[240px] sm:min-h-[300px] md:min-h-[420px] lg:min-h-[480px] h-[240px] sm:h-[300px] md:h-[420px] lg:h-[480px] overflow-hidden rounded-xl shadow-lg">
             <Image
-              src="/hero/home_cleaning_hero.png"
+              src={heroCleaningImage}
               alt="Home cleaning service"
               fill
               priority
