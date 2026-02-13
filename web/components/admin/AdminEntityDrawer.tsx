@@ -11,10 +11,10 @@ import {
     WORKFLOW_EVENT_TYPES,
     WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE,
     WORKFLOW_ENTITY_ID_QUICK_FILL,
+    WORKFLOW_CONDITION_OPERATORS,
 } from "@/lib/workflowVocab";
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors"] as const;
-const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exists", "gt", "gte", "lt", "lte"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -101,7 +101,7 @@ export default function AdminEntityDrawer() {
     const [rescheduleError, setRescheduleError] = useState<string | null>(null);
     const [pipelines, setPipelines] = useState<{ id: string; name: string }[]>([]);
     const [stages, setStages] = useState<{ id: string; pipeline_id: string; name: string; position: number }[]>([]);
-    const [workflowConditions, setWorkflowConditions] = useState<{ field: string; operator: string; value: string }[]>([]);
+    const [workflowConditions, setWorkflowConditions] = useState<{ target_entity?: string; field_path: string; operator: string; value: string }[]>([]);
     const [workflowActions, setWorkflowActions] = useState<{ action_type: string; target_entity?: string; payload?: Record<string, unknown> }[]>([]);
     const [runModalOpen, setRunModalOpen] = useState(false);
     const [runPayload, setRunPayload] = useState("{}");
@@ -181,10 +181,11 @@ export default function AdminEntityDrawer() {
             return;
         }
         if (data._conditions) {
-            const cond = (data._conditions as { field?: string; operator?: string; value?: string }[]).map((c) => ({
-                field: c.field ?? "",
-                operator: c.operator ?? "equals",
-                value: c.value ?? "",
+            const cond = (data._conditions as { target_entity?: string; field_path?: string; field?: string; operator?: string; value?: string; value_jsonb?: unknown }[]).map((c) => ({
+                target_entity: c.target_entity ?? "",
+                field_path: c.field_path ?? c.field ?? "",
+                operator: c.operator ?? "eq",
+                value: c.value ?? (c.value_jsonb != null ? (typeof c.value_jsonb === "string" ? c.value_jsonb : JSON.stringify(c.value_jsonb)) : ""),
             }));
             setWorkflowConditions(cond);
         }
@@ -833,23 +834,27 @@ export default function AdminEntityDrawer() {
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Conditions</strong>
                                                 {workflowConditions.map((c, i) => {
-                                                    const entityType = (formData.entity_type as string) || "job";
+                                                    const entityType = c.target_entity || (formData.entity_type as string) || "job";
                                                     const fieldOptions = WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE[entityType] ?? WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE.job ?? [];
                                                     return (
-                                                        <div key={i} className="flex gap-2 items-center mb-2">
-                                                            <select value={c.field} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm">
-                                                                <option value="">Select field…</option>
-                                                                {fieldOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                        <div key={i} className="flex gap-2 items-center mb-2 flex-wrap">
+                                                            <select value={c.target_entity ?? ""} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, target_entity: e.target.value || undefined } : p))} className="w-28 px-2 py-1.5 border rounded text-sm" title="Target entity">
+                                                                <option value="">Entity…</option>
+                                                                {WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}
                                                             </select>
-                                                            <select value={c.operator} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, operator: e.target.value } : p))} className="w-28 px-2 py-1.5 border rounded text-sm">
+                                                            <input list={`cond-field-${i}`} placeholder="field path (e.g. job.service_frequency_key)" value={c.field_path} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field_path: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" title="Dot path into target entity" />
+                                                            <datalist id={`cond-field-${i}`}>
+                                                                {fieldOptions.map((opt) => <option key={opt.value} value={opt.value} />)}
+                                                            </datalist>
+                                                            <select value={c.operator} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, operator: e.target.value } : p))} className="w-24 px-2 py-1.5 border rounded text-sm">
                                                                 {WORKFLOW_CONDITION_OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
                                                             </select>
-                                                            <input placeholder="value" value={c.value} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" />
+                                                            <input placeholder="value" value={c.value} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm max-w-[120px]" />
                                                             <button type="button" onClick={() => setWorkflowConditions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>
                                                         </div>
                                                     );
                                                 })}
-                                                <button type="button" onClick={() => setWorkflowConditions((prev) => [...prev, { field: "", operator: "equals", value: "" }])} className="text-sm text-alloy-blue hover:underline">Add condition</button>
+                                                <button type="button" onClick={() => setWorkflowConditions((prev) => [...prev, { target_entity: (formData.entity_type as string) || undefined, field_path: "", operator: "eq", value: "" }])} className="text-sm text-alloy-blue hover:underline">Add condition</button>
                                             </div>
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Actions</strong>
@@ -859,9 +864,10 @@ export default function AdminEntityDrawer() {
                                                             <select value={a.action_type} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, action_type: e.target.value } : p))} className="px-2 py-1.5 border rounded text-sm">
                                                                 <option value="log">log</option>
                                                                 <option value="create_message">create_message</option>
+                                                                <option value="send_message">send_message</option>
                                                                 <option value="update_entity">update_entity</option>
                                                             </select>
-                                                            {a.action_type === "update_entity" && (
+                                                            {(a.action_type === "update_entity" || a.action_type === "send_message") && (
                                                                 <select value={a.target_entity ?? ""} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, target_entity: e.target.value || undefined } : p))} className="px-2 py-1.5 border rounded text-sm">
                                                                     <option value="">— Entity —</option>
                                                                     {WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}
@@ -937,6 +943,61 @@ export default function AdminEntityDrawer() {
                                                                     );
                                                                 })()}
                                                             </>
+                                                        ) : a.action_type === "send_message" ? (
+                                                            (() => {
+                                                                const pl = (a.payload && typeof a.payload === "object" ? a.payload : {}) as Record<string, unknown>;
+                                                                const recipients = (Array.isArray(pl.recipients) ? pl.recipients : []) as { type?: string; source?: string; path?: string; vendor_id_path?: string; role_in?: string[]; max?: number }[];
+                                                                return (
+                                                                    <div className="space-y-2">
+                                                                        <div>
+                                                                            <label className="block text-xs text-alloy-midnight/60 mb-0.5">Channel</label>
+                                                                            <select value={String(pl.channel ?? "sms")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), channel: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm">
+                                                                                <option value="sms">sms</option>
+                                                                                <option value="email">email</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-xs text-alloy-midnight/60 mb-0.5">Template (e.g. New job: {`{{job.title}}`} at {`{{schedule.start_at}}`})</label>
+                                                                            <textarea value={String(pl.template ?? "")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), template: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm" rows={3} placeholder="Supports {{job.title}}, {{contact.phone}}, etc." />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-xs text-alloy-midnight/60 mb-0.5">Recipients</label>
+                                                                            {recipients.map((rec, ri) => {
+                                                                                const recTypeKey = rec.source === "payload" && rec.path === "contact.id" ? "payload_contact" : rec.source === "payload" && rec.path === "customer.primary_contact_id" ? "customer_primary" : rec.source === "payload" && rec.path === "vendor.primary_contact_id" ? "vendor_primary" : rec.type === "contacts_by_vendor" ? "contacts_by_vendor" : rec.type === "job_qualified_vendors" ? "job_qualified_vendors" : "";
+                                                                                return (
+                                                                                    <div key={ri} className="flex gap-2 items-center mb-1">
+                                                                                        <select value={recTypeKey} onChange={(e) => {
+                                                                                            const t = e.target.value;
+                                                                                            const next = [...recipients];
+                                                                                            if (t === "payload_contact") next[ri] = { type: "contact", source: "payload", path: "contact.id" };
+                                                                                            else if (t === "customer_primary") next[ri] = { type: "customer", source: "payload", path: "customer.primary_contact_id" };
+                                                                                            else if (t === "vendor_primary") next[ri] = { type: "vendor", source: "payload", path: "vendor.primary_contact_id" };
+                                                                                            else if (t === "contacts_by_vendor") next[ri] = { type: "contacts_by_vendor", source: "query", vendor_id_path: "vendor.id", role_in: ["primary", "billing"] };
+                                                                                            else if (t === "job_qualified_vendors") next[ri] = { type: "job_qualified_vendors", source: "resolver", max: 25 };
+                                                                                            else next[ri] = { type: "contact", source: "payload", path: "contact.id" };
+                                                                                            setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: next } } : p));
+                                                                                        }} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm">
+                                                                                            <option value="">— Type —</option>
+                                                                                            <option value="payload_contact">Payload contact</option>
+                                                                                            <option value="customer_primary">Customer primary contact</option>
+                                                                                            <option value="vendor_primary">Vendor primary contact</option>
+                                                                                            <option value="contacts_by_vendor">All contacts for vendor (by role)</option>
+                                                                                            <option value="job_qualified_vendors">Qualified vendors for job (resolver)</option>
+                                                                                        </select>
+                                                                                        <span className="text-xs text-alloy-midnight/50 shrink-0">{rec.type === "contacts_by_vendor" ? `vendor: ${rec.vendor_id_path ?? ""}` : rec.type === "job_qualified_vendors" ? `max ${rec.max ?? 25}` : rec.path ?? ""}</span>
+                                                                                        <button type="button" onClick={() => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: recipients.filter((_, k) => k !== ri) } } : p))} className="text-red-600 text-xs">Remove</button>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                            <button type="button" onClick={() => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: [...recipients, { type: "contact", source: "payload", path: "contact.id" }] } } : p))} className="text-sm text-alloy-blue hover:underline">Add recipient</button>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-xs text-alloy-midnight/60 mb-0.5">Dedupe key (optional)</label>
+                                                                            <input value={String(pl.dedupe_key ?? "")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), dedupe_key: e.target.value || undefined } } : p))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="e.g. job_new_notify_{{job.id}}" />
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()
                                                         ) : a.action_type === "update_entity" ? (
                                                             <>
                                                                 <p className="text-xs text-alloy-midnight/50 mb-1">Payload: <code>entity_type</code>, <code>entity_id</code> (path or literal), <code>patch</code> (object).</p>
@@ -976,7 +1037,7 @@ export default function AdminEntityDrawer() {
                                             <Field label="Entity type" value={(data.entity_type as string) ?? "-"} />
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-1">Conditions</strong>
-                                                {(data._conditions as { field: string; operator: string; value: string }[] | undefined)?.length ? (data._conditions as { field: string; operator: string; value: string }[]).map((c, i) => <div key={i} className="text-sm">{c.field} {c.operator} {c.value}</div>) : <div className="text-sm text-alloy-midnight/60">None</div>}
+                                                {(data._conditions as { target_entity?: string; field_path?: string; field?: string; operator: string; value?: string }[] | undefined)?.length ? (data._conditions as { target_entity?: string; field_path?: string; field?: string; operator: string; value?: string }[]).map((c, i) => <div key={i} className="text-sm">{(c.target_entity ?? "") && `${c.target_entity}.`}{c.field_path ?? c.field ?? ""} {c.operator} {c.value ?? ""}</div>) : <div className="text-sm text-alloy-midnight/60">None</div>}
                                             </div>
                                             <div className="pt-2 border-t border-alloy-stone/20">
                                                 <strong className="text-alloy-midnight/70 block mb-1">Actions</strong>

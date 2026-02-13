@@ -1,8 +1,9 @@
 /**
  * Single source of truth for workflow editor vocabulary (V1).
+ * Canonical entity types: customer, contact, job, schedule, opportunity, vendor.
  */
 
-export const WORKFLOW_ENTITY_TYPES = ["job", "opportunity", "contact", "customer", "schedule"] as const;
+export const WORKFLOW_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor"] as const;
 export type WorkflowEntityType = (typeof WORKFLOW_ENTITY_TYPES)[number];
 
 export const WORKFLOW_EVENT_TYPES = [
@@ -14,6 +15,7 @@ export const WORKFLOW_EVENT_TYPES = [
     "payment_failed",
 ] as const;
 export type WorkflowEventType = (typeof WORKFLOW_EVENT_TYPES)[number];
+
 
 /** Field paths for conditions dropdown, keyed by entity_type. Value is path string, label for display. */
 export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string; label: string }[]> = {
@@ -73,7 +75,18 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "job.id", label: "job.id" },
         { value: "job.title", label: "job.title" },
     ],
+    vendor: [
+        { value: "vendor.id", label: "vendor.id" },
+        { value: "vendor.name", label: "vendor.name" },
+        { value: "vendor.email", label: "vendor.email" },
+        { value: "vendor.phone", label: "vendor.phone" },
+        { value: "vendor.vendor_status_id", label: "vendor.vendor_status_id" },
+        { value: "vendor.primary_contact_id", label: "vendor.primary_contact_id" },
+    ],
 };
+
+/** Condition operators (DB and UI). eq/equals and neq/not_equals both supported at runtime. */
+export const WORKFLOW_CONDITION_OPERATORS = ["eq", "neq", "contains", "gt", "lt", "gte", "lte", "in", "not_in", "is_null", "not_null", "exists"] as const;
 
 /** Entity_id quick-fill options for update_entity (dot paths into event payload). */
 export const WORKFLOW_ENTITY_ID_QUICK_FILL = [
@@ -82,4 +95,5 @@ export const WORKFLOW_ENTITY_ID_QUICK_FILL = [
     { value: "customer.id", label: "customer.id" },
     { value: "opportunity.id", label: "opportunity.id" },
     { value: "schedule.id", label: "schedule.id" },
+    { value: "vendor.id", label: "vendor.id" },
 ] as const;

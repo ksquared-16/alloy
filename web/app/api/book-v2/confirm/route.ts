@@ -1029,6 +1029,9 @@ export async function POST(request: NextRequest) {
             const { data: contactRow } = await supabase.from("contacts").select("id, first_name, last_name, email, phone").eq("id", contactId).single();
             const { data: customerRow } = await supabase.from("customers").select("id, name").eq("id", customerId).single();
             const eventPayload: Record<string, unknown> = {
+                event_type: "booking_confirmed",
+                occurred_at: new Date().toISOString(),
+                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 job: jobRow ? { id: jobRow.id, title: jobRow.title, scheduled_at: jobRow.scheduled_at, service_frequency_key: jobRow.service_frequency_key, opportunity_id: jobRow.opportunity_id, primary_contact_id: jobRow.primary_contact_id, customer_id: jobRow.customer_id } : { id: jobId, title: null, scheduled_at: slot_start, service_frequency_key, opportunity_id: opportunityId, primary_contact_id: contactId, customer_id: customerId },
                 schedule: { id: scheduleId, start_at: sched.start_at ?? slot_start, end_at: sched.end_at ?? slot_end, timezone: sched.timezone ?? timezone, duration_minutes: sched.duration_minutes ?? 120 },
                 contact: contactRow ? { id: contactRow.id, first_name: contactRow.first_name, last_name: contactRow.last_name, email: contactRow.email, phone: contactRow.phone } : { id: contactId, first_name: null, last_name: null, email: null, phone: null },

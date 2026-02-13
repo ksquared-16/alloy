@@ -1,50 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getByPath, renderTemplate } from "@/lib/workflowTemplate";
 
-function evaluateCondition(
-    eventPayload: Record<string, unknown>,
-    field: string,
-    operator: string,
-    value: string
-): boolean {
-    const actual = getByPath(eventPayload, field);
-    const valStr = value;
+/** Standard event payload shape; all entity keys optional. Do not crash if missing. */
+export type WorkflowEventPayload = {
+    event_type?: string;
+    occurred_at?: string;
+    org_id?: string | null;
+    customer?: Record<string, unknown> | null;
+    contact?: Record<string, unknown> | null;
+    opportunity?: Record<string, unknown> | null;
+    job?: Record<string, unknown> | null;
+    schedule?: Record<string, unknown> | null;
+    vendor?: Record<string, unknown> | null;
+    [key: string]: unknown;
+};
 
-    switch (operator) {
-        case "exists":
-            return actual != null && actual !== "";
-        case "equals":
-            if (actual == null) return valStr === "" || valStr === "null";
-            return String(actual) === valStr || (typeof actual === "number" && parseFloat(valStr) === actual);
-        case "not_equals":
-            if (actual == null) return valStr !== "" && valStr !== "null";
-            return String(actual) !== valStr;
-        case "contains":
-            return String(actual ?? "").includes(valStr);
-        case "gt": {
-            const n = Number(actual);
-            const v = parseFloat(valStr);
-            return !Number.isNaN(n) && !Number.isNaN(v) && n > v;
-        }
-        case "gte": {
-            const n = Number(actual);
-            const v = parseFloat(valStr);
-            return !Number.isNaN(n) && !Number.isNaN(v) && n >= v;
-        }
-        case "lt": {
-            const n = Number(actual);
-            const v = parseFloat(valStr);
-            return !Number.isNaN(n) && !Number.isNaN(v) && n < v;
-        }
-        case "lte": {
-            const n = Number(actual);
-            const v = parseFloat(valStr);
-            return !Number.isNaN(n) && !Number.isNaN(v) && n <= v;
-        }
-        default:
-            return String(actual) === valStr;
-    }
-}
+const CANONICAL_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor"] as const;
 
 const ENTITY_TABLES: Record<string, string> = {
     job: "jobs",
@@ -57,12 +28,235 @@ const ENTITY_TABLES: Record<string, string> = {
     customers: "customers",
     schedule: "schedules",
     schedules: "schedules",
+    vendor: "vendors",
+    vendors: "vendors",
 };
+
+type ConditionRow = {
+    target_entity?: string | null;
+    field_path?: string | null;
+    field?: string | null;
+    operator?: string | null;
+    value?: unknown;
+    value_jsonb?: unknown;
+    enabled?: boolean | null;
+};
+
+function getConditionActual(payload: Record<string, unknown>, defaultEntityType: string | null, c: ConditionRow): unknown {
+    const entityType = (c.target_entity ?? defaultEntityType ?? "job").trim() || "job";
+    const entity = payload[entityType];
+    const path = (c.field_path ?? c.field ?? "").trim();
+    if (path && entity != null && typeof entity === "object") {
+        const relativePath = path.includes(".") ? path : path;
+        return getByPath(entity, relativePath);
+    }
+    if (c.field && typeof c.field === "string" && c.field.trim()) {
+        return getByPath(payload, c.field.trim());
+    }
+    if (path && entity != null && typeof entity === "object") {
+        return getByPath(entity, path);
+    }
+    return undefined;
+}
+
+function normalizeConditionValue(v: unknown): string | number | boolean | null | unknown[] {
+    if (v === undefined || v === null) return null;
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
+    if (Array.isArray(v)) return v;
+    if (typeof v === "object" && v !== null && "value" in (v as object)) return normalizeConditionValue((v as { value: unknown }).value);
+    return String(v);
+}
+
+function evaluateCondition(
+    payload: Record<string, unknown>,
+    defaultEntityType: string | null,
+    c: ConditionRow
+): boolean {
+    if (c.enabled === false) return true;
+    const actual = getConditionActual(payload, defaultEntityType, c);
+    const rawVal = c.value_jsonb !== undefined && c.value_jsonb !== null ? c.value_jsonb : c.value;
+    const val = normalizeConditionValue(rawVal);
+    const operator = (c.operator ?? "eq").trim().toLowerCase();
+
+    switch (operator) {
+        case "is_null":
+            return actual == null || actual === "";
+        case "not_null":
+            return actual != null && actual !== "";
+        case "eq":
+        case "equals":
+            if (actual == null) return val === null || val === "" || val === "null";
+            if (typeof val === "string" && (val === "" || val === "null")) return actual == null;
+            return String(actual) === String(val) || (typeof actual === "number" && typeof val === "number" && actual === val);
+        case "neq":
+        case "not_equals":
+            if (actual == null) return val !== null && val !== "" && val !== "null";
+            return String(actual) !== String(val);
+        case "contains":
+            return String(actual ?? "").includes(String(val ?? ""));
+        case "gt": {
+            const n = Number(actual);
+            const v = typeof val === "number" ? val : parseFloat(String(val));
+            return !Number.isNaN(n) && !Number.isNaN(v) && n > v;
+        }
+        case "lt": {
+            const n = Number(actual);
+            const v = typeof val === "number" ? val : parseFloat(String(val));
+            return !Number.isNaN(n) && !Number.isNaN(v) && n < v;
+        }
+        case "gte": {
+            const n = Number(actual);
+            const v = typeof val === "number" ? val : parseFloat(String(val));
+            return !Number.isNaN(n) && !Number.isNaN(v) && n >= v;
+        }
+        case "lte": {
+            const n = Number(actual);
+            const v = typeof val === "number" ? val : parseFloat(String(val));
+            return !Number.isNaN(n) && !Number.isNaN(v) && n <= v;
+        }
+        case "in": {
+            const arr = Array.isArray(val) ? val : (typeof val === "string" ? [val] : []);
+            const actualStr = actual != null ? String(actual) : "";
+            return arr.some((x) => String(x) === actualStr);
+        }
+        case "not_in": {
+            const arr = Array.isArray(val) ? val : (typeof val === "string" ? [val] : []);
+            const actualStr = actual != null ? String(actual) : "";
+            return !arr.some((x) => String(x) === actualStr);
+        }
+        case "exists":
+            return actual != null && actual !== "";
+        default:
+            return String(actual) === String(val);
+    }
+}
 
 function resolveId(value: unknown, eventPayload: Record<string, unknown>): string | null {
     if (value == null) return null;
     const s = typeof value === "string" ? renderTemplate(value, eventPayload) : String(value);
     return s.trim() || null;
+}
+
+/** Single resolved recipient for send_message (contact_id and/or to_phone/to_email). */
+type ResolvedRecipient = { contact_id?: string | null; to_phone?: string | null; to_email?: string | null };
+
+/** Recipient spec from send_message payload.recipients[]. */
+type RecipientSpec = {
+    type?: string;
+    source?: string;
+    path?: string;
+    vendor_id_path?: string;
+    role_in?: string[];
+    max?: number;
+};
+
+async function resolveRecipients(
+    supabase: SupabaseClient,
+    payload: Record<string, unknown>,
+    recipients: RecipientSpec[],
+    logs: string[]
+): Promise<ResolvedRecipient[]> {
+    const out: ResolvedRecipient[] = [];
+    const seen = new Set<string>();
+
+    for (const r of recipients ?? []) {
+        const source = (r.source ?? "payload").toLowerCase();
+        const type = (r.type ?? "").toLowerCase();
+
+        if (source === "payload" && r.path) {
+            const id = getByPath(payload, r.path.trim());
+            const contactId = id != null ? String(id) : null;
+            if (contactId) {
+                const key = `c:${contactId}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    out.push({ contact_id: contactId });
+                }
+            } else {
+                logs.push(`send_message: payload path ${r.path} resolved to empty`);
+            }
+            continue;
+        }
+
+        if (source === "query" && (type === "contacts_by_vendor" || type === "vendor_contacts") && r.vendor_id_path) {
+            const vendorId = getByPath(payload, r.vendor_id_path.trim());
+            if (vendorId == null) {
+                logs.push(`send_message: vendor_id_path ${r.vendor_id_path} empty`);
+                continue;
+            }
+            const vid = String(vendorId);
+            let list: { id: string; phone?: string | null; email?: string | null }[];
+            const roleIn = r.role_in ?? ["primary"];
+            if (roleIn.length > 0) {
+                const { data } = await supabase
+                    .from("contacts")
+                    .select("id, phone, email")
+                    .eq("vendor_id", vid)
+                    .in("vendor_contact_role", roleIn);
+                list = (data ?? []) as { id: string; phone?: string | null; email?: string | null }[];
+            } else {
+                const { data } = await supabase
+                    .from("contacts")
+                    .select("id, phone, email")
+                    .eq("vendor_id", vid);
+                list = (data ?? []) as { id: string; phone?: string | null; email?: string | null }[];
+            }
+            for (const c of list) {
+                const key = `c:${c.id}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    out.push({ contact_id: c.id, to_phone: c.phone ?? undefined, to_email: c.email ?? undefined });
+                }
+            }
+            continue;
+        }
+
+        if (source === "resolver" && type === "job_qualified_vendors") {
+            const job = payload.job as Record<string, unknown> | undefined;
+            const max = typeof r.max === "number" ? r.max : 25;
+            if (!job || typeof job !== "object") {
+                logs.push("send_message: job_qualified_vendors resolver requires job in payload");
+                continue;
+            }
+            const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", "approved").maybeSingle();
+            const approvedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
+            let query = supabase.from("vendors").select("id, primary_contact_id").limit(max);
+            if (approvedStatusId) {
+                query = query.eq("vendor_status_id", approvedStatusId);
+            }
+            const { data: vendors } = await query;
+            const contactIds: string[] = [];
+            for (const v of (vendors ?? []) as { id: string; primary_contact_id?: string | null }[]) {
+                if (v.primary_contact_id) {
+                    const key = `c:${v.primary_contact_id}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        contactIds.push(v.primary_contact_id);
+                    }
+                }
+                if (contactIds.length >= max) break;
+            }
+            for (const cid of contactIds.slice(0, max)) {
+                out.push({ contact_id: cid });
+            }
+            continue;
+        }
+
+        logs.push(`send_message: unknown recipient type/source ${type}/${source}`);
+    }
+
+    return out;
+}
+
+async function ensureContactPhoneEmail(supabase: SupabaseClient, r: ResolvedRecipient): Promise<ResolvedRecipient> {
+    if (r.contact_id && (!r.to_phone && !r.to_email)) {
+        const { data: c } = await supabase.from("contacts").select("phone, email").eq("id", r.contact_id).single();
+        if (c) {
+            return { ...r, to_phone: (c as { phone?: string }).phone ?? null, to_email: (c as { email?: string }).email ?? null };
+        }
+        return r;
+    }
+    return r;
 }
 
 export interface WorkflowRunResult {
@@ -75,13 +269,26 @@ export interface WorkflowRunResult {
 
 /**
  * Execute a workflow run: insert run row, evaluate conditions, execute actions.
- * Caller must pass a Supabase client (e.g. createAdminClient()).
+ * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor) when available.
  */
 export async function executeWorkflowRun(
     supabase: SupabaseClient,
     workflowId: string,
     eventPayload: Record<string, unknown>
 ): Promise<WorkflowRunResult> {
+    const payload: WorkflowEventPayload = {
+        event_type: (eventPayload.event_type as string) ?? "",
+        occurred_at: (eventPayload.occurred_at as string) ?? new Date().toISOString(),
+        org_id: (eventPayload.org_id as string) ?? null,
+        customer: (eventPayload.customer as Record<string, unknown>) ?? null,
+        contact: (eventPayload.contact as Record<string, unknown>) ?? null,
+        opportunity: (eventPayload.opportunity as Record<string, unknown>) ?? null,
+        job: (eventPayload.job as Record<string, unknown>) ?? null,
+        schedule: (eventPayload.schedule as Record<string, unknown>) ?? null,
+        vendor: (eventPayload.vendor as Record<string, unknown>) ?? null,
+        ...eventPayload,
+    };
+
     const { data: workflow, error: wErr } = await supabase
         .from("workflows")
         .select("*")
@@ -93,6 +300,7 @@ export async function executeWorkflowRun(
 
     const runId = crypto.randomUUID();
     const startedAt = new Date().toISOString();
+    const defaultEntityType = (workflow as { entity_type?: string }).entity_type ?? null;
 
     const { error: runInsertErr } = await supabase.from("workflow_runs").insert({
         id: runId,
@@ -102,7 +310,7 @@ export async function executeWorkflowRun(
         error: null,
         started_at: startedAt,
         completed_at: null,
-        event_payload: eventPayload,
+        event_payload: payload,
     });
     if (runInsertErr) {
         throw new Error(runInsertErr.message);
@@ -110,13 +318,16 @@ export async function executeWorkflowRun(
 
     const { data: conditions } = await supabase
         .from("workflow_conditions")
-        .select("field, operator, value")
+        .select("target_entity, field_path, field, operator, value, value_jsonb, enabled")
         .eq("workflow_id", workflowId);
 
-    const allPass = (conditions ?? []).every(
-        (c: { field: string; operator: string; value: string }) =>
-            evaluateCondition(eventPayload, c.field, c.operator, c.value ?? "")
-    );
+    const allPass = (conditions ?? []).every((c: ConditionRow) => {
+        try {
+            return evaluateCondition(payload, defaultEntityType, c);
+        } catch {
+            return false;
+        }
+    });
 
     if (!allPass) {
         await supabase
@@ -133,21 +344,25 @@ export async function executeWorkflowRun(
         .order("action_order", { ascending: true });
 
     const logs: string[] = [];
+    const orgId = payload.org_id ?? null;
 
     try {
         for (const action of actions ?? []) {
             const pl = (action.payload as Record<string, unknown>) ?? {};
+            const actionTargetEntity = (action.target_entity ?? defaultEntityType ?? "job") as string;
+            const table = ENTITY_TABLES[actionTargetEntity];
+
             switch (action.action_type) {
                 case "create_message": {
                     const channel = pl.channel != null ? String(pl.channel) : "email";
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
                     const bodyRaw = pl.body != null ? String(pl.body) : "";
-                    const toValue = renderTemplate(toValueRaw, eventPayload);
-                    const bodyText = renderTemplate(bodyRaw, eventPayload);
-                    const contactId = resolveId(pl.contact_id, eventPayload);
-                    const customerId = resolveId(pl.customer_id, eventPayload);
-                    const opportunityId = resolveId(pl.opportunity_id, eventPayload);
-                    const jobId = resolveId(pl.job_id, eventPayload);
+                    const toValue = renderTemplate(toValueRaw, payload);
+                    const bodyText = renderTemplate(bodyRaw, payload);
+                    const contactId = resolveId(pl.contact_id, payload);
+                    const customerId = resolveId(pl.customer_id, payload);
+                    const opportunityId = resolveId(pl.opportunity_id, payload);
+                    const jobId = resolveId(pl.job_id, payload);
                     const { error: msgErr } = await supabase.from("messages").insert({
                         customer_id: customerId,
                         contact_id: contactId,
@@ -176,28 +391,81 @@ export async function executeWorkflowRun(
                     if (msgErr) throw new Error(`create_message: ${msgErr.message}`);
                     break;
                 }
+                case "send_message": {
+                    const channel = (pl.channel ?? "sms") as string;
+                    const template = (pl.template ?? pl.body ?? "") as string;
+                    const recipients = (pl.recipients ?? []) as RecipientSpec[];
+                    const dedupeKey = (pl.dedupe_key ?? "") as string;
+                    const bodyText = renderTemplate(template, payload);
+                    const resolved = await resolveRecipients(supabase, payload, recipients, logs);
+                    const deduped: ResolvedRecipient[] = [];
+                    const seenKey = new Set<string>();
+                    for (const r of resolved) {
+                        const key = r.contact_id ? `c:${r.contact_id}` : `p:${r.to_phone ?? ""}:e:${r.to_email ?? ""}`;
+                        if (seenKey.has(key)) continue;
+                        seenKey.add(key);
+                        deduped.push(r);
+                    }
+                    for (const r of deduped) {
+                        const filled = await ensureContactPhoneEmail(supabase, r);
+                        const toPhone = filled.to_phone ?? null;
+                        const toEmail = filled.to_email ?? null;
+                        const { error: outErr } = await supabase.from("messages_outbox").insert({
+                            org_id: orgId,
+                            workflow_run_id: runId,
+                            channel,
+                            to_contact_id: filled.contact_id ?? null,
+                            to_phone: toPhone,
+                            to_email: toEmail,
+                            body: bodyText,
+                            status: "queued",
+                            dedupe_key: dedupeKey || null,
+                        });
+                        if (outErr) {
+                            if (dedupeKey && String(outErr).includes("duplicate")) {
+                                logs.push(`send_message: skipped duplicate dedupe_key=${dedupeKey}`);
+                            } else {
+                                throw new Error(`send_message outbox: ${outErr.message}`);
+                            }
+                        }
+                    }
+                    logs.push(`send_message: queued ${deduped.length} recipient(s)`);
+                    break;
+                }
                 case "update_entity": {
-                    const entityType = pl.entity_type != null ? String(pl.entity_type) : "";
+                    const entityType = (pl.entity_type ?? pl.target_entity ?? actionTargetEntity) as string;
                     const entityIdPath = pl.entity_id != null ? String(pl.entity_id) : "";
                     const patch = pl.patch && typeof pl.patch === "object" ? (pl.patch as Record<string, unknown>) : {};
-                    const table = ENTITY_TABLES[entityType];
-                    if (!table) throw new Error(`update_entity: unknown entity_type ${entityType}`);
+                    const tableName = ENTITY_TABLES[entityType];
+                    if (!tableName) {
+                        logs.push(`update_entity: unknown entity_type ${entityType}, skipping`);
+                        break;
+                    }
                     let entityId: string | null = null;
-                    if (entityIdPath.startsWith("event.") || !entityIdPath.includes(".")) {
+                    if (entityIdPath && (entityIdPath.startsWith("event.") || entityIdPath.includes("."))) {
                         const path = entityIdPath.replace(/^event\./, "");
-                        const resolved = path ? getByPath(eventPayload, path) : null;
+                        const resolved = path ? getByPath(payload, path) : null;
                         entityId = resolved != null ? String(resolved) : null;
-                    } else {
+                    } else if (entityIdPath) {
                         entityId = entityIdPath;
                     }
-                    if (!entityId) throw new Error(`update_entity: could not resolve entity_id ${entityIdPath}`);
-                    const { error: updErr } = await supabase.from(table).update(patch).eq("id", entityId);
+                    if (!entityId) {
+                        const entityFromPayload = payload[entityType];
+                        entityId = entityFromPayload && typeof entityFromPayload === "object" && entityFromPayload !== null && "id" in entityFromPayload
+                            ? String((entityFromPayload as { id: unknown }).id)
+                            : null;
+                    }
+                    if (!entityId) {
+                        logs.push(`update_entity: could not resolve entity_id for ${entityType}, skipping`);
+                        break;
+                    }
+                    const { error: updErr } = await supabase.from(tableName).update(patch).eq("id", entityId);
                     if (updErr) throw new Error(`update_entity: ${updErr.message}`);
                     break;
                 }
                 case "log": {
                     const message = pl.message != null ? String(pl.message) : "";
-                    logs.push(message);
+                    logs.push(renderTemplate(message, payload));
                     break;
                 }
                 default:
@@ -211,7 +479,7 @@ export async function executeWorkflowRun(
             error: null,
         };
         if (logs.length > 0) {
-            updateRun.event_payload = { ...eventPayload, metadata: { ...((eventPayload.metadata as Record<string, unknown>) ?? {}), logs } };
+            updateRun.event_payload = { ...payload, metadata: { ...((payload.metadata as Record<string, unknown>) ?? {}), logs } };
         }
         await supabase.from("workflow_runs").update(updateRun).eq("id", runId);
 
@@ -236,6 +504,7 @@ export async function executeWorkflowRun(
             status: "failed",
             workflow_run_id: runId,
             error: errMsg,
+            logs: logs.length > 0 ? logs : undefined,
         };
     }
 }
