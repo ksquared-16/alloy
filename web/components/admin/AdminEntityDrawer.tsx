@@ -15,6 +15,24 @@ import {
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors"] as const;
 const WORKFLOW_CONDITION_OPERATORS = ["equals", "not_equals", "contains", "exists", "gt", "gte", "lt", "lte"] as const;
+
+type VendorFormData = {
+    vendor_status_id?: string | null;
+    name?: string;
+    phone?: string;
+    email?: string;
+    address_line1?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    days_available?: string;
+    operating_hours_open?: string;
+    operating_hours_close?: string;
+    owns_supplies?: boolean;
+    max_daily_jobs?: number | "" | null;
+    payout_percent?: number | "" | null;
+    service_area_zip_codes?: string;
+};
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
 }
@@ -261,23 +279,24 @@ export default function AdminEntityDrawer() {
         } else if (drawer.type === "vendors") {
             const days = data.days_available as string[] | null | undefined;
             const zips = data.service_area_zip_codes as string[] | null | undefined;
-            setFormData({
+            const vendorForm: VendorFormData = {
                 vendor_status_id: data.vendor_status_id ?? "",
-                name: data.name ?? "",
-                phone: data.phone ?? "",
-                email: data.email ?? "",
-                address_line1: data.address_line1 ?? "",
-                city: data.city ?? "",
-                state: data.state ?? "",
-                postal_code: data.postal_code ?? "",
+                name: (data.name as string) ?? "",
+                phone: (data.phone as string) ?? "",
+                email: (data.email as string) ?? "",
+                address_line1: (data.address_line1 as string) ?? "",
+                city: (data.city as string) ?? "",
+                state: (data.state as string) ?? "",
+                postal_code: (data.postal_code as string) ?? "",
                 days_available: Array.isArray(days) ? days.join(", ") : "",
-                operating_hours_open: data.operating_hours_open ?? "",
-                operating_hours_close: data.operating_hours_close ?? "",
+                operating_hours_open: (data.operating_hours_open as string) ?? "",
+                operating_hours_close: (data.operating_hours_close as string) ?? "",
                 owns_supplies: !!data.owns_supplies,
-                max_daily_jobs: data.max_daily_jobs ?? "",
-                payout_percent: data.payout_percent ?? "",
+                max_daily_jobs: typeof data.max_daily_jobs === "number" ? data.max_daily_jobs : "",
+                payout_percent: typeof data.payout_percent === "number" ? data.payout_percent : "",
                 service_area_zip_codes: Array.isArray(zips) ? zips.join(", ") : "",
-            });
+            };
+            setFormData(vendorForm);
         } else if (drawer.type === "schedules") {
             setFormData({
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
@@ -484,8 +503,8 @@ export default function AdminEntityDrawer() {
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Days available (comma-separated)</label><input value={String(formData.days_available ?? "")} onChange={(e) => setFormData((f) => ({ ...f, days_available: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                                 <div className="flex gap-4"><label className="block text-sm text-alloy-midnight/70 mb-0.5">Hours</label><input value={String(formData.operating_hours_open ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_open: e.target.value }))} placeholder="Open" className="px-2 py-1.5 border rounded text-sm w-24" /><input value={String(formData.operating_hours_close ?? "")} onChange={(e) => setFormData((f) => ({ ...f, operating_hours_close: e.target.value }))} placeholder="Close" className="px-2 py-1.5 border rounded text-sm w-24" /></div>
                                                 <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.owns_supplies} onChange={(e) => setFormData((f) => ({ ...f, owns_supplies: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Owns supplies</label></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={formData.max_daily_jobs === "" || formData.max_daily_jobs == null ? "" : formData.max_daily_jobs} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={formData.payout_percent === "" || formData.payout_percent == null ? "" : formData.payout_percent} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Max daily jobs</label><input type="number" value={typeof (formData as VendorFormData).max_daily_jobs === "number" ? (formData as VendorFormData).max_daily_jobs : ""} onChange={(e) => setFormData((f) => ({ ...f, max_daily_jobs: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Payout %</label><input type="number" step="0.01" value={typeof (formData as VendorFormData).payout_percent === "number" ? (formData as VendorFormData).payout_percent : ""} onChange={(e) => setFormData((f) => ({ ...f, payout_percent: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm w-24" /></div>
                                             </>
                                         ) : (
                                             <>
