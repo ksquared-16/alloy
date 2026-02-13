@@ -36,7 +36,9 @@ export async function middleware(request: NextRequest) {
 
   // Allow only known admin paths; redirect unknown paths to dashboard (avoid 404 for valid app routes)
   if (!isAllowedAdminPath(request.nextUrl.pathname)) {
-    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+    const res = NextResponse.redirect(new URL("/admin/dashboard", request.url));
+    res.headers.set("x-alloy-admin-mw", "blocked");
+    return res;
   }
 
   let response = NextResponse.next({
@@ -51,7 +53,9 @@ export async function middleware(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[MIDDLEWARE] Missing Supabase environment variables. Required: SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY)");
-    return NextResponse.redirect(new URL("/login?error=config", request.url));
+    const res = NextResponse.redirect(new URL("/login?error=config", request.url));
+    res.headers.set("x-alloy-admin-mw", "redirect:/login?error=config");
+    return res;
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -81,9 +85,12 @@ export async function middleware(request: NextRequest) {
 
   // No session → login. Role check (admin/ops only) is the single gate and is done in admin layout via user_profiles.
   if (!user) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const res = NextResponse.redirect(new URL("/login", request.url));
+    res.headers.set("x-alloy-admin-mw", "redirect:/login");
+    return res;
   }
 
+  response.headers.set("x-alloy-admin-mw", "next");
   return response;
 }
 
