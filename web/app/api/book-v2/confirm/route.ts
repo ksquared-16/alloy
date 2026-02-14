@@ -823,11 +823,52 @@ export async function POST(request: NextRequest) {
             console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_AFTER] booking_attempt_id=%s redemption_id=%s discount_code_id=%s", booking_attempt_id ?? "None", redemptionRow?.id ?? "?", discount_code_id);
         }
 
+        // Step 5c: If recurring, ensure customer_subscriptions row and get subscription id for schedule linkage
+        let customerSubscriptionId: string | null = null;
+        if (is_recurring && verticalId) {
+            const { data: pfRow } = await supabase
+                .from("pricing_frequencies")
+                .select("id")
+                .eq("vertical_id", verticalId)
+                .eq("frequency_key", service_frequency_key)
+                .maybeSingle();
+            const pricingFrequencyId = (pfRow as { id?: string } | null)?.id ?? null;
+            if (pricingFrequencyId) {
+                const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+                const { data: existingSub } = await supabase
+                    .from("customer_subscriptions")
+                    .select("id")
+                    .eq("customer_id", customerId)
+                    .eq("pricing_frequency_id", pricingFrequencyId)
+                    .eq("status", "active")
+                    .maybeSingle();
+                if (existingSub?.id) {
+                    customerSubscriptionId = existingSub.id;
+                } else {
+                    const startDate = slot_start ? new Date(slot_start).toISOString().slice(0, 10) : null;
+                    const { data: newSub, error: subErr } = await supabase
+                        .from("customer_subscriptions")
+                        .insert({
+                            org_id: orgId,
+                            customer_id: customerId,
+                            primary_contact_id: contactId,
+                            vertical_id: verticalId,
+                            pricing_frequency_id: pricingFrequencyId,
+                            status: "active",
+                            start_date: startDate,
+                        })
+                        .select("id")
+                        .single();
+                    if (!subErr && newSub?.id) customerSubscriptionId = newSub.id;
+                }
+            }
+        }
+
         // Step 6: Create schedule
         // Reuse only if same start_at, end_at, timezone AND metadata.booking_attempt_id === booking_attempt_id. Otherwise create new row.
         const { data: existingSchedules, error: scheduleSearchError } = await supabase
             .from("schedules")
-            .select("id, start_at, end_at, timezone, metadata")
+            .select("id, start_at, end_at, timezone, metadata, customer_subscription_id")
             .eq("job_id", jobId);
 
         if (scheduleSearchError) {
@@ -853,17 +894,22 @@ export async function POST(request: NextRequest) {
             scheduleId = existingSchedule.id;
             console.log(`[BOOK_V2_CONFIRM] Found existing schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
 
-            // Update schedule (keep metadata.booking_attempt_id)
+            // Update schedule (keep metadata.booking_attempt_id); link subscription if first time
             const existingScheduleMeta = (existingSchedule.metadata as Record<string, unknown>) || {};
+            const updatePayload: Record<string, unknown> = {
+                start_at: slot_start,
+                end_at: slot_end,
+                duration_minutes: 120,
+                timezone,
+                metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
+            };
+            if (customerSubscriptionId && !(existingSchedule as { customer_subscription_id?: string | null }).customer_subscription_id) {
+                updatePayload.customer_subscription_id = customerSubscriptionId;
+                updatePayload.subscription_sequence = 1;
+            }
             const { error: scheduleUpdateError } = await supabase
                 .from("schedules")
-                .update({
-                    start_at: slot_start,
-                    end_at: slot_end,
-                    duration_minutes: 120,
-                    timezone,
-                    metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
-                })
+                .update(updatePayload)
                 .eq("id", scheduleId);
 
             if (scheduleUpdateError) {
@@ -875,16 +921,21 @@ export async function POST(request: NextRequest) {
             }
         } else {
             // Create new schedule
+            const scheduleInsert: Record<string, unknown> = {
+                job_id: jobId,
+                start_at: slot_start,
+                end_at: slot_end,
+                duration_minutes: 120,
+                timezone,
+                metadata: { booking_attempt_id: booking_attempt_id ?? undefined },
+            };
+            if (customerSubscriptionId) {
+                scheduleInsert.customer_subscription_id = customerSubscriptionId;
+                scheduleInsert.subscription_sequence = 1;
+            }
             const { data: newSchedule, error: scheduleError } = await supabase
                 .from("schedules")
-                .insert({
-                    job_id: jobId,
-                    start_at: slot_start,
-                    end_at: slot_end,
-                    duration_minutes: 120,
-                    timezone,
-                    metadata: { booking_attempt_id: booking_attempt_id ?? undefined },
-                })
+                .insert(scheduleInsert)
                 .select("id")
                 .single();
 

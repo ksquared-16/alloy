@@ -440,7 +440,7 @@ export default function CleaningQuoteForm({
                         // Also store in sessionStorage for backward compatibility
                         sessionStorage.setItem("alloy_cleaning_quote", quoteJson);
                         sessionStorage.setItem("cleaning_quote", quoteJson);
-                        
+
                         // Store enhanced quote with prefill data in alloy_quote_v1 (canonical key for /book-v2)
                         const enhancedQuote = {
                             ...result,
@@ -608,7 +608,7 @@ export default function CleaningQuoteForm({
                             try {
                                 const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
                                 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-                                
+
                                 if (isStaging) {
                                     console.log("[STAGING DEBUG] CleaningQuoteForm: Writing session data", {
                                         api_base_url: apiBaseUrl,
@@ -616,7 +616,7 @@ export default function CleaningQuoteForm({
                                         storage_key: "alloy_booking_prefill"
                                     });
                                 }
-                                
+
                                 // Read existing prefill data or create new
                                 const existingPrefill = sessionStorage.getItem("alloy_booking_prefill");
                                 let prefillData: any = {};
@@ -1083,9 +1083,7 @@ export default function CleaningQuoteForm({
                             className={checkboxClass}
                         />
                         <span>
-                            By providing my phone number, I agree to receive SMS messages from Alloy regarding my
-                            quote, appointment updates, and service notifications. Reply <strong>STOP</strong> to
-                            unsubscribe.
+                            I agree to receive transactional SMS messages from Alloy regarding my quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.
                         </span>
                     </label>
                     {errors.consent && (

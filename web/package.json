@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "date-fns": "^4.1.0",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@stripe/stripe-js": "^2.4.0",
     "@supabase/ssr": "^0.8.0",

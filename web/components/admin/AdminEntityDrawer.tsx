@@ -55,6 +55,36 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
+function SubscriptionGenerateNextButton({ subscriptionId, onDone }: { subscriptionId: string; onDone: () => void }) {
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    const handleClick = async () => {
+        setLoading(true);
+        setErr(null);
+        try {
+            const res = await fetch(`/api/admin/subscriptions/${subscriptionId}/generate-next`, { method: "POST" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setErr((json as { error?: string }).error ?? "Failed");
+                return;
+            }
+            onDone();
+        } catch (e) {
+            setErr((e as Error).message);
+        } finally {
+            setLoading(false);
+        }
+    };
+    return (
+        <div className="pt-4 border-t border-alloy-stone/20">
+            <button type="button" onClick={handleClick} disabled={loading} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">
+                {loading ? "Generating…" : "Generate next occurrence"}
+            </button>
+            {err && <p className="text-red-600 text-sm mt-2">{err}</p>}
+        </div>
+    );
+}
+
 function DrawerLinkWithName({
     label,
     id,
@@ -418,7 +448,9 @@ export default function AdminEntityDrawer() {
                           : `Workflow: ${(data.name as string) || drawer.id}`
                         : drawer.type === "vendors"
                           ? `Vendor: ${(data.name as string) || drawer.id}`
-                          : "Details"
+                          : drawer.type === "subscriptions"
+                            ? `Subscription: ${(data._customer_name as string) || drawer.id.slice(0, 8)}…`
+                            : "Details"
         : loading
           ? "Loading…"
           : "Details";
@@ -1112,6 +1144,57 @@ export default function AdminEntityDrawer() {
                             <Field label="Job ID" value={data.job_id as string} />
                         </>
                     )}
+                    {drawer.type === "subscriptions" && data && (() => {
+                        const subData = data as {
+                            id: string;
+                            created_at: string;
+                            customer_id: string;
+                            status: string;
+                            start_date: string | null;
+                            _frequency_label: string | null;
+                            _customer_name: string | null;
+                            _schedules?: { id: string; job_id: string; start_at: string; end_at: string; subscription_sequence: number; rescheduled_from_schedule_id: string | null; canceled_at: string | null; canceled_by: string | null; cancel_reason: string | null }[];
+                        };
+                        const schedules = subData._schedules ?? [];
+                        return (
+                            <>
+                                <details className="pt-2 pb-2 border-b border-alloy-stone/20">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Overview</summary>
+                                    <div className="space-y-1">
+                                        <Field label="ID" value={subData.id} />
+                                        <Field label="Created" value={formatDateTime(subData.created_at)} />
+                                        <Field label="Customer" value={subData._customer_name ?? "—"} />
+                                        <DrawerLinkWithName label="Customer" id={subData.customer_id ?? null} type="customers" displayName={subData._customer_name} />
+                                        <Field label="Frequency" value={subData._frequency_label ?? "—"} />
+                                        <Field label="Status" value={subData.status} />
+                                        <Field label="Start date" value={subData.start_date ?? "—"} />
+                                    </div>
+                                </details>
+                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
+                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Schedules</summary>
+                                    {schedules.length === 0 ? (
+                                        <p className="text-sm text-alloy-midnight/60">No occurrences yet.</p>
+                                    ) : (
+                                        <ul className="space-y-2">
+                                            {schedules.map((s) => (
+                                                <li key={s.id} className="border border-alloy-stone/30 rounded p-2 text-sm">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span>#{s.subscription_sequence} — {formatDateTime(s.start_at)}</span>
+                                                        <button type="button" onClick={() => openDrawer({ type: "schedules", id: s.id })} className="text-alloy-blue hover:underline text-xs">Open</button>
+                                                    </div>
+                                                    {s.rescheduled_from_schedule_id && <div className="text-alloy-midnight/60 text-xs mt-0.5">Rescheduled from schedule</div>}
+                                                    {s.canceled_at && <div className="text-red-600/80 text-xs mt-0.5">Canceled {formatDateTime(s.canceled_at)}{s.canceled_by ? ` by ${s.canceled_by}` : ""}{s.cancel_reason ? ` — ${s.cancel_reason}` : ""}</div>}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </details>
+                                {drawer.id && (
+                                    <SubscriptionGenerateNextButton subscriptionId={drawer.id} onDone={refetch} />
+                                )}
+                            </>
+                        );
+                    })()}
                     {drawer.type === "contacts" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="contact" entityId={drawer.id} /></div>}
                     {drawer.type === "customers" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="customer" entityId={drawer.id} /></div>}
                     {drawer.type === "opportunities" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="opportunity" entityId={drawer.id} /></div>}
