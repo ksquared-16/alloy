@@ -24,6 +24,7 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "job.title", label: "job.title" },
         { value: "job.scheduled_at", label: "job.scheduled_at" },
         { value: "job.service_frequency_key", label: "job.service_frequency_key" },
+        { value: "job.postal_code", label: "job.postal_code" },
         { value: "job.is_recurring", label: "job.is_recurring" },
         { value: "schedule.id", label: "schedule.id" },
         { value: "schedule.start_at", label: "schedule.start_at" },
@@ -37,7 +38,9 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "contact.phone", label: "contact.phone" },
         { value: "customer.id", label: "customer.id" },
         { value: "customer.name", label: "customer.name" },
+        { value: "customer.postal_code", label: "customer.postal_code" },
         { value: "opportunity.id", label: "opportunity.id" },
+        { value: "opportunity.postal_code", label: "opportunity.postal_code" },
         { value: "opportunity.job_date", label: "opportunity.job_date" },
         { value: "opportunity.job_time_window", label: "opportunity.job_time_window" },
         { value: "opportunity.pipeline_stage_id", label: "opportunity.pipeline_stage_id" },
@@ -45,6 +48,7 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
     opportunity: [
         { value: "opportunity.id", label: "opportunity.id" },
         { value: "opportunity.name", label: "opportunity.name" },
+        { value: "opportunity.postal_code", label: "opportunity.postal_code" },
         { value: "opportunity.job_date", label: "opportunity.job_date" },
         { value: "opportunity.job_time_window", label: "opportunity.job_time_window" },
         { value: "contact.id", label: "contact.id" },
@@ -65,6 +69,7 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
     customer: [
         { value: "customer.id", label: "customer.id" },
         { value: "customer.name", label: "customer.name" },
+        { value: "customer.postal_code", label: "customer.postal_code" },
     ],
     schedule: [
         { value: "schedule.id", label: "schedule.id" },

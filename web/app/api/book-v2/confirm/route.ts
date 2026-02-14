@@ -1023,20 +1023,20 @@ export async function POST(request: NextRequest) {
             .eq("event_type", "booking_confirmed")
             .eq("entity_type", "job");
         if (bookingWorkflows?.length) {
-            const { data: jobRow } = await supabase.from("jobs").select("id, title, scheduled_at, service_frequency_key, opportunity_id, primary_contact_id, customer_id").eq("id", jobId).single();
+            const { data: jobRow } = await supabase.from("jobs").select("id, title, scheduled_at, service_frequency_key, opportunity_id, primary_contact_id, customer_id, vertical_id, postal_code").eq("id", jobId).single();
             const sched = integrityCheck as Record<string, unknown>;
-            const { data: oppRow } = await supabase.from("opportunities").select("id, name, job_date, job_time_window, pipeline_stage_id").eq("id", opportunityId).single();
+            const { data: oppRow } = await supabase.from("opportunities").select("id, name, job_date, job_time_window, pipeline_stage_id, vertical_id, postal_code").eq("id", opportunityId).single();
             const { data: contactRow } = await supabase.from("contacts").select("id, first_name, last_name, email, phone").eq("id", contactId).single();
-            const { data: customerRow } = await supabase.from("customers").select("id, name").eq("id", customerId).single();
+            const { data: customerRow } = await supabase.from("customers").select("id, name, postal_code").eq("id", customerId).single();
             const eventPayload: Record<string, unknown> = {
                 event_type: "booking_confirmed",
                 occurred_at: new Date().toISOString(),
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
-                job: jobRow ? { id: jobRow.id, title: jobRow.title, scheduled_at: jobRow.scheduled_at, service_frequency_key: jobRow.service_frequency_key, opportunity_id: jobRow.opportunity_id, primary_contact_id: jobRow.primary_contact_id, customer_id: jobRow.customer_id } : { id: jobId, title: null, scheduled_at: slot_start, service_frequency_key, opportunity_id: opportunityId, primary_contact_id: contactId, customer_id: customerId },
+                job: jobRow ? { id: jobRow.id, title: jobRow.title, scheduled_at: jobRow.scheduled_at, service_frequency_key: jobRow.service_frequency_key, opportunity_id: jobRow.opportunity_id, primary_contact_id: jobRow.primary_contact_id, customer_id: jobRow.customer_id, vertical_id: (jobRow as { vertical_id?: string | null }).vertical_id ?? null, postal_code: (jobRow as { postal_code?: string | null }).postal_code ?? null } : { id: jobId, title: null, scheduled_at: slot_start, service_frequency_key, opportunity_id: opportunityId, primary_contact_id: contactId, customer_id: customerId, vertical_id: null, postal_code: null },
                 schedule: { id: scheduleId, start_at: sched.start_at ?? slot_start, end_at: sched.end_at ?? slot_end, timezone: sched.timezone ?? timezone, duration_minutes: sched.duration_minutes ?? 120 },
                 contact: contactRow ? { id: contactRow.id, first_name: contactRow.first_name, last_name: contactRow.last_name, email: contactRow.email, phone: contactRow.phone } : { id: contactId, first_name: null, last_name: null, email: null, phone: null },
-                customer: customerRow ? { id: customerRow.id, name: customerRow.name } : { id: customerId, name: null },
-                opportunity: oppRow ? { id: oppRow.id, name: oppRow.name, job_date: oppRow.job_date, job_time_window: oppRow.job_time_window, pipeline_stage_id: oppRow.pipeline_stage_id ?? null } : { id: opportunityId, name: null, job_date: jobDate, job_time_window: jobTimeWindow, pipeline_stage_id: null },
+                customer: customerRow ? { id: customerRow.id, name: customerRow.name, postal_code: (customerRow as { postal_code?: string | null }).postal_code ?? null } : { id: customerId, name: null, postal_code: null },
+                opportunity: oppRow ? { id: oppRow.id, name: oppRow.name, job_date: oppRow.job_date, job_time_window: oppRow.job_time_window, pipeline_stage_id: oppRow.pipeline_stage_id ?? null, vertical_id: (oppRow as { vertical_id?: string | null }).vertical_id ?? null, postal_code: (oppRow as { postal_code?: string | null }).postal_code ?? null } : { id: opportunityId, name: null, job_date: jobDate, job_time_window: jobTimeWindow, pipeline_stage_id: null, vertical_id: null, postal_code: null },
             };
             for (const wf of bookingWorkflows) {
                 try {

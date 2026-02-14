@@ -17,6 +17,29 @@ export type WorkflowEventPayload = {
 
 const CANONICAL_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor"] as const;
 
+/**
+ * Resolve job zip from payload for vendor matching. Tries schedule, job, opportunity, customer.
+ * Returns 5-digit zip (strip non-digits, take first 5) or null.
+ */
+function getJobZip(payload: Record<string, unknown>): string | null {
+    const schedule = payload.schedule as Record<string, unknown> | undefined;
+    const job = payload.job as Record<string, unknown> | undefined;
+    const opportunity = payload.opportunity as Record<string, unknown> | undefined;
+    const customer = payload.customer as Record<string, unknown> | undefined;
+    const raw =
+        (schedule?.postal_code != null && String(schedule.postal_code).trim() !== "" ? String(schedule.postal_code).trim() : null) ??
+        (schedule?.location != null && typeof schedule.location === "object" && (schedule.location as Record<string, unknown>)?.postal_code != null
+            ? String((schedule.location as Record<string, unknown>).postal_code).trim()
+            : null) ??
+        (job?.postal_code != null && String(job.postal_code).trim() !== "" ? String(job.postal_code).trim() : null) ??
+        (opportunity?.postal_code != null && String(opportunity.postal_code).trim() !== "" ? String(opportunity.postal_code).trim() : null) ??
+        (customer?.postal_code != null && String(customer.postal_code).trim() !== "" ? String(customer.postal_code).trim() : null);
+    if (raw == null || raw === "") return null;
+    const digitsOnly = String(raw).replace(/\D/g, "");
+    const five = digitsOnly.slice(0, 5);
+    return five.length >= 5 ? five : null;
+}
+
 const ENTITY_TABLES: Record<string, string> = {
     job: "jobs",
     jobs: "jobs",
@@ -213,20 +236,63 @@ async function resolveRecipients(
 
         if (source === "resolver" && type === "job_qualified_vendors") {
             const job = payload.job as Record<string, unknown> | undefined;
+            const jobId = job && typeof job === "object" && job.id != null ? String(job.id) : null;
             const max = typeof r.max === "number" ? r.max : 25;
+            const orgId = payload.org_id != null ? String(payload.org_id) : null;
             if (!job || typeof job !== "object") {
                 logs.push("send_message: job_qualified_vendors resolver requires job in payload");
                 continue;
             }
+            if (!orgId) {
+                logs.push("send_message: job_qualified_vendors resolver requires org_id in payload");
+                continue;
+            }
+            const jobVerticalId = (job.vertical_id ?? (job as { verticalId?: string; _job_vertical?: { id?: string } }).verticalId ?? (job as { _job_vertical?: { id?: string } })._job_vertical?.id) != null
+                ? String(job.vertical_id ?? (job as { verticalId?: string; _job_vertical?: { id?: string } }).verticalId ?? (job as { _job_vertical?: { id?: string } })._job_vertical?.id)
+                : null;
+            if (!jobVerticalId) {
+                console.warn("[WORKFLOW] job_qualified_vendors: missing job vertical", { jobId, orgId });
+                logs.push("send_message: job_qualified_vendors requires job vertical; skipping (fail closed)");
+                continue;
+            }
+            const jobZip = getJobZip(payload);
+            if (!jobZip) {
+                console.warn("[WORKFLOW] job_qualified_vendors: missing job zip; using vertical-only", { jobId, orgId, jobVerticalId });
+                logs.push("send_message: job_qualified_vendors no jobZip; using vertical-only match");
+            }
+            const { data: vvRows } = await supabase
+                .from("vendor_verticals")
+                .select("vendor_id")
+                .eq("vertical_id", jobVerticalId);
+            const vendorIdsInVertical = (vvRows ?? []) as { vendor_id: string }[];
+            const vendorIdSet = new Set(vendorIdsInVertical.map((row) => row.vendor_id));
+            if (vendorIdSet.size === 0) {
+                logs.push("job_qualified_vendors: no vendors in vertical");
+                console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: 0 });
+                continue;
+            }
             const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", "approved").maybeSingle();
             const approvedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
-            let query = supabase.from("vendors").select("id, primary_contact_id").limit(max);
+            let vendorsQuery = supabase
+                .from("vendors")
+                .select("id, primary_contact_id, service_area_zip_codes")
+                .eq("org_id", orgId)
+                .in("id", Array.from(vendorIdSet))
+                .limit(500);
             if (approvedStatusId) {
-                query = query.eq("vendor_status_id", approvedStatusId);
+                vendorsQuery = vendorsQuery.eq("vendor_status_id", approvedStatusId);
             }
-            const { data: vendors } = await query;
+            const { data: approvedVendors } = await vendorsQuery;
+            let list = (approvedVendors ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
+            if (jobZip) {
+                list = list.filter((v) => {
+                    const zips = v.service_area_zip_codes;
+                    if (!zips || !Array.isArray(zips)) return false;
+                    return zips.some((z) => String(z).replace(/\D/g, "").slice(0, 5) === jobZip);
+                });
+            }
             const contactIds: string[] = [];
-            for (const v of (vendors ?? []) as { id: string; primary_contact_id?: string | null }[]) {
+            for (const v of list.slice(0, max)) {
                 if (v.primary_contact_id) {
                     const key = `c:${v.primary_contact_id}`;
                     if (!seen.has(key)) {
@@ -234,11 +300,12 @@ async function resolveRecipients(
                         contactIds.push(v.primary_contact_id);
                     }
                 }
-                if (contactIds.length >= max) break;
             }
-            for (const cid of contactIds.slice(0, max)) {
+            for (const cid of contactIds) {
                 out.push({ contact_id: cid });
             }
+            console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: contactIds.length });
+            logs.push(`job_qualified_vendors: resolved count=${contactIds.length}`);
             continue;
         }
 

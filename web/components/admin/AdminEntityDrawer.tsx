@@ -545,22 +545,32 @@ export default function AdminEntityDrawer() {
                                 <details className="pt-4 border-b border-alloy-stone/20 pb-4">
                                     <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Documents</summary>
                                     <div className="space-y-2">
-                                        {(data.insurance_doc_path as string) ? (
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <strong className="text-alloy-midnight/70 shrink-0">Insurance:</strong>
-                                                <span className="text-sm font-mono break-all">{data.insurance_doc_path as string}</span>
-                                                <button type="button" onClick={() => { navigator.clipboard.writeText((data.insurance_doc_path as string) ?? ""); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0">Copy path</button>
-                                                <button type="button" onClick={async () => { const path = data.insurance_doc_path as string; const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(path)}`); const json = await res.json().catch(() => ({})); if (json.ok && json.signedUrl) window.open(json.signedUrl, "_blank"); else alert(json.error || "Failed to get link"); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0 text-alloy-blue border-alloy-blue/50">View</button>
-                                            </div>
-                                        ) : <Field label="Insurance" value="—" />}
-                                        {(data.drivers_license_doc_path as string) ? (
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <strong className="text-alloy-midnight/70 shrink-0">Drivers license:</strong>
-                                                <span className="text-sm font-mono break-all">{data.drivers_license_doc_path as string}</span>
-                                                <button type="button" onClick={() => { navigator.clipboard.writeText((data.drivers_license_doc_path as string) ?? ""); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0">Copy path</button>
-                                                <button type="button" onClick={async () => { const path = data.drivers_license_doc_path as string; const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(path)}`); const json = await res.json().catch(() => ({})); if (json.ok && json.signedUrl) window.open(json.signedUrl, "_blank"); else alert(json.error || "Failed to get link"); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0 text-alloy-blue border-alloy-blue/50">View</button>
-                                            </div>
-                                        ) : <Field label="Drivers license" value="—" />}
+                                        {(() => {
+                                            const insurancePath = typeof data.insurance_doc_path === "string" ? data.insurance_doc_path : null;
+                                            return (
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-alloy-midnight/70 shrink-0">Insurance:</span>
+                                                    {insurancePath ? (
+                                                        <button type="button" onClick={async () => { const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(insurancePath)}`); const json = await res.json().catch(() => ({})); if (json.ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank"); else alert((json as { error?: string }).error || "Failed to get link"); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0 text-alloy-blue border-alloy-blue/50">View Insurance</button>
+                                                    ) : (
+                                                        <span className="text-alloy-midnight/50">—</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                        {(() => {
+                                            const driversLicensePath = typeof data.drivers_license_doc_path === "string" ? data.drivers_license_doc_path : null;
+                                            return (
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-alloy-midnight/70 shrink-0">Driver&apos;s License:</span>
+                                                    {driversLicensePath ? (
+                                                        <button type="button" onClick={async () => { const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(driversLicensePath)}`); const json = await res.json().catch(() => ({})); if (json.ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank"); else alert((json as { error?: string }).error || "Failed to get link"); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 shrink-0 text-alloy-blue border-alloy-blue/50">View Driver&apos;s License</button>
+                                                    ) : (
+                                                        <span className="text-alloy-midnight/50">—</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </details>
                                 <details className="pt-4 border-b border-alloy-stone/20 pb-4">
