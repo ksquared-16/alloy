@@ -28,6 +28,8 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [smsConsent, setSmsConsent] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +54,13 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
       setError("Please enter your email or phone so we can save your quote.");
       return;
     }
+    if (!smsConsent) {
+      setConsentError("You must agree to receive SMS updates.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
+    setConsentError(null);
     try {
       const res = await fetch("/api/book-v2/quote-start", {
         method: "POST",
@@ -191,6 +198,23 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
           placeholder="(541) 555-0123"
           className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
         />
+      </div>
+      <div className="pt-1">
+        <label className="flex items-start gap-2 text-xs text-alloy-midnight/80 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={smsConsent}
+            onChange={(e) => {
+              setSmsConsent(e.target.checked);
+              setConsentError(null);
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-alloy-stone/70 text-alloy-juniper focus:ring-alloy-juniper"
+          />
+          <span>
+            I agree to receive transactional SMS messages from Alloy regarding my quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.
+          </span>
+        </label>
+        {consentError && <p className="mt-1 text-xs text-red-600">{consentError}</p>}
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
