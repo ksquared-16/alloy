@@ -9,7 +9,8 @@ interface SubscriptionRow {
     created_at: string;
     customer_id: string;
     status: string;
-    pricing_frequency_id: string;
+    cadence?: string;
+    interval?: number;
     start_date: string | null;
     _frequency_label: string;
     _customer_name: string | null;

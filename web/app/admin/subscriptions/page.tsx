@@ -1,13 +1,14 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import SubscriptionsClient from "./SubscriptionsClient";
 import { addWeeks, addMonths } from "date-fns";
+import { formatFrequencyLabel } from "@/lib/adminFormatters";
 
 export default async function AdminSubscriptionsPage() {
     const supabase = createAdminClient();
 
     const { data: subs, error } = await supabase
         .from("customer_subscriptions")
-        .select("id, created_at, customer_id, status, pricing_frequency_id, start_date")
+        .select("id, created_at, customer_id, status, cadence, interval, start_date")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -19,24 +20,7 @@ export default async function AdminSubscriptionsPage() {
     }
 
     const list = subs ?? [];
-    const pfIds = [...new Set(list.map((s) => s.pricing_frequency_id).filter(Boolean))] as string[];
     const customerIds = [...new Set(list.map((s) => s.customer_id).filter(Boolean))] as string[];
-
-    let pfMap: Record<string, { frequency_label: string; recurrence_unit: string; recurrence_interval: number }> = {};
-    if (pfIds.length > 0) {
-        const { data: pfRows } = await supabase
-            .from("pricing_frequencies")
-            .select("id, frequency_label, recurrence_unit, recurrence_interval")
-            .in("id", pfIds);
-        for (const pf of pfRows ?? []) {
-            const p = pf as { id: string; frequency_label: string; recurrence_unit?: string; recurrence_interval?: number };
-            pfMap[p.id] = {
-                frequency_label: p.frequency_label ?? "",
-                recurrence_unit: p.recurrence_unit ?? "month",
-                recurrence_interval: Math.max(1, Number(p.recurrence_interval) || 1),
-            };
-        }
-    }
 
     let customerMap: Record<string, string> = {};
     if (customerIds.length > 0) {
@@ -65,25 +49,22 @@ export default async function AdminSubscriptionsPage() {
     }
 
     const rows = list.map((s) => {
-        const pf = pfMap[s.pricing_frequency_id];
+        const cadence = (s as { cadence?: string }).cadence ?? "month";
+        const interval = Math.max(1, Number((s as { interval?: number }).interval) || 1);
         const last = lastBySub[s.id];
         let nextPreview: string | null = null;
-        if (pf && last) {
+        if (last) {
             const lastDate = new Date(last.start_at);
-            const next = pf.recurrence_unit === "week"
-                ? addWeeks(lastDate, pf.recurrence_interval)
-                : addMonths(lastDate, pf.recurrence_interval);
+            const next = cadence === "week" ? addWeeks(lastDate, interval) : addMonths(lastDate, interval);
             nextPreview = next.toISOString().slice(0, 10);
-        } else if (pf && s.start_date) {
+        } else if (s.start_date) {
             const startDate = new Date(s.start_date + "T12:00:00Z");
-            const next = pf.recurrence_unit === "week"
-                ? addWeeks(startDate, pf.recurrence_interval)
-                : addMonths(startDate, pf.recurrence_interval);
+            const next = cadence === "week" ? addWeeks(startDate, interval) : addMonths(startDate, interval);
             nextPreview = next.toISOString().slice(0, 10);
         }
         return {
             ...s,
-            _frequency_label: pf?.frequency_label ?? "—",
+            _frequency_label: formatFrequencyLabel(cadence, interval),
             _customer_name: customerMap[s.customer_id] || null,
             _last_occurrence: last?.start_at ?? null,
             _next_preview: nextPreview,

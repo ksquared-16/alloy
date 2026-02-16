@@ -54,6 +54,14 @@ export function formatDate(value: string | number | Date | null | undefined): st
     }).format(d as Date);
 }
 
+/** Format subscription cadence + interval as label, e.g. "Every 1 week", "Every 2 weeks", "Every 3 months". */
+export function formatFrequencyLabel(cadence: string | null | undefined, interval: number | string | null | undefined): string {
+    const c = (cadence ?? "month").toLowerCase();
+    const n = Math.max(1, Number(interval) || 1);
+    if (c === "week") return n === 1 ? "Every 1 week" : `Every ${n} weeks`;
+    return n === 1 ? "Every 1 month" : `Every ${n} months`;
+}
+
 /** Display as MM/DD/YYYY, h:mm A (local date-time). */
 export function formatDateTime(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";

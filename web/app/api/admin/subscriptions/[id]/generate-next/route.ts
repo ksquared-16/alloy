@@ -19,23 +19,15 @@ export async function POST(
 
     const { data: sub, error: subErr } = await supabase
         .from("customer_subscriptions")
-        .select("id, customer_id, primary_contact_id, vertical_id, pricing_frequency_id, status, start_date, org_id")
+        .select("id, customer_id, primary_contact_id, vertical_id, cadence, interval, status, start_date, org_id")
         .eq("id", subscriptionId)
         .single();
     if (subErr || !sub) {
         return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
     }
 
-    const { data: pf, error: pfErr } = await supabase
-        .from("pricing_frequencies")
-        .select("recurrence_unit, recurrence_interval")
-        .eq("id", sub.pricing_frequency_id)
-        .single();
-    if (pfErr || !pf) {
-        return NextResponse.json({ error: "Pricing frequency not found" }, { status: 400 });
-    }
-    const unit = (pf as { recurrence_unit?: string }).recurrence_unit ?? "month";
-    const interval = Math.max(1, Number((pf as { recurrence_interval?: number }).recurrence_interval) || 1);
+    const cadence = (sub as { cadence?: string }).cadence ?? "month";
+    const interval = Math.max(1, Number((sub as { interval?: number }).interval) || 1);
 
     const { data: latestSchedules } = await supabase
         .from("schedules")
@@ -55,7 +47,7 @@ export async function POST(
 
     if (lastSchedule) {
         const lastStart = new Date(lastSchedule.start_at);
-        nextStart = unit === "week" ? addWeeks(lastStart, interval) : addMonths(lastStart, interval);
+        nextStart = cadence === "week" ? addWeeks(lastStart, interval) : addMonths(lastStart, interval);
         const lastEnd = new Date(lastSchedule.end_at);
         const durationMs = lastEnd.getTime() - lastStart.getTime();
         nextEnd = new Date(nextStart.getTime() + durationMs);
@@ -68,7 +60,7 @@ export async function POST(
         if (!startDate) {
             return NextResponse.json({ error: "No previous schedule and subscription has no start_date" }, { status: 400 });
         }
-        nextStart = unit === "week" ? addWeeks(new Date(startDate + "T12:00:00Z"), interval) : addMonths(new Date(startDate + "T12:00:00Z"), interval);
+        nextStart = cadence === "week" ? addWeeks(new Date(startDate + "T12:00:00Z"), interval) : addMonths(new Date(startDate + "T12:00:00Z"), interval);
         nextEnd = new Date(nextStart.getTime() + 120 * 60 * 1000);
         timezone = "UTC";
         durationMinutes = 120;

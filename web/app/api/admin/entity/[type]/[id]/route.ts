@@ -156,13 +156,12 @@ export async function GET(
             const { data: sub, error: subErr } = await supabase.from("customer_subscriptions").select("*").eq("id", id).single();
             if (subErr || !sub) return NextResponse.json(subErr?.message || "Not found", { status: subErr?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...sub };
-            const pfId = (sub as { pricing_frequency_id?: string }).pricing_frequency_id;
-            if (pfId) {
-                const { data: pf } = await supabase.from("pricing_frequencies").select("frequency_key, frequency_label, recurrence_unit, recurrence_interval").eq("id", pfId).single();
-                out._frequency_label = pf?.frequency_label ?? null;
-                out._recurrence_unit = pf?.recurrence_unit ?? null;
-                out._recurrence_interval = pf?.recurrence_interval ?? null;
-            }
+            const cadence = (sub as { cadence?: string }).cadence ?? "month";
+            const interval = Math.max(1, Number((sub as { interval?: number }).interval) || 1);
+            const { formatFrequencyLabel } = await import("@/lib/adminFormatters");
+            out._frequency_label = formatFrequencyLabel(cadence, interval);
+            out._cadence = cadence;
+            out._interval = interval;
             const customerId = (sub as { customer_id?: string }).customer_id;
             if (customerId) {
                 const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).single();

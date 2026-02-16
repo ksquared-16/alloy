@@ -60,6 +60,19 @@ function normalizeFrequencyKey(frequencyLabel: string | null | undefined): strin
     return "one_time";
 }
 
+/** Map service_frequency_key to customer_subscriptions cadence + interval. Returns null for one_time. */
+function getCadenceIntervalFromServiceFrequencyKey(
+    service_frequency_key: string
+): { cadence: "week" | "month"; interval: number } | null {
+    const k = (service_frequency_key ?? "").toLowerCase().trim();
+    if (k === "one_time" || !k) return null;
+    if (k === "weekly") return { cadence: "week", interval: 1 };
+    if (k === "biweekly") return { cadence: "week", interval: 2 };
+    if (k === "monthly") return { cadence: "month", interval: 1 };
+    if (k === "quarterly") return { cadence: "month", interval: 3 };
+    return null;
+}
+
 /**
  * POST /api/book-v2/confirm
  * 
@@ -877,23 +890,21 @@ export async function POST(request: NextRequest) {
             console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_AFTER] booking_attempt_id=%s redemption_id=%s discount_code_id=%s", booking_attempt_id ?? "None", redemptionRow?.id ?? "?", discount_code_id);
         }
 
-        // Step 5c: If recurring, ensure customer_subscriptions row and get subscription id for schedule linkage
+        // Step 5c: If recurring, ensure customer_subscriptions row (cadence+interval) and get subscription id for schedule linkage
         let customerSubscriptionId: string | null = null;
         if (is_recurring && verticalId) {
-            const { data: pfRow } = await supabase
-                .from("pricing_frequencies")
-                .select("id")
-                .eq("vertical_id", verticalId)
-                .eq("frequency_key", service_frequency_key)
-                .maybeSingle();
-            const pricingFrequencyId = (pfRow as { id?: string } | null)?.id ?? null;
-            if (pricingFrequencyId) {
+            const cadenceInterval = getCadenceIntervalFromServiceFrequencyKey(service_frequency_key);
+            if (cadenceInterval) {
+                const { cadence, interval } = cadenceInterval;
                 const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
                 const { data: existingSub } = await supabase
                     .from("customer_subscriptions")
                     .select("id")
+                    .eq("org_id", orgId)
                     .eq("customer_id", customerId)
-                    .eq("pricing_frequency_id", pricingFrequencyId)
+                    .eq("vertical_id", verticalId)
+                    .eq("cadence", cadence)
+                    .eq("interval", interval)
                     .eq("status", "active")
                     .maybeSingle();
                 if (existingSub?.id) {
@@ -907,7 +918,8 @@ export async function POST(request: NextRequest) {
                             customer_id: customerId,
                             primary_contact_id: contactId,
                             vertical_id: verticalId,
-                            pricing_frequency_id: pricingFrequencyId,
+                            cadence,
+                            interval,
                             status: "active",
                             start_date: startDate,
                         })
