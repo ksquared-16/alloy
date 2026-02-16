@@ -150,10 +150,18 @@ export async function POST(request: NextRequest) {
             discount_amount
         );
 
-        // Validation
-        if (!slot_start || !slot_end || !timezone || !contact_email || !contact_phone) {
+        // Validation: slot/time required; either contact_id (existing lead) or both email and phone
+        if (!slot_start || !slot_end || !timezone) {
             return NextResponse.json(
-                { ok: false, message: "Missing required fields", booking_attempt_id: booking_attempt_id ?? null },
+                { ok: false, message: "Missing required fields (slot/time)", booking_attempt_id: booking_attempt_id ?? null },
+                { status: 400 }
+            );
+        }
+        const hasContactId = !!contact_id_from_quote;
+        const hasEmailAndPhone = !!(contact_email?.trim() && contact_phone?.trim());
+        if (!hasContactId && !hasEmailAndPhone) {
+            return NextResponse.json(
+                { ok: false, message: "Provide either contact_id (from quote) or both contact_email and contact_phone", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 400 }
             );
         }
@@ -359,35 +367,78 @@ export async function POST(request: NextRequest) {
         }
         const verticalIdElse = verticalElse.id;
 
-        // Step 1: Resolve or create contact and customer (guaranteed linking); set/backfill customer.vertical_id
-        try {
-            const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
-                first_name: contact_first_name,
-                last_name: contact_last_name,
-                email: contact_email,
-                phone: contact_phone,
-                postal_code: undefined, // Not provided in booking flow
-                timezone: timezone,
-                address: address,
-                city: city,
-                state: undefined, // Not provided in booking flow
-                vertical_key: "cleaning",
-                vertical_id: verticalIdElse,
-                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
-            });
+        // Step 1: Use provided contact_id if valid, otherwise resolve or create contact and customer
+        let contactResolved = false;
+        if (contact_id_from_quote) {
+            const { data: contactRow, error: contactFetchErr } = await supabase
+                .from("contacts")
+                .select("*")
+                .eq("id", contact_id_from_quote)
+                .single();
+            if (!contactFetchErr && contactRow) {
+                const linkedCustomerId = (contactRow as { customer_id?: string | null }).customer_id ?? customer_id_from_quote ?? null;
+                if (linkedCustomerId) {
+                    contactId = contact_id_from_quote;
+                    customerId = linkedCustomerId;
+                    contactResolved = true;
+                    console.log(
+                        `[BOOK_V2_CONFIRM] Using contact_id from quote booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId}`
+                    );
+                } else {
+                    console.warn("[BOOK_V2_CONFIRM] contact_id provided but contact has no linked customer", { contact_id: contact_id_from_quote });
+                    return NextResponse.json(
+                        { ok: false, message: "Contact has no linked customer; please refresh your quote and try again.", booking_attempt_id: booking_attempt_id ?? null },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
 
-            contactId = resolverResult.contact_id;
-            customerId = resolverResult.customer_id;
+        if (!contactResolved) {
+            const emailPresent = !!(contact_email?.trim());
+            const phonePresent = !!(contact_phone?.trim());
+            if (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV === "preview") {
+                console.warn("[BOOK_V2_CONFIRM] Resolver fallback: missing fields", {
+                    booking_attempt_id: booking_attempt_id ?? null,
+                    contact_id_provided: !!contact_id_from_quote,
+                    email_present: emailPresent,
+                    phone_present: phonePresent,
+                });
+            }
+            const emailForResolver = contact_email?.trim() ?? "";
+            const phoneForResolver = contact_phone?.trim() ?? "";
+            const digits = phoneForResolver.replace(/\D/g, "");
+            const normalizedPhone = digits.length === 10 ? "+1" + digits : digits.length === 11 && digits.startsWith("1") ? "+" + digits : phoneForResolver.startsWith("+") ? "+" + digits : phoneForResolver ? "+" + digits : "";
+            try {
+                const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
+                    first_name: contact_first_name,
+                    last_name: contact_last_name,
+                    email: emailForResolver,
+                    phone: normalizedPhone || phoneForResolver,
+                    postal_code: undefined,
+                    timezone: timezone,
+                    address: address,
+                    city: city,
+                    state: undefined,
+                    vertical_key: "cleaning",
+                    vertical_id: verticalIdElse,
+                    org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
+                });
 
-            console.log(
-                `[BOOK_V2_CONFIRM] Contact/Customer resolved booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
-            );
-        } catch (error: any) {
-            console.error("[BOOK_V2_CONFIRM] Failed to resolve contact/customer booking_attempt_id=", booking_attempt_id, error);
-            return NextResponse.json(
-                { ok: false, message: `Failed to resolve contact/customer: ${error.message}`, booking_attempt_id: booking_attempt_id ?? null },
-                { status: 500 }
-            );
+                contactId = resolverResult.contact_id;
+                customerId = resolverResult.customer_id;
+
+                console.log(
+                    `[BOOK_V2_CONFIRM] Contact/Customer resolved booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
+                );
+            } catch (error: unknown) {
+                const errMsg = error instanceof Error ? error.message : String(error);
+                console.error("[BOOK_V2_CONFIRM] Failed to resolve contact/customer booking_attempt_id=", booking_attempt_id, "error=", errMsg, "missing_contact_id=", !contact_id_from_quote, "missing_email=", !emailPresent, "missing_phone=", !phonePresent);
+                return NextResponse.json(
+                    { ok: false, message: `Could not resolve or create contact; check email and phone. ${errMsg}`, booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
+            }
         }
 
         // Step 2: If discount used, check redemption not already recorded (enforce "once per customer")

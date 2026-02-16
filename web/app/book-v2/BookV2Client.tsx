@@ -1206,11 +1206,9 @@ export default function BookV2Client() {
                 quote_output: quoteOutputForConfirm,
                 booking_attempt_id: attemptId,
             };
-            if (storedOpportunityId && storedContactId && storedCustomerId) {
-                confirmPayload.opportunity_id = storedOpportunityId;
-                confirmPayload.contact_id = storedContactId;
-                confirmPayload.customer_id = storedCustomerId;
-            }
+            if (storedOpportunityId) confirmPayload.opportunity_id = storedOpportunityId;
+            if (storedContactId) confirmPayload.contact_id = storedContactId;
+            if (storedCustomerId) confirmPayload.customer_id = storedCustomerId;
 
             const bookingResponse = await fetch("/api/book-v2/confirm", {
                 method: "POST",
