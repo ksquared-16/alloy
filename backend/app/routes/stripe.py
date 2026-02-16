@@ -317,11 +317,25 @@ async def create_setup_intent(request: Request):
     email = body.get("email")
     ghl_contact_id = body.get("ghl_contact_id")
     booking_attempt_id = body.get("booking_attempt_id")
+    contact_id_from_quote = body.get("contact_id")
+    customer_id_from_quote = body.get("customer_id")
 
-    if not phone or not email:
-        logger.error("create_setup_intent: missing required fields booking_attempt_id=%s (phone=%s, email=%s)", booking_attempt_id or "None", bool(phone), bool(email))
-        raise HTTPException(status_code=400, detail="phone and email are required")
-    
+    # Require either (contact_id from quote) or (phone and email)
+    has_quote_ids = bool(contact_id_from_quote and str(contact_id_from_quote).strip())
+    has_phone_email = phone and email
+    if not has_quote_ids and not has_phone_email:
+        logger.error(
+            "create_setup_intent: missing required fields booking_attempt_id=%s (contact_id=%s, phone=%s, email=%s)",
+            booking_attempt_id or "None",
+            bool(contact_id_from_quote),
+            bool(phone),
+            bool(email),
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either contact_id (from quote) or both phone and email.",
+        )
+
     # Step 1: Normalize and resolve or create Supabase contact + customer (idempotent, Supabase-first)
     from ..supabase_client import resolve_or_create_contact_and_customer, normalize_phone as normalize_phone_supa
 
@@ -340,7 +354,17 @@ async def create_setup_intent(request: Request):
         email=normalized_email,
         phone=normalized_phone,
         name=name,
+        contact_id=contact_id_from_quote.strip() if isinstance(contact_id_from_quote, str) and contact_id_from_quote.strip() else None,
+        customer_id=customer_id_from_quote.strip() if isinstance(customer_id_from_quote, str) and customer_id_from_quote.strip() else None,
+        booking_attempt_id=booking_attempt_id,
     )
+
+    if resolution_path == "contact_no_customer":
+        logger.warning("create_setup_intent: contact has no linked customer booking_attempt_id=%s contact_id=%s", booking_attempt_id or "None", contact_id_from_quote[:8] + "***" if contact_id_from_quote and len(contact_id_from_quote) > 8 else contact_id_from_quote)
+        raise HTTPException(
+            status_code=400,
+            detail="Contact has no linked customer; refresh quote and try again.",
+        )
 
     if not supabase_contact_id or not supa_customer_id:
         logger.error(

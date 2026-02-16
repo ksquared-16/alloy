@@ -1114,8 +1114,10 @@ export default function BookV2Client() {
                 }
             }
 
-            // Step 1: Create SetupIntent
+            // Step 1: Create SetupIntent (pass quote contact_id/customer_id so backend can reuse existing lead)
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+            const setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
+            const setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
             const setupIntentResponse = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
                 method: "POST",
                 headers: {
@@ -1126,6 +1128,8 @@ export default function BookV2Client() {
                     email: resolvedEmail || prefillData.email,
                     ghl_contact_id: prefillData.ghl_contact_id || null,
                     booking_attempt_id: attemptId,
+                    contact_id: setupContactId || undefined,
+                    customer_id: setupCustomerId || undefined,
                 }),
             });
 

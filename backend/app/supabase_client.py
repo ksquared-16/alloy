@@ -3,9 +3,10 @@ Supabase database client for backend operations.
 Uses service role key to bypass RLS.
 """
 import logging
+import os
 import requests
 import re
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple, List
 from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY
 import stripe
 
@@ -122,16 +123,51 @@ def find_contact_by_phone(phone: str) -> Optional[Dict]:
     return None
 
 
+def find_contact_by_id(contact_id: str) -> Optional[Dict]:
+    """Fetch a contact by UUID. Returns full row or None."""
+    if not contact_id or not contact_id.strip():
+        return None
+    base_url = _get_base_url()
+    url = f"{base_url}/contacts"
+    params = {"id": f"eq.{contact_id.strip()}", "select": "*", "limit": "1"}
+    try:
+        response = requests.get(url, headers=_get_headers(), params=params, timeout=30)
+        if response.ok:
+            data = response.json()
+            if data and len(data) > 0:
+                return data[0]
+    except Exception as e:
+        logger.debug("Error fetching contact by id: %s", e)
+    return None
+
+
+def _normalize_uuid_fields(payload: Dict[str, Any], uuid_keys: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Convert empty string to None for UUID/FK fields. Returns a copy."""
+    keys = uuid_keys or ("customer_id", "org_id", "primary_contact_id", "vendor_id", "vertical_id")
+    out = dict(payload)
+    for k in keys:
+        if k in out and out[k] == "":
+            out[k] = None
+    return out
+
+
 def resolve_or_create_contact_and_customer(
     email: Optional[str] = None,
     phone: Optional[str] = None,
     name: Optional[str] = None,
+    contact_id: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    booking_attempt_id: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str], str]:
     """
     Resolve or create Supabase contact and ensure customer exists (idempotent).
     Used by /stripe/setup-intent so flow never requires a pre-existing contact.
 
-    Steps:
+    If contact_id is provided: fetch contact by id; if found use it and
+    customer_id = customer_id param or contact.customer_id; skip create.
+    resolution_path "contact_no_customer" when contact has no linked customer.
+
+    Steps otherwise:
     1. Normalize email (case-insensitive) and phone (E.164).
     2. Find contact by email, then by phone.
     3. If not found, create contact (POST contacts).
@@ -139,7 +175,7 @@ def resolve_or_create_contact_and_customer(
        contacts.customer_id and customers.primary_contact_id.
     5. Return (supa_contact_id, supa_customer_id, resolution_path).
 
-    resolution_path: "found_by_email" | "found_by_phone" | "created" | "missing"
+    resolution_path: "quote_id" | "found_by_email" | "found_by_phone" | "created" | "missing" | "contact_no_customer"
 
     Returns:
         (contact_id, customer_id, resolution_path); (None, None, "missing") if no email/phone.
@@ -147,6 +183,23 @@ def resolve_or_create_contact_and_customer(
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("resolve_or_create_contact_and_customer: Supabase not configured")
         return None, None, "missing"
+
+    # Quote-ID shortcut: use existing contact when contact_id provided
+    if contact_id and contact_id.strip():
+        existing = find_contact_by_id(contact_id.strip())
+        if existing:
+            cid = existing.get("id")
+            cust_id = (customer_id and customer_id.strip()) or existing.get("customer_id")
+            if cust_id:
+                logger.info(
+                    "resolve_or_create_contact_and_customer: quote_id shortcut booking_attempt_id=%s supa_contact_id=%s supa_customer_id=%s",
+                    booking_attempt_id or "None",
+                    (cid[:8] + "***") if cid and len(cid) > 8 else cid,
+                    (cust_id[:8] + "***") if cust_id and len(cust_id) > 8 else cust_id,
+                )
+                return cid, cust_id, "quote_id"
+            logger.warning("resolve_or_create_contact_and_customer: contact_id provided but contact has no linked customer contact_id=%s", cid[:8] + "***" if cid and len(cid) > 8 else cid)
+            return None, None, "contact_no_customer"
 
     normalized_email = email.strip().lower() if (email and isinstance(email, str)) else None
     normalized_phone = normalize_phone(phone) if phone else None
@@ -172,12 +225,23 @@ def resolve_or_create_contact_and_customer(
             "primary_contact_id": contact_id,
             "status": "active",
         }
+        org_id = os.getenv("ALLOY_PUBLIC_ORG_ID") or None
+        if org_id:
+            customer_payload["org_id"] = org_id
+        customer_payload = _normalize_uuid_fields(customer_payload)
         try:
             create_resp = requests.post(f"{base_url}/customers", headers=headers, json=customer_payload, timeout=30)
             if not create_resp.ok:
+                try:
+                    error_body = create_resp.text
+                except Exception:
+                    error_body = ""
                 logger.error(
-                    "resolve_or_create_contact_and_customer: failed to create customer status=%d contact_id=%s",
-                    create_resp.status_code, contact_id
+                    "resolve_or_create_contact_and_customer: supabase customer insert failed status=%s error_body=%s payload_keys=%s contact_id=%s",
+                    create_resp.status_code,
+                    error_body[:500] if error_body else "",
+                    list(customer_payload.keys()),
+                    contact_id[:8] + "***" if contact_id and len(contact_id) > 8 else contact_id,
                 )
                 return contact_id, None, resolution_path
             customer_data = create_resp.json()
@@ -238,12 +302,23 @@ def resolve_or_create_contact_and_customer(
         contact_payload["email"] = normalized_email
     if normalized_phone:
         contact_payload["phone"] = normalized_phone
+    org_id = os.getenv("ALLOY_PUBLIC_ORG_ID") or None
+    if org_id:
+        contact_payload["org_id"] = org_id
+    contact_payload = _normalize_uuid_fields(contact_payload)
     try:
         create_contact_resp = requests.post(f"{base_url}/contacts", headers=headers, json=contact_payload, timeout=30)
         if not create_contact_resp.ok:
+            try:
+                error_body = create_contact_resp.text
+            except Exception:
+                error_body = ""
             logger.error(
-                "resolve_or_create_contact_and_customer: failed to create contact status=%s",
+                "resolve_or_create_contact_and_customer: supabase contact insert failed status=%s error_body=%s payload_keys=%s booking_attempt_id=%s",
                 create_contact_resp.status_code,
+                error_body[:500] if error_body else "",
+                list(contact_payload.keys()),
+                booking_attempt_id or "None",
             )
             return None, None, "created"
         contact_data = create_contact_resp.json()
