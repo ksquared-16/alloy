@@ -188,6 +188,14 @@ type RecipientSpec = {
     vendor_id_path?: string;
     role_in?: string[];
     max?: number;
+    /** vendors_query: filter by status key (e.g. "approved") */
+    status_key?: string | null;
+    /** vendors_query: vertical slug when match_job_vertical is false */
+    vertical_slug?: string | null;
+    /** vendors_query: use payload.job.vertical_id (default true) */
+    match_job_vertical?: boolean;
+    /** vendors_query: filter by job zip via service_area_zip_codes (default true) */
+    match_job_zip?: boolean;
 };
 
 async function resolveRecipients(
@@ -248,6 +256,105 @@ async function resolveRecipients(
                     out.push({ contact_id: c.id, to_phone: c.phone ?? undefined, to_email: c.email ?? undefined });
                 }
             }
+            continue;
+        }
+
+        if (source === "query" && type === "vendors_query") {
+            const orgId = payload.org_id != null ? String(payload.org_id) : null;
+            if (!orgId) {
+                logs.push("send_message: vendors_query requires org_id in payload");
+                continue;
+            }
+            const matchJobVertical = r.match_job_vertical !== false;
+            const matchJobZip = r.match_job_zip !== false;
+            const max = Math.max(1, Math.min(500, typeof r.max === "number" ? r.max : 25));
+
+            let verticalId: string | null = null;
+            if (matchJobVertical) {
+                const job = payload.job as Record<string, unknown> | undefined;
+                if (!job || typeof job !== "object") {
+                    logs.push("send_message: vendors_query match_job_vertical requires job in payload");
+                    continue;
+                }
+                verticalId = (job.vertical_id ?? (job as { verticalId?: string }).verticalId ?? (job as { _job_vertical?: { id?: string } })._job_vertical?.id) != null
+                    ? String(job.vertical_id ?? (job as { verticalId?: string }).verticalId ?? (job as { _job_vertical?: { id?: string } })._job_vertical?.id)
+                    : null;
+                if (!verticalId) {
+                    logs.push("send_message: vendors_query match_job_vertical requires job.vertical_id; skipping");
+                    continue;
+                }
+            } else if (r.vertical_slug) {
+                const { data: vert } = await supabase
+                    .from("verticals")
+                    .select("id")
+                    .eq("slug", String(r.vertical_slug).trim())
+                    .maybeSingle();
+                verticalId = (vert as { id?: string } | null)?.id ?? null;
+                if (!verticalId) {
+                    logs.push(`send_message: vendors_query vertical_slug "${r.vertical_slug}" not found; skipping`);
+                    continue;
+                }
+            } else {
+                logs.push("send_message: vendors_query requires match_job_vertical or vertical_slug; skipping");
+                continue;
+            }
+
+            let statusId: string | null = null;
+            if (r.status_key != null && String(r.status_key).trim() !== "") {
+                const { data: statusRow } = await supabase
+                    .from("vendor_statuses")
+                    .select("id")
+                    .eq("key", String(r.status_key).trim())
+                    .maybeSingle();
+                statusId = (statusRow as { id?: string } | null)?.id ?? null;
+            }
+
+            const { data: vvRows } = await supabase
+                .from("vendor_verticals")
+                .select("vendor_id")
+                .eq("vertical_id", verticalId);
+            const vendorIdsInVertical = ((vvRows ?? []) as { vendor_id: string }[]).map((row) => row.vendor_id);
+            const vendorIdSet = new Set(vendorIdsInVertical);
+            if (vendorIdSet.size === 0) {
+                logs.push("vendors_query: no vendors in vertical");
+                continue;
+            }
+
+            let vendorsQuery = supabase
+                .from("vendors")
+                .select("id, primary_contact_id, service_area_zip_codes")
+                .eq("org_id", orgId)
+                .in("id", Array.from(vendorIdSet))
+                .limit(500);
+            if (statusId) {
+                vendorsQuery = vendorsQuery.eq("vendor_status_id", statusId);
+            }
+            const { data: vendorRows } = await vendorsQuery;
+            let list = (vendorRows ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
+
+            const jobZip = matchJobZip ? getJobZip(payload) : null;
+            if (matchJobZip && jobZip) {
+                list = list.filter((v) => {
+                    const zips = v.service_area_zip_codes;
+                    if (!zips || !Array.isArray(zips)) return false;
+                    return zips.some((z) => String(z).replace(/\D/g, "").slice(0, 5) === jobZip);
+                });
+            } else if (matchJobZip && !jobZip) {
+                logs.push("vendors_query: match_job_zip true but no job zip in payload; using vertical-only");
+            }
+
+            const contactIds: string[] = [];
+            for (const v of list.slice(0, max)) {
+                if (v.primary_contact_id) {
+                    const key = `c:${v.primary_contact_id}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        contactIds.push(v.primary_contact_id);
+                        out.push({ contact_id: v.primary_contact_id });
+                    }
+                }
+            }
+            logs.push(`vendors_query: resolved count=${contactIds.length}`);
             continue;
         }
 

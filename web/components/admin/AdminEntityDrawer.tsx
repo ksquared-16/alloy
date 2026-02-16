@@ -143,6 +143,8 @@ export default function AdminEntityDrawer() {
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
+    const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
+    const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -222,6 +224,17 @@ export default function AdminEntityDrawer() {
                 .catch(() => setFieldCatalogByEntity((prev) => ({ ...prev, [entityType]: [] })));
         });
     }, [drawer.type, formData.entity_type, workflowConditions, fieldCatalogByEntity]);
+
+    useEffect(() => {
+        if (drawer.type !== "workflows") return;
+        Promise.all([
+            fetch("/api/admin/vendor-statuses").then((r) => (r.ok ? r.json() : [])),
+            fetch("/api/admin/verticals").then((r) => (r.ok ? r.json() : [])),
+        ]).then(([statuses, verts]) => {
+            setVendorStatuses(Array.isArray(statuses) ? statuses : []);
+            setWorkflowVerticals(Array.isArray(verts) ? verts : []);
+        }).catch(() => { setVendorStatuses([]); setWorkflowVerticals([]); });
+    }, [drawer.type]);
 
     useEffect(() => {
         if (drawer.type !== "workflows" || !data) return;
@@ -1047,7 +1060,12 @@ export default function AdminEntityDrawer() {
                                                         ) : a.action_type === "send_message" ? (
                                                             (() => {
                                                                 const pl = (a.payload && typeof a.payload === "object" ? a.payload : {}) as Record<string, unknown>;
-                                                                const recipients = (Array.isArray(pl.recipients) ? pl.recipients : []) as { type?: string; source?: string; path?: string; vendor_id_path?: string; role_in?: string[]; max?: number }[];
+                                                                const recipients = (Array.isArray(pl.recipients) ? pl.recipients : []) as { type?: string; source?: string; path?: string; vendor_id_path?: string; role_in?: string[]; max?: number; status_key?: string | null; vertical_slug?: string | null; match_job_vertical?: boolean; match_job_zip?: boolean }[];
+                                                                const updateRecipient = (ri: number, patch: Partial<typeof recipients[0]>) => {
+                                                                    const next = [...recipients];
+                                                                    next[ri] = { ...next[ri], ...patch };
+                                                                    setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: next } } : p));
+                                                                };
                                                                 return (
                                                                     <div className="space-y-2">
                                                                         <div>
@@ -1058,15 +1076,15 @@ export default function AdminEntityDrawer() {
                                                                             </select>
                                                                         </div>
                                                                         <div>
-                                                                            <label className="block text-xs text-alloy-midnight/60 mb-0.5">Template (e.g. New job: {`{{job.title}}`} at {`{{schedule.start_at}}`})</label>
-                                                                            <textarea value={String(pl.template ?? "")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), template: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm" rows={3} placeholder="Supports {{job.title}}, {{contact.phone}}, etc." />
+                                                                            <label className="block text-xs text-alloy-midnight/60 mb-0.5">Template / body (supports {`{{job.title}}`}, {`{{schedule.start_at}}`})</label>
+                                                                            <textarea value={String(pl.template ?? pl.body ?? "")} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), template: e.target.value, body: e.target.value } } : p))} className="w-full px-2 py-1.5 border rounded text-sm" rows={3} placeholder="New job: {{job.title}} at {{schedule.start_at}}" />
                                                                         </div>
                                                                         <div>
                                                                             <label className="block text-xs text-alloy-midnight/60 mb-0.5">Recipients</label>
                                                                             {recipients.map((rec, ri) => {
-                                                                                const recTypeKey = rec.source === "payload" && rec.path === "contact.id" ? "payload_contact" : rec.source === "payload" && rec.path === "customer.primary_contact_id" ? "customer_primary" : rec.source === "payload" && rec.path === "vendor.primary_contact_id" ? "vendor_primary" : rec.type === "contacts_by_vendor" ? "contacts_by_vendor" : rec.type === "job_qualified_vendors" ? "job_qualified_vendors" : "";
+                                                                                const recTypeKey = rec.source === "payload" && rec.path === "contact.id" ? "payload_contact" : rec.source === "payload" && rec.path === "customer.primary_contact_id" ? "customer_primary" : rec.source === "payload" && rec.path === "vendor.primary_contact_id" ? "vendor_primary" : rec.type === "contacts_by_vendor" ? "contacts_by_vendor" : rec.type === "job_qualified_vendors" ? "job_qualified_vendors" : rec.type === "vendors_query" ? "vendors_query" : "";
                                                                                 return (
-                                                                                    <div key={ri} className="flex gap-2 items-center mb-1">
+                                                                                    <div key={ri} className="flex flex-wrap gap-2 items-center mb-2 p-2 border border-alloy-stone/30 rounded">
                                                                                         <select value={recTypeKey} onChange={(e) => {
                                                                                             const t = e.target.value;
                                                                                             const next = [...recipients];
@@ -1074,18 +1092,53 @@ export default function AdminEntityDrawer() {
                                                                                             else if (t === "customer_primary") next[ri] = { type: "customer", source: "payload", path: "customer.primary_contact_id" };
                                                                                             else if (t === "vendor_primary") next[ri] = { type: "vendor", source: "payload", path: "vendor.primary_contact_id" };
                                                                                             else if (t === "contacts_by_vendor") next[ri] = { type: "contacts_by_vendor", source: "query", vendor_id_path: "vendor.id", role_in: ["primary", "billing"] };
-                                                                                            else if (t === "job_qualified_vendors") next[ri] = { type: "job_qualified_vendors", source: "resolver", max: 25 };
+                                                                                            else if (t === "job_qualified_vendors") next[ri] = { type: "job_qualified_vendors", source: "resolver", max: 25, role_in: ["primary"] };
+                                                                                            else if (t === "vendors_query") next[ri] = { type: "vendors_query", source: "query", status_key: "approved", vertical_slug: null, match_job_vertical: true, match_job_zip: true, max: 25, role_in: ["primary"] };
                                                                                             else next[ri] = { type: "contact", source: "payload", path: "contact.id" };
                                                                                             setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: next } } : p));
-                                                                                        }} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm">
+                                                                                        }} className="min-w-[200px] px-2 py-1.5 border rounded text-sm">
                                                                                             <option value="">— Type —</option>
                                                                                             <option value="payload_contact">Payload contact</option>
                                                                                             <option value="customer_primary">Customer primary contact</option>
                                                                                             <option value="vendor_primary">Vendor primary contact</option>
                                                                                             <option value="contacts_by_vendor">All contacts for vendor (by role)</option>
                                                                                             <option value="job_qualified_vendors">Qualified vendors for job (resolver)</option>
+                                                                                            <option value="vendors_query">Vendors (query)</option>
                                                                                         </select>
-                                                                                        <span className="text-xs text-alloy-midnight/50 shrink-0">{rec.type === "contacts_by_vendor" ? `vendor: ${rec.vendor_id_path ?? ""}` : rec.type === "job_qualified_vendors" ? `max ${rec.max ?? 25}` : rec.path ?? ""}</span>
+                                                                                        {rec.type === "job_qualified_vendors" && (
+                                                                                            <>
+                                                                                                <label className="text-xs text-alloy-midnight/60 shrink-0">Max</label>
+                                                                                                <input type="number" min={1} max={500} value={rec.max ?? 25} onChange={(e) => updateRecipient(ri, { max: Math.max(1, parseInt(e.target.value, 10) || 25) })} className="w-16 px-2 py-1.5 border rounded text-sm" />
+                                                                                                <label className="text-xs text-alloy-midnight/60 shrink-0">Roles (optional)</label>
+                                                                                                <input type="text" value={Array.isArray(rec.role_in) ? rec.role_in.join(", ") : "primary"} onChange={(e) => updateRecipient(ri, { role_in: e.target.value.split(",").map((s) => s.trim()).filter(Boolean).length ? e.target.value.split(",").map((s) => s.trim()).filter(Boolean) : ["primary"] })} className="w-24 px-2 py-1.5 border rounded text-sm" placeholder="primary" title="role_in for resolver" />
+                                                                                            </>
+                                                                                        )}
+                                                                                        {rec.type === "vendors_query" && (
+                                                                                            <div className="flex flex-wrap gap-2 items-center w-full mt-1">
+                                                                                                <label className="text-xs text-alloy-midnight/60 shrink-0">Status</label>
+                                                                                                <select value={rec.status_key ?? ""} onChange={(e) => updateRecipient(ri, { status_key: e.target.value || null })} className="px-2 py-1.5 border rounded text-sm min-w-[100px]">
+                                                                                                    <option value="">— Any —</option>
+                                                                                                    {vendorStatuses.map((s) => <option key={s.id} value={s.key}>{s.label}</option>)}
+                                                                                                </select>
+                                                                                                <label className="text-xs text-alloy-midnight/60 shrink-0 ml-1">Vertical</label>
+                                                                                                <select value={rec.vertical_slug ?? ""} onChange={(e) => updateRecipient(ri, { vertical_slug: e.target.value || null })} className="px-2 py-1.5 border rounded text-sm min-w-[100px]" disabled={rec.match_job_vertical !== false}>
+                                                                                                    <option value="">— None (use job) —</option>
+                                                                                                    {workflowVerticals.map((v) => <option key={v.id} value={v.slug}>{v.name}</option>)}
+                                                                                                </select>
+                                                                                                <label className="flex items-center gap-1 text-xs text-alloy-midnight/60 shrink-0"><input type="checkbox" checked={rec.match_job_vertical !== false} onChange={(e) => updateRecipient(ri, { match_job_vertical: e.target.checked })} /> Use job vertical</label>
+                                                                                                <label className="flex items-center gap-1 text-xs text-alloy-midnight/60 shrink-0"><input type="checkbox" checked={rec.match_job_zip !== false} onChange={(e) => updateRecipient(ri, { match_job_zip: e.target.checked })} /> Match job zip</label>
+                                                                                                <label className="text-xs text-alloy-midnight/60 shrink-0">Max</label>
+                                                                                                <input type="number" min={1} max={500} value={rec.max ?? 25} onChange={(e) => updateRecipient(ri, { max: Math.max(1, parseInt(e.target.value, 10) || 25) })} className="w-16 px-2 py-1.5 border rounded text-sm" />
+                                                                                                <label className="text-xs text-alloy-midnight/60 shrink-0">Roles</label>
+                                                                                                <input type="text" value={Array.isArray(rec.role_in) ? rec.role_in.join(", ") : "primary"} onChange={(e) => updateRecipient(ri, { role_in: e.target.value.split(",").map((s) => s.trim()).filter(Boolean).length ? e.target.value.split(",").map((s) => s.trim()).filter(Boolean) : ["primary"] })} className="w-24 px-2 py-1.5 border rounded text-sm" placeholder="primary" />
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {rec.type === "contacts_by_vendor" && (
+                                                                                            <input value={rec.vendor_id_path ?? "vendor.id"} onChange={(e) => updateRecipient(ri, { vendor_id_path: e.target.value || "vendor.id" })} className="w-28 px-2 py-1.5 border rounded text-sm" placeholder="vendor_id_path" />
+                                                                                        )}
+                                                                                        {!rec.type?.includes("vendor") && rec.type !== "vendors_query" && rec.path != null && rec.source === "payload" && (
+                                                                                            <span className="text-xs text-alloy-midnight/50">{rec.path}</span>
+                                                                                        )}
                                                                                         <button type="button" onClick={() => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: recipients.filter((_, k) => k !== ri) } } : p))} className="text-red-600 text-xs">Remove</button>
                                                                                     </div>
                                                                                 );

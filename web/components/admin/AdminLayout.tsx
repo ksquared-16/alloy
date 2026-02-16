@@ -15,7 +15,7 @@ const navGroups: { label: string; items: { href: string; label: string }[] }[] =
     { label: "Core", items: [{ href: "/admin/dashboard", label: "Dashboard" }, { href: "/admin/opportunities", label: "Opportunities" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/schedules", label: "Schedules" }] },
     { label: "People", items: [{ href: "/admin/customers", label: "Customers" }, { href: "/admin/contacts", label: "Contacts" }, { href: "/admin/vendors", label: "Vendors" }] },
     { label: "Billing & Pricing", items: [{ href: "/admin/discounts", label: "Discounts" }, { href: "/admin/discount-redemptions", label: "Discount Redemptions" }, { href: "/admin/subscriptions", label: "Subscriptions" }] },
-    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/settings", label: "Settings" }] },
+    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/messages-outbox", label: "Messages outbox" }, { href: "/admin/settings", label: "Settings" }] },
 ];
 
 function getInitialCollapsed(): Record<string, boolean> {
