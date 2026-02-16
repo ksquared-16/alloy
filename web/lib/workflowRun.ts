@@ -65,19 +65,26 @@ type ConditionRow = {
     enabled?: boolean | null;
 };
 
+/** Normalize legacy field_path: for vendor entity, strip "vendor." prefix so path is relative to payload.vendor. */
+function normalizeFieldPathForEntity(entityType: string, path: string): string {
+    const p = path.trim();
+    if (!p) return p;
+    if ((entityType === "vendor" || entityType === "vendors") && p.startsWith("vendor.")) {
+        return p.slice("vendor.".length).trim() || p;
+    }
+    return p;
+}
+
 function getConditionActual(payload: Record<string, unknown>, defaultEntityType: string | null, c: ConditionRow): unknown {
     const entityType = (c.target_entity ?? defaultEntityType ?? "job").trim() || "job";
     const entity = payload[entityType];
-    const path = (c.field_path ?? c.field ?? "").trim();
+    const rawPath = (c.field_path ?? c.field ?? "").trim();
+    const path = normalizeFieldPathForEntity(entityType, rawPath);
     if (path && entity != null && typeof entity === "object") {
-        const relativePath = path.includes(".") ? path : path;
-        return getByPath(entity, relativePath);
+        return getByPath(entity, path);
     }
     if (c.field && typeof c.field === "string" && c.field.trim()) {
         return getByPath(payload, c.field.trim());
-    }
-    if (path && entity != null && typeof entity === "object") {
-        return getByPath(entity, path);
     }
     return undefined;
 }
@@ -115,8 +122,13 @@ function evaluateCondition(
         case "not_equals":
             if (actual == null) return val !== null && val !== "" && val !== "null";
             return String(actual) !== String(val);
-        case "contains":
+        case "contains": {
+            if (Array.isArray(actual)) {
+                const v = val != null ? String(val) : "";
+                return actual.some((x) => String(x) === v);
+            }
             return String(actual ?? "").includes(String(val ?? ""));
+        }
         case "gt": {
             const n = Number(actual);
             const v = typeof val === "number" ? val : parseFloat(String(val));
@@ -149,6 +161,11 @@ function evaluateCondition(
         }
         case "exists":
             return actual != null && actual !== "";
+        case "overlaps": {
+            const actualArr = Array.isArray(actual) ? actual : [];
+            const valArr = Array.isArray(val) ? val : (val != null ? [val] : []);
+            return actualArr.some((a) => valArr.some((v) => String(a) === String(v)));
+        }
         default:
             return String(actual) === String(val);
     }
@@ -335,6 +352,57 @@ export interface WorkflowRunResult {
 }
 
 /**
+ * Enrich payload.vendor with vendor_status (id, key, label), vendor_vertical_ids, vendor_vertical_keys (slugs), vendor_vertical_names
+ * so conditions like vendor_status.key and vendor_vertical_keys can be evaluated without extra DB in the condition loop.
+ * Schema: vendor_statuses has id, key, label (no name); verticals has slug, name.
+ */
+async function enrichVendorPayload(supabase: SupabaseClient, payload: WorkflowEventPayload): Promise<void> {
+    const vendor = payload.vendor;
+    if (!vendor || typeof vendor !== "object") return;
+    const vendorId = (vendor as { id?: string }).id;
+    if (!vendorId) return;
+
+    const statusId = (vendor as { vendor_status_id?: string | null }).vendor_status_id;
+    if (statusId) {
+        const { data: vs, error: _vsErr } = await supabase
+            .from("vendor_statuses")
+            .select("id, key, label")
+            .eq("id", statusId)
+            .maybeSingle();
+        const row = vs as { id: string; key: string; label: string } | null;
+        (vendor as Record<string, unknown>).vendor_status = row ? { id: row.id, key: row.key, label: row.label } : null;
+    } else {
+        (vendor as Record<string, unknown>).vendor_status = null;
+    }
+
+    const { data: vvRows } = await supabase
+        .from("vendor_verticals")
+        .select("vertical_id")
+        .eq("vendor_id", vendorId);
+    const verticalIds = ((vvRows ?? []) as { vertical_id: string }[]).map((r) => r.vertical_id);
+    (vendor as Record<string, unknown>).vendor_vertical_ids = verticalIds;
+
+    if (verticalIds.length > 0) {
+        const { data: vertRows } = await supabase
+            .from("verticals")
+            .select("id, slug, name")
+            .in("id", verticalIds);
+        const keys: string[] = [];
+        const names: string[] = [];
+        for (const v of vertRows ?? []) {
+            const r = v as { id: string; slug?: string | null; name?: string | null };
+            keys.push(r.slug ?? r.id);
+            names.push(r.name ?? r.id);
+        }
+        (vendor as Record<string, unknown>).vendor_vertical_keys = keys;
+        (vendor as Record<string, unknown>).vendor_vertical_names = names;
+    } else {
+        (vendor as Record<string, unknown>).vendor_vertical_keys = [];
+        (vendor as Record<string, unknown>).vendor_vertical_names = [];
+    }
+}
+
+/**
  * Execute a workflow run: insert run row, evaluate conditions, execute actions.
  * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor) when available.
  */
@@ -355,6 +423,8 @@ export async function executeWorkflowRun(
         vendor: (eventPayload.vendor as Record<string, unknown>) ?? null,
         ...eventPayload,
     };
+
+    await enrichVendorPayload(supabase, payload);
 
     const { data: workflow, error: wErr } = await supabase
         .from("workflows")

@@ -9,10 +9,10 @@ import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTim
 import {
     WORKFLOW_ENTITY_TYPES,
     WORKFLOW_EVENT_TYPES,
-    WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE,
     WORKFLOW_ENTITY_ID_QUICK_FILL,
-    WORKFLOW_CONDITION_OPERATORS,
 } from "@/lib/workflowVocab";
+
+type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors"] as const;
 
@@ -142,6 +142,7 @@ export default function AdminEntityDrawer() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
+    const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -203,6 +204,26 @@ export default function AdminEntityDrawer() {
     }, [drawer.type]);
 
     useEffect(() => {
+        if (drawer.type !== "workflows") return;
+        const entityTypes = new Set<string>();
+        if ((formData.entity_type as string)?.trim()) entityTypes.add((formData.entity_type as string).trim());
+        workflowConditions.forEach((c) => {
+            const t = (c.target_entity ?? "").trim();
+            if (t) entityTypes.add(t);
+        });
+        entityTypes.forEach((entityType) => {
+            if (fieldCatalogByEntity[entityType] != null) return;
+            fetch(`/api/admin/workflows/field-catalog?entity_type=${encodeURIComponent(entityType)}`)
+                .then((r) => (r.ok ? r.json() : { fields: [] }))
+                .then((json: { fields?: FieldCatalogEntry[] }) => {
+                    const fields = Array.isArray(json.fields) ? json.fields : [];
+                    setFieldCatalogByEntity((prev) => ({ ...prev, [entityType]: fields }));
+                })
+                .catch(() => setFieldCatalogByEntity((prev) => ({ ...prev, [entityType]: [] })));
+        });
+    }, [drawer.type, formData.entity_type, workflowConditions, fieldCatalogByEntity]);
+
+    useEffect(() => {
         if (drawer.type !== "workflows" || !data) return;
         if ((data as { _create?: boolean })._create) {
             setWorkflowConditions([]);
@@ -211,12 +232,19 @@ export default function AdminEntityDrawer() {
             return;
         }
         if (data._conditions) {
-            const cond = (data._conditions as { target_entity?: string; field_path?: string; field?: string; operator?: string; value?: string; value_jsonb?: unknown }[]).map((c) => ({
-                target_entity: c.target_entity ?? "",
-                field_path: c.field_path ?? c.field ?? "",
-                operator: c.operator ?? "eq",
-                value: c.value ?? (c.value_jsonb != null ? (typeof c.value_jsonb === "string" ? c.value_jsonb : JSON.stringify(c.value_jsonb)) : ""),
-            }));
+            const cond = (data._conditions as { target_entity?: string; field_path?: string; field?: string; operator?: string; value?: string; value_jsonb?: unknown }[]).map((c) => {
+                let fieldPath = (c.field_path ?? c.field ?? "").toString().trim();
+                const entityType = (c.target_entity ?? "").toString().trim();
+                if ((entityType === "vendor" || entityType === "vendors") && fieldPath.startsWith("vendor.")) {
+                    fieldPath = fieldPath.slice("vendor.".length).trim() || fieldPath;
+                }
+                return {
+                    target_entity: entityType,
+                    field_path: fieldPath,
+                    operator: c.operator ?? "eq",
+                    value: c.value ?? (c.value_jsonb != null ? (typeof c.value_jsonb === "string" ? c.value_jsonb : JSON.stringify(c.value_jsonb)) : ""),
+                };
+            });
             setWorkflowConditions(cond);
         }
         if (data._actions) {
@@ -891,19 +919,36 @@ export default function AdminEntityDrawer() {
                                                 <strong className="text-alloy-midnight/70 block mb-2">Conditions</strong>
                                                 {workflowConditions.map((c, i) => {
                                                     const entityType = c.target_entity || (formData.entity_type as string) || "job";
-                                                    const fieldOptions = WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE[entityType] ?? WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE.job ?? [];
+                                                    const fieldOptions = fieldCatalogByEntity[entityType] ?? [];
+                                                    const selectedField = fieldOptions.find((f) => f.key === c.field_path);
+                                                    const operators = selectedField?.operators?.length ? selectedField.operators : ["eq", "neq", "contains", "exists", "is_null", "not_null"];
+                                                    const optionsWithCustom = c.field_path && !selectedField
+                                                        ? [...fieldOptions, { key: c.field_path, label: c.field_path, data_type: "text", operators: ["eq", "neq", "contains", "exists", "is_null", "not_null"], source: "custom" as const }]
+                                                        : fieldOptions;
                                                     return (
                                                         <div key={i} className="flex gap-2 items-center mb-2 flex-wrap">
                                                             <select value={c.target_entity ?? ""} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, target_entity: e.target.value || undefined } : p))} className="w-28 px-2 py-1.5 border rounded text-sm" title="Target entity">
                                                                 <option value="">Entity…</option>
                                                                 {WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}
                                                             </select>
-                                                            <input list={`cond-field-${i}`} placeholder="field path (e.g. job.service_frequency_key)" value={c.field_path} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field_path: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm" title="Dot path into target entity" />
-                                                            <datalist id={`cond-field-${i}`}>
-                                                                {fieldOptions.map((opt) => <option key={opt.value} value={opt.value} />)}
-                                                            </datalist>
+                                                            <select
+                                                                value={c.field_path}
+                                                                onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, field_path: e.target.value, operator: "eq" } : p))}
+                                                                className="flex-1 min-w-0 min-w-[140px] max-w-[200px] px-2 py-1.5 border rounded text-sm"
+                                                                title="Field"
+                                                            >
+                                                                <option value="">— Field —</option>
+                                                                {optionsWithCustom.map((f) => (
+                                                                    <option key={f.key} value={f.key}>{f.label}</option>
+                                                                ))}
+                                                            </select>
+                                                            {fieldOptions.length === 0 && entityType && (
+                                                                <span className="text-xs text-alloy-midnight/60">Loading fields…</span>
+                                                            )}
                                                             <select value={c.operator} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, operator: e.target.value } : p))} className="w-24 px-2 py-1.5 border rounded text-sm">
-                                                                {WORKFLOW_CONDITION_OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
+                                                                {operators.map((op) => (
+                                                                    <option key={op} value={op}>{op}</option>
+                                                                ))}
                                                             </select>
                                                             <input placeholder="value" value={c.value} onChange={(e) => setWorkflowConditions((prev) => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 min-w-0 px-2 py-1.5 border rounded text-sm max-w-[120px]" />
                                                             <button type="button" onClick={() => setWorkflowConditions((prev) => prev.filter((_, j) => j !== i))} className="text-red-600 text-sm">Remove</button>

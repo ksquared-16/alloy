@@ -31,6 +31,17 @@ type ConditionInput = {
     enabled?: boolean | null;
 };
 
+/** Normalize field_path for vendor: store without "vendor." prefix so it matches catalog keys. */
+function normalizeFieldPath(targetEntity: string | null, fieldPath: string): string {
+    const p = fieldPath.trim();
+    if (!p) return p;
+    const entity = (targetEntity ?? "").trim();
+    if ((entity === "vendor" || entity === "vendors") && p.startsWith("vendor.")) {
+        return p.slice("vendor.".length).trim() || p;
+    }
+    return p;
+}
+
 /** PUT: replace all conditions (admin only). Body: { conditions: [{ target_entity?, field_path?, field?, operator, value?, enabled? }] } */
 export async function PUT(
     request: NextRequest,
@@ -47,7 +58,10 @@ export async function PUT(
         await supabase.from("workflow_conditions").delete().eq("workflow_id", id);
         if (conditions.length > 0) {
             const rows = conditions.map((c: ConditionInput) => {
-                const fieldPath = (c.field_path ?? c.field ?? "").toString().trim();
+                const fieldPath = normalizeFieldPath(
+                    (c.target_entity ?? "").toString().trim() || null,
+                    (c.field_path ?? c.field ?? "").toString().trim()
+                );
                 const op = (c.operator ?? "eq").toString().trim();
                 const val = c.value;
                 const valueJsonb = val === undefined || val === null ? null : (typeof val === "object" ? val : Array.isArray(val) ? val : val);
