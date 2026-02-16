@@ -399,9 +399,7 @@ export async function POST(request: NextRequest) {
         customerId = existingContact.customer_id;
       }
     } else {
-      let defaultOrgId: string | null = null;
-      const { data: defaultOrg, error: _orgErr } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
-      if (!_orgErr && defaultOrg) defaultOrgId = (defaultOrg as { id?: string }).id ?? null;
+      const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
       const contactInsert: Record<string, unknown> = {
         email: emailForLookup || null,
         phone: phoneForLookup || null,
@@ -410,7 +408,7 @@ export async function POST(request: NextRequest) {
         postal_code: zip,
         contact_type: "lead",
       };
-      if (defaultOrgId) contactInsert.org_id = defaultOrgId;
+      if (publicOrgId) contactInsert.org_id = publicOrgId;
 
       const { data: newContact, error: contactError } = await supabase
         .from("contacts")
@@ -462,12 +460,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let defaultOrgId: string | null = null;
-    if (!contactOrgId) {
-      const { data: defaultOrg, error: _orgErr2 } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
-      if (!_orgErr2 && defaultOrg) defaultOrgId = (defaultOrg as { id?: string }).id ?? null;
-    }
-    const orgIdForWrites = contactOrgId ?? defaultOrgId;
+    const orgIdForWrites = contactOrgId ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
     // Ensure we ALWAYS have a non-null customerId before creating/updating any opportunity
     const contactForEnsure: ContactForEnsure = {

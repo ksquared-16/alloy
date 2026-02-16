@@ -77,6 +77,8 @@ export async function resolve_or_create_contact_and_customer(
     vertical_key?: string;
     /** When set, customers.vertical_id is set on create and backfilled if null */
     vertical_id?: string | null;
+    /** Org for inserts; when omitted, uses process.env.ALLOY_PUBLIC_ORG_ID (public flows) */
+    org_id?: string | null;
   }
 ): Promise<ContactCustomerResult> {
   const {
@@ -91,7 +93,9 @@ export async function resolve_or_create_contact_and_customer(
     state,
     vertical_key = "cleaning",
     vertical_id: verticalIdParam,
+    org_id: orgIdParam,
   } = params;
+  const orgId = orgIdParam ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
   // Normalize inputs
   const normalizedEmail = normalizeEmail(email);
@@ -282,6 +286,7 @@ export async function resolve_or_create_contact_and_customer(
         email: normalizedEmail,
         phone: normalizedPhone,
         vertical_id: verticalIdParam ?? undefined,
+        org_id: orgId,
       });
       customerResolutionPath = "created_for_existing_contact";
     }
@@ -294,6 +299,7 @@ export async function resolve_or_create_contact_and_customer(
       last_name: last_name || null,
       contact_type: "lead",
     };
+    if (orgId != null) contactPayload.org_id = orgId;
 
     if (timezone) {
       contactPayload.timezone = timezone;
@@ -342,6 +348,7 @@ export async function resolve_or_create_contact_and_customer(
                 email: normalizedEmail,
                 phone: normalizedPhone,
                 vertical_id: verticalIdParam ?? undefined,
+                org_id: orgId,
               });
               customerResolutionPath = "created_for_new_contact";
             }
@@ -366,6 +373,7 @@ export async function resolve_or_create_contact_and_customer(
         email: normalizedEmail,
         phone: normalizedPhone,
         vertical_id: verticalIdParam ?? undefined,
+        org_id: orgId,
       });
       customerResolutionPath = "created_for_new_contact";
     } else {
@@ -440,9 +448,10 @@ async function createAndLinkCustomer(
     email: string;
     phone: string;
     vertical_id?: string | null;
+    org_id?: string | null;
   }
 ): Promise<string> {
-  const { first_name, last_name, email, phone, vertical_id } = params;
+  const { first_name, last_name, email, phone, vertical_id, org_id } = params;
 
   // Determine customer name with safe fallback
   let customerName: string;
@@ -466,6 +475,9 @@ async function createAndLinkCustomer(
   };
   if (vertical_id) {
     customerPayload.vertical_id = vertical_id;
+  }
+  if (org_id != null) {
+    customerPayload.org_id = org_id;
   }
 
   const { data: newCustomer, error: customerError } = await supabase

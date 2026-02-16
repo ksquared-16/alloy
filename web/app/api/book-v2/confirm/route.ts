@@ -373,6 +373,7 @@ export async function POST(request: NextRequest) {
                 state: undefined, // Not provided in booking flow
                 vertical_key: "cleaning",
                 vertical_id: verticalIdElse,
+                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
             });
 
             contactId = resolverResult.contact_id;
@@ -573,6 +574,7 @@ export async function POST(request: NextRequest) {
             if (quote_output != null && typeof quote_output === "object") insertMeta.quote_output = quote_output;
 
             const insertPayload: Record<string, unknown> = {
+                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 vertical_id: verticalId,
                 primary_contact_id: contactId,
                 customer_id: customerId,
@@ -713,6 +715,7 @@ export async function POST(request: NextRequest) {
             const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
             const effectiveFirstCleanCents = firstCleanCents ?? quoteTotalCents;
             const jobPayload: Record<string, any> = {
+                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 opportunity_id: opportunityId,
                 customer_id: customerId,
                 primary_contact_id: contactId,
@@ -922,6 +925,7 @@ export async function POST(request: NextRequest) {
         } else {
             // Create new schedule
             const scheduleInsert: Record<string, unknown> = {
+                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 job_id: jobId,
                 start_at: slot_start,
                 end_at: slot_end,

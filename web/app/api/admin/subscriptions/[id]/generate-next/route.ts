@@ -19,7 +19,7 @@ export async function POST(
 
     const { data: sub, error: subErr } = await supabase
         .from("customer_subscriptions")
-        .select("id, customer_id, primary_contact_id, vertical_id, pricing_frequency_id, status, start_date")
+        .select("id, customer_id, primary_contact_id, vertical_id, pricing_frequency_id, status, start_date, org_id")
         .eq("id", subscriptionId)
         .single();
     if (subErr || !sub) {
@@ -99,9 +99,11 @@ export async function POST(
         return NextResponse.json({ ok: true, schedule_id: existing.id });
     }
 
+    const scheduleOrgId = (sub as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
     const { data: newSchedule, error: insertErr } = await supabase
         .from("schedules")
         .insert({
+            org_id: scheduleOrgId,
             job_id: jobId,
             start_at: nextStartIso,
             end_at: nextEndIso,
