@@ -111,5 +111,23 @@ export async function POST(
         console.error("[GENERATE_NEXT_SCHEDULE]", insertErr);
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, schedule_id: newSchedule!.id });
+
+    const newScheduleId = (newSchedule as { id: string }).id;
+    const { data: jobRow } = await supabase.from("jobs").select("assigned_vendor_id").eq("id", jobId).single();
+    const assignedVendorId = (jobRow as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
+    if (assignedVendorId) {
+        const { data: assignedStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "assigned").maybeSingle();
+        const assignedStatusId = (assignedStatus as { id?: string } | null)?.id ?? null;
+        if (assignedStatusId) {
+            await supabase.from("assignments").insert({
+                schedule_id: newScheduleId,
+                job_id: jobId,
+                vendor_id: assignedVendorId,
+                assignment_status_id: assignedStatusId,
+                updated_at: new Date().toISOString(),
+            });
+        }
+    }
+
+    return NextResponse.json({ ok: true, schedule_id: newScheduleId });
 }

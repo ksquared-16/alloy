@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 
-/** POST: assign a vendor to this schedule. Body: { vendor_id }. Creates or updates assignment with status "offered". */
+/** POST: assign a vendor to this schedule. Body: { vendor_id }. Creates or updates assignment with status "assigned". */
 export async function POST(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
@@ -31,10 +31,10 @@ export async function POST(
     const { data: statusRow } = await supabase
         .from("assignment_statuses")
         .select("id")
-        .eq("key", "offered")
+        .eq("key", "assigned")
         .maybeSingle();
-    const offeredStatusId = (statusRow as { id?: string } | null)?.id ?? null;
-    if (!offeredStatusId) return NextResponse.json({ error: "Assignment status 'offered' not found" }, { status: 500 });
+    const assignedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
+    if (!assignedStatusId) return NextResponse.json({ error: "Assignment status 'assigned' not found" }, { status: 500 });
 
     const { data: existing } = await supabase
         .from("assignments")
@@ -46,7 +46,7 @@ export async function POST(
     if (existing?.id) {
         const { error: updErr } = await supabase
             .from("assignments")
-            .update({ vendor_id: vendorId, assignment_status_id: offeredStatusId, updated_at: now })
+            .update({ vendor_id: vendorId, assignment_status_id: assignedStatusId, updated_at: now })
             .eq("id", (existing as { id: string }).id);
         if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
         return NextResponse.json({ ok: true, assignment_id: (existing as { id: string }).id });
@@ -58,7 +58,7 @@ export async function POST(
             schedule_id: scheduleId,
             job_id: jobId,
             vendor_id: vendorId,
-            assignment_status_id: offeredStatusId,
+            assignment_status_id: assignedStatusId,
             updated_at: now,
         })
         .select("id")

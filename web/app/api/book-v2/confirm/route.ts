@@ -1033,6 +1033,22 @@ export async function POST(request: NextRequest) {
 
             scheduleId = newSchedule.id;
             console.log(`[BOOK_V2_CONFIRM] Created new schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
+
+            const { data: jobForVendor } = await supabase.from("jobs").select("assigned_vendor_id").eq("id", jobId).single();
+            const assignedVendorId = (jobForVendor as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
+            if (assignedVendorId) {
+                const { data: assignedStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "assigned").maybeSingle();
+                const assignedStatusId = (assignedStatus as { id?: string } | null)?.id ?? null;
+                if (assignedStatusId) {
+                    await supabase.from("assignments").insert({
+                        schedule_id: scheduleId,
+                        job_id: jobId,
+                        vendor_id: assignedVendorId,
+                        assignment_status_id: assignedStatusId,
+                        updated_at: new Date().toISOString(),
+                    });
+                }
+            }
         }
 
         // Step 8: Check if customer has saved payment method

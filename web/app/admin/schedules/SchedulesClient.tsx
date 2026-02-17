@@ -18,6 +18,7 @@ export interface ScheduleRow {
     _vertical_name?: string | null;
     _assignment_status?: string | null;
     _vendor_name?: string | null;
+    _vendor_source?: "schedule" | "job" | null;
     [key: string]: unknown;
 }
 
@@ -40,7 +41,7 @@ export default function SchedulesClient({
         { key: "_contact_phone", label: "Contact", sortable: false, render: (_: unknown, row: ScheduleRow) => row._contact_phone ?? row._contact_email ?? "—" },
         { key: "_vertical_name", label: "Vertical", sortable: true, render: (_: unknown, row: ScheduleRow) => row._vertical_name ?? "—" },
         { key: "_assignment_status", label: "Assignment", sortable: true, render: (_: unknown, row: ScheduleRow) => row._assignment_status ?? "—" },
-        { key: "_vendor_name", label: "Vendor", sortable: true, render: (_: unknown, row: ScheduleRow) => row._vendor_name ?? "—" },
+        { key: "_vendor_name", label: "Vendor", sortable: true, render: (_: unknown, row: ScheduleRow) => (row._vendor_source === "job" && row._vendor_name ? `Default: ${row._vendor_name} (job)` : row._vendor_name ?? "—") },
         { key: "canceled_at", label: "Canceled", sortable: false, render: (_: unknown, row: ScheduleRow) => row.canceled_at ? "Yes" : "—" },
     ];
 

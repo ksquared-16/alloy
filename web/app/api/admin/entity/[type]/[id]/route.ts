@@ -34,6 +34,13 @@ export async function GET(
                 const customer = await supabase.from("customers").select("name").eq("id", data.customer_id).single();
                 out._customer_name = customer.data?.name ?? null;
             }
+            const assignedVendorId = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id;
+            if (assignedVendorId) {
+                const { data: vendor } = await supabase.from("vendors").select("id, name").eq("id", assignedVendorId).single();
+                out._assigned_vendor = vendor ?? null;
+            } else {
+                out._assigned_vendor = null;
+            }
             return NextResponse.json(out);
         }
         if (type === "opportunities") {
@@ -83,7 +90,7 @@ export async function GET(
             const out: Record<string, unknown> = { ...schedule };
             const jobId = (schedule as { job_id?: string }).job_id;
             if (jobId) {
-                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, job_status_id").eq("id", jobId).single();
+                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id").eq("id", jobId).single();
                 out._job = job ?? null;
                 if (job) {
                     if ((job as { customer_id?: string }).customer_id) {
@@ -118,6 +125,18 @@ export async function GET(
                 } else out._assignment_status = null;
             } else {
                 out._vendor = null; out._assignment_status = null;
+            }
+            if (!out._assignment && jobId) {
+                const job = out._job as { assigned_vendor_id?: string | null } | null;
+                const jobVendorId = job?.assigned_vendor_id ?? null;
+                if (jobVendorId) {
+                    const { data: jobVendor } = await supabase.from("vendors").select("id, name").eq("id", jobVendorId).single();
+                    out._job_assigned_vendor = jobVendor ?? null;
+                } else {
+                    out._job_assigned_vendor = null;
+                }
+            } else {
+                out._job_assigned_vendor = null;
             }
             return NextResponse.json(out);
         }

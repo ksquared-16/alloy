@@ -1,0 +1,49 @@
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+
+/** GET: vendors that can be assigned to this job (org + job vertical + approved). */
+export async function GET(
+    _request: Request,
+    context: { params: Promise<{ id: string }> }
+) {
+    const forbidden = await requireAdminOrOps();
+    if (forbidden) return forbidden;
+    const auth = await getAdminAuth();
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { id: jobId } = await context.params;
+    if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: job, error: jErr } = await supabase
+        .from("jobs")
+        .select("id, vertical_id, org_id")
+        .eq("id", jobId)
+        .single();
+    if (jErr || !job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const orgId = (job as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+    const verticalId = (job as { vertical_id?: string } | null)?.vertical_id ?? null;
+    if (!orgId) return NextResponse.json({ vendors: [] });
+    if (!verticalId) return NextResponse.json({ vendors: [] });
+
+    const { data: vvRows } = await supabase
+        .from("vendor_verticals")
+        .select("vendor_id")
+        .eq("vertical_id", verticalId);
+    const vendorIds = ((vvRows ?? []) as { vendor_id: string }[]).map((r) => r.vendor_id);
+    if (vendorIds.length === 0) return NextResponse.json({ vendors: [] });
+
+    const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", "approved").maybeSingle();
+    const approvedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
+
+    let query = supabase
+        .from("vendors")
+        .select("id, name")
+        .eq("org_id", orgId)
+        .in("id", vendorIds)
+        .order("name");
+    if (approvedStatusId) query = query.eq("vendor_status_id", approvedStatusId);
+    const { data: vendors } = await query;
+    return NextResponse.json({ vendors: vendors ?? [] });
+}

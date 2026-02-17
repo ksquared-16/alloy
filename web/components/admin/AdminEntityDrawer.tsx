@@ -151,6 +151,10 @@ export default function AdminEntityDrawer() {
     const [scheduleCancelPrompt, setScheduleCancelPrompt] = useState(false);
     const [scheduleRescheduleForm, setScheduleRescheduleForm] = useState<{ start_at: string; end_at: string; copy_assignment: boolean } | null>(null);
     const [scheduleRescheduleSaving, setScheduleRescheduleSaving] = useState(false);
+    const [jobVendorsForAssign, setJobVendorsForAssign] = useState<{ id: string; name: string }[]>([]);
+    const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
+    const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
+    const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -188,13 +192,28 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "jobs" || !drawer.id) {
             setJobSchedules([]);
             setRescheduleForm(null);
+            setJobVendorsForAssign([]);
+            setJobAssignedVendorId(null);
             return;
         }
         fetch(`/api/admin/related/job/${drawer.id}`)
             .then((res) => res.ok ? res.json() : { schedules: [] })
             .then((json: { schedules?: { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] }) => setJobSchedules(json.schedules ?? []))
             .catch(() => setJobSchedules([]));
+        fetch(`/api/admin/jobs/${drawer.id}/vendors-for-assign`)
+            .then((res) => res.ok ? res.json() : { vendors: [] })
+            .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorsForAssign(json.vendors ?? []))
+            .catch(() => setJobVendorsForAssign([]));
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type === "jobs" && data) {
+            const vid = (data.assigned_vendor_id as string) ?? null;
+            setJobAssignedVendorId(vid);
+        } else {
+            setJobAssignedVendorId(null);
+        }
+    }, [drawer.type, data]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities") {
@@ -349,6 +368,7 @@ export default function AdminEntityDrawer() {
                 is_recurring: data.is_recurring ?? false,
                 job_status_id: data.job_status_id ?? "",
                 internal_notes: (meta.internal_notes as string) ?? "",
+                assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
             });
         } else if (drawer.type === "contacts") {
             setFormData({
@@ -783,6 +803,62 @@ export default function AdminEntityDrawer() {
                             <Field label="ID" value={data.id as string} />
                             <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Title" value={data.title as string} />
+                            <div className="pt-2 pb-2 border-b border-alloy-stone/20">
+                                <strong className="text-alloy-midnight/70 block mb-2">Assigned vendor</strong>
+                                <p className="text-sm text-alloy-midnight/80 mb-2">
+                                    {(data._assigned_vendor as { id: string; name: string } | null)?.name ?? (jobAssignedVendorId && jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId)?.name) ?? "—"}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <select
+                                        value={jobAssignedVendorId ?? ""}
+                                        onChange={(e) => setJobAssignedVendorId(e.target.value || null)}
+                                        className="px-2 py-1.5 border rounded text-sm min-w-[140px]"
+                                    >
+                                        <option value="">— None —</option>
+                                        {jobVendorsForAssign.map((v) => (
+                                            <option key={v.id} value={v.id}>{v.name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        disabled={jobAssignedVendorSaving}
+                                        onClick={async () => {
+                                            if (!drawer.id) return;
+                                            setJobAssignedVendorSaving(true);
+                                            try {
+                                                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ assigned_vendor_id: jobAssignedVendorId || null }),
+                                                });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                                                setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null } : prev));
+                                                if (applyVendorToUpcoming && jobAssignedVendorId) {
+                                                    const applyRes = await fetch(`/api/admin/jobs/${drawer.id}/apply-vendor-to-upcoming`, { method: "POST" });
+                                                    if (!applyRes.ok) {
+                                                        const applyJson = await applyRes.json().catch(() => ({}));
+                                                        throw new Error((applyJson.error as string) || "Apply to upcoming failed");
+                                                    }
+                                                }
+                                                refetch();
+                                                router.refresh();
+                                            } catch (e) {
+                                                setSaveError((e as Error).message);
+                                            } finally {
+                                                setJobAssignedVendorSaving(false);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                    >
+                                        {jobAssignedVendorSaving ? "Saving…" : "Save"}
+                                    </button>
+                                </div>
+                                <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
+                                    <input type="checkbox" checked={applyVendorToUpcoming} onChange={(e) => setApplyVendorToUpcoming(e.target.checked)} />
+                                    Apply to all upcoming schedules for this job (safe)
+                                </label>
+                            </div>
                             {isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Scheduled (local)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -835,33 +911,6 @@ export default function AdminEntityDrawer() {
                             <div className="pt-4 border-t border-alloy-stone/20">
                                 <strong className="text-alloy-midnight/70 block mb-2">Status actions</strong>
                                 <div className="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        disabled={!!jobActionLoading}
-                                        onClick={async () => {
-                                            if (!drawer.id) return;
-                                            setJobActionLoading("assign_vendor");
-                                            try {
-                                                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
-                                                    method: "PATCH",
-                                                    headers: { "Content-Type": "application/json" },
-                                                    body: JSON.stringify({ action: "assign_vendor" }),
-                                                });
-                                                const json = await res.json().catch(() => ({}));
-                                                if (!res.ok) throw new Error((json.error as string) || "Failed");
-                                                setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                                refetch();
-                                                router.refresh();
-                                            } catch (e) {
-                                                console.error("Assign vendor failed", e);
-                                            } finally {
-                                                setJobActionLoading(null);
-                                            }
-                                        }}
-                                        className="px-3 py-1.5 text-sm bg-alloy-stone/80 text-alloy-midnight rounded-md hover:bg-alloy-stone disabled:opacity-50"
-                                    >
-                                        {jobActionLoading === "assign_vendor" ? "…" : "Assign vendor"}
-                                    </button>
                                     <button
                                         type="button"
                                         disabled={!!jobActionLoading}
@@ -966,7 +1015,12 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                 ) : (
-                                    <p className="text-alloy-midnight/60 text-sm">No assignment</p>
+                                    <div className="text-sm">
+                                        <p className="text-alloy-midnight/60">No assignment</p>
+                                        {(data._job_assigned_vendor as { id: string; name: string } | null) && (
+                                            <p className="text-alloy-midnight/70 mt-1">Default vendor: {(data._job_assigned_vendor as { name: string }).name} (job)</p>
+                                        )}
+                                    </div>
                                 )}
                                 {!(data.canceled_at as string) && scheduleVendors.length > 0 && (
                                     <div className="mt-2 flex items-center gap-2">

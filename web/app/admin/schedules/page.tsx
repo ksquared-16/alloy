@@ -20,9 +20,13 @@ export default async function AdminSchedulesPage() {
     const scheduleIds = list.map((s) => s.id);
 
     const { data: jobs } = jobIds.length
-        ? await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id").in("id", jobIds)
+        ? await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, assigned_vendor_id").in("id", jobIds)
         : { data: [] };
     const jobMap = new Map((jobs ?? []).map((j) => [j.id, j]));
+
+    const jobVendorIds = [...new Set((jobs ?? []).map((j) => (j as { assigned_vendor_id?: string | null }).assigned_vendor_id).filter(Boolean))] as string[];
+    const { data: jobVendors } = jobVendorIds.length ? await supabase.from("vendors").select("id, name").in("id", jobVendorIds) : { data: [] };
+    const jobVendorMap = new Map((jobVendors ?? []).map((v) => [v.id, v]));
 
     const customerIds = [...new Set((jobs ?? []).map((j) => j.customer_id).filter(Boolean))] as string[];
     const contactIds = [...new Set((jobs ?? []).map((j) => j.primary_contact_id).filter(Boolean))] as string[];
@@ -65,6 +69,8 @@ export default async function AdminSchedulesPage() {
         const assignment = assignmentBySchedule.get(s.id);
         const vendor = assignment?.vendor_id ? vendorMap.get(assignment.vendor_id) : undefined;
         const assignmentStatus = assignment?.assignment_status_id ? statusMap.get(assignment.assignment_status_id) : undefined;
+        const jobAssignedVendorId = job ? (job as { assigned_vendor_id?: string | null }).assigned_vendor_id : null;
+        const jobVendor = !assignment && jobAssignedVendorId ? jobVendorMap.get(jobAssignedVendorId) : undefined;
         return {
             ...s,
             _job_title: job?.title ?? null,
@@ -74,7 +80,8 @@ export default async function AdminSchedulesPage() {
             _opportunity_name: (opp as { name?: string })?.name ?? null,
             _vertical_name: (vertical as { name?: string })?.name ?? (vertical as { slug?: string })?.slug ?? null,
             _assignment_status: assignmentStatus ? (assignmentStatus as { key?: string }).key ?? (assignmentStatus as { label?: string }).label : null,
-            _vendor_name: (vendor as { name?: string })?.name ?? null,
+            _vendor_name: (vendor as { name?: string })?.name ?? (jobVendor as { name?: string })?.name ?? null,
+            _vendor_source: assignment ? "schedule" : jobVendor ? "job" : null,
         };
     });
 

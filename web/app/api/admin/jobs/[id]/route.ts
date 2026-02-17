@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
-const ALLOWED_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "job_status_id", "internal_notes", "completed_at"] as const;
+const ALLOWED_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "job_status_id", "internal_notes", "completed_at", "assigned_vendor_id"] as const;
 
 const JOB_ACTION_PAYLOADS: Record<string, Record<string, unknown>> = {
     assign_vendor: { job_status_id: "assigned" },
@@ -32,6 +32,10 @@ export async function PATCH(
 
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
+            if (key === "assigned_vendor_id") {
+                updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+                continue;
+            }
             if (key === "internal_notes") {
                 const supabase = createAdminClient();
                 const { data: existing } = await supabase.from("jobs").select("metadata").eq("id", id).single();
