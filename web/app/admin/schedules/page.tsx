@@ -71,6 +71,8 @@ export default async function AdminSchedulesPage() {
         const assignmentStatus = assignment?.assignment_status_id ? statusMap.get(assignment.assignment_status_id) : undefined;
         const jobAssignedVendorId = job ? (job as { assigned_vendor_id?: string | null }).assigned_vendor_id : null;
         const jobVendor = !assignment && jobAssignedVendorId ? jobVendorMap.get(jobAssignedVendorId) : undefined;
+        const vendorSource: "job" | "schedule" | null =
+            assignment ? "schedule" : jobVendor ? "job" : null;
         return {
             ...s,
             _job_title: job?.title ?? null,
@@ -81,7 +83,7 @@ export default async function AdminSchedulesPage() {
             _vertical_name: (vertical as { name?: string })?.name ?? (vertical as { slug?: string })?.slug ?? null,
             _assignment_status: assignmentStatus ? (assignmentStatus as { key?: string }).key ?? (assignmentStatus as { label?: string }).label : null,
             _vendor_name: (vendor as { name?: string })?.name ?? (jobVendor as { name?: string })?.name ?? null,
-            _vendor_source: assignment ? "schedule" : jobVendor ? "job" : null,
+            _vendor_source: vendorSource,
         };
     });
 
