@@ -34,13 +34,14 @@ export function AssignmentStatusBadge({ statusKey, label }: { statusKey: string 
 }
 
 /** Generic status/stage badge for job status, opportunity stage, customer status, etc. */
-export function StatusBadge({ label, variant = "default" }: { label: string | null | undefined; variant?: "default" | "success" | "warning" | "neutral" }) {
+export function StatusBadge({ label, variant = "default" }: { label: string | null | undefined; variant?: "default" | "success" | "warning" | "neutral" | "gold" }) {
     const display = label ?? "—";
     const variants: Record<string, string> = {
-        default: "bg-alloy-stone/20 text-alloy-midnight/80 border-alloy-stone/30",
+        default: "bg-alloy-stone/20 text-[#31394d] border-[#e6e8ec]",
         success: "bg-green-100 text-green-800 border-green-200",
         warning: "bg-amber-100 text-amber-800 border-amber-200",
-        neutral: "bg-alloy-stone/30 text-alloy-midnight/70 border-alloy-stone/40",
+        neutral: "bg-alloy-stone/30 text-[#45506c] border-[#e6e8ec]",
+        gold: "bg-[#e6d3a0]/40 text-[#31394d] border-[#DBC078]",
     };
     const style = variants[variant] ?? variants.default;
     return (

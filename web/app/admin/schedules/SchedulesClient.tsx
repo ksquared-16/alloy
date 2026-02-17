@@ -4,6 +4,7 @@ import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge } from "@/components/admin/StatusBadge";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
 
 export interface ScheduleRow {
     id: string;
@@ -55,8 +56,8 @@ export default function SchedulesClient({
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-alloy-midnight mb-4">Schedules</h1>
-            <div className="flex flex-wrap gap-4 mb-6">
+            <AdminPageHeader title="Schedules" subtitle="Upcoming visits and assignment status." />
+            <div className="mb-6 flex flex-wrap gap-4">
                 <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[90px]">
                     <div className="text-2xl font-semibold text-alloy-midnight">{upcoming}</div>
                     <div className="text-xs text-alloy-midnight/60">Upcoming</div>

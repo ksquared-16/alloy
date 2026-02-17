@@ -8,6 +8,7 @@ import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
+import AlloyLogo from "@/components/admin/AlloyLogo";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
 
@@ -81,9 +82,9 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     return (
         <div className="min-h-screen bg-alloy-stone flex">
             <aside className="w-64 bg-white border-r border-alloy-stone/30 flex flex-col">
-                <div className="p-4 border-b border-alloy-stone/30">
-                    <h1 className="text-xl font-bold text-alloy-midnight">Alloy</h1>
-                    <p className="text-xs text-alloy-midnight/50 mt-0.5">Admin</p>
+                <div className="p-5 border-b border-[#e6e8ec]">
+                    <AlloyLogo />
+                    <p className="mt-2 text-xs text-[#59678b]">Admin</p>
                 </div>
                 <nav className="flex-1 overflow-y-auto p-4">
                     {navGroups.map((group) => {
@@ -93,20 +94,20 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                 <button
                                     type="button"
                                     onClick={() => toggleGroup(group.label)}
-                                    className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-alloy-midnight/50 hover:bg-alloy-stone/50 rounded"
+                                    className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#59678b] hover:bg-[#F4F6F9] rounded-md"
                                 >
                                     <span>{group.label}</span>
-                                    <span className="text-alloy-midnight/40">{isCollapsed ? "▶" : "▼"}</span>
+                                    <span className="text-[#59678b]/70">{isCollapsed ? "▶" : "▼"}</span>
                                 </button>
                                 {!isCollapsed && (
-                                    <ul className="space-y-1 mt-1">
+                                    <ul className="mt-1.5 space-y-0.5">
                                         {group.items.map((item) => {
                                             const isActive = pathname === item.href;
                                             return (
                                                 <li key={item.href}>
                                                     <Link
                                                         href={item.href}
-                                                        className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue text-white" : "text-alloy-midnight/70 hover:bg-alloy-stone hover:text-alloy-midnight"}`}
+                                                        className={`block px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
                                                     >
                                                         {item.label}
                                                     </Link>

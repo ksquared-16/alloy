@@ -6,6 +6,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
 
 interface Customer {
   id: string;
@@ -56,7 +57,7 @@ export default function CustomersClient({
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-alloy-midnight mb-6">Customers</h1>
+      <AdminPageHeader title="Customers" subtitle="Customer records and verticals." />
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">

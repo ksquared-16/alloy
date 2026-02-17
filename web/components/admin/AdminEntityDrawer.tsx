@@ -50,8 +50,9 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
     return (
-        <div>
-            <strong className="text-alloy-midnight/70">{label}:</strong> {value ?? "-"}
+        <div className="py-1.5">
+            <strong className="text-[#45506c] text-sm">{label}:</strong>
+            <span className="ml-2 text-[#31394d]">{value ?? "—"}</span>
         </div>
     );
 }
@@ -77,7 +78,7 @@ function SubscriptionGenerateNextButton({ subscriptionId, onDone }: { subscripti
         }
     };
     return (
-        <div className="pt-4 border-t border-alloy-stone/20">
+        <div className="pt-4 border-t border-[#e6e8ec]">
             <button type="button" onClick={handleClick} disabled={loading} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">
                 {loading ? "Generating…" : "Generate next occurrence"}
             </button>
@@ -550,9 +551,9 @@ export default function AdminEntityDrawer() {
             {loading && <p className="text-alloy-midnight/60">Loading…</p>}
             {error && <p className="text-red-600">Error: {error}</p>}
             {data && !loading && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                     {canEditInDrawer(drawer.type) && (
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-alloy-stone/20">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#e6e8ec]">
                             <div className="flex gap-2">
                                 {!isEditing ? (
                                     <>
@@ -567,9 +568,9 @@ export default function AdminEntityDrawer() {
                                 )}
                             </div>
                             {["jobs", "schedules", "opportunities", "customers", "contacts", "vendors"].includes(drawer.type) && (
-                                <div className="flex gap-1 rounded-md border border-alloy-stone/30 p-0.5">
+                                <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
                                     {(["overview", "related", "details"] as const).map((tab) => (
-                                        <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`px-3 py-1 text-xs font-medium rounded ${drawerTab === tab ? "bg-alloy-blue text-white" : "text-alloy-midnight/70 hover:bg-alloy-stone/30"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
+                                        <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
                                     ))}
                                 </div>
                             )}
@@ -582,8 +583,8 @@ export default function AdminEntityDrawer() {
                         </div>
                     )}
                     {drawerTab === "details" && (
-                        <div className="space-y-2 pt-2">
-                            <strong className="text-alloy-midnight/70 block">IDs &amp; raw fields</strong>
+                        <div className="space-y-3 pt-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2">IDs &amp; raw fields</h3>
                             {["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
                                 const val = data[key];
                                 if (val === undefined) return null;
@@ -613,7 +614,7 @@ export default function AdminEntityDrawer() {
                                 </>
                             )}
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
-                            <div className="pt-2 border-t border-alloy-stone/20">
+                            <div className="pt-2 border-t border-[#e6e8ec]">
                                 <strong className="text-alloy-midnight/70">Vendor:</strong>{" "}
                                 {(() => {
                                     const v: ContactVendorShape | null = (data._contact_vendor as ContactVendorShape | null | undefined) ?? null;
@@ -650,9 +651,9 @@ export default function AdminEntityDrawer() {
                     {drawer.type === "vendors" && (
                         <>
                             <div className="space-y-0">
-                                <details open className="border-b border-alloy-stone/20 pb-4">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Overview</summary>
-                                    <div className="space-y-2">
+                                <details open className="border-b border-[#e6e8ec] pb-5 pt-1">
+                                    <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Overview</summary>
+                                    <div className="space-y-0">
                                         <Field label="ID" value={data.id as string} />
                                         <Field label="Submitted" value={data.submitted_at ? formatDateTime(data.submitted_at as string) : formatDateTime(data.created_at as string)} />
                                         {isEditing ? (
@@ -675,8 +676,8 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                 </details>
-                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Documents</summary>
+                                <details className="border-b border-[#e6e8ec] pb-5 pt-4">
+                                    <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Documents</summary>
                                     <div className="space-y-2">
                                         {(() => {
                                             const insurancePath = typeof data.insurance_doc_path === "string" ? data.insurance_doc_path : null;
@@ -706,8 +707,8 @@ export default function AdminEntityDrawer() {
                                         })()}
                                     </div>
                                 </details>
-                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Jobs & Schedule</summary>
+                                <details className="border-b border-[#e6e8ec] pb-5 pt-4">
+                                    <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Jobs & Schedule</summary>
                                     {((data._vendor_jobs as VendorDrawerJob[]) ?? []).length === 0 ? (
                                         <p className="text-sm text-alloy-midnight/60">No jobs assigned yet.</p>
                                     ) : (
@@ -715,7 +716,7 @@ export default function AdminEntityDrawer() {
                                             {((data._vendor_jobs as VendorDrawerJob[]) ?? []).map((job) => {
                                                 const scheds = ((data._vendor_schedules as { job_id: string; start_at: string; end_at: string; timezone: string }[]) ?? []).filter((s) => s.job_id === job.id);
                                                 return (
-                                                    <li key={job.id} className="border border-alloy-stone/30 rounded p-2 text-sm">
+                                                    <li key={job.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
                                                         <button type="button" onClick={() => openDrawer({ type: "jobs", id: job.id })} className="text-alloy-blue hover:underline font-medium">{job.title || job.id.slice(0, 8)}</button>
                                                         <div className="text-alloy-midnight/70 mt-0.5">Scheduled: {job.scheduled_at ? formatDateTime(job.scheduled_at) : "-"} · Status: {job.job_status_id ?? "-"}</div>
                                                         {job.gross_price_cents != null && <div>Gross: {formatMoneyFromCents(job.gross_price_cents)}</div>}
@@ -728,8 +729,8 @@ export default function AdminEntityDrawer() {
                                         </ul>
                                     )}
                                 </details>
-                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">
+                                <details className="pt-4 border-b border-[#e6e8ec] pb-4">
+                                    <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">
                                         Contacts ({((data._vendor_contacts as VendorDrawerContact[]) ?? []).length})
                                     </summary>
                                     <ul className="space-y-1 mt-2">
@@ -748,7 +749,7 @@ export default function AdminEntityDrawer() {
                                     </ul>
                                 </details>
                                 <details className="pt-4 pb-2">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Operational / Settings</summary>
+                                    <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Operational / Settings</summary>
                                     <div className="space-y-2 mt-2">
                                         {isEditing ? (
                                             <>
@@ -819,7 +820,7 @@ export default function AdminEntityDrawer() {
                     {drawer.type === "jobs" && (
                         <>
                             <Field label="Title" value={data.title as string} />
-                            <div className="pt-2 pb-2 border-b border-alloy-stone/20">
+                            <div className="pt-2 pb-2 border-b border-[#e6e8ec]">
                                 <strong className="text-alloy-midnight/70 block mb-2">Default vendor</strong>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <select
@@ -897,7 +898,7 @@ export default function AdminEntityDrawer() {
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <Field label="Offer Code" value={data.offer_code as string} />
                             {jobSchedules.length > 0 && (
-                                <div className="pt-4 border-t border-alloy-stone/20">
+                                <div className="pt-4 border-t border-[#e6e8ec]">
                                     <strong className="text-alloy-midnight/70 block mb-2">Reschedule</strong>
                                     {rescheduleForm && rescheduleScheduleId ? (
                                         <div className="space-y-2">
@@ -922,7 +923,7 @@ export default function AdminEntityDrawer() {
                                     )}
                                 </div>
                             )}
-                            <div className="pt-4 border-t border-alloy-stone/20">
+                            <div className="pt-4 border-t border-[#e6e8ec]">
                                 <strong className="text-alloy-midnight/70 block mb-2">Status actions</strong>
                                 <div className="flex flex-wrap gap-2">
                                     <button
@@ -1001,7 +1002,7 @@ export default function AdminEntityDrawer() {
                             {(data.canceled_at as string) && (
                                 <div className="text-amber-700 text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
                             )}
-                            <div className="pt-2 border-t border-alloy-stone/20">
+                            <div className="pt-2 border-t border-[#e6e8ec]">
                                 <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
                                 {(data._assignment as { id?: string }) ? (
                                     <div className="flex flex-wrap items-center gap-2">
@@ -1087,7 +1088,7 @@ export default function AdminEntityDrawer() {
                                 )}
                             </div>
                             {!(data.canceled_at as string) && (
-                                <div className="pt-2 border-t border-alloy-stone/20 flex flex-wrap gap-2">
+                                <div className="pt-2 border-t border-[#e6e8ec] flex flex-wrap gap-2">
                                     {!scheduleCancelPrompt ? (
                                         <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-amber-600 text-amber-700 rounded hover:bg-amber-50">Cancel schedule</button>
                                     ) : (
@@ -1109,7 +1110,7 @@ export default function AdminEntityDrawer() {
                                 </div>
                             )}
                             {scheduleRescheduleForm && (
-                                <div className="pt-2 border border-alloy-stone/30 rounded p-2 space-y-2">
+                                <div className="pt-2 border border-[#e6e8ec] rounded p-2 space-y-2">
                                     <strong className="text-sm">New time</strong>
                                     <input type="datetime-local" value={scheduleRescheduleForm.start_at} onChange={(e) => setScheduleRescheduleForm((f) => f ? { ...f, start_at: e.target.value } : null)} className="w-full px-2 py-1.5 border rounded text-sm" />
                                     <input type="datetime-local" value={scheduleRescheduleForm.end_at} onChange={(e) => setScheduleRescheduleForm((f) => f ? { ...f, end_at: e.target.value } : null)} className="w-full px-2 py-1.5 border rounded text-sm" />
@@ -1169,7 +1170,7 @@ export default function AdminEntityDrawer() {
                                             <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.enabled} onChange={(e) => setFormData((f) => ({ ...f, enabled: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Enabled</label></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Event type</label><select value={String(formData.event_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, event_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_EVENT_TYPES.map((ev) => <option key={ev} value={ev}>{ev}</option>)}</select></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Entity type</label><select value={String(formData.entity_type ?? "")} onChange={(e) => setFormData((f) => ({ ...f, entity_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{WORKFLOW_ENTITY_TYPES.map((ent) => <option key={ent} value={ent}>{ent}</option>)}</select></div>
-                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                            <div className="pt-2 border-t border-[#e6e8ec]">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Conditions</strong>
                                                 {workflowConditions.map((c, i) => {
                                                     const entityType = c.target_entity || (formData.entity_type as string) || "job";
@@ -1211,10 +1212,10 @@ export default function AdminEntityDrawer() {
                                                 })}
                                                 <button type="button" onClick={() => setWorkflowConditions((prev) => [...prev, { target_entity: (formData.entity_type as string) || undefined, field_path: "", operator: "eq", value: "" }])} className="text-sm text-alloy-blue hover:underline">Add condition</button>
                                             </div>
-                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                            <div className="pt-2 border-t border-[#e6e8ec]">
                                                 <strong className="text-alloy-midnight/70 block mb-2">Actions</strong>
                                                 {workflowActions.map((a, i) => (
-                                                    <div key={i} className="border border-alloy-stone/30 rounded p-2 mb-2">
+                                                    <div key={i} className="border border-[#e6e8ec] rounded p-2 mb-2">
                                                         <div className="flex gap-2 items-center mb-1 flex-wrap">
                                                             <select value={a.action_type} onChange={(e) => setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, action_type: e.target.value } : p))} className="px-2 py-1.5 border rounded text-sm">
                                                                 <option value="log">log</option>
@@ -1325,7 +1326,7 @@ export default function AdminEntityDrawer() {
                                                                             {recipients.map((rec, ri) => {
                                                                                 const recTypeKey = rec.source === "payload" && rec.path === "contact.id" ? "payload_contact" : rec.source === "payload" && rec.path === "customer.primary_contact_id" ? "customer_primary" : rec.source === "payload" && rec.path === "vendor.primary_contact_id" ? "vendor_primary" : rec.type === "contacts_by_vendor" ? "contacts_by_vendor" : rec.type === "job_qualified_vendors" ? "job_qualified_vendors" : rec.type === "vendors_query" ? "vendors_query" : "";
                                                                                 return (
-                                                                                    <div key={ri} className="flex flex-wrap gap-2 items-center mb-2 p-2 border border-alloy-stone/30 rounded">
+                                                                                    <div key={ri} className="flex flex-wrap gap-2 items-center mb-2 p-2 border border-[#e6e8ec] rounded">
                                                                                         <select value={recTypeKey} onChange={(e) => {
                                                                                             const t = e.target.value;
                                                                                             const next = [...recipients];
@@ -1430,11 +1431,11 @@ export default function AdminEntityDrawer() {
                                             <Field label="Enabled" value={data.enabled ? "Yes" : "No"} />
                                             <Field label="Event type" value={(data.event_type as string) ?? "-"} />
                                             <Field label="Entity type" value={(data.entity_type as string) ?? "-"} />
-                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                            <div className="pt-2 border-t border-[#e6e8ec]">
                                                 <strong className="text-alloy-midnight/70 block mb-1">Conditions</strong>
                                                 {(data._conditions as { target_entity?: string; field_path?: string; field?: string; operator: string; value?: string }[] | undefined)?.length ? (data._conditions as { target_entity?: string; field_path?: string; field?: string; operator: string; value?: string }[]).map((c, i) => <div key={i} className="text-sm">{(c.target_entity ?? "") && `${c.target_entity}.`}{c.field_path ?? c.field ?? ""} {c.operator} {c.value ?? ""}</div>) : <div className="text-sm text-alloy-midnight/60">None</div>}
                                             </div>
-                                            <div className="pt-2 border-t border-alloy-stone/20">
+                                            <div className="pt-2 border-t border-[#e6e8ec]">
                                                 <strong className="text-alloy-midnight/70 block mb-1">Actions</strong>
                                                 {(data._actions as { action_order: number; action_type: string; payload?: unknown }[] | undefined)?.length ? (data._actions as { action_order: number; action_type: string; payload?: unknown }[]).map((a, i) => <div key={i} className="text-sm">{(a.action_order ?? i + 1)}. {a.action_type} {a.payload && typeof a.payload === "object" ? JSON.stringify(a.payload) : ""}</div>) : <div className="text-sm text-alloy-midnight/60">None</div>}
                                             </div>
@@ -1497,8 +1498,8 @@ export default function AdminEntityDrawer() {
                         const schedules = subData._schedules ?? [];
                         return (
                             <>
-                                <details className="pt-2 pb-2 border-b border-alloy-stone/20">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Overview</summary>
+                                <details className="pt-2 pb-2 border-b border-[#e6e8ec]">
+                                    <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Overview</summary>
                                     <div className="space-y-1">
                                         <Field label="ID" value={subData.id} />
                                         <Field label="Created" value={formatDateTime(subData.created_at)} />
@@ -1509,14 +1510,14 @@ export default function AdminEntityDrawer() {
                                         <Field label="Start date" value={subData.start_date ?? "—"} />
                                     </div>
                                 </details>
-                                <details className="pt-4 border-b border-alloy-stone/20 pb-4">
-                                    <summary className="text-sm font-semibold text-alloy-midnight/80 cursor-pointer list-none mb-2">Schedules</summary>
+                                <details className="pt-4 border-b border-[#e6e8ec] pb-4">
+                                    <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Schedules</summary>
                                     {schedules.length === 0 ? (
                                         <p className="text-sm text-alloy-midnight/60">No occurrences yet.</p>
                                     ) : (
                                         <ul className="space-y-2">
                                             {schedules.map((s) => (
-                                                <li key={s.id} className="border border-alloy-stone/30 rounded p-2 text-sm">
+                                                <li key={s.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
                                                     <div className="flex items-center justify-between gap-2">
                                                         <span>#{s.subscription_sequence} — {formatDateTime(s.start_at)}</span>
                                                         <button type="button" onClick={() => openDrawer({ type: "schedules", id: s.id })} className="text-alloy-blue hover:underline text-xs">Open</button>

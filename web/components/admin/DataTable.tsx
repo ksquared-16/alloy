@@ -117,16 +117,16 @@ export default function DataTable<T extends Record<string, any>>({
 
     if (loading) {
         return (
-            <div className="bg-white rounded-lg border border-alloy-stone/30 p-8">
-                <div className="text-center text-alloy-midnight/60">Loading...</div>
+            <div className="rounded-lg border border-[#e6e8ec] bg-white p-8">
+                <div className="text-center text-[#59678b]">Loading...</div>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-lg border border-alloy-stone/30">
+        <div className="rounded-lg border border-[#e6e8ec] bg-white">
             {/* Search and Filters */}
-            <div className="p-4 border-b border-alloy-stone/30 space-y-4">
+            <div className="space-y-4 border-b border-[#e6e8ec] p-4">
                 {searchable && (
                     <div>
                         <input
@@ -137,13 +137,13 @@ export default function DataTable<T extends Record<string, any>>({
                                 setSearch(e.target.value);
                                 setPage(1);
                             }}
-                            className="w-full px-4 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
+                            className="w-full rounded-md border border-[#e6e8ec] px-4 py-2 focus:border-[#31394d] focus:outline-none focus:ring-2 focus:ring-[#31394d]/20"
                         />
                     </div>
                 )}
 
                 {filters.length > 0 && (
-                    <div className="flex gap-4 flex-wrap">
+                    <div className="flex flex-wrap gap-4">
                         {filters.map((filter) => (
                             <select
                                 key={filter.key}
@@ -155,7 +155,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     });
                                     setPage(1);
                                 }}
-                                className="px-3 py-2 border border-alloy-stone/80 rounded-md focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
+                                className="rounded-md border border-[#e6e8ec] px-3 py-2 focus:border-[#31394d] focus:outline-none focus:ring-2 focus:ring-[#31394d]/20"
                             >
                                 <option value="">All {filter.label}</option>
                                 {filter.options.map((option) => (
@@ -172,21 +172,21 @@ export default function DataTable<T extends Record<string, any>>({
             {/* Table */}
             <div className="overflow-x-auto">
                 <table className="w-full">
-                    <thead className="bg-alloy-stone/50">
-                        <tr>
+                    <thead>
+                        <tr className="border-b border-[#e6e8ec] bg-[#F4F6F9]">
                             {columns.map((column) => (
                                 <th
                                     key={String(column.key)}
                                     className={`
-                    px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-alloy-midnight/70
-                    ${column.sortable ? "cursor-pointer hover:bg-alloy-stone/70" : ""}
+                    px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-[#45506c]
+                    ${column.sortable ? "cursor-pointer hover:bg-[#eef0f4]" : ""}
                   `}
                                     onClick={() => column.sortable && handleSort(column.key)}
                                 >
                                     <div className="flex items-center gap-2">
                                         {column.label}
                                         {column.sortable && sortColumn === column.key && (
-                                            <span className="text-alloy-blue">
+                                            <span className="text-[#31394d]">
                                                 {sortDirection === "asc" ? "↑" : "↓"}
                                             </span>
                                         )}
@@ -195,12 +195,12 @@ export default function DataTable<T extends Record<string, any>>({
                             ))}
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-alloy-stone/30">
+                    <tbody className="divide-y divide-[#e6e8ec]">
                         {paginatedData.length === 0 ? (
                             <tr>
                                 <td
                                     colSpan={columns.length}
-                                    className="px-4 py-8 text-center text-alloy-midnight/60"
+                                    className="px-5 py-12 text-center text-[#59678b]"
                                 >
                                     No data found
                                 </td>
@@ -210,13 +210,13 @@ export default function DataTable<T extends Record<string, any>>({
                                 <tr
                                     key={idx}
                                     className={`
-                    hover:bg-alloy-stone/30 transition-colors
+                    transition-colors hover:bg-[#F4F6F9]/80
                     ${onRowClick ? "cursor-pointer" : ""}
                   `}
                                     onClick={() => onRowClick?.(row)}
                                 >
                                     {columns.map((column) => (
-                                        <td key={String(column.key)} className="px-4 py-3 text-sm">
+                                        <td key={String(column.key)} className="max-w-[320px] px-5 py-3.5 text-sm text-[#31394d]">
                                             {column.render
                                                 ? column.render(getValue(row, column.key), row)
                                                 : String(getValue(row, column.key) ?? "")}
@@ -231,8 +231,8 @@ export default function DataTable<T extends Record<string, any>>({
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="p-4 border-t border-alloy-stone/30 flex items-center justify-between">
-                    <div className="text-sm text-alloy-midnight/60">
+                <div className="flex items-center justify-between border-t border-[#e6e8ec] p-4">
+                    <div className="text-sm text-[#59678b]">
                         Showing {(page - 1) * pageSize + 1} to{" "}
                         {Math.min(page * pageSize, sortedData.length)} of {sortedData.length}{" "}
                         results
@@ -241,14 +241,14 @@ export default function DataTable<T extends Record<string, any>>({
                         <button
                             onClick={() => setPage(Math.max(1, page - 1))}
                             disabled={page === 1}
-                            className="px-3 py-1 text-sm border border-alloy-stone/80 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-alloy-stone"
+                            className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm hover:bg-[#F4F6F9] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Previous
                         </button>
                         <button
                             onClick={() => setPage(Math.min(totalPages, page + 1))}
                             disabled={page === totalPages}
-                            className="px-3 py-1 text-sm border border-alloy-stone/80 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-alloy-stone"
+                            className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm hover:bg-[#F4F6F9] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Next
                         </button>

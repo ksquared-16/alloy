@@ -4,6 +4,7 @@ import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
 
 interface Contact {
   id: string;
@@ -52,7 +53,7 @@ export default function ContactsClient({
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-alloy-midnight mb-6">Contacts</h1>
+      <AdminPageHeader title="Contacts" subtitle="Contact records and customer links." />
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">

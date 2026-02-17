@@ -8,7 +8,13 @@
   --color-alloy-ember: #BC4300;
   --color-alloy-stone: #F4F6F9;
   --color-alloy-midnight: #18273A;
-  
+  /* Admin / productized palette */
+  --color-alloy-navy: #31394d;
+  --color-alloy-slate: #45506c;
+  --color-alloy-gold: #DBC078;
+  --color-alloy-gold-dark: #d0ad50;
+  --color-alloy-muted: #59678b;
+  --color-alloy-light: #e6d3a0;
   /* Font */
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }

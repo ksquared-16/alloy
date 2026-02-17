@@ -1,0 +1,126 @@
+"use client";
+
+import Link from "next/link";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import KpiCard from "@/components/admin/KpiCard";
+import SectionCard from "@/components/admin/SectionCard";
+import EmptyState from "@/components/admin/EmptyState";
+import { formatDateTime } from "@/lib/adminFormatters";
+
+export interface DashboardData {
+    jobs: { total: number; withDefaultVendor: number };
+    opportunities: { total: number; booked: number; notBooked: number; byStage: Record<string, number> };
+    schedules: { upcoming: number; unassigned: number; offered: number; accepted: number; canceled: number };
+    vendors: { pending: number; approved: number; suspended: number };
+    attention: { unassignedSchedules: number; offeredNotAccepted: number; failedWorkflowRuns: number; messageOutboxFailures: number };
+    upcomingSchedules: { id: string; start_at: string; end_at: string; _job_title: string | null; _customer_name: string | null; _assignment_status: string | null }[];
+}
+
+interface DashboardClientProps {
+    data: DashboardData;
+}
+
+export default function DashboardClient({ data }: DashboardClientProps) {
+    const { jobs, opportunities, schedules, vendors, attention, upcomingSchedules } = data;
+
+    return (
+        <div className="space-y-8">
+            <AdminPageHeader
+                title="Alloy Admin"
+                subtitle="Overview of jobs, opportunities, schedules, and vendors."
+            />
+
+            {/* KPI row */}
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <KpiCard value={jobs.total} label="Jobs" href="/admin/jobs" accent="navy" />
+                <KpiCard value={jobs.withDefaultVendor} label="Jobs with default vendor" href="/admin/jobs" accent="gold" />
+                <KpiCard value={opportunities.total} label="Opportunities" href="/admin/opportunities" accent="slate" />
+                <KpiCard value={opportunities.booked} label="Opportunities booked" href="/admin/opportunities" accent="juniper" />
+            </section>
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <KpiCard value={schedules.upcoming} label="Upcoming schedules" href="/admin/schedules" accent="navy" />
+                <KpiCard value={schedules.unassigned} label="Unassigned" href="/admin/schedules" />
+                <KpiCard value={schedules.offered} label="Offered" href="/admin/schedules" accent="gold" />
+                <KpiCard value={schedules.accepted} label="Accepted" href="/admin/schedules" accent="juniper" />
+                <KpiCard value={schedules.canceled} label="Canceled" href="/admin/schedules" />
+            </section>
+
+            {/* Pipeline / funnel tiles */}
+            <section className="grid gap-4 sm:grid-cols-2">
+                <SectionCard title="Vendor funnel">
+                    <div className="flex flex-wrap gap-4">
+                        <div className="rounded-lg bg-[#F4F6F9] px-4 py-2"><span className="text-xs text-[#59678b]">Pending</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.pending}</span></div>
+                        <div className="rounded-lg bg-[#e6d3a0]/30 px-4 py-2 border border-[#DBC078]/50"><span className="text-xs text-[#59678b]">Approved</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.approved}</span></div>
+                        <div className="rounded-lg bg-[#F4F6F9] px-4 py-2"><span className="text-xs text-[#59678b]">Suspended</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.suspended}</span></div>
+                    </div>
+                </SectionCard>
+                <SectionCard title="Opportunity pipeline">
+                    <div className="flex flex-wrap gap-4">
+                        {Object.entries(opportunities.byStage).map(([stage, count]) => (
+                            <div key={stage} className="rounded-lg bg-[#F4F6F9] px-4 py-2">
+                                <span className="text-xs text-[#59678b] capitalize">{stage}</span>
+                                <span className="ml-2 font-semibold text-[#31394d]">{count}</span>
+                            </div>
+                        ))}
+                        {Object.keys(opportunities.byStage).length === 0 && <p className="text-sm text-[#59678b]">No stage breakdown</p>}
+                    </div>
+                </SectionCard>
+            </section>
+
+            {/* Two-column: Upcoming schedules table | Attention + Quick Actions */}
+            <section className="grid gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                    <SectionCard title="Upcoming schedules (next 7 days)">
+                        {upcomingSchedules.length === 0 ? (
+                            <EmptyState title="No upcoming schedules" description="Schedules in the next 7 days will appear here." action={<Link href="/admin/schedules" className="text-sm font-medium text-[#00458C] hover:underline">View all schedules</Link>} />
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-[#e6e8ec]">
+                                            <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Start</th>
+                                            <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Job</th>
+                                            <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Customer</th>
+                                            <th className="pb-2 text-left font-semibold text-[#59678b]">Assignment</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#e6e8ec]">
+                                        {upcomingSchedules.slice(0, 10).map((s) => (
+                                            <tr key={s.id} className="hover:bg-[#F4F6F9]/50">
+                                                <td className="py-2.5 pr-4 text-[#31394d]">{formatDateTime(s.start_at)}</td>
+                                                <td className="py-2.5 pr-4 text-[#31394d]">{s._job_title ?? "—"}</td>
+                                                <td className="py-2.5 pr-4 text-[#59678b]">{s._customer_name ?? "—"}</td>
+                                                <td className="py-2.5 text-[#59678b]">{s._assignment_status ?? "Unassigned"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {upcomingSchedules.length > 10 && <p className="mt-2 text-xs text-[#59678b]">Showing 10 of {upcomingSchedules.length}</p>}
+                            </div>
+                        )}
+                    </SectionCard>
+                </div>
+                <div className="space-y-6">
+                    <SectionCard title="Attention needed">
+                        <ul className="space-y-2 text-sm">
+                            {attention.unassignedSchedules > 0 && <li><Link href="/admin/schedules" className="text-[#00458C] hover:underline">Unassigned schedules: {attention.unassignedSchedules}</Link></li>}
+                            {attention.offeredNotAccepted > 0 && <li><Link href="/admin/schedules" className="text-[#00458C] hover:underline">Offered (not accepted): {attention.offeredNotAccepted}</Link></li>}
+                            {attention.failedWorkflowRuns > 0 && <li><Link href="/admin/workflows" className="text-[#BC4300] hover:underline">Failed workflow runs: {attention.failedWorkflowRuns}</Link></li>}
+                            {attention.messageOutboxFailures > 0 && <li><Link href="/admin/messages-outbox" className="text-[#BC4300] hover:underline">Message outbox failures: {attention.messageOutboxFailures}</Link></li>}
+                            {attention.unassignedSchedules === 0 && attention.offeredNotAccepted === 0 && attention.failedWorkflowRuns === 0 && attention.messageOutboxFailures === 0 && <li className="text-[#59678b]">Nothing needs attention right now.</li>}
+                        </ul>
+                    </SectionCard>
+                    <SectionCard title="Quick actions">
+                        <div className="flex flex-col gap-2">
+                            <Link href="/admin/schedules" className="text-sm text-[#00458C] hover:underline">View Schedules</Link>
+                            <Link href="/admin/vendors" className="text-sm text-[#00458C] hover:underline">View Vendors</Link>
+                            <Link href="/admin/messages-outbox" className="text-sm text-[#00458C] hover:underline">View Messages Outbox</Link>
+                            <Link href="/admin/opportunities" className="text-sm text-[#00458C] hover:underline">View Opportunities</Link>
+                            <Link href="/admin/jobs" className="text-sm text-[#00458C] hover:underline">View Jobs</Link>
+                        </div>
+                    </SectionCard>
+                </div>
+            </section>
+        </div>
+    );
+}

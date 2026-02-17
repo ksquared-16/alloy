@@ -6,6 +6,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
 
 interface Job {
     id: string;
@@ -70,8 +71,8 @@ export default function JobsClient({
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-alloy-midnight mb-4">Jobs</h1>
-            <div className="flex flex-wrap gap-4 mb-6">
+            <AdminPageHeader title="Jobs" subtitle="Manage jobs and default vendor assignments." />
+            <div className="mb-6 flex flex-wrap gap-4">
                 <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[120px]">
                     <div className="text-2xl font-semibold text-alloy-midnight">{total}</div>
                     <div className="text-xs text-alloy-midnight/60">Total</div>

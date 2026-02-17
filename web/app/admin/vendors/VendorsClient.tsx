@@ -1,6 +1,7 @@
 "use client";
 
 import DataTable from "@/components/admin/DataTable";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 
@@ -74,7 +75,7 @@ export default function VendorsClient({
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-alloy-midnight mb-6">Vendors</h1>
+            <AdminPageHeader title="Vendors" subtitle="Vendor status and assignments." />
 
             {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
