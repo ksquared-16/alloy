@@ -5,6 +5,7 @@ import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 
 interface Job {
     id: string;
@@ -21,6 +22,8 @@ interface Job {
     primary_contact_id: string | null;
     customer_id: string | null;
     vertical_id: string | null;
+    _status_label?: string | null;
+    _default_vendor_name?: string | null;
 }
 
 interface JobsClientProps {
@@ -42,13 +45,12 @@ export default function JobsClient({
     const columns = [
         { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
         { key: "title", label: "Title", sortable: true },
-        { key: "is_recurring", label: "Recurring", sortable: true, render: (value: boolean | null) => (value ? "Yes" : "No") },
-        { key: "scheduled_at", label: "Scheduled", sortable: true, render: (v: string) => formatDateTime(v) },
-        { key: "job_status_id", label: "Status ID", sortable: false },
+        { key: "is_recurring", label: "Recurring", sortable: true, render: (_: unknown, row: Job) => (row.is_recurring ? "Yes" : "No") },
+        { key: "scheduled_at", label: "Scheduled", sortable: true, render: (v: string | null) => (v ? formatDateTime(v) : "—") },
+        { key: "_status_label", label: "Status", sortable: false, render: (_: unknown, row: Job) => <StatusBadge label={row._status_label ?? row.job_status_id} /> },
         { key: "gross_price_cents", label: "Gross Price", sortable: true, render: (v: number | null) => formatMoneyFromCents(v) },
         { key: "contractor_payout_cents", label: "Payout", sortable: true, render: (v: number | null) => formatMoneyFromCents(v) },
-        { key: "offer_code", label: "Offer Code", sortable: false },
-        { key: "external_id", label: "External ID", sortable: false },
+        { key: "_default_vendor_name", label: "Default vendor", sortable: false, render: (_: unknown, row: Job) => row._default_vendor_name ?? "—" },
     ];
 
     const filters = [
@@ -63,9 +65,22 @@ export default function JobsClient({
         },
     ];
 
+    const total = data.length;
+    const withDefaultVendor = data.filter((r) => r._default_vendor_name).length;
+
     return (
         <div>
-            <h1 className="text-3xl font-bold text-alloy-midnight mb-6">Jobs</h1>
+            <h1 className="text-3xl font-bold text-alloy-midnight mb-4">Jobs</h1>
+            <div className="flex flex-wrap gap-4 mb-6">
+                <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[120px]">
+                    <div className="text-2xl font-semibold text-alloy-midnight">{total}</div>
+                    <div className="text-xs text-alloy-midnight/60">Total</div>
+                </div>
+                <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[120px]">
+                    <div className="text-2xl font-semibold text-alloy-midnight">{withDefaultVendor}</div>
+                    <div className="text-xs text-alloy-midnight/60">With default vendor</div>
+                </div>
+            </div>
 
             {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">

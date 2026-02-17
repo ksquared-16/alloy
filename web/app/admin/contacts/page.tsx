@@ -14,10 +14,24 @@ export default async function ContactsPage() {
 
   if (error) {
     console.error("Error fetching contacts:", error);
+    return <ContactsClient initialData={[]} error={error?.message} />;
   }
 
+  const list = contacts ?? [];
+  const customerIds = [...new Set(list.map((c) => c.customer_id).filter(Boolean))] as string[];
+  const { data: customers } = customerIds.length ? await supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] };
+  const customerMap = new Map((customers ?? []).map((c) => [c.id, c]));
+
+  const rows = list.map((c) => {
+    const customer = c.customer_id ? customerMap.get(c.customer_id) : undefined;
+    return {
+      ...c,
+      _customer_name: (customer as { name?: string } | undefined)?.name ?? null,
+    };
+  });
+
   return (
-    <ContactsClient initialData={contacts || []} error={error?.message} />
+    <ContactsClient initialData={rows} error={undefined} />
   );
 }
 

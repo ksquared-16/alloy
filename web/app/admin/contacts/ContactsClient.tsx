@@ -3,6 +3,7 @@
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 
 interface Contact {
   id: string;
@@ -14,6 +15,7 @@ interface Contact {
   status: string | null;
   customer_id: string | null;
   external_id: string | null;
+  _customer_name?: string | null;
 }
 
 interface ContactsClientProps {
@@ -29,13 +31,11 @@ export default function ContactsClient({
 
   const columns = [
     { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
-    { key: "first_name", label: "First Name", sortable: true },
-    { key: "last_name", label: "Last Name", sortable: true },
+    { key: "first_name", label: "Name", sortable: true, render: (_: unknown, row: Contact) => [row.first_name, row.last_name].filter(Boolean).join(" ") || "—" },
     { key: "email", label: "Email", sortable: true },
     { key: "phone", label: "Phone", sortable: true },
-    { key: "status", label: "Status", sortable: true },
-    { key: "customer_id", label: "Customer ID", sortable: false },
-    { key: "external_id", label: "External ID", sortable: false },
+    { key: "status", label: "Status", sortable: true, render: (_: unknown, row: Contact) => <StatusBadge label={row.status} /> },
+    { key: "_customer_name", label: "Customer", sortable: false, render: (_: unknown, row: Contact) => row._customer_name ?? "—" },
   ];
 
   const filters = [

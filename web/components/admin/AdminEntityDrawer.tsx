@@ -6,6 +6,7 @@ import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
+import { AssignmentStatusBadge } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
     WORKFLOW_EVENT_TYPES,
@@ -155,6 +156,7 @@ export default function AdminEntityDrawer() {
     const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
+    const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "details">("overview");
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -173,8 +175,10 @@ export default function AdminEntityDrawer() {
             setData(null);
             setError(null);
             setIsEditing(false);
+            setDrawerTab("overview");
             return;
         }
+        setDrawerTab("overview");
         setLoading(true);
         setError(null);
         setIsEditing(false);
@@ -548,25 +552,49 @@ export default function AdminEntityDrawer() {
             {data && !loading && (
                 <div className="space-y-4">
                     {canEditInDrawer(drawer.type) && (
-                        <div className="flex gap-2 pb-2 border-b border-alloy-stone/20">
-                            {!isEditing ? (
-                                <>
-                                    <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                                    {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
-                                </>
-                            ) : (
-                                <>
-                                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                    <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                                </>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-alloy-stone/20">
+                            <div className="flex gap-2">
+                                {!isEditing ? (
+                                    <>
+                                        <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                        {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
+                                    </>
+                                ) : (
+                                    <>
+                                        <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                        <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                                    </>
+                                )}
+                            </div>
+                            {["jobs", "schedules", "opportunities", "customers", "contacts", "vendors"].includes(drawer.type) && (
+                                <div className="flex gap-1 rounded-md border border-alloy-stone/30 p-0.5">
+                                    {(["overview", "related", "details"] as const).map((tab) => (
+                                        <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`px-3 py-1 text-xs font-medium rounded ${drawerTab === tab ? "bg-alloy-blue text-white" : "text-alloy-midnight/70 hover:bg-alloy-stone/30"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     )}
                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                    {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs"].includes(drawer.type) && drawer.id && (
+                        <div className="pt-2">
+                            <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : "job"} entityId={drawer.id} />
+                        </div>
+                    )}
+                    {drawerTab === "details" && (
+                        <div className="space-y-2 pt-2">
+                            <strong className="text-alloy-midnight/70 block">IDs &amp; raw fields</strong>
+                            {["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
+                                const val = data[key];
+                                if (val === undefined) return null;
+                                return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
+                            })}
+                        </div>
+                    )}
+                    {drawerTab === "overview" && (
+                    <>
                     {drawer.type === "contacts" && (
                         <>
-                            <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             {isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First Name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -585,7 +613,6 @@ export default function AdminEntityDrawer() {
                                 </>
                             )}
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
-                            <Field label="External ID" value={data.external_id as string} />
                             <div className="pt-2 border-t border-alloy-stone/20">
                                 <strong className="text-alloy-midnight/70">Vendor:</strong>{" "}
                                 {(() => {
@@ -607,8 +634,6 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "customers" && (
                         <>
-                            <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             {isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -620,10 +645,6 @@ export default function AdminEntityDrawer() {
                                     <Field label="Status" value={data.status as string} />
                                 </>
                             )}
-                            <Field label="Stripe Customer ID" value={data.stripe_customer_id as string} />
-                            <Field label="Payment Method ID" value={data.default_payment_method_id as string} />
-                            <Field label="Vertical ID" value={data.vertical_id as string} />
-                            <Field label="External ID" value={data.external_id as string} />
                         </>
                     )}
                     {drawer.type === "vendors" && (
@@ -761,8 +782,6 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "opportunities" && (
                         <>
-                            <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Name" value={data.name as string} />
                             {isEditing ? (
                                 <>
@@ -795,13 +814,10 @@ export default function AdminEntityDrawer() {
                             )}
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
-                            <Field label="External ID" value={data.external_id as string} />
                         </>
                     )}
                     {drawer.type === "jobs" && (
                         <>
-                            <Field label="ID" value={data.id as string} />
-                            <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Title" value={data.title as string} />
                             <div className="pt-2 pb-2 border-b border-alloy-stone/20">
                                 <strong className="text-alloy-midnight/70 block mb-2">Default vendor</strong>
@@ -851,10 +867,12 @@ export default function AdminEntityDrawer() {
                                         {jobAssignedVendorSaving ? "Saving…" : "Save"}
                                     </button>
                                 </div>
-                                <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
-                                    <input type="checkbox" checked={applyVendorToUpcoming} onChange={(e) => setApplyVendorToUpcoming(e.target.checked)} />
-                                    Apply to all upcoming schedules for this job (safe)
-                                </label>
+                                {jobAssignedVendorId && (
+                                    <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
+                                        <input type="checkbox" checked={applyVendorToUpcoming} onChange={(e) => setApplyVendorToUpcoming(e.target.checked)} />
+                                        Apply to all upcoming schedules for this job (safe)
+                                    </label>
+                                )}
                             </div>
                             {isEditing ? (
                                 <>
@@ -878,7 +896,6 @@ export default function AdminEntityDrawer() {
                             <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <Field label="Offer Code" value={data.offer_code as string} />
-                            <Field label="External ID" value={data.external_id as string} />
                             {jobSchedules.length > 0 && (
                                 <div className="pt-4 border-t border-alloy-stone/20">
                                     <strong className="text-alloy-midnight/70 block mb-2">Reschedule</strong>
@@ -941,7 +958,6 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "schedules" && (
                         <>
-                            <Field label="Schedule ID" value={(data.id as string)?.slice(0, 8) + "…"} />
                             {(data.job_id as string) && (
                                 <div>
                                     <strong className="text-alloy-midnight/70">Job</strong>
@@ -989,7 +1005,11 @@ export default function AdminEntityDrawer() {
                                 <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
                                 {(data._assignment as { id?: string }) ? (
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span>{(data._vendor as { name?: string })?.name ?? "Vendor"} — {(data._assignment_status as { key?: string })?.key ?? (data._assignment_status as { label?: string })?.label ?? "—"}</span>
+                                        <span className="inline-flex items-center gap-2">
+                                            <span className="text-xs text-alloy-midnight/60">Assignment:</span>
+                                            <AssignmentStatusBadge statusKey={(data._assignment_status as { key?: string })?.key} label={(data._assignment_status as { label?: string })?.label} />
+                                        </span>
+                                        <span>{(data._vendor as { name?: string })?.name ?? "Vendor"}</span>
                                         {!(data.canceled_at as string) && (
                                             <>
                                                 <button type="button" disabled={scheduleAssignLoading} onClick={async () => {
@@ -1013,6 +1033,7 @@ export default function AdminEntityDrawer() {
                                     </div>
                                 ) : (
                                     <div className="text-sm">
+                                        <p className="mb-1"><span className="text-xs text-alloy-midnight/60">Assignment: </span><AssignmentStatusBadge statusKey={null} label="Unassigned" /></p>
                                         <p className="text-alloy-midnight/60">No schedule assignment yet</p>
                                         {(data._job_assigned_vendor as { id: string; name: string } | null) ? (
                                             <div className="mt-2 space-y-2">
@@ -1513,10 +1534,8 @@ export default function AdminEntityDrawer() {
                             </>
                         );
                     })()}
-                    {drawer.type === "contacts" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="contact" entityId={drawer.id} /></div>}
-                    {drawer.type === "customers" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="customer" entityId={drawer.id} /></div>}
-                    {drawer.type === "opportunities" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="opportunity" entityId={drawer.id} /></div>}
-                    {drawer.type === "jobs" && drawer.id && <div className="pt-4 border-t border-alloy-stone/20"><RelatedRecordsTabs entityType="job" entityId={drawer.id} /></div>}
+                    </>
+                    )}
                 </div>
             )}
         </Drawer>

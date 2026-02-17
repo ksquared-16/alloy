@@ -5,6 +5,7 @@ import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 
 interface Customer {
   id: string;
@@ -15,6 +16,7 @@ interface Customer {
   default_payment_method_id: string | null;
   vertical_id: string | null;
   external_id: string | null;
+  _vertical_name?: string | null;
 }
 
 interface CustomersClientProps {
@@ -36,15 +38,8 @@ export default function CustomersClient({
   const columns = [
     { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
     { key: "name", label: "Name", sortable: true },
-    { key: "status", label: "Status", sortable: true },
-    { key: "stripe_customer_id", label: "Stripe Customer ID", sortable: false },
-    {
-      key: "default_payment_method_id",
-      label: "Payment Method ID",
-      sortable: false,
-    },
-    { key: "vertical_id", label: "Vertical ID", sortable: false },
-    { key: "external_id", label: "External ID", sortable: false },
+    { key: "status", label: "Status", sortable: true, render: (_: unknown, row: Customer) => <StatusBadge label={row.status} /> },
+    { key: "_vertical_name", label: "Vertical", sortable: false, render: (_: unknown, row: Customer) => row._vertical_name ?? "—" },
   ];
 
   const filters = [

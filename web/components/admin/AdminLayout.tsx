@@ -82,7 +82,8 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         <div className="min-h-screen bg-alloy-stone flex">
             <aside className="w-64 bg-white border-r border-alloy-stone/30 flex flex-col">
                 <div className="p-4 border-b border-alloy-stone/30">
-                    <h1 className="text-xl font-bold text-alloy-midnight">Admin</h1>
+                    <h1 className="text-xl font-bold text-alloy-midnight">Alloy</h1>
+                    <p className="text-xs text-alloy-midnight/50 mt-0.5">Admin</p>
                 </div>
                 <nav className="flex-1 overflow-y-auto p-4">
                     {navGroups.map((group) => {
