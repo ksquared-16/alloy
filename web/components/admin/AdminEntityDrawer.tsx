@@ -145,6 +145,12 @@ export default function AdminEntityDrawer() {
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
+    const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
+    const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
+    const [scheduleCancelReason, setScheduleCancelReason] = useState("");
+    const [scheduleCancelPrompt, setScheduleCancelPrompt] = useState(false);
+    const [scheduleRescheduleForm, setScheduleRescheduleForm] = useState<{ start_at: string; end_at: string; copy_assignment: boolean } | null>(null);
+    const [scheduleRescheduleSaving, setScheduleRescheduleSaving] = useState(false);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -235,6 +241,19 @@ export default function AdminEntityDrawer() {
             setWorkflowVerticals(Array.isArray(verts) ? verts : []);
         }).catch(() => { setVendorStatuses([]); setWorkflowVerticals([]); });
     }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "schedules" || !drawer.id) {
+            setScheduleVendors([]);
+            setScheduleRescheduleForm(null);
+            setScheduleCancelPrompt(false);
+            return;
+        }
+        fetch(`/api/admin/schedules/${drawer.id}/vendors-for-assign`)
+            .then((r) => (r.ok ? r.json() : { vendors: [] }))
+            .then((json: { vendors?: { id: string; name: string }[] }) => setScheduleVendors(Array.isArray(json.vendors) ? json.vendors : []))
+            .catch(() => setScheduleVendors([]));
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "workflows" || !data) return;
@@ -876,8 +895,34 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "schedules" && (
                         <>
-                            <Field label="ID" value={data.id as string} />
-                            <Field label="Job ID" value={data.job_id as string} />
+                            <Field label="Schedule ID" value={(data.id as string)?.slice(0, 8) + "…"} />
+                            {(data.job_id as string) && (
+                                <div>
+                                    <strong className="text-alloy-midnight/70">Job</strong>
+                                    <button type="button" onClick={() => openDrawer({ type: "jobs", id: data.job_id as string })} className="ml-2 text-alloy-blue hover:underline text-sm">
+                                        {(data._job as { title?: string })?.title ?? (data.job_id as string).slice(0, 8) + "…"}
+                                    </button>
+                                    <span className="text-alloy-midnight/50 text-xs ml-1">({(data.job_id as string).slice(0, 8)}…)</span>
+                                </div>
+                            )}
+                            {(data._customer as { id?: string; name?: string }) && (
+                                <div>
+                                    <strong className="text-alloy-midnight/70">Customer</strong>
+                                    <button type="button" onClick={() => openDrawer({ type: "customers", id: (data._customer as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._customer as { name?: string }).name ?? (data._customer as { id: string }).id.slice(0, 8) + "…"}</button>
+                                </div>
+                            )}
+                            {(data._contact as { id?: string; email?: string; phone?: string }) && (
+                                <div>
+                                    <strong className="text-alloy-midnight/70">Contact</strong>
+                                    <button type="button" onClick={() => openDrawer({ type: "contacts", id: (data._contact as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._contact as { email?: string }).email ?? (data._contact as { phone?: string }).phone ?? (data._contact as { id: string }).id.slice(0, 8) + "…"}</button>
+                                </div>
+                            )}
+                            {(data._opportunity as { id?: string; name?: string }) && (
+                                <div>
+                                    <strong className="text-alloy-midnight/70">Opportunity</strong>
+                                    <button type="button" onClick={() => openDrawer({ type: "opportunities", id: (data._opportunity as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._opportunity as { name?: string }).name ?? (data._opportunity as { id: string }).id.slice(0, 8) + "…"}</button>
+                                </div>
+                            )}
                             {isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -890,6 +935,109 @@ export default function AdminEntityDrawer() {
                                     <Field label="End" value={formatDateTime(data.end_at as string)} />
                                     <Field label="Timezone" value={data.timezone as string} />
                                 </>
+                            )}
+                            {(data.canceled_at as string) && (
+                                <div className="text-amber-700 text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
+                            )}
+                            <div className="pt-2 border-t border-alloy-stone/20">
+                                <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
+                                {(data._assignment as { id?: string }) ? (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span>{(data._vendor as { name?: string })?.name ?? "Vendor"} — {(data._assignment_status as { key?: string })?.key ?? (data._assignment_status as { label?: string })?.label ?? "—"}</span>
+                                        {!(data.canceled_at as string) && (
+                                            <>
+                                                <button type="button" disabled={scheduleAssignLoading} onClick={async () => {
+                                                    setScheduleAssignLoading(true);
+                                                    try {
+                                                        const res = await fetch(`/api/admin/schedules/${drawer.id}/assignment`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status_key: "accepted" }) });
+                                                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
+                                                        refetch(); router.refresh();
+                                                    } finally { setScheduleAssignLoading(false); }
+                                                }} className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Accept</button>
+                                                <button type="button" disabled={scheduleAssignLoading} onClick={async () => {
+                                                    setScheduleAssignLoading(true);
+                                                    try {
+                                                        const res = await fetch(`/api/admin/schedules/${drawer.id}/assignment`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status_key: "declined" }) });
+                                                        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
+                                                        refetch(); router.refresh();
+                                                    } finally { setScheduleAssignLoading(false); }
+                                                }} className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Decline</button>
+                                            </>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-alloy-midnight/60 text-sm">No assignment</p>
+                                )}
+                                {!(data.canceled_at as string) && scheduleVendors.length > 0 && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <label className="text-sm text-alloy-midnight/70">Assign vendor</label>
+                                        <select
+                                            value=""
+                                            onChange={async (e) => {
+                                                const vid = e.target.value;
+                                                if (!vid) return;
+                                                setScheduleAssignLoading(true);
+                                                try {
+                                                    const res = await fetch(`/api/admin/schedules/${drawer.id}/assign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_id: vid }) });
+                                                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Assign failed");
+                                                    refetch(); router.refresh();
+                                                    e.target.value = "";
+                                                } finally { setScheduleAssignLoading(false); }
+                                            }}
+                                            disabled={scheduleAssignLoading}
+                                            className="px-2 py-1.5 border rounded text-sm"
+                                        >
+                                            <option value="">— Select vendor —</option>
+                                            {scheduleVendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+                            {!(data.canceled_at as string) && (
+                                <div className="pt-2 border-t border-alloy-stone/20 flex flex-wrap gap-2">
+                                    {!scheduleCancelPrompt ? (
+                                        <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-amber-600 text-amber-700 rounded hover:bg-amber-50">Cancel schedule</button>
+                                    ) : (
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <input value={scheduleCancelReason} onChange={(e) => setScheduleCancelReason(e.target.value)} placeholder="Reason (optional)" className="px-2 py-1.5 border rounded text-sm w-40" />
+                                            <button type="button" onClick={async () => {
+                                                try {
+                                                    const res = await fetch(`/api/admin/schedules/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canceled_at: new Date().toISOString(), canceled_by: "admin", cancel_reason: scheduleCancelReason || null }) });
+                                                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
+                                                    setScheduleCancelReason("");
+                                                    setScheduleCancelPrompt(false);
+                                                    refetch(); router.refresh();
+                                                } catch (err) { setSaveError((err as Error).message); }
+                                            }} className="px-2 py-1.5 text-sm bg-amber-100 text-amber-800 rounded">Confirm cancel</button>
+                                            <button type="button" onClick={() => { setScheduleCancelPrompt(false); setScheduleCancelReason(""); }} className="text-sm text-alloy-midnight/60">Back</button>
+                                        </div>
+                                    )}
+                                    <button type="button" onClick={() => setScheduleRescheduleForm(scheduleRescheduleForm ? null : { start_at: (data.start_at as string) ? new Date(data.start_at as string).toISOString().slice(0, 16) : "", end_at: (data.end_at as string) ? new Date(data.end_at as string).toISOString().slice(0, 16) : "", copy_assignment: !!(data._assignment as { id?: string }) })} className="px-2 py-1.5 text-sm border border-alloy-blue text-alloy-blue rounded hover:bg-alloy-stone/10">Reschedule</button>
+                                </div>
+                            )}
+                            {scheduleRescheduleForm && (
+                                <div className="pt-2 border border-alloy-stone/30 rounded p-2 space-y-2">
+                                    <strong className="text-sm">New time</strong>
+                                    <input type="datetime-local" value={scheduleRescheduleForm.start_at} onChange={(e) => setScheduleRescheduleForm((f) => f ? { ...f, start_at: e.target.value } : null)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                                    <input type="datetime-local" value={scheduleRescheduleForm.end_at} onChange={(e) => setScheduleRescheduleForm((f) => f ? { ...f, end_at: e.target.value } : null)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={scheduleRescheduleForm.copy_assignment} onChange={(e) => setScheduleRescheduleForm((f) => f ? { ...f, copy_assignment: e.target.checked } : null)} /> Copy assignment to new schedule</label>
+                                    <div className="flex gap-2">
+                                        <button type="button" disabled={scheduleRescheduleSaving} onClick={async () => {
+                                            if (!scheduleRescheduleForm || !drawer.id) return;
+                                            setScheduleRescheduleSaving(true);
+                                            try {
+                                                const res = await fetch(`/api/admin/schedules/${drawer.id}/reschedule`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ start_at: new Date(scheduleRescheduleForm.start_at).toISOString(), end_at: new Date(scheduleRescheduleForm.end_at).toISOString(), copy_assignment: scheduleRescheduleForm.copy_assignment }) });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Reschedule failed");
+                                                setScheduleRescheduleForm(null);
+                                                const newId = (json as { schedule_id?: string }).schedule_id;
+                                                if (newId) openDrawer({ type: "schedules", id: newId });
+                                                refetch(); router.refresh();
+                                            } finally { setScheduleRescheduleSaving(false); }
+                                            }} className="px-2 py-1.5 text-sm bg-alloy-blue text-white rounded disabled:opacity-50">{scheduleRescheduleSaving ? "Creating…" : "Create new schedule"}</button>
+                                        <button type="button" onClick={() => setScheduleRescheduleForm(null)} className="px-2 py-1.5 text-sm border rounded">Cancel</button>
+                                    </div>
+                                </div>
                             )}
                         </>
                     )}

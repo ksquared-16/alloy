@@ -78,9 +78,48 @@ export async function GET(
             return NextResponse.json(data);
         }
         if (type === "schedules") {
-            const { data, error } = await supabase.from("schedules").select("*").eq("id", id).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            return NextResponse.json(data);
+            const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).single();
+            if (error || !schedule) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            const out: Record<string, unknown> = { ...schedule };
+            const jobId = (schedule as { job_id?: string }).job_id;
+            if (jobId) {
+                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, job_status_id").eq("id", jobId).single();
+                out._job = job ?? null;
+                if (job) {
+                    if ((job as { customer_id?: string }).customer_id) {
+                        const { data: cust } = await supabase.from("customers").select("id, name").eq("id", (job as { customer_id: string }).customer_id).single();
+                        out._customer = cust ?? null;
+                    } else out._customer = null;
+                    if ((job as { primary_contact_id?: string }).primary_contact_id) {
+                        const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone").eq("id", (job as { primary_contact_id: string }).primary_contact_id).single();
+                        out._contact = contact ?? null;
+                    } else out._contact = null;
+                    if ((job as { opportunity_id?: string }).opportunity_id) {
+                        const { data: opp } = await supabase.from("opportunities").select("id, name").eq("id", (job as { opportunity_id: string }).opportunity_id).single();
+                        out._opportunity = opp ?? null;
+                    } else out._opportunity = null;
+                    if ((job as { vertical_id?: string }).vertical_id) {
+                        const { data: vert } = await supabase.from("verticals").select("id, name, slug").eq("id", (job as { vertical_id: string }).vertical_id).single();
+                        out._vertical = vert ?? null;
+                    } else out._vertical = null;
+                }
+            } else {
+                out._job = null; out._customer = null; out._contact = null; out._opportunity = null; out._vertical = null;
+            }
+            const { data: assignment } = await supabase.from("assignments").select("id, schedule_id, job_id, vendor_id, assignment_status_id, created_at").eq("schedule_id", id).maybeSingle();
+            out._assignment = assignment ?? null;
+            if (assignment) {
+                const { data: vendor } = await supabase.from("vendors").select("id, name").eq("id", (assignment as { vendor_id: string }).vendor_id).single();
+                out._vendor = vendor ?? null;
+                const statusId = (assignment as { assignment_status_id?: string }).assignment_status_id;
+                if (statusId) {
+                    const { data: st } = await supabase.from("assignment_statuses").select("id, key, label").eq("id", statusId).single();
+                    out._assignment_status = st ?? null;
+                } else out._assignment_status = null;
+            } else {
+                out._vendor = null; out._assignment_status = null;
+            }
+            return NextResponse.json(out);
         }
         if (type === "discount_redemptions") {
             const { data, error } = await supabase.from("discount_redemptions").select("*").eq("id", id).single();

@@ -10,6 +10,15 @@ export interface ScheduleRow {
     start_at: string;
     end_at: string;
     timezone: string | null;
+    canceled_at?: string | null;
+    _job_title?: string | null;
+    _customer_name?: string | null;
+    _contact_phone?: string | null;
+    _contact_email?: string | null;
+    _vertical_name?: string | null;
+    _assignment_status?: string | null;
+    _vendor_name?: string | null;
+    [key: string]: unknown;
 }
 
 interface SchedulesClientProps {
@@ -24,11 +33,15 @@ export default function SchedulesClient({
     const { openDrawer } = useAdminDrawer();
 
     const columns = [
-        { key: "id", label: "ID", sortable: false, render: (v: string) => (v ? `${v.slice(0, 8)}…` : "-") },
-        { key: "job_id", label: "Job ID", sortable: false, render: (v: string) => (v ? `${v.slice(0, 8)}…` : "-") },
-        { key: "start_at", label: "Start", sortable: true, render: (v: string) => formatDateTime(v) },
-        { key: "end_at", label: "End", sortable: true, render: (v: string) => formatDateTime(v) },
-        { key: "timezone", label: "Timezone", sortable: true },
+        { key: "start_at", label: "Start", sortable: true, render: (_: unknown, row: ScheduleRow) => formatDateTime(row.start_at) },
+        { key: "end_at", label: "End", sortable: true, render: (_: unknown, row: ScheduleRow) => formatDateTime(row.end_at) },
+        { key: "_job_title", label: "Job", sortable: true, render: (_: unknown, row: ScheduleRow) => row._job_title ?? (row.job_id ? `${String(row.job_id).slice(0, 8)}…` : "—") },
+        { key: "_customer_name", label: "Customer", sortable: true, render: (_: unknown, row: ScheduleRow) => row._customer_name ?? "—" },
+        { key: "_contact_phone", label: "Contact", sortable: false, render: (_: unknown, row: ScheduleRow) => row._contact_phone ?? row._contact_email ?? "—" },
+        { key: "_vertical_name", label: "Vertical", sortable: true, render: (_: unknown, row: ScheduleRow) => row._vertical_name ?? "—" },
+        { key: "_assignment_status", label: "Assignment", sortable: true, render: (_: unknown, row: ScheduleRow) => row._assignment_status ?? "—" },
+        { key: "_vendor_name", label: "Vendor", sortable: true, render: (_: unknown, row: ScheduleRow) => row._vendor_name ?? "—" },
+        { key: "canceled_at", label: "Canceled", sortable: false, render: (_: unknown, row: ScheduleRow) => row.canceled_at ? "Yes" : "—" },
     ];
 
     return (

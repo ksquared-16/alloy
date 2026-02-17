@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
-const ALLOWED_KEYS = ["start_at", "end_at", "timezone"] as const;
+const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "canceled_at", "canceled_by", "cancel_reason"] as const;
 
 export async function PATCH(
     request: NextRequest,
