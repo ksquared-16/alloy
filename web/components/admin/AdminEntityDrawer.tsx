@@ -804,10 +804,7 @@ export default function AdminEntityDrawer() {
                             <Field label="Created" value={formatDateTime(data.created_at as string)} />
                             <Field label="Title" value={data.title as string} />
                             <div className="pt-2 pb-2 border-b border-alloy-stone/20">
-                                <strong className="text-alloy-midnight/70 block mb-2">Assigned vendor</strong>
-                                <p className="text-sm text-alloy-midnight/80 mb-2">
-                                    {(data._assigned_vendor as { id: string; name: string } | null)?.name ?? (jobAssignedVendorId && jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId)?.name) ?? "—"}
-                                </p>
+                                <strong className="text-alloy-midnight/70 block mb-2">Default vendor</strong>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <select
                                         value={jobAssignedVendorId ?? ""}
@@ -1016,15 +1013,36 @@ export default function AdminEntityDrawer() {
                                     </div>
                                 ) : (
                                     <div className="text-sm">
-                                        <p className="text-alloy-midnight/60">No assignment</p>
-                                        {(data._job_assigned_vendor as { id: string; name: string } | null) && (
-                                            <p className="text-alloy-midnight/70 mt-1">Default vendor: {(data._job_assigned_vendor as { name: string }).name} (job)</p>
-                                        )}
+                                        <p className="text-alloy-midnight/60">No schedule assignment yet</p>
+                                        {(data._job_assigned_vendor as { id: string; name: string } | null) ? (
+                                            <div className="mt-2 space-y-2">
+                                                <p className="text-alloy-midnight/70">Default vendor (job): {(data._job_assigned_vendor as { name: string }).name}</p>
+                                                {!(data.canceled_at as string) && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={scheduleAssignLoading}
+                                                        onClick={async () => {
+                                                            if (!drawer.id) return;
+                                                            const jobVendorId = (data._job_assigned_vendor as { id: string }).id;
+                                                            setScheduleAssignLoading(true);
+                                                            try {
+                                                                const res = await fetch(`/api/admin/schedules/${drawer.id}/assign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_id: jobVendorId }) });
+                                                                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Assign failed");
+                                                                refetch(); router.refresh();
+                                                            } finally { setScheduleAssignLoading(false); }
+                                                            }}
+                                                        className="px-2 py-1.5 text-sm bg-alloy-blue text-white rounded hover:opacity-90 disabled:opacity-50"
+                                                    >
+                                                        {scheduleAssignLoading ? "Creating…" : "Create assignment from default"}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : null}
                                     </div>
                                 )}
-                                {!(data.canceled_at as string) && scheduleVendors.length > 0 && (
+                                {!(data.canceled_at as string) && scheduleVendors.length > 0 && ((data._assignment as { id?: string }) || !(data._job_assigned_vendor as { id?: string })) && (
                                     <div className="mt-2 flex items-center gap-2">
-                                        <label className="text-sm text-alloy-midnight/70">Assign vendor</label>
+                                        <label className="text-sm text-alloy-midnight/70">{(data._assignment as { id?: string }) ? "Override vendor" : "Assign vendor"}</label>
                                         <select
                                             value=""
                                             onChange={async (e) => {
@@ -1037,7 +1055,7 @@ export default function AdminEntityDrawer() {
                                                     refetch(); router.refresh();
                                                     e.target.value = "";
                                                 } finally { setScheduleAssignLoading(false); }
-                                            }}
+                                                }}
                                             disabled={scheduleAssignLoading}
                                             className="px-2 py-1.5 border rounded text-sm"
                                         >

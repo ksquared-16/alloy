@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 
-const ASSIGNED_STATUS_KEY = "assigned";
+const OFFERED_STATUS_KEY = "offered";
 
 /**
  * POST: apply job.assigned_vendor_id to all upcoming schedules (safe rules).
- * - No assignment -> create with vendor_id and status 'assigned'.
- * - Assignment exists and status = 'assigned' -> update vendor_id only.
+ * - No assignment -> create with vendor_id and status 'offered'.
+ * - Assignment exists and status = 'offered' -> update vendor_id only.
  * - Any other status -> leave unchanged.
  */
 export async function POST(
@@ -32,13 +32,13 @@ export async function POST(
     const vendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id;
     if (!vendorId) return NextResponse.json({ error: "Job has no assigned_vendor_id; set it first" }, { status: 400 });
 
-    const { data: assignedStatus } = await supabase
+    const { data: offeredStatus } = await supabase
         .from("assignment_statuses")
         .select("id")
-        .eq("key", ASSIGNED_STATUS_KEY)
+        .eq("key", OFFERED_STATUS_KEY)
         .maybeSingle();
-    const assignedStatusId = (assignedStatus as { id?: string } | null)?.id ?? null;
-    if (!assignedStatusId) return NextResponse.json({ error: `Assignment status '${ASSIGNED_STATUS_KEY}' not found` }, { status: 500 });
+    const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
+    if (!offeredStatusId) return NextResponse.json({ error: `Assignment status '${OFFERED_STATUS_KEY}' not found` }, { status: 500 });
 
     const now = new Date().toISOString();
     const { data: upcomingSchedules } = await supabase
@@ -73,14 +73,14 @@ export async function POST(
                 schedule_id: scheduleId,
                 job_id: jobId,
                 vendor_id: vendorId,
-                assignment_status_id: assignedStatusId,
+                assignment_status_id: offeredStatusId,
                 updated_at: now,
             });
             if (!insErr) created++;
             continue;
         }
         const currentKey = existing.assignment_status_id ? statusKeyById.get(existing.assignment_status_id) : null;
-        if (currentKey === ASSIGNED_STATUS_KEY) {
+        if (currentKey === OFFERED_STATUS_KEY) {
             const { error: updErr } = await supabase
                 .from("assignments")
                 .update({ vendor_id: vendorId, updated_at: now })
