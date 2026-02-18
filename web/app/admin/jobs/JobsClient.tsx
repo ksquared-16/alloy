@@ -25,6 +25,8 @@ interface Job {
     vertical_id: string | null;
     _status_label?: string | null;
     _default_vendor_name?: string | null;
+    _customer_name?: string | null;
+    _location_summary?: string | null;
 }
 
 interface JobsClientProps {
@@ -46,12 +48,14 @@ export default function JobsClient({
     const columns = [
         { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
         { key: "title", label: "Title", sortable: true },
-        { key: "is_recurring", label: "Recurring", sortable: true, render: (_: unknown, row: Job) => (row.is_recurring ? "Yes" : "No") },
+        { key: "_customer_name", label: "Customer", sortable: true, render: (_: unknown, row: Job) => row._customer_name ?? "—" },
         { key: "scheduled_at", label: "Scheduled", sortable: true, render: (v: string | null) => (v ? formatDateTime(v) : "—") },
-        { key: "_status_label", label: "Status", sortable: false, render: (_: unknown, row: Job) => <StatusBadge label={row._status_label ?? row.job_status_id} /> },
+        { key: "_location_summary", label: "Location", sortable: false, render: (_: unknown, row: Job) => row._location_summary ?? "—" },
+        { key: "_status_label", label: "Status", sortable: false, render: (_: unknown, row: Job) => <StatusBadge label={row._status_label ?? "—"} /> },
         { key: "gross_price_cents", label: "Gross Price", sortable: true, render: (v: number | null) => formatMoneyFromCents(v) },
         { key: "contractor_payout_cents", label: "Payout", sortable: true, render: (v: number | null) => formatMoneyFromCents(v) },
         { key: "_default_vendor_name", label: "Default vendor", sortable: false, render: (_: unknown, row: Job) => row._default_vendor_name ?? "—" },
+        { key: "is_recurring", label: "Recurring", sortable: true, render: (_: unknown, row: Job) => (row.is_recurring ? "Yes" : "No") },
     ];
 
     const filters = [
