@@ -14,6 +14,7 @@ export default function Footer() {
     legal: [
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
+      { href: "/sms-consent", label: "SMS Consent" },
     ],
   };
 
