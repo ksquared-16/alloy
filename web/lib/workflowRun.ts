@@ -689,8 +689,27 @@ export async function executeWorkflowRun(
                         logs.push(`update_entity: unknown entity_type ${entityType}, skipping`);
                         break;
                     }
+                    const ep = payload?.event_payload;
+                    logs.push(`update_entity debug: idPath="${idPath}"`);
+                    logs.push(`update_entity debug: has payload.entity_id=${payload?.entity_id != null ? String(payload.entity_id) : "undefined"}`);
+                    logs.push(`update_entity debug: has payload.event_payload.entity_id=${ep != null && (ep as Record<string, unknown>).entity_id != null ? String((ep as Record<string, unknown>).entity_id) : "undefined"}`);
+                    const payloadKeys = payload && typeof payload === "object" ? Object.keys(payload).slice(0, 20).join(",") : "";
+                    const epKeys = ep && typeof ep === "object" ? Object.keys(ep as Record<string, unknown>).slice(0, 20).join(",") : "";
+                    logs.push(`update_entity debug: keys(payload)=${payloadKeys} and keys(payload.event_payload)=${epKeys}`);
                     let entityId: string | null = null;
                     let resolvedVia: string | null = null;
+                    if (ep != null && typeof ep === "object" && (ep as Record<string, unknown>).entity_id != null && (ep as Record<string, unknown>).entity_id !== "") {
+                        entityId = String((ep as Record<string, unknown>).entity_id);
+                        resolvedVia = "event_payload.entity_id (hard)";
+                    }
+                    if (!entityId && idPath && ep != null && typeof ep === "object" && (ep as Record<string, unknown>)[idPath] != null && (ep as Record<string, unknown>)[idPath] !== "") {
+                        entityId = String((ep as Record<string, unknown>)[idPath]);
+                        resolvedVia = `event_payload.${idPath} (hard)`;
+                    }
+                    if (!entityId && payload?.entity_id != null && payload.entity_id !== "") {
+                        entityId = String(payload.entity_id);
+                        resolvedVia = "entity_id (hard)";
+                    }
                     const tryPath = (path: string): boolean => {
                         const v = getByPath(payload, path);
                         if (v != null && v !== "") {
@@ -700,7 +719,7 @@ export async function executeWorkflowRun(
                         }
                         return false;
                     };
-                    if (idPath) {
+                    if (idPath && !entityId) {
                         tryPath(idPath) ||
                             tryPath(`event_payload.${idPath}`) ||
                             tryPath(`data.${idPath}`) ||
