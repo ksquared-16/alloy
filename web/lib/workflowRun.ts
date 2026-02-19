@@ -682,7 +682,7 @@ export async function executeWorkflowRun(
                 }
                 case "update_entity": {
                     const entityType = (pl.entity_type ?? pl.target_entity ?? actionTargetEntity) as string;
-                    const entityIdPath = pl.entity_id != null ? String(pl.entity_id) : "";
+                    const idPath = (pl.id_path != null ? String(pl.id_path) : pl.entity_id != null ? String(pl.entity_id) : "").trim();
                     const patch = pl.patch && typeof pl.patch === "object" ? (pl.patch as Record<string, unknown>) : {};
                     const table = ENTITY_TABLES[entityType] ?? entityType;
                     if (!table) {
@@ -690,19 +690,34 @@ export async function executeWorkflowRun(
                         break;
                     }
                     let entityId: string | null = null;
-                    if (entityIdPath && (entityIdPath.startsWith("event.") || entityIdPath.includes("."))) {
-                        const path = entityIdPath.replace(/^event\./, "");
-                        const resolved = path ? getByPath(payload, path) : null;
-                        entityId = resolved != null ? String(resolved) : null;
-                    } else if (entityIdPath) {
-                        entityId = entityIdPath;
+                    let resolvedVia: string | null = null;
+                    if (idPath) {
+                        const fromTop = getByPath(payload, idPath);
+                        if (fromTop != null && fromTop !== "") {
+                            entityId = String(fromTop);
+                            resolvedVia = idPath;
+                        }
+                        if (!entityId) {
+                            const nestedPath = `${entityType}.${idPath}`;
+                            const fromNested = getByPath(payload, nestedPath);
+                            if (fromNested != null && fromNested !== "") {
+                                entityId = String(fromNested);
+                                resolvedVia = nestedPath;
+                            }
+                        }
+                        if (!entityId && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(idPath)) {
+                            entityId = idPath;
+                            resolvedVia = "literal";
+                        }
                     }
                     if (!entityId) {
                         const entityFromPayload = payload[entityType];
                         entityId = entityFromPayload && typeof entityFromPayload === "object" && entityFromPayload !== null && "id" in entityFromPayload
                             ? String((entityFromPayload as { id: unknown }).id)
                             : null;
+                        if (entityId) resolvedVia = `${entityType}.id`;
                     }
+                    if (resolvedVia) logs.push(`update_entity: resolved entity_id from path "${resolvedVia}"`);
                     if (!entityId) {
                         logs.push(`update_entity: could not resolve entity_id for ${entityType}, skipping`);
                         break;
