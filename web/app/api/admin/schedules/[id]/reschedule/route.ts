@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. When copy_assignment is false, workflow(s) with event_type "schedule_created" may create assignment from job default. */
@@ -87,9 +88,28 @@ export async function POST(
             job,
             schedule: newScheduleRow ?? { id: newId, job_id: jobId },
         };
+        const occurredAt = ((eventPayload as Record<string, unknown>)?.occurred_at as string) ?? new Date().toISOString();
+        let eventId: string | null = null;
+        try {
+            eventId = await emitEvent({
+                org_id: orgIdForWf ?? orgId ?? null,
+                event_type: "schedule_created",
+                entity_type: "schedule",
+                entity_id: newId ?? ((eventPayload as Record<string, unknown>)?.schedule as { id?: string } | undefined)?.id ?? null,
+                action_type: null,
+                occurred_at: occurredAt,
+                payload: eventPayload,
+            });
+        } catch (emitErr) {
+            console.error("[SCHEDULE_CREATED_EMIT_EVENT]", emitErr);
+            eventId = null;
+        }
         for (const wf of wfs ?? []) {
             try {
-                await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
+                await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                    event_id: eventId,
+                    org_id: orgIdForWf ?? orgId ?? null,
+                });
             } catch (_) {}
         }
     }
