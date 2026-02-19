@@ -21,7 +21,14 @@ export async function createActionLink(
         metadata?: unknown;
     }
 ): Promise<string | null> {
-    const admin = createAdminClient();
+    let admin: ReturnType<typeof createAdminClient>;
+    try {
+        admin = createAdminClient();
+        console.log("[createActionLink] admin client created successfully");
+    } catch (e) {
+        console.error("[createActionLink] admin client failed", e);
+        return null;
+    }
 
     const token = crypto.randomBytes(24).toString("hex");
 

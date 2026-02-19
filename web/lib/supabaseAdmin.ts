@@ -17,6 +17,7 @@ const getSupabaseUrl = (): string => {
 const getSupabaseServiceRoleKey = (): string => {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!key) {
+        console.error("[createAdminClient] missing service role key");
         throw new Error("SUPABASE_SERVICE_ROLE_KEY environment variable is not set");
     }
     return key;
