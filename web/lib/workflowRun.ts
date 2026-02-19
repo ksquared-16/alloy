@@ -860,6 +860,7 @@ export async function executeWorkflowRun(
                     break;
                 }
                 case "create_action_link": {
+                    const outputKey = pl.output_key != null && typeof pl.output_key === "string" ? pl.output_key : "action_link_url";
                     const linkActionType = pl.action_type != null ? String(pl.action_type) : null;
                     const linkEntityType = pl.entity_type != null ? String(pl.entity_type) : null;
                     const entityIdResolved =
@@ -903,7 +904,8 @@ export async function executeWorkflowRun(
                             (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||
                             (typeof process !== "undefined" && process.env?.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
                         const actionLinkUrl = baseUrl ? `${String(baseUrl).replace(/\/$/, "")}/action/${token}` : `/action/${token}`;
-                        (payload as Record<string, unknown>).action_link_url = actionLinkUrl;
+                        (payload as Record<string, unknown>)[outputKey] = actionLinkUrl;
+                        logs.push(`create_action_link: set ${outputKey}`);
                     } else {
                         logs.push("create_action_link: createActionLink returned null");
                     }
