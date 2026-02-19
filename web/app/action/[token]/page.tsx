@@ -76,7 +76,7 @@ type LinkMeta = {
     metadata?: Record<string, unknown>;
 };
 
-type Status = "loading" | "ready" | "expired" | "consumed" | "not_found" | "success" | "error";
+type Status = "loading" | "ready" | "expired" | "consumed" | "not_found" | "success" | "error" | "already_assigned";
 
 export default function ActionConfirmPage() {
     const params = useParams();
@@ -149,6 +149,31 @@ export default function ActionConfirmPage() {
                 setSubmitting(false);
             });
     }, [token, meta, cancelReason, submitting, status]);
+
+    const handleAcceptJob = useCallback(() => {
+        if (!token || submitting || status !== "ready") return;
+        setSubmitting(true);
+        fetch("/api/action-links/consume-accept-job", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+        })
+            .then((res) => res.json())
+            .then((data: { ok?: boolean; reason?: string }) => {
+                if (data.ok) {
+                    setStatus("success");
+                } else if (data.reason === "already_assigned") {
+                    setStatus("already_assigned");
+                } else {
+                    setStatus("error");
+                }
+                setSubmitting(false);
+            })
+            .catch(() => {
+                setStatus("error");
+                setSubmitting(false);
+            });
+    }, [token, submitting, status]);
 
     if (status === "loading") {
         return (
@@ -245,6 +270,7 @@ export default function ActionConfirmPage() {
     }
 
     if (status === "success") {
+        const isAcceptJob = meta?.action_type === "vendor_accept_job";
         return (
             <div className={pageBg}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -252,10 +278,31 @@ export default function ActionConfirmPage() {
                 </div>
                 <div className={cardClass}>
                     <div className={headerClass}>
-                        <h1 className="text-lg font-semibold text-alloy-midnight">Done</h1>
+                        <h1 className="text-lg font-semibold text-alloy-midnight">{isAcceptJob ? "Job accepted" : "Done"}</h1>
                     </div>
                     <div className={`${bodyClass} text-center`}>
-                        <p className="text-alloy-midnight/70 text-sm">Your action has been completed successfully.</p>
+                        <p className="text-alloy-midnight/70 text-sm">
+                            {isAcceptJob ? "You have accepted this job." : "Your action has been completed successfully."}
+                        </p>
+                        {backLink}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (status === "already_assigned") {
+        return (
+            <div className={pageBg}>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-[420px] h-[320px] rounded-full bg-alloy-stone/10 blur-3xl" />
+                </div>
+                <div className={cardClass}>
+                    <div className={headerClass}>
+                        <h1 className="text-lg font-semibold text-alloy-midnight">Job no longer available</h1>
+                    </div>
+                    <div className={`${bodyClass} text-center`}>
+                        <p className="text-alloy-midnight/70 text-sm">Someone else already accepted this job.</p>
                         {backLink}
                     </div>
                 </div>
@@ -382,6 +429,15 @@ export default function ActionConfirmPage() {
                                 className="w-full sm:w-auto px-5 py-2.5 bg-alloy-blue text-white rounded-lg text-sm font-medium hover:bg-alloy-blue/90 transition-colors"
                             >
                                 {copy.primaryCta}
+                            </button>
+                        ) : meta.action_type === "vendor_accept_job" ? (
+                            <button
+                                type="button"
+                                onClick={handleAcceptJob}
+                                disabled={submitting}
+                                className="w-full sm:w-auto px-5 py-2.5 bg-alloy-blue text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-alloy-blue/90 transition-colors"
+                            >
+                                {submitting ? "Confirming…" : copy.primaryCta}
                             </button>
                         ) : (
                             <button
