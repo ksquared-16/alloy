@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 import { getByPath, renderTemplate } from "@/lib/workflowTemplate";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
@@ -659,9 +660,11 @@ export async function executeWorkflowRun(
                 case "send_message": {
                     const channel = (pl.channel ?? "sms") as string;
                     const template = (pl.template ?? pl.body ?? "") as string;
+                    const templateKey = (pl.template_key != null ? String(pl.template_key) : "") as string;
                     const recipients = (pl.recipients ?? []) as RecipientSpec[];
-                    const dedupeKey = (pl.dedupe_key ?? "") as string;
                     const bodyText = renderTemplate(template, payload);
+                    const bodyHash = createHash("sha1").update(bodyText ?? "").digest("hex").slice(0, 16);
+                    const outboxPayload: Record<string, unknown> = { body: bodyText };
                     const resolved = await resolveRecipients(supabase, payload, recipients, logs);
                     const deduped: ResolvedRecipient[] = [];
                     const seenKey = new Set<string>();
@@ -675,19 +678,31 @@ export async function executeWorkflowRun(
                         const filled = await ensureContactPhoneEmail(supabase, r);
                         const toPhone = filled.to_phone ?? null;
                         const toEmail = filled.to_email ?? null;
-                        const { error: outErr } = await supabase.from("messages_outbox").insert({
+                        const isSms = channel.toLowerCase() === "sms";
+                        const recipient = isSms ? (toPhone ?? "") : (toEmail ?? "");
+                        const dedupeKey = `${workflowId}:${channel}:${recipient}:${templateKey}:${bodyHash}`;
+                        const row: Record<string, unknown> = {
                             org_id: orgId,
                             workflow_run_id: runId,
+                            workflow_id: workflowId,
                             channel,
-                            to_contact_id: filled.contact_id ?? null,
-                            to_phone: toPhone,
-                            to_email: toEmail,
-                            body: bodyText,
+                            payload: outboxPayload,
                             status: "queued",
-                            dedupe_key: dedupeKey || null,
-                        });
+                            template_key: templateKey || null,
+                            body: bodyText,
+                            dedupe_key: dedupeKey,
+                            to_contact_id: filled.contact_id ?? null,
+                        };
+                        if (isSms) {
+                            row.to_phone = toPhone;
+                            row.to_email = null;
+                        } else {
+                            row.to_email = toEmail;
+                            row.to_phone = null;
+                        }
+                        const { error: outErr } = await supabase.from("messages_outbox").insert(row);
                         if (outErr) {
-                            if (dedupeKey && String(outErr).includes("duplicate")) {
+                            if (String(outErr).includes("duplicate")) {
                                 logs.push(`send_message: skipped duplicate dedupe_key=${dedupeKey}`);
                             } else {
                                 throw new Error(`send_message outbox: ${outErr.message}`);
