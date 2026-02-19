@@ -513,14 +513,21 @@ async function enrichVendorPayload(supabase: SupabaseClient, payload: WorkflowEv
     }
 }
 
+export type ExecuteWorkflowRunOptions = {
+    event_id?: string | null;
+    org_id?: string | null;
+};
+
 /**
  * Execute a workflow run: insert run row, evaluate conditions, execute actions.
  * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor) when available.
+ * Optional options.event_id and options.org_id are set on the workflow_runs row when provided (e.g. from canonical event layer).
  */
 export async function executeWorkflowRun(
     supabase: SupabaseClient,
     workflowId: string,
-    eventPayload: Record<string, unknown>
+    eventPayload: Record<string, unknown>,
+    options?: ExecuteWorkflowRunOptions
 ): Promise<WorkflowRunResult> {
     const payload: WorkflowEventPayload = {
         event_type: (eventPayload.event_type as string) ?? "",
@@ -553,7 +560,8 @@ export async function executeWorkflowRun(
     const { error: runInsertErr } = await supabase.from("workflow_runs").insert({
         id: runId,
         workflow_id: workflowId,
-        event_id: null,
+        event_id: options?.event_id ?? null,
+        org_id: options?.org_id ?? null,
         status: "running",
         error: null,
         started_at: startedAt,
