@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import { createActionLink } from "@/lib/actionLinks";
 import { getByPath, renderTemplate } from "@/lib/workflowTemplate";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
@@ -856,6 +857,42 @@ export async function executeWorkflowRun(
                         }
                     }
                     logs.push(`apply_job_vendor_to_upcoming: created=${created} updated=${updated}`);
+                    break;
+                }
+                case "create_action_link": {
+                    const linkActionType = pl.action_type != null ? String(pl.action_type) : null;
+                    const linkEntityType = pl.entity_type != null ? String(pl.entity_type) : null;
+                    const entityIdResolved =
+                        resolvePath(payload, pl.entity_id_path as string | null | undefined) ??
+                        resolveId(pl.entity_id, payload) ??
+                        (payload?.entity_id != null && payload.entity_id !== "" ? String(payload.entity_id) : null);
+                    const expiresInMinutes = typeof pl.expires_in_minutes === "number" ? pl.expires_in_minutes : 120;
+                    const linkOrgId = run?.org_id ?? payload?.org_id ?? null;
+                    if (!linkActionType || !linkEntityType) {
+                        logs.push("create_action_link: missing action_type or entity_type; skipping");
+                        break;
+                    }
+                    if (!entityIdResolved) {
+                        logs.push("create_action_link: could not resolve entity_id; skipping");
+                        break;
+                    }
+                    const token = await createActionLink(supabase, {
+                        org_id: linkOrgId,
+                        action_type: linkActionType,
+                        entity_type: linkEntityType,
+                        entity_id: entityIdResolved,
+                        expires_in_minutes: expiresInMinutes,
+                        metadata: (pl.metadata != null && typeof pl.metadata === "object" ? pl.metadata : null) as Record<string, unknown> | null,
+                    });
+                    if (token) {
+                        const baseUrl =
+                            (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||
+                            (typeof process !== "undefined" && process.env?.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+                        const actionLinkUrl = baseUrl ? `${String(baseUrl).replace(/\/$/, "")}/action/${token}` : `/action/${token}`;
+                        (payload as Record<string, unknown>).action_link_url = actionLinkUrl;
+                    } else {
+                        logs.push("create_action_link: createActionLink returned null");
+                    }
                     break;
                 }
                 case "log": {
