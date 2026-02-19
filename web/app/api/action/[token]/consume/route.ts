@@ -54,7 +54,13 @@ export async function POST(
     for (const wf of wfs ?? []) {
         try {
             await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
-        } catch (_) {}
+        } catch (err) {
+            console.error("[ACTION_CONSUME] executeWorkflowRun failed", (err as Error).message, "workflow_id=", (wf as { id: string }).id);
+            return NextResponse.json(
+                { error: "Workflow execution failed", message: (err as Error).message },
+                { status: 500 }
+            );
+        }
     }
 
     if (r.action_type === "vendor_accept_job" && r.entity_type === "job") {

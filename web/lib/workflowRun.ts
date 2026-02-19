@@ -40,6 +40,7 @@ function getJobZip(payload: Record<string, unknown>): string | null {
     return five.length >= 5 ? five : null;
 }
 
+/** Map entity type (e.g. "schedule", "job") to real table name for update_entity and other actions. */
 const ENTITY_TABLES: Record<string, string> = {
     job: "jobs",
     jobs: "jobs",
@@ -53,6 +54,8 @@ const ENTITY_TABLES: Record<string, string> = {
     schedules: "schedules",
     vendor: "vendors",
     vendors: "vendors",
+    assignment: "assignments",
+    assignments: "assignments",
 };
 
 type ConditionRow = {
@@ -681,8 +684,8 @@ export async function executeWorkflowRun(
                     const entityType = (pl.entity_type ?? pl.target_entity ?? actionTargetEntity) as string;
                     const entityIdPath = pl.entity_id != null ? String(pl.entity_id) : "";
                     const patch = pl.patch && typeof pl.patch === "object" ? (pl.patch as Record<string, unknown>) : {};
-                    const tableName = ENTITY_TABLES[entityType];
-                    if (!tableName) {
+                    const table = ENTITY_TABLES[entityType] ?? entityType;
+                    if (!table) {
                         logs.push(`update_entity: unknown entity_type ${entityType}, skipping`);
                         break;
                     }
@@ -713,7 +716,7 @@ export async function executeWorkflowRun(
                             templatedPatch[k] = v;
                         }
                     }
-                    const { error: updErr } = await supabase.from(tableName).update(templatedPatch).eq("id", entityId);
+                    const { error: updErr } = await supabase.from(table).update(templatedPatch).eq("id", entityId);
                     if (updErr) throw new Error(`update_entity: ${updErr.message}`);
                     break;
                 }
