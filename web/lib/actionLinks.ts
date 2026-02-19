@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 
 const TOKEN_BYTES = 32;
 
@@ -30,7 +31,8 @@ export async function createActionLink(
 ): Promise<string | null> {
     const token = secureRandomToken();
     const expiresAt = new Date(Date.now() + params.expires_in_minutes * 60 * 1000).toISOString();
-    const { error } = await supabase.from("action_links").insert({
+    const admin = createAdminClient();
+    const { error } = await admin.from("action_links").insert({
         token,
         org_id: params.org_id,
         action_type: params.action_type,
