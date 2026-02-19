@@ -180,6 +180,13 @@ function resolveId(value: unknown, eventPayload: Record<string, unknown>): strin
     return s.trim() || null;
 }
 
+/** Resolve a dot-path (e.g. "job.id") from event payload to a string value (e.g. UUID). Returns null if path missing or empty. */
+function resolvePath(eventPayload: Record<string, unknown>, path: string | null | undefined): string | null {
+    if (path == null || typeof path !== "string" || !path.trim()) return null;
+    const v = getByPath(eventPayload, path.trim());
+    return v != null && v !== "" ? String(v) : null;
+}
+
 /** Single resolved recipient for send_message (contact_id and/or to_phone/to_email). */
 type ResolvedRecipient = { contact_id?: string | null; to_phone?: string | null; to_email?: string | null };
 
@@ -743,12 +750,27 @@ export async function executeWorkflowRun(
                     break;
                 }
                 case "create_assignment": {
-                    const scheduleId = resolveId(pl.schedule_id ?? pl.schedule_id_path, payload) ?? (payload.schedule && typeof payload.schedule === "object" && (payload.schedule as { id?: unknown }).id != null ? String((payload.schedule as { id: unknown }).id) : null);
-                    const jobId = resolveId(pl.job_id ?? pl.job_id_path, payload) ?? (payload.job && typeof payload.job === "object" && (payload.job as { id?: unknown }).id != null ? String((payload.job as { id: unknown }).id) : null);
-                    const vendorId = resolveId(pl.vendor_id ?? pl.vendor_id_path, payload) ?? (payload.job && typeof payload.job === "object" && (payload.job as { assigned_vendor_id?: unknown }).assigned_vendor_id != null ? String((payload.job as { assigned_vendor_id: unknown }).assigned_vendor_id) : null);
+                    const jobId =
+                        resolvePath(payload, pl.job_id_path as string | null | undefined) ??
+                        resolveId(pl.job_id, payload) ??
+                        (payload.job && typeof payload.job === "object" && (payload.job as { id?: unknown }).id != null ? String((payload.job as { id: unknown }).id) : null);
+                    const scheduleId =
+                        resolvePath(payload, pl.schedule_id_path as string | null | undefined) ??
+                        resolveId(pl.schedule_id, payload) ??
+                        (payload.schedule && typeof payload.schedule === "object" && (payload.schedule as { id?: unknown }).id != null ? String((payload.schedule as { id: unknown }).id) : null);
+                    const vendorId =
+                        resolvePath(payload, pl.vendor_id_path as string | null | undefined) ??
+                        resolveId(pl.vendor_id, payload) ??
+                        (payload.job && typeof payload.job === "object" && (payload.job as { assigned_vendor_id?: unknown }).assigned_vendor_id != null ? String((payload.job as { assigned_vendor_id: unknown }).assigned_vendor_id) : null);
+                    if (!jobId) {
+                        throw new Error("create_assignment: missing job id");
+                    }
+                    if (process.env.NODE_ENV !== "production") {
+                        console.log("[create_assignment] resolved", { jobId, scheduleId, vendorId });
+                    }
                     const statusKey = (pl.status_key != null ? String(pl.status_key) : "offered").trim() || "offered";
-                    if (!scheduleId || !jobId || !vendorId) {
-                        logs.push(`create_assignment: missing schedule_id, job_id, or vendor_id; skipping`);
+                    if (!scheduleId || !vendorId) {
+                        logs.push(`create_assignment: missing schedule_id or vendor_id; skipping`);
                         break;
                     }
                     const { data: statusRow } = await supabase.from("assignment_statuses").select("id").eq("key", statusKey).maybeSingle();
