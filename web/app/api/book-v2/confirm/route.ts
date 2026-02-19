@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
+import { emitEvent } from "@/lib/emitEvent";
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** Get or create pipeline stage by name (for Booked). */
@@ -1167,9 +1168,26 @@ export async function POST(request: NextRequest) {
                 opportunity: oppRow ?? null,
                 schedule: normalizedSchedule,
             };
+            let eventId: string | null = null;
+            try {
+                eventId = await emitEvent({
+                    org_id: orgIdForWorkflows,
+                    event_type: "booking_confirmed",
+                    entity_type: "job",
+                    entity_id: jobId,
+                    action_type: null,
+                    occurred_at: eventPayload.occurred_at as string,
+                    payload: eventPayload,
+                });
+            } catch (emitErr: unknown) {
+                console.error("[BOOK_V2_CONFIRM_EMIT_EVENT]", emitErr);
+            }
             for (const wf of bookingWorkflows) {
                 try {
-                    const runResult = await executeWorkflowRun(supabase, wf.id, eventPayload);
+                    const runResult = await executeWorkflowRun(supabase, wf.id, eventPayload, {
+                        event_id: eventId ?? null,
+                        org_id: orgIdForWorkflows,
+                    });
                     console.log(`[BOOK_V2_CONFIRM_WORKFLOW] workflow_id=${wf.id} run_id=${runResult.workflow_run_id} status=${runResult.status}`);
                 } catch (wfErr: unknown) {
                     console.error("[BOOK_V2_CONFIRM_WORKFLOW_ERROR]", wf.id, wfErr);
