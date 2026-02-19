@@ -228,10 +228,6 @@ export default function ActionConfirmPage() {
     const linkStatus = meta.consumed_at ? "Already used" : isExpired ? "Expired" : "Valid";
     const copy = getActionCopy(meta.action_type);
 
-    const cardClass = "max-w-md w-full mx-auto bg-white rounded-xl border border-alloy-stone/25 shadow-sm overflow-hidden";
-    const headerClass = "px-6 py-4 border-b border-alloy-stone/20 bg-alloy-stone/5";
-    const bodyClass = "px-6 py-5";
-
     return (
         <div className="min-h-screen flex items-center justify-center p-6">
             <div className={cardClass}>
