@@ -691,31 +691,35 @@ export async function executeWorkflowRun(
                     }
                     let entityId: string | null = null;
                     let resolvedVia: string | null = null;
+                    const tryPath = (path: string): boolean => {
+                        const v = getByPath(payload, path);
+                        if (v != null && v !== "") {
+                            entityId = String(v);
+                            resolvedVia = path;
+                            return true;
+                        }
+                        return false;
+                    };
                     if (idPath) {
-                        const fromTop = getByPath(payload, idPath);
-                        if (fromTop != null && fromTop !== "") {
-                            entityId = String(fromTop);
-                            resolvedVia = idPath;
-                        }
-                        if (!entityId) {
-                            const nestedPath = `${entityType}.${idPath}`;
-                            const fromNested = getByPath(payload, nestedPath);
-                            if (fromNested != null && fromNested !== "") {
-                                entityId = String(fromNested);
-                                resolvedVia = nestedPath;
-                            }
-                        }
-                        if (!entityId && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(idPath)) {
-                            entityId = idPath;
-                            resolvedVia = "literal";
-                        }
+                        tryPath(idPath) ||
+                            tryPath(`event_payload.${idPath}`) ||
+                            tryPath(`data.${idPath}`) ||
+                            tryPath(`${entityType}.${idPath}`) ||
+                            tryPath(`event_payload.${entityType}.${idPath}`) ||
+                            tryPath(`data.${entityType}.${idPath}`);
+                    }
+                    if (!entityId && idPath && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(idPath)) {
+                        entityId = idPath;
+                        resolvedVia = "literal";
                     }
                     if (!entityId) {
-                        const entityFromPayload = payload[entityType];
-                        entityId = entityFromPayload && typeof entityFromPayload === "object" && entityFromPayload !== null && "id" in entityFromPayload
-                            ? String((entityFromPayload as { id: unknown }).id)
-                            : null;
-                        if (entityId) resolvedVia = `${entityType}.id`;
+                        const fromObj = (obj: unknown) =>
+                            obj && typeof obj === "object" && obj !== null && "id" in obj ? String((obj as { id: unknown }).id) : null;
+                        const idFromEntity = fromObj(payload[entityType]) ?? fromObj(getByPath(payload, `event_payload.${entityType}`)) ?? fromObj(getByPath(payload, `data.${entityType}`));
+                        if (idFromEntity) {
+                            entityId = idFromEntity;
+                            resolvedVia = `${entityType}.id (event_payload/data fallback)`;
+                        }
                     }
                     if (resolvedVia) logs.push(`update_entity: resolved entity_id from path "${resolvedVia}"`);
                     if (!entityId) {
