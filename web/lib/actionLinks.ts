@@ -41,7 +41,7 @@ export async function createActionLink(
         action_type: params.action_type,
         entity_type: params.entity_type,
         entity_id: params.entity_id,
-        metadata: params.metadata ?? null,
+        metadata: (params.metadata ?? {}) as Record<string, unknown>,
         expires_at,
     });
 
