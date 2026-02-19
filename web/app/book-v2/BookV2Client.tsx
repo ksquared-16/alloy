@@ -317,6 +317,20 @@ export default function BookV2Client() {
     const cardCvcRef = useRef<HTMLDivElement>(null);
 
     const debug = searchParams?.get("debug") === "1";
+
+    // Reschedule-via-action-link: token from URL, resolve result, and confirm result
+    const [rescheduleResolve, setRescheduleResolve] = useState<{
+        token: string;
+        action_type: string;
+        entity_type: string;
+        entity_id: string;
+        expires_at: string;
+        consumed_at: string | null;
+    } | null>(null);
+    const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+    const [rescheduleLoading, setRescheduleLoading] = useState(true);
+    const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
+    const [rescheduleResult, setRescheduleResult] = useState<{ start_at: string; end_at: string } | null>(null);
     
     // Resolve email/phone with priority: query params > localStorage > debug mock
     const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
@@ -343,6 +357,43 @@ export default function BookV2Client() {
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // Resolve reschedule_token from URL: if valid, go to slot selection; if invalid, show error
+    useEffect(() => {
+        const token = searchParams?.get("reschedule_token");
+        if (!token?.trim()) {
+            setRescheduleLoading(false);
+            return;
+        }
+        setRescheduleLoading(true);
+        setRescheduleError(null);
+        setRescheduleResolve(null);
+        fetch(`/api/action-links/resolve?token=${encodeURIComponent(token.trim())}`)
+            .then((res) => res.json())
+            .then((data: { valid?: boolean; action_type?: string; entity_type?: string; entity_id?: string; expires_at?: string; consumed_at?: string | null }) => {
+                if (data.valid && data.action_type === "customer_reschedule" && data.entity_type === "schedule" && data.entity_id) {
+                    setRescheduleResolve({
+                        token: token.trim(),
+                        action_type: data.action_type,
+                        entity_type: data.entity_type,
+                        entity_id: data.entity_id,
+                        expires_at: data.expires_at ?? "",
+                        consumed_at: data.consumed_at ?? null,
+                    });
+                    setCurrentStep("slot_selection");
+                } else {
+                    if (!data.valid) {
+                        if (data.consumed_at) setRescheduleError("This link has already been used.");
+                        else if (data.expires_at && new Date(data.expires_at) <= new Date()) setRescheduleError("This link has expired.");
+                        else setRescheduleError("This link is invalid.");
+                    } else {
+                        setRescheduleError("This link is not valid for rescheduling.");
+                    }
+                }
+            })
+            .catch(() => setRescheduleError("Something went wrong. Please try again."))
+            .finally(() => setRescheduleLoading(false));
+    }, [searchParams]);
 
     // Scroll to top when showing booking confirmation so user sees success message
     useEffect(() => {
@@ -1302,6 +1353,99 @@ export default function BookV2Client() {
             setIsProcessingPayment(false);
         }
     };
+
+    // Reschedule flow: loading, error, success, or slot picker
+    const rescheduleToken = searchParams?.get("reschedule_token");
+    if (rescheduleToken?.trim()) {
+        if (rescheduleLoading) {
+            return (
+                <div className="min-h-screen py-6 md:py-10">
+                    <Section className="max-w-7xl">
+                        <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
+                            <p className="text-alloy-midnight/70">Loading…</p>
+                        </div>
+                    </Section>
+                </div>
+            );
+        }
+        if (rescheduleError) {
+            return (
+                <div className="min-h-screen py-6 md:py-10">
+                    <Section className="max-w-7xl">
+                        <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
+                            <h2 className="text-xl font-semibold text-alloy-midnight mb-2">Unable to reschedule</h2>
+                            <p className="text-alloy-midnight/70 text-sm mb-4">{rescheduleError}</p>
+                            <a href="/" className="text-alloy-blue hover:underline text-sm">Go home</a>
+                        </div>
+                    </Section>
+                </div>
+            );
+        }
+        if (rescheduleResult) {
+            const startDate = new Date(rescheduleResult.start_at);
+            const endDate = new Date(rescheduleResult.end_at);
+            const formatted = startDate.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+            return (
+                <div className="min-h-screen py-6 md:py-10">
+                    <Section className="max-w-7xl">
+                        <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
+                            <h2 className="text-xl font-semibold text-alloy-midnight mb-2">Appointment rescheduled</h2>
+                            <p className="text-alloy-midnight/70 text-sm mb-4">Your appointment is now scheduled for {formatted}.</p>
+                            <a href="/" className="text-alloy-blue hover:underline text-sm">Go home</a>
+                        </div>
+                    </Section>
+                </div>
+            );
+        }
+        if (rescheduleResolve) {
+            const handleRescheduleConfirm = () => {
+                if (!selectedSlot || rescheduleSubmitting) return;
+                setRescheduleSubmitting(true);
+                fetch("/api/action-links/consume-reschedule", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        token: rescheduleResolve.token,
+                        start_at: selectedSlot.isoStart,
+                        end_at: selectedSlot.isoEnd,
+                        timezone,
+                    }),
+                })
+                    .then((res) => res.json())
+                    .then((data: { ok?: boolean; error?: string; start_at?: string; end_at?: string }) => {
+                        if (data.ok && data.start_at && data.end_at) {
+                            setRescheduleResult({ start_at: data.start_at, end_at: data.end_at });
+                        } else {
+                            setBookingError(data.error ?? "Failed to reschedule");
+                        }
+                    })
+                    .catch(() => setBookingError("Failed to reschedule. Please try again."))
+                    .finally(() => setRescheduleSubmitting(false));
+            };
+            return (
+                <div className="min-h-screen py-6 md:py-10">
+                    <Section className="max-w-7xl">
+                        <div className="max-w-4xl mx-auto space-y-6">
+                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6">
+                                <h2 className="text-xl font-bold text-alloy-midnight mb-2">Choose a new time</h2>
+                                <p className="text-sm text-alloy-midnight/70 mb-6">Select an available slot below, then confirm to reschedule your appointment.</p>
+                                <SlotPicker
+                                    selectedSlot={selectedSlot}
+                                    onSelectSlot={handleSelectSlot}
+                                    onConfirmTime={handleRescheduleConfirm}
+                                    timezone={timezone}
+                                    error={bookingError}
+                                />
+                                <div className="mt-4">
+                                    <a href="/" className="text-alloy-midnight/70 hover:underline text-sm">Back</a>
+                                </div>
+                            </div>
+                        </div>
+                    </Section>
+                </div>
+            );
+        }
+    }
 
     return (
         <div className="min-h-screen py-6 md:py-10">
