@@ -707,12 +707,13 @@ export async function executeWorkflowRun(
                         break;
                     }
                     const orgIdResolved = payload?.org_id ?? run?.org_id;
-                    const entityIdRaw =
-                        (idPath && (payload as Record<string, unknown>)?.[idPath]) ??
-                        (payload?.event_payload && typeof payload.event_payload === "object" && idPath
-                            ? (payload.event_payload as Record<string, unknown>)[idPath]
-                            : undefined);
-                    const entityId = entityIdRaw != null && entityIdRaw !== "" ? String(entityIdRaw) : null;
+                    let entityId: string | null =
+                        resolvePath(payload, pl.id_path as string | null | undefined) ??
+                        resolveId(pl.entity_id, payload) ??
+                        (payload?.entity_id != null && payload.entity_id !== "" ? String(payload.entity_id) : null) ??
+                        (payload?.event_payload && typeof payload.event_payload === "object" && (payload.event_payload as Record<string, unknown>).entity_id != null && (payload.event_payload as Record<string, unknown>).entity_id !== ""
+                            ? String((payload.event_payload as Record<string, unknown>).entity_id)
+                            : null);
 
                     if (!orgIdResolved) {
                         throw new Error("update_entity: missing org_id");
@@ -721,15 +722,15 @@ export async function executeWorkflowRun(
                         throw new Error("update_entity: missing entity_id");
                     }
 
+                    if (process.env.NODE_ENV !== "production") {
+                        console.log("[update_entity] debug", { target_entity: entityType, id_path: idPath || null, resolvedEntityId: entityId });
+                    }
+
                     const patchResolved: Record<string, unknown> = {};
                     for (const k of Object.keys(patch)) {
                         const v = patch[k];
                         patchResolved[k] = typeof v === "string" ? renderTemplate(v, payload) : v;
                     }
-
-                    console.log("[update_entity] orgId:", orgIdResolved);
-                    console.log("[update_entity] entityId:", entityId);
-                    console.log("[update_entity] patchResolved:", patchResolved);
 
                     const { data, error: updErr } = await supabase
                         .from(table)
