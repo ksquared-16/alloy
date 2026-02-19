@@ -593,6 +593,8 @@ export async function executeWorkflowRun(
 
     const logs: string[] = [];
     const orgId = payload.org_id ?? null;
+    const { data: runRow } = await supabase.from("workflow_runs").select("org_id").eq("id", runId).maybeSingle();
+    const run = runRow as { org_id?: string } | null;
 
     try {
         for (const action of actions ?? []) {
@@ -689,67 +691,47 @@ export async function executeWorkflowRun(
                         logs.push(`update_entity: unknown entity_type ${entityType}, skipping`);
                         break;
                     }
-                    const ep = payload?.event_payload;
-                    let entityId: string | null = null;
-                    let resolvedVia: string | null = null;
-                    if (ep != null && typeof ep === "object" && (ep as Record<string, unknown>).entity_id != null && (ep as Record<string, unknown>).entity_id !== "") {
-                        entityId = String((ep as Record<string, unknown>).entity_id);
-                        resolvedVia = "event_payload.entity_id (hard)";
-                    }
-                    if (!entityId && idPath && ep != null && typeof ep === "object" && (ep as Record<string, unknown>)[idPath] != null && (ep as Record<string, unknown>)[idPath] !== "") {
-                        entityId = String((ep as Record<string, unknown>)[idPath]);
-                        resolvedVia = `event_payload.${idPath} (hard)`;
-                    }
-                    if (!entityId && payload?.entity_id != null && payload.entity_id !== "") {
-                        entityId = String(payload.entity_id);
-                        resolvedVia = "entity_id (hard)";
-                    }
-                    const tryPath = (path: string): boolean => {
-                        const v = getByPath(payload, path);
-                        if (v != null && v !== "") {
-                            entityId = String(v);
-                            resolvedVia = path;
-                            return true;
-                        }
-                        return false;
-                    };
-                    if (idPath && !entityId) {
-                        tryPath(idPath) ||
-                            tryPath(`event_payload.${idPath}`) ||
-                            tryPath(`data.${idPath}`) ||
-                            tryPath(`${entityType}.${idPath}`) ||
-                            tryPath(`event_payload.${entityType}.${idPath}`) ||
-                            tryPath(`data.${entityType}.${idPath}`);
-                    }
-                    if (!entityId && idPath && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(idPath)) {
-                        entityId = idPath;
-                        resolvedVia = "literal";
+                    const orgIdResolved = payload?.org_id ?? run?.org_id;
+                    const entityIdRaw =
+                        (idPath && (payload as Record<string, unknown>)?.[idPath]) ??
+                        (payload?.event_payload && typeof payload.event_payload === "object" && idPath
+                            ? (payload.event_payload as Record<string, unknown>)[idPath]
+                            : undefined);
+                    const entityId = entityIdRaw != null && entityIdRaw !== "" ? String(entityIdRaw) : null;
+
+                    if (!orgIdResolved) {
+                        throw new Error("update_entity: missing org_id");
                     }
                     if (!entityId) {
-                        const fromObj = (obj: unknown) =>
-                            obj && typeof obj === "object" && obj !== null && "id" in obj ? String((obj as { id: unknown }).id) : null;
-                        const idFromEntity = fromObj(payload[entityType]) ?? fromObj(getByPath(payload, `event_payload.${entityType}`)) ?? fromObj(getByPath(payload, `data.${entityType}`));
-                        if (idFromEntity) {
-                            entityId = idFromEntity;
-                            resolvedVia = `${entityType}.id (event_payload/data fallback)`;
-                        }
+                        throw new Error("update_entity: missing entity_id");
                     }
-                    if (resolvedVia) logs.push(`update_entity: resolved entity_id from path "${resolvedVia}"`);
-                    if (!entityId) {
-                        logs.push(`update_entity: could not resolve entity_id for ${entityType}, skipping`);
-                        break;
-                    }
-                    const templatedPatch: Record<string, unknown> = {};
+
+                    const patchResolved: Record<string, unknown> = {};
                     for (const k of Object.keys(patch)) {
                         const v = patch[k];
-                        if (typeof v === "string") {
-                            templatedPatch[k] = renderTemplate(v, payload);
-                        } else {
-                            templatedPatch[k] = v;
-                        }
+                        patchResolved[k] = typeof v === "string" ? renderTemplate(v, payload) : v;
                     }
-                    const { error: updErr } = await supabase.from(table).update(templatedPatch).eq("id", entityId);
-                    if (updErr) throw new Error(`update_entity: ${updErr.message}`);
+
+                    console.log("[update_entity] orgId:", orgIdResolved);
+                    console.log("[update_entity] entityId:", entityId);
+                    console.log("[update_entity] patchResolved:", patchResolved);
+
+                    const { data, error: updErr } = await supabase
+                        .from(table)
+                        .update(patchResolved)
+                        .eq("id", entityId)
+                        .eq("org_id", orgIdResolved)
+                        .select("id")
+                        .maybeSingle();
+
+                    if (updErr) {
+                        throw updErr;
+                    }
+                    if (!data) {
+                        throw new Error(
+                            `update_entity: 0 rows updated (${entityType} id=${entityId}, org_id=${orgIdResolved})`
+                        );
+                    }
                     break;
                 }
                 case "create_assignment": {
