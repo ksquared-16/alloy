@@ -876,7 +876,7 @@ export async function executeWorkflowRun(
                         logs.push("create_action_link: could not resolve entity_id; skipping");
                         break;
                     }
-                    const token = await createActionLink(supabase, {
+                    const result = await createActionLink(supabase, {
                         org_id: linkOrgId,
                         action_type: linkActionType,
                         entity_type: linkEntityType,
@@ -884,6 +884,20 @@ export async function executeWorkflowRun(
                         expires_in_minutes: expiresInMinutes,
                         metadata: (pl.metadata != null && typeof pl.metadata === "object" ? pl.metadata : null) as Record<string, unknown> | null,
                     });
+                    if (process.env.NODE_ENV !== "production") {
+                        console.log("[create_action_link] result", result);
+                    }
+                    let token: string | null = null;
+                    if (typeof result === "string") {
+                        token = result;
+                    } else if (result && typeof result === "object") {
+                        const obj = result as Record<string, unknown>;
+                        if ("token" in obj && typeof obj.token === "string") {
+                            token = obj.token;
+                        } else if ("data" in obj && obj.data != null && typeof obj.data === "object" && "token" in (obj.data as Record<string, unknown>) && typeof (obj.data as Record<string, unknown>).token === "string") {
+                            token = (obj.data as { token: string }).token;
+                        }
+                    }
                     if (token) {
                         const baseUrl =
                             (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||
