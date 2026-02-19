@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
-
-const OFFERED_STATUS_KEY = "offered";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /**
- * POST: apply job.assigned_vendor_id to all upcoming schedules (safe rules).
- * - No assignment -> create with vendor_id and status 'offered'.
- * - Assignment exists and status = 'offered' -> update vendor_id only.
- * - Any other status -> leave unchanged.
+ * POST: trigger workflow(s) to apply job.assigned_vendor_id to all upcoming schedules.
+ * Policy (create/update assignments with status "offered") is performed by workflows
+ * with event_type "job_default_vendor_applied" and action apply_job_vendor_to_upcoming.
  */
 export async function POST(
     _request: Request,
@@ -32,62 +30,23 @@ export async function POST(
     const vendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id;
     if (!vendorId) return NextResponse.json({ error: "Job has no assigned_vendor_id; set it first" }, { status: 400 });
 
-    const { data: offeredStatus } = await supabase
-        .from("assignment_statuses")
-        .select("id")
-        .eq("key", OFFERED_STATUS_KEY)
-        .maybeSingle();
-    const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
-    if (!offeredStatusId) return NextResponse.json({ error: `Assignment status '${OFFERED_STATUS_KEY}' not found` }, { status: 500 });
-
-    const now = new Date().toISOString();
-    const { data: upcomingSchedules } = await supabase
-        .from("schedules")
-        .select("id")
-        .eq("job_id", jobId)
-        .is("canceled_at", null)
-        .gte("start_at", now);
-    const scheduleIds = (upcomingSchedules ?? []).map((s) => (s as { id: string }).id);
-    if (scheduleIds.length === 0) return NextResponse.json({ ok: true, applied: 0 });
-
-    const { data: existingAssignments } = await supabase
-        .from("assignments")
-        .select("id, schedule_id, assignment_status_id")
-        .in("schedule_id", scheduleIds);
-    const assignmentBySchedule = new Map(
-        (existingAssignments ?? []).map((a) => [(a as { schedule_id: string }).schedule_id, a as { id: string; assignment_status_id?: string | null }])
-    );
-
-    const { data: statusRows } = await supabase
-        .from("assignment_statuses")
-        .select("id, key")
-        .in("id", [...new Set((existingAssignments ?? []).map((a) => (a as { assignment_status_id?: string }).assignment_status_id).filter(Boolean))]);
-    const statusKeyById = new Map((statusRows ?? []).map((s) => [(s as { id: string }).id, (s as { key: string }).key]));
-
-    let created = 0;
-    let updated = 0;
-    for (const scheduleId of scheduleIds) {
-        const existing = assignmentBySchedule.get(scheduleId);
-        if (!existing) {
-            const { error: insErr } = await supabase.from("assignments").insert({
-                schedule_id: scheduleId,
-                job_id: jobId,
-                vendor_id: vendorId,
-                assignment_status_id: offeredStatusId,
-                updated_at: now,
-            });
-            if (!insErr) created++;
-            continue;
-        }
-        const currentKey = existing.assignment_status_id ? statusKeyById.get(existing.assignment_status_id) : null;
-        if (currentKey === OFFERED_STATUS_KEY) {
-            const { error: updErr } = await supabase
-                .from("assignments")
-                .update({ vendor_id: vendorId, updated_at: now })
-                .eq("id", existing.id);
-            if (!updErr) updated++;
+    const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+    let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "job_default_vendor_applied").eq("entity_type", "job");
+    if (orgId) wq = wq.or(`org_id.eq.${orgId},org_id.is.null`);
+    const { data: wfs } = await wq;
+    const eventPayload: Record<string, unknown> = {
+        event_type: "job_default_vendor_applied",
+        occurred_at: new Date().toISOString(),
+        org_id: orgId,
+        job,
+    };
+    for (const wf of wfs ?? []) {
+        try {
+            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
+        } catch (_) {
+            // log and continue
         }
     }
 
-    return NextResponse.json({ ok: true, applied: created + updated, created, updated });
+    return NextResponse.json({ ok: true });
 }

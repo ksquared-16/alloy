@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 const ALLOWED_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "job_status_id", "internal_notes", "completed_at", "assigned_vendor_id"] as const;
 
-const JOB_ACTION_PAYLOADS: Record<string, Record<string, unknown>> = {
-    assign_vendor: { job_status_id: "assigned" },
-    mark_completed: { job_status_id: "completed", completed_at: new Date().toISOString() },
-};
+const JOB_ACTIONS = ["assign_vendor", "mark_completed"] as const;
 
 export async function PATCH(
     request: NextRequest,
@@ -26,8 +24,34 @@ export async function PATCH(
         const updates: Record<string, unknown> = {};
 
         const action = body.action as string | undefined;
-        if (action && JOB_ACTION_PAYLOADS[action]) {
-            Object.assign(updates, JOB_ACTION_PAYLOADS[action]);
+        if (action && (JOB_ACTIONS as readonly string[]).includes(action)) {
+            const supabase = createAdminClient();
+            const { data: jobRow } = await supabase.from("jobs").select("*").eq("id", id).single();
+            if (jobRow) {
+                const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+                let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "job_action").eq("entity_type", "job");
+                if (orgId) wq = wq.or(`org_id.eq.${orgId},org_id.is.null`);
+                const { data: wfs } = await wq;
+                const eventPayload: Record<string, unknown> = {
+                    event_type: "job_action",
+                    occurred_at: new Date().toISOString(),
+                    org_id: orgId,
+                    action,
+                    job: jobRow,
+                };
+                for (const wf of wfs ?? []) {
+                    try {
+                        await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
+                    } catch (_) {
+                        // log and continue
+                    }
+                }
+                const { data: jobAfter } = await supabase.from("jobs").select("*").eq("id", id).single();
+                if (jobAfter && Object.keys(updates).length === 0) {
+                    logAdminAudit({ entity: "jobs", id, changed_fields: ["action:" + action], actor_user_id: auth.user.id, role: auth.role });
+                    return NextResponse.json(jobAfter);
+                }
+            }
         }
 
         for (const key of ALLOWED_KEYS) {

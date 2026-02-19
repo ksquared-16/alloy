@@ -1,281 +1,138 @@
 # Alloy
 
-Alloy is a marketplace connecting homeowners with trusted local service professionals, starting with home cleaning in Bend, Oregon.
+Alloy is a **platform connecting homeowners with local service professionals**. The system of record is **Supabase**; the main application is the **Next.js web app** in `web/`, which handles marketing, quoting, booking, and a full admin for opportunities, jobs, schedules, vendors, and operations. The current production vertical is **home cleaning** (e.g. Bend, Oregon).
 
-This repository contains:
-- **backend/** – Python-based dispatcher/API that integrates with GoHighLevel (GHL) and Twilio for SMS flows
-- **web/** – Next.js marketing website and lead generation frontend
+**What’s working today:** A customer gets a quote (quote-start → quote-refine), selects a time (availability), and confirms (book-v2/confirm). That creates or reuses **Opportunity → Job → Schedule** and optionally **Customer/Contact** and **discount redemptions**. Admins manage **vendors** (approve/suspend), set a **job default vendor** (`assigned_vendor_id`), **apply it to upcoming schedules** (creates assignments with status “offered”), and handle **assignments** (accept/decline), **reschedule**, and **cancel**. **Subscriptions** can generate the next occurrence (generate-next). **Workflows** (e.g. `booking_confirmed`) run on confirm and can enqueue **messages_outbox** (Twilio/send integration TBD). A separate **sync** (Python) can pull contacts/opportunities/jobs from GoHighLevel into Supabase; a **backend** (Python) exists for GHL/Twilio flows and is optional relative to the web app.
 
-## Repository Structure
+---
+
+## Repository structure
 
 ```
 .
-├── backend/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI dispatcher application
-│   ├── requirements.txt     # Python dependencies
-│   └── .env.example         # Environment variable template
-├── web/
-│   ├── app/                 # Next.js App Router pages
-│   ├── components/          # React components
-│   ├── lib/                 # Utility functions and API helpers
-│   ├── public/              # Static assets
+├── web/                    # Next.js 16 app (main app + admin + API routes)
+│   ├── app/                # App Router: pages + API routes
+│   │   ├── admin/          # Admin UI (dashboard, jobs, schedules, vendors, etc.)
+│   │   ├── api/            # API: book-v2, admin/*, action links, etc.
+│   │   ├── book-v2/        # Booking flow UI
+│   │   └── ...
+│   ├── components/         # React components (admin, cleaning, UI)
+│   ├── lib/                # Supabase clients, workflowRun, bookingResolver, etc.
 │   └── ...
-└── README.md
+├── supabase/
+│   └── migrations/         # SQL migrations (apply via Supabase CLI or dashboard)
+├── sync/                  # Python: GHL → Supabase sync (contacts, opportunities, jobs)
+├── backend/                # Python: GHL/Twilio dispatcher (optional; see below)
+└── docs/                   # Architecture, domain model, deployment, operations
 ```
 
-## Backend Setup
+- **web**: Primary app. Next.js runs both the public/marketing/booking frontend and the admin; API routes live under `web/app/api/`.
+- **supabase/migrations**: Source of truth for schema. Apply in order by timestamp prefix.
+- **sync**: Idempotent workers that pull from GoHighLevel and upsert into Supabase (see `sync/README.md`).
+- **backend**: Legacy/optional Python service for GHL webhooks and Twilio; not required for the core booking → job → schedule → assignment flow, which is handled in the web app.
 
-The backend is a FastAPI application that handles:
-- Job dispatch to contractors via GHL and SMS
-- Contractor reply processing
-- Lead submission from the frontend website
-- Pros application submissions
+---
+
+## Local setup
 
 ### Prerequisites
 
-- Python 3.8+
-- Virtual environment (venv)
+- **Node.js 18+** (for web)
+- **Supabase** project (local or hosted)
+- **Python 3.8+** (only if running sync or backend)
 
-### Installation
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Create a virtual environment:
-   ```bash
-   python -m venv .venv
-   ```
-
-3. Activate the virtual environment:
-   ```bash
-   # On macOS/Linux:
-   source .venv/bin/activate
-   
-   # On Windows:
-   .venv\Scripts\activate
-   ```
-
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. Create a `.env` file (copy from `.env.example` if available, or create manually):
-   ```bash
-   # Required environment variables:
-   GHL_API_KEY=your_ghl_api_key_here
-   GHL_LOCATION_ID=your_ghl_location_id_here
-   
-   # Optional: GHL Custom Field IDs (for contact custom fields)
-   # If not set, these fields will be skipped when creating/updating contacts
-   GHL_CF_SERVICE_TYPE=your_custom_field_id_here
-   GHL_CF_PREFERRED_SERVICE_DATE=your_custom_field_id_here
-   GHL_CF_HOME_TYPE=your_custom_field_id_here
-   GHL_CF_CLEANING_FREQUENCY=your_custom_field_id_here
-   GHL_CF_EXTRAS_ADD_ONS=your_custom_field_id_here
-   GHL_CF_ADDONS_FREQUENCY=your_custom_field_id_here
-   GHL_CF_APPROX_SQFT=your_custom_field_id_here
-   ```
-
-### Running the Backend
-
-Start the development server:
+### 1. Web app
 
 ```bash
-uvicorn backend.main:app --reload
-```
-
-The API will be available at `http://localhost:8000`
-
-- API docs: `http://localhost:8000/docs` (Swagger UI)
-- Health check: `http://localhost:8000/`
-
-### Backend Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GHL_API_KEY` | GoHighLevel API Bearer token | Yes |
-| `GHL_LOCATION_ID` | GoHighLevel location ID | Yes |
-| `STRIPE_SECRET_KEY` | Stripe secret key for SetupIntent creation | Yes (for payment flow) |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | Yes (for payment flow) |
-| `GHL_STRIPE_CUSTOMER_ID` | GHL custom field ID for storing Stripe Customer ID | Yes (for payment flow) |
-| `GHL_CF_SERVICE_TYPE` | GHL custom field ID for service type | No (skipped if missing) |
-| `GHL_CF_PREFERRED_SERVICE_DATE` | GHL custom field ID for preferred service date | No (skipped if missing) |
-| `GHL_CF_HOME_TYPE` | GHL custom field ID for home type | No (skipped if missing) |
-| `GHL_CF_CLEANING_FREQUENCY` | GHL custom field ID for cleaning frequency | No (skipped if missing) |
-| `GHL_CF_EXTRAS_ADD_ONS` | GHL custom field ID for extras/add-ons | No (skipped if missing) |
-| `GHL_CF_ADDONS_FREQUENCY` | GHL custom field ID for add-ons frequency | No (skipped if missing) |
-| `GHL_CF_APPROX_SQFT` | GHL custom field ID for approximate square footage | No (skipped if missing) |
-
-## Frontend Setup
-
-The frontend is a Next.js 14+ application with TypeScript and Tailwind CSS.
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation
-
-1. Navigate to the web directory:
-   ```bash
-   cd web
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env.local` file:
-   ```bash
-   NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-   ```
-
-### Running the Frontend
-
-Start the development server:
-
-```bash
+cd web
+cp .env.local.example .env.local   # if present; otherwise create .env.local
+npm install
 npm run dev
 ```
 
-The website will be available at `http://localhost:3000`
+App runs at **http://localhost:3000**. Admin at **http://localhost:3000/admin** (requires Supabase Auth; see `web/lib/adminAuth` and login flow).
 
-### Frontend Environment Variables
+**Required env (see `web/.env.local`):**
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEXT_PUBLIC_API_BASE_URL` | Base URL of the backend API (e.g., `http://localhost:8000` in dev) | Yes |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE` | Stripe publishable key for card-on-file collection | Yes (for payment flow) |
+- `NEXT_PUBLIC_SUPABASE_URL` – Supabase project URL  
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` – Supabase anon key  
+- `SUPABASE_SERVICE_ROLE_KEY` – Server-side (confirm, admin, workflows); never expose to client  
 
-### Stripe Configuration
+Other keys (Stripe, Twilio, etc.) as needed for payment and messaging (TBD in codebase).
 
-The application uses Stripe SetupIntents for card-on-file collection (no charge today).
+### 2. Database and migrations
 
-**Important:** SetupIntent is NOT a payment. It saves a payment method to a Stripe Customer for future charges. No money is charged when collecting the card.
-
-**Frontend (Vercel):**
-- Set `NEXT_PUBLIC_STRIPE_PUBLISHABLE` in Vercel project settings (Stripe publishable key)
-- **Important:** After changing environment variables in Vercel, you MUST redeploy for changes to take effect
-- Debug page available at `/debug/stripe` to verify configuration
-
-**Backend (Render):**
-- Set `STRIPE_SECRET_KEY` - Your Stripe secret key
-- Set `STRIPE_WEBHOOK_SECRET` - Webhook signing secret (get from `stripe listen` or Stripe Dashboard)
-- Set `GHL_STRIPE_CUSTOMER_ID` - GHL custom field ID where Stripe Customer ID (cus_...) is stored
-- Set `GHL_WORKFLOW_SECRET` - Secret token for GHL workflow webhook authentication (used for `/stripe/charge` endpoint)
-
-**Testing Locally:**
-1. Start backend: `uvicorn backend.main:app --reload`
-2. Forward webhooks: `stripe listen --forward-to localhost:8000/stripe/webhook`
-3. Start frontend: `npm run dev`
-4. Visit `/payment?phone=+15551234567&email=test@example.com`
-5. Use test card: `4242 4242 4242 4242`
-6. Verify:
-   - SetupIntent is created with Stripe Customer
-   - Webhook receives `setup_intent.succeeded`
-   - Contact in GHL is tagged with "card_on_file:collected"
-   - Stripe Customer ID is synced to GHL contact custom field
-
-**Charging Customers (GHL Workflow Integration):**
-
-The `/stripe/charge` endpoint allows GHL workflows to charge customers when an opportunity stage becomes "Ready to Pay".
-
-**Testing the charge endpoint:**
+Migrations live in **`supabase/migrations/`** (root of repo). Apply via Supabase CLI:
 
 ```bash
-curl -X POST https://alloy-dispatcher.onrender.com/stripe/charge \
-  -H "Content-Type: application/json" \
-  -H "X-ALLOY-WORKFLOW-SECRET: <your-secret>" \
-  -d '{
-    "stripe_customer_id": "cus_123",
-    "amount": "240.00",
-    "currency": "usd",
-    "description": "Test Job Payment",
-    "ghl_contact_id": "...",
-    "opportunity_id": "..."
-  }'
+# If using Supabase CLI linked to your project
+supabase db push
 ```
 
-**GHL Workflow Configuration:**
+Or run the SQL files in order (by filename timestamp) in the Supabase SQL editor or your migration runner. **Do not change migration order**; they depend on each other.
 
-When setting up the workflow action in GHL, use these fields:
-- **Stripe Customer ID**: `{{contact.stripe_customer_id}}`
-- **Description**: `{{opportunity.name}}`
-- **Amount**: `{{opportunity.lead_value}}`
-- **Currency**: `usd` (or leave empty for default)
-- **GHL Contact ID**: `{{contact.id}}` (optional but recommended)
-- **Opportunity ID**: `{{opportunity.id}}` (optional but recommended)
+### 3. Sync (optional)
 
-The endpoint will:
-1. Verify the workflow secret (X-ALLOY-WORKFLOW-SECRET header)
-2. Convert amount from dollars to cents
-3. Retrieve the customer's default payment method
-4. Create and confirm a PaymentIntent (off-session)
-5. Update GHL with success/failure tags and notes
+For GHL → Supabase sync:
 
-## Development Workflow
+```bash
+cd sync
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env: GHL_*, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# Run e.g. sync_contacts.py, sync_opportunities.py, sync_jobs.py
+```
 
-1. **Start the backend** (in one terminal):
-   ```bash
-   cd backend
-   source .venv/bin/activate  # or activate on Windows
-   uvicorn backend.main:app --reload
-   ```
+See **`sync/README.md`** for details.
 
-2. **Start the frontend** (in another terminal):
-   ```bash
-   cd web
-   npm run dev
-   ```
+### 4. Backend (optional)
 
-3. The frontend at `http://localhost:3000` will communicate with the backend at `http://localhost:8000`
+Python dispatcher for GHL/Twilio; not required for booking/admin:
 
-## API Endpoints
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+# Configure .env per backend needs; run e.g. uvicorn
+```
 
-### Public Endpoints
+---
 
-- `GET /` – Health check
-- `GET /contractors` – List eligible contractors
-- `POST /leads/cleaning` – Submit a cleaning lead from the website
-- `POST /leads/pros` – Submit a pros application
+## Staging / production workflow
 
-### Webhook Endpoints (called by GHL)
+- **Branches:** `staging` is the main branch referenced for this doc. Production branch and strategy: **TBD** (confirm in your Vercel/project settings).
+- **Web deploy:** Typically **Vercel** (Next.js). Set env vars in Vercel (Supabase, Stripe, etc.); no application code changes in this doc.
+- **Supabase:** Separate projects for staging vs prod recommended. Point each deploy to the correct Supabase project via env.
+- **Migrations:** Apply to each environment (staging, prod) in the same order; avoid schema drift.
 
-- `POST /dispatch` – Called when a customer books an appointment
-- `POST /contractor-reply` – Called when a contractor replies to a dispatch SMS
-- `POST /stripe/charge` – Charge customer's saved payment method (requires X-ALLOY-WORKFLOW-SECRET header)
+---
 
-### Debug Endpoints
+## Next up (from current codebase)
 
-- `GET /debug/jobs` – View in-memory job cache (development only)
+- **Messaging / workflows:** Harden workflow execution and messages_outbox processing (e.g. Twilio sender); RLS and audit where needed.
+- **RLS:** Row Level Security is not fully applied; admin currently uses service role / server-side auth.
+- **Job statuses:** Optional `job_statuses` table for human-readable labels; fallback in admin for known keys (scheduled, assigned, completed).
+- **Subscription cadence:** generate-next uses subscription `cadence`/`interval`; confirm schema source (table vs `pricing_frequencies`) if needed.
 
-## Future Work
+---
 
-- Split dispatcher functions into separate modules for better organization
-- Add more service verticals (beyond home cleaning)
-- Add database persistence for jobs (currently in-memory)
-- Add authentication/authorization for admin endpoints
-- Expand API documentation with more examples
-- Add integration tests
+## Docs
 
-## Brand Guidelines
+| Doc | Purpose |
+|-----|--------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System overview, data flows, idempotency, where to add features |
+| [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) | Entities, relationships, assignment statuses, default vendor vs assignment |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy process, env, validation |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | How admins run the business; checklists for demo/QA |
+| [docs/EVENTS.md](docs/EVENTS.md) | System events implied by code (workflows, action links); optional |
 
-The frontend uses the following brand colors (defined in Tailwind config):
+---
 
-- **Alloy Blue** (`#00458C`) – Primary brand color
-- **Bend Pine** (`#273F52`) – Muted green/blue accent
-- **Juniper** (`#00A283`) – Calm, fresh accent
-- **Ember** (`#BC4300`) – Warm accent (use sparingly)
-- **River Stone** (`#F4F6F9`) – Light neutral background
-- **Midnight Forge** (`#18273A`) – Dark text/background
+## Notes / TBD
 
-Typography: **Poppins** (all weights) via Google Fonts
-
-Brand values: Trust First, Fair for Everyone, Human + Smart, Dead-Simple, Local Proud
-
+- Confirm production branch and Vercel project(s).
+- Confirm which env vars are required for book-v2 payment (Stripe) and messaging (Twilio).
+- Backend and sync are optional; document which flows still depend on them, if any.

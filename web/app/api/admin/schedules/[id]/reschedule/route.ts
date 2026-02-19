@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
-/** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. */
+/** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. When copy_assignment is false, workflow(s) with event_type "schedule_created" may create assignment from job default. */
 export async function POST(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
@@ -70,20 +71,26 @@ export async function POST(
             });
         }
     } else {
-        const { data: jobRow } = await supabase.from("jobs").select("assigned_vendor_id").eq("id", jobId).single();
-        const assignedVendorId = (jobRow as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
-        if (assignedVendorId) {
-            const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "offered").maybeSingle();
-            const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
-            if (offeredStatusId) {
-                await supabase.from("assignments").insert({
-                    schedule_id: newId,
-                    job_id: jobId,
-                    vendor_id: assignedVendorId,
-                    assignment_status_id: offeredStatusId,
-                    updated_at: new Date().toISOString(),
-                });
-            }
+        const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).single();
+        const job = jobRow ?? null;
+        const orgIdForWf = (oldSchedule as { org_id?: string }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "schedule_created").eq("entity_type", "schedule");
+        if (orgIdForWf) wq = wq.or(`org_id.eq.${orgIdForWf},org_id.is.null`);
+        const { data: wfs } = await wq;
+        const { data: newScheduleRow } = await supabase.from("schedules").select("*").eq("id", newId).single();
+        const eventPayload: Record<string, unknown> = {
+            event_type: "schedule_created",
+            occurred_at: new Date().toISOString(),
+            org_id: orgIdForWf,
+            schedule_id: newId,
+            job_id: jobId,
+            job,
+            schedule: newScheduleRow ?? { id: newId, job_id: jobId },
+        };
+        for (const wf of wfs ?? []) {
+            try {
+                await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
+            } catch (_) {}
         }
     }
 

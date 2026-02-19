@@ -536,21 +536,15 @@ export async function POST(request: NextRequest) {
     let opportunityId: string;
     let created_new_opportunity = false;
 
-    let existingOppQuery = supabase
+    const existingOppQuery = supabase
       .from("opportunities")
       .select("id, pipeline_stage_id")
       .eq("primary_contact_id", contactId)
       .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1);
-    if (quoteStartedStageId) {
-      existingOppQuery = existingOppQuery.eq("pipeline_stage_id", quoteStartedStageId);
-    }
     const { data: existingOpp } = await existingOppQuery.maybeSingle();
 
-    const stageMatches =
-      quoteStartedStageId &&
-      existingOpp?.pipeline_stage_id === quoteStartedStageId;
     const metaSourceMatches = async () => {
       if (!existingOpp) return false;
       const { data: opp } = await supabase
@@ -561,10 +555,7 @@ export async function POST(request: NextRequest) {
       const meta = (opp?.metadata as Record<string, unknown>) ?? {};
       return meta.source === "web_quote";
     };
-    const shouldReuse =
-      existingOpp &&
-      stageMatches &&
-      (await metaSourceMatches());
+    const shouldReuse = existingOpp && (await metaSourceMatches());
 
     if (shouldReuse && existingOpp) {
       opportunityId = existingOpp.id;
@@ -600,7 +591,6 @@ export async function POST(request: NextRequest) {
         name: opportunityName,
         status: "open",
         source: "website",
-        pipeline_stage_id: quoteStartedStageId,
         estimated_price_cents: estimatedPriceCents,
         monetary_value_cents: estimatedPriceCents,
         metadata: {
@@ -626,6 +616,24 @@ export async function POST(request: NextRequest) {
       }
       opportunityId = newOpp.id;
       created_new_opportunity = true;
+
+      const { executeWorkflowRun } = await import("@/lib/workflowRun");
+      let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "quote_started").eq("entity_type", "opportunity");
+      if (orgIdForWrites) wq = wq.or(`org_id.eq.${orgIdForWrites},org_id.is.null`);
+      const { data: quoteWfs } = await wq;
+      const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
+      const eventPayload: Record<string, unknown> = {
+        event_type: "quote_started",
+        occurred_at: new Date().toISOString(),
+        org_id: orgIdForWrites ?? null,
+        quote_started_stage_id: quoteStartedStageId,
+        opportunity: oppRow ?? null,
+      };
+      for (const wf of quoteWfs ?? []) {
+        try {
+          await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
+        } catch (_) {}
+      }
     }
 
     console.log(

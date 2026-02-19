@@ -322,10 +322,6 @@ export async function POST(request: NextRequest) {
                 metadata: mergedMetadata,
             };
             if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
-            if (bookedStageId) {
-                oppUpdate.pipeline_stage_id = bookedStageId;
-                oppUpdate.status = "booked";
-            }
             if (discount_code_id != null) {
                 (oppUpdate as Record<string, unknown>).discount_code_id = discount_code_id;
                 (oppUpdate as Record<string, unknown>).discount_code = discount_code ?? null;
@@ -588,10 +584,6 @@ export async function POST(request: NextRequest) {
                 metadata: mergedMetaElse,
             };
             if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
-            if (bookedStageIdElse) {
-                updatePayload.pipeline_stage_id = bookedStageIdElse;
-                updatePayload.status = "booked";
-            }
             if (discount_code_id != null) {
                 updatePayload.discount_code_id = discount_code_id;
                 if (discount_code != null) updatePayload.discount_code = discount_code;
@@ -643,7 +635,7 @@ export async function POST(request: NextRequest) {
                 primary_contact_id: contactId,
                 customer_id: customerId,
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
-                status: bookedStageIdElse ? "booked" : "open",
+                status: "open",
                 source: "website",
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
@@ -660,7 +652,6 @@ export async function POST(request: NextRequest) {
                 }),
                 metadata: insertMeta,
             };
-            if (bookedStageIdElse) insertPayload.pipeline_stage_id = bookedStageIdElse;
             const { data: newOpp, error: oppError } = await supabase
                 .from("opportunities")
                 .insert(insertPayload)
@@ -1033,22 +1024,6 @@ export async function POST(request: NextRequest) {
 
             scheduleId = newSchedule.id;
             console.log(`[BOOK_V2_CONFIRM] Created new schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
-
-            const { data: jobForVendor } = await supabase.from("jobs").select("assigned_vendor_id").eq("id", jobId).single();
-            const assignedVendorId = (jobForVendor as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
-            if (assignedVendorId) {
-                const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "offered").maybeSingle();
-                const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
-                if (offeredStatusId) {
-                    await supabase.from("assignments").insert({
-                        schedule_id: scheduleId,
-                        job_id: jobId,
-                        vendor_id: assignedVendorId,
-                        assignment_status_id: offeredStatusId,
-                        updated_at: new Date().toISOString(),
-                    });
-                }
-            }
         }
 
         // Step 8: Check if customer has saved payment method
@@ -1149,14 +1124,24 @@ export async function POST(request: NextRequest) {
             `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
         );
 
-        // Step 10: Auto-run booking_confirmed workflows
-        const { data: bookingWorkflows } = await supabase
+        // Step 10: Auto-run booking_confirmed workflows (opportunity stage, job status, assignment created by workflows)
+        const orgIdForWorkflows = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        let workflowQuery = supabase
             .from("workflows")
             .select("id")
             .eq("enabled", true)
             .eq("event_type", "booking_confirmed")
             .eq("entity_type", "job");
+        if (orgIdForWorkflows) {
+            workflowQuery = workflowQuery.or(`org_id.eq.${orgIdForWorkflows},org_id.is.null`);
+        }
+        const { data: bookingWorkflows } = await workflowQuery;
         if (bookingWorkflows?.length) {
+            const { data: pipelines } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
+            const pipelineIdForBooked = pipelines?.[0]?.id ?? null;
+            let bookedStageIdForPayload: string | null = null;
+            if (pipelineIdForBooked) bookedStageIdForPayload = await getOrCreateBookedStage(supabase, pipelineIdForBooked);
+
             const { data: jobRow } = await supabase.from("jobs").select("*").eq("id", jobId).single();
             const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
             const { data: contactRow } = await supabase.from("contacts").select("*").eq("id", contactId).single();
@@ -1174,7 +1159,8 @@ export async function POST(request: NextRequest) {
             const eventPayload: Record<string, unknown> = {
                 event_type: "booking_confirmed",
                 occurred_at: new Date().toISOString(),
-                org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
+                org_id: orgIdForWorkflows,
+                booked_stage_id: bookedStageIdForPayload,
                 job: jobRow ?? null,
                 contact: contactRow ?? null,
                 customer: customerRow ?? null,
@@ -1190,15 +1176,6 @@ export async function POST(request: NextRequest) {
                     // Don't fail the booking; log and continue
                 }
             }
-        }
-
-        // V1: Set job status to 'scheduled' after booking_confirmed (idempotent, workflow-driven)
-        const { error: statusUpdateErr } = await supabase
-            .from("jobs")
-            .update({ job_status_id: "scheduled" })
-            .eq("id", jobId);
-        if (statusUpdateErr) {
-            console.warn("[BOOK_V2_CONFIRM] job_status_id=scheduled update failed (non-fatal)", jobId, statusUpdateErr.message);
         }
 
         // Structured logging

@@ -395,7 +395,8 @@ async function resolveRecipients(
                 console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: 0 });
                 continue;
             }
-            const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", "approved").maybeSingle();
+            const vendorStatusKey = (r.status_key != null && String(r.status_key).trim() !== "") ? String(r.status_key).trim() : "approved";
+            const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", vendorStatusKey).maybeSingle();
             const approvedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
             let vendorsQuery = supabase
                 .from("vendors")
@@ -703,8 +704,95 @@ export async function executeWorkflowRun(
                         logs.push(`update_entity: could not resolve entity_id for ${entityType}, skipping`);
                         break;
                     }
-                    const { error: updErr } = await supabase.from(tableName).update(patch).eq("id", entityId);
+                    const templatedPatch: Record<string, unknown> = {};
+                    for (const k of Object.keys(patch)) {
+                        const v = patch[k];
+                        if (typeof v === "string") {
+                            templatedPatch[k] = renderTemplate(v, payload);
+                        } else {
+                            templatedPatch[k] = v;
+                        }
+                    }
+                    const { error: updErr } = await supabase.from(tableName).update(templatedPatch).eq("id", entityId);
                     if (updErr) throw new Error(`update_entity: ${updErr.message}`);
+                    break;
+                }
+                case "create_assignment": {
+                    const scheduleId = resolveId(pl.schedule_id ?? pl.schedule_id_path, payload) ?? (payload.schedule && typeof payload.schedule === "object" && (payload.schedule as { id?: unknown }).id != null ? String((payload.schedule as { id: unknown }).id) : null);
+                    const jobId = resolveId(pl.job_id ?? pl.job_id_path, payload) ?? (payload.job && typeof payload.job === "object" && (payload.job as { id?: unknown }).id != null ? String((payload.job as { id: unknown }).id) : null);
+                    const vendorId = resolveId(pl.vendor_id ?? pl.vendor_id_path, payload) ?? (payload.job && typeof payload.job === "object" && (payload.job as { assigned_vendor_id?: unknown }).assigned_vendor_id != null ? String((payload.job as { assigned_vendor_id: unknown }).assigned_vendor_id) : null);
+                    const statusKey = (pl.status_key != null ? String(pl.status_key) : "offered").trim() || "offered";
+                    if (!scheduleId || !jobId || !vendorId) {
+                        logs.push(`create_assignment: missing schedule_id, job_id, or vendor_id; skipping`);
+                        break;
+                    }
+                    const { data: statusRow } = await supabase.from("assignment_statuses").select("id").eq("key", statusKey).maybeSingle();
+                    const statusId = (statusRow as { id?: string } | null)?.id ?? null;
+                    if (!statusId) {
+                        logs.push(`create_assignment: assignment_status key "${statusKey}" not found; skipping`);
+                        break;
+                    }
+                    const { data: existing } = await supabase.from("assignments").select("id").eq("schedule_id", scheduleId).maybeSingle();
+                    const now = new Date().toISOString();
+                    if (existing?.id) {
+                        const { error: uErr } = await supabase.from("assignments").update({ vendor_id: vendorId, assignment_status_id: statusId, updated_at: now }).eq("id", (existing as { id: string }).id);
+                        if (uErr) throw new Error(`create_assignment update: ${uErr.message}`);
+                        logs.push(`create_assignment: updated assignment for schedule ${scheduleId}`);
+                    } else {
+                        const { error: iErr } = await supabase.from("assignments").insert({
+                            schedule_id: scheduleId,
+                            job_id: jobId,
+                            vendor_id: vendorId,
+                            assignment_status_id: statusId,
+                            updated_at: now,
+                        });
+                        if (iErr) throw new Error(`create_assignment insert: ${iErr.message}`);
+                        logs.push(`create_assignment: inserted assignment for schedule ${scheduleId}`);
+                    }
+                    break;
+                }
+                case "apply_job_vendor_to_upcoming": {
+                    const jobId = resolveId(pl.job_id ?? pl.job_id_path, payload) ?? (payload.job && typeof payload.job === "object" && (payload.job as { id?: unknown }).id != null ? String((payload.job as { id: unknown }).id) : null);
+                    if (!jobId) {
+                        logs.push(`apply_job_vendor_to_upcoming: missing job_id; skipping`);
+                        break;
+                    }
+                    const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).single();
+                    const vendorId = (jobRow as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
+                    if (!vendorId) {
+                        logs.push(`apply_job_vendor_to_upcoming: job has no assigned_vendor_id; skipping`);
+                        break;
+                    }
+                    const now = new Date().toISOString();
+                    const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "offered").maybeSingle();
+                    const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
+                    if (!offeredStatusId) {
+                        logs.push(`apply_job_vendor_to_upcoming: assignment status 'offered' not found; skipping`);
+                        break;
+                    }
+                    const { data: upcomingSchedules } = await supabase.from("schedules").select("id").eq("job_id", jobId).is("canceled_at", null).gte("start_at", now);
+                    const scheduleIds = (upcomingSchedules ?? []).map((s) => (s as { id: string }).id);
+                    if (scheduleIds.length === 0) {
+                        logs.push(`apply_job_vendor_to_upcoming: no upcoming schedules; skipping`);
+                        break;
+                    }
+                    const { data: existingAssignments } = await supabase.from("assignments").select("id, schedule_id, assignment_status_id").in("schedule_id", scheduleIds);
+                    const assignmentBySchedule = new Map((existingAssignments ?? []).map((a) => [(a as { schedule_id: string }).schedule_id, a as { id: string; assignment_status_id?: string | null }]));
+                    const { data: statusRows } = await supabase.from("assignment_statuses").select("id, key").in("id", [...new Set((existingAssignments ?? []).map((a) => (a as { assignment_status_id?: string }).assignment_status_id).filter(Boolean))]);
+                    const statusKeyById = new Map((statusRows ?? []).map((s) => [(s as { id: string }).id, (s as { key: string }).key]));
+                    let created = 0;
+                    let updated = 0;
+                    for (const sid of scheduleIds) {
+                        const existing = assignmentBySchedule.get(sid);
+                        if (!existing) {
+                            const { error: iErr } = await supabase.from("assignments").insert({ schedule_id: sid, job_id: jobId, vendor_id: vendorId, assignment_status_id: offeredStatusId, updated_at: now });
+                            if (!iErr) created++;
+                        } else if (existing.assignment_status_id && statusKeyById.get(existing.assignment_status_id) === "offered") {
+                            const { error: uErr } = await supabase.from("assignments").update({ vendor_id: vendorId, updated_at: now }).eq("id", existing.id);
+                            if (!uErr) updated++;
+                        }
+                    }
+                    logs.push(`apply_job_vendor_to_upcoming: created=${created} updated=${updated}`);
                     break;
                 }
                 case "log": {
