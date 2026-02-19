@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
+import { emitEvent } from "@/lib/emitEvent";
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
 import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
@@ -629,9 +630,26 @@ export async function POST(request: NextRequest) {
         quote_started_stage_id: quoteStartedStageId,
         opportunity: oppRow ?? null,
       };
+      let eventId: string | null = null;
+      try {
+        eventId = await emitEvent({
+          org_id: orgIdForWrites ?? null,
+          event_type: "quote_started",
+          entity_type: "opportunity",
+          entity_id: opportunityId ?? null,
+          action_type: null,
+          occurred_at: (eventPayload.occurred_at as string) ?? new Date().toISOString(),
+          payload: eventPayload,
+        });
+      } catch (emitErr: unknown) {
+        console.error("[QUOTE_START_EMIT_EVENT]", emitErr);
+      }
       for (const wf of quoteWfs ?? []) {
         try {
-          await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
+          await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+            event_id: eventId ?? null,
+            org_id: orgIdForWrites ?? null,
+          });
         } catch (_) {}
       }
     }
