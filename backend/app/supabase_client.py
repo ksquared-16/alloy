@@ -4,9 +4,10 @@ Uses service role key to bypass RLS.
 """
 import logging
 import os
-import requests
 import re
+from datetime import datetime, timezone
 from typing import Dict, Optional, Any, Tuple, List
+import requests
 from .settings import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY
 import stripe
 
@@ -1567,3 +1568,84 @@ def get_or_create_stripe_customer_for_customer(
             exc_info=True
         )
         return None
+
+
+# Lookup column in payment_statuses for resolving pending/paid/failed (use 'code' or 'name' if your table differs)
+PAYMENT_STATUS_LOOKUP_COLUMN = "key"
+
+
+def get_payment_status_id_by_key(status_key: str) -> Optional[str]:
+    """
+    Resolve payment_statuses.id (UUID) by status key/code.
+    payment_statuses is assumed to have a column (key/code/name) with values 'pending', 'paid', 'failed'.
+    Returns the UUID string of the row, or None if not found.
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payment_statuses"
+        params = {
+            "select": "id",
+            PAYMENT_STATUS_LOOKUP_COLUMN: f"eq.{status_key}",
+            "limit": "1",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            logger.warning("get_payment_status_id_by_key: %s=%s status=%d", PAYMENT_STATUS_LOOKUP_COLUMN, status_key, resp.status_code)
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0].get("id")
+        return None
+    except Exception as e:
+        logger.warning("get_payment_status_id_by_key: exception %s", e)
+        return None
+
+
+def update_payment_by_provider_payment_id(
+    provider_payment_id: str,
+    payment_status_id: str,
+    paid_at: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """
+    Update a payments row by Stripe PaymentIntent id (provider_payment_id).
+    payment_status_id must be the UUID (string) of payment_statuses.id.
+    Used by Stripe webhook handlers for payment_intent.succeeded / payment_failed / canceled.
+    Idempotent: safe to call multiple times for the same event.
+    Returns True if update was applied (or no row found), False on error.
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.warning("update_payment_by_provider_payment_id: Supabase not configured")
+        return False
+    if not provider_payment_id or not provider_payment_id.startswith("pi_"):
+        logger.warning("update_payment_by_provider_payment_id: invalid provider_payment_id")
+        return False
+    base_url = _get_base_url()
+    headers = _get_headers()
+    payload = {
+        "payment_status_id": payment_status_id,
+        "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    if paid_at is not None:
+        payload["paid_at"] = paid_at
+    if metadata is not None:
+        payload["metadata"] = metadata
+    try:
+        url = f"{base_url}/payments"
+        params = {"provider_payment_id": f"eq.{provider_payment_id}"}
+        resp = requests.patch(url, headers=headers, json=payload, params=params, timeout=30)
+        if resp.status_code == 200:
+            return True
+        logger.warning(
+            "update_payment_by_provider_payment_id: PATCH failed provider_payment_id=%s status=%d body=%s",
+            provider_payment_id[:12] + "***",
+            resp.status_code,
+            resp.text[:200],
+        )
+        return False
+    except Exception as e:
+        logger.warning("update_payment_by_provider_payment_id: exception %s", e)
+        return False

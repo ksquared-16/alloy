@@ -1,8 +1,10 @@
 """
-Stripe webhook endpoints for SetupIntent events (card on file collection).
+Stripe webhook endpoints for SetupIntent events (card on file collection)
+and PaymentIntent events (payments table updates).
 """
-import logging
 import hashlib
+import logging
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Request, Header, HTTPException, Query
@@ -21,7 +23,12 @@ from ..ghl_client import (
     create_contact_note,
     update_opportunity_stage,
 )
-from ..supabase_client import link_stripe_customer_to_supabase, get_or_create_stripe_customer_for_customer
+from ..supabase_client import (
+    link_stripe_customer_to_supabase,
+    get_or_create_stripe_customer_for_customer,
+    get_payment_status_id_by_key,
+    update_payment_by_provider_payment_id,
+)
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -759,7 +766,7 @@ async def stripe_webhook(request: Request):
         error_type = last_setup_error.get("type")
         error_message = last_setup_error.get("message", "Unknown")
         payment_method_id = setup_intent.get("payment_method")
-        
+
         logger.warning(
             "stripe_webhook: setup_intent.setup_failed event_id=%s setup_intent_id=%s error_code=%s error_decline_code=%s error_type=%s error_message=%s payment_method_id=%s",
             event_id,
@@ -770,6 +777,69 @@ async def stripe_webhook(request: Request):
             error_message,
             payment_method_id[:8] + "***" if payment_method_id else "None"
         )
+
+    # Handle payment_intent.succeeded: update payments row (idempotent); payment_status_id is UUID from payment_statuses
+    elif event_type == "payment_intent.succeeded":
+        pi_obj = event.get("data", {}).get("object", {})
+        pi_id = pi_obj.get("id")
+        if pi_id:
+            paid_status_uuid = get_payment_status_id_by_key("paid")
+            if not paid_status_uuid:
+                logger.warning("stripe_webhook: payment_statuses row for key=paid not found, skipping payment update event_id=%s", event_id)
+            else:
+                logger.info("stripe_webhook: handling payment_intent.succeeded event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                paid_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                ok = update_payment_by_provider_payment_id(
+                    provider_payment_id=pi_id,
+                    payment_status_id=paid_status_uuid,
+                    paid_at=paid_at,
+                )
+                if ok:
+                    logger.info("stripe_webhook: updated payment paid event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                else:
+                    logger.warning("stripe_webhook: could not update payment for payment_intent_id=%s event_id=%s", pi_id[:12] + "***", event_id)
+
+    # Handle payment_intent.payment_failed: set payment_status_id=failed (UUID), store error in metadata (idempotent)
+    elif event_type == "payment_intent.payment_failed":
+        pi_obj = event.get("data", {}).get("object", {})
+        pi_id = pi_obj.get("id")
+        last_error = pi_obj.get("last_payment_error", {}) or {}
+        err_message = last_error.get("message", "Payment failed")
+        if pi_id:
+            failed_status_uuid = get_payment_status_id_by_key("failed")
+            if not failed_status_uuid:
+                logger.warning("stripe_webhook: payment_statuses row for key=failed not found, skipping payment update event_id=%s", event_id)
+            else:
+                logger.info("stripe_webhook: handling payment_intent.payment_failed event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                ok = update_payment_by_provider_payment_id(
+                    provider_payment_id=pi_id,
+                    payment_status_id=failed_status_uuid,
+                    metadata={"error": err_message},
+                )
+                if ok:
+                    logger.info("stripe_webhook: updated payment failed event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                else:
+                    logger.warning("stripe_webhook: could not update payment for payment_intent_id=%s event_id=%s", pi_id[:12] + "***", event_id)
+
+    # Handle payment_intent.canceled: set payment_status_id=failed (UUID) (idempotent)
+    elif event_type == "payment_intent.canceled":
+        pi_obj = event.get("data", {}).get("object", {})
+        pi_id = pi_obj.get("id")
+        if pi_id:
+            failed_status_uuid = get_payment_status_id_by_key("failed")
+            if not failed_status_uuid:
+                logger.warning("stripe_webhook: payment_statuses row for key=failed not found, skipping payment update event_id=%s", event_id)
+            else:
+                logger.info("stripe_webhook: handling payment_intent.canceled event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                ok = update_payment_by_provider_payment_id(
+                    provider_payment_id=pi_id,
+                    payment_status_id=failed_status_uuid,
+                    metadata={"reason": "canceled"},
+                )
+                if ok:
+                    logger.info("stripe_webhook: updated payment canceled event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                else:
+                    logger.warning("stripe_webhook: could not update payment for payment_intent_id=%s event_id=%s", pi_id[:12] + "***", event_id)
     
     # Ignore other event types
     else:
