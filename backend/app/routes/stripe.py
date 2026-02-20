@@ -1,13 +1,15 @@
 """
 Stripe webhook endpoints for SetupIntent events (card on file collection)
 and PaymentIntent events (payments table updates).
+Admin endpoint for running payments (PaymentIntent create + confirm) lives here so Stripe runs in one runtime.
 """
 import hashlib
 import logging
+import os
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Request, Header, HTTPException, Query
+from fastapi import APIRouter, Request, Header, HTTPException, Query, Body
 from fastapi.responses import JSONResponse
 import stripe
 
@@ -28,6 +30,11 @@ from ..supabase_client import (
     get_or_create_stripe_customer_for_customer,
     get_payment_status_id_by_key,
     update_payment_by_provider_payment_id,
+    get_job_by_id,
+    get_customer_by_id,
+    get_opportunity_org_id,
+    insert_payment,
+    update_payment_by_id,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -40,6 +47,152 @@ stripe_mode = "live" if STRIPE_SECRET_KEY.startswith("sk_live_") else "test" if 
 logger.info("STRIPE_MODE=%s (key prefix: %s)", stripe_mode, STRIPE_SECRET_KEY[:7] + "***" if STRIPE_SECRET_KEY else "None")
 
 router = APIRouter()
+
+
+@router.post("/admin/payments/run")
+async def admin_payments_run(
+    body: Dict[str, Any] = Body(...),
+):
+    """
+    Create a payment record and charge the customer's saved payment method via Stripe PaymentIntent.
+    Body: { "job_id": string, "amount_cents"?: number }
+    If amount_cents omitted, uses job.estimated_total_cents or job.recurring_total_cents.
+    All Stripe logic runs in backend; Next.js proxies to this route.
+    """
+    job_id = body.get("job_id") if isinstance(body.get("job_id"), str) else None
+    if not job_id:
+        raise HTTPException(status_code=400, detail="job_id is required")
+
+    pending_uuid = get_payment_status_id_by_key("pending")
+    paid_uuid = get_payment_status_id_by_key("paid")
+    failed_uuid = get_payment_status_id_by_key("failed")
+    if not pending_uuid or not paid_uuid or not failed_uuid:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not resolve payment_statuses (pending/paid/failed). Check payment_statuses table.",
+        )
+
+    job = get_job_by_id(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    customer_id = job.get("customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="Job has no customer_id")
+
+    customer = get_customer_by_id(customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    stripe_customer_id = customer.get("stripe_customer_id")
+    if not stripe_customer_id:
+        raise HTTPException(status_code=400, detail="Customer has no stripe_customer_id (card not saved)")
+
+    amount_cents = body.get("amount_cents")
+    if amount_cents is not None and not isinstance(amount_cents, (int, float)):
+        amount_cents = None
+    if amount_cents is None or amount_cents < 1:
+        amount_cents = (job.get("estimated_total_cents") or job.get("recurring_total_cents") or 0) or 0
+    if amount_cents < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="amount_cents required (or job must have estimated_total_cents/recurring_total_cents)",
+        )
+    amount_cents = int(amount_cents)
+
+    org_id = job.get("org_id")
+    if not org_id and job.get("opportunity_id"):
+        org_id = get_opportunity_org_id(job["opportunity_id"])
+    if not org_id:
+        org_id = os.getenv("ALLOY_PUBLIC_ORG_ID")
+
+    metadata_insert = {"source": "payments_run", "requested_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    payment_id = insert_payment(
+        job_id=job_id,
+        customer_id=customer_id,
+        amount_cents=amount_cents,
+        payment_status_id=pending_uuid,
+        org_id=org_id,
+        metadata=metadata_insert,
+    )
+    if not payment_id:
+        raise HTTPException(status_code=500, detail="Failed to create payment record")
+
+    default_pm_id = customer.get("default_payment_method_id")
+    payment_method_id = default_pm_id
+    if not payment_method_id:
+        try:
+            pm_list = stripe.PaymentMethod.list(customer=stripe_customer_id, type="card", limit=1)
+            payment_method_id = pm_list.data[0].id if pm_list.data else None
+        except Exception as e:
+            logger.warning("admin_payments_run: list payment methods failed %s", e)
+            payment_method_id = None
+
+    if not payment_method_id:
+        update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": "No payment method found for customer"})
+        raise HTTPException(status_code=400, detail="No payment method found for customer")
+
+    try:
+        payment_intent = stripe.PaymentIntent.create(
+            amount=amount_cents,
+            currency="usd",
+            customer=stripe_customer_id,
+            payment_method=payment_method_id,
+            confirm=True,
+            off_session=True,
+            metadata={
+                "job_id": job_id,
+                "customer_id": customer_id,
+                "payment_id": payment_id,
+            },
+        )
+    except stripe.error.StripeError as e:
+        err_msg = getattr(e, "user_message", None) or str(e)
+        update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+        raise HTTPException(status_code=500, detail=err_msg)
+
+    update_payment_by_id(payment_id, provider_payment_id=payment_intent.id)
+
+    if payment_intent.status == "succeeded":
+        paid_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        update_payment_by_id(payment_id, payment_status_id=paid_uuid, paid_at=paid_at)
+        return {
+            "ok": True,
+            "payment_id": payment_id,
+            "provider_payment_id": payment_intent.id,
+            "status": "succeeded",
+            "amount_cents": amount_cents,
+        }
+
+    if payment_intent.status == "requires_action":
+        update_payment_by_id(
+            payment_id,
+            payment_status_id=failed_uuid,
+            metadata={"error": "Payment requires customer authentication (SCA)"},
+        )
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "payment_id": payment_id,
+                "provider_payment_id": payment_intent.id,
+                "error": "Payment requires customer authentication",
+                "status": "requires_action",
+            },
+        )
+
+    err_msg = (payment_intent.last_payment_error or {}).get("message", payment_intent.status) if hasattr(payment_intent, "last_payment_error") else payment_intent.status
+    update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+    return JSONResponse(
+        status_code=400,
+        content={
+            "ok": False,
+            "payment_id": payment_id,
+            "provider_payment_id": payment_intent.id,
+            "error": err_msg or str(payment_intent.status),
+            "status": payment_intent.status,
+        },
+    )
 
 
 def record_payment_failure(ghl_contact_id: Optional[str], title: str, body: str) -> None:

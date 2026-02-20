@@ -1574,6 +1574,147 @@ def get_or_create_stripe_customer_for_customer(
 PAYMENT_STATUS_LOOKUP_COLUMN = "key"
 
 
+def get_job_by_id(job_id: str) -> Optional[Dict]:
+    """Fetch a single job by id. Returns dict with id, customer_id, opportunity_id, org_id, estimated_total_cents, recurring_total_cents or None."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/jobs"
+        params = {"id": f"eq.{job_id}", "select": "id,customer_id,opportunity_id,org_id,estimated_total_cents,recurring_total_cents", "limit": "1"}
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return None
+    except Exception as e:
+        logger.warning("get_job_by_id: exception %s", e)
+        return None
+
+
+def get_customer_by_id(customer_id: str) -> Optional[Dict]:
+    """Fetch a single customer by id. Returns dict with id, stripe_customer_id, default_payment_method_id or None."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/customers"
+        params = {"id": f"eq.{customer_id}", "select": "id,stripe_customer_id,default_payment_method_id", "limit": "1"}
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return None
+    except Exception as e:
+        logger.warning("get_customer_by_id: exception %s", e)
+        return None
+
+
+def get_opportunity_org_id(opportunity_id: str) -> Optional[str]:
+    """Fetch org_id for an opportunity. Returns None if not found."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/opportunities"
+        params = {"id": f"eq.{opportunity_id}", "select": "org_id", "limit": "1"}
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0].get("org_id")
+        return None
+    except Exception as e:
+        logger.warning("get_opportunity_org_id: exception %s", e)
+        return None
+
+
+def insert_payment(
+    job_id: str,
+    customer_id: str,
+    amount_cents: int,
+    payment_status_id: str,
+    org_id: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """
+    Insert a row into payments. Returns the new row id (UUID string) or None on error.
+    Caller must set provider, currency, etc. via payload; this helper sets minimal required fields.
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    payload = {
+        "job_id": job_id,
+        "customer_id": customer_id,
+        "amount_cents": amount_cents,
+        "currency": "USD",
+        "payment_status_id": payment_status_id,
+        "provider": "stripe",
+    }
+    if org_id:
+        payload["org_id"] = org_id
+    if metadata is not None:
+        payload["metadata"] = metadata
+    try:
+        url = f"{base_url}/payments"
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        if not resp.ok:
+            logger.warning("insert_payment: POST failed status=%d body=%s", resp.status_code, resp.text[:200])
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0].get("id")
+        return None
+    except Exception as e:
+        logger.warning("insert_payment: exception %s", e)
+        return None
+
+
+def update_payment_by_id(
+    payment_id: str,
+    *,
+    provider_payment_id: Optional[str] = None,
+    payment_status_id: Optional[str] = None,
+    paid_at: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Update a payments row by id. All keyword-only args are optional. Returns True if PATCH succeeded."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+    base_url = _get_base_url()
+    headers = _get_headers()
+    payload: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    if provider_payment_id is not None:
+        payload["provider_payment_id"] = provider_payment_id
+    if payment_status_id is not None:
+        payload["payment_status_id"] = payment_status_id
+    if paid_at is not None:
+        payload["paid_at"] = paid_at
+    if metadata is not None:
+        payload["metadata"] = metadata
+    try:
+        url = f"{base_url}/payments"
+        params = {"id": f"eq.{payment_id}"}
+        resp = requests.patch(url, headers=headers, json=payload, params=params, timeout=30)
+        if resp.status_code == 200:
+            return True
+        logger.warning("update_payment_by_id: PATCH failed payment_id=%s status=%d body=%s", payment_id[:8] + "***", resp.status_code, resp.text[:200])
+        return False
+    except Exception as e:
+        logger.warning("update_payment_by_id: exception %s", e)
+        return False
+
+
 def get_payment_status_id_by_key(status_key: str) -> Optional[str]:
     """
     Resolve payment_statuses.id (UUID) by status key/code.
