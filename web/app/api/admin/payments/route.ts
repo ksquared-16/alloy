@@ -41,15 +41,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    let payments: PaymentListItem[] = (rows ?? []).map((r) => ({
-        id: r.id,
-        created_at: r.created_at,
-        amount_cents: r.amount_cents,
-        provider_payment_id: r.provider_payment_id ?? null,
-        payment_status_id: r.payment_status_id,
-        job_id: r.job_id ?? null,
-        payment_statuses: r.payment_statuses ?? null,
-    }));
+    let payments: PaymentListItem[] = (rows ?? []).map((r) => {
+        const status = r.payment_statuses;
+        const statusObj = Array.isArray(status) ? status[0] ?? null : status ?? null;
+        return {
+            id: r.id,
+            created_at: r.created_at,
+            amount_cents: r.amount_cents,
+            provider_payment_id: r.provider_payment_id ?? null,
+            payment_status_id: r.payment_status_id,
+            job_id: r.job_id ?? null,
+            payment_statuses: statusObj as { key: string } | null,
+        };
+    });
 
     if (statusKey) {
         const keys = statusKey.split(",").map((k) => k.trim().toLowerCase());
