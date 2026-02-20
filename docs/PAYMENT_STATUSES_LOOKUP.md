@@ -65,3 +65,17 @@ After deploying run-route and webhook changes:
 
 6. **Migration**
    - Apply migration; confirm no `CREATE TABLE` runs and only indexes are created/updated. No duplicate table or constraint errors.
+
+---
+
+## Quick manual test (payments stuck in pending)
+
+If charges succeed in Stripe but `public.payments` rows stay pending with `paid_at` NULL:
+
+1. Run **POST /admin/payments/run** (or POST to the Next.js proxy with the same body) with a valid `job_id` (customer has card on file).
+2. Expect **200** and `"status": "succeeded"`.
+3. In Supabase, open the payment row by `job_id` or `provider_payment_id` and confirm:
+   - `payment_status_id` = UUID for paid.
+   - `paid_at` is set (not NULL).
+
+If the API returns 500 with a message like "Payment update failed: ...", check backend logs and Supabase (RLS, service role key, table permissions).

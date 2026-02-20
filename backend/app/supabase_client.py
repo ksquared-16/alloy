@@ -1687,10 +1687,14 @@ def update_payment_by_id(
     payment_status_id: Optional[str] = None,
     paid_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
-) -> bool:
-    """Update a payments row by id. All keyword-only args are optional. Returns True if PATCH succeeded."""
+) -> Tuple[bool, int]:
+    """
+    Update a payments row by id. All keyword-only args are optional.
+    Returns (success, rows_updated). On non-2xx response logs request/response and raises RuntimeError.
+    """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        return False
+        logger.error("update_payment_by_id: Supabase not configured")
+        return (False, 0)
     base_url = _get_base_url()
     headers = _get_headers()
     payload: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
@@ -1702,17 +1706,24 @@ def update_payment_by_id(
         payload["paid_at"] = paid_at
     if metadata is not None:
         payload["metadata"] = metadata
+    url = f"{base_url}/payments"
+    params = {"id": f"eq.{payment_id}"}
     try:
-        url = f"{base_url}/payments"
-        params = {"id": f"eq.{payment_id}"}
         resp = requests.patch(url, headers=headers, json=payload, params=params, timeout=30)
         if resp.status_code == 200:
-            return True
-        logger.warning("update_payment_by_id: PATCH failed payment_id=%s status=%d body=%s", payment_id[:8] + "***", resp.status_code, resp.text[:200])
-        return False
-    except Exception as e:
-        logger.warning("update_payment_by_id: exception %s", e)
-        return False
+            data = resp.json()
+            rows = len(data) if isinstance(data, list) else 0
+            return (True, rows)
+        logger.error(
+            "update_payment_by_id: PATCH non-2xx request url=%s params=%s payload_keys=%s response status=%d body=%s",
+            url, params, list(payload.keys()), resp.status_code, resp.text[:500],
+        )
+        raise RuntimeError(
+            "Supabase PATCH payments by id failed: status=%d body=%s" % (resp.status_code, resp.text[:300])
+        )
+    except requests.RequestException as e:
+        logger.exception("update_payment_by_id: request exception payment_id=%s", payment_id[:8] + "***")
+        raise RuntimeError("Supabase PATCH payments by id failed: %s" % e) from e
 
 
 def get_payment_status_id_by_key(status_key: str) -> Optional[str]:
@@ -1750,20 +1761,21 @@ def update_payment_by_provider_payment_id(
     payment_status_id: str,
     paid_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
-) -> bool:
+) -> Tuple[bool, int]:
     """
-    Update a payments row by Stripe PaymentIntent id (provider_payment_id).
+    Update a payments row by Stripe PaymentIntent id.
+    WHERE filter uses DB column: public.payments.provider_payment_id (PostgREST: provider_payment_id=eq.<id>).
     payment_status_id must be the UUID (string) of payment_statuses.id.
     Used by Stripe webhook handlers for payment_intent.succeeded / payment_failed / canceled.
     Idempotent: safe to call multiple times for the same event.
-    Returns True if update was applied (or no row found), False on error.
+    Returns (success, rows_updated). On non-2xx response logs request/response and raises RuntimeError.
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        logger.warning("update_payment_by_provider_payment_id: Supabase not configured")
-        return False
+        logger.error("update_payment_by_provider_payment_id: Supabase not configured")
+        return (False, 0)
     if not provider_payment_id or not provider_payment_id.startswith("pi_"):
         logger.warning("update_payment_by_provider_payment_id: invalid provider_payment_id")
-        return False
+        return (False, 0)
     base_url = _get_base_url()
     headers = _get_headers()
     payload = {
@@ -1774,19 +1786,30 @@ def update_payment_by_provider_payment_id(
         payload["paid_at"] = paid_at
     if metadata is not None:
         payload["metadata"] = metadata
+    url = f"{base_url}/payments"
+    # Filter by actual DB column: provider_payment_id (text)
+    params = {"provider_payment_id": f"eq.{provider_payment_id}"}
     try:
-        url = f"{base_url}/payments"
-        params = {"provider_payment_id": f"eq.{provider_payment_id}"}
         resp = requests.patch(url, headers=headers, json=payload, params=params, timeout=30)
         if resp.status_code == 200:
-            return True
-        logger.warning(
-            "update_payment_by_provider_payment_id: PATCH failed provider_payment_id=%s status=%d body=%s",
-            provider_payment_id[:12] + "***",
-            resp.status_code,
-            resp.text[:200],
+            data = resp.json()
+            rows = len(data) if isinstance(data, list) else 0
+            logger.info(
+                "update_payment_by_provider_payment_id: filter_column=provider_payment_id rows_updated=%s pi_id=%s",
+                rows, provider_payment_id[:14] + "***",
+            )
+            return (True, rows)
+        logger.error(
+            "update_payment_by_provider_payment_id: PATCH non-2xx request url=%s params=%s response status=%d body=%s",
+            url, params, resp.status_code, resp.text[:500],
         )
-        return False
-    except Exception as e:
-        logger.warning("update_payment_by_provider_payment_id: exception %s", e)
-        return False
+        raise RuntimeError(
+            "Supabase PATCH payments by provider_payment_id failed: status=%d body=%s"
+            % (resp.status_code, resp.text[:300])
+        )
+    except requests.RequestException as e:
+        logger.exception(
+            "update_payment_by_provider_payment_id: request exception provider_payment_id=%s",
+            provider_payment_id[:12] + "***",
+        )
+        raise RuntimeError("Supabase PATCH payments by provider_payment_id failed: %s" % e) from e

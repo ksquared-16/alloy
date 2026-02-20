@@ -134,7 +134,12 @@ async def admin_payments_run(
             payment_method_id = None
 
     if not payment_method_id:
-        update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": "No payment method found for customer"})
+        try:
+            ok, n = update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": "No payment method found for customer"})
+            if not ok or n < 1:
+                raise HTTPException(status_code=500, detail="Payment update failed: could not set failed status (0 rows updated)")
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
         raise HTTPException(status_code=400, detail="No payment method found for customer")
 
     try:
@@ -153,14 +158,29 @@ async def admin_payments_run(
         )
     except stripe.error.StripeError as e:
         err_msg = getattr(e, "user_message", None) or str(e)
-        update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+        try:
+            ok, n = update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+            if not ok or n < 1:
+                logger.error("admin_payments_run: could not update payment to failed after Stripe error payment_id=%s", payment_id[:8] + "***")
+        except RuntimeError:
+            logger.exception("admin_payments_run: Supabase update failed after Stripe error")
         raise HTTPException(status_code=500, detail=err_msg)
 
-    update_payment_by_id(payment_id, provider_payment_id=payment_intent.id)
+    try:
+        ok, n = update_payment_by_id(payment_id, provider_payment_id=payment_intent.id)
+        if not ok or n < 1:
+            raise HTTPException(status_code=500, detail="Payment update failed: could not set provider_payment_id (0 rows updated)")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
 
     if payment_intent.status == "succeeded":
         paid_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        update_payment_by_id(payment_id, payment_status_id=paid_uuid, paid_at=paid_at)
+        try:
+            ok, n = update_payment_by_id(payment_id, payment_status_id=paid_uuid, paid_at=paid_at)
+            if not ok or n < 1:
+                raise HTTPException(status_code=500, detail="Payment update failed: could not set paid status (0 rows updated)")
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
         return {
             "ok": True,
             "payment_id": payment_id,
@@ -170,11 +190,16 @@ async def admin_payments_run(
         }
 
     if payment_intent.status == "requires_action":
-        update_payment_by_id(
-            payment_id,
-            payment_status_id=failed_uuid,
-            metadata={"error": "Payment requires customer authentication (SCA)"},
-        )
+        try:
+            ok, n = update_payment_by_id(
+                payment_id,
+                payment_status_id=failed_uuid,
+                metadata={"error": "Payment requires customer authentication (SCA)"},
+            )
+            if not ok or n < 1:
+                raise HTTPException(status_code=500, detail="Payment update failed: could not set failed status (0 rows updated)")
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
         return JSONResponse(
             status_code=400,
             content={
@@ -187,7 +212,12 @@ async def admin_payments_run(
         )
 
     err_msg = (payment_intent.last_payment_error or {}).get("message", payment_intent.status) if hasattr(payment_intent, "last_payment_error") else payment_intent.status
-    update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+    try:
+        ok, n = update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+        if not ok or n < 1:
+            raise HTTPException(status_code=500, detail="Payment update failed: could not set failed status (0 rows updated)")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
     return JSONResponse(
         status_code=400,
         content={
@@ -936,68 +966,134 @@ async def stripe_webhook(request: Request):
             payment_method_id[:8] + "***" if payment_method_id else "None"
         )
 
-    # Handle payment_intent.succeeded: update payments row (idempotent); payment_status_id is UUID from payment_statuses
+    # Handle payment_intent.succeeded: update payments row (idempotent); fallback to metadata.payment_id if 0 rows
     elif event_type == "payment_intent.succeeded":
         pi_obj = event.get("data", {}).get("object", {})
         pi_id = pi_obj.get("id")
+        metadata = pi_obj.get("metadata") or {}
+        payment_id_meta = metadata.get("payment_id") if isinstance(metadata.get("payment_id"), str) else None
+        logger.info(
+            "stripe_webhook: payment_intent.succeeded event_id=%s pi_id=%s metadata.payment_id=%s",
+            event_id, pi_id[:12] + "***" if pi_id else "None", payment_id_meta[:8] + "***" if payment_id_meta else "None",
+        )
         if pi_id:
             paid_status_uuid = get_payment_status_id_by_key("paid")
             if not paid_status_uuid:
                 logger.warning("stripe_webhook: payment_statuses row for key=paid not found, skipping payment update event_id=%s", event_id)
             else:
-                logger.info("stripe_webhook: handling payment_intent.succeeded event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
                 paid_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                ok = update_payment_by_provider_payment_id(
-                    provider_payment_id=pi_id,
-                    payment_status_id=paid_status_uuid,
-                    paid_at=paid_at,
+                try:
+                    ok, rows = update_payment_by_provider_payment_id(
+                        provider_payment_id=pi_id,
+                        payment_status_id=paid_status_uuid,
+                        paid_at=paid_at,
+                    )
+                except RuntimeError as e:
+                    logger.exception("stripe_webhook: update_payment_by_provider_payment_id failed event_id=%s: %s", event_id, e)
+                    ok, rows = False, 0
+                logger.info(
+                    "stripe_webhook: payment_intent.succeeded event_id=%s pi_id=%s rows_updated=%s (by provider_payment_id)",
+                    event_id, pi_id[:14] + "***" if pi_id else "None", rows,
                 )
-                if ok:
-                    logger.info("stripe_webhook: updated payment paid event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                if ok and rows > 0:
+                    logger.info("stripe_webhook: updated payment paid by provider_payment_id event_id=%s pi_id=%s rows=%s", event_id, pi_id[:12] + "***", rows)
+                elif payment_id_meta:
+                    try:
+                        ok2, n2 = update_payment_by_id(payment_id_meta, payment_status_id=paid_status_uuid, paid_at=paid_at)
+                        logger.info(
+                            "stripe_webhook: fallback update by payment_id (metadata) event_id=%s payment_id=%s success=%s rows=%s",
+                            event_id, payment_id_meta[:8] + "***", ok2, n2,
+                        )
+                    except RuntimeError as e:
+                        logger.exception("stripe_webhook: fallback update_payment_by_id failed event_id=%s payment_id=%s: %s", event_id, payment_id_meta[:8] + "***", e)
                 else:
-                    logger.warning("stripe_webhook: could not update payment for payment_intent_id=%s event_id=%s", pi_id[:12] + "***", event_id)
+                    logger.warning("stripe_webhook: could not update payment (0 rows by provider_payment_id, no metadata.payment_id) event_id=%s pi_id=%s", event_id, pi_id[:12] + "***")
 
-    # Handle payment_intent.payment_failed: set payment_status_id=failed (UUID), store error in metadata (idempotent)
+    # Handle payment_intent.payment_failed: set payment_status_id=failed; fallback to metadata.payment_id if 0 rows
     elif event_type == "payment_intent.payment_failed":
         pi_obj = event.get("data", {}).get("object", {})
         pi_id = pi_obj.get("id")
         last_error = pi_obj.get("last_payment_error", {}) or {}
         err_message = last_error.get("message", "Payment failed")
+        metadata = pi_obj.get("metadata") or {}
+        payment_id_meta = metadata.get("payment_id") if isinstance(metadata.get("payment_id"), str) else None
+        logger.info(
+            "stripe_webhook: payment_intent.payment_failed event_id=%s pi_id=%s metadata.payment_id=%s",
+            event_id, pi_id[:12] + "***" if pi_id else "None", payment_id_meta[:8] + "***" if payment_id_meta else "None",
+        )
         if pi_id:
             failed_status_uuid = get_payment_status_id_by_key("failed")
             if not failed_status_uuid:
                 logger.warning("stripe_webhook: payment_statuses row for key=failed not found, skipping payment update event_id=%s", event_id)
             else:
-                logger.info("stripe_webhook: handling payment_intent.payment_failed event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
-                ok = update_payment_by_provider_payment_id(
-                    provider_payment_id=pi_id,
-                    payment_status_id=failed_status_uuid,
-                    metadata={"error": err_message},
+                try:
+                    ok, rows = update_payment_by_provider_payment_id(
+                        provider_payment_id=pi_id,
+                        payment_status_id=failed_status_uuid,
+                        metadata={"error": err_message},
+                    )
+                except RuntimeError as e:
+                    logger.exception("stripe_webhook: update_payment_by_provider_payment_id failed event_id=%s: %s", event_id, e)
+                    ok, rows = False, 0
+                logger.info(
+                    "stripe_webhook: payment_intent.payment_failed event_id=%s pi_id=%s rows_updated=%s (by provider_payment_id)",
+                    event_id, pi_id[:14] + "***" if pi_id else "None", rows,
                 )
-                if ok:
-                    logger.info("stripe_webhook: updated payment failed event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                if ok and rows > 0:
+                    logger.info("stripe_webhook: updated payment failed by provider_payment_id event_id=%s pi_id=%s rows=%s", event_id, pi_id[:12] + "***", rows)
+                elif payment_id_meta:
+                    try:
+                        ok2, n2 = update_payment_by_id(payment_id_meta, payment_status_id=failed_status_uuid, metadata={"error": err_message})
+                        logger.info(
+                            "stripe_webhook: fallback update by payment_id (metadata) event_id=%s payment_id=%s success=%s rows=%s",
+                            event_id, payment_id_meta[:8] + "***", ok2, n2,
+                        )
+                    except RuntimeError as e:
+                        logger.exception("stripe_webhook: fallback update_payment_by_id failed event_id=%s payment_id=%s: %s", event_id, payment_id_meta[:8] + "***", e)
                 else:
-                    logger.warning("stripe_webhook: could not update payment for payment_intent_id=%s event_id=%s", pi_id[:12] + "***", event_id)
+                    logger.warning("stripe_webhook: could not update payment (0 rows by provider_payment_id, no metadata.payment_id) event_id=%s pi_id=%s", event_id, pi_id[:12] + "***")
 
-    # Handle payment_intent.canceled: set payment_status_id=failed (UUID) (idempotent)
+    # Handle payment_intent.canceled: set payment_status_id=failed; fallback to metadata.payment_id if 0 rows
     elif event_type == "payment_intent.canceled":
         pi_obj = event.get("data", {}).get("object", {})
         pi_id = pi_obj.get("id")
+        metadata = pi_obj.get("metadata") or {}
+        payment_id_meta = metadata.get("payment_id") if isinstance(metadata.get("payment_id"), str) else None
+        logger.info(
+            "stripe_webhook: payment_intent.canceled event_id=%s pi_id=%s metadata.payment_id=%s",
+            event_id, pi_id[:12] + "***" if pi_id else "None", payment_id_meta[:8] + "***" if payment_id_meta else "None",
+        )
         if pi_id:
             failed_status_uuid = get_payment_status_id_by_key("failed")
             if not failed_status_uuid:
                 logger.warning("stripe_webhook: payment_statuses row for key=failed not found, skipping payment update event_id=%s", event_id)
             else:
-                logger.info("stripe_webhook: handling payment_intent.canceled event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
-                ok = update_payment_by_provider_payment_id(
-                    provider_payment_id=pi_id,
-                    payment_status_id=failed_status_uuid,
-                    metadata={"reason": "canceled"},
+                try:
+                    ok, rows = update_payment_by_provider_payment_id(
+                        provider_payment_id=pi_id,
+                        payment_status_id=failed_status_uuid,
+                        metadata={"reason": "canceled"},
+                    )
+                except RuntimeError as e:
+                    logger.exception("stripe_webhook: update_payment_by_provider_payment_id failed event_id=%s: %s", event_id, e)
+                    ok, rows = False, 0
+                logger.info(
+                    "stripe_webhook: payment_intent.canceled event_id=%s pi_id=%s rows_updated=%s (by provider_payment_id)",
+                    event_id, pi_id[:14] + "***" if pi_id else "None", rows,
                 )
-                if ok:
-                    logger.info("stripe_webhook: updated payment canceled event_id=%s payment_intent_id=%s", event_id, pi_id[:12] + "***")
+                if ok and rows > 0:
+                    logger.info("stripe_webhook: updated payment canceled by provider_payment_id event_id=%s pi_id=%s rows=%s", event_id, pi_id[:12] + "***", rows)
+                elif payment_id_meta:
+                    try:
+                        ok2, n2 = update_payment_by_id(payment_id_meta, payment_status_id=failed_status_uuid, metadata={"reason": "canceled"})
+                        logger.info(
+                            "stripe_webhook: fallback update by payment_id (metadata) event_id=%s payment_id=%s success=%s rows=%s",
+                            event_id, payment_id_meta[:8] + "***", ok2, n2,
+                        )
+                    except RuntimeError as e:
+                        logger.exception("stripe_webhook: fallback update_payment_by_id failed event_id=%s payment_id=%s: %s", event_id, payment_id_meta[:8] + "***", e)
                 else:
-                    logger.warning("stripe_webhook: could not update payment for payment_intent_id=%s event_id=%s", pi_id[:12] + "***", event_id)
+                    logger.warning("stripe_webhook: could not update payment (0 rows by provider_payment_id, no metadata.payment_id) event_id=%s pi_id=%s", event_id, pi_id[:12] + "***")
     
     # Ignore other event types
     else:
