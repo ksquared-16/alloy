@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { ORG_ID_FINANCIALS } from "@/lib/financials";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/admin/financials/ledger/[id] — ledger transaction detail + linked journal entry + lines
+ */
+export async function GET(
+    _request: NextRequest,
+    context: { params: Promise<{ id: string }> }
+) {
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const orgId = ORG_ID_FINANCIALS;
+
+    const { data: txn, error: txnErr } = await supabase
+        .from("ledger_transactions")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", orgId)
+        .single();
+
+    if (txnErr || !txn) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const journalEntryId = (txn as { journal_entry_id?: string | null }).journal_entry_id;
+    let entry: Record<string, unknown> | null = null;
+    let lines: Record<string, unknown>[] = [];
+
+    if (journalEntryId) {
+        const { data: entryRow, error: entryErr } = await supabase
+            .from("gl_journal_entries")
+            .select("*")
+            .eq("id", journalEntryId)
+            .eq("org_id", orgId)
+            .single();
+        if (!entryErr && entryRow) entry = entryRow as Record<string, unknown>;
+
+        const { data: lineRows, error: linesErr } = await supabase
+            .from("gl_journal_lines")
+            .select("id, line_no, account_id, description, debit_cents, credit_cents, currency")
+            .eq("entry_id", journalEntryId)
+            .eq("org_id", orgId)
+            .order("line_no", { ascending: true });
+        if (!linesErr && lineRows) {
+            const accountIds = [...new Set((lineRows as { account_id: string }[]).map((l) => l.account_id))];
+            const { data: accounts } = accountIds.length
+                ? await supabase.from("gl_accounts").select("id, code, name, type").in("id", accountIds)
+                : { data: [] };
+            const accountMap = new Map((accounts ?? []).map((a) => [(a as { id: string }).id, a]));
+            lines = (lineRows as Record<string, unknown>[]).map((l) => ({
+                ...l,
+                account: accountMap.get(l.account_id as string) ?? null,
+            }));
+        }
+    }
+
+    return NextResponse.json({
+        transaction: txn,
+        journalEntry: entry,
+        journalLines: lines,
+    });
+}

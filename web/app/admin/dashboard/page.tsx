@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { ORG_ID_FINANCIALS, getFinancialSnapshot } from "@/lib/financials";
 import DashboardClient, { type DashboardData } from "./DashboardClient";
 
 async function getDashboardData(): Promise<DashboardData> {
@@ -121,6 +122,13 @@ async function getDashboardData(): Promise<DashboardData> {
         };
     });
 
+    let financialSnapshot = null;
+    try {
+        financialSnapshot = await getFinancialSnapshot(supabase, ORG_ID_FINANCIALS);
+    } catch (e) {
+        console.error("Dashboard financial snapshot:", e);
+    }
+
     return {
         jobs: { total: jobs.length, withDefaultVendor: jobsWithVendor },
         opportunities: { total: opportunities.length, booked, notBooked: opportunities.length - booked, byStage },
@@ -133,6 +141,7 @@ async function getDashboardData(): Promise<DashboardData> {
             messageOutboxFailures: typeof (outboxFailuresRes as { count?: number }).count === "number" ? (outboxFailuresRes as { count: number }).count : 0,
         },
         upcomingSchedules: upcomingRows,
+        financialSnapshot,
     };
 }
 
@@ -144,6 +153,7 @@ export default async function AdminDashboardPage() {
         vendors: { pending: 0, approved: 0, suspended: 0 },
         attention: { unassignedSchedules: 0, offeredNotAccepted: 0, failedWorkflowRuns: 0, messageOutboxFailures: 0 },
         upcomingSchedules: [],
+        financialSnapshot: null,
     };
     try {
         data = await getDashboardData();

@@ -5,7 +5,8 @@ import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import KpiCard from "@/components/admin/KpiCard";
 import SectionCard from "@/components/admin/SectionCard";
 import EmptyState from "@/components/admin/EmptyState";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import type { FinancialSnapshot } from "@/lib/financials";
 
 export interface DashboardData {
     jobs: { total: number; withDefaultVendor: number };
@@ -14,6 +15,7 @@ export interface DashboardData {
     vendors: { pending: number; approved: number; suspended: number };
     attention: { unassignedSchedules: number; offeredNotAccepted: number; failedWorkflowRuns: number; messageOutboxFailures: number };
     upcomingSchedules: { id: string; start_at: string; end_at: string; _job_title: string | null; _customer_name: string | null; _assignment_status: string | null }[];
+    financialSnapshot: FinancialSnapshot | null;
 }
 
 interface DashboardClientProps {
@@ -21,7 +23,7 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ data }: DashboardClientProps) {
-    const { jobs, opportunities, schedules, vendors, attention, upcomingSchedules } = data;
+    const { jobs, opportunities, schedules, vendors, attention, upcomingSchedules, financialSnapshot } = data;
 
     return (
         <div className="space-y-8">
@@ -44,6 +46,23 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                 <KpiCard value={schedules.accepted} label="Accepted" href="/admin/schedules" accent="juniper" />
                 <KpiCard value={schedules.canceled} label="Canceled" href="/admin/schedules" />
             </section>
+
+            {/* Financial Snapshot (GL-derived) */}
+            {financialSnapshot && (
+                <SectionCard title="Financial snapshot">
+                    <p className="text-xs text-[#59678b] mb-3">Month-to-date and current balances from the general ledger.</p>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-lg bg-[#F4F6F9] px-3 py-2"><span className="text-xs text-[#59678b]">MTD Revenue</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.mtd_revenue_cents)}</p></div>
+                        <div className="rounded-lg bg-[#F4F6F9] px-3 py-2"><span className="text-xs text-[#59678b]">MTD Contractor COGS</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.mtd_contractor_cogs_cents)}</p></div>
+                        <div className="rounded-lg bg-[#F4F6F9] px-3 py-2"><span className="text-xs text-[#59678b]">MTD Stripe Fees</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.mtd_stripe_fees_cents)}</p></div>
+                        <div className="rounded-lg bg-[#F4F6F9] px-3 py-2"><span className="text-xs text-[#59678b]">MTD Discounts</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.mtd_discounts_cents)}</p></div>
+                        <div className="rounded-lg bg-[#e6d3a0]/30 px-3 py-2 border border-[#DBC078]/50"><span className="text-xs text-[#59678b]">MTD Net Income</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.mtd_net_income_cents)}</p></div>
+                        <div className="rounded-lg bg-[#F4F6F9] px-3 py-2"><span className="text-xs text-[#59678b]">Stripe Clearing (1000)</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.stripe_clearing_cents)}</p></div>
+                        <div className="rounded-lg bg-[#F4F6F9] px-3 py-2"><span className="text-xs text-[#59678b]">Contractor Payable (2000)</span><p className="font-semibold text-[#31394d]">{formatMoneyFromCents(financialSnapshot.contractor_payable_cents)}</p></div>
+                    </div>
+                    <Link href="/admin/financials/ledger" className="inline-block mt-3 text-sm text-[#00458C] hover:underline">View Ledger</Link>
+                </SectionCard>
+            )}
 
             {/* Pipeline / funnel tiles */}
             <section className="grid gap-4 sm:grid-cols-2">
