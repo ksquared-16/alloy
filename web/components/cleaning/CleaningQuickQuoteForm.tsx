@@ -99,10 +99,32 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         price_breakdown: undefined,
         addons: qo?.addons ?? [],
         quote_input: { zip: zip.trim(), square_footage: square_footage.trim(), cleaning_frequency: cleaning_frequency || "one_time" },
+        email: email?.trim() || undefined,
+        phone: phone?.trim() || undefined,
+        first_name: first_name?.trim() || undefined,
+        last_name: last_name?.trim() || undefined,
       };
       const quoteJson = JSON.stringify(storedQuote);
       localStorage.setItem("alloy_quote_v1", quoteJson);
       sessionStorage.setItem("alloy_quote_v1", quoteJson);
+
+      // Persist contact for BookV2 (same key + shape as BookV2 reads: alloy_booking_prefill)
+      const prefillData: Record<string, string | undefined> = {
+        email: email?.trim() || undefined,
+        phone: phone?.trim() || undefined,
+        first_name: first_name?.trim() || undefined,
+        last_name: last_name?.trim() || undefined,
+        zip: zip?.trim() || undefined,
+        postal_code: zip?.trim() || undefined,
+      };
+      const prefillJson = JSON.stringify(prefillData);
+      try {
+        sessionStorage.setItem("alloy_booking_prefill", prefillJson);
+        localStorage.setItem("alloy_booking_prefill", prefillJson);
+      } catch (e) {
+        console.warn("alloy_booking_prefill set failed:", e);
+      }
+
       onSuccess();
     } catch (err) {
       console.error("Quote start failed:", err);

@@ -338,11 +338,13 @@ export default function BookV2Client() {
     const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
     const [rescheduleResult, setRescheduleResult] = useState<{ start_at: string; end_at: string } | null>(null);
     
-    // Resolve email/phone with priority: query params > localStorage > debug mock
+    // Resolve email/phone with priority: query params > alloy_booking_prefill > stored quote
     const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
     const [resolvedPhone, setResolvedPhone] = useState<string | null>(null);
     const [resolvedFirstName, setResolvedFirstName] = useState<string | null>(null);
     const [resolvedLastName, setResolvedLastName] = useState<string | null>(null);
+    /** True after first run of identity resolution (avoids flashing inline form before hydration) */
+    const [identityHydrated, setIdentityHydrated] = useState(false);
 
     // Default timezone
     const timezone = "America/Los_Angeles";
@@ -417,42 +419,45 @@ export default function BookV2Client() {
         };
     }, []);
 
-    // Resolve email/phone from multiple sources
+    // Resolve email/phone from multiple sources (runs on mount + when searchParams change)
     useEffect(() => {
         if (debug) {
-            // Debug mode: use mock contact info
             setResolvedEmail("test@example.com");
             setResolvedPhone("+15415551234");
             setResolvedFirstName("Test");
             setResolvedLastName("User");
+            setIdentityHydrated(true);
             return;
         }
 
-        // Priority 1: Query params
+        // Priority 1: URL params
         const queryEmail = searchParams?.get("email");
         const queryPhone = searchParams?.get("phone");
         const queryFirstName = searchParams?.get("first_name");
         const queryLastName = searchParams?.get("last_name");
-
-        if (queryEmail && queryPhone) {
-            setResolvedEmail(queryEmail);
-            setResolvedPhone(queryPhone);
+        if (queryEmail || queryPhone) {
+            setResolvedEmail(queryEmail || null);
+            setResolvedPhone(queryPhone || null);
             setResolvedFirstName(queryFirstName || null);
             setResolvedLastName(queryLastName || null);
+            setIdentityHydrated(true);
             return;
         }
 
-        // Priority 2: localStorage prefill
+        // Priority 2: alloy_booking_prefill (sessionStorage then localStorage — same shape as quote form writes)
         try {
             const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
                 localStorage.getItem("alloy_booking_prefill");
             if (prefill) {
-                const prefillData = JSON.parse(prefill);
-                if (prefillData.email && prefillData.phone) {
-                    setResolvedEmail(prefillData.email);
-                    setResolvedPhone(prefillData.phone);
-                    setResolvedFirstName(prefillData.first_name || null);
-                    setResolvedLastName(prefillData.last_name || null);
+                const prefillData = JSON.parse(prefill) as Record<string, unknown>;
+                const prefillEmail = typeof prefillData.email === "string" ? prefillData.email.trim() || null : null;
+                const prefillPhone = typeof prefillData.phone === "string" ? prefillData.phone.trim() || null : null;
+                if (prefillEmail || prefillPhone) {
+                    setResolvedEmail(prefillEmail || null);
+                    setResolvedPhone(prefillPhone || null);
+                    setResolvedFirstName(typeof prefillData.first_name === "string" ? prefillData.first_name.trim() || null : null);
+                    setResolvedLastName(typeof prefillData.last_name === "string" ? prefillData.last_name.trim() || null : null);
+                    setIdentityHydrated(true);
                     return;
                 }
             }
@@ -460,19 +465,23 @@ export default function BookV2Client() {
             console.warn("Failed to load prefill:", e);
         }
 
-        // Priority 3: Quote storage (may contain contact info)
+        // Priority 3: Stored quote objects (alloy_quote_v1 / cleaning_quote / alloy_cleaning_quote)
         try {
-            let storedQuote = localStorage.getItem("alloy_quote_v1") ||
+            const storedQuoteRaw =
+                localStorage.getItem("alloy_quote_v1") ||
                 localStorage.getItem("cleaning_quote") ||
                 sessionStorage.getItem("alloy_cleaning_quote") ||
                 sessionStorage.getItem("cleaning_quote");
-            if (storedQuote) {
-                const parsedQuote = JSON.parse(storedQuote);
-                if (parsedQuote.email && parsedQuote.phone) {
-                    setResolvedEmail(parsedQuote.email);
-                    setResolvedPhone(parsedQuote.phone);
-                    setResolvedFirstName(parsedQuote.first_name || null);
-                    setResolvedLastName(parsedQuote.last_name || null);
+            if (storedQuoteRaw) {
+                const parsedQuote = JSON.parse(storedQuoteRaw) as Record<string, unknown>;
+                const quoteEmail = typeof parsedQuote.email === "string" ? parsedQuote.email.trim() || null : null;
+                const quotePhone = typeof parsedQuote.phone === "string" ? parsedQuote.phone.trim() || null : null;
+                if (quoteEmail || quotePhone) {
+                    setResolvedEmail(quoteEmail || null);
+                    setResolvedPhone(quotePhone || null);
+                    setResolvedFirstName(typeof parsedQuote.first_name === "string" ? parsedQuote.first_name.trim() || null : null);
+                    setResolvedLastName(typeof parsedQuote.last_name === "string" ? parsedQuote.last_name.trim() || null : null);
+                    setIdentityHydrated(true);
                     return;
                 }
             }
@@ -480,11 +489,11 @@ export default function BookV2Client() {
             console.warn("Failed to load contact from quote:", e);
         }
 
-        // No contact info found
         setResolvedEmail(null);
         setResolvedPhone(null);
         setResolvedFirstName(null);
         setResolvedLastName(null);
+        setIdentityHydrated(true);
     }, [debug, searchParams]);
 
     // Prefill quote-start form with resolved email/phone/name when they become available
@@ -2108,6 +2117,10 @@ export default function BookV2Client() {
                                     </p>
                                 </div>
                             ) : !mounted ? (
+                                <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
+                                    <p className="text-xs text-alloy-midnight/60">Loading...</p>
+                                </div>
+                            ) : !identityHydrated ? (
                                 <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
                                     <p className="text-xs text-alloy-midnight/60">Loading...</p>
                                 </div>
