@@ -1726,6 +1726,36 @@ def update_payment_by_id(
         raise RuntimeError("Supabase PATCH payments by id failed: %s" % e) from e
 
 
+def get_existing_paid_payment_for_job(job_id: str, paid_status_uuid: str) -> Optional[Dict]:
+    """
+    Return a paid payment for the job if one exists (payments joined to payment_statuses via paid_status_uuid).
+    Queries payments where job_id = job_id and payment_status_id = paid_status_uuid, limit 1.
+    Returns dict with id, provider_payment_id or None.
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not paid_status_uuid:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payments"
+        params = {
+            "job_id": f"eq.{job_id}",
+            "payment_status_id": f"eq.{paid_status_uuid}",
+            "select": "id,provider_payment_id",
+            "limit": "1",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return None
+    except Exception as e:
+        logger.warning("get_existing_paid_payment_for_job: exception %s", e)
+        return None
+
+
 def get_payment_status_id_by_key(status_key: str) -> Optional[str]:
     """
     Resolve payment_statuses.id (UUID) by status key/code.

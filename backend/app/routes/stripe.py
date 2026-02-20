@@ -35,6 +35,7 @@ from ..supabase_client import (
     get_opportunity_org_id,
     insert_payment,
     update_payment_by_id,
+    get_existing_paid_payment_for_job,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -75,6 +76,18 @@ async def admin_payments_run(
         raise HTTPException(
             status_code=500,
             detail="Could not resolve payment_statuses (pending/paid/failed). Check payment_statuses table.",
+        )
+
+    existing = get_existing_paid_payment_for_job(job_id, paid_uuid)
+    if existing:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "ok": False,
+                "error": "Job already has a paid payment",
+                "existing_payment_id": existing.get("id"),
+                "provider_payment_id": existing.get("provider_payment_id"),
+            },
         )
 
     job = get_job_by_id(job_id)
