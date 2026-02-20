@@ -67,31 +67,56 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, reason: "invalid" }, { status: 400 });
     }
 
+    const jobId = r.entity_id;
     const { data: updatedJob, error: updateErr } = await supabase
         .from("jobs")
         .update({ assigned_vendor_id: vendorId })
-        .eq("id", r.entity_id)
+        .eq("id", jobId)
         .is("assigned_vendor_id", null)
         .select("id, assigned_vendor_id")
         .maybeSingle();
 
+    if (updateErr) {
+        return NextResponse.json({ ok: false, reason: "invalid" }, { status: 500 });
+    }
+
+    const accepted = !!updatedJob;
+    const acceptResult = accepted ? "accepted" : "already_assigned";
+    const mergedMetadata = { ...metadata, accept_result: acceptResult };
+    const now = new Date().toISOString();
+
     const { error: consumeErr } = await supabase
         .from("action_links")
-        .update({ consumed_at: new Date().toISOString() })
+        .update({
+            consumed_at: now,
+            metadata: mergedMetadata,
+        })
         .eq("id", r.id);
 
     if (consumeErr) {
         return NextResponse.json({ ok: false, reason: "invalid" }, { status: 500 });
     }
 
-    if (updateErr) {
-        return NextResponse.json({ ok: false, reason: "invalid" }, { status: 500 });
-    }
-
+    let assignedVendorId: string;
     if (updatedJob) {
-        const out = updatedJob as { id: string; assigned_vendor_id: string };
-        return NextResponse.json({ ok: true, assigned_vendor_id: out.assigned_vendor_id });
+        assignedVendorId = (updatedJob as { assigned_vendor_id: string }).assigned_vendor_id;
+    } else {
+        const { data: jobRow } = await supabase
+            .from("jobs")
+            .select("assigned_vendor_id")
+            .eq("id", jobId)
+            .single();
+        assignedVendorId = (jobRow as { assigned_vendor_id: string } | null)?.assigned_vendor_id ?? vendorId;
     }
 
-    return NextResponse.json({ ok: false, reason: "already_assigned" }, { status: 200 });
+    const actionLinkResult = {
+        accept_result: acceptResult as "accepted" | "already_assigned",
+        job_id: jobId,
+        assigned_vendor_id: assignedVendorId,
+    };
+
+    return NextResponse.json({
+        ok: true,
+        action_link_result: actionLinkResult,
+    });
 }

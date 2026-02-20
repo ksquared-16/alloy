@@ -159,11 +159,11 @@ export default function ActionConfirmPage() {
             body: JSON.stringify({ token }),
         })
             .then((res) => res.json())
-            .then((data: { ok?: boolean; reason?: string }) => {
-                if (data.ok) {
-                    setStatus("success");
-                } else if (data.reason === "already_assigned") {
+            .then((data: { ok?: boolean; reason?: string; action_link_result?: { accept_result?: string } }) => {
+                if (data.ok && data.action_link_result?.accept_result === "already_assigned") {
                     setStatus("already_assigned");
+                } else if (data.ok) {
+                    setStatus("success");
                 } else {
                     setStatus("error");
                 }
@@ -278,11 +278,11 @@ export default function ActionConfirmPage() {
                 </div>
                 <div className={cardClass}>
                     <div className={headerClass}>
-                        <h1 className="text-lg font-semibold text-alloy-midnight">{isAcceptJob ? "Job accepted" : "Done"}</h1>
+                        <h1 className="text-lg font-semibold text-alloy-midnight">{isAcceptJob ? "You're booked!" : "Done"}</h1>
                     </div>
                     <div className={`${bodyClass} text-center`}>
                         <p className="text-alloy-midnight/70 text-sm">
-                            {isAcceptJob ? "You have accepted this job." : "Your action has been completed successfully."}
+                            {isAcceptJob ? "Job accepted." : "Your action has been completed successfully."}
                         </p>
                         {backLink}
                     </div>
@@ -302,7 +302,7 @@ export default function ActionConfirmPage() {
                         <h1 className="text-lg font-semibold text-alloy-midnight">Job no longer available</h1>
                     </div>
                     <div className={`${bodyClass} text-center`}>
-                        <p className="text-alloy-midnight/70 text-sm">Someone else already accepted this job.</p>
+                        <p className="text-alloy-midnight/70 text-sm">This job has already been accepted by someone else.</p>
                         {backLink}
                     </div>
                 </div>
