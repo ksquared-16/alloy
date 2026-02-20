@@ -59,6 +59,11 @@ async def admin_payments_run(
     If amount_cents omitted, uses job.estimated_total_cents or job.recurring_total_cents.
     All Stripe logic runs in backend; Next.js proxies to this route.
     """
+    # Request-time Stripe init (same key as SetupIntent): set before any Stripe call
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="STRIPE_SECRET_KEY is not configured")
+    stripe.api_key = STRIPE_SECRET_KEY
+
     job_id = body.get("job_id") if isinstance(body.get("job_id"), str) else None
     if not job_id:
         raise HTTPException(status_code=400, detail="job_id is required")
