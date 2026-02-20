@@ -10,6 +10,7 @@ const PAYMENT_STATUS_LOOKUP_COLUMN = "key";
 
 /**
  * Resolve payment_statuses.id (UUID) for pending, paid, failed. Returns null if any missing.
+ * Narrows row type via runtime checks; no Record<string, string> cast.
  */
 async function getPaymentStatusIds(supabase: ReturnType<typeof createAdminClient>): Promise<{ pending: string; paid: string; failed: string } | null> {
     const { data: rows, error } = await supabase
@@ -19,8 +20,13 @@ async function getPaymentStatusIds(supabase: ReturnType<typeof createAdminClient
     if (error || !rows?.length) return null;
     const byKey: Record<string, string> = {};
     for (const r of rows) {
-        const k = (r as Record<string, string>)[PAYMENT_STATUS_LOOKUP_COLUMN];
-        if (k && (r as { id?: string }).id) byKey[k] = (r as { id: string }).id;
+        if (r === null || typeof r !== "object") continue;
+        const o = r as Record<string, unknown>;
+        const id = o.id;
+        const lookupVal = o[PAYMENT_STATUS_LOOKUP_COLUMN];
+        if (typeof id === "string" && typeof lookupVal === "string" && lookupVal) {
+            byKey[lookupVal] = id;
+        }
     }
     if (!byKey.pending || !byKey.paid || !byKey.failed) return null;
     return { pending: byKey.pending, paid: byKey.paid, failed: byKey.failed };
@@ -167,7 +173,7 @@ export async function POST(request: NextRequest) {
     const stripe = new Stripe(secretKey);
 
     // Resolve payment method: use default or first on customer
-    let paymentMethodId: string | null = defaultPaymentMethodId;
+    let paymentMethodId: string | null = defaultPaymentMethodId ?? null;
 
     if (!paymentMethodId) {
         const pmList = await stripe.paymentMethods.list({
