@@ -159,3 +159,39 @@ So: **conflict risk** is mainly (1) **payment_status_id** being a uuid FK in you
 | **Conflict?** | Only if table already exists and we add conflicting indexes, or if column names/types differ. | Use existing table; make migration additive-only (indexes only); align code to your column names and payment_status_id type (text vs uuid FK). |
 
 If you paste your current `payments` table definition (from the SQL above), the implementation can be adjusted exactly to match it (column names and payment_status_id handling).
+
+---
+
+## 7. SQL verification: payment status, paid_at, posted_to_ledger_at
+
+After a successful charge (e.g. `POST /admin/payments/run` then webhook or run route sets paid), run in the Supabase SQL editor to confirm:
+
+```sql
+-- Replace with a known payment id or job_id
+SELECT
+  p.id,
+  p.job_id,
+  p.payment_status_id,
+  ps.key AS payment_status_key,
+  p.paid_at,
+  p.posted_to_ledger_at,
+  p.provider_payment_id
+FROM public.payments p
+LEFT JOIN public.payment_statuses ps ON ps.id = p.payment_status_id
+WHERE p.job_id = '<job_id>'  -- or: WHERE p.id = '<payment_id>'
+ORDER BY p.created_at DESC
+LIMIT 1;
+```
+
+- **payment_status_id** should be the UUID of the “paid” status; **payment_status_key** should be `paid`.
+- **paid_at** should be non-null (set when PaymentIntent succeeds).
+- **posted_to_ledger_at** should be non-null after the `payments_post_to_ledger` trigger runs (trigger calls `post_payment_to_ledger(uuid)` which sets this).
+
+If you have a separate ledger/transactions table, add a check that rows were created for this payment, for example:
+
+```sql
+-- If you have e.g. ledger_transactions with payment_id or reference to payments.id
+SELECT * FROM public.ledger_transactions
+WHERE payment_id = '<payment_id>'
+   OR source_type = 'payment' AND source_id = '<payment_id>';
+```
