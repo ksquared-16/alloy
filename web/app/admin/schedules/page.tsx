@@ -60,6 +60,20 @@ export default async function AdminSchedulesPage() {
     const vendorMap = new Map((vendors ?? []).map((v) => [v.id, v]));
     const statusMap = new Map((statusRows ?? []).map((s) => [s.id, s]));
 
+    let paidJobIds = new Set<string>();
+    if (jobIds.length > 0) {
+        const { data: paidRows } = await supabase
+            .from("payments")
+            .select("job_id, payment_statuses(key)")
+            .in("job_id", jobIds);
+        paidJobIds = new Set(
+            (paidRows ?? [])
+                .filter((r) => (r as { payment_statuses?: { key?: string } }).payment_statuses?.key === "paid")
+                .map((r) => (r as { job_id: string }).job_id)
+                .filter(Boolean)
+        );
+    }
+
     const rows = list.map((s) => {
         const job = s.job_id ? jobMap.get(s.job_id) : undefined;
         const customer = job?.customer_id ? customerMap.get(job.customer_id) : undefined;
@@ -84,6 +98,7 @@ export default async function AdminSchedulesPage() {
             _assignment_status: assignmentStatus ? (assignmentStatus as { key?: string }).key ?? (assignmentStatus as { label?: string }).label : null,
             _vendor_name: (vendor as { name?: string })?.name ?? (jobVendor as { name?: string })?.name ?? null,
             _vendor_source: vendorSource,
+            _job_paid: s.job_id ? paidJobIds.has(s.job_id) : false,
         };
     });
 

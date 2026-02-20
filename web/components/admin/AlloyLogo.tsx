@@ -1,12 +1,17 @@
 "use client";
 
-/** Minimal Alloy wordmark + mark for admin sidebar/header. No asset required. */
+/** Alloy brandmark for admin sidebar/header. Clickable parent (Link) is in AdminLayout. */
 export default function AlloyLogo({ compact = false }: { compact?: boolean }) {
+    const size = 28;
     return (
         <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#31394d] text-[#DBC078] font-bold text-sm">
-                A
-            </div>
+            <img
+                src="/brand/alloy-brandmark-gradient.svg"
+                alt="Alloy"
+                width={size}
+                height={size}
+                className="shrink-0"
+            />
             {!compact && <span className="font-semibold text-[#31394d] tracking-tight">Alloy</span>}
         </div>
     );

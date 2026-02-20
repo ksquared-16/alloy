@@ -540,7 +540,14 @@ export default function AdminEntityDrawer() {
 
     if (!drawer.type || !drawer.id) return null;
 
-    const title = data
+    const paymentStatusLabel = jobPayments.some((p) => p.payment_statuses?.key === "paid")
+        ? "Paid"
+        : jobPayments.length === 0
+            ? "Unpaid"
+            : (jobPayments[0]?.payment_statuses?.key ?? "pending").charAt(0).toUpperCase() + (jobPayments[0]?.payment_statuses?.key ?? "pending").slice(1);
+    const paymentStatusVariant = jobPayments.some((p) => p.payment_statuses?.key === "paid") ? "success" : jobPayments[0]?.payment_statuses?.key === "failed" ? "warning" : "default";
+
+    const title: React.ReactNode = data
         ? drawer.type === "contacts"
             ? `Contact: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
             : drawer.type === "customers"
@@ -548,7 +555,20 @@ export default function AdminEntityDrawer() {
               : drawer.type === "opportunities"
                 ? `Opportunity: ${(data.name as string) || drawer.id}`
                 : drawer.type === "jobs"
-                  ? `Job: ${(data.title as string) || drawer.id}`
+                    ? (
+                        <div className="flex flex-col gap-1 min-w-0">
+                            <span className="truncate">{(data._customer_name as string) || (data.title as string) || drawer.id}</span>
+                            <span className="text-sm font-normal text-alloy-midnight/70">
+                                {((data.title as string) || "Cleaning").trim() || "Cleaning"}
+                                {(data.gross_price_cents != null || (data as { estimated_total_cents?: number }).estimated_total_cents != null) && (
+                                    <> · {formatMoneyFromCents((data.gross_price_cents as number) ?? (data as { estimated_total_cents?: number }).estimated_total_cents ?? 0)}</>
+                                )}
+                            </span>
+                            <span className="mt-0.5">
+                                <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+                            </span>
+                        </div>
+                    )
                   : drawer.type === "schedules"
                     ? `Schedule: ${drawer.id}`
                     : drawer.type === "discount_redemptions"
@@ -845,6 +865,123 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "jobs" && (
                         <>
+                            <div className="rounded-lg border border-alloy-stone/30 bg-[#F4F6F9]/50 p-3 mb-4">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Quick Actions</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
+                                        <button
+                                            type="button"
+                                            disabled={!!paymentActionLoading}
+                                            onClick={async () => {
+                                                if (!drawer.id) return;
+                                                setPaymentActionLoading("run");
+                                                setPaymentToast(null);
+                                                try {
+                                                    const res = await fetch("/api/admin/payments/run", {
+                                                        method: "POST",
+                                                        headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify({ job_id: drawer.id }),
+                                                    });
+                                                    const json = await res.json().catch(() => ({}));
+                                                    if (res.status === 409) {
+                                                        setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" });
+                                                        refetchJobPayments();
+                                                        return;
+                                                    }
+                                                    if (!res.ok) {
+                                                        setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Run payment failed" });
+                                                        return;
+                                                    }
+                                                    setPaymentToast({ type: "success", message: "Payment succeeded" });
+                                                    refetchJobPayments();
+                                                    refetch();
+                                                } catch (e) {
+                                                    setPaymentToast({ type: "error", message: (e as Error).message });
+                                                } finally {
+                                                    setPaymentActionLoading(null);
+                                                }
+                                            }}
+                                            className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                        >
+                                            {paymentActionLoading === "run" ? "…" : "Run Payment"}
+                                        </button>
+                                    )}
+                                    {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
+                                        <button
+                                            type="button"
+                                            disabled={!!paymentActionLoading}
+                                            onClick={async () => {
+                                                if (!drawer.id) return;
+                                                setPaymentActionLoading("retry");
+                                                setPaymentToast(null);
+                                                try {
+                                                    const res = await fetch("/api/admin/payments/run", {
+                                                        method: "POST",
+                                                        headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify({ job_id: drawer.id }),
+                                                    });
+                                                    const json = await res.json().catch(() => ({}));
+                                                    if (res.status === 409) {
+                                                        setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" });
+                                                        refetchJobPayments();
+                                                        return;
+                                                    }
+                                                    if (!res.ok) {
+                                                        setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" });
+                                                        return;
+                                                    }
+                                                    setPaymentToast({ type: "success", message: "Payment succeeded" });
+                                                    refetchJobPayments();
+                                                    refetch();
+                                                } catch (e) {
+                                                    setPaymentToast({ type: "error", message: (e as Error).message });
+                                                } finally {
+                                                    setPaymentActionLoading(null);
+                                                }
+                                            }}
+                                            className="px-3 py-1.5 text-sm border border-amber-500/60 text-amber-700 rounded-md hover:bg-amber-50 disabled:opacity-50"
+                                        >
+                                            {paymentActionLoading === "retry" ? "…" : "Retry Failed"}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        disabled={!!jobActionLoading}
+                                        onClick={async () => {
+                                            if (!drawer.id) return;
+                                            setJobActionLoading("mark_completed");
+                                            try {
+                                                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ action: "mark_completed" }),
+                                                });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Failed");
+                                                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                                                refetch();
+                                                router.refresh();
+                                            } catch (e) {
+                                                console.error("Mark completed failed", e);
+                                            } finally {
+                                                setJobActionLoading(null);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                    >
+                                        {jobActionLoading === "mark_completed" ? "…" : "Mark completed"}
+                                    </button>
+                                    {jobSchedules.length > 0 && !rescheduleForm && (
+                                        <button
+                                            type="button"
+                                            onClick={() => openReschedule(jobSchedules[0])}
+                                            className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
+                                        >
+                                            Reschedule
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                             <Field label="Title" value={data.title as string} />
                             <div className="pt-2 pb-2 border-b border-[#e6e8ec]">
                                 <strong className="text-alloy-midnight/70 block mb-2">Default vendor</strong>
@@ -950,38 +1087,6 @@ export default function AdminEntityDrawer() {
                                 </div>
                             )}
                             <div className="pt-4 border-t border-[#e6e8ec]">
-                                <strong className="text-alloy-midnight/70 block mb-2">Status actions</strong>
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        disabled={!!jobActionLoading}
-                                        onClick={async () => {
-                                            if (!drawer.id) return;
-                                            setJobActionLoading("mark_completed");
-                                            try {
-                                                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
-                                                    method: "PATCH",
-                                                    headers: { "Content-Type": "application/json" },
-                                                    body: JSON.stringify({ action: "mark_completed" }),
-                                                });
-                                                const json = await res.json().catch(() => ({}));
-                                                if (!res.ok) throw new Error((json.error as string) || "Failed");
-                                                setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                                refetch();
-                                                router.refresh();
-                                            } catch (e) {
-                                                console.error("Mark completed failed", e);
-                                            } finally {
-                                                setJobActionLoading(null);
-                                            }
-                                        }}
-                                        className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                    >
-                                        {jobActionLoading === "mark_completed" ? "…" : "Mark completed"}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="pt-4 border-t border-[#e6e8ec]">
                                 <strong className="text-alloy-midnight/70 block mb-2">Payments</strong>
                                 {paymentToast && (
                                     <div className={`mb-2 px-3 py-2 rounded text-sm ${paymentToast.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`} role="alert">
@@ -1021,82 +1126,6 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         )}
                                         <div className="flex flex-wrap gap-2">
-                                            {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
-                                                <button
-                                                    type="button"
-                                                    disabled={!!paymentActionLoading}
-                                                    onClick={async () => {
-                                                        if (!drawer.id) return;
-                                                        setPaymentActionLoading("run");
-                                                        setPaymentToast(null);
-                                                        try {
-                                                            const res = await fetch("/api/admin/payments/run", {
-                                                                method: "POST",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ job_id: drawer.id }),
-                                                            });
-                                                            const json = await res.json().catch(() => ({}));
-                                                            if (res.status === 409) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" });
-                                                                refetchJobPayments();
-                                                                return;
-                                                            }
-                                                            if (!res.ok) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Run payment failed" });
-                                                                return;
-                                                            }
-                                                            setPaymentToast({ type: "success", message: "Payment succeeded" });
-                                                            refetchJobPayments();
-                                                            refetch();
-                                                        } catch (e) {
-                                                            setPaymentToast({ type: "error", message: (e as Error).message });
-                                                        } finally {
-                                                            setPaymentActionLoading(null);
-                                                        }
-                                                    }}
-                                                    className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                                >
-                                                    {paymentActionLoading === "run" ? "Running…" : "Run Payment"}
-                                                </button>
-                                            )}
-                                            {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
-                                                <button
-                                                    type="button"
-                                                    disabled={!!paymentActionLoading}
-                                                    onClick={async () => {
-                                                        if (!drawer.id) return;
-                                                        setPaymentActionLoading("retry");
-                                                        setPaymentToast(null);
-                                                        try {
-                                                            const res = await fetch("/api/admin/payments/run", {
-                                                                method: "POST",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ job_id: drawer.id }),
-                                                            });
-                                                            const json = await res.json().catch(() => ({}));
-                                                            if (res.status === 409) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" });
-                                                                refetchJobPayments();
-                                                                return;
-                                                            }
-                                                            if (!res.ok) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" });
-                                                                return;
-                                                            }
-                                                            setPaymentToast({ type: "success", message: "Payment succeeded" });
-                                                            refetchJobPayments();
-                                                            refetch();
-                                                        } catch (e) {
-                                                            setPaymentToast({ type: "error", message: (e as Error).message });
-                                                        } finally {
-                                                            setPaymentActionLoading(null);
-                                                        }
-                                                    }}
-                                                    className="px-3 py-1.5 text-sm border border-amber-500 text-amber-700 rounded-md hover:bg-amber-50 disabled:opacity-50"
-                                                >
-                                                    {paymentActionLoading === "retry" ? "Retrying…" : "Retry Failed"}
-                                                </button>
-                                            )}
                                             {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "pending" && (
                                                 <button type="button" disabled title="Void Pending — coming soon" className="px-3 py-1.5 text-sm border border-[#e6e8ec] rounded-md text-alloy-midnight/50 cursor-not-allowed">
                                                     Void Pending

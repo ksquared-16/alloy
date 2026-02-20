@@ -21,6 +21,7 @@ export interface ScheduleRow {
     _assignment_status?: string | null;
     _vendor_name?: string | null;
     _vendor_source?: "schedule" | "job" | null;
+    _job_paid?: boolean;
     [key: string]: unknown;
 }
 
@@ -45,7 +46,12 @@ export default function SchedulesClient({
     const columns = [
         { key: "start_at", label: "Start", sortable: true, render: (_: unknown, row: ScheduleRow) => formatDateTime(row.start_at) },
         { key: "end_at", label: "End", sortable: true, render: (_: unknown, row: ScheduleRow) => formatDateTime(row.end_at) },
-        { key: "_job_title", label: "Job", sortable: true, render: (_: unknown, row: ScheduleRow) => row._job_title ?? (row.job_id ? `${String(row.job_id).slice(0, 8)}…` : "—") },
+        { key: "_job_title", label: "Job", sortable: true, render: (_: unknown, row: ScheduleRow) => (
+            <span className="flex items-center gap-1.5">
+                {row._job_paid && <span className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-800" title="Job has a paid payment">Paid</span>}
+                {row._job_title ?? (row.job_id ? `${String(row.job_id).slice(0, 8)}…` : "—")}
+            </span>
+        ) },
         { key: "_customer_name", label: "Customer", sortable: true, render: (_: unknown, row: ScheduleRow) => row._customer_name ?? "—" },
         { key: "_contact_phone", label: "Contact", sortable: false, render: (_: unknown, row: ScheduleRow) => row._contact_phone ?? row._contact_email ?? "—" },
         { key: "_vertical_name", label: "Vertical", sortable: true, render: (_: unknown, row: ScheduleRow) => row._vertical_name ?? "—" },
