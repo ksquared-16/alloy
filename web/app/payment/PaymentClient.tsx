@@ -456,81 +456,56 @@ export default function PaymentClient() {
                 console.warn("Payment page: Creating SetupIntent without ghl_contact_id, using phone/email fallback");
             }
             
-            const response = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestBody),
-            });
+            const createSetupIntentOnce = async (): Promise<string> => {
+                const response = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(requestBody),
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to create setup intent");
+                }
+                const data = await response.json();
+                const secret = data.client_secret;
+                if (!secret) throw new Error("No client_secret from setup-intent");
+                return secret;
+            };
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || "Failed to create setup intent");
-            }
-
-            const { client_secret } = await response.json();
+            let client_secret = await createSetupIntentOnce();
 
             // Build billing_details with available user data
-            // Stripe will automatically extract postal_code from the card element and merge it
             const billingDetails: {
                 email?: string;
                 phone?: string;
                 name?: string;
-                address?: {
-                    postal_code?: string;
-                };
+                address?: { postal_code?: string };
             } = {};
-            
-            if (resolvedEmail) {
-                billingDetails.email = resolvedEmail;
-            }
-            if (resolvedPhone) {
-                billingDetails.phone = resolvedPhone;
-            }
-            if (resolvedFirstName && resolvedLastName) {
-                billingDetails.name = `${resolvedFirstName} ${resolvedLastName}`;
-            } else if (resolvedFirstName) {
-                billingDetails.name = resolvedFirstName;
-            } else if (resolvedLastName) {
-                billingDetails.name = resolvedLastName;
-            }
-            
-            // Get postal_code from stored form data if available
-            // Stripe will also extract it from the card element automatically and merge
+            if (resolvedEmail) billingDetails.email = resolvedEmail;
+            if (resolvedPhone) billingDetails.phone = resolvedPhone;
+            if (resolvedFirstName && resolvedLastName) billingDetails.name = `${resolvedFirstName} ${resolvedLastName}`;
+            else if (resolvedFirstName) billingDetails.name = resolvedFirstName;
+            else if (resolvedLastName) billingDetails.name = resolvedLastName;
             try {
                 const storedFormData = sessionStorage.getItem("alloy_lead_form_data");
                 if (storedFormData) {
                     const formData = JSON.parse(storedFormData);
-                    if (formData.postal_code) {
-                        billingDetails.address = {
-                            postal_code: formData.postal_code,
-                        };
-                    }
+                    if (formData.postal_code) billingDetails.address = { postal_code: formData.postal_code };
                 }
             } catch (e) {
-                // Ignore - postal_code will be extracted by Stripe from card element
+                // Ignore
             }
 
-            // Confirm the SetupIntent with Stripe
-            const { error: confirmError } = await stripe.confirmCardSetup(
-                client_secret,
-                {
-                    payment_method: {
-                        card: card,
-                        billing_details: billingDetails,
-                    },
-                }
-            );
-
+            const confirmPayload = {
+                payment_method: { card: card, billing_details: billingDetails },
+            };
+            let confirmError = (await stripe.confirmCardSetup(client_secret, confirmPayload)).error;
+            if (confirmError && typeof confirmError.message === "string" && confirmError.message.toLowerCase().includes("no such setupintent")) {
+                client_secret = await createSetupIntentOnce();
+                confirmError = (await stripe.confirmCardSetup(client_secret, confirmPayload)).error;
+            }
             if (confirmError) {
-                const errorDetails = {
-                    message: confirmError.message || "Card setup failed",
-                    code: confirmError.code || null,
-                    decline_code: confirmError.decline_code || null,
-                    type: confirmError.type || null,
-                };
-                console.error("[PAYMENT] Card setup failed:", errorDetails);
+                console.error("[PAYMENT] Card setup failed:", confirmError.message, confirmError.code, confirmError.decline_code);
                 throw new Error(confirmError.message || "Card setup failed");
             }
 

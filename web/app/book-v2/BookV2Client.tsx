@@ -282,6 +282,12 @@ export default function BookV2Client() {
     const [quoteStartError, setQuoteStartError] = useState<string | null>(null);
     const [quoteJustSaved, setQuoteJustSaved] = useState(false);
 
+    // Payment step: inline email/phone when identity missing (no URL params / prefill / quote)
+    const [paymentIdentityEmail, setPaymentIdentityEmail] = useState("");
+    const [paymentIdentityPhone, setPaymentIdentityPhone] = useState("");
+    const [paymentIdentitySubmitting, setPaymentIdentitySubmitting] = useState(false);
+    const [paymentIdentityError, setPaymentIdentityError] = useState<string | null>(null);
+
     // Refine quote step: frequency and add-ons (optimistic UI; selectedAddonKeys = source of truth for checkboxes)
     const [refineFrequency, setRefineFrequency] = useState<"one_time" | "weekly" | "biweekly" | "monthly">("one_time");
     const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
@@ -1016,6 +1022,90 @@ export default function BookV2Client() {
         setServiceDetailsSnapshot(null);
     };
 
+    /** Submit inline email/phone on payment step; store in prefill + quote storage, then set resolved so Stripe loads */
+    const handlePaymentIdentityContinue = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const email = paymentIdentityEmail?.trim() || "";
+        const phone = paymentIdentityPhone?.trim() || "";
+        if (!email || !phone) {
+            setPaymentIdentityError("Please enter both email and phone to continue.");
+            return;
+        }
+        setPaymentIdentitySubmitting(true);
+        setPaymentIdentityError(null);
+        try {
+            // Ensure we have contact/opportunity (same as quote flow)
+            const existingPrefillRaw = typeof window !== "undefined"
+                ? (sessionStorage.getItem("alloy_booking_prefill") || localStorage.getItem("alloy_booking_prefill"))
+                : null;
+            let prefillData: Record<string, unknown> = {};
+            if (existingPrefillRaw) {
+                try {
+                    prefillData = JSON.parse(existingPrefillRaw);
+                } catch {
+                    // ignore
+                }
+            }
+            const hasIds = typeof window !== "undefined" &&
+                (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
+            if (!hasIds) {
+                const res = await fetch("/api/book-v2/quote-start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        email,
+                        phone,
+                        first_name: (resolvedFirstName ?? (prefillData.first_name as string))?.trim() || undefined,
+                        last_name: (resolvedLastName ?? (prefillData.last_name as string))?.trim() || undefined,
+                        zip: (prefillData.zip as string)?.trim() || (prefillData.postal_code as string)?.trim() || undefined,
+                        cleaning_frequency: "one_time",
+                        quote_context: { source: "book_v2_payment_identity", url: typeof window !== "undefined" ? window.location.href : "" },
+                    }),
+                });
+                const data = await res.json();
+                if (res.ok && data.ok) {
+                    try {
+                        if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
+                        if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
+                        if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+            // Store in same place quote flow uses (prefill)
+            prefillData.email = email;
+            prefillData.phone = phone;
+            const jsonData = JSON.stringify(prefillData);
+            sessionStorage.setItem("alloy_booking_prefill", jsonData);
+            localStorage.setItem("alloy_booking_prefill", jsonData);
+            // Update stored quote if present so future loads resolve identity from quote
+            const quoteStorageKeys = ["alloy_quote_v1", "cleaning_quote", "alloy_cleaning_quote"];
+            for (const key of quoteStorageKeys) {
+                const raw = typeof window !== "undefined" ? (localStorage.getItem(key) || sessionStorage.getItem(key)) : null;
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        parsed.email = email;
+                        parsed.phone = phone;
+                        const updated = JSON.stringify(parsed);
+                        localStorage.setItem(key, updated);
+                        sessionStorage.setItem(key, updated);
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+            setResolvedEmail(email);
+            setResolvedPhone(phone);
+        } catch (err) {
+            console.error("Payment identity save failed:", err);
+            setPaymentIdentityError("Something went wrong. Please try again.");
+        } finally {
+            setPaymentIdentitySubmitting(false);
+        }
+    };
+
     const handleValidateDiscount = async () => {
         if (!discountCode.trim() || !quote) {
             setDiscountError("Please enter a discount code");
@@ -1169,47 +1259,54 @@ export default function BookV2Client() {
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
             const setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
             const setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
-            const setupIntentResponse = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    phone: resolvedPhone || prefillData.phone,
-                    email: resolvedEmail || prefillData.email,
-                    ghl_contact_id: prefillData.ghl_contact_id || null,
-                    booking_attempt_id: attemptId,
-                    contact_id: setupContactId || undefined,
-                    customer_id: setupCustomerId || undefined,
-                }),
-            });
 
-            const setupIntentData = await setupIntentResponse.json();
-            if (process.env.NODE_ENV !== "production") {
-                console.log("[BOOK_V2_SETUP_INTENT] booking_attempt_id=", attemptId, "status=", setupIntentResponse.status, "body=", setupIntentData);
-            }
+            const createSetupIntentOnce = async (): Promise<string> => {
+                const setupIntentResponse = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        phone: resolvedPhone || prefillData.phone,
+                        email: resolvedEmail || prefillData.email,
+                        ghl_contact_id: prefillData.ghl_contact_id || null,
+                        booking_attempt_id: attemptId,
+                        contact_id: setupContactId || undefined,
+                        customer_id: setupCustomerId || undefined,
+                    }),
+                });
+                const setupIntentData = await setupIntentResponse.json();
+                if (process.env.NODE_ENV !== "production") {
+                    console.log("[BOOK_V2_SETUP_INTENT] booking_attempt_id=", attemptId, "status=", setupIntentResponse.status, "body=", setupIntentData);
+                }
+                if (!setupIntentResponse.ok) {
+                    throw new Error(setupIntentData.detail || "Failed to create payment setup");
+                }
+                const secret = setupIntentData.client_secret;
+                if (!secret) throw new Error("No client_secret from setup-intent");
+                return secret;
+            };
 
-            if (!setupIntentResponse.ok) {
-                throw new Error(setupIntentData.detail || "Failed to create payment setup");
-            }
+            let client_secret = await createSetupIntentOnce();
 
-            const { client_secret } = setupIntentData;
-
-            // Step 2: Confirm SetupIntent with Stripe
-            const { error: confirmError } = await stripe.confirmCardSetup(client_secret, {
+            // Step 2: Confirm SetupIntent with Stripe (retry once if "No such setupintent" — e.g. stale LIVE secret with TEST keys)
+            const confirmPayloadStripe = {
                 payment_method: {
                     card: cardNumber,
                     billing_details: {
                         name: `${resolvedFirstName || prefillData.first_name || ""} ${resolvedLastName || prefillData.last_name || ""}`.trim() || undefined,
                         email: resolvedEmail || prefillData.email,
                         phone: resolvedPhone || prefillData.phone,
-                        address: {
-                            postal_code: postalCode || undefined,
-                        },
+                        address: { postal_code: postalCode || undefined },
                     },
                 },
-            });
-
+            };
+            let confirmError = (await stripe.confirmCardSetup(client_secret, confirmPayloadStripe)).error;
+            if (confirmError && typeof confirmError.message === "string" && confirmError.message.toLowerCase().includes("no such setupintent")) {
+                if (process.env.NODE_ENV !== "production") {
+                    console.log("[BOOK_V2_SETUP_INTENT] retrying with fresh SetupIntent after no such setupintent");
+                }
+                client_secret = await createSetupIntentOnce();
+                confirmError = (await stripe.confirmCardSetup(client_secret, confirmPayloadStripe)).error;
+            }
             if (confirmError) {
                 throw new Error(confirmError.message || "Payment setup failed");
             }
@@ -2015,13 +2112,42 @@ export default function BookV2Client() {
                                     <p className="text-xs text-alloy-midnight/60">Loading...</p>
                                 </div>
                             ) : !resolvedEmail || !resolvedPhone ? (
-                                <div className="bg-alloy-stone/20 rounded-lg p-4 text-center">
-                                    <p className="text-xs text-alloy-midnight/60 mb-2">
-                                        Enter your email + phone to load payment.
+                                <div className="bg-alloy-stone/20 rounded-lg p-4">
+                                    <p className="text-xs text-alloy-midnight/60 mb-3">
+                                        Enter your email and phone to load payment.
                                     </p>
-                                    <p className="text-xs text-alloy-midnight/50">
-                                        Please add ?email=your@email.com&phone=+1234567890 to the URL or complete the quote form.
-                                    </p>
+                                    <form onSubmit={handlePaymentIdentityContinue} className="space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email</label>
+                                            <input
+                                                type="email"
+                                                value={paymentIdentityEmail}
+                                                onChange={(e) => { setPaymentIdentityEmail(e.target.value); setPaymentIdentityError(null); }}
+                                                placeholder="you@example.com"
+                                                className="w-full px-3 py-2 border border-alloy-stone/40 rounded-lg text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:outline-none focus:ring-2 focus:ring-alloy-blue/50"
+                                                autoComplete="email"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone</label>
+                                            <input
+                                                type="tel"
+                                                value={paymentIdentityPhone}
+                                                onChange={(e) => { setPaymentIdentityPhone(e.target.value); setPaymentIdentityError(null); }}
+                                                placeholder="+1 555 123 4567"
+                                                className="w-full px-3 py-2 border border-alloy-stone/40 rounded-lg text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:outline-none focus:ring-2 focus:ring-alloy-blue/50"
+                                                autoComplete="tel"
+                                            />
+                                        </div>
+                                        {paymentIdentityError && <p className="text-sm text-red-600">{paymentIdentityError}</p>}
+                                        <button
+                                            type="submit"
+                                            disabled={paymentIdentitySubmitting}
+                                            className="w-full sm:w-auto px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm disabled:opacity-60"
+                                        >
+                                            {paymentIdentitySubmitting ? "Saving…" : "Continue"}
+                                        </button>
+                                    </form>
                                 </div>
                             ) : (
                                 <>
