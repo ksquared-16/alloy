@@ -13,25 +13,24 @@ import AlloyLogo from "@/components/admin/AlloyLogo";
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
 
 const navGroups: { label: string; items: { href: string; label: string }[] }[] = [
-    { label: "Home", items: [{ href: "/admin/dashboard", label: "Dashboard" }] },
     { label: "Core", items: [{ href: "/admin/opportunities", label: "Opportunities" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/schedules", label: "Schedules" }] },
     { label: "People", items: [{ href: "/admin/customers", label: "Customers" }, { href: "/admin/contacts", label: "Contacts" }, { href: "/admin/vendors", label: "Vendors" }] },
-    { label: "Financials", items: [{ href: "/admin/financials/payments", label: "Payments" }, { href: "/admin/financials/ledger", label: "Ledger" }, { href: "/admin/financials/statements", label: "Statements" }, { href: "/admin/financials/accounts", label: "Accounts" }, { href: "/admin/discounts", label: "Discounts" }, { href: "/admin/discount-redemptions", label: "Discount Redemptions" }, { href: "/admin/subscriptions", label: "Subscriptions" }] },
-    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/messages-outbox", label: "Messages outbox" }, { href: "/admin/settings", label: "Settings" }] },
+    { label: "Financials", items: [{ href: "/admin/financials/payments", label: "Payments" }, { href: "/admin/financials/ledger", label: "Ledger" }, { href: "/admin/financials/statements", label: "Statements" }, { href: "/admin/financials/accounts", label: "Accounts" }, { href: "/admin/subscriptions", label: "Subscriptions" }] },
+    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/workflow-events", label: "Workflow Events" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/messages-outbox", label: "Messages outbox" }, { href: "/admin/settings", label: "Settings" }, { href: "/admin/discounts", label: "Discounts" }] },
 ];
 
 function getInitialCollapsed(): Record<string, boolean> {
     if (typeof window === "undefined") {
-        return { Home: false, Core: false, People: true, Financials: false, System: true };
+        return { Core: false, People: true, Financials: false, System: true };
     }
     try {
         const raw = localStorage.getItem(SIDEBAR_STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw) as Record<string, boolean>;
-            return { ...{ Home: false, Core: false, People: true, Financials: false, System: true }, ...parsed };
+            return { ...{ Core: false, People: true, Financials: false, System: true }, ...parsed };
         }
     } catch (_) {}
-    return { Home: false, Core: false, People: true, Financials: false, System: true };
+    return { Core: false, People: true, Financials: false, System: true };
 }
 
 function getInitials(email: string): string {
@@ -84,7 +83,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         <div className="min-h-screen bg-alloy-stone flex">
             <aside className="w-64 bg-white border-r border-alloy-stone/30 flex flex-col">
                 <div className="p-5 border-b border-[#e6e8ec]">
-                    <Link href="/admin/dashboard" className="block" aria-label="Home">
+                    <Link href="/admin" className="block" aria-label="Home">
                         <AlloyLogo />
                     </Link>
                     <p className="mt-2 text-xs text-[#59678b]">Admin</p>
