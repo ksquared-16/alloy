@@ -27,7 +27,7 @@ type PaymentRow = {
     created_at: string;
     amount_cents: number;
     paid_at: string | null;
-    payment_statuses: { key: string } | null;
+    payment_status: string | null;
 };
 
 type JobStatusOption = { id: string; label: string | null };
@@ -429,7 +429,7 @@ export default function JobDetailClient({
                                                 <tr key={p.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
                                                     <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
                                                     <td className="py-2 pr-4">
-                                                        <StatusBadge label={p.payment_statuses?.key ?? "—"} variant="neutral" />
+                                                        <StatusBadge label={p.payment_status ?? "—"} variant="neutral" />
                                                     </td>
                                                     <td className="py-2 pr-4">{p.paid_at ? formatDateTime(p.paid_at) : "—"}</td>
                                                     <td className="py-2 pr-4">{formatDateTime(p.created_at)}</td>

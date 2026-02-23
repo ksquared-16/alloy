@@ -8,8 +8,8 @@ export type JobPaymentRow = {
     amount_cents: number;
     paid_at: string | null;
     provider_payment_id: string | null;
-    payment_status_id: string;
-    payment_statuses: { key: string } | null;
+    payment_status_id: string | null;
+    payment_status: string | null;
 };
 
 export async function GET(
@@ -40,14 +40,26 @@ export async function GET(
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    const payments: JobPaymentRow[] = (rows ?? []).map((r) => ({
-        id: r.id,
-        created_at: r.created_at,
-        amount_cents: r.amount_cents,
-        paid_at: (r as { paid_at?: string | null }).paid_at ?? null,
-        provider_payment_id: r.provider_payment_id ?? null,
-        payment_status_id: r.payment_status_id,
-        payment_statuses: r.payment_statuses ?? null,
-    }));
+    const payments: JobPaymentRow[] = (rows ?? []).map((r) => {
+        const raw = r as {
+            id: string;
+            created_at: string;
+            amount_cents: number;
+            paid_at?: string | null;
+            provider_payment_id?: string | null;
+            payment_status_id?: string | null;
+            payment_statuses?: { key?: string }[] | null;
+        };
+        const statusKey = raw.payment_statuses?.[0]?.key ?? null;
+        return {
+            id: raw.id,
+            created_at: raw.created_at,
+            amount_cents: raw.amount_cents,
+            paid_at: raw.paid_at ?? null,
+            provider_payment_id: raw.provider_payment_id ?? null,
+            payment_status_id: raw.payment_status_id ?? null,
+            payment_status: statusKey,
+        };
+    });
     return NextResponse.json({ payments });
 }
