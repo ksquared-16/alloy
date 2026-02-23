@@ -30,6 +30,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
             { href: "/admin/messaging", label: "Messaging" },
             { href: "/admin/messages-outbox", label: "Messages outbox" },
             { href: "/admin/settings", label: "Settings" },
+            { href: "/admin/send-password-reset", label: "Send password reset" },
             { href: "/admin/discounts", label: "Discounts" },
         ],
     },

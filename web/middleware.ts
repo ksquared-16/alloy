@@ -20,6 +20,7 @@ const ADMIN_PATH_PREFIXES = [
   "/admin/workflows",
   "/admin/messaging",
   "/admin/settings",
+  "/admin/send-password-reset",
 ];
 
 function isAllowedAdminPath(pathname: string): boolean {

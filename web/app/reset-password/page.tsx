@@ -1,0 +1,203 @@
+"use client";
+
+import { useState, FormEvent, useEffect } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabaseClient";
+import PrimaryButton from "@/components/PrimaryButton";
+
+type Status = "loading" | "ready" | "success" | "expired";
+
+export default function ResetPasswordPage() {
+  const [status, setStatus] = useState<Status>("loading");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkSession() {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (session) {
+        setStatus("ready");
+      } else {
+        setStatus("expired");
+      }
+    }
+
+    checkSession();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setError(updateError.message || "Failed to update password.");
+        setIsLoading(false);
+        return;
+      }
+      setStatus("success");
+      setPassword("");
+      setConfirm("");
+    } catch (_) {
+      setError("An unexpected error occurred.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
+          <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
+            Reset password
+          </h1>
+          <p className="text-alloy-midnight/70 text-sm text-center">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "expired") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
+          <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
+            Link expired or invalid
+          </h1>
+          <p className="text-alloy-midnight/80 text-sm mb-6 text-center">
+            This reset link has expired or was already used. Request a new one from the sign-in page.
+          </p>
+          <div className="text-center">
+            <Link
+              href="/forgot-password"
+              className="inline-block px-4 py-2 bg-alloy-blue text-white rounded-md text-sm font-medium hover:opacity-90"
+            >
+              Request new link
+            </Link>
+            <span className="mx-2 text-alloy-midnight/50">or</span>
+            <Link href="/login" className="text-alloy-blue hover:underline text-sm font-medium">
+              Back to sign in
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "success") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
+          <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
+            Password updated
+          </h1>
+          <p className="text-alloy-midnight/80 text-sm mb-6 text-center">
+            Your password has been changed. You can now sign in with your new password.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Link
+              href="/login"
+              className="block w-full text-center px-4 py-2 bg-alloy-midnight text-white rounded-md text-sm font-medium hover:opacity-90"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/admin"
+              className="block w-full text-center text-alloy-blue hover:underline text-sm"
+            >
+              Go to admin
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-alloy-stone py-12 px-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border border-alloy-stone/30">
+        <h1 className="text-2xl font-bold text-alloy-midnight mb-6 text-center">
+          Set new password
+        </h1>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70"
+            >
+              New password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full rounded-md px-3 py-2 text-sm border border-alloy-stone/80 bg-white focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
+              placeholder="••••••••"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="confirm"
+              className="block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70"
+            >
+              Confirm password
+            </label>
+            <input
+              type="password"
+              id="confirm"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              minLength={6}
+              className="w-full rounded-md px-3 py-2 text-sm border border-alloy-stone/80 bg-white focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
+              placeholder="••••••••"
+            />
+          </div>
+          <div className="pt-2">
+            <PrimaryButton
+              type="submit"
+              disabled={isLoading}
+              className="w-full"
+            >
+              {isLoading ? "Updating…" : "Update password"}
+            </PrimaryButton>
+          </div>
+        </form>
+        <p className="mt-4 text-center text-sm text-alloy-midnight/70">
+          <Link href="/login" className="text-alloy-blue hover:underline">
+            Back to sign in
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}

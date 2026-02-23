@@ -123,6 +123,11 @@ function LoginForm() {
               {isLoading ? "Signing in..." : "Sign in"}
             </PrimaryButton>
           </div>
+          <p className="mt-4 text-center text-sm text-alloy-midnight/70">
+            <a href="/forgot-password" className="text-alloy-blue hover:underline">
+              Forgot password?
+            </a>
+          </p>
         </form>
       </div>
     </div>
