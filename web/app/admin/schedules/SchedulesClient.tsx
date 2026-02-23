@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -16,6 +17,7 @@ type ScheduleRow = {
   canceled_at?: string | null;
   _job_title?: string | null;
   _customer_name?: string | null;
+  _assigned_vendor_name?: string | null;
 };
 
 type JobOption = { id: string; title: string | null };
@@ -30,6 +32,7 @@ const EMPTY_FORM = {
 };
 
 export default function SchedulesClient() {
+  const router = useRouter();
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [jobs, setJobs] = useState<JobOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,6 +258,7 @@ export default function SchedulesClient() {
                   <th className="pb-2 pr-4">End</th>
                   <th className="pb-2 pr-4">Job</th>
                   <th className="pb-2 pr-4">Customer</th>
+                  <th className="pb-2 pr-4">Assigned vendor</th>
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2 pr-4">Canceled?</th>
                   <th className="pb-2 pr-4">Actions</th>
@@ -262,21 +266,26 @@ export default function SchedulesClient() {
               </thead>
               <tbody>
                 {schedules.length === 0 ? (
-                  <tr><td colSpan={7} className="py-4 text-alloy-midnight/60">No schedules found.</td></tr>
+                  <tr><td colSpan={8} className="py-4 text-alloy-midnight/60">No schedules found.</td></tr>
                 ) : (
                   schedules.map((s) => (
-                    <tr key={s.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
+                    <tr
+                      key={s.id}
+                      className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10 cursor-pointer"
+                      onClick={() => router.push(`/admin/schedules/${s.id}`)}
+                    >
                       <td className="py-2 pr-4">{formatDateTime(s.start_at)}</td>
                       <td className="py-2 pr-4">{formatDateTime(s.end_at)}</td>
                       <td className="py-2 pr-4">{s._job_title ?? s.job_id?.slice(0, 8) ?? "—"}</td>
                       <td className="py-2 pr-4">{s._customer_name ?? "—"}</td>
+                      <td className="py-2 pr-4">{s._assigned_vendor_name ?? "—"}</td>
                       <td className="py-2 pr-4"><StatusBadge label={s.canceled_at ? "Canceled" : "—"} variant="neutral" /></td>
                       <td className="py-2 pr-4">{s.canceled_at ? "Yes" : "—"}</td>
-                      <td className="py-2 pr-4">
+                      <td className="py-2 pr-4" onClick={(e) => e.stopPropagation()}>
                         <span className="flex flex-wrap gap-1">
-                          <button type="button" onClick={() => openEdit(s)} className="text-xs px-2 py-0.5 text-alloy-blue hover:underline">Edit</button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(s); }} className="text-xs px-2 py-0.5 text-alloy-blue hover:underline">Edit</button>
                           {!s.canceled_at && (
-                            <button type="button" onClick={() => setCancelTarget(s)} className="text-xs px-2 py-0.5 text-amber-700 hover:underline">Cancel</button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setCancelTarget(s); }} className="text-xs px-2 py-0.5 text-amber-700 hover:underline">Cancel</button>
                           )}
                         </span>
                       </td>

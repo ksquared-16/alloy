@@ -36,9 +36,10 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const list = rows ?? [];
+  const scheduleIds = list.map((s) => (s as { id: string }).id);
   const jobIds = [...new Set(list.map((s) => (s as { job_id: string }).job_id).filter(Boolean))] as string[];
   const { data: jobs } = jobIds.length
-    ? await supabase.from("jobs").select("id, title, customer_id").in("id", jobIds)
+    ? await supabase.from("jobs").select("id, title, customer_id, assigned_vendor_id").in("id", jobIds)
     : { data: [] };
   const jobMap = new Map((jobs ?? []).map((j) => [(j as { id: string }).id, j]));
   const customerIds = [...new Set((jobs ?? []).map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
@@ -47,13 +48,30 @@ export async function GET(request: NextRequest) {
     : { data: [] };
   const customerMap = new Map((customers ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
 
+  const { data: assignments } = scheduleIds.length
+    ? await supabase.from("assignments").select("schedule_id, vendor_id").in("schedule_id", scheduleIds)
+    : { data: [] };
+  const assignmentVendorBySchedule = new Map((assignments ?? []).map((a) => [(a as { schedule_id: string }).schedule_id, (a as { vendor_id: string }).vendor_id]));
+  const jobVendorIds = [...new Set((jobs ?? []).map((j) => (j as { assigned_vendor_id?: string }).assigned_vendor_id).filter(Boolean))] as string[];
+  const assignVendorIds = [...new Set((assignments ?? []).map((a) => (a as { vendor_id: string }).vendor_id).filter(Boolean))] as string[];
+  const allVendorIds = [...new Set([...jobVendorIds, ...assignVendorIds])];
+  const { data: vendorRows } = allVendorIds.length
+    ? await supabase.from("vendors").select("id, name").in("id", allVendorIds)
+    : { data: [] };
+  const vendorMap = new Map((vendorRows ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
+
   const schedules = list.map((s) => {
     const job = (s as { job_id: string }).job_id ? jobMap.get((s as { job_id: string }).job_id) : undefined;
     const customerId = job ? (job as { customer_id?: string }).customer_id : null;
+    const scheduleVendorId = assignmentVendorBySchedule.get((s as { id: string }).id);
+    const jobVendorId = job ? (job as { assigned_vendor_id?: string }).assigned_vendor_id : null;
+    const vendorId = scheduleVendorId ?? jobVendorId;
+    const _assigned_vendor_name = vendorId ? vendorMap.get(vendorId) ?? null : null;
     return {
       ...s,
       _job_title: job ? (job as { title: string | null }).title ?? null : null,
       _customer_name: customerId ? customerMap.get(customerId) ?? null : null,
+      _assigned_vendor_name,
     };
   });
 

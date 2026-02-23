@@ -38,14 +38,20 @@ export async function GET(request: NextRequest) {
 
   const jobs = rows ?? [];
   const customerIds = [...new Set(jobs.map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
+  const vendorIds = [...new Set(jobs.map((j) => (j as { assigned_vendor_id?: string }).assigned_vendor_id).filter(Boolean))] as string[];
   const { data: custRows } = customerIds.length
     ? await supabase.from("customers").select("id, name").in("id", customerIds)
     : { data: [] };
+  const { data: vendorRows } = vendorIds.length
+    ? await supabase.from("vendors").select("id, name").in("id", vendorIds)
+    : { data: [] };
   const customerMap = new Map((custRows ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
+  const vendorMap = new Map((vendorRows ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
 
   const result = jobs.map((j) => ({
     ...j,
     _customer_name: (j as { customer_id?: string }).customer_id ? customerMap.get((j as { customer_id: string }).customer_id) ?? null : null,
+    _assigned_vendor_name: (j as { assigned_vendor_id?: string }).assigned_vendor_id ? vendorMap.get((j as { assigned_vendor_id: string }).assigned_vendor_id) ?? null : null,
   }));
 
   return NextResponse.json({ jobs: result, total: count ?? result.length });

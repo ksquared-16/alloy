@@ -33,7 +33,7 @@ type PaymentRow = {
 type JobStatusOption = { id: string; label: string | null };
 type VendorOption = { id: string; name: string | null };
 
-const TABS = ["overview", "schedules", "payments"] as const;
+const TABS = ["overview", "related", "activity"] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function JobDetailClient({
@@ -104,7 +104,7 @@ export default function JobDetailClient({
     }, [isAdmin]);
 
     useEffect(() => {
-        if (tab !== "schedules") return;
+        if (tab !== "related") return;
         setLoadingSchedules(true);
         fetch(`/api/admin/schedules?job_id=${encodeURIComponent(jobId)}&include_canceled=true`)
             .then((r) => r.json())
@@ -113,7 +113,7 @@ export default function JobDetailClient({
     }, [tab, jobId]);
 
     useEffect(() => {
-        if (tab !== "payments") return;
+        if (tab !== "related") return;
         setLoadingPayments(true);
         fetch(`/api/admin/jobs/${jobId}/payments`)
             .then((r) => r.json())
@@ -247,8 +247,11 @@ export default function JobDetailClient({
                 title={title}
                 subtitle={`Job details · ${customerName}`}
                 actions={
-                    isAdmin ? (
-                        <span className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge label={statusLabel(job.job_status_id as string)} variant="neutral" />
+                        <StatusBadge label={vendorName ?? "Unassigned"} variant="default" />
+                        {isAdmin ? (
+                        <>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -271,38 +274,21 @@ export default function JobDetailClient({
                             >
                                 Create schedule
                             </button>
-                        </span>
-                    ) : undefined
+                        </>
+                    ) : null}
+                    </div>
                 }
             />
 
             <SectionCard title="Job" className="mb-4">
-                <div className="flex flex-wrap items-center gap-4 mb-4">
-                    <StatusBadge label={statusLabel(job.job_status_id as string)} variant="neutral" />
-                    <span className="text-sm text-alloy-midnight/80">
-                        Customer: <span className="font-medium text-alloy-midnight">{customerName}</span>
-                    </span>
-                    <span className="text-sm text-alloy-midnight/80">
-                        Assigned vendor: <span className="font-medium text-alloy-midnight">{vendorName ?? "Unassigned"}</span>
-                    </span>
-                    {scheduledAt && (
-                        <span className="text-sm text-alloy-midnight/70">Scheduled: {formatDateTime(scheduledAt)}</span>
-                    )}
-                    {completedAt && (
-                        <span className="text-sm text-alloy-midnight/70">Completed: {formatDateTime(completedAt)}</span>
-                    )}
-                </div>
-
-                <div className="flex gap-2 border-b border-alloy-stone/20 mb-4">
+                <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5 mb-4">
                     {TABS.map((t) => (
                         <button
                             key={t}
                             type="button"
                             onClick={() => setTab(t)}
-                            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
-                                tab === t
-                                    ? "border-alloy-midnight text-alloy-midnight"
-                                    : "border-transparent text-alloy-midnight/70 hover:text-alloy-midnight"
+                            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                                tab === t ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"
                             }`}
                         >
                             {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -311,136 +297,164 @@ export default function JobDetailClient({
                 </div>
 
                 {tab === "overview" && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                        <div>
-                            <span className="text-alloy-midnight/60">Title</span>
-                            <p className="font-medium">{(job.title as string) ?? "—"}</p>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="text-alloy-midnight/60">Title</span>
+                                <p className="font-medium">{(job.title as string) ?? "—"}</p>
+                            </div>
+                            <div>
+                                <span className="text-alloy-midnight/60">Description</span>
+                                <p className="font-medium">{(job.description as string) ?? "—"}</p>
+                            </div>
+                            <div>
+                                <span className="text-alloy-midnight/60">Recurring</span>
+                                <p className="font-medium">{(job.is_recurring as boolean) ? "Yes" : "No"}</p>
+                            </div>
+                            <div>
+                                <span className="text-alloy-midnight/60">Internal notes</span>
+                                <p className="font-medium">
+                                    {((job.metadata as Record<string, unknown>)?.internal_notes as string) ?? "—"}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <span className="text-alloy-midnight/60">Description</span>
-                            <p className="font-medium">{(job.description as string) ?? "—"}</p>
-                        </div>
-                        <div>
-                            <span className="text-alloy-midnight/60">Recurring</span>
-                            <p className="font-medium">{(job.is_recurring as boolean) ? "Yes" : "No"}</p>
-                        </div>
-                        <div>
-                            <span className="text-alloy-midnight/60">Internal notes</span>
-                            <p className="font-medium">
-                                {((job.metadata as Record<string, unknown>)?.internal_notes as string) ?? "—"}
-                            </p>
-                        </div>
+                        {(scheduledAt || completedAt) && (
+                            <div className="pt-2 border-t border-alloy-stone/20 text-sm text-alloy-midnight/70">
+                                {scheduledAt && <span>Scheduled: {formatDateTime(scheduledAt)}</span>}
+                                {scheduledAt && completedAt && " · "}
+                                {completedAt && <span>Completed: {formatDateTime(completedAt)}</span>}
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {tab === "schedules" && (
-                    <div>
-                        {loadingSchedules ? (
-                            <p className="text-sm text-alloy-midnight/60">Loading schedules…</p>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                            <th className="pb-2 pr-4">Start</th>
-                                            <th className="pb-2 pr-4">End</th>
-                                            <th className="pb-2 pr-4">Timezone</th>
-                                            <th className="pb-2 pr-4">Status</th>
-                                            {isAdmin && <th className="pb-2 pr-4">Actions</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {schedules.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={isAdmin ? 5 : 4} className="py-4 text-alloy-midnight/60">
-                                                    No schedules.
-                                                </td>
+                {tab === "related" && (
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Customer</h3>
+                            <p className="text-sm text-alloy-midnight">{customerName}</p>
+                        </div>
+                        {(job._primary_contact_name as string) && (
+                            <div>
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Contact</h3>
+                                <p className="text-sm text-alloy-midnight">{job._primary_contact_name as string}</p>
+                            </div>
+                        )}
+                        <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned vendor</h3>
+                            <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
+                        </div>
+                        <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Schedules</h3>
+                            {loadingSchedules ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading schedules…</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
+                                                <th className="pb-2 pr-4">Start</th>
+                                                <th className="pb-2 pr-4">End</th>
+                                                <th className="pb-2 pr-4">Timezone</th>
+                                                <th className="pb-2 pr-4">Status</th>
+                                                {isAdmin && <th className="pb-2 pr-4">Actions</th>}
                                             </tr>
-                                        ) : (
-                                            schedules.map((s) => (
-                                                <tr key={s.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                                                    <td className="py-2 pr-4">{formatDateTime(s.start_at)}</td>
-                                                    <td className="py-2 pr-4">{formatDateTime(s.end_at)}</td>
-                                                    <td className="py-2 pr-4">{(s as { timezone?: string }).timezone ?? "—"}</td>
-                                                    <td className="py-2 pr-4">
-                                                        <StatusBadge
-                                                            label={s.canceled_at ? "Canceled" : "Scheduled"}
-                                                            variant={s.canceled_at ? "neutral" : "default"}
-                                                        />
+                                        </thead>
+                                        <tbody>
+                                            {schedules.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={isAdmin ? 5 : 4} className="py-4 text-alloy-midnight/60">
+                                                        No schedules.
                                                     </td>
-                                                    {isAdmin && (
+                                                </tr>
+                                            ) : (
+                                                schedules.map((s) => (
+                                                    <tr key={s.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
+                                                        <td className="py-2 pr-4">{formatDateTime(s.start_at)}</td>
+                                                        <td className="py-2 pr-4">{formatDateTime(s.end_at)}</td>
+                                                        <td className="py-2 pr-4">{(s as { timezone?: string }).timezone ?? "—"}</td>
                                                         <td className="py-2 pr-4">
-                                                            <span className="flex flex-wrap gap-1">
-                                                                {!s.canceled_at && (
-                                                                    <>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => openReschedule(s)}
-                                                                            className="text-xs px-2 py-0.5 text-alloy-blue hover:underline"
-                                                                        >
-                                                                            Reschedule
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setCancelTarget(s)}
-                                                                            className="text-xs px-2 py-0.5 text-amber-700 hover:underline"
-                                                                        >
-                                                                            Cancel
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </span>
+                                                            <StatusBadge
+                                                                label={s.canceled_at ? "Canceled" : "Scheduled"}
+                                                                variant={s.canceled_at ? "neutral" : "default"}
+                                                            />
                                                         </td>
-                                                    )}
+                                                        {isAdmin && (
+                                                            <td className="py-2 pr-4">
+                                                                <span className="flex flex-wrap gap-1">
+                                                                    {!s.canceled_at && (
+                                                                        <>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openReschedule(s)}
+                                                                                className="text-xs px-2 py-0.5 text-alloy-blue hover:underline"
+                                                                            >
+                                                                                Reschedule
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setCancelTarget(s)}
+                                                                                className="text-xs px-2 py-0.5 text-amber-700 hover:underline"
+                                                                            >
+                                                                                Cancel
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </span>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Payments</h3>
+                            {loadingPayments ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading payments…</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
+                                                <th className="pb-2 pr-4">Amount</th>
+                                                <th className="pb-2 pr-4">Status</th>
+                                                <th className="pb-2 pr-4">Paid at</th>
+                                                <th className="pb-2 pr-4">Created</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {payments.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={4} className="py-4 text-alloy-midnight/60">
+                                                        No payments.
+                                                    </td>
                                                 </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                                            ) : (
+                                                payments.map((p) => (
+                                                    <tr key={p.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
+                                                        <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
+                                                        <td className="py-2 pr-4">
+                                                            <StatusBadge label={p.payment_status ?? "—"} variant="neutral" />
+                                                        </td>
+                                                        <td className="py-2 pr-4">{p.paid_at ? formatDateTime(p.paid_at) : "—"}</td>
+                                                        <td className="py-2 pr-4">{formatDateTime(p.created_at)}</td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
-                {tab === "payments" && (
-                    <div>
-                        {loadingPayments ? (
-                            <p className="text-sm text-alloy-midnight/60">Loading payments…</p>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                            <th className="pb-2 pr-4">Amount</th>
-                                            <th className="pb-2 pr-4">Status</th>
-                                            <th className="pb-2 pr-4">Paid at</th>
-                                            <th className="pb-2 pr-4">Created</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {payments.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={4} className="py-4 text-alloy-midnight/60">
-                                                    No payments.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            payments.map((p) => (
-                                                <tr key={p.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                                                    <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
-                                                    <td className="py-2 pr-4">
-                                                        <StatusBadge label={p.payment_status ?? "—"} variant="neutral" />
-                                                    </td>
-                                                    <td className="py-2 pr-4">{p.paid_at ? formatDateTime(p.paid_at) : "—"}</td>
-                                                    <td className="py-2 pr-4">{formatDateTime(p.created_at)}</td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+                {tab === "activity" && (
+                    <p className="text-sm text-alloy-midnight/60">No activity yet.</p>
                 )}
             </SectionCard>
 

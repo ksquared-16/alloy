@@ -5,6 +5,64 @@ import { logAdminAudit } from "@/lib/adminAuth";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "metadata"] as const;
 
+/** GET: single schedule by id, org-scoped. Returns schedule + _job_title, _customer_name, _assigned_vendor_name. */
+export async function GET(
+    _request: NextRequest,
+    context: { params: Promise<{ id: string }> }
+) {
+    const ctx = await getAdminContext();
+    if (ctx instanceof NextResponse) return ctx;
+
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: schedule, error } = await supabase
+        .from("schedules")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .single();
+
+    if (error || !schedule) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const s = schedule as Record<string, unknown>;
+    const jobId = s.job_id as string | null | undefined;
+    let _job_title: string | null = null;
+    let _customer_name: string | null = null;
+    let _assigned_vendor_name: string | null = null;
+
+    if (jobId) {
+        const { data: job } = await supabase.from("jobs").select("id, title, customer_id, assigned_vendor_id").eq("id", jobId).maybeSingle();
+        if (job) {
+            const j = job as { title?: string | null; customer_id?: string | null; assigned_vendor_id?: string | null };
+            _job_title = j.title ?? null;
+            const customerId = j.customer_id ?? null;
+            if (customerId) {
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+                _customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            }
+            const jobVendorId = j.assigned_vendor_id ?? null;
+            const { data: assign } = await supabase.from("assignments").select("vendor_id").eq("schedule_id", id).maybeSingle();
+            const scheduleVendorId = (assign as { vendor_id?: string } | null)?.vendor_id ?? null;
+            const vendorId = scheduleVendorId ?? jobVendorId;
+            if (vendorId) {
+                const { data: vendor } = await supabase.from("vendors").select("name").eq("id", vendorId).maybeSingle();
+                _assigned_vendor_name = (vendor as { name?: string | null } | null)?.name ?? null;
+            }
+        }
+    }
+
+    return NextResponse.json({
+        ...s,
+        _job_title,
+        _customer_name,
+        _assigned_vendor_name,
+    });
+}
+
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }

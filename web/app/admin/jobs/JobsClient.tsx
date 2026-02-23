@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -17,6 +17,7 @@ type JobRow = {
   is_recurring: boolean | null;
   customer_id: string | null;
   _customer_name?: string | null;
+  _assigned_vendor_name?: string | null;
   archived_at?: string | null;
 };
 
@@ -32,6 +33,7 @@ const EMPTY_FORM = {
 };
 
 export default function JobsClient() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -246,6 +248,7 @@ export default function JobsClient() {
                   <th className="pb-2 pr-4">Title</th>
                   <th className="pb-2 pr-4">Customer</th>
                   <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2 pr-4">Assigned vendor</th>
                   <th className="pb-2 pr-4">Recurring</th>
                   <th className="pb-2 pr-4">Created</th>
                   <th className="pb-2 pr-4">Actions</th>
@@ -253,24 +256,27 @@ export default function JobsClient() {
               </thead>
               <tbody>
                 {jobs.length === 0 ? (
-                  <tr><td colSpan={6} className="py-4 text-alloy-midnight/60">No jobs found.</td></tr>
+                  <tr><td colSpan={7} className="py-4 text-alloy-midnight/60">No jobs found.</td></tr>
                 ) : (
                   jobs.map((j) => (
-                    <tr key={j.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                      <td className="py-2 pr-4">
-                        <Link href={`/admin/jobs/${j.id}`} className="text-alloy-blue hover:underline">{j.title ?? "—"}</Link>
-                      </td>
+                    <tr
+                      key={j.id}
+                      className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10 cursor-pointer"
+                      onClick={() => router.push(`/admin/jobs/${j.id}`)}
+                    >
+                      <td className="py-2 pr-4 text-alloy-blue hover:underline">{j.title ?? "—"}</td>
                       <td className="py-2 pr-4">{j._customer_name ?? "—"}</td>
                       <td className="py-2 pr-4"><StatusBadge label={statusLabel(j.job_status_id)} variant="neutral" /></td>
+                      <td className="py-2 pr-4">{j._assigned_vendor_name ?? "—"}</td>
                       <td className="py-2 pr-4">{j.is_recurring ? "Yes" : "No"}</td>
                       <td className="py-2 pr-4">{formatDateTime(j.created_at)}</td>
-                      <td className="py-2 pr-4">
+                      <td className="py-2 pr-4" onClick={(e) => e.stopPropagation()}>
                         <span className="flex flex-wrap gap-1">
-                          <button type="button" onClick={() => openEdit(j)} className="text-xs px-2 py-0.5 text-alloy-blue hover:underline">Edit</button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(j); }} className="text-xs px-2 py-0.5 text-alloy-blue hover:underline">Edit</button>
                           {j.archived_at ? (
-                            <button type="button" onClick={() => unarchive(j.id)} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-alloy-midnight/70 hover:underline disabled:opacity-50">Unarchive</button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); unarchive(j.id); }} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-alloy-midnight/70 hover:underline disabled:opacity-50">Unarchive</button>
                           ) : (
-                            <button type="button" onClick={() => archive(j.id)} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-amber-700 hover:underline disabled:opacity-50">Archive</button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); archive(j.id); }} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-amber-700 hover:underline disabled:opacity-50">Archive</button>
                           )}
                         </span>
                       </td>
