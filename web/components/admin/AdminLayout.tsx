@@ -16,7 +16,7 @@ const navGroups: { label: string; items: { href: string; label: string }[] }[] =
     { label: "Core", items: [{ href: "/admin/opportunities", label: "Opportunities" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/schedules", label: "Schedules" }] },
     { label: "People", items: [{ href: "/admin/customers", label: "Customers" }, { href: "/admin/contacts", label: "Contacts" }, { href: "/admin/vendors", label: "Vendors" }] },
     { label: "Financials", items: [{ href: "/admin/financials/payments", label: "Payments" }, { href: "/admin/financials/ledger", label: "Ledger" }, { href: "/admin/financials/statements", label: "Statements" }, { href: "/admin/financials/accounts", label: "Accounts" }, { href: "/admin/subscriptions", label: "Subscriptions" }] },
-    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/workflow-events", label: "Workflow Events" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/messages-outbox", label: "Messages outbox" }, { href: "/admin/settings", label: "Settings" }, { href: "/admin/discounts", label: "Discounts" }] },
+    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/workflow-events", label: "Workflow Events" }, { href: "/admin/workflow-runs", label: "Workflow Runs" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/messages-outbox", label: "Messages outbox" }, { href: "/admin/settings", label: "Settings" }, { href: "/admin/discounts", label: "Discounts" }] },
 ];
 
 function getInitialCollapsed(): Record<string, boolean> {
