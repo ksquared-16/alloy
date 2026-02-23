@@ -1,112 +1,120 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPostgrestUrl, getPostgrestHeaders } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-/**
- * GET /api/admin/schedules
- * 
- * Fetch schedules from Supabase (stored in jobs.metadata.schedule).
- * Supports query parameters:
- * - status: Filter by schedule status (scheduled, completed, cancelled)
- * - start_date: Filter by start_at >= start_date (ISO date string)
- * - end_date: Filter by start_at <= end_date (ISO date string)
- * - limit: Limit results (default: 50, max: 100)
- * - offset: Pagination offset (default: 0)
- * 
- * Returns jobs with schedule info extracted from metadata.
- */
+/** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get("status");
-    const startDate = searchParams.get("start_date");
-    const endDate = searchParams.get("end_date");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
-    const offset = parseInt(searchParams.get("offset") || "0");
+  const ctx = await getAdminContext();
+  if (ctx instanceof NextResponse) return ctx;
 
-    const url = `${getPostgrestUrl()}/jobs`;
-    const headers = getPostgrestHeaders();
-    
-    // Build query params
-    const params = new URLSearchParams({
-      select: "id,title,description,opportunity_id,created_at,updated_at,metadata",
-      order: "created_at.desc",
-      limit: limit.toString(),
-      offset: offset.toString(),
-    });
+  const { searchParams } = new URL(request.url);
+  const includeCanceled = searchParams.get("include_canceled") === "true";
+  const jobId = (searchParams.get("job_id") ?? "").trim();
+  const from = (searchParams.get("from") ?? "").trim();
+  const to = (searchParams.get("to") ?? "").trim();
+  const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
-    const response = await fetch(`${url}?${params.toString()}`, {
-      headers,
-      method: "GET",
-    });
+  const supabase = createAdminClient();
+  let q = supabase
+    .from("schedules")
+    .select(
+      "id, job_id, org_id, start_at, end_at, timezone, canceled_at, canceled_by, cancel_reason, duration_minutes",
+      { count: "exact" }
+    )
+    .eq("org_id", ctx.orgId)
+    .order("start_at", { ascending: false })
+    .limit(limit);
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to fetch schedules: ${response.status} ${text}`);
-    }
-
-    let jobs = await response.json();
-
-    // Extract schedule info from metadata and filter
-    const schedules = jobs
-      .map((job: any) => {
-        const schedule = job.metadata?.schedule;
-        if (!schedule) {
-          return null; // Skip jobs without schedule info
-        }
-
-        return {
-          job_id: job.id,
-          job_title: job.title,
-          job_description: job.description,
-          opportunity_id: job.opportunity_id,
-          start_at: schedule.start_at,
-          end_at: schedule.end_at,
-          timezone: schedule.timezone,
-          status: schedule.status,
-          created_at: job.created_at,
-          updated_at: job.updated_at,
-        };
-      })
-      .filter((s: any) => s !== null);
-
-    // Filter by status if provided
-    let filteredSchedules = schedules;
-    if (status) {
-      filteredSchedules = filteredSchedules.filter(
-        (s: any) => s.status === status
-      );
-    }
-
-    // Filter by start_date if provided
-    if (startDate) {
-      filteredSchedules = filteredSchedules.filter(
-        (s: any) => s.start_at && s.start_at >= startDate
-      );
-    }
-
-    // Filter by end_date if provided
-    if (endDate) {
-      filteredSchedules = filteredSchedules.filter(
-        (s: any) => s.start_at && s.start_at <= endDate
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      schedules: filteredSchedules,
-      count: filteredSchedules.length,
-      limit,
-      offset,
-    });
-  } catch (error: any) {
-    console.error("[ADMIN_SCHEDULES_ERROR]", error);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error.message || "Failed to fetch schedules",
-      },
-      { status: 500 }
-    );
+  if (!includeCanceled) {
+    q = q.is("canceled_at", null);
   }
+  if (jobId) q = q.eq("job_id", jobId);
+  if (from) q = q.gte("start_at", from);
+  if (to) q = q.lte("start_at", to);
+
+  const { data: rows, error, count } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const list = rows ?? [];
+  const jobIds = [...new Set(list.map((s) => (s as { job_id: string }).job_id).filter(Boolean))] as string[];
+  const { data: jobs } = jobIds.length
+    ? await supabase.from("jobs").select("id, title, customer_id").in("id", jobIds)
+    : { data: [] };
+  const jobMap = new Map((jobs ?? []).map((j) => [(j as { id: string }).id, j]));
+  const customerIds = [...new Set((jobs ?? []).map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
+  const { data: customers } = customerIds.length
+    ? await supabase.from("customers").select("id, name").in("id", customerIds)
+    : { data: [] };
+  const customerMap = new Map((customers ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
+
+  const schedules = list.map((s) => {
+    const job = (s as { job_id: string }).job_id ? jobMap.get((s as { job_id: string }).job_id) : undefined;
+    const customerId = job ? (job as { customer_id?: string }).customer_id : null;
+    return {
+      ...s,
+      _job_title: job ? (job as { title: string | null }).title ?? null : null,
+      _customer_name: customerId ? customerMap.get(customerId) ?? null : null,
+    };
+  });
+
+  return NextResponse.json({ schedules, total: count ?? schedules.length });
 }
 
+/** POST: create schedule. Admin only. job_id required; job must belong to org. */
+export async function POST(request: NextRequest) {
+  const ctx = await getAdminContext();
+  if (ctx instanceof NextResponse) return ctx;
+  if (ctx.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    // ignore
+  }
+
+  const job_id = typeof body.job_id === "string" ? body.job_id.trim() : null;
+  if (!job_id) {
+    return NextResponse.json({ error: "job_id is required" }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+  const { data: job } = await supabase
+    .from("jobs")
+    .select("id, org_id")
+    .eq("id", job_id)
+    .maybeSingle();
+  if (!job || (job as { org_id?: string }).org_id !== ctx.orgId) {
+    return NextResponse.json({ error: "Job not found or does not belong to your org" }, { status: 400 });
+  }
+
+  const start_at = typeof body.start_at === "string" ? body.start_at : null;
+  const end_at = typeof body.end_at === "string" ? body.end_at : null;
+  if (!start_at || !end_at) {
+    return NextResponse.json({ error: "start_at and end_at are required" }, { status: 400 });
+  }
+  if (new Date(end_at) <= new Date(start_at)) {
+    return NextResponse.json({ error: "end_at must be after start_at" }, { status: 400 });
+  }
+
+  const row: Record<string, unknown> = {
+    org_id: ctx.orgId,
+    job_id,
+    start_at,
+    end_at,
+    timezone: typeof body.timezone === "string" ? body.timezone : null,
+    metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
+  };
+  if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
+  if (typeof body.schedule_status_id === "string" && body.schedule_status_id) row.schedule_status_id = body.schedule_status_id;
+
+  const durationMs = new Date(end_at).getTime() - new Date(start_at).getTime();
+  const duration_minutes = Math.round(durationMs / 60000);
+  if (duration_minutes > 0) row.duration_minutes = duration_minutes;
+
+  const { data, error } = await supabase.from("schedules").insert(row).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json(data);
+}

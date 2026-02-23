@@ -1,23 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { logAdminAudit } from "@/lib/adminAuth";
 
-const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "canceled_at", "canceled_by", "cancel_reason"] as const;
+const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "metadata"] as const;
 
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (ctx instanceof NextResponse) return ctx;
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
-        const body = await request.json();
-        const auth = await getAdminAuth();
-        if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+        const body = (await request.json()) as Record<string, unknown>;
         const updates: Record<string, unknown> = {};
         for (const key of ALLOWED_KEYS) {
             if (body[key] !== undefined) updates[key] = body[key];
@@ -37,41 +39,42 @@ export async function PATCH(
             .from("schedules")
             .select("job_id, start_at, end_at")
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .single();
         if (fetchErr || !schedule) {
             return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
         }
 
-        const finalStart = (updates.start_at as string) ?? schedule.start_at;
-        const finalEnd = (updates.end_at as string) ?? schedule.end_at;
+        const finalStart = (updates.start_at as string) ?? (schedule as { start_at?: string }).start_at;
+        const finalEnd = (updates.end_at as string) ?? (schedule as { end_at?: string }).end_at;
         if (finalStart && finalEnd) {
             const durationMs = new Date(finalEnd).getTime() - new Date(finalStart).getTime();
             const durationMinutes = Math.round(durationMs / 60000);
-            if (durationMinutes > 0) (updates as Record<string, unknown>).duration_minutes = durationMinutes;
+            if (durationMinutes > 0) updates.duration_minutes = durationMinutes;
         }
 
         const { data, error } = await supabase
             .from("schedules")
             .update(updates)
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .select()
             .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        if (schedule.job_id && updates.start_at) {
-            await supabase
-                .from("jobs")
-                .update({ scheduled_at: updates.start_at })
-                .eq("id", schedule.job_id);
+        const jobId = (schedule as { job_id?: string }).job_id;
+        if (jobId && updates.start_at) {
+            await supabase.from("jobs").update({ scheduled_at: updates.start_at }).eq("id", jobId);
         }
 
         logAdminAudit({
             entity: "schedules",
             id,
             changed_fields: Object.keys(updates),
-            actor_user_id: auth.user.id,
-            role: auth.role,
+            actor_user_id: ctx.user.id,
+            role: ctx.role,
         });
         return NextResponse.json(data);
     } catch (e: unknown) {
