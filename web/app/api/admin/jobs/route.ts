@@ -1,76 +1,106 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPostgrestUrl, getPostgrestHeaders } from "@/lib/supabase";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-/**
- * GET /api/admin/jobs
- * 
- * Fetch jobs from Supabase for admin portal.
- * Supports query parameters:
- * - status: Filter by job status (from metadata.schedule.status)
- * - opportunity_id: Filter by opportunity UUID
- * - limit: Limit results (default: 50, max: 100)
- * - offset: Pagination offset (default: 0)
- */
+/** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get("status");
-    const opportunityId = searchParams.get("opportunity_id");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
-    const offset = parseInt(searchParams.get("offset") || "0");
+  const ctx = await getAdminContext();
+  if (ctx instanceof NextResponse) return ctx;
 
-    const url = `${getPostgrestUrl()}/jobs`;
-    const headers = getPostgrestHeaders();
-    
-    // Build query params
-    const params = new URLSearchParams({
-      select: "id,title,description,opportunity_id,created_at,updated_at,metadata",
-      order: "created_at.desc",
-      limit: limit.toString(),
-      offset: offset.toString(),
-    });
+  const { searchParams } = new URL(request.url);
+  const search = (searchParams.get("search") ?? "").trim();
+  const includeArchived = searchParams.get("include_archived") === "true";
+  const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
-    // Filter by opportunity_id if provided
-    if (opportunityId) {
-      params.append("opportunity_id", `eq.${opportunityId}`);
-    }
+  const supabase = createAdminClient();
+  let q = supabase
+    .from("jobs")
+    .select(
+      "id, created_at, title, description, job_status_id, is_recurring, customer_id, assigned_vendor_id, metadata, archived_at",
+      { count: "exact" }
+    )
+    .eq("org_id", ctx.orgId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
-    const response = await fetch(`${url}?${params.toString()}`, {
-      headers,
-      method: "GET",
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to fetch jobs: ${response.status} ${text}`);
-    }
-
-    let jobs = await response.json();
-
-    // Filter by status if provided (status is in metadata.schedule.status)
-    if (status) {
-      jobs = jobs.filter((job: any) => {
-        const scheduleStatus = job.metadata?.schedule?.status;
-        return scheduleStatus === status;
-      });
-    }
-
-    return NextResponse.json({
-      ok: true,
-      jobs,
-      count: jobs.length,
-      limit,
-      offset,
-    });
-  } catch (error: any) {
-    console.error("[ADMIN_JOBS_ERROR]", error);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error.message || "Failed to fetch jobs",
-      },
-      { status: 500 }
-    );
+  if (!includeArchived) {
+    q = q.is("archived_at", null);
   }
+
+  if (search) {
+    const safe = search.replace(/,/g, " ").trim();
+    const term = `%${safe}%`;
+    q = q.or(`title.ilike.${term},job_number_for_customer.ilike.${term}`);
+  }
+
+  const { data: rows, error, count } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const jobs = rows ?? [];
+  const customerIds = [...new Set(jobs.map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
+  const { data: custRows } = customerIds.length
+    ? await supabase.from("customers").select("id, name").in("id", customerIds)
+    : { data: [] };
+  const customerMap = new Map((custRows ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
+
+  const result = jobs.map((j) => ({
+    ...j,
+    _customer_name: (j as { customer_id?: string }).customer_id ? customerMap.get((j as { customer_id: string }).customer_id) ?? null : null,
+  }));
+
+  return NextResponse.json({ jobs: result, total: count ?? result.length });
 }
 
+/** POST: create job. Admin only. customer_id, job_status_id, is_recurring required. org_id from context. */
+export async function POST(request: NextRequest) {
+  const ctx = await getAdminContext();
+  if (ctx instanceof NextResponse) return ctx;
+  if (ctx.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    // ignore
+  }
+  const customer_id = typeof body.customer_id === "string" ? body.customer_id.trim() : null;
+  const job_status_id = typeof body.job_status_id === "string" ? body.job_status_id.trim() : null;
+  const is_recurring = body.is_recurring;
+
+  if (!customer_id) {
+    return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
+  }
+  if (!job_status_id) {
+    return NextResponse.json({ error: "job_status_id is required" }, { status: 400 });
+  }
+  if (typeof is_recurring !== "boolean") {
+    return NextResponse.json({ error: "is_recurring is required (boolean)" }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("id, org_id")
+    .eq("id", customer_id)
+    .maybeSingle();
+  if (!customer || (customer as { org_id?: string }).org_id !== ctx.orgId) {
+    return NextResponse.json({ error: "Customer not found or does not belong to your org" }, { status: 400 });
+  }
+
+  const row: Record<string, unknown> = {
+    org_id: ctx.orgId,
+    customer_id,
+    job_status_id,
+    is_recurring,
+    title: typeof body.title === "string" ? body.title.trim() || null : null,
+    description: typeof body.description === "string" ? body.description.trim() || null : null,
+    assigned_vendor_id: typeof body.assigned_vendor_id === "string" && body.assigned_vendor_id.trim() ? body.assigned_vendor_id.trim() : null,
+    metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
+  };
+
+  const { data, error } = await supabase.from("jobs").insert(row).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json(data);
+}
