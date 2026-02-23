@@ -19,6 +19,51 @@ const ALLOWED_KEYS = [
 
 const JOB_ACTIONS = ["assign_vendor", "mark_completed"] as const;
 
+/** GET: single job by id, org-scoped. Returns job + _customer_name + _assigned_vendor_name. Admin/ops. */
+export async function GET(
+    _request: NextRequest,
+    context: { params: Promise<{ id: string }> }
+) {
+    const ctx = await getAdminContext();
+    if (ctx instanceof NextResponse) return ctx;
+
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: job, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .single();
+
+    if (error || !job) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const j = job as Record<string, unknown>;
+    const customerId = j.customer_id as string | null | undefined;
+    const vendorId = j.assigned_vendor_id as string | null | undefined;
+
+    let _customer_name: string | null = null;
+    let _assigned_vendor_name: string | null = null;
+    if (customerId) {
+        const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+        _customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+    }
+    if (vendorId) {
+        const { data: vendor } = await supabase.from("vendors").select("name").eq("id", vendorId).maybeSingle();
+        _assigned_vendor_name = (vendor as { name?: string | null } | null)?.name ?? null;
+    }
+
+    return NextResponse.json({
+        ...j,
+        _customer_name,
+        _assigned_vendor_name,
+    });
+}
+
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -256,7 +257,9 @@ export default function JobsClient() {
                 ) : (
                   jobs.map((j) => (
                     <tr key={j.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                      <td className="py-2 pr-4">{j.title ?? "—"}</td>
+                      <td className="py-2 pr-4">
+                        <Link href={`/admin/jobs/${j.id}`} className="text-alloy-blue hover:underline">{j.title ?? "—"}</Link>
+                      </td>
                       <td className="py-2 pr-4">{j._customer_name ?? "—"}</td>
                       <td className="py-2 pr-4"><StatusBadge label={statusLabel(j.job_status_id)} variant="neutral" /></td>
                       <td className="py-2 pr-4">{j.is_recurring ? "Yes" : "No"}</td>
