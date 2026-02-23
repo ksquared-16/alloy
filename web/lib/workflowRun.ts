@@ -619,7 +619,33 @@ export async function executeWorkflowRun(
             const actionTargetEntity = (action.target_entity ?? defaultEntityType ?? "job") as string;
             const table = ENTITY_TABLES[actionTargetEntity];
 
-            switch (action.action_type) {
+            const actionRunInputs = { payload: pl, target_entity: actionTargetEntity };
+            const { data: actionRunInsert } = await supabase
+                .from("workflow_action_runs")
+                .insert({
+                    org_id: orgId ?? undefined,
+                    workflow_run_id: runId,
+                    workflow_id: workflowId,
+                    action_id: (action as { id?: string }).id ?? null,
+                    action_order: action.action_order ?? 0,
+                    action_type: action.action_type ?? "log",
+                    status: "started",
+                    started_at: new Date().toISOString(),
+                    inputs: actionRunInputs,
+                    outputs: {},
+                    meta: {},
+                })
+                .select("id")
+                .single();
+            const actionRunId = (actionRunInsert as { id?: string } | null)?.id ?? null;
+
+            let actionCompleted = false;
+            let actionSkipped = false;
+            let skipReason = "";
+            let actionOutputs: Record<string, unknown> = {};
+
+            try {
+                switch (action.action_type) {
                 case "create_message": {
                     const channel = pl.channel != null ? String(pl.channel) : "email";
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
@@ -656,6 +682,8 @@ export async function executeWorkflowRun(
                         error: null,
                     });
                     if (msgErr) throw new Error(`create_message: ${msgErr.message}`);
+                    actionOutputs = { queued: true };
+                    actionCompleted = true;
                     break;
                 }
                 case "send_message": {
@@ -711,6 +739,8 @@ export async function executeWorkflowRun(
                         }
                     }
                     logs.push(`send_message: queued ${deduped.length} recipient(s)`);
+                    actionOutputs = { recipients: deduped.length };
+                    actionCompleted = true;
                     break;
                 }
                 case "update_entity": {
@@ -720,6 +750,8 @@ export async function executeWorkflowRun(
                     const table = ENTITY_TABLES[entityType] ?? entityType;
                     if (!table) {
                         logs.push(`update_entity: unknown entity_type ${entityType}, skipping`);
+                        actionSkipped = true;
+                        skipReason = `unknown entity_type ${entityType}`;
                         break;
                     }
                     const orgIdResolved = payload?.org_id ?? run?.org_id;
@@ -764,6 +796,8 @@ export async function executeWorkflowRun(
                             `update_entity: 0 rows updated (${entityType} id=${entityId}, org_id=${orgIdResolved})`
                         );
                     }
+                    actionOutputs = { updated: true };
+                    actionCompleted = true;
                     break;
                 }
                 case "create_assignment": {
@@ -788,12 +822,16 @@ export async function executeWorkflowRun(
                     const statusKey = (pl.status_key != null ? String(pl.status_key) : "offered").trim() || "offered";
                     if (!scheduleId || !vendorId) {
                         logs.push(`create_assignment: missing schedule_id or vendor_id; skipping`);
+                        actionSkipped = true;
+                        skipReason = "missing schedule_id or vendor_id";
                         break;
                     }
                     const { data: statusRow } = await supabase.from("assignment_statuses").select("id").eq("key", statusKey).maybeSingle();
                     const statusId = (statusRow as { id?: string } | null)?.id ?? null;
                     if (!statusId) {
                         logs.push(`create_assignment: assignment_status key "${statusKey}" not found; skipping`);
+                        actionSkipped = true;
+                        skipReason = `assignment_status key "${statusKey}" not found`;
                         break;
                     }
                     const { data: existing } = await supabase.from("assignments").select("id").eq("schedule_id", scheduleId).maybeSingle();
@@ -813,18 +851,24 @@ export async function executeWorkflowRun(
                         if (iErr) throw new Error(`create_assignment insert: ${iErr.message}`);
                         logs.push(`create_assignment: inserted assignment for schedule ${scheduleId}`);
                     }
+                    actionOutputs = { schedule_id: scheduleId };
+                    actionCompleted = true;
                     break;
                 }
                 case "apply_job_vendor_to_upcoming": {
                     const jobId = resolveId(pl.job_id ?? pl.job_id_path, payload) ?? (payload.job && typeof payload.job === "object" && (payload.job as { id?: unknown }).id != null ? String((payload.job as { id: unknown }).id) : null);
                     if (!jobId) {
                         logs.push(`apply_job_vendor_to_upcoming: missing job_id; skipping`);
+                        actionSkipped = true;
+                        skipReason = "missing job_id";
                         break;
                     }
                     const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).single();
                     const vendorId = (jobRow as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
                     if (!vendorId) {
                         logs.push(`apply_job_vendor_to_upcoming: job has no assigned_vendor_id; skipping`);
+                        actionSkipped = true;
+                        skipReason = "job has no assigned_vendor_id";
                         break;
                     }
                     const now = new Date().toISOString();
@@ -832,12 +876,16 @@ export async function executeWorkflowRun(
                     const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
                     if (!offeredStatusId) {
                         logs.push(`apply_job_vendor_to_upcoming: assignment status 'offered' not found; skipping`);
+                        actionSkipped = true;
+                        skipReason = "assignment status 'offered' not found";
                         break;
                     }
                     const { data: upcomingSchedules } = await supabase.from("schedules").select("id").eq("job_id", jobId).is("canceled_at", null).gte("start_at", now);
                     const scheduleIds = (upcomingSchedules ?? []).map((s) => (s as { id: string }).id);
                     if (scheduleIds.length === 0) {
                         logs.push(`apply_job_vendor_to_upcoming: no upcoming schedules; skipping`);
+                        actionSkipped = true;
+                        skipReason = "no upcoming schedules";
                         break;
                     }
                     const { data: existingAssignments } = await supabase.from("assignments").select("id, schedule_id, assignment_status_id").in("schedule_id", scheduleIds);
@@ -857,6 +905,8 @@ export async function executeWorkflowRun(
                         }
                     }
                     logs.push(`apply_job_vendor_to_upcoming: created=${created} updated=${updated}`);
+                    actionOutputs = { created, updated };
+                    actionCompleted = true;
                     break;
                 }
                 case "create_action_link": {
@@ -871,10 +921,14 @@ export async function executeWorkflowRun(
                     const linkOrgId = run?.org_id ?? payload?.org_id ?? null;
                     if (!linkActionType || !linkEntityType) {
                         logs.push("create_action_link: missing action_type or entity_type; skipping");
+                        actionSkipped = true;
+                        skipReason = "missing action_type or entity_type";
                         break;
                     }
                     if (!entityIdResolved) {
                         logs.push("create_action_link: could not resolve entity_id; skipping");
+                        actionSkipped = true;
+                        skipReason = "could not resolve entity_id";
                         break;
                     }
                     const result = await createActionLink(supabase, {
@@ -906,18 +960,64 @@ export async function executeWorkflowRun(
                         const actionLinkUrl = baseUrl ? `${String(baseUrl).replace(/\/$/, "")}/action/${token}` : `/action/${token}`;
                         (payload as Record<string, unknown>)[outputKey] = actionLinkUrl;
                         logs.push(`create_action_link: set ${outputKey}`);
+                        actionOutputs = { output_key: outputKey };
+                        actionCompleted = true;
                     } else {
                         logs.push("create_action_link: createActionLink returned null");
+                        actionSkipped = true;
+                        skipReason = "createActionLink returned null";
                     }
                     break;
                 }
                 case "log": {
                     const message = pl.message != null ? String(pl.message) : "";
                     logs.push(renderTemplate(message, payload));
+                    actionOutputs = { message: renderTemplate(message, payload) };
+                    actionCompleted = true;
                     break;
                 }
                 default:
                     logs.push(`Unknown action_type: ${action.action_type}`);
+                    actionSkipped = true;
+                    skipReason = `Unknown action_type: ${action.action_type}`;
+                }
+            } catch (actionErr: unknown) {
+                const errMsg = actionErr instanceof Error ? actionErr.message : String(actionErr);
+                if (actionRunId) {
+                    await supabase
+                        .from("workflow_action_runs")
+                        .update({
+                            status: "failed",
+                            completed_at: new Date().toISOString(),
+                            outputs: {},
+                            error: errMsg,
+                            meta: { stack: actionErr instanceof Error ? actionErr.stack : undefined },
+                        })
+                        .eq("id", actionRunId);
+                }
+                throw actionErr;
+            }
+            if (actionRunId && actionCompleted) {
+                await supabase
+                    .from("workflow_action_runs")
+                    .update({
+                        status: "completed",
+                        completed_at: new Date().toISOString(),
+                        outputs: actionOutputs,
+                        error: null,
+                    })
+                    .eq("id", actionRunId);
+            }
+            if (actionRunId && actionSkipped) {
+                await supabase
+                    .from("workflow_action_runs")
+                    .update({
+                        status: "skipped",
+                        completed_at: new Date().toISOString(),
+                        outputs: {},
+                        meta: { reason: skipReason },
+                    })
+                    .eq("id", actionRunId);
             }
         }
 

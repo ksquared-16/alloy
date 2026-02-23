@@ -12,11 +12,27 @@ import AlloyLogo from "@/components/admin/AlloyLogo";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
 
-const navGroups: { label: string; items: { href: string; label: string }[] }[] = [
+type NavLink = { href: string; label: string };
+type NavItem = NavLink | { label: string; subItems: NavLink[] };
+function isNestedNavItem(item: NavItem): item is { label: string; subItems: NavLink[] } {
+    return "subItems" in item && Array.isArray((item as { subItems: unknown }).subItems);
+}
+
+const navGroups: { label: string; items: NavItem[] }[] = [
     { label: "Core", items: [{ href: "/admin/opportunities", label: "Opportunities" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/schedules", label: "Schedules" }] },
     { label: "People", items: [{ href: "/admin/customers", label: "Customers" }, { href: "/admin/contacts", label: "Contacts" }, { href: "/admin/vendors", label: "Vendors" }] },
     { label: "Financials", items: [{ href: "/admin/financials/payments", label: "Payments" }, { href: "/admin/financials/ledger", label: "Ledger" }, { href: "/admin/financials/statements", label: "Statements" }, { href: "/admin/financials/accounts", label: "Accounts" }, { href: "/admin/subscriptions", label: "Subscriptions" }] },
-    { label: "System", items: [{ href: "/admin/verticals", label: "Verticals" }, { href: "/admin/workflows", label: "Workflows" }, { href: "/admin/workflow-events", label: "Workflow Events" }, { href: "/admin/workflow-runs", label: "Workflow Runs" }, { href: "/admin/messaging", label: "Messaging" }, { href: "/admin/messages-outbox", label: "Messages outbox" }, { href: "/admin/settings", label: "Settings" }, { href: "/admin/discounts", label: "Discounts" }] },
+    {
+        label: "System",
+        items: [
+            { href: "/admin/verticals", label: "Verticals" },
+            { label: "Workflows", subItems: [{ href: "/admin/workflows", label: "Builder" }, { href: "/admin/workflow-events", label: "Events" }, { href: "/admin/workflow-runs", label: "Runs" }] },
+            { href: "/admin/messaging", label: "Messaging" },
+            { href: "/admin/messages-outbox", label: "Messages outbox" },
+            { href: "/admin/settings", label: "Settings" },
+            { href: "/admin/discounts", label: "Discounts" },
+        ],
+    },
 ];
 
 function getInitialCollapsed(): Record<string, boolean> {
@@ -51,13 +67,23 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const router = useRouter();
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ Workflows: true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
     useEffect(() => {
-        const group = navGroups.find((g) => g.items.some((i) => i.href === pathname));
+        const group = navGroups.find((g) =>
+            g.items.some((i) => {
+                if (isNestedNavItem(i)) return i.subItems.some((s) => s.href === pathname);
+                return i.href === pathname;
+            })
+        );
         if (group && collapsed[group.label]) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
+        }
+        const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
+        if (workflowPaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev.Workflows === false ? prev : { ...prev, Workflows: false }));
         }
     }, [pathname]);
 
@@ -69,6 +95,10 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
 
     const toggleGroup = useCallback((label: string) => {
         setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
+    }, []);
+
+    const toggleNested = useCallback((label: string) => {
+        setNestedCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
     }, []);
 
     const handleSignOut = async () => {
@@ -104,6 +134,39 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                 {!isCollapsed && (
                                     <ul className="mt-1.5 space-y-0.5">
                                         {group.items.map((item) => {
+                                            if (isNestedNavItem(item)) {
+                                                const isNestedOpen = !(nestedCollapsed[item.label] ?? true);
+                                                const hasActiveChild = item.subItems.some((s) => s.href === pathname);
+                                                return (
+                                                    <li key={item.label}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleNested(item.label)}
+                                                            className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left ${hasActiveChild ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
+                                                        >
+                                                            <span>{item.label}</span>
+                                                            <span className="opacity-70">{isNestedOpen ? "▼" : "▶"}</span>
+                                                        </button>
+                                                        {isNestedOpen && (
+                                                            <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-[#e6e8ec] pl-2">
+                                                                {item.subItems.map((sub) => {
+                                                                    const isActive = pathname === sub.href;
+                                                                    return (
+                                                                        <li key={sub.href}>
+                                                                            <Link
+                                                                                href={sub.href}
+                                                                                className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
+                                                                            >
+                                                                                {sub.label}
+                                                                            </Link>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        )}
+                                                    </li>
+                                                );
+                                            }
                                             const isActive = pathname === item.href;
                                             return (
                                                 <li key={item.href}>
