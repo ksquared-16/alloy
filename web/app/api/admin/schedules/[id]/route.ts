@@ -20,9 +20,15 @@ export async function PATCH(
 
     try {
         const body = (await request.json()) as Record<string, unknown>;
+        if ("metadata" in body && body.metadata == null) body.metadata = {};
         const updates: Record<string, unknown> = {};
         for (const key of ALLOWED_KEYS) {
-            if (body[key] !== undefined) updates[key] = body[key];
+            if (body[key] === undefined) continue;
+            if (key === "metadata") {
+                updates[key] = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
+                continue;
+            }
+            updates[key] = body[key];
         }
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });

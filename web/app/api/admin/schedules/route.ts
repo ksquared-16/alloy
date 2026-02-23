@@ -99,13 +99,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "end_at must be after start_at" }, { status: 400 });
   }
 
+  const metadata = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
   const row: Record<string, unknown> = {
     org_id: ctx.orgId,
     job_id,
     start_at,
     end_at,
     timezone: typeof body.timezone === "string" ? body.timezone : null,
-    metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
+    metadata,
   };
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
   if (typeof body.schedule_status_id === "string" && body.schedule_status_id) row.schedule_status_id = body.schedule_status_id;
