@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     }
 
     const eventType = searchParams.get("event_type") ?? "";
+    const eventId = (searchParams.get("event_id") ?? "").trim();
     const search = (searchParams.get("search") ?? "").trim();
     const range = searchParams.get("range") ?? ""; // 24h | 7d | 30d
     const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
         .order("occurred_at", { ascending: false });
 
     if (eventType) q = q.eq("event_type", eventType);
+    if (eventId) q = q.eq("id", eventId);
     if (fromIso) q = q.gte("occurred_at", fromIso);
 
     if (search) {

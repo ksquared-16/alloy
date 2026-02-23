@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -20,7 +21,35 @@ type WorkflowRunRow = {
     started_at: string;
     completed_at: string | null;
     event_payload: Record<string, unknown>;
+    has_failed_action?: boolean;
 };
+
+type WorkflowActionRunRow = {
+    id: string;
+    workflow_run_id: string;
+    action_order: number;
+    action_type: string;
+    status: string;
+    error: string | null;
+    meta: Record<string, unknown>;
+    started_at: string;
+    completed_at: string | null;
+    inputs: Record<string, unknown>;
+    outputs: Record<string, unknown>;
+};
+
+/** Best-effort admin route for entity_type. Returns null if unknown. */
+function entityAdminRoute(entityType: string | null, _entityId: string): { href: string; label: string } | null {
+    if (!entityType) return null;
+    const t = entityType.toLowerCase();
+    if (t === "job") return { href: "/admin/jobs", label: "Jobs" };
+    if (t === "schedule") return { href: "/admin/schedules", label: "Schedules" };
+    if (t === "customer") return { href: "/admin/customers", label: "Customers" };
+    if (t === "contact") return { href: "/admin/contacts", label: "Contacts" };
+    if (t === "vendor") return { href: "/admin/vendors", label: "Vendors" };
+    if (t === "opportunity") return { href: "/admin/opportunities", label: "Opportunities" };
+    return null;
+}
 
 const RANGE_OPTIONS = [
     { value: "", label: "All time" },
@@ -54,6 +83,47 @@ function formatDuration(started: string, completed: string | null): string {
     return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function ActionRunItem({
+    ar,
+    formatDuration: fd,
+    statusVariant: sv,
+}: {
+    ar: WorkflowActionRunRow;
+    formatDuration: (s: string, c: string | null) => string;
+    statusVariant: (s: string) => "default" | "success" | "warning" | "neutral";
+}) {
+    const [metaOpen, setMetaOpen] = useState(false);
+    const hasMeta = ar.meta && Object.keys(ar.meta).length > 0;
+    return (
+        <li className="border border-alloy-stone/30 rounded-md p-3 bg-alloy-stone/10">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-sm">{ar.action_type}</span>
+                <StatusBadge label={ar.status} variant={sv(ar.status)} />
+                <span className="text-xs text-alloy-midnight/60">{fd(ar.started_at, ar.completed_at)}</span>
+                {hasMeta && (
+                    <button
+                        type="button"
+                        onClick={() => setMetaOpen((o) => !o)}
+                        className="text-xs text-alloy-blue hover:underline"
+                    >
+                        {metaOpen ? "Hide" : "Show"} meta
+                    </button>
+                )}
+            </div>
+            {ar.status === "failed" && ar.error && (
+                <pre className="mt-2 bg-red-50 text-red-800 rounded p-2 text-xs font-mono whitespace-pre-wrap break-words border border-red-200">
+                    {ar.error}
+                </pre>
+            )}
+            {metaOpen && hasMeta && (
+                <pre className="mt-2 bg-alloy-stone/20 rounded p-2 text-xs overflow-x-auto font-mono whitespace-pre-wrap break-words">
+                    {JSON.stringify(ar.meta, null, 2)}
+                </pre>
+            )}
+        </li>
+    );
+}
+
 export default function WorkflowRunsClient() {
     const [runs, setRuns] = useState<WorkflowRunRow[]>([]);
     const [total, setTotal] = useState(0);
@@ -68,7 +138,25 @@ export default function WorkflowRunsClient() {
     const [searchApplied, setSearchApplied] = useState("");
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState<WorkflowRunRow | null>(null);
+    const [actionRuns, setActionRuns] = useState<WorkflowActionRunRow[]>([]);
+    const [actionRunsLoading, setActionRunsLoading] = useState(false);
     const limit = 50;
+
+    useEffect(() => {
+        if (!selected) {
+            setActionRuns([]);
+            return;
+        }
+        let cancelled = false;
+        setActionRunsLoading(true);
+        fetch(`/api/admin/workflow-runs/${selected.id}/action-runs`)
+            .then((res) => res.json())
+            .then((json) => {
+                if (!cancelled && Array.isArray(json.action_runs)) setActionRuns(json.action_runs);
+            })
+            .finally(() => { if (!cancelled) setActionRunsLoading(false); });
+        return () => { cancelled = true; };
+    }, [selected?.id]);
 
     const fetchWorkflows = useCallback(async () => {
         try {
@@ -235,7 +323,14 @@ export default function WorkflowRunsClient() {
                                                     {r.entity_type && r.entity_id ? `${r.entity_type}: ${r.entity_id.slice(0, 8)}…` : (r.entity_id ? `${r.entity_id.slice(0, 8)}…` : "—")}
                                                 </td>
                                                 <td className="py-2 pr-4">
-                                                    <StatusBadge label={r.status} variant={statusVariant(r.status)} />
+                                                    <span className="flex items-center gap-1.5 flex-wrap">
+                                                        <StatusBadge label={r.status} variant={statusVariant(r.status)} />
+                                                        {(r.status === "failed" || r.has_failed_action) && (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-200" title="Run or an action failed">
+                                                                Failed
+                                                            </span>
+                                                        )}
+                                                    </span>
                                                 </td>
                                                 <td className="py-2 pr-4">{formatDuration(r.started_at, r.completed_at)}</td>
                                             </tr>
@@ -277,33 +372,114 @@ export default function WorkflowRunsClient() {
             <Drawer
                 isOpen={!!selected}
                 onClose={() => setSelected(null)}
-                title={selected ? `Run ${selected.id.slice(0, 8)}…` : ""}
+                title={
+                    selected ? (
+                        <span className="flex flex-col gap-0.5">
+                            <span>Run {selected.id.slice(0, 8)}…</span>
+                            {(() => {
+                                const firstFailed = actionRuns.find((a) => a.status === "failed");
+                                if (!firstFailed) return null;
+                                return (
+                                    <span className="text-xs font-normal text-red-700 mt-0.5">
+                                        Failed action: {firstFailed.action_type} — {firstFailed.error ?? "Unknown error"}
+                                    </span>
+                                );
+                            })()}
+                        </span>
+                    ) : ""
+                }
                 zIndexBackdrop={60}
                 zIndexPanel={70}
             >
                 {selected && (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div><span className="text-alloy-midnight/60">Workflow</span><br />{selected.workflow_name ?? selected.workflow_id ?? "—"}</div>
-                            <div><span className="text-alloy-midnight/60">Event type</span><br />{selected.event_type ?? "—"}</div>
-                            <div><span className="text-alloy-midnight/60">Entity</span><br />{selected.entity_type && selected.entity_id ? `${selected.entity_type}: ${selected.entity_id}` : (selected.entity_id ?? "—")}</div>
+                            <div>
+                                <span className="text-alloy-midnight/60">Workflow</span>
+                                <br />
+                                {selected.workflow_id ? (
+                                    <Link href={`/admin/workflows/${selected.workflow_id}`} className="text-alloy-blue hover:underline">
+                                        {selected.workflow_name ?? selected.workflow_id.slice(0, 8) + "…"}
+                                    </Link>
+                                ) : (selected.workflow_name ?? "—")}
+                            </div>
+                            <div>
+                                <span className="text-alloy-midnight/60">Event</span>
+                                <br />
+                                {selected.event_id ? (
+                                    <Link href={`/admin/workflow-events?event_id=${encodeURIComponent(selected.event_id)}`} className="text-alloy-blue hover:underline">
+                                        {selected.event_type ?? selected.event_id.slice(0, 8) + "…"}
+                                    </Link>
+                                ) : (selected.event_type ?? "—")}
+                            </div>
+                            <div className="col-span-2">
+                                <span className="text-alloy-midnight/60">Entity</span>
+                                <br />
+                                {selected.entity_type && selected.entity_id ? (
+                                    <span className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-mono text-xs break-all">{selected.entity_type}: {selected.entity_id}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { navigator.clipboard.writeText(selected.entity_id ?? ""); }}
+                                            className="px-2 py-0.5 text-xs border border-alloy-stone/40 rounded hover:bg-alloy-stone/20"
+                                        >
+                                            Copy ID
+                                        </button>
+                                        {entityAdminRoute(selected.entity_type, selected.entity_id) && (
+                                            <Link
+                                                href={entityAdminRoute(selected.entity_type, selected.entity_id)!.href}
+                                                className="text-alloy-blue hover:underline text-xs"
+                                            >
+                                                View {entityAdminRoute(selected.entity_type, selected.entity_id)!.label}
+                                            </Link>
+                                        )}
+                                    </span>
+                                ) : selected.entity_id ? (
+                                    <span className="flex items-center gap-2">
+                                        <span className="font-mono text-xs break-all">{selected.entity_id}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { navigator.clipboard.writeText(selected.entity_id ?? ""); }}
+                                            className="px-2 py-0.5 text-xs border border-alloy-stone/40 rounded hover:bg-alloy-stone/20"
+                                        >
+                                            Copy
+                                        </button>
+                                    </span>
+                                ) : "—"}
+                            </div>
                             <div><span className="text-alloy-midnight/60">Status</span><br /><StatusBadge label={selected.status} variant={statusVariant(selected.status)} /></div>
                             <div><span className="text-alloy-midnight/60">Started at</span><br />{formatDateTime(selected.started_at)}</div>
                             <div><span className="text-alloy-midnight/60">Completed at</span><br />{selected.completed_at ? formatDateTime(selected.completed_at) : "—"}</div>
                             <div><span className="text-alloy-midnight/60">Duration</span><br />{formatDuration(selected.started_at, selected.completed_at)}</div>
-                            <div className="col-span-2"><span className="text-alloy-midnight/60">ID</span><br /><span className="font-mono text-xs break-all">{selected.id}</span></div>
+                            <div className="col-span-2"><span className="text-alloy-midnight/60">Run ID</span><br /><span className="font-mono text-xs break-all">{selected.id}</span></div>
                         </div>
                         {selected.error && (
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Error</p>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Run error</p>
                                 <pre className="bg-red-50 text-red-800 rounded p-3 text-xs overflow-x-auto font-mono whitespace-pre-wrap break-words border border-red-200">
                                     {selected.error}
                                 </pre>
                             </div>
                         )}
+
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Actions timeline</p>
+                            {actionRunsLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading actions…</p>
+                            ) : actionRuns.length === 0 ? (
+                                <p className="text-sm text-alloy-midnight/60">No action runs recorded.</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {actionRuns.map((ar) => (
+                                        <ActionRunItem key={ar.id} ar={ar} formatDuration={formatDuration} statusVariant={statusVariant} />
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">event_payload</p>
-                            <pre className="bg-alloy-stone/20 rounded p-3 text-xs overflow-x-auto max-h-[60vh] overflow-y-auto font-mono whitespace-pre-wrap break-words">
+                            <pre className="bg-alloy-stone/20 rounded p-3 text-xs overflow-x-auto max-h-[40vh] overflow-y-auto font-mono whitespace-pre-wrap break-words">
                                 {JSON.stringify(selected.event_payload, null, 2)}
                             </pre>
                         </div>

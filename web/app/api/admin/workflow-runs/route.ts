@@ -15,6 +15,8 @@ export type WorkflowRunRow = {
     started_at: string;
     completed_at: string | null;
     event_payload: Record<string, unknown>;
+    /** True if any workflow_action_run for this run has status 'failed'. */
+    has_failed_action?: boolean;
 };
 
 /** GET: list workflow_runs for current org. Enriches with workflow name and event_type/entity_type/entity_id from workflow_events. */
@@ -110,6 +112,16 @@ export async function GET(request: NextRequest) {
         const { data: evData } = evIds.length ? await supabase.from("workflow_events").select("id, event_type, entity_type, entity_id").in("id", evIds) : { data: [] };
         const wfMap = new Map((wfData ?? []).map((w) => [(w as { id: string }).id, (w as { name: string | null }).name ?? null]));
         const evMap = new Map((evData ?? []).map((e) => [(e as { id: string }).id, e as { event_type: string | null; entity_type: string | null; entity_id: string | null }]));
+        const runIds = rows.map((r) => r.id);
+        let runIdsWithFailedAction = new Set<string>();
+        if (runIds.length > 0) {
+            const { data: failedRows } = await supabase
+                .from("workflow_action_runs")
+                .select("workflow_run_id")
+                .in("workflow_run_id", runIds)
+                .eq("status", "failed");
+            runIdsWithFailedAction = new Set((failedRows ?? []).map((r) => (r as { workflow_run_id: string }).workflow_run_id));
+        }
         return rows.map((r) => ({
             id: r.id,
             workflow_id: r.workflow_id,
@@ -123,6 +135,7 @@ export async function GET(request: NextRequest) {
             started_at: r.started_at,
             completed_at: r.completed_at,
             event_payload: (r.event_payload as Record<string, unknown>) ?? {},
+            has_failed_action: runIdsWithFailedAction.has(r.id),
         }));
     }
 

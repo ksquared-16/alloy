@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -25,17 +26,24 @@ const RANGE_OPTIONS = [
 ];
 
 export default function WorkflowEventsClient() {
+    const searchParams = useSearchParams();
     const [events, setEvents] = useState<WorkflowEventRow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [eventTypes, setEventTypes] = useState<string[]>([]);
     const [eventType, setEventType] = useState("");
+    const [eventId, setEventId] = useState(() => searchParams.get("event_id") ?? "");
     const [search, setSearch] = useState("");
     const [searchApplied, setSearchApplied] = useState("");
     const [range, setRange] = useState("");
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState<WorkflowEventRow | null>(null);
     const limit = 50;
+
+    useEffect(() => {
+        const id = searchParams.get("event_id") ?? "";
+        setEventId((prev) => (id !== prev ? id : prev));
+    }, [searchParams]);
 
     const fetchEventTypes = useCallback(async () => {
         try {
@@ -51,6 +59,7 @@ export default function WorkflowEventsClient() {
         params.set("limit", String(limit));
         params.set("page", String(page));
         if (eventType) params.set("event_type", eventType);
+        if (eventId) params.set("event_id", eventId);
         if (searchApplied) params.set("search", searchApplied);
         if (range) params.set("range", range);
         try {
@@ -63,7 +72,7 @@ export default function WorkflowEventsClient() {
         } finally {
             setLoading(false);
         }
-    }, [page, eventType, searchApplied, range]);
+    }, [page, eventType, eventId, searchApplied, range]);
 
     useEffect(() => {
         fetchEventTypes();
@@ -92,6 +101,16 @@ export default function WorkflowEventsClient() {
                                 <option key={t} value={t}>{t}</option>
                             ))}
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Event ID</label>
+                        <input
+                            type="text"
+                            placeholder="UUID (e.g. from run details)"
+                            value={eventId}
+                            onChange={(e) => { setEventId(e.target.value); setPage(1); }}
+                            className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-56 font-mono"
+                        />
                     </div>
                     <div>
                         <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Date range</label>
