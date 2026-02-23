@@ -1,22 +1,21 @@
 import { notFound, redirect } from "next/navigation";
-import { NextResponse } from "next/server";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import JobDetailClient from "./JobDetailClient";
 
-export default async function AdminJobDetailPage({
+export default async function Page({
     params,
 }: {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) {
-        const status = ctx.status;
+    if (ctx && "status" in ctx && typeof (ctx as { status: number }).status === "number") {
+        const status = (ctx as { status: number }).status;
         if (status === 401) redirect("/login");
         redirect("/admin");
     }
 
-    const { id } = params;
+    const { id } = await params;
     if (!id) notFound();
 
     const supabase = createAdminClient();
@@ -24,7 +23,7 @@ export default async function AdminJobDetailPage({
         .from("jobs")
         .select("*")
         .eq("id", id)
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", (ctx as { orgId: string }).orgId)
         .single();
 
     if (error || !job) notFound();
@@ -59,7 +58,7 @@ export default async function AdminJobDetailPage({
         <JobDetailClient
             jobId={id}
             initialJob={initialJob}
-            role={ctx.role}
+            role={(ctx as { role: string }).role}
         />
     );
 }
