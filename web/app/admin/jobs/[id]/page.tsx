@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -7,12 +7,16 @@ import JobDetailClient from "./JobDetailClient";
 export default async function AdminJobDetailPage({
     params,
 }: {
-    params: Promise<{ id: string }>;
+    params: { id: string };
 }) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (ctx instanceof NextResponse) {
+        const status = ctx.status;
+        if (status === 401) redirect("/login");
+        redirect("/admin");
+    }
 
-    const { id } = await params;
+    const { id } = params;
     if (!id) notFound();
 
     const supabase = createAdminClient();
