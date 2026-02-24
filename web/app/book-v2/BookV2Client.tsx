@@ -1653,9 +1653,11 @@ export default function BookV2Client() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone *</label>
                                 <input
                                     type="tel"
+                                    required
+                                    aria-required
                                     value={quoteStartForm.phone}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, phone: e.target.value }))}
                                     placeholder="(541) 555-0123"
@@ -2155,9 +2157,11 @@ export default function BookV2Client() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone</label>
+                                            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone *</label>
                                             <input
                                                 type="tel"
+                                                required
+                                                aria-required
                                                 value={paymentIdentityPhone}
                                                 onChange={(e) => { setPaymentIdentityPhone(e.target.value); setPaymentIdentityError(null); }}
                                                 placeholder="+1 555 123 4567"
