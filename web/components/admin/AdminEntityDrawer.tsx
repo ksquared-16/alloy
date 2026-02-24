@@ -16,7 +16,9 @@ import {
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors", "locations"] as const;
+
+const LOCATION_TYPES = ["address", "site", "room", "unit", "property", "classroom"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -474,6 +476,20 @@ export default function AdminEntityDrawer() {
                 event_type: data.event_type ?? "",
                 entity_type: data.entity_type ?? "",
             });
+        } else if (drawer.type === "locations") {
+            setFormData({
+                label: data.label ?? "",
+                location_type: (data.location_type as string) ?? "address",
+                is_active: data.is_active ?? true,
+                is_primary: data.is_primary ?? false,
+                address1: data.address1 ?? "",
+                address2: data.address2 ?? "",
+                city: data.city ?? "",
+                state: data.state ?? "",
+                postal_code: data.postal_code ?? "",
+                country: data.country ?? "",
+                access_notes: data.access_notes ?? "",
+            });
         }
         setSaveError(null);
         setIsEditing(true);
@@ -531,6 +547,29 @@ export default function AdminEntityDrawer() {
                 payload.service_area_zip_codes = zipsStr ? String(zipsStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
                 if (payload.max_daily_jobs === "") payload.max_daily_jobs = null;
                 if (payload.payout_percent === "") payload.payout_percent = null;
+            }
+            if (drawer.type === "locations") {
+                const locPayload: Record<string, unknown> = {};
+                const keys = ["label", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes"] as const;
+                for (const k of keys) {
+                    if (formData[k] !== undefined) {
+                        if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
+                            locPayload[k] = typeof formData[k] === "string" ? (formData[k] as string).trim() || null : null;
+                        } else if (k === "location_type") {
+                            locPayload[k] = typeof formData[k] === "string" && (formData[k] as string).trim() ? (formData[k] as string).trim() : null;
+                        } else {
+                            locPayload[k] = formData[k];
+                        }
+                    }
+                }
+                const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                setIsEditing(false);
+                router.refresh();
+                return;
             }
             const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             const json = await res.json().catch(() => ({}));
@@ -608,7 +647,7 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-red-600">Error: {error}</p>}
             {data && !loading && (
                 <div className="space-y-6">
-                    {(canEditInDrawer(drawer.type) || drawer.type === "locations") && (
+                    {canEditInDrawer(drawer.type) && (
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#e6e8ec]">
                             <div className="flex gap-2">
                                 {canEditInDrawer(drawer.type) && (
@@ -616,8 +655,8 @@ export default function AdminEntityDrawer() {
                                         <>
                                             <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
                                             {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
-                                            {drawer.type === "jobs" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Set location</button>}
-                                            {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Set location</button>}
+                                            {drawer.type === "jobs" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>}
+                                            {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
                                         </>
                                     ) : (
                                         <>
@@ -645,7 +684,7 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "related" && drawer.type === "jobs" && data && (
                         <div className="pt-2 space-y-3 mb-4">
-                            <div className="py-1.5">
+                            <div className="py-1.5 flex items-center gap-2 flex-wrap">
                                 <strong className="text-[#45506c] text-sm">Location:</strong>{" "}
                                 {data.location_id ? (
                                     (() => {
@@ -657,13 +696,19 @@ export default function AdminEntityDrawer() {
                                         }
                                         const display = name ?? `${(data.location_id as string).slice(0, 8)}…`;
                                         return (
-                                            <button type="button" onClick={() => openDrawer({ type: "locations", id: data.location_id as string })} className="text-alloy-blue hover:underline">
-                                                {display}
-                                            </button>
+                                            <>
+                                                <button type="button" onClick={() => openDrawer({ type: "locations", id: data.location_id as string })} className="text-alloy-blue hover:underline">
+                                                    {display}
+                                                </button>
+                                                {canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button>}
+                                            </>
                                         );
                                     })()
                                 ) : (
-                                    <span className="text-[#31394d]">Unassigned</span>
+                                    <>
+                                        <span className="text-[#31394d]">Unassigned</span>
+                                        {canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId(null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-blue">Set location</button>}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -686,7 +731,7 @@ export default function AdminEntityDrawer() {
                                     <span className="text-[#31394d]">Unassigned</span>
                                 )}
                             </div>
-                            <div className="py-1.5">
+                            <div className="py-1.5 flex items-center gap-2 flex-wrap">
                                 <strong className="text-[#45506c] text-sm">Location:</strong>{" "}
                                 {((data._location_id as string) ?? (data.location_id as string)) ? (
                                     (() => {
@@ -699,13 +744,19 @@ export default function AdminEntityDrawer() {
                                         }
                                         const display = name ?? `${locId.slice(0, 8)}…`;
                                         return (
-                                            <button type="button" onClick={() => openDrawer({ type: "locations", id: locId })} className="text-alloy-blue hover:underline">
-                                                {display}
-                                            </button>
+                                            <>
+                                                <button type="button" onClick={() => openDrawer({ type: "locations", id: locId })} className="text-alloy-blue hover:underline">
+                                                    {display}
+                                                </button>
+                                                {canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); setSetLocationSelectedId(locId); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button>}
+                                            </>
                                         );
                                     })()
                                 ) : (
-                                    <span className="text-[#31394d]">Unassigned</span>
+                                    <>
+                                        <span className="text-[#31394d]">Unassigned</span>
+                                        {canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); setSetLocationSelectedId(null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-blue">Set location</button>}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -782,6 +833,37 @@ export default function AdminEntityDrawer() {
                                 <>
                                     <Field label="Name" value={data.name as string} />
                                     <Field label="Status" value={data.status as string} />
+                                    {(data._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null) && (
+                                        <div className="py-1.5">
+                                            <strong className="text-[#45506c] text-sm">Primary Contact:</strong>{" "}
+                                            <button type="button" onClick={() => openDrawer({ type: "contacts", id: (data._primary_contact as { id: string }).id })} className="text-alloy-blue hover:underline">
+                                                {[(data._primary_contact as { first_name?: string }).first_name, (data._primary_contact as { last_name?: string }).last_name].filter(Boolean).join(" ") || (data._primary_contact as { id: string }).id.slice(0, 8) + "…"}
+                                            </button>
+                                            {((data._primary_contact as { email?: string }).email || (data._primary_contact as { phone?: string }).phone) && (
+                                                <span className="text-[#31394d] text-sm ml-1">
+                                                    ({[((data._primary_contact as { email?: string }).email), ((data._primary_contact as { phone?: string }).phone)].filter(Boolean).join(" · ")})
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {(data._primary_location as { id?: string; label?: string; address1?: string } | null) && (
+                                        <div className="py-1.5">
+                                            <strong className="text-[#45506c] text-sm">Primary Location:</strong>{" "}
+                                            <button type="button" onClick={() => openDrawer({ type: "locations", id: (data._primary_location as { id: string }).id })} className="text-alloy-blue hover:underline">
+                                                {(data._primary_location as { label?: string }).label || (data._primary_location as { address1?: string }).address1 || (data._primary_location as { id: string }).id.slice(0, 8) + "…"}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {(data._counts as { contacts?: number; opportunities?: number; jobs?: number; schedules?: number; locations?: number }) && (
+                                        <div className="py-1.5 text-sm text-[#59678b]">
+                                            <strong className="text-[#45506c]">Counts:</strong>{" "}
+                                            Contacts {(data._counts as { contacts?: number }).contacts ?? 0}
+                                            {" · "}Opportunities {(data._counts as { opportunities?: number }).opportunities ?? 0}
+                                            {" · "}Jobs {(data._counts as { jobs?: number }).jobs ?? 0}
+                                            {" · "}Schedules {(data._counts as { schedules?: number }).schedules ?? 0}
+                                            {" · "}Locations {(data._counts as { locations?: number }).locations ?? 0}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </>
@@ -1414,16 +1496,35 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "locations" && data && (
                         <>
-                            <Field label="Label" value={data.label as string} />
-                            <Field label="Address 1" value={data.address1 as string} />
-                            <Field label="Address 2" value={data.address2 as string} />
-                            <Field label="City" value={data.city as string} />
-                            <Field label="State" value={data.state as string} />
-                            <Field label="Postal code" value={data.postal_code as string} />
-                            <Field label="Country" value={data.country as string} />
-                            <Field label="Primary" value={data.is_primary ? "Yes" : "No"} />
-                            <Field label="Active" value={data.is_active ? "Yes" : "No"} />
-                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                            <Field label="Type" value={(data.location_type as string) ? String(data.location_type).charAt(0).toUpperCase() + String(data.location_type).slice(1).toLowerCase() : "—"} />
+                            <Field label="Owner" value={(data.customer_id as string) ? "Customer location" : "Org location"} />
+                            {isEditing ? (
+                                <>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.label ?? "")} onChange={(e) => setFormData((f) => ({ ...f, label: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Type</label><select value={String(formData.location_type ?? "address")} onChange={(e) => setFormData((f) => ({ ...f, location_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm">{LOCATION_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}</select></div>
+                                    <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Active</label></div>
+                                    {(data.customer_id as string) && <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_primary} onChange={(e) => setFormData((f) => ({ ...f, is_primary: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Primary</label></div>}
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 1</label><input value={String(formData.address1 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address1: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 2</label><input value={String(formData.address2 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address2: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div className="grid grid-cols-3 gap-2"><input value={String(formData.city ?? "")} onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.state ?? "")} onChange={(e) => setFormData((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.postal_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, postal_code: e.target.value }))} placeholder="ZIP" className="px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Country</label><input value={String(formData.country ?? "")} onChange={(e) => setFormData((f) => ({ ...f, country: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Access notes</label><textarea value={String(formData.access_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, access_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
+                                </>
+                            ) : (
+                                <>
+                                    <Field label="Name" value={data.label as string} />
+                                    <Field label="Address 1" value={data.address1 as string} />
+                                    <Field label="Address 2" value={data.address2 as string} />
+                                    <Field label="City" value={data.city as string} />
+                                    <Field label="State" value={data.state as string} />
+                                    <Field label="Postal code" value={data.postal_code as string} />
+                                    <Field label="Country" value={data.country as string} />
+                                    <Field label="Primary" value={data.is_primary ? "Yes" : "No"} />
+                                    <Field label="Active" value={data.is_active ? "Yes" : "No"} />
+                                    <Field label="Access notes" value={data.access_notes as string} />
+                                    <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                                </>
+                            )}
                         </>
                     )}
                     {drawer.type === "workflows" && data && (

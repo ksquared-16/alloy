@@ -61,10 +61,7 @@ export async function ensureCustomerAddressLocation(
     .eq("location_type", "address");
   const isFirst = (addrCount ?? 0) === 0;
 
-  const label =
-    (city && pc) ? `${city} ${pc}`.trim()
-    : (city ?? pc) ? (city ?? pc).trim()
-    : "Primary";
+  const label = a1 ? a1 : "Primary address";
 
   const insert: Record<string, unknown> = {
     org_id: org_id ?? undefined,

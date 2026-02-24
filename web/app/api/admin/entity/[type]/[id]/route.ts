@@ -98,7 +98,54 @@ export async function GET(
         if (type === "customers") {
             const { data, error } = await supabase.from("customers").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            return NextResponse.json(data);
+            const out: Record<string, unknown> = { ...data };
+            const orgId = (data as { org_id?: string }).org_id;
+            const primaryContactId = (data as { primary_contact_id?: string | null }).primary_contact_id;
+            if (primaryContactId) {
+                const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone").eq("id", primaryContactId).maybeSingle();
+                out._primary_contact = contact ?? null;
+            } else {
+                out._primary_contact = null;
+            }
+            const { data: primaryLoc } = await supabase
+                .from("locations")
+                .select("id, label, address1, city, postal_code")
+                .eq("customer_id", id)
+                .eq("org_id", orgId)
+                .eq("is_primary", true)
+                .limit(1)
+                .maybeSingle();
+            out._primary_location = primaryLoc ?? null;
+            if (orgId) {
+                const [
+                    { count: contactsCount },
+                    { count: oppCount },
+                    { count: jobsCount },
+                    { count: locsCount },
+                ] = await Promise.all([
+                    supabase.from("contacts").select("id", { count: "exact", head: true }).eq("customer_id", id),
+                    supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("customer_id", id),
+                    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("customer_id", id),
+                    supabase.from("locations").select("id", { count: "exact", head: true }).eq("customer_id", id).eq("org_id", orgId),
+                ]);
+                const { data: jobRows } = await supabase.from("jobs").select("id").eq("customer_id", id);
+                const jobIds = (jobRows ?? []).map((j: { id: string }) => j.id);
+                let schedulesCount = 0;
+                if (jobIds.length > 0) {
+                    const { count } = await supabase.from("schedules").select("id", { count: "exact", head: true }).in("job_id", jobIds);
+                    schedulesCount = count ?? 0;
+                }
+                out._counts = {
+                    contacts: contactsCount ?? 0,
+                    opportunities: oppCount ?? 0,
+                    jobs: jobsCount ?? 0,
+                    schedules: schedulesCount,
+                    locations: locsCount ?? 0,
+                };
+            } else {
+                out._counts = { contacts: 0, opportunities: 0, jobs: 0, schedules: 0, locations: 0 };
+            }
+            return NextResponse.json(out);
         }
         if (type === "schedules") {
             const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).single();
