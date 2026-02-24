@@ -19,35 +19,78 @@ function isNestedNavItem(item: NavItem): item is { label: string; subItems: NavL
 }
 
 const navGroups: { label: string; items: NavItem[] }[] = [
-    { label: "Core", items: [{ href: "/admin/opportunities", label: "Opportunities" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/schedules", label: "Schedules" }] },
-    { label: "People", items: [{ href: "/admin/customers", label: "Customers" }, { href: "/admin/contacts", label: "Contacts" }, { href: "/admin/vendors", label: "Vendors" }] },
-    { label: "Financials", items: [{ href: "/admin/financials/payments", label: "Payments" }, { href: "/admin/financials/ledger", label: "Ledger" }, { href: "/admin/financials/statements", label: "Statements" }, { href: "/admin/financials/accounts", label: "Accounts" }, { href: "/admin/subscriptions", label: "Subscriptions" }] },
+    {
+        label: "Operations",
+        items: [
+            { href: "/admin/dashboard", label: "Dashboard" },
+            { href: "/admin/opportunities", label: "Opportunities" },
+            { href: "/admin/jobs", label: "Jobs" },
+            { href: "/admin/schedules", label: "Schedules" },
+            { href: "/admin/customers", label: "Customers" },
+            { href: "/admin/contacts", label: "Contacts" },
+            { href: "/admin/vendors", label: "Vendors" },
+            { href: "/admin/contractors", label: "Contractors" },
+            {
+                label: "Workflows",
+                subItems: [
+                    { href: "/admin/workflows", label: "Builder" },
+                    { href: "/admin/workflow-events", label: "Events" },
+                    { href: "/admin/workflow-runs", label: "Runs" },
+                ],
+            },
+            { href: "/admin/messaging", label: "Messaging" },
+            { href: "/admin/messages-outbox", label: "Outbox" },
+        ],
+    },
+    {
+        label: "Financials",
+        items: [
+            { href: "/admin/financials/ledger", label: "Ledger" },
+            { href: "/admin/financials/statements", label: "Statements" },
+            { href: "/admin/financials/payments", label: "Payments" },
+            { href: "/admin/subscriptions", label: "Subscriptions" },
+            { href: "/admin/financials/pricing", label: "Pricing" },
+            { href: "/admin/discounts", label: "Discounts" },
+            { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
+            { href: "/admin/financials/accounts", label: "GL Accounts" },
+            {
+                label: "Financials Settings",
+                subItems: [
+                    { href: "/admin/financials/pricing", label: "Pricing & Frequencies" },
+                    { href: "/admin/discounts", label: "Discounts" },
+                    { href: "/admin/financials/accounts", label: "GL Accounts" },
+                    { href: "/admin/financials/settings/subscription", label: "Subscription config" },
+                ],
+            },
+        ],
+    },
     {
         label: "System",
         items: [
-            { href: "/admin/verticals", label: "Verticals" },
-            { label: "Workflows", subItems: [{ href: "/admin/workflows", label: "Builder" }, { href: "/admin/workflow-events", label: "Events" }, { href: "/admin/workflow-runs", label: "Runs" }] },
-            { href: "/admin/messaging", label: "Messaging" },
-            { href: "/admin/messages-outbox", label: "Messages outbox" },
             { href: "/admin/settings", label: "Settings" },
             { href: "/admin/users", label: "Users" },
-            { href: "/admin/discounts", label: "Discounts" },
+            { href: "/admin/system/roles", label: "Roles & Permissions" },
+            { href: "/admin/verticals", label: "Verticals / Industries" },
+            { href: "/admin/system/entity-labels", label: "Entity Labels" },
+            { href: "/admin/system/statuses", label: "Statuses" },
+            { href: "/admin/system/db-relationships", label: "DB Relationships" },
         ],
     },
 ];
 
 function getInitialCollapsed(): Record<string, boolean> {
+    const defaults = { Operations: false, Financials: true, System: true };
     if (typeof window === "undefined") {
-        return { Core: false, People: true, Financials: false, System: true };
+        return defaults;
     }
     try {
         const raw = localStorage.getItem(SIDEBAR_STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw) as Record<string, boolean>;
-            return { ...{ Core: false, People: true, Financials: false, System: true }, ...parsed };
+            return { ...defaults, ...parsed };
         }
     } catch (_) {}
-    return { Core: false, People: true, Financials: false, System: true };
+    return defaults;
 }
 
 function getInitials(email: string): string {
@@ -68,7 +111,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const router = useRouter();
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ Workflows: true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ Workflows: true, "Financials Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -83,8 +126,12 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
+        const financialsSettingsPaths = ["/admin/financials/pricing", "/admin/discounts", "/admin/financials/accounts", "/admin/financials/settings/subscription"];
         if (workflowPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev.Workflows === false ? prev : { ...prev, Workflows: false }));
+        }
+        if (financialsSettingsPaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev["Financials Settings"] === false ? prev : { ...prev, "Financials Settings": false }));
         }
     }, [pathname]);
 
