@@ -5,7 +5,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   const { searchParams } = new URL(request.url);
   const search = (searchParams.get("search") ?? "").trim();
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 /** POST: create job. Admin only. customer_id, job_status_id, is_recurring required. org_id from context. */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

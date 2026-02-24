@@ -17,7 +17,7 @@ export async function GET(
     context: { params: Promise<{ id: string }> }
 ) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { id: jobId } = await context.params;
     if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });

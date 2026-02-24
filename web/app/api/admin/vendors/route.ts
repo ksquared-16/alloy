@@ -5,7 +5,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 /** GET: list vendors for current org. Admin/ops. Used for assign-vendor dropdown etc. */
 export async function GET() {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase

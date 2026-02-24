@@ -1,21 +1,20 @@
 import { notFound, redirect } from "next/navigation";
-import { NextResponse } from "next/server";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import ScheduleDetailClient from "./ScheduleDetailClient";
 
-export default async function AdminScheduleDetailPage({
+export default async function Page({
     params,
 }: {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) {
+    if (!ctx.ok) {
         if (ctx.status === 401) redirect("/login");
         redirect("/admin");
     }
 
-    const { id } = params;
+    const { id } = await params;
     if (!id) notFound();
 
     const supabase = createAdminClient();

@@ -8,7 +8,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -29,7 +29,7 @@ export async function POST(
     .from("schedules")
     .update({
       canceled_at: new Date().toISOString(),
-      canceled_by: ctx.user.id,
+      canceled_by: ctx.userId,
       cancel_reason: cancel_reason ?? null,
     })
     .eq("id", id)

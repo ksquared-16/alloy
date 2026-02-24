@@ -1,33 +1,38 @@
 /**
  * Resolve admin org context from public.user_roles (membership scoping).
- * Use in admin API routes that need org_id; throws 401/403 if not allowed.
+ * Use in admin API routes and page components that need org_id.
  */
 
-import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabaseServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import type { User } from "@supabase/supabase-js";
 
 const ALLOWED_ROLES = ["admin", "ops"] as const;
 
-export interface AdminContext {
-    user: User;
+export type AdminContextSuccess = {
+    ok: true;
     orgId: string;
     role: string;
-}
+    userId: string;
+};
+
+export type AdminContextFailure = {
+    ok: false;
+    status: 401 | 403;
+};
+
+export type AdminContextResult = AdminContextSuccess | AdminContextFailure;
 
 /**
  * Get current user and their org + role from user_roles.
- * - Uses Supabase server client for auth (getUser), admin client for user_roles query.
- * - Returns context or throws (via returning NextResponse) for 401/403.
+ * Returns a result object: { ok: true, orgId, role, userId } or { ok: false, status: 401 | 403 }.
  */
-export async function getAdminContext(): Promise<AdminContext | NextResponse> {
+export async function getAdminContext(): Promise<AdminContextResult> {
     const supabaseAuth = await createClient();
     const {
         data: { user },
     } = await supabaseAuth.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return { ok: false, status: 401 };
     }
 
     const admin = createAdminClient();
@@ -40,20 +45,21 @@ export async function getAdminContext(): Promise<AdminContext | NextResponse> {
 
     if (error) {
         console.error("[getAdminContext] user_roles error:", error);
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return { ok: false, status: 403 };
     }
     if (!row || !(row as { org_id?: string }).org_id) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return { ok: false, status: 403 };
     }
 
     const role = (row as { role?: string }).role ?? "";
     if (!ALLOWED_ROLES.includes(role as (typeof ALLOWED_ROLES)[number])) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return { ok: false, status: 403 };
     }
 
     return {
-        user,
+        ok: true,
         orgId: (row as { org_id: string }).org_id,
         role,
+        userId: user.id,
     };
 }

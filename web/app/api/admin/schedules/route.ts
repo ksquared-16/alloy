@@ -5,7 +5,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   const { searchParams } = new URL(request.url);
   const includeCanceled = searchParams.get("include_canceled") === "true";
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
 /** POST: create schedule. Admin only. job_id required; job must belong to org. */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

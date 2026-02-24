@@ -5,7 +5,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 /** POST: send password reset email for the given address. Admin role only. No email enumeration. */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -9,9 +9,8 @@ export default async function Page({
     params: Promise<{ id: string }>;
 }) {
     const ctx = await getAdminContext();
-    if (ctx && "status" in ctx && typeof (ctx as { status: number }).status === "number") {
-        const status = (ctx as { status: number }).status;
-        if (status === 401) redirect("/login");
+    if (!ctx.ok) {
+        if (ctx.status === 401) redirect("/login");
         redirect("/admin");
     }
 
@@ -23,7 +22,7 @@ export default async function Page({
         .from("jobs")
         .select("*")
         .eq("id", id)
-        .eq("org_id", (ctx as { orgId: string }).orgId)
+        .eq("org_id", ctx.orgId)
         .single();
 
     if (error || !job) notFound();
@@ -58,7 +57,7 @@ export default async function Page({
         <JobDetailClient
             jobId={id}
             initialJob={initialJob}
-            role={(ctx as { role: string }).role}
+            role={ctx.role}
         />
     );
 }

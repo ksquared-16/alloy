@@ -20,7 +20,7 @@ const CREATE_ALLOWED: readonly string[] = [
 /** GET: list contacts for current org. Scoped by org from getAdminContext. */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     const { orgId } = ctx;
 
     const { searchParams } = new URL(request.url);
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 /** POST: create contact. Server sets org_id from context. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     const { orgId, user } = ctx;
 
     try {

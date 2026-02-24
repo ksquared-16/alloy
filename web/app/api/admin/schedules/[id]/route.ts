@@ -11,7 +11,7 @@ export async function GET(
     context: { params: Promise<{ id: string }> }
 ) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -68,7 +68,7 @@ export async function PATCH(
     context: { params: Promise<{ id: string }> }
 ) {
     const ctx = await getAdminContext();
-    if (ctx instanceof NextResponse) return ctx;
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -137,7 +137,7 @@ export async function PATCH(
             entity: "schedules",
             id,
             changed_fields: Object.keys(updates),
-            actor_user_id: ctx.user.id,
+            actor_user_id: ctx.userId,
             role: ctx.role,
         });
         return NextResponse.json(data);

@@ -10,7 +10,7 @@ export async function PATCH(
   context: { params: Promise<{ userId: string }> }
 ) {
   const ctx = await getAdminContext();
-  if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
