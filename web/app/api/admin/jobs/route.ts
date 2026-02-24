@@ -53,7 +53,9 @@ export async function GET(request: NextRequest) {
   const vendorMap = new Map((vendorRows ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
   const locationMap = new Map((locationRows ?? []).map((loc) => {
     const l = loc as { id: string; label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
-    const summary = l.label ?? [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null;
+    const summary =
+      l.label ??
+      ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
     return [l.id, summary];
   }));
 
