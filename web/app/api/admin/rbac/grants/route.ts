@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
         .from("role_permission_grants")
         .select("permission_key")
         .eq("org_id", ctx.orgId)
-        .eq("role_key", role_key);
+        .eq("role_key", role_key)
+        .eq("allowed", true);
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -92,6 +93,7 @@ export async function PUT(request: NextRequest) {
             org_id: ctx.orgId,
             role_key,
             permission_key,
+            allowed: true,
         }));
         const { error: insertErr } = await supabase.from("role_permission_grants").insert(inserts);
         if (insertErr) {
@@ -99,5 +101,5 @@ export async function PUT(request: NextRequest) {
         }
     }
 
-    return NextResponse.json({ permission_keys });
+    return NextResponse.json({ ok: true });
 }
