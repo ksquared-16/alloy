@@ -167,10 +167,16 @@ export async function POST(request: NextRequest) {
             discount_amount
         );
 
-        // Validation: slot/time required; either contact_id (existing lead) or both email and phone
+        // Validation: slot/time required; phone always required
         if (!slot_start || !slot_end || !timezone) {
             return NextResponse.json(
                 { ok: false, message: "Missing required fields (slot/time)", booking_attempt_id: booking_attempt_id ?? null },
+                { status: 400 }
+            );
+        }
+        if (!contact_phone || String(contact_phone).trim() === "") {
+            return NextResponse.json(
+                { ok: false, error: "Phone number is required.", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 400 }
             );
         }
@@ -677,10 +683,34 @@ export async function POST(request: NextRequest) {
 
         // Step 4b: Ensure customer address location for job/schedule linkage
         const orgIdForLocation = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-        const locationPostalCode = body.postal_code ?? body.zip ?? body.postalCode ?? null;
-        const locationState = body.state ?? body.address_state ?? body.region ?? null;
-        if (address && !locationPostalCode && (body.zip != null && String(body.zip).trim() !== "")) {
-            console.warn("[BOOK_V2_CONFIRM] zip present but postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null });
+        const { data: oppForLocation } = await supabase.from("opportunities").select("metadata").eq("id", opportunityId).maybeSingle();
+        const oppMeta = (oppForLocation?.metadata as Record<string, unknown>) ?? {};
+        const quoteInput = (oppMeta.quote_input as Record<string, unknown>) ?? {};
+        function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
+            for (const v of vals) {
+                const s = v != null ? String(v).trim() : "";
+                if (s !== "") return s;
+            }
+            return null;
+        }
+        const locationPostalCode = firstNonEmpty(
+            body.postal_code,
+            body.zip,
+            body.postalCode,
+            quoteInput.zip,
+            quoteInput.postal_code,
+            oppMeta.postal_code,
+            oppMeta.zip
+        );
+        const locationState = firstNonEmpty(
+            body.state,
+            body.address_state,
+            body.region,
+            oppMeta.state,
+            quoteInput.state
+        );
+        if (address && !locationPostalCode) {
+            console.warn("[BOOK_V2_CONFIRM] postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null, opportunity_id: opportunityId });
         }
         let locationId: string | null = null;
         try {

@@ -923,8 +923,12 @@ export default function BookV2Client() {
             setQuoteStartError("Please select approximate square footage.");
             return;
         }
-        if (!email?.trim() && !phone?.trim()) {
-            setQuoteStartError("Please enter your email or phone so we can save your quote.");
+        if (!phone?.trim()) {
+            setQuoteStartError("Phone number is required.");
+            return;
+        }
+        if (!email?.trim()) {
+            setQuoteStartError("Please enter your email so we can save your quote.");
             return;
         }
         setQuoteStartSubmitting(true);
@@ -1228,7 +1232,12 @@ export default function BookV2Client() {
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
+        const phoneForConfirm = (resolvedPhone || prefillData.phone)?.trim();
+        if (!phoneForConfirm) {
+            setPaymentError("Phone number is required.");
+            return;
+        }
         if (!selectedSlot || !serviceDetails || !serviceDetailsValid || !stripe || !cardNumber || !cardExpiry || !cardCvc) {
             setPaymentError("Please complete all steps before submitting payment");
             return;
@@ -1349,11 +1358,14 @@ export default function BookV2Client() {
                 discount_code_id: discountData?.discount_code_id ?? null,
                 discount_code: (discountData?.code ?? discountCode.trim()) || null,
                 contact_email: resolvedEmail || prefillData.email,
-                contact_phone: resolvedPhone || prefillData.phone,
+                contact_phone: phoneForConfirm,
                 contact_first_name: resolvedFirstName || prefillData.first_name,
                 contact_last_name: resolvedLastName || prefillData.last_name,
                 address: serviceDetails.address,
                 city: serviceDetails.city,
+                zip: quote?.quote_input?.zip ?? prefillData.zip ?? undefined,
+                postal_code: quote?.quote_input?.postal_code ?? quote?.quote_input?.zip ?? prefillData.postal_code ?? prefillData.zip ?? undefined,
+                state: prefillData.state ?? undefined,
                 home_type: serviceDetails.home_type || undefined,
                 bedrooms: serviceDetails.bedrooms,
                 bathrooms: serviceDetails.bathrooms,
@@ -1640,7 +1652,7 @@ export default function BookV2Client() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone (optional)</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone</label>
                                 <input
                                     type="tel"
                                     value={quoteStartForm.phone}
