@@ -15,7 +15,7 @@ export type EnsureCustomerAddressLocationParams = {
 };
 
 /**
- * Find or create a customer-owned address location. Deduplicates by customer_id + normalized address_line1 + postal_code.
+ * Find or create a customer-owned address location. Deduplicates by customer_id + normalized address1 + postal_code.
  * Returns location id or null if creation failed / address missing.
  */
 export async function ensureCustomerAddressLocation(
@@ -31,17 +31,17 @@ export async function ensureCustomerAddressLocation(
     return null;
   }
 
-  // Dedupe: find existing location for this customer with same address_line1 + postal_code (case/trim normalized)
+  // Dedupe: find existing location for this customer with same address1 + postal_code (trimmed)
   const { data: list } = await supabase
     .from("locations")
-    .select("id, address_line1, postal_code")
+    .select("id, address1, postal_code")
     .eq("org_id", org_id)
     .eq("customer_id", customer_id)
     .eq("location_type", "address");
 
   const match = (list ?? []).find(
-    (row: { address_line1?: string | null; postal_code?: string | null }) =>
-      (row.address_line1 ?? "").trim() === a1 && (row.postal_code ?? "").trim() === pc
+    (row: { address1?: string | null; postal_code?: string | null }) =>
+      (row.address1 ?? "").trim() === a1 && (row.postal_code ?? "").trim() === pc
   );
   if (match) {
     return (match as { id: string }).id;
@@ -67,7 +67,7 @@ export async function ensureCustomerAddressLocation(
     location_type: "address",
     label,
     is_primary: isFirst,
-    address_line1: a1 || null,
+    address1: a1 || null,
     city: (city ?? "").trim() || null,
     state: (state ?? "").trim() || null,
     postal_code: pc || null,

@@ -47,13 +47,13 @@ export async function GET(request: NextRequest) {
     ? await supabase.from("vendors").select("id, name").in("id", vendorIds)
     : { data: [] };
   const { data: locationRows } = locationIds.length
-    ? await supabase.from("locations").select("id, label, address_line1, city, postal_code").in("id", locationIds)
+    ? await supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds)
     : { data: [] };
   const customerMap = new Map((custRows ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
   const vendorMap = new Map((vendorRows ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
   const locationMap = new Map((locationRows ?? []).map((loc) => {
-    const l = loc as { id: string; label?: string | null; address_line1?: string | null; city?: string | null; postal_code?: string | null };
-    const summary = l.label ?? [l.address_line1, l.city, l.postal_code].filter(Boolean).join(", ") || null;
+    const l = loc as { id: string; label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
+    const summary = l.label ?? [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null;
     return [l.id, summary];
   }));
 
