@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    const { orgId, user } = ctx;
+    const { orgId } = ctx;
 
     try {
         const body = (await request.json()) as Record<string, unknown>;

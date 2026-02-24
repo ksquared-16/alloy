@@ -24,7 +24,7 @@ export async function PATCH(
 ) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    const { orgId, user } = ctx;
+    const { orgId, userId } = ctx;
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -65,7 +65,7 @@ export async function PATCH(
             entity: "contacts",
             id,
             changed_fields: Object.keys(updates),
-            actor_user_id: user.id,
+            actor_user_id: userId,
             role: ctx.role,
         });
         return NextResponse.json(data);
