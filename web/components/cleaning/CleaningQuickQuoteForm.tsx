@@ -50,8 +50,12 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
       setError("Please select approximate square footage.");
       return;
     }
-    if (!email?.trim() && !phone?.trim()) {
-      setError("Please enter your email or phone so we can save your quote.");
+    if (!phone?.trim()) {
+      setError("Phone number is required.");
+      return;
+    }
+    if (!email?.trim()) {
+      setError("Please enter your email so we can save your quote.");
       return;
     }
     if (!smsConsent) {
@@ -72,7 +76,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
           square_footage: square_footage.trim(),
           cleaning_frequency: cleaning_frequency || "one_time",
           email: email?.trim() || undefined,
-          phone: phone?.trim() || undefined,
+          phone: phone.trim(),
         }),
       });
       const data = await res.json();
@@ -212,9 +216,11 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         />
       </div>
       <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone (optional)</label>
+        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone *</label>
         <input
           type="tel"
+          required
+          aria-required
           value={form.phone}
           onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
           placeholder="(541) 555-0123"
