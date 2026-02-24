@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatMoneyFromDollars } from "@/lib/adminFormatters";
+
+const LOCATION_TYPES = ["address", "site", "room", "unit", "property", "classroom"] as const;
 
 type EntityKind = "contact" | "customer" | "opportunity" | "job" | "location";
 
@@ -25,11 +29,12 @@ export default function RelatedRecordsTabs({
     entityId: string;
 }) {
     const { openDrawer } = useAdminDrawer();
+    const { canMutate } = useAdminAuth();
     const [data, setData] = useState<Record<string, unknown[]>>(EMPTY);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const refetch = useCallback(() => {
         setLoading(true);
         setError(null);
         fetch(`/api/admin/related/${entityType}/${entityId}`)
@@ -41,6 +46,27 @@ export default function RelatedRecordsTabs({
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [entityType, entityId]);
+
+    useEffect(() => {
+        refetch();
+    }, [refetch]);
+
+    const [addLocationOpen, setAddLocationOpen] = useState(false);
+    const [addLocationForm, setAddLocationForm] = useState({
+        label: "",
+        location_type: "address",
+        is_primary: false,
+        is_active: true,
+        address1: "",
+        address2: "",
+        city: "",
+        state: "",
+        postal_code: "",
+        country: "",
+        access_notes: "",
+    });
+    const [addLocationSaving, setAddLocationSaving] = useState(false);
+    const [addLocationError, setAddLocationError] = useState<string | null>(null);
 
     const tabs: TabConfig[] = [];
 
@@ -160,6 +186,33 @@ export default function RelatedRecordsTabs({
                             </button>
                         ))}
                     </div>
+                    {entityType === "customer" && activeTab === "locations" && canMutate && (
+                        <div className="mb-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setAddLocationError(null);
+                                    setAddLocationForm({
+                                        label: "",
+                                        location_type: "address",
+                                        is_primary: false,
+                                        is_active: true,
+                                        address1: "",
+                                        address2: "",
+                                        city: "",
+                                        state: "",
+                                        postal_code: "",
+                                        country: "",
+                                        access_notes: "",
+                                    });
+                                    setAddLocationOpen(true);
+                                }}
+                                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90"
+                            >
+                                Add location
+                            </button>
+                        </div>
+                    )}
                     {rows.length === 0 ? (
                         <p className="text-alloy-midnight/60 text-sm">No {active.label.toLowerCase()} found.</p>
                     ) : (
@@ -194,6 +247,156 @@ export default function RelatedRecordsTabs({
                     )}
                 </>
             )}
+            <Drawer
+                isOpen={addLocationOpen}
+                onClose={() => setAddLocationOpen(false)}
+                title="New location"
+                zIndexBackdrop={60}
+                zIndexPanel={70}
+            >
+                <div className="space-y-3">
+                    {addLocationError && <p className="text-red-600 text-sm">{addLocationError}</p>}
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label>
+                        <input
+                            value={addLocationForm.label}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, label: e.target.value }))}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Type</label>
+                        <select
+                            value={addLocationForm.location_type}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, location_type: e.target.value }))}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                        >
+                            {LOCATION_TYPES.map((t) => (
+                                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={addLocationForm.is_primary}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, is_primary: e.target.checked }))}
+                        />
+                        <label className="text-sm text-alloy-midnight/70">Primary</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={addLocationForm.is_active}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, is_active: e.target.checked }))}
+                        />
+                        <label className="text-sm text-alloy-midnight/70">Active</label>
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 1</label>
+                        <input
+                            value={addLocationForm.address1}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, address1: e.target.value }))}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 2</label>
+                        <input
+                            value={addLocationForm.address2}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, address2: e.target.value }))}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                        />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        <input
+                            value={addLocationForm.city}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, city: e.target.value }))}
+                            placeholder="City"
+                            className="px-2 py-1.5 border rounded text-sm"
+                        />
+                        <input
+                            value={addLocationForm.state}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, state: e.target.value }))}
+                            placeholder="State"
+                            className="px-2 py-1.5 border rounded text-sm"
+                        />
+                        <input
+                            value={addLocationForm.postal_code}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, postal_code: e.target.value }))}
+                            placeholder="ZIP"
+                            className="px-2 py-1.5 border rounded text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Country</label>
+                        <input
+                            value={addLocationForm.country}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, country: e.target.value }))}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Access notes</label>
+                        <textarea
+                            value={addLocationForm.access_notes}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, access_notes: e.target.value }))}
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                            rows={2}
+                        />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                        <button
+                            type="button"
+                            disabled={addLocationSaving}
+                            onClick={async () => {
+                                setAddLocationSaving(true);
+                                setAddLocationError(null);
+                                try {
+                                    const res = await fetch("/api/admin/locations", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                            customer_id: entityId,
+                                            label: addLocationForm.label.trim() || null,
+                                            location_type: addLocationForm.location_type,
+                                            is_primary: addLocationForm.is_primary,
+                                            is_active: addLocationForm.is_active,
+                                            address1: addLocationForm.address1.trim() || null,
+                                            address2: addLocationForm.address2.trim() || null,
+                                            city: addLocationForm.city.trim() || null,
+                                            state: addLocationForm.state.trim() || null,
+                                            postal_code: addLocationForm.postal_code.trim() || null,
+                                            country: addLocationForm.country.trim() || null,
+                                            access_notes: addLocationForm.access_notes.trim() || null,
+                                        }),
+                                    });
+                                    const json = await res.json().catch(() => ({}));
+                                    if (!res.ok) throw new Error((json.error as string) || "Create failed");
+                                    const createdId = (json as { id: string }).id;
+                                    if (!createdId) throw new Error("No id returned");
+                                    setAddLocationOpen(false);
+                                    refetch();
+                                    openDrawer({ type: "locations", id: createdId });
+                                } catch (e: unknown) {
+                                    setAddLocationError((e as Error).message);
+                                }
+                                setAddLocationSaving(false);
+                            }}
+                            className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50"
+                        >
+                            {addLocationSaving ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setAddLocationOpen(false)}
+                            className="px-3 py-1.5 text-sm border rounded-md"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </Drawer>
         </div>
     );
 }

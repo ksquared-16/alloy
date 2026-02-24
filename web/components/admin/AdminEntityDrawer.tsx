@@ -700,6 +700,7 @@ export default function AdminEntityDrawer() {
                                                 <button type="button" onClick={() => openDrawer({ type: "locations", id: data.location_id as string })} className="text-alloy-blue hover:underline">
                                                     {display}
                                                 </button>
+                                                {canMutate && <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "locations", id: data.location_id as string }); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Edit</button>}
                                                 {canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button>}
                                             </>
                                         );
@@ -748,6 +749,7 @@ export default function AdminEntityDrawer() {
                                                 <button type="button" onClick={() => openDrawer({ type: "locations", id: locId })} className="text-alloy-blue hover:underline">
                                                     {display}
                                                 </button>
+                                                {canMutate && <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "locations", id: locId }); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Edit</button>}
                                                 {canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); setSetLocationSelectedId(locId); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button>}
                                             </>
                                         );
