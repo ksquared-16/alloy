@@ -33,7 +33,7 @@ export async function PATCH(
     const supabase = createAdminClient();
 
     const { data: existing, error: fetchErr } = await supabase
-        .from("org_roles")
+        .from("role_definitions")
         .select("role_key, is_system")
         .eq("org_id", ctx.orgId)
         .eq("role_key", role_key)
@@ -43,17 +43,21 @@ export async function PATCH(
         return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
 
+    const is_system = (existing as { is_system: boolean }).is_system;
     const updates: { role_label?: string; is_active?: boolean } = {};
     if (typeof body.role_label === "string") {
         updates.role_label = body.role_label.trim();
     }
     if (typeof body.is_active === "boolean") {
+        if (is_system && body.is_active === false) {
+            return NextResponse.json({ error: "System roles cannot be deactivated" }, { status: 400 });
+        }
         updates.is_active = body.is_active;
     }
 
     if (Object.keys(updates).length === 0) {
         const { data: current } = await supabase
-            .from("org_roles")
+            .from("role_definitions")
             .select("role_key, role_label, is_system, is_active, created_at")
             .eq("org_id", ctx.orgId)
             .eq("role_key", role_key)
@@ -62,7 +66,7 @@ export async function PATCH(
     }
 
     const { data: updated, error: updateErr } = await supabase
-        .from("org_roles")
+        .from("role_definitions")
         .update(updates)
         .eq("org_id", ctx.orgId)
         .eq("role_key", role_key)

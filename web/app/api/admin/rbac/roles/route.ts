@@ -14,7 +14,7 @@ export async function GET() {
 
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
-        .from("org_roles")
+        .from("role_definitions")
         .select("role_key, role_label, is_system, is_active, created_at")
         .eq("org_id", ctx.orgId)
         .order("is_system", { ascending: false })
@@ -69,18 +69,18 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
 
     const { data: existing } = await supabase
-        .from("org_roles")
+        .from("role_definitions")
         .select("role_key")
         .eq("org_id", ctx.orgId)
         .eq("role_key", role_key)
         .maybeSingle();
 
     if (existing) {
-        return NextResponse.json({ error: "Role key already exists in this org" }, { status: 400 });
+        return NextResponse.json({ error: "Role key already exists in this org" }, { status: 409 });
     }
 
     const { data: created, error } = await supabase
-        .from("org_roles")
+        .from("role_definitions")
         .insert({
             org_id: ctx.orgId,
             role_key,
@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        const status = error.code === "23505" ? 409 : 400;
+        return NextResponse.json({ error: error.message }, { status });
     }
 
     return NextResponse.json(created);
