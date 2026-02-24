@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -32,7 +32,7 @@ const EMPTY_FORM = {
 };
 
 export default function SchedulesClient() {
-  const router = useRouter();
+  const { openDrawer } = useAdminDrawer();
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [jobs, setJobs] = useState<JobOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +41,6 @@ export default function SchedulesClient() {
   const [jobIdFilter, setJobIdFilter] = useState("");
   const [includeCanceled, setIncludeCanceled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -85,84 +84,39 @@ export default function SchedulesClient() {
   }, [fetchJobs]);
 
   const openCreate = () => {
-    setEditingId(null);
     setForm(EMPTY_FORM);
     setSaveError(null);
     setDrawerOpen(true);
   };
 
-  const openEdit = (s: ScheduleRow) => {
-    setEditingId(s.id);
-    setForm({
-      job_id: s.job_id,
-      start_at: s.start_at ? s.start_at.slice(0, 16) : "",
-      end_at: s.end_at ? s.end_at.slice(0, 16) : "",
-      timezone: (s as { timezone?: string }).timezone ?? "America/Los_Angeles",
-      visit_type: (s as { visit_type?: string }).visit_type ?? "",
-      status: (s as { status?: string }).status ?? "",
-    });
-    setSaveError(null);
-    setDrawerOpen(true);
-  };
-
   const handleSave = async () => {
-    if (editingId) {
-      if (!form.start_at || !form.end_at) {
-        setSaveError("Start and end are required.");
+    if (!form.job_id || !form.start_at || !form.end_at) {
+      setSaveError("Job, start, and end are required.");
+      return;
+    }
+    setSaveLoading(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/admin/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: form.job_id,
+          start_at: new Date(form.start_at).toISOString(),
+          end_at: new Date(form.end_at).toISOString(),
+          timezone: form.timezone || null,
+          visit_type: form.visit_type || null,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError((json as { error?: string }).error ?? "Create failed");
         return;
       }
-      setSaveLoading(true);
-      setSaveError(null);
-      try {
-        const res = await fetch(`/api/admin/schedules/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            start_at: new Date(form.start_at).toISOString(),
-            end_at: new Date(form.end_at).toISOString(),
-            timezone: form.timezone || null,
-            status: form.status || null,
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setSaveError((json as { error?: string }).error ?? "Update failed");
-          return;
-        }
-        setDrawerOpen(false);
-        fetchSchedules();
-      } finally {
-        setSaveLoading(false);
-      }
-    } else {
-      if (!form.job_id || !form.start_at || !form.end_at) {
-        setSaveError("Job, start, and end are required.");
-        return;
-      }
-      setSaveLoading(true);
-      setSaveError(null);
-      try {
-        const res = await fetch("/api/admin/schedules", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            job_id: form.job_id,
-            start_at: new Date(form.start_at).toISOString(),
-            end_at: new Date(form.end_at).toISOString(),
-            timezone: form.timezone || null,
-            visit_type: form.visit_type || null,
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setSaveError((json as { error?: string }).error ?? "Create failed");
-          return;
-        }
-        setDrawerOpen(false);
-        fetchSchedules();
-      } finally {
-        setSaveLoading(false);
-      }
+      setDrawerOpen(false);
+      fetchSchedules();
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -272,7 +226,7 @@ export default function SchedulesClient() {
                     <tr
                       key={s.id}
                       className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10 cursor-pointer"
-                      onClick={() => router.push(`/admin/schedules/${s.id}`)}
+                      onClick={() => openDrawer({ type: "schedules", id: s.id })}
                     >
                       <td className="py-2 pr-4">{formatDateTime(s.start_at)}</td>
                       <td className="py-2 pr-4">{formatDateTime(s.end_at)}</td>
@@ -283,7 +237,6 @@ export default function SchedulesClient() {
                       <td className="py-2 pr-4">{s.canceled_at ? "Yes" : "—"}</td>
                       <td className="py-2 pr-4" onClick={(e) => e.stopPropagation()}>
                         <span className="flex flex-wrap gap-1">
-                          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(s); }} className="text-xs px-2 py-0.5 text-alloy-blue hover:underline">Edit</button>
                           {!s.canceled_at && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setCancelTarget(s); }} className="text-xs px-2 py-0.5 text-amber-700 hover:underline">Cancel</button>
                           )}
@@ -298,7 +251,7 @@ export default function SchedulesClient() {
         )}
       </SectionCard>
 
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={editingId ? "Edit schedule" : "New schedule"} zIndexBackdrop={60} zIndexPanel={70}>
+      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title="New schedule" zIndexBackdrop={60} zIndexPanel={70}>
         <div className="space-y-4">
           {saveError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{saveError}</p>}
           <div className="grid grid-cols-1 gap-3 text-sm">
@@ -308,14 +261,12 @@ export default function SchedulesClient() {
                 value={form.job_id}
                 onChange={(e) => setForm((f) => ({ ...f, job_id: e.target.value }))}
                 className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                disabled={!!editingId}
               >
                 <option value="">Select job</option>
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>{j.title ?? j.id}</option>
                 ))}
               </select>
-              {editingId && <p className="text-xs text-alloy-midnight/50 mt-0.5">Job cannot be changed when editing.</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Start (required)</label>
@@ -344,30 +295,18 @@ export default function SchedulesClient() {
                 placeholder="America/Los_Angeles"
               />
             </div>
-            {!editingId && (
-              <div>
-                <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Visit type</label>
-                <input
-                  value={form.visit_type}
-                  onChange={(e) => setForm((f) => ({ ...f, visit_type: e.target.value }))}
-                  className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                />
-              </div>
-            )}
-            {editingId && (
-              <div>
-                <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status</label>
-                <input
-                  value={form.status}
-                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                  className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Visit type</label>
+              <input
+                value={form.visit_type}
+                onChange={(e) => setForm((f) => ({ ...f, visit_type: e.target.value }))}
+                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
+              />
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={handleSave} disabled={saveLoading} className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90 disabled:opacity-50">
-              {saveLoading ? "Saving…" : editingId ? "Update" : "Create"}
+              {saveLoading ? "Saving…" : "Create"}
             </button>
             <button type="button" onClick={() => setDrawerOpen(false)} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20">Cancel</button>
           </div>

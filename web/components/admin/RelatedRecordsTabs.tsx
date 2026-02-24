@@ -95,6 +95,11 @@ export default function RelatedRecordsTabs({
                 { key: "title", label: "Title" },
                 { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
             ]},
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
+                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "timezone", label: "Timezone" },
+            ]},
         );
     } else if (entityType === "job") {
         tabs.push(

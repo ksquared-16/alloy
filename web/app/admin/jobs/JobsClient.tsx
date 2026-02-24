@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -33,7 +33,7 @@ const EMPTY_FORM = {
 };
 
 export default function JobsClient() {
-  const router = useRouter();
+  const { openDrawer } = useAdminDrawer();
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -42,7 +42,6 @@ export default function JobsClient() {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [jobStatuses, setJobStatuses] = useState<JobStatusOption[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -87,21 +86,7 @@ export default function JobsClient() {
   }, [fetchCustomers, fetchJobStatuses]);
 
   const openCreate = () => {
-    setEditingId(null);
     setForm(EMPTY_FORM);
-    setSaveError(null);
-    setDrawerOpen(true);
-  };
-
-  const openEdit = (j: JobRow) => {
-    setEditingId(j.id);
-    setForm({
-      title: j.title ?? "",
-      customer_id: j.customer_id ?? "",
-      job_status_id: j.job_status_id ?? "",
-      is_recurring: j.is_recurring ?? false,
-      description: j.description ?? "",
-    });
     setSaveError(null);
     setDrawerOpen(true);
   };
@@ -114,40 +99,21 @@ export default function JobsClient() {
     setSaveLoading(true);
     setSaveError(null);
     try {
-      if (editingId) {
-        const res = await fetch(`/api/admin/jobs/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: form.title || null,
-            description: form.description || null,
-            job_status_id: form.job_status_id || null,
-            is_recurring: form.is_recurring,
-            customer_id: undefined,
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setSaveError((json as { error?: string }).error ?? "Update failed");
-          return;
-        }
-      } else {
-        const res = await fetch("/api/admin/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: form.title || null,
-            description: form.description || null,
-            customer_id: form.customer_id,
-            job_status_id: form.job_status_id,
-            is_recurring: form.is_recurring,
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setSaveError((json as { error?: string }).error ?? "Create failed");
-          return;
-        }
+      const res = await fetch("/api/admin/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title || null,
+          description: form.description || null,
+          customer_id: form.customer_id,
+          job_status_id: form.job_status_id,
+          is_recurring: form.is_recurring,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError((json as { error?: string }).error ?? "Create failed");
+        return;
       }
       setDrawerOpen(false);
       fetchJobs();
@@ -262,7 +228,7 @@ export default function JobsClient() {
                     <tr
                       key={j.id}
                       className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10 cursor-pointer"
-                      onClick={() => router.push(`/admin/jobs/${j.id}`)}
+                      onClick={() => openDrawer({ type: "jobs", id: j.id })}
                     >
                       <td className="py-2 pr-4 text-alloy-blue hover:underline">{j.title ?? "—"}</td>
                       <td className="py-2 pr-4">{j._customer_name ?? "—"}</td>
@@ -272,7 +238,6 @@ export default function JobsClient() {
                       <td className="py-2 pr-4">{formatDateTime(j.created_at)}</td>
                       <td className="py-2 pr-4" onClick={(e) => e.stopPropagation()}>
                         <span className="flex flex-wrap gap-1">
-                          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(j); }} className="text-xs px-2 py-0.5 text-alloy-blue hover:underline">Edit</button>
                           {j.archived_at ? (
                             <button type="button" onClick={(e) => { e.stopPropagation(); unarchive(j.id); }} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-alloy-midnight/70 hover:underline disabled:opacity-50">Unarchive</button>
                           ) : (
@@ -289,7 +254,7 @@ export default function JobsClient() {
         )}
       </SectionCard>
 
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={editingId ? "Edit job" : "New job"} zIndexBackdrop={60} zIndexPanel={70}>
+      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title="New job" zIndexBackdrop={60} zIndexPanel={70}>
         <div className="space-y-4">
           {saveError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{saveError}</p>}
           <div className="grid grid-cols-1 gap-3 text-sm">
@@ -303,14 +268,12 @@ export default function JobsClient() {
                 value={form.customer_id}
                 onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value }))}
                 className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                disabled={!!editingId}
               >
                 <option value="">Select customer</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>{c.name ?? c.id}</option>
                 ))}
               </select>
-              {editingId && <p className="text-xs text-alloy-midnight/50 mt-0.5">Customer cannot be changed when editing.</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status (required)</label>
@@ -342,7 +305,7 @@ export default function JobsClient() {
           </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={handleSave} disabled={saveLoading} className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90 disabled:opacity-50">
-              {saveLoading ? "Saving…" : editingId ? "Update" : "Create"}
+              {saveLoading ? "Saving…" : "Create"}
             </button>
             <button type="button" onClick={() => setDrawerOpen(false)} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20">Cancel</button>
           </div>

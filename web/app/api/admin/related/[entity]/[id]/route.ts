@@ -49,8 +49,13 @@ export async function GET(
 
         if (entity === "opportunity") {
             const jobsRes = await supabase.from("jobs").select("id, created_at, title, scheduled_at").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(LIMIT);
+            const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
+            const schedulesRes = jobIds.length > 0
+                ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false }).limit(LIMIT)
+                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
+                schedules: schedulesRes.data ?? [],
             });
         }
 

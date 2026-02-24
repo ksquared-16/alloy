@@ -623,6 +623,32 @@ export default function AdminEntityDrawer() {
                         </div>
                     )}
                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                    {drawerTab === "related" && drawer.type === "opportunities" && data && (
+                        <div className="pt-2 space-y-3 mb-4">
+                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                            <DrawerLinkWithName label="Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+                        </div>
+                    )}
+                    {drawerTab === "related" && drawer.type === "schedules" && data && (
+                        <div className="pt-2 space-y-3 mb-4">
+                            {(data.job_id as string) && (
+                                <DrawerLinkWithName label="Job" id={data.job_id as string} type="jobs" displayName={(data._job as { title?: string })?.title ?? null} />
+                            )}
+                            {(data._customer as { id?: string; name?: string }) && (
+                                <DrawerLinkWithName label="Customer" id={(data._customer as { id: string }).id} type="customers" displayName={(data._customer as { name?: string }).name ?? null} />
+                            )}
+                            <div className="py-1.5">
+                                <strong className="text-[#45506c] text-sm">Assigned vendor:</strong>{" "}
+                                {(data._vendor as { id?: string; name?: string }) ? (
+                                    <button type="button" onClick={() => openDrawer({ type: "vendors", id: (data._vendor as { id: string }).id })} className="text-alloy-blue hover:underline text-sm">{(data._vendor as { name?: string }).name ?? "Vendor"}</button>
+                                ) : (data._job_assigned_vendor as { id?: string; name?: string }) ? (
+                                    <button type="button" onClick={() => openDrawer({ type: "vendors", id: (data._job_assigned_vendor as { id: string }).id })} className="text-alloy-blue hover:underline text-sm">{(data._job_assigned_vendor as { name?: string }).name ?? "Vendor"}</button>
+                                ) : (
+                                    <span className="text-[#31394d]">Unassigned</span>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
                             <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : "job"} entityId={drawer.id} />
