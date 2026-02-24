@@ -18,8 +18,6 @@ type FieldCatalogEntry = { key: string; label: string; data_type: string; operat
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors", "locations"] as const;
 
-const LOCATION_TYPES = ["address", "site", "room", "unit", "property", "classroom"] as const;
-
 type VendorFormData = {
     vendor_status_id?: string | null;
     name?: string;
@@ -156,6 +154,7 @@ export default function AdminEntityDrawer() {
     const [setLocationSaving, setSetLocationSaving] = useState(false);
     const [setLocationError, setSetLocationError] = useState<string | null>(null);
     const [setLocationList, setSetLocationList] = useState<{ id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[]>([]);
+    const [locationTypes, setLocationTypes] = useState<{ id: string; key: string; label: string; position: number; is_active: boolean }[]>([]);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
     const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
@@ -269,6 +268,17 @@ export default function AdminEntityDrawer() {
             setPipelines(Array.isArray(pl) ? pl : []);
             setStages(Array.isArray(st) ? st : []);
         }).catch(() => { setPipelines([]); setStages([]); });
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "locations") {
+            setLocationTypes([]);
+            return;
+        }
+        fetch("/api/admin/location-types")
+            .then((r) => (r.ok ? r.json() : { location_types: [] }))
+            .then((json: { location_types?: { id: string; key: string; label: string; position: number; is_active: boolean }[] }) => setLocationTypes(json.location_types ?? []))
+            .catch(() => setLocationTypes([]));
     }, [drawer.type]);
 
     useEffect(() => {
@@ -479,7 +489,8 @@ export default function AdminEntityDrawer() {
         } else if (drawer.type === "locations") {
             setFormData({
                 label: data.label ?? "",
-                location_type: (data.location_type as string) ?? "address",
+                location_type_id: (data.location_type_id as string) ?? "",
+                location_type: (data.location_type as string) ?? "",
                 is_active: data.is_active ?? true,
                 is_primary: data.is_primary ?? false,
                 address1: data.address1 ?? "",
@@ -550,16 +561,18 @@ export default function AdminEntityDrawer() {
             }
             if (drawer.type === "locations") {
                 const locPayload: Record<string, unknown> = {};
-                const keys = ["label", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes"] as const;
+                const keys = ["label", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes"] as const;
                 for (const k of keys) {
-                    if (formData[k] !== undefined) {
-                        if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
-                            locPayload[k] = typeof formData[k] === "string" ? (formData[k] as string).trim() || null : null;
-                        } else if (k === "location_type") {
-                            locPayload[k] = typeof formData[k] === "string" && (formData[k] as string).trim() ? (formData[k] as string).trim() : null;
-                        } else {
-                            locPayload[k] = formData[k];
-                        }
+                    if (formData[k] === undefined) continue;
+                    if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
+                        locPayload[k] = typeof formData[k] === "string" ? (formData[k] as string).trim() || null : null;
+                    } else if (k === "location_type_id") {
+                        const v = formData[k];
+                        locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
+                    } else if (k === "location_type") {
+                        locPayload[k] = typeof formData[k] === "string" && (formData[k] as string).trim() ? (formData[k] as string).trim() : null;
+                    } else {
+                        locPayload[k] = formData[k];
                     }
                 }
                 const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
@@ -1498,12 +1511,12 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawer.type === "locations" && data && (
                         <>
-                            <Field label="Type" value={(data.location_type as string) ? String(data.location_type).charAt(0).toUpperCase() + String(data.location_type).slice(1).toLowerCase() : "—"} />
+                            <Field label="Type" value={(data._location_type_label as string) ?? ((data.location_type as string) ? String(data.location_type).charAt(0).toUpperCase() + String(data.location_type).slice(1).toLowerCase() : "—")} />
                             <Field label="Owner" value={(data.customer_id as string) ? "Customer location" : "Org location"} />
                             {isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.label ?? "")} onChange={(e) => setFormData((f) => ({ ...f, label: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Type</label><select value={String(formData.location_type ?? "address")} onChange={(e) => setFormData((f) => ({ ...f, location_type: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm">{LOCATION_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}</select></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Type</label><select value={String(formData.location_type_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, location_type_id: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{locationTypes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
                                     <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Active</label></div>
                                     {(data.customer_id as string) && <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_primary} onChange={(e) => setFormData((f) => ({ ...f, is_primary: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Primary</label></div>}
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 1</label><input value={String(formData.address1 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address1: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>

@@ -6,6 +6,7 @@ import { logAdminAudit } from "@/lib/adminAuth";
 const ALLOWED_KEYS = [
     "label",
     "location_type",
+    "location_type_id",
     "is_primary",
     "is_active",
     "address1",
@@ -84,7 +85,35 @@ export async function PATCH(
             continue;
         }
         if (key === "location_type") {
-            updates[key] = typeof body[key] === "string" && (body[key] as string).trim() ? (body[key] as string).trim() : null;
+            if (updates.location_type === undefined) {
+                updates[key] = typeof body[key] === "string" && (body[key] as string).trim() ? (body[key] as string).trim() : null;
+            }
+            continue;
+        }
+        if (key === "location_type_id") {
+            const tid = body[key];
+            if (tid === "" || tid == null) {
+                updates.location_type_id = null;
+                updates.location_type = null;
+            } else {
+                const typeId = typeof tid === "string" ? tid.trim() : null;
+                if (!typeId) {
+                    updates.location_type_id = null;
+                    updates.location_type = null;
+                } else {
+                    const { data: typeRow } = await supabase
+                        .from("location_types")
+                        .select("id, key")
+                        .eq("id", typeId)
+                        .eq("org_id", ctx.orgId)
+                        .maybeSingle();
+                    if (!typeRow) {
+                        return NextResponse.json({ error: "Location type not found or does not belong to your org" }, { status: 400 });
+                    }
+                    updates.location_type_id = (typeRow as { id: string }).id;
+                    updates.location_type = ((typeRow as { key: string }).key ?? "").trim() || null;
+                }
+            }
             continue;
         }
         if (key === "is_primary" || key === "is_active") {

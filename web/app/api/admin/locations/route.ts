@@ -86,10 +86,33 @@ export async function POST(request: NextRequest) {
     }
 
     const label = typeof body.label === "string" ? (body.label as string).trim() || null : null;
-    const location_type =
-        typeof body.location_type === "string" && (body.location_type as string).trim()
-            ? (body.location_type as string).trim()
-            : "address";
+
+    let location_type: string = "address";
+    let location_type_id: string | null = null;
+    const locationTypeIdInput =
+        typeof body.location_type_id === "string" && (body.location_type_id as string).trim()
+            ? (body.location_type_id as string).trim()
+            : null;
+    if (locationTypeIdInput) {
+        const { data: typeRow } = await supabase
+            .from("location_types")
+            .select("id, key")
+            .eq("id", locationTypeIdInput)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (!typeRow) {
+            return NextResponse.json({ error: "Location type not found or does not belong to your org" }, { status: 400 });
+        }
+        location_type_id = (typeRow as { id: string }).id;
+        location_type = ((typeRow as { key: string }).key ?? "address").trim() || "address";
+    } else {
+        const locTypeInput =
+            typeof body.location_type === "string" && (body.location_type as string).trim()
+                ? (body.location_type as string).trim()
+                : null;
+        if (locTypeInput) location_type = locTypeInput;
+    }
+
     const is_primary = customer_id ? !!body.is_primary : false;
     const is_active = body.is_active !== false;
     const address1 = typeof body.address1 === "string" ? (body.address1 as string).trim() || null : null;
@@ -119,6 +142,7 @@ export async function POST(request: NextRequest) {
         vendor_id: null,
         label,
         location_type,
+        location_type_id: location_type_id ?? null,
         is_primary,
         is_active,
         address1,

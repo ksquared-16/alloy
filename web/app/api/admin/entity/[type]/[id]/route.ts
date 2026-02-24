@@ -235,6 +235,13 @@ export async function GET(
                 return NextResponse.json(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found", { status: 404 });
             }
             const out: Record<string, unknown> = { ...location };
+            const locationTypeId = (location as { location_type_id?: string | null }).location_type_id;
+            if (locationTypeId) {
+                const { data: typeRow } = await supabase.from("location_types").select("label").eq("id", locationTypeId).maybeSingle();
+                out._location_type_label = (typeRow as { label?: string } | null)?.label ?? null;
+            } else {
+                out._location_type_label = null;
+            }
             const customerId = (location as { customer_id: string }).customer_id;
             if (customerId) {
                 const { data: cust } = await supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle();

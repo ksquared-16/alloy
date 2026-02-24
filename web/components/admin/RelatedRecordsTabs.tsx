@@ -7,8 +7,6 @@ import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatMoneyFromDollars } from "@/lib/adminFormatters";
 
-const LOCATION_TYPES = ["address", "site", "room", "unit", "property", "classroom"] as const;
-
 type EntityKind = "contact" | "customer" | "opportunity" | "job" | "location";
 
 interface TabConfig {
@@ -52,9 +50,10 @@ export default function RelatedRecordsTabs({
     }, [refetch]);
 
     const [addLocationOpen, setAddLocationOpen] = useState(false);
+    const [locationTypes, setLocationTypes] = useState<{ id: string; key: string; label: string; position: number; is_active: boolean }[]>([]);
     const [addLocationForm, setAddLocationForm] = useState({
         label: "",
-        location_type: "address",
+        location_type_id: "",
         is_primary: false,
         is_active: true,
         address1: "",
@@ -67,6 +66,14 @@ export default function RelatedRecordsTabs({
     });
     const [addLocationSaving, setAddLocationSaving] = useState(false);
     const [addLocationError, setAddLocationError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (entityType !== "customer" || !addLocationOpen) return;
+        fetch("/api/admin/location-types")
+            .then((r) => (r.ok ? r.json() : { location_types: [] }))
+            .then((json: { location_types?: { id: string; key: string; label: string; position: number; is_active: boolean }[] }) => setLocationTypes(json.location_types ?? []))
+            .catch(() => setLocationTypes([]));
+    }, [entityType, addLocationOpen]);
 
     const tabs: TabConfig[] = [];
 
@@ -194,7 +201,7 @@ export default function RelatedRecordsTabs({
                                     setAddLocationError(null);
                                     setAddLocationForm({
                                         label: "",
-                                        location_type: "address",
+                                        location_type_id: "",
                                         is_primary: false,
                                         is_active: true,
                                         address1: "",
@@ -267,12 +274,13 @@ export default function RelatedRecordsTabs({
                     <div>
                         <label className="block text-sm text-alloy-midnight/70 mb-0.5">Type</label>
                         <select
-                            value={addLocationForm.location_type}
-                            onChange={(e) => setAddLocationForm((f) => ({ ...f, location_type: e.target.value }))}
+                            value={addLocationForm.location_type_id}
+                            onChange={(e) => setAddLocationForm((f) => ({ ...f, location_type_id: e.target.value }))}
                             className="w-full px-2 py-1.5 border rounded text-sm"
                         >
-                            {LOCATION_TYPES.map((t) => (
-                                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                            <option value="">— Select —</option>
+                            {locationTypes.map((t) => (
+                                <option key={t.id} value={t.id}>{t.label}</option>
                             ))}
                         </select>
                     </div>
@@ -353,13 +361,17 @@ export default function RelatedRecordsTabs({
                                 setAddLocationSaving(true);
                                 setAddLocationError(null);
                                 try {
+                                    const selectedType = addLocationForm.location_type_id
+                                        ? locationTypes.find((t) => t.id === addLocationForm.location_type_id)
+                                        : null;
                                     const res = await fetch("/api/admin/locations", {
                                         method: "POST",
                                         headers: { "Content-Type": "application/json" },
                                         body: JSON.stringify({
                                             customer_id: entityId,
                                             label: addLocationForm.label.trim() || null,
-                                            location_type: addLocationForm.location_type,
+                                            location_type_id: addLocationForm.location_type_id.trim() || null,
+                                            location_type: selectedType ? selectedType.key : null,
                                             is_primary: addLocationForm.is_primary,
                                             is_active: addLocationForm.is_active,
                                             address1: addLocationForm.address1.trim() || null,
