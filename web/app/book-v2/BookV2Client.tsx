@@ -13,6 +13,7 @@ import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing"
 
 interface QuoteInputStored {
     zip?: string;
+    postal_code?: string;
     square_footage?: string;
     cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
     /** Present only for backward compat (e.g. existing metadata); not set by quote form */
@@ -1233,7 +1234,7 @@ export default function BookV2Client() {
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const phoneForConfirm = (resolvedPhone || prefillData.phone)?.trim();
+        const phoneForConfirm = resolvedPhone?.trim();
         if (!phoneForConfirm) {
             setPaymentError("Phone number is required.");
             return;
