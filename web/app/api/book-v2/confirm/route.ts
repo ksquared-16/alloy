@@ -686,29 +686,27 @@ export async function POST(request: NextRequest) {
         const { data: oppForLocation } = await supabase.from("opportunities").select("metadata").eq("id", opportunityId).maybeSingle();
         const oppMeta = (oppForLocation?.metadata as Record<string, unknown>) ?? {};
         const quoteInput = (oppMeta.quote_input as Record<string, unknown>) ?? {};
-        function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
-            for (const v of vals) {
-                const s = v != null ? String(v).trim() : "";
-                if (s !== "") return s;
-            }
-            return null;
+        function asOptionalString(v: unknown): string | undefined {
+            if (v == null) return undefined;
+            const s = String(v).trim();
+            return s !== "" ? s : undefined;
         }
-        const locationPostalCode = firstNonEmpty(
-            body.postal_code,
-            body.zip,
-            body.postalCode,
-            quoteInput.zip,
-            quoteInput.postal_code,
-            oppMeta.postal_code,
-            oppMeta.zip
-        );
-        const locationState = firstNonEmpty(
-            body.state,
-            body.address_state,
-            body.region,
-            oppMeta.state,
-            quoteInput.state
-        );
+        const locationPostalCode: string | null =
+            asOptionalString(body.postal_code) ??
+            asOptionalString(body.zip) ??
+            asOptionalString(body.postalCode) ??
+            asOptionalString(quoteInput.zip) ??
+            asOptionalString(quoteInput.postal_code) ??
+            asOptionalString(oppMeta.postal_code) ??
+            asOptionalString(oppMeta.zip) ??
+            null;
+        const locationState: string | null =
+            asOptionalString(body.state) ??
+            asOptionalString(body.address_state) ??
+            asOptionalString(body.region) ??
+            asOptionalString(oppMeta.state) ??
+            asOptionalString(quoteInput.state) ??
+            null;
         if (address && !locationPostalCode) {
             console.warn("[BOOK_V2_CONFIRM] postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null, opportunity_id: opportunityId });
         }
