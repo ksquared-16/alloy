@@ -15,7 +15,7 @@ export type EnsureCustomerAddressLocationParams = {
 };
 
 /**
- * Find or create a customer-owned address location. Deduplicates by customer_id + normalized address1 + postal_code.
+ * Find or create a customer-owned address location. Deduplicates by customer_id + address1 + (postal_code if present, else city).
  * Returns location id or null if creation failed / address missing.
  */
 export async function ensureCustomerAddressLocation(
@@ -25,24 +25,30 @@ export async function ensureCustomerAddressLocation(
   const { org_id, customer_id, address_line1, city, state, postal_code } = params;
   const a1 = (address_line1 ?? "").trim();
   const pc = (postal_code ?? "").trim();
+  const cityNorm = (city ?? "").trim();
 
   // If no address at all, we could still create a "Primary" placeholder; for minimal change we require at least address or postal_code to create.
   if (!a1 && !pc) {
     return null;
   }
 
-  // Dedupe: find existing location for this customer with same address1 + postal_code (trimmed)
+  // Dedupe: by address1 + postal_code when postal_code present; else by address1 + city
   const { data: list } = await supabase
     .from("locations")
-    .select("id, address1, postal_code")
+    .select("id, address1, postal_code, city")
     .eq("org_id", org_id)
     .eq("customer_id", customer_id)
     .eq("location_type", "address");
 
-  const match = (list ?? []).find(
-    (row: { address1?: string | null; postal_code?: string | null }) =>
-      (row.address1 ?? "").trim() === a1 && (row.postal_code ?? "").trim() === pc
-  );
+  const match = (list ?? []).find((row: { address1?: string | null; postal_code?: string | null; city?: string | null }) => {
+    const rowA1 = (row.address1 ?? "").trim();
+    const rowPc = (row.postal_code ?? "").trim();
+    const rowCity = (row.city ?? "").trim();
+    if (pc) {
+      return rowA1 === a1 && rowPc === pc;
+    }
+    return rowA1 === a1 && rowCity === cityNorm;
+  });
   if (match) {
     return (match as { id: string }).id;
   }
@@ -68,7 +74,8 @@ export async function ensureCustomerAddressLocation(
     label,
     is_primary: isFirst,
     address1: a1 || null,
-    city: (city ?? "").trim() || null,
+    address2: null,
+    city: cityNorm || null,
     state: (state ?? "").trim() || null,
     postal_code: pc || null,
     metadata: {},

@@ -677,6 +677,11 @@ export async function POST(request: NextRequest) {
 
         // Step 4b: Ensure customer address location for job/schedule linkage
         const orgIdForLocation = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        const locationPostalCode = body.postal_code ?? body.zip ?? body.postalCode ?? null;
+        const locationState = body.state ?? body.address_state ?? body.region ?? null;
+        if (address && !locationPostalCode && (body.zip != null && String(body.zip).trim() !== "")) {
+            console.warn("[BOOK_V2_CONFIRM] zip present but postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null });
+        }
         let locationId: string | null = null;
         try {
             locationId = await ensureCustomerAddressLocation(supabase, {
@@ -684,8 +689,8 @@ export async function POST(request: NextRequest) {
                 customer_id: customerId,
                 address_line1: address ?? null,
                 city: city ?? null,
-                state: state ?? null,
-                postal_code: postal_code ?? body.zip ?? null,
+                state: locationState,
+                postal_code: locationPostalCode,
             });
         } catch (locErr) {
             console.warn("[BOOK_V2_CONFIRM] ensureCustomerAddressLocation failed", locErr);
