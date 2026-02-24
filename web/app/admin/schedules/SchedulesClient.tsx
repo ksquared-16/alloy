@@ -18,6 +18,7 @@ type ScheduleRow = {
   _job_title?: string | null;
   _customer_name?: string | null;
   _assigned_vendor_name?: string | null;
+  _location_label?: string | null;
 };
 
 type JobOption = { id: string; title: string | null };
@@ -212,6 +213,7 @@ export default function SchedulesClient() {
                   <th className="pb-2 pr-4">End</th>
                   <th className="pb-2 pr-4">Job</th>
                   <th className="pb-2 pr-4">Customer</th>
+                  <th className="pb-2 pr-4">Location</th>
                   <th className="pb-2 pr-4">Assigned vendor</th>
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2 pr-4">Canceled?</th>
@@ -220,7 +222,7 @@ export default function SchedulesClient() {
               </thead>
               <tbody>
                 {schedules.length === 0 ? (
-                  <tr><td colSpan={8} className="py-4 text-alloy-midnight/60">No schedules found.</td></tr>
+                  <tr><td colSpan={9} className="py-4 text-alloy-midnight/60">No schedules found.</td></tr>
                 ) : (
                   schedules.map((s) => (
                     <tr
@@ -232,6 +234,7 @@ export default function SchedulesClient() {
                       <td className="py-2 pr-4">{formatDateTime(s.end_at)}</td>
                       <td className="py-2 pr-4">{s._job_title ?? s.job_id?.slice(0, 8) ?? "—"}</td>
                       <td className="py-2 pr-4">{s._customer_name ?? "—"}</td>
+                      <td className="py-2 pr-4">{s._location_label ?? "—"}</td>
                       <td className="py-2 pr-4">{s._assigned_vendor_name ?? "—"}</td>
                       <td className="py-2 pr-4"><StatusBadge label={s.canceled_at ? "Canceled" : "—"} variant="neutral" /></td>
                       <td className="py-2 pr-4">{s.canceled_at ? "Yes" : "—"}</td>

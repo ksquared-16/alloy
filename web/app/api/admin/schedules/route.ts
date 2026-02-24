@@ -48,6 +48,16 @@ export async function GET(request: NextRequest) {
     : { data: [] };
   const customerMap = new Map((customers ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
 
+  const locationIds = [...new Set(list.map((s) => (s as { location_id?: string | null }).location_id).filter(Boolean))] as string[];
+  const { data: locationRows } = locationIds.length
+    ? await supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds)
+    : { data: [] };
+  const locationMap = new Map((locationRows ?? []).map((loc) => {
+    const l = loc as { id: string; label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
+    const summary = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+    return [l.id, summary];
+  }));
+
   const { data: assignments } = scheduleIds.length
     ? await supabase.from("assignments").select("schedule_id, vendor_id").in("schedule_id", scheduleIds)
     : { data: [] };
@@ -67,11 +77,14 @@ export async function GET(request: NextRequest) {
     const jobVendorId = job ? (job as { assigned_vendor_id?: string }).assigned_vendor_id : null;
     const vendorId = scheduleVendorId ?? jobVendorId;
     const _assigned_vendor_name = vendorId ? vendorMap.get(vendorId) ?? null : null;
+    const locId = (s as { location_id?: string | null }).location_id;
+    const _location_label = locId ? locationMap.get(locId) ?? null : null;
     return {
       ...s,
       _job_title: job ? (job as { title: string | null }).title ?? null : null,
       _customer_name: customerId ? customerMap.get(customerId) ?? null : null,
       _assigned_vendor_name,
+      _location_label,
     };
   });
 

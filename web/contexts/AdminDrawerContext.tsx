@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
 
-export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "customers" | "schedules" | "discount_redemptions" | "workflows" | "vendors" | "subscriptions";
+export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "customers" | "schedules" | "discount_redemptions" | "workflows" | "vendors" | "subscriptions" | "locations";
 
 interface AdminDrawerState {
     type: AdminDrawerEntityType | null;

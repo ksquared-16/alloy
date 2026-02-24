@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations"] as const;
 
 type ContactRow = { id: string; first_name?: string; last_name?: string; email?: string; phone?: string };
 
@@ -40,6 +41,21 @@ export async function GET(
                 out._assigned_vendor = vendor ?? null;
             } else {
                 out._assigned_vendor = null;
+            }
+            const jobLocationId = (data as { location_id?: string | null }).location_id;
+            if (jobLocationId) {
+                const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", jobLocationId).maybeSingle();
+                if (loc) {
+                    const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
+                    out._location_label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+                    out._location = loc;
+                } else {
+                    out._location_label = null;
+                    out._location = null;
+                }
+            } else {
+                out._location_label = null;
+                out._location = null;
             }
             return NextResponse.json(out);
         }
@@ -88,9 +104,10 @@ export async function GET(
             const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).single();
             if (error || !schedule) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...schedule };
+            const scheduleLocationId = (schedule as { location_id?: string | null }).location_id;
             const jobId = (schedule as { job_id?: string }).job_id;
             if (jobId) {
-                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id").eq("id", jobId).single();
+                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id").eq("id", jobId).single();
                 out._job = job ?? null;
                 if (job) {
                     if ((job as { customer_id?: string }).customer_id) {
@@ -137,6 +154,48 @@ export async function GET(
                 }
             } else {
                 out._job_assigned_vendor = null;
+            }
+            const effectiveLocationId = scheduleLocationId ?? (out._job as { location_id?: string | null } | null)?.location_id ?? null;
+            out._location_id = effectiveLocationId ?? null;
+            if (effectiveLocationId) {
+                const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", effectiveLocationId).maybeSingle();
+                if (loc) {
+                    const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
+                    out._location_label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+                    out._location = loc;
+                } else {
+                    out._location_label = null;
+                    out._location = null;
+                }
+            } else {
+                out._location_label = null;
+                out._location = null;
+            }
+            return NextResponse.json(out);
+        }
+        if (type === "locations") {
+            const ctx = await getAdminContext();
+            if (!ctx.ok) {
+                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
+            }
+            const { data: location, error } = await supabase
+                .from("locations")
+                .select("*")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .single();
+            if (error || !location) {
+                return NextResponse.json(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found", { status: 404 });
+            }
+            const out: Record<string, unknown> = { ...location };
+            const customerId = (location as { customer_id: string }).customer_id;
+            if (customerId) {
+                const { data: cust } = await supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle();
+                out._customer = cust ?? null;
+                out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._customer = null;
+                out._customer_name = null;
             }
             return NextResponse.json(out);
         }

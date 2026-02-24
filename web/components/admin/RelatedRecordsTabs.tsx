@@ -5,7 +5,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { formatMoneyFromDollars } from "@/lib/adminFormatters";
 
-type EntityKind = "contact" | "customer" | "opportunity" | "job";
+type EntityKind = "contact" | "customer" | "opportunity" | "job" | "location";
 
 interface TabConfig {
     key: string;
@@ -15,7 +15,7 @@ interface TabConfig {
     dataKey: string;
 }
 
-const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [] };
+const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [], locations: [] };
 
 export default function RelatedRecordsTabs({
     entityType,
@@ -87,6 +87,14 @@ export default function RelatedRecordsTabs({
                 { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
                 { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
             ]},
+            { key: "locations", label: "Locations", entityType: "locations", dataKey: "locations", columns: [
+                { key: "label", label: "Label" },
+                { key: "address1", label: "Address1" },
+                { key: "city", label: "City" },
+                { key: "postal_code", label: "Postal" },
+                { key: "is_primary", label: "Primary", render: (v) => v ? "Yes" : "No" },
+                { key: "is_active", label: "Active", render: (v) => v ? "Yes" : "No" },
+            ]},
         );
     } else if (entityType === "opportunity") {
         tabs.push(
@@ -103,6 +111,19 @@ export default function RelatedRecordsTabs({
         );
     } else if (entityType === "job") {
         tabs.push(
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
+                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "timezone", label: "Timezone" },
+            ]},
+        );
+    } else if (entityType === "location") {
+        tabs.push(
+            { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
+                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "title", label: "Title" },
+                { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+            ]},
             { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
                 { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
                 { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },

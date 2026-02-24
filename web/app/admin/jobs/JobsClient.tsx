@@ -18,6 +18,7 @@ type JobRow = {
   customer_id: string | null;
   _customer_name?: string | null;
   _assigned_vendor_name?: string | null;
+  _location_label?: string | null;
   archived_at?: string | null;
 };
 
@@ -213,6 +214,7 @@ export default function JobsClient() {
                 <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
                   <th className="pb-2 pr-4">Title</th>
                   <th className="pb-2 pr-4">Customer</th>
+                  <th className="pb-2 pr-4">Location</th>
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2 pr-4">Assigned vendor</th>
                   <th className="pb-2 pr-4">Recurring</th>
@@ -222,7 +224,7 @@ export default function JobsClient() {
               </thead>
               <tbody>
                 {jobs.length === 0 ? (
-                  <tr><td colSpan={7} className="py-4 text-alloy-midnight/60">No jobs found.</td></tr>
+                  <tr><td colSpan={8} className="py-4 text-alloy-midnight/60">No jobs found.</td></tr>
                 ) : (
                   jobs.map((j) => (
                     <tr
@@ -232,6 +234,7 @@ export default function JobsClient() {
                     >
                       <td className="py-2 pr-4 text-alloy-blue hover:underline">{j.title ?? "—"}</td>
                       <td className="py-2 pr-4">{j._customer_name ?? "—"}</td>
+                      <td className="py-2 pr-4">{j._location_label ?? "—"}</td>
                       <td className="py-2 pr-4"><StatusBadge label={statusLabel(j.job_status_id)} variant="neutral" /></td>
                       <td className="py-2 pr-4">{j._assigned_vendor_name ?? "—"}</td>
                       <td className="py-2 pr-4">{j.is_recurring ? "Yes" : "No"}</td>

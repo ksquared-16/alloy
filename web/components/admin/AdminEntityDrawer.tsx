@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
@@ -95,7 +96,7 @@ function DrawerLinkWithName({
 }: {
     label: string;
     id: string | null;
-    type: "contacts" | "customers" | "opportunities" | "jobs" | "vendors";
+    type: "contacts" | "customers" | "opportunities" | "jobs" | "vendors" | "locations";
     displayName: string | null | undefined;
 }) {
     const { openDrawer } = useAdminDrawer();
@@ -118,6 +119,7 @@ function DrawerLinkWithName({
 
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
+    const { canMutate } = useAdminAuth();
     const router = useRouter();
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
@@ -146,6 +148,12 @@ export default function AdminEntityDrawer() {
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
+    const [setLocationOpen, setSetLocationOpen] = useState(false);
+    const [setLocationEntity, setSetLocationEntity] = useState<"job" | "schedule" | null>(null);
+    const [setLocationSelectedId, setSetLocationSelectedId] = useState<string | null>(null);
+    const [setLocationSaving, setSetLocationSaving] = useState(false);
+    const [setLocationError, setSetLocationError] = useState<string | null>(null);
+    const [setLocationList, setSetLocationList] = useState<{ id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[]>([]);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
     const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
@@ -571,7 +579,9 @@ export default function AdminEntityDrawer() {
                     )
                   : drawer.type === "schedules"
                     ? `Schedule: ${drawer.id}`
-                    : drawer.type === "discount_redemptions"
+                    : drawer.type === "locations"
+                      ? `Location: ${(data.label as string) || (data.address1 as string) || drawer.id.slice(0, 8) + "…"}`
+                      : drawer.type === "discount_redemptions"
                       ? `Redemption: ${(data.discount_code as string) || drawer.id}`
                       : drawer.type === "workflows"
                         ? (data as { _create?: boolean })._create
@@ -598,22 +608,26 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-red-600">Error: {error}</p>}
             {data && !loading && (
                 <div className="space-y-6">
-                    {canEditInDrawer(drawer.type) && (
+                    {(canEditInDrawer(drawer.type) || drawer.type === "locations") && (
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#e6e8ec]">
                             <div className="flex gap-2">
-                                {!isEditing ? (
-                                    <>
-                                        <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                                        {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
-                                    </>
-                                ) : (
-                                    <>
-                                        <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                        <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                                    </>
+                                {canEditInDrawer(drawer.type) && (
+                                    !isEditing ? (
+                                        <>
+                                            <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                            {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
+                                            {drawer.type === "jobs" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Set location</button>}
+                                            {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Set location</button>}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                            <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                                        </>
+                                    )
                                 )}
                             </div>
-                            {["jobs", "schedules", "opportunities", "customers", "contacts", "vendors"].includes(drawer.type) && (
+                            {["jobs", "schedules", "opportunities", "customers", "contacts", "vendors", "locations"].includes(drawer.type) && (
                                 <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
                                     {(["overview", "related", "details"] as const).map((tab) => (
                                         <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
@@ -627,6 +641,31 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3 mb-4">
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <DrawerLinkWithName label="Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+                        </div>
+                    )}
+                    {drawerTab === "related" && drawer.type === "jobs" && data && (
+                        <div className="pt-2 space-y-3 mb-4">
+                            <div className="py-1.5">
+                                <strong className="text-[#45506c] text-sm">Location:</strong>{" "}
+                                {data.location_id ? (
+                                    (() => {
+                                        const loc = data._location as { address1?: string | null; city?: string | null; postal_code?: string | null } | null | undefined;
+                                        let name: string | null = (data._location_label as string) ?? null;
+                                        if (!name && loc) {
+                                            const parts = [loc.address1, loc.city, loc.postal_code].filter(Boolean);
+                                            name = parts.length ? parts.join(", ") : null;
+                                        }
+                                        const display = name ?? `${(data.location_id as string).slice(0, 8)}…`;
+                                        return (
+                                            <button type="button" onClick={() => openDrawer({ type: "locations", id: data.location_id as string })} className="text-alloy-blue hover:underline">
+                                                {display}
+                                            </button>
+                                        );
+                                    })()
+                                ) : (
+                                    <span className="text-[#31394d]">Unassigned</span>
+                                )}
+                            </div>
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "schedules" && data && (
@@ -647,11 +686,38 @@ export default function AdminEntityDrawer() {
                                     <span className="text-[#31394d]">Unassigned</span>
                                 )}
                             </div>
+                            <div className="py-1.5">
+                                <strong className="text-[#45506c] text-sm">Location:</strong>{" "}
+                                {((data._location_id as string) ?? (data.location_id as string)) ? (
+                                    (() => {
+                                        const locId = (data._location_id as string) ?? (data.location_id as string);
+                                        const loc = data._location as { address1?: string | null; city?: string | null; postal_code?: string | null } | null | undefined;
+                                        let name: string | null = (data._location_label as string) ?? null;
+                                        if (!name && loc) {
+                                            const parts = [loc.address1, loc.city, loc.postal_code].filter(Boolean);
+                                            name = parts.length ? parts.join(", ") : null;
+                                        }
+                                        const display = name ?? `${locId.slice(0, 8)}…`;
+                                        return (
+                                            <button type="button" onClick={() => openDrawer({ type: "locations", id: locId })} className="text-alloy-blue hover:underline">
+                                                {display}
+                                            </button>
+                                        );
+                                    })()
+                                ) : (
+                                    <span className="text-[#31394d]">Unassigned</span>
+                                )}
+                            </div>
                         </div>
                     )}
-                    {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs"].includes(drawer.type) && drawer.id && (
+                    {drawerTab === "related" && drawer.type === "locations" && data && (
+                        <div className="pt-2 space-y-3 mb-4">
+                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                        </div>
+                    )}
+                    {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
-                            <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : "job"} entityId={drawer.id} />
+                            <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
                         </div>
                     )}
                     {drawerTab === "details" && (
@@ -1346,6 +1412,20 @@ export default function AdminEntityDrawer() {
                             )}
                         </>
                     )}
+                    {drawer.type === "locations" && data && (
+                        <>
+                            <Field label="Label" value={data.label as string} />
+                            <Field label="Address 1" value={data.address1 as string} />
+                            <Field label="Address 2" value={data.address2 as string} />
+                            <Field label="City" value={data.city as string} />
+                            <Field label="State" value={data.state as string} />
+                            <Field label="Postal code" value={data.postal_code as string} />
+                            <Field label="Country" value={data.country as string} />
+                            <Field label="Primary" value={data.is_primary ? "Yes" : "No"} />
+                            <Field label="Active" value={data.is_active ? "Yes" : "No"} />
+                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                        </>
+                    )}
                     {drawer.type === "workflows" && data && (
                         <>
                             {(data as { _create?: boolean })._create ? (
@@ -1748,6 +1828,59 @@ export default function AdminEntityDrawer() {
                     })()}
                     </>
                     )}
+                </div>
+            )}
+            {setLocationOpen && setLocationEntity && drawer.id && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Set location">
+                    <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-4 max-w-sm w-full mx-4">
+                        <h3 className="text-sm font-semibold text-alloy-midnight mb-3">Set location</h3>
+                        {setLocationError && <p className="text-red-600 text-sm mb-2">{setLocationError}</p>}
+                        <select
+                            value={setLocationSelectedId ?? ""}
+                            onChange={(e) => setSetLocationSelectedId(e.target.value ? e.target.value : null)}
+                            className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm mb-3"
+                        >
+                            <option value="">— None (unassign) —</option>
+                            {setLocationList.map((loc) => {
+                                let label: string;
+                                if (loc.label) {
+                                    label = loc.label;
+                                } else {
+                                    const parts = [loc.address1, loc.city, loc.postal_code].filter(Boolean).join(", ");
+                                    label = parts ? parts : loc.id.slice(0, 8) + "…";
+                                }
+                                return <option key={loc.id} value={loc.id}>{label}</option>;
+                            })}
+                        </select>
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={() => { setSetLocationOpen(false); setSetLocationEntity(null); setSetLocationError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20">Cancel</button>
+                            <button
+                                type="button"
+                                disabled={setLocationSaving}
+                                onClick={async () => {
+                                    setSetLocationSaving(true);
+                                    setSetLocationError(null);
+                                    try {
+                                        const url = setLocationEntity === "job" ? `/api/admin/jobs/${drawer.id}/location` : `/api/admin/schedules/${drawer.id}/location`;
+                                        const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location_id: setLocationSelectedId }) });
+                                        const json = await res.json().catch(() => ({}));
+                                        if (!res.ok) {
+                                            setSetLocationError((json as { error?: string }).error ?? "Failed");
+                                            return;
+                                        }
+                                        setSetLocationOpen(false);
+                                        setSetLocationEntity(null);
+                                        refetch();
+                                    } finally {
+                                        setSetLocationSaving(false);
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded hover:opacity-90 disabled:opacity-50"
+                            >
+                                {setLocationSaving ? "Saving…" : "Save"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </Drawer>

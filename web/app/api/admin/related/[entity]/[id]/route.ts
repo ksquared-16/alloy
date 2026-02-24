@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 
 const LIMIT = 25;
 
@@ -9,6 +10,11 @@ export async function GET(
 ) {
     const { entity, id } = await params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    }
 
     try {
         const supabase = createAdminClient();
@@ -30,10 +36,11 @@ export async function GET(
         }
 
         if (entity === "customer") {
-            const [contactsRes, oppRes, jobsRes] = await Promise.all([
+            const [contactsRes, oppRes, jobsRes, locationsRes] = await Promise.all([
                 supabase.from("contacts").select("id, created_at, first_name, last_name, email, phone").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("locations").select("id, label, address1, city, state, postal_code, is_primary, is_active").eq("customer_id", id).eq("org_id", ctx.orgId).order("is_primary", { ascending: false }).order("label", { ascending: true }).limit(LIMIT),
             ]);
             const jobIds = (jobsRes.data ?? []).map((j) => j.id);
             const schedulesRes = jobIds.length > 0
@@ -44,6 +51,7 @@ export async function GET(
                 opportunities: oppRes.data ?? [],
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
+                locations: locationsRes.data ?? [],
             });
         }
 
@@ -60,9 +68,17 @@ export async function GET(
         }
 
         if (entity === "job") {
+            const { data: jobRow } = await supabase.from("jobs").select("location_id").eq("id", id).maybeSingle();
+            const locationId = (jobRow as { location_id?: string | null } | null)?.location_id ?? null;
+            let location: Record<string, unknown> | null = null;
+            if (locationId) {
+                const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active").eq("id", locationId).maybeSingle();
+                if (loc) location = loc as Record<string, unknown>;
+            }
             const schedulesRes = await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").eq("job_id", id).order("start_at", { ascending: false }).limit(LIMIT);
             return NextResponse.json({
                 schedules: schedulesRes.data ?? [],
+                location,
             });
         }
 
@@ -87,6 +103,37 @@ export async function GET(
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
                 contacts: contactsWithRole,
+            });
+        }
+
+        if (entity === "schedule") {
+            const { data: scheduleRow } = await supabase.from("schedules").select("location_id").eq("id", id).maybeSingle();
+            const locationId = (scheduleRow as { location_id?: string | null } | null)?.location_id ?? null;
+            let location: Record<string, unknown> | null = null;
+            if (locationId) {
+                const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active").eq("id", locationId).maybeSingle();
+                if (loc) location = loc as Record<string, unknown>;
+            }
+            return NextResponse.json({
+                location,
+            });
+        }
+
+        if (entity === "location") {
+            const { data: locRow } = await supabase.from("locations").select("id, customer_id, org_id").eq("id", id).eq("org_id", ctx.orgId).maybeSingle();
+            if (!locRow) {
+                return NextResponse.json({ error: "Location not found" }, { status: 404 });
+            }
+            const customerId = (locRow as { customer_id: string }).customer_id;
+            const [customerRes, jobsRes, schedulesRes] = await Promise.all([
+                customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : { data: null },
+                supabase.from("jobs").select("id, created_at, title, scheduled_at").eq("location_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").eq("location_id", id).eq("org_id", ctx.orgId).order("start_at", { ascending: false }).limit(LIMIT),
+            ]);
+            return NextResponse.json({
+                customer: customerRes.data ?? null,
+                jobs: jobsRes.data ?? [],
+                schedules: schedulesRes.data ?? [],
             });
         }
 
