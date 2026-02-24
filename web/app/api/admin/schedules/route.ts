@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("schedules")
     .select(
-      "id, job_id, org_id, start_at, end_at, timezone, canceled_at, canceled_by, cancel_reason, duration_minutes",
+      "id, job_id, org_id, location_id, start_at, end_at, timezone, canceled_at, canceled_by, cancel_reason, duration_minutes",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -101,11 +101,22 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
   const { data: job } = await supabase
     .from("jobs")
-    .select("id, org_id")
+    .select("id, org_id, location_id")
     .eq("id", job_id)
     .maybeSingle();
   if (!job || (job as { org_id?: string }).org_id !== ctx.orgId) {
     return NextResponse.json({ error: "Job not found or does not belong to your org" }, { status: 400 });
+  }
+
+  let location_id: string | null = typeof body.location_id === "string" && body.location_id.trim() ? body.location_id.trim() : null;
+  if (!location_id && (job as { location_id?: string | null }).location_id) {
+    location_id = (job as { location_id: string }).location_id;
+  }
+  if (location_id) {
+    const { data: loc } = await supabase.from("locations").select("id, org_id").eq("id", location_id).maybeSingle();
+    if (!loc || (loc as { org_id?: string }).org_id !== ctx.orgId) {
+      return NextResponse.json({ error: "Location not found or does not belong to your org" }, { status: 400 });
+    }
   }
 
   const start_at = typeof body.start_at === "string" ? body.start_at : null;
@@ -126,6 +137,7 @@ export async function POST(request: NextRequest) {
     timezone: typeof body.timezone === "string" ? body.timezone : null,
     metadata,
   };
+  if (location_id) row.location_id = location_id;
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
   if (typeof body.schedule_status_id === "string" && body.schedule_status_id) row.schedule_status_id = body.schedule_status_id;
 

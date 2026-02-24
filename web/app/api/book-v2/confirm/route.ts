@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
+import { ensureCustomerAddressLocation } from "@/lib/bookingLocations";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -125,6 +126,8 @@ export async function POST(request: NextRequest) {
             contact_last_name,
             address,
             city,
+            state,
+            postal_code,
             home_type,
             bedrooms,
             bathrooms,
@@ -672,6 +675,22 @@ export async function POST(request: NextRequest) {
         }
         } // end else (!useQuoteIds)
 
+        // Step 4b: Ensure customer address location for job/schedule linkage
+        const orgIdForLocation = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        let locationId: string | null = null;
+        try {
+            locationId = await ensureCustomerAddressLocation(supabase, {
+                org_id: orgIdForLocation,
+                customer_id: customerId,
+                address_line1: address ?? null,
+                city: city ?? null,
+                state: state ?? null,
+                postal_code: postal_code ?? body.zip ?? null,
+            });
+        } catch (locErr) {
+            console.warn("[BOOK_V2_CONFIRM] ensureCustomerAddressLocation failed", locErr);
+        }
+
         // Step 5: Create or update job
         // Reuse only if existing job has same booking_attempt_id (idempotent retry). Otherwise create new.
         const { data: existingJobRow, error: jobSearchError } = await supabase
@@ -719,6 +738,7 @@ export async function POST(request: NextRequest) {
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
+                ...(locationId != null && { location_id: locationId }),
                 metadata: {
                     ...jobMeta,
                     booking_attempt_id: booking_attempt_id ?? undefined,
@@ -776,6 +796,7 @@ export async function POST(request: NextRequest) {
                 customer_id: customerId,
                 primary_contact_id: contactId,
                 vertical_id: verticalId,
+                ...(locationId != null && { location_id: locationId }),
                 title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 description: `Scheduled cleaning service`,
                 scheduled_at: slot_start,
@@ -961,6 +982,7 @@ export async function POST(request: NextRequest) {
                 timezone,
                 metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
+            if (locationId != null) updatePayload.location_id = locationId;
             if (customerSubscriptionId && !(existingSchedule as { customer_subscription_id?: string | null }).customer_subscription_id) {
                 updatePayload.customer_subscription_id = customerSubscriptionId;
                 updatePayload.subscription_sequence = 1;
@@ -986,6 +1008,7 @@ export async function POST(request: NextRequest) {
                 end_at: slot_end,
                 duration_minutes: 120,
                 timezone,
+                ...(locationId != null && { location_id: locationId }),
                 metadata: { booking_attempt_id: booking_attempt_id ?? undefined },
             };
             if (customerSubscriptionId) {
