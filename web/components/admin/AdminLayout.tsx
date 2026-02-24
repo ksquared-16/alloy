@@ -3,7 +3,24 @@
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+    Briefcase,
+    Calendar,
+    ChevronDown,
+    ChevronRight,
+    DollarSign,
+    FileText,
+    GitBranch,
+    LayoutGrid,
+    Mail,
+    MessageSquare,
+    Receipt,
+    Settings,
+    Shield,
+    Tag,
+    Users,
+} from "lucide-react";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
@@ -11,6 +28,7 @@ import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVertica
 import AlloyLogo from "@/components/admin/AlloyLogo";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
+const SIDEBAR_SCROLL_KEY = "adminSidebarScrollTop";
 
 type NavLink = { href: string; label: string };
 type NavItem = NavLink | { label: string; subItems: NavLink[] };
@@ -18,18 +36,25 @@ function isNestedNavItem(item: NavItem): item is { label: string; subItems: NavL
     return "subItems" in item && Array.isArray((item as { subItems: unknown }).subItems);
 }
 
-const navGroups: { label: string; items: NavItem[] }[] = [
+type IconComponent = React.ComponentType<{ className?: string }>;
+const iconClass = "h-4 w-4 shrink-0 text-[#59678b]/80";
+
+const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
     {
         label: "Operations",
+        icon: Briefcase,
         items: [
-            { href: "/admin/dashboard", label: "Dashboard" },
             { href: "/admin/opportunities", label: "Opportunities" },
             { href: "/admin/jobs", label: "Jobs" },
             { href: "/admin/schedules", label: "Schedules" },
-            { href: "/admin/customers", label: "Customers" },
-            { href: "/admin/contacts", label: "Contacts" },
-            { href: "/admin/vendors", label: "Vendors" },
-            { href: "/admin/contractors", label: "Contractors" },
+            {
+                label: "People",
+                subItems: [
+                    { href: "/admin/customers", label: "Customers" },
+                    { href: "/admin/contacts", label: "Contacts" },
+                    { href: "/admin/vendors", label: "Vendors" },
+                ],
+            },
             {
                 label: "Workflows",
                 subItems: [
@@ -44,30 +69,29 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     },
     {
         label: "Financials",
+        icon: DollarSign,
         items: [
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
             { href: "/admin/financials/payments", label: "Payments" },
             { href: "/admin/subscriptions", label: "Subscriptions" },
             { href: "/admin/financials/pricing", label: "Pricing" },
-            { href: "/admin/discounts", label: "Discounts" },
             { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
-            { href: "/admin/financials/accounts", label: "GL Accounts" },
             {
-                label: "Financials Settings",
+                label: "Settings",
                 subItems: [
-                    { href: "/admin/financials/pricing", label: "Pricing & Frequencies" },
                     { href: "/admin/discounts", label: "Discounts" },
-                    { href: "/admin/financials/accounts", label: "GL Accounts" },
-                    { href: "/admin/financials/settings/subscription", label: "Subscription config" },
+                    { href: "/admin/financials/accounts", label: "GL Account Setup" },
+                    { href: "/admin/financials/settings/subscription", label: "Subscription Setup" },
+                    { href: "/admin/financials/pricing", label: "Pricing setup" },
                 ],
             },
         ],
     },
     {
         label: "System",
+        icon: Settings,
         items: [
-            { href: "/admin/settings", label: "Settings" },
             { href: "/admin/users", label: "Users" },
             { href: "/admin/system/roles", label: "Roles & Permissions" },
             { href: "/admin/verticals", label: "Verticals / Industries" },
@@ -77,6 +101,33 @@ const navGroups: { label: string; items: NavItem[] }[] = [
         ],
     },
 ];
+
+function getLinkIcon(href: string, label: string, nestedLabel?: string): IconComponent | null {
+    const map: Record<string, IconComponent> = {
+        "/admin/opportunities": LayoutGrid,
+        "/admin/jobs": Briefcase,
+        "/admin/schedules": Calendar,
+        "/admin/messaging": MessageSquare,
+        "/admin/messages-outbox": Mail,
+        "/admin/financials/ledger": FileText,
+        "/admin/financials/statements": Receipt,
+        "/admin/financials/payments": DollarSign,
+        "/admin/subscriptions": Receipt,
+        "/admin/financials/pricing": Tag,
+        "/admin/discount-redemptions": Tag,
+        "/admin/users": Users,
+        "/admin/system/roles": Shield,
+        "/admin/verticals": LayoutGrid,
+        "/admin/system/entity-labels": Tag,
+        "/admin/system/statuses": Tag,
+        "/admin/system/db-relationships": GitBranch,
+    };
+    if (map[href]) return map[href];
+    if (nestedLabel === "People") return Users;
+    if (nestedLabel === "Workflows") return GitBranch;
+    if (nestedLabel === "Settings") return Settings;
+    return null;
+}
 
 function getInitialCollapsed(): Record<string, boolean> {
     const defaults = { Operations: false, Financials: true, System: true };
@@ -109,9 +160,10 @@ interface AdminLayoutProps {
 function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
+    const sidebarScrollRef = useRef<HTMLElement | null>(null);
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ Workflows: true, "Financials Settings": true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ People: true, Workflows: true, Settings: true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -119,19 +171,23 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         const group = navGroups.find((g) =>
             g.items.some((i) => {
                 if (isNestedNavItem(i)) return i.subItems.some((s) => s.href === pathname);
-                return i.href === pathname;
+                return (i as NavLink).href === pathname;
             })
         );
         if (group && collapsed[group.label]) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
+        const peoplePaths = ["/admin/customers", "/admin/contacts", "/admin/vendors"];
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
         const financialsSettingsPaths = ["/admin/financials/pricing", "/admin/discounts", "/admin/financials/accounts", "/admin/financials/settings/subscription"];
+        if (peoplePaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev.People === false ? prev : { ...prev, People: false }));
+        }
         if (workflowPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev.Workflows === false ? prev : { ...prev, Workflows: false }));
         }
         if (financialsSettingsPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev["Financials Settings"] === false ? prev : { ...prev, "Financials Settings": false }));
+            setNestedCollapsed((prev) => (prev.Settings === false ? prev : { ...prev, Settings: false }));
         }
     }, [pathname]);
 
@@ -140,6 +196,30 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
             localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(collapsed));
         } catch (_) {}
     }, [collapsed]);
+
+    useEffect(() => {
+        const el = sidebarScrollRef.current;
+        if (!el) return;
+        const handleScroll = () => {
+            try {
+                sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(el.scrollTop));
+            } catch (_) {}
+        };
+        el.addEventListener("scroll", handleScroll, { passive: true });
+        return () => el.removeEventListener("scroll", handleScroll);
+    }, []);
+
+    useEffect(() => {
+        const el = sidebarScrollRef.current;
+        if (!el || typeof sessionStorage === "undefined") return;
+        const raw = sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+        const scrollTop = raw ? parseInt(raw, 10) : 0;
+        if (!Number.isFinite(scrollTop) || scrollTop <= 0) return;
+        const raf = requestAnimationFrame(() => {
+            el.scrollTop = scrollTop;
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [pathname]);
 
     const toggleGroup = useCallback((label: string) => {
         setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -166,18 +246,26 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                     </Link>
                     <p className="mt-2 text-xs text-[#59678b]">Admin</p>
                 </div>
-                <nav className="flex-1 overflow-y-auto p-4">
+                <nav
+                    ref={sidebarScrollRef}
+                    className="flex-1 overflow-y-auto overflow-x-hidden p-4"
+                    aria-label="Admin navigation"
+                >
                     {navGroups.map((group) => {
+                        const GroupIcon = group.icon;
                         const isCollapsed = collapsed[group.label] ?? true;
                         return (
                             <div key={group.label} className="mb-4">
                                 <button
                                     type="button"
                                     onClick={() => toggleGroup(group.label)}
-                                    className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#59678b] hover:bg-[#F4F6F9] rounded-md"
+                                    className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#59678b] hover:bg-[#F4F6F9] rounded-md gap-2"
                                 >
-                                    <span>{group.label}</span>
-                                    <span className="text-[#59678b]/70">{isCollapsed ? "▶" : "▼"}</span>
+                                    <span className="flex items-center gap-2">
+                                        {GroupIcon && <GroupIcon className={iconClass} />}
+                                        {group.label}
+                                    </span>
+                                    {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-[#59678b]/70" /> : <ChevronDown className="h-3.5 w-3.5 text-[#59678b]/70" />}
                                 </button>
                                 {!isCollapsed && (
                                     <ul className="mt-1.5 space-y-0.5">
@@ -185,15 +273,19 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                             if (isNestedNavItem(item)) {
                                                 const isNestedOpen = !(nestedCollapsed[item.label] ?? true);
                                                 const hasActiveChild = item.subItems.some((s) => s.href === pathname);
+                                                const NestedIcon = getLinkIcon("", item.label, item.label);
                                                 return (
                                                     <li key={item.label}>
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleNested(item.label)}
-                                                            className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left ${hasActiveChild ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
+                                                            className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
                                                         >
-                                                            <span>{item.label}</span>
-                                                            <span className="opacity-70">{isNestedOpen ? "▼" : "▶"}</span>
+                                                            <span className="flex items-center gap-2 min-w-0">
+                                                                {NestedIcon && <NestedIcon className={`${iconClass} ${hasActiveChild ? "text-white/80" : ""}`} />}
+                                                                <span className="truncate">{item.label}</span>
+                                                            </span>
+                                                            {isNestedOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                                                         </button>
                                                         {isNestedOpen && (
                                                             <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-[#e6e8ec] pl-2">
@@ -215,14 +307,16 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                     </li>
                                                 );
                                             }
-                                            const isActive = pathname === item.href;
+                                            const isActive = pathname === (item as NavLink).href;
+                                            const LinkIcon = getLinkIcon((item as NavLink).href, (item as NavLink).label);
                                             return (
-                                                <li key={item.href}>
+                                                <li key={(item as NavLink).href}>
                                                     <Link
-                                                        href={item.href}
-                                                        className={`block px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
+                                                        href={(item as NavLink).href}
+                                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
                                                     >
-                                                        {item.label}
+                                                        {LinkIcon && <LinkIcon className={`${iconClass} ${isActive ? "text-white/80" : ""}`} />}
+                                                        <span className="truncate">{(item as NavLink).label}</span>
                                                     </Link>
                                                 </li>
                                             );
