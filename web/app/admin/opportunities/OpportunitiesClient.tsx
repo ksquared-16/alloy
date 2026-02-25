@@ -7,6 +7,7 @@ import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDate, formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 interface Opportunity {
     id: string;
@@ -47,6 +48,8 @@ export default function OpportunitiesClient({
 }: OpportunitiesClientProps) {
     const { openDrawer } = useAdminDrawer();
     const { selectedVerticalId } = useAdminVertical();
+    const { labels } = useEntityLabels();
+    const title = labels?.opportunities?.plural ?? "Opportunities";
     const data = useMemo(() => {
         if (!selectedVerticalId) return initialData;
         return initialData.filter((r) => r.vertical_id === selectedVerticalId);
@@ -84,7 +87,7 @@ export default function OpportunitiesClient({
 
     return (
         <div>
-            <AdminPageHeader title="Opportunities" subtitle="Pipeline and booking status." />
+            <AdminPageHeader title={title} subtitle="Pipeline and booking status." />
             <div className="mb-6 flex flex-wrap gap-4">
                 <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[100px]">
                     <div className="text-2xl font-semibold text-alloy-midnight">{total}</div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -34,6 +35,8 @@ const EMPTY_FORM = {
 
 export default function SchedulesClient() {
   const { openDrawer } = useAdminDrawer();
+  const { labels } = useEntityLabels();
+  const title = labels?.schedules?.plural ?? "Schedules";
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [jobs, setJobs] = useState<JobOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,7 +146,7 @@ export default function SchedulesClient() {
   return (
     <>
       <AdminPageHeader
-        title="Schedules"
+        title={title}
         subtitle="Org-scoped schedules. Job is required. Only admins can create, edit, or cancel."
       />
       <SectionCard title="Filters" className="mb-4">

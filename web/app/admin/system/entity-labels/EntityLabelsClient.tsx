@@ -5,6 +5,7 @@ import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 type LabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
@@ -17,6 +18,7 @@ type ApiResponse = {
 
 export default function EntityLabelsClient() {
     const { canMutate } = useAdminAuth();
+    const { refreshEntityLabels } = useEntityLabels();
     const [data, setData] = useState<ApiResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export default function EntityLabelsClient() {
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
             await fetchData();
+            await refreshEntityLabels();
         } catch (e) {
             setSaveError((e as Error).message);
         } finally {
@@ -105,6 +108,7 @@ export default function EntityLabelsClient() {
                 return next;
             });
             await fetchData();
+            await refreshEntityLabels();
         } catch (e) {
             setSaveError((e as Error).message);
         } finally {
@@ -142,7 +146,7 @@ export default function EntityLabelsClient() {
             <div className="mb-6 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3 text-sm text-[#31394d]">
                 Industry defaults: <strong>{industryLabel}</strong>
                 {" — "}
-                <Link href="/admin/verticals" className="text-alloy-blue hover:underline">
+                <Link href="/admin/system/verticals-industries" className="text-alloy-blue hover:underline">
                     Change in Verticals / Industries
                 </Link>
             </div>

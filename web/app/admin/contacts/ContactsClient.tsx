@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -39,6 +40,8 @@ const EMPTY_FORM = {
 };
 
 export default function ContactsClient() {
+    const { labels } = useEntityLabels();
+    const title = labels?.contacts?.plural ?? "Contacts";
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -176,7 +179,7 @@ export default function ContactsClient() {
 
     return (
         <>
-            <AdminPageHeader title="Contacts" subtitle="Contact records scoped by your org. Create, edit, and archive." />
+            <AdminPageHeader title={title} subtitle="Contact records scoped by your org. Create, edit, and archive." />
             <SectionCard title="Filters" className="mb-4">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>

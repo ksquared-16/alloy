@@ -2,6 +2,7 @@
 
 import DataTable from "@/components/admin/DataTable";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 
@@ -47,6 +48,8 @@ export default function VendorsClient({
     error,
 }: VendorsClientProps) {
     const { openDrawer } = useAdminDrawer();
+    const { labels } = useEntityLabels();
+    const title = labels?.vendors?.plural ?? "Vendors";
 
     const columns = [
         { key: "submitted_at", label: "Submitted", sortable: true, render: (_: unknown, row: Vendor) => formatVendorDate(row) },
@@ -75,7 +78,7 @@ export default function VendorsClient({
 
     return (
         <div>
-            <AdminPageHeader title="Vendors" subtitle="Vendor status and assignments." />
+            <AdminPageHeader title={title} subtitle="Vendor status and assignments." />
 
             {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">

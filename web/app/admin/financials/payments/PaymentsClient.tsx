@@ -5,6 +5,7 @@ import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 type PaymentRow = {
     id: string;
@@ -35,6 +36,8 @@ function StatusBadge({ statusKey }: { statusKey: string }) {
 
 export default function PaymentsClient() {
     const { openDrawer } = useAdminDrawer();
+    const { labels } = useEntityLabels();
+    const title = labels?.payments?.plural ?? "Payments";
     const [payments, setPayments] = useState<PaymentRow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -71,7 +74,7 @@ export default function PaymentsClient() {
 
     return (
         <>
-            <AdminPageHeader title="Payments" />
+            <AdminPageHeader title={title} />
             <SectionCard title="Filters" className="mb-4">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>

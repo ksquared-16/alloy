@@ -2,6 +2,7 @@
 
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import PrimaryButton from "@/components/PrimaryButton";
 import { formatDateTime } from "@/lib/adminFormatters";
 
@@ -26,6 +27,8 @@ export default function WorkflowsClient({
     error,
 }: WorkflowsClientProps) {
     const { openDrawer } = useAdminDrawer();
+    const { labels } = useEntityLabels();
+    const title = labels?.workflows?.plural ?? "Workflows";
 
     const columns = [
         { key: "name", label: "Name", sortable: true },
@@ -38,7 +41,7 @@ export default function WorkflowsClient({
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold text-alloy-midnight">Workflows</h1>
+                <h1 className="text-3xl font-bold text-alloy-midnight">{title}</h1>
                 <PrimaryButton onClick={() => openDrawer({ type: "workflows", id: "new" })}>
                     New workflow
                 </PrimaryButton>

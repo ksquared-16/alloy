@@ -7,6 +7,7 @@ import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 interface Customer {
   id: string;
@@ -31,6 +32,8 @@ export default function CustomersClient({
 }: CustomersClientProps) {
   const { openDrawer } = useAdminDrawer();
   const { selectedVerticalId } = useAdminVertical();
+  const { labels } = useEntityLabels();
+  const title = labels?.customers?.plural ?? "Customers";
   const data = useMemo(() => {
     if (!selectedVerticalId) return initialData;
     return initialData.filter((r) => r.vertical_id === selectedVerticalId);
@@ -57,7 +60,7 @@ export default function CustomersClient({
 
   return (
     <div>
-      <AdminPageHeader title="Customers" subtitle="Customer records and verticals." />
+      <AdminPageHeader title={title} subtitle="Customer records and verticals." />
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">

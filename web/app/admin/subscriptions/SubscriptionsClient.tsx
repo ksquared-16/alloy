@@ -2,6 +2,7 @@
 
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { formatDateTime, formatDate } from "@/lib/adminFormatters";
 
 interface SubscriptionRow {
@@ -28,6 +29,8 @@ export default function SubscriptionsClient({
     error,
 }: SubscriptionsClientProps) {
     const { openDrawer } = useAdminDrawer();
+    const { labels } = useEntityLabels();
+    const title = labels?.subscriptions?.plural ?? "Subscriptions";
 
     const columns = [
         { key: "created_at", label: "Created", sortable: true, render: (_: unknown, row: SubscriptionRow) => formatDateTime(row.created_at) },
@@ -40,7 +43,7 @@ export default function SubscriptionsClient({
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-alloy-midnight mb-6">Subscriptions</h1>
+            <h1 className="text-3xl font-bold text-alloy-midnight mb-6">{title}</h1>
             {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
                     Error: {error}

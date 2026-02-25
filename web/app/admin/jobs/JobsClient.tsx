@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -35,6 +36,8 @@ const EMPTY_FORM = {
 
 export default function JobsClient() {
   const { openDrawer } = useAdminDrawer();
+  const { labels } = useEntityLabels();
+  const title = labels?.jobs?.plural ?? "Jobs";
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -152,7 +155,7 @@ export default function JobsClient() {
   return (
     <>
       <AdminPageHeader
-        title="Jobs"
+        title={title}
         subtitle="Jobs scoped by your org. Customer is required. Only admins can create, edit, or archive."
       />
       <SectionCard title="Filters" className="mb-4">

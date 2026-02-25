@@ -25,12 +25,13 @@ import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
+import { EntityLabelsProvider, useEntityLabels } from "@/contexts/EntityLabelsContext";
 import AlloyLogo from "@/components/admin/AlloyLogo";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
 const SIDEBAR_SCROLL_KEY = "adminSidebarScrollTop";
 
-type NavLink = { href: string; label: string };
+type NavLink = { href: string; label: string; entityType?: string };
 type NavItem = NavLink | { label: string; subItems: NavLink[] };
 function isNestedNavItem(item: NavItem): item is { label: string; subItems: NavLink[] } {
     return "subItems" in item && Array.isArray((item as { subItems: unknown }).subItems);
@@ -44,15 +45,15 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         label: "Operations",
         icon: Briefcase,
         items: [
-            { href: "/admin/opportunities", label: "Opportunities" },
-            { href: "/admin/jobs", label: "Jobs" },
-            { href: "/admin/schedules", label: "Schedules" },
+            { href: "/admin/opportunities", label: "Opportunities", entityType: "opportunities" },
+            { href: "/admin/jobs", label: "Jobs", entityType: "jobs" },
+            { href: "/admin/schedules", label: "Schedules", entityType: "schedules" },
             {
                 label: "People",
                 subItems: [
-                    { href: "/admin/customers", label: "Customers" },
-                    { href: "/admin/contacts", label: "Contacts" },
-                    { href: "/admin/vendors", label: "Vendors" },
+                    { href: "/admin/customers", label: "Customers", entityType: "customers" },
+                    { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
+                    { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
                 ],
             },
             {
@@ -63,7 +64,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/admin/workflow-runs", label: "Runs" },
                 ],
             },
-            { href: "/admin/messaging", label: "Messaging" },
+            { href: "/admin/messaging", label: "Messaging", entityType: "messages" },
             { href: "/admin/messages-outbox", label: "Outbox" },
         ],
     },
@@ -73,8 +74,8 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         items: [
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
-            { href: "/admin/financials/payments", label: "Payments" },
-            { href: "/admin/subscriptions", label: "Subscriptions" },
+            { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
+            { href: "/admin/subscriptions", label: "Subscriptions", entityType: "subscriptions" },
             { href: "/admin/financials/pricing", label: "Pricing" },
             { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
             {
@@ -93,7 +94,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         icon: Settings,
         items: [
             { href: "/admin/system/access-control", label: "Access Control" },
-            { href: "/admin/verticals", label: "Verticals / Industries" },
+            { href: "/admin/system/verticals-industries", label: "Verticals / Industries" },
             { href: "/admin/system/entity-labels", label: "Entity Labels" },
             { href: "/admin/system/statuses", label: "Statuses" },
             { href: "/admin/system/db-relationships", label: "DB Relationships" },
@@ -115,7 +116,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/financials/pricing": Tag,
         "/admin/discount-redemptions": Tag,
         "/admin/system/access-control": Shield,
-        "/admin/verticals": LayoutGrid,
+        "/admin/system/verticals-industries": LayoutGrid,
         "/admin/system/entity-labels": Tag,
         "/admin/system/statuses": Tag,
         "/admin/system/db-relationships": GitBranch,
@@ -155,11 +156,17 @@ interface AdminLayoutProps {
     role: string;
 }
 
+function navLinkLabel(link: NavLink, labels: Record<string, { singular: string | null; plural: string | null }>): string {
+    if (link.entityType && labels[link.entityType]?.plural) return labels[link.entityType].plural!;
+    return link.label;
+}
+
 function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
     const sidebarScrollRef = useRef<HTMLElement | null>(null);
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
+    const { labels } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
     const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ People: true, Workflows: true, Settings: true });
     const [profileOpen, setProfileOpen] = useState(false);
@@ -289,13 +296,14 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                             <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-[#e6e8ec] pl-2">
                                                                 {item.subItems.map((sub) => {
                                                                     const isActive = pathname === sub.href;
+                                                                    const displayLabel = navLinkLabel(sub, labels);
                                                                     return (
                                                                         <li key={sub.href}>
                                                                             <Link
                                                                                 href={sub.href}
                                                                                 className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
                                                                             >
-                                                                                {sub.label}
+                                                                                {displayLabel}
                                                                             </Link>
                                                                         </li>
                                                                     );
@@ -305,16 +313,18 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                     </li>
                                                 );
                                             }
-                                            const isActive = pathname === (item as NavLink).href;
-                                            const LinkIcon = getLinkIcon((item as NavLink).href, (item as NavLink).label);
+                                            const link = item as NavLink;
+                                            const isActive = pathname === link.href;
+                                            const LinkIcon = getLinkIcon(link.href, link.label);
+                                            const displayLabel = navLinkLabel(link, labels);
                                             return (
-                                                <li key={(item as NavLink).href}>
+                                                <li key={link.href}>
                                                     <Link
-                                                        href={(item as NavLink).href}
+                                                        href={link.href}
                                                         className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#31394d] text-white border-l-2 border-[#DBC078]" : "text-[#45506c] hover:bg-[#F4F6F9] hover:text-[#31394d]"}`}
                                                     >
                                                         {LinkIcon && <LinkIcon className={`${iconClass} ${isActive ? "text-white/80" : ""}`} />}
-                                                        <span className="truncate">{(item as NavLink).label}</span>
+                                                        <span className="truncate">{displayLabel}</span>
                                                     </Link>
                                                 </li>
                                             );
@@ -395,7 +405,9 @@ export default function AdminLayout(props: AdminLayoutProps) {
     return (
         <AdminAuthProvider userEmail={props.userEmail} role={props.role}>
             <AdminVerticalProvider>
-                <AdminLayoutInner {...props} />
+                <EntityLabelsProvider>
+                    <AdminLayoutInner {...props} />
+                </EntityLabelsProvider>
             </AdminVerticalProvider>
         </AdminAuthProvider>
     );
