@@ -92,6 +92,9 @@ export default function PrivacyPage() {
               <p>
                 We do not sell, rent, or share SMS consent or phone numbers with third parties for marketing purposes.
               </p>
+              <p>
+                SMS consent is not shared with third parties for marketing purposes.
+              </p>
             </section>
 
             <section>

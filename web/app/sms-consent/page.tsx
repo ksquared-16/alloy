@@ -4,7 +4,7 @@ import Link from "next/link";
 import Section from "@/components/Section";
 
 const CONSENT_LANGUAGE =
-  "I agree to receive transactional SMS messages from Alloy regarding my quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.";
+  "By checking this box, you agree to receive transactional SMS messages from Alloy regarding your quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.";
 
 export default function SmsConsentPage() {
   const handleSubmit = (e: React.FormEvent) => {

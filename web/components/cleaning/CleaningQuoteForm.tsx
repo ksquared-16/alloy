@@ -340,9 +340,6 @@ export default function CleaningQuoteForm({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const nextErrors = validate(form);
-        if (!consent) {
-            nextErrors.consent = "You must agree to receive SMS updates.";
-        }
 
         if (Object.keys(nextErrors).length > 0) {
             setErrors(nextErrors);
@@ -797,6 +794,9 @@ export default function CleaningQuoteForm({
                             className={textInputClass}
                         />
                         {errors.phone && <p className="mt-1 text-xs text-alloy-ember">{errors.phone}</p>}
+                        <p className="mt-1.5 text-xs text-alloy-midnight/60">
+                            Phone number is required for booking coordination. SMS messages are optional and require separate consent below.
+                        </p>
                     </div>
 
                     {/* Email */}
@@ -1083,7 +1083,7 @@ export default function CleaningQuoteForm({
                             className={checkboxClass}
                         />
                         <span>
-                            I agree to receive transactional SMS messages from Alloy regarding my quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.
+                            By checking this box, you agree to receive transactional SMS messages from Alloy regarding your quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.
                         </span>
                     </label>
                     {errors.consent && (
