@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
 
-/** PATCH: set org's industry_id. Admin only. */
+/** PATCH: set org's industry_id. Admin only. Returns 403 if config is locked. */
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -13,6 +14,14 @@ export async function PATCH(request: NextRequest) {
     }
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const locked = await getOrgConfigLocked(ctx.orgId);
+    if (locked) {
+        return NextResponse.json(
+            { error: "Configuration is locked. Unlock in System Settings." },
+            { status: 403 }
+        );
     }
 
     let body: { industry_id?: string | null } = {};

@@ -1,27 +1,35 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import ConfigLockBanner from "@/components/admin/ConfigLockBanner";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 type LabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
+type IndustryOption = { id: string; key: string; label: string };
+
 type ApiResponse = {
+    org_industry_id: string | null;
     industry: { key: string; label: string } | null;
     defaults: LabelRow[];
     overrides: LabelRow[];
     effective: LabelRow[];
 };
 
+const GENERIC_VALUE = "__generic__";
+
 export default function EntityLabelsClient() {
     const { canMutate } = useAdminAuth();
     const { refreshEntityLabels } = useEntityLabels();
     const [data, setData] = useState<ApiResponse | null>(null);
+    const [industries, setIndustries] = useState<IndustryOption[]>([]);
+    const [configLocked, setConfigLocked] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [industrySaving, setIndustrySaving] = useState(false);
 
     const [edits, setEdits] = useState<Record<string, { singular: string; plural: string }>>({});
     const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -44,11 +52,36 @@ export default function EntityLabelsClient() {
         }
     }, []);
 
+    const fetchIndustries = useCallback(async () => {
+        try {
+            const res = await fetch("/api/admin/industries");
+            const json = await res.json().catch(() => ({}));
+            if (res.ok) {
+                const list = (json as { industries?: IndustryOption[] }).industries ?? [];
+                setIndustries(list);
+            }
+        } catch {
+            setIndustries([]);
+        }
+    }, []);
+
+    const fetchConfigLock = useCallback(async () => {
+        try {
+            const res = await fetch("/api/admin/org-config");
+            const json = await res.json().catch(() => ({}));
+            if (res.ok) setConfigLocked(Boolean((json as { config_locked?: boolean }).config_locked));
+        } catch {
+            setConfigLocked(false);
+        }
+    }, []);
+
     useEffect(() => {
         setLoading(true);
         setError(null);
         fetchData();
-    }, [fetchData]);
+        fetchIndustries();
+        fetchConfigLock();
+    }, [fetchData, fetchIndustries, fetchConfigLock]);
 
     const getOverrideFor = (entityType: string): { singular: string; plural: string } => {
         if (edits[entityType] !== undefined) return edits[entityType];
@@ -116,6 +149,30 @@ export default function EntityLabelsClient() {
         }
     };
 
+    const industrySelectValue = data?.org_industry_id ?? GENERIC_VALUE;
+
+    const handleIndustryChange = async (value: string) => {
+        if (!canMutate || configLocked) return;
+        const industry_id = value === GENERIC_VALUE ? null : value;
+        setIndustrySaving(true);
+        setSaveError(null);
+        try {
+            const res = await fetch("/api/admin/org/industry", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ industry_id }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to update industry");
+            await fetchData();
+            await refreshEntityLabels();
+        } catch (e) {
+            setSaveError((e as Error).message);
+        } finally {
+            setIndustrySaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <>
@@ -134,21 +191,30 @@ export default function EntityLabelsClient() {
         );
     }
 
-    const industryLabel = data.industry?.label ?? "Generic";
-    const effectiveByType = new Map(data.effective.map((e) => [e.entity_type, e]));
+    const defaultsByType = new Map(data.defaults.map((d) => [d.entity_type, d]));
+    const locked = configLocked;
 
     return (
         <>
-            <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. Opportunities, Jobs) for your vertical or branding." />
+            <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. customer_members → Children for childcare)." />
+            {locked && <ConfigLockBanner />}
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>
             )}
-            <div className="mb-6 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3 text-sm text-[#31394d]">
-                Industry defaults: <strong>{industryLabel}</strong>
-                {" — "}
-                <Link href="/admin/system/verticals-industries" className="text-alloy-blue hover:underline">
-                    Change in Verticals / Industries
-                </Link>
+            <div className="mb-6 flex flex-wrap items-center gap-4 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3">
+                <label className="text-sm font-medium text-[#31394d]">Industry</label>
+                <select
+                    value={industrySelectValue}
+                    onChange={(e) => handleIndustryChange(e.target.value)}
+                    disabled={!canMutate || industrySaving || locked}
+                    className="rounded border border-[#e6e8ec] bg-white px-3 py-1.5 text-sm text-[#31394d] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                    <option value={GENERIC_VALUE}>Generic</option>
+                    {industries.map((i) => (
+                        <option key={i.id} value={i.id}>{i.label}</option>
+                    ))}
+                </select>
+                {industrySaving && <span className="text-sm text-[#59678b]">Saving…</span>}
             </div>
             {saveError && (
                 <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{saveError}</div>
@@ -169,28 +235,28 @@ export default function EntityLabelsClient() {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.defaults.length === 0 ? (
+                            {data.effective.length === 0 ? (
                                 <tr>
                                     <td colSpan={canMutate ? 8 : 7} className="py-4 text-[#59678b]">
-                                        No industry defaults configured. Set an industry for your org in Verticals / Industries.
+                                        No entity types for this industry. Select an industry (e.g. childcare) to see defaults including customer_members.
                                     </td>
                                 </tr>
                             ) : (
-                                data.defaults.map((d) => {
-                                    const eff = effectiveByType.get(d.entity_type) ?? d;
-                                    const { singular: ovSingular, plural: ovPlural } = getOverrideFor(d.entity_type);
-                                    const hasOverride = data.overrides.some((o) => o.entity_type === d.entity_type);
+                                data.effective.map((eff) => {
+                                    const def = defaultsByType.get(eff.entity_type);
+                                    const { singular: ovSingular, plural: ovPlural } = getOverrideFor(eff.entity_type);
+                                    const hasOverride = data.overrides.some((o) => o.entity_type === eff.entity_type);
                                     return (
-                                        <tr key={d.entity_type} className="border-b border-[#e6e8ec] align-top">
-                                            <td className="py-2 pr-4 font-medium text-[#31394d]">{d.entity_type}</td>
-                                            <td className="py-2 pr-4 text-[#59678b]">{d.singular ?? "—"}</td>
-                                            <td className="py-2 pr-4 text-[#59678b]">{d.plural ?? "—"}</td>
+                                        <tr key={eff.entity_type} className="border-b border-[#e6e8ec] align-top">
+                                            <td className="py-2 pr-4 font-medium text-[#31394d]">{eff.entity_type}</td>
+                                            <td className="py-2 pr-4 text-[#59678b]">{def?.singular ?? "—"}</td>
+                                            <td className="py-2 pr-4 text-[#59678b]">{def?.plural ?? "—"}</td>
                                             <td className="py-2 pr-4">
                                                 <input
                                                     type="text"
                                                     value={ovSingular}
-                                                    onChange={(e) => setOverrideFor(d.entity_type, "singular", e.target.value)}
-                                                    disabled={!canMutate}
+                                                    onChange={(e) => setOverrideFor(eff.entity_type, "singular", e.target.value)}
+                                                    disabled={!canMutate || locked}
                                                     placeholder="Override singular"
                                                     className="w-full min-w-[100px] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-[#e6e8ec]/50 disabled:opacity-70"
                                                 />
@@ -199,8 +265,8 @@ export default function EntityLabelsClient() {
                                                 <input
                                                     type="text"
                                                     value={ovPlural}
-                                                    onChange={(e) => setOverrideFor(d.entity_type, "plural", e.target.value)}
-                                                    disabled={!canMutate}
+                                                    onChange={(e) => setOverrideFor(eff.entity_type, "plural", e.target.value)}
+                                                    disabled={!canMutate || locked}
                                                     placeholder="Override plural"
                                                     className="w-full min-w-[100px] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-[#e6e8ec]/50 disabled:opacity-70"
                                                 />
@@ -211,20 +277,20 @@ export default function EntityLabelsClient() {
                                                 <td className="py-2 flex flex-wrap items-center gap-2">
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleSave(d.entity_type)}
-                                                        disabled={savingKey === d.entity_type}
+                                                        onClick={() => handleSave(eff.entity_type)}
+                                                        disabled={savingKey === eff.entity_type || locked}
                                                         className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium text-[#31394d] hover:bg-alloy-stone/20 disabled:opacity-50"
                                                     >
-                                                        {savingKey === d.entity_type ? "Saving…" : "Save"}
+                                                        {savingKey === eff.entity_type ? "Saving…" : "Save"}
                                                     </button>
                                                     {hasOverride && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleReset(d.entity_type)}
-                                                            disabled={resetLoadingKey === d.entity_type}
+                                                            onClick={() => handleReset(eff.entity_type)}
+                                                            disabled={resetLoadingKey === eff.entity_type || locked}
                                                             className="rounded border border-amber-200 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
                                                         >
-                                                            {resetLoadingKey === d.entity_type ? "Resetting…" : "Reset to default"}
+                                                            {resetLoadingKey === eff.entity_type ? "Resetting…" : "Reset to default"}
                                                         </button>
                                                     )}
                                                 </td>
