@@ -181,6 +181,9 @@ export default function AdminEntityDrawer() {
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
     const [memberDeleteConfirm, setMemberDeleteConfirm] = useState(false);
     const [memberDeleting, setMemberDeleting] = useState(false);
+    const [memberRelatedContacts, setMemberRelatedContacts] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; created_at?: string }[]>([]);
+    const [memberRelatedLoading, setMemberRelatedLoading] = useState(false);
+    const [memberRelatedError, setMemberRelatedError] = useState<string | null>(null);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -203,6 +206,9 @@ export default function AdminEntityDrawer() {
             setMemberDeleteConfirm(false);
             setMemberDeleting(false);
             setMemberCreateError(null);
+            setMemberRelatedContacts([]);
+            setMemberRelatedLoading(false);
+            setMemberRelatedError(null);
             return;
         }
         setDrawerTab("overview");
@@ -338,6 +344,35 @@ export default function AdminEntityDrawer() {
             })
             .catch(() => setMemberCustomers([]));
     }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "customer_members" || !data || (data as { _create?: boolean })._create) {
+            setMemberRelatedContacts([]);
+            setMemberRelatedLoading(false);
+            setMemberRelatedError(null);
+            return;
+        }
+        const customerId = data.customer_id as string | undefined;
+        if (!customerId) {
+            setMemberRelatedContacts([]);
+            return;
+        }
+        setMemberRelatedLoading(true);
+        setMemberRelatedError(null);
+        fetch(`/api/admin/related/customer/${customerId}`)
+            .then((r) => {
+                if (!r.ok) throw new Error("Failed to load related");
+                return r.json();
+            })
+            .then((json: { contacts?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; created_at?: string }[] }) => {
+                setMemberRelatedContacts(json.contacts ?? []);
+            })
+            .catch((e: Error) => {
+                setMemberRelatedError(e.message);
+                setMemberRelatedContacts([]);
+            })
+            .finally(() => setMemberRelatedLoading(false));
+    }, [drawer.type, data?.customer_id, (data as { _create?: boolean })?._create]);
 
     useEffect(() => {
         if (drawer.type !== "customer_members" || !data) return;
@@ -857,8 +892,45 @@ export default function AdminEntityDrawer() {
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                         </div>
                     )}
-                    {drawerTab === "related" && drawer.type === "customer_members" && (
-                        <p className="text-sm text-[#59678b] pt-2">Coming soon.</p>
+                    {drawerTab === "related" && drawer.type === "customer_members" && data && (
+                        <div className="pt-2 space-y-4 mb-4">
+                            <section>
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Parent / Family (Customer)</h4>
+                                {(data.customer_id as string) ? (
+                                    <DrawerLinkWithName label="Customer" id={data.customer_id as string} type="customers" displayName={data._customer_name as string} />
+                                ) : (
+                                    <p className="text-sm text-[#59678b]">No family/customer linked.</p>
+                                )}
+                            </section>
+                            <section>
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Contacts (Guardians)</h4>
+                                {!(data.customer_id as string) ? (
+                                    <p className="text-sm text-[#59678b]">No customer linked — contacts not available.</p>
+                                ) : memberRelatedLoading ? (
+                                    <p className="text-sm text-[#59678b]">Loading…</p>
+                                ) : memberRelatedError ? (
+                                    <p className="text-sm text-red-600">{memberRelatedError}</p>
+                                ) : memberRelatedContacts.length === 0 ? (
+                                    <p className="text-sm text-[#59678b]">No related contacts.</p>
+                                ) : (
+                                    <ul className="space-y-1.5">
+                                        {memberRelatedContacts.map((c) => {
+                                            const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.phone || c.id.slice(0, 8) + "…";
+                                            return (
+                                                <li key={c.id}>
+                                                    <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-sm text-left">
+                                                        {name}
+                                                    </button>
+                                                    {(c.email || c.phone) && (
+                                                        <span className="text-xs text-[#59678b] ml-2">{[c.email, c.phone].filter(Boolean).join(" · ")}</span>
+                                                    )}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </section>
+                        </div>
                     )}
                     {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
