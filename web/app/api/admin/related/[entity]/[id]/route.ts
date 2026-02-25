@@ -36,11 +36,12 @@ export async function GET(
         }
 
         if (entity === "customer") {
-            const [contactsRes, oppRes, jobsRes, locationsRes] = await Promise.all([
+            const [contactsRes, oppRes, jobsRes, locationsRes, membersRes] = await Promise.all([
                 supabase.from("contacts").select("id, created_at, first_name, last_name, email, phone").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("locations").select("id, label, address1, city, state, postal_code, is_primary, is_active, location_type").eq("customer_id", id).eq("org_id", ctx.orgId).order("is_primary", { ascending: false }).order("label", { ascending: true }).limit(LIMIT),
+                supabase.from("customer_members").select("id, created_at, display_name, relationship, first_name, last_name, dob, is_active").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
             const jobIds = (jobsRes.data ?? []).map((j) => j.id);
             const schedulesRes = jobIds.length > 0
@@ -52,6 +53,7 @@ export async function GET(
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
                 locations: locationsRes.data ?? [],
+                customer_members: membersRes.data ?? [],
             });
         }
 

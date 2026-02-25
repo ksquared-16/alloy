@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
@@ -17,7 +18,7 @@ import {
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "schedules", "workflows", "vendors", "locations"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -97,7 +98,7 @@ function DrawerLinkWithName({
 }: {
     label: string;
     id: string | null;
-    type: "contacts" | "customers" | "opportunities" | "jobs" | "vendors" | "locations";
+    type: "contacts" | "customers" | "customer_members" | "opportunities" | "jobs" | "vendors" | "locations";
     displayName: string | null | undefined;
 }) {
     const { openDrawer } = useAdminDrawer();
@@ -121,6 +122,9 @@ function DrawerLinkWithName({
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
+    const memberSingular = labels.customer_members?.singular ?? "Member";
+    const memberPlural = labels.customer_members?.plural ?? "Members";
     const router = useRouter();
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
@@ -172,6 +176,11 @@ export default function AdminEntityDrawer() {
     const [paymentActionLoading, setPaymentActionLoading] = useState<"run" | "retry" | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "automation" | "details">("overview");
+    const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
+    const [memberCreateSaving, setMemberCreateSaving] = useState(false);
+    const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
+    const [memberDeleteConfirm, setMemberDeleteConfirm] = useState(false);
+    const [memberDeleting, setMemberDeleting] = useState(false);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -191,6 +200,9 @@ export default function AdminEntityDrawer() {
             setError(null);
             setIsEditing(false);
             setDrawerTab("overview");
+            setMemberDeleteConfirm(false);
+            setMemberDeleting(false);
+            setMemberCreateError(null);
             return;
         }
         setDrawerTab("overview");
@@ -312,6 +324,36 @@ export default function AdminEntityDrawer() {
             setWorkflowVerticals(Array.isArray(verts) ? verts : []);
         }).catch(() => { setVendorStatuses([]); setWorkflowVerticals([]); });
     }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "customer_members") {
+            setMemberCustomers([]);
+            return;
+        }
+        fetch("/api/admin/customers")
+            .then((r) => (r.ok ? r.json() : []))
+            .then((json) => {
+                const list = Array.isArray(json) ? json : (json as { customers?: { id: string; name: string | null }[] }).customers ?? [];
+                setMemberCustomers(list.map((c: { id: string; name?: string | null }) => ({ id: c.id, name: c.name ?? null })));
+            })
+            .catch(() => setMemberCustomers([]));
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "customer_members" || !data) return;
+        if ((data as { _create?: boolean })._create) {
+            const defaultId = drawer.defaultCustomerId ?? "";
+            setFormData({
+                customer_id: defaultId,
+                display_name: "",
+                relationship: "",
+                first_name: "",
+                last_name: "",
+                dob: "",
+                is_active: true,
+            });
+        }
+    }, [drawer.type, drawer.defaultCustomerId, data]);
 
     useEffect(() => {
         if (drawer.type !== "schedules" || !drawer.id) {
@@ -503,6 +545,16 @@ export default function AdminEntityDrawer() {
                 country: data.country ?? "",
                 access_notes: data.access_notes ?? "",
             });
+        } else if (drawer.type === "customer_members") {
+            setFormData({
+                customer_id: data.customer_id ?? "",
+                display_name: data.display_name ?? "",
+                relationship: data.relationship ?? "",
+                first_name: data.first_name ?? "",
+                last_name: data.last_name ?? "",
+                dob: data.dob ?? "",
+                is_active: data.is_active ?? true,
+            });
         }
         setSaveError(null);
         setIsEditing(true);
@@ -531,6 +583,24 @@ export default function AdminEntityDrawer() {
                 const actJson = await actRes.json().catch(() => ({}));
                 if (!actRes.ok) throw new Error((actJson.error as string) || "Save actions failed");
                 setData((prev) => prev ? { ...prev, ...json, _conditions: workflowConditions, _actions: workflowActions } : prev);
+                refetch();
+                setIsEditing(false);
+                router.refresh();
+                return;
+            }
+            if (drawer.type === "customer_members") {
+                const payload = {
+                    display_name: typeof formData.display_name === "string" ? formData.display_name.trim() : "",
+                    relationship: typeof formData.relationship === "string" ? formData.relationship.trim() || null : null,
+                    first_name: typeof formData.first_name === "string" ? formData.first_name.trim() || null : null,
+                    last_name: typeof formData.last_name === "string" ? formData.last_name.trim() || null : null,
+                    dob: typeof formData.dob === "string" && formData.dob.trim() ? formData.dob.trim() : null,
+                    is_active: !!formData.is_active,
+                };
+                const res = await fetch(`/api/admin/customer-members/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
                 setIsEditing(false);
                 router.refresh();
@@ -614,6 +684,10 @@ export default function AdminEntityDrawer() {
             ? `Contact: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
             : drawer.type === "customers"
               ? `Customer: ${(data.name as string) || drawer.id}`
+              : drawer.type === "customer_members"
+                ? (data as { _create?: boolean })._create
+                  ? `New ${memberSingular}`
+                  : `${memberSingular}: ${(data.display_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
               : drawer.type === "opportunities"
                 ? `Opportunity: ${(data.name as string) || drawer.id}`
                 : drawer.type === "jobs"
@@ -681,7 +755,7 @@ export default function AdminEntityDrawer() {
                                     )
                                 )}
                             </div>
-                            {["jobs", "schedules", "opportunities", "customers", "contacts", "vendors", "locations"].includes(drawer.type) && (
+                            {["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && (
                                 <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
                                     {(["overview", "related", ...(drawer.type === "opportunities" ? ["automation" as const] : []), "details"] as const).map((tab) => (
                                         <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
@@ -783,6 +857,9 @@ export default function AdminEntityDrawer() {
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                         </div>
                     )}
+                    {drawerTab === "related" && drawer.type === "customer_members" && (
+                        <p className="text-sm text-[#59678b] pt-2">Coming soon.</p>
+                    )}
                     {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
                             <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
@@ -804,11 +881,29 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "details" && (
                         <div className="space-y-3 pt-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2">IDs &amp; raw fields</h3>
-                            {["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
-                                const val = data[key];
-                                if (val === undefined) return null;
-                                return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
-                            })}
+                            {drawer.type === "customer_members" ? (
+                                <>
+                                    {["id", "org_id", "customer_id", "external_source", "external_id", "created_at", "updated_at"].map((key) => {
+                                        const val = data[key];
+                                        if (val === undefined) return null;
+                                        return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
+                                    })}
+                                    {data.metadata != null && (
+                                        <div className="text-sm">
+                                            <span className="text-alloy-midnight/60">metadata:</span>
+                                            <pre className="mt-1 p-2 bg-alloy-stone/20 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words">
+                                                {typeof data.metadata === "object" ? JSON.stringify(data.metadata, null, 2) : String(data.metadata)}
+                                            </pre>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                ["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
+                                    const val = data[key];
+                                    if (val === undefined) return null;
+                                    return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
+                                })
+                            )}
                         </div>
                     )}
                     {drawerTab === "overview" && (
@@ -850,6 +945,90 @@ export default function AdminEntityDrawer() {
                                     );
                                 })()}
                             </div>
+                        </>
+                    )}
+                    {drawer.type === "customer_members" && data && (
+                        <>
+                            {(data as { _create?: boolean })._create ? (
+                                <div className="space-y-4">
+                                    {memberCreateError && <p className="text-red-600 text-sm">{memberCreateError}</p>}
+                                    <div>
+                                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Customer *</label>
+                                        <select value={String(formData.customer_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, customer_id: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                            <option value="">— Select —</option>
+                                            {memberCustomers.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+                                        </select>
+                                    </div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label><input value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    </div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" disabled={memberCreateSaving || !canMutate || !(formData.display_name as string)?.trim() || !(formData.customer_id as string)?.trim()} onClick={async () => {
+                                            setMemberCreateSaving(true); setMemberCreateError(null);
+                                            try {
+                                                const res = await fetch("/api/admin/customer-members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: formData.customer_id, display_name: (formData.display_name as string)?.trim(), relationship: (formData.relationship as string)?.trim() || null, first_name: (formData.first_name as string)?.trim() || null, last_name: (formData.last_name as string)?.trim() || null, dob: (formData.dob as string)?.trim() || null, is_active: !!formData.is_active }) });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json.error as string) || "Create failed");
+                                                const newId = (json as { id?: string }).id;
+                                                if (newId) { openDrawer({ type: "customer_members", id: newId }); router.refresh(); }
+                                                else setMemberCreateError("No id returned");
+                                            } catch (e: unknown) { setMemberCreateError((e as Error).message); }
+                                            setMemberCreateSaving(false);
+                                        }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">{memberCreateSaving ? "Creating…" : "Create"}</button>
+                                        <button type="button" onClick={closeDrawer} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
+                                    </div>
+                                </div>
+                            ) : isEditing ? (
+                                <>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label><input value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    </div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
+                                </>
+                            ) : (
+                                <>
+                                    <Field label="Display name" value={data.display_name as string} />
+                                    <Field label="Relationship" value={data.relationship as string} />
+                                    <Field label="First name" value={data.first_name as string} />
+                                    <Field label="Last name" value={data.last_name as string} />
+                                    <Field label="DOB" value={data.dob as string} />
+                                    <Field label="Active" value={data.is_active ? "Yes" : "No"} />
+                                    <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                                    {canMutate && (
+                                        <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
+                                            {!memberDeleteConfirm ? (
+                                                <button type="button" onClick={() => setMemberDeleteConfirm(true)} className="px-3 py-1.5 text-sm border border-red-200 text-red-700 rounded-md hover:bg-red-50">Delete</button>
+                                            ) : (
+                                                <>
+                                                    <span className="text-sm text-alloy-midnight/70">Delete this {memberSingular.toLowerCase()}?</span>
+                                                    <button type="button" disabled={memberDeleting} onClick={async () => {
+                                                        setMemberDeleting(true);
+                                                        try {
+                                                            const res = await fetch(`/api/admin/customer-members/${drawer.id}`, { method: "DELETE" });
+                                                            const json = await res.json().catch(() => ({}));
+                                                            if (!res.ok) throw new Error((json.error as string) || "Delete failed");
+                                                            closeDrawer();
+                                                            router.refresh();
+                                                        } catch (e: unknown) { setMemberCreateError((e as Error).message); }
+                                                        setMemberDeleting(false);
+                                                        setMemberDeleteConfirm(false);
+                                                    }} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md disabled:opacity-50">Yes, delete</button>
+                                                    <button type="button" onClick={() => { setMemberDeleteConfirm(false); setMemberCreateError(null); }} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </>
                     )}
                     {drawer.type === "customers" && (

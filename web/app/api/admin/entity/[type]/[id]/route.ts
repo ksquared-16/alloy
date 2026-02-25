@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations"] as const;
 
 type ContactRow = { id: string; first_name?: string; last_name?: string; email?: string; phone?: string };
 
@@ -344,6 +344,34 @@ export async function GET(
                 .eq("customer_subscription_id", id)
                 .order("subscription_sequence", { ascending: true });
             out._schedules = scheds ?? [];
+            return NextResponse.json(out);
+        }
+
+        if (type === "customer_members") {
+            const ctx = await getAdminContext();
+            if (!ctx.ok) {
+                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
+            }
+            if (id === "new") {
+                return NextResponse.json({ _create: true });
+            }
+            const { data: row, error: rowErr } = await supabase
+                .from("customer_members")
+                .select("*")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (rowErr || !row) {
+                return NextResponse.json(rowErr?.code === "PGRST116" ? "Not found" : rowErr?.message ?? "Not found", { status: 404 });
+            }
+            const out: Record<string, unknown> = { ...row };
+            const customerId = (row as { customer_id: string }).customer_id;
+            if (customerId) {
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+                out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._customer_name = null;
+            }
             return NextResponse.json(out);
         }
 

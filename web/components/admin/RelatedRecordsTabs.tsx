@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { formatMoneyFromDollars } from "@/lib/adminFormatters";
 
 type EntityKind = "contact" | "customer" | "opportunity" | "job" | "location";
@@ -13,11 +15,11 @@ interface TabConfig {
     key: string;
     label: string;
     entityType: AdminDrawerEntityType;
-    columns: { key: string; label: string; render?: (val: unknown) => React.ReactNode }[];
+    columns: { key: string; label: string; render?: (val: unknown, row?: Record<string, unknown>) => React.ReactNode }[];
     dataKey: string;
 }
 
-const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [], locations: [] };
+const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [] };
 
 export default function RelatedRecordsTabs({
     entityType,
@@ -28,6 +30,9 @@ export default function RelatedRecordsTabs({
 }) {
     const { openDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
+    const membersPlural = labels.customer_members?.plural ?? "Members";
+    const membersSingular = labels.customer_members?.singular ?? "Member";
     const [data, setData] = useState<Record<string, unknown[]>>(EMPTY);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -104,6 +109,12 @@ export default function RelatedRecordsTabs({
                 { key: "first_name", label: "First" },
                 { key: "last_name", label: "Last" },
                 { key: "email", label: "Email" },
+            ]},
+            { key: "customer_members", label: membersPlural, entityType: "customer_members", dataKey: "customer_members", columns: [
+                { key: "display_name", label: "Name", render: (v, row) => (v as string) || (row ? [row.first_name, row.last_name].filter(Boolean).join(" ") : null) || "—" },
+                { key: "relationship", label: "Relationship", render: (v) => (v as string) || "—" },
+                { key: "dob", label: "DOB", render: (v) => (v as string) || "—" },
+                { key: "is_active", label: "Active", render: (v) => v ? "Yes" : "No" },
             ]},
             { key: "opportunities", label: "Opportunities", entityType: "opportunities", dataKey: "opportunities", columns: [
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
@@ -193,6 +204,16 @@ export default function RelatedRecordsTabs({
                             </button>
                         ))}
                     </div>
+                    {entityType === "customer" && activeTab === "customer_members" && canMutate && (
+                        <div className="mb-3">
+                            <Link
+                                href={`/admin/customer-members?customer_id=${encodeURIComponent(entityId)}`}
+                                className="inline-block px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90"
+                            >
+                                Add {membersSingular}
+                            </Link>
+                        </div>
+                    )}
                     {entityType === "customer" && activeTab === "locations" && canMutate && (
                         <div className="mb-3">
                             <button
@@ -243,7 +264,7 @@ export default function RelatedRecordsTabs({
                                         >
                                             {active.columns.map((col) => (
                                                 <td key={col.key} className="px-3 py-2">
-                                                    {col.render ? col.render(row[col.key]) : (row[col.key] as React.ReactNode) ?? "-"}
+                                                    {col.render ? col.render(row[col.key], row) : (row[col.key] as React.ReactNode) ?? "-"}
                                                 </td>
                                             ))}
                                         </tr>
