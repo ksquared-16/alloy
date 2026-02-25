@@ -98,6 +98,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
+        org_industry_id: industryId,
         industry,
         defaults,
         overrides,
