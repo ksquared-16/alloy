@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useMemo } from "react";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
@@ -9,7 +8,6 @@ import { formatDate, formatDateTime, formatMoneyFromDollars } from "@/lib/adminF
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import { ChevronDown } from "lucide-react";
 
 interface Opportunity {
     id: string;
@@ -86,47 +84,10 @@ export default function OpportunitiesClient({
     const total = data.length;
     const booked = data.filter((r) => (r.status ?? "").toLowerCase() === "closed" || (r._stage_name ?? "").toLowerCase().includes("book")).length;
     const notBooked = total - booked;
-    const [configureOpen, setConfigureOpen] = useState(false);
 
     return (
         <div>
-            <AdminPageHeader
-                title={title}
-                subtitle="Pipeline and booking status."
-                actions={
-                    <div className="relative">
-                        <button
-                            type="button"
-                            onClick={() => setConfigureOpen((o) => !o)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-[#e6e8ec] bg-white px-3 py-2 text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9]"
-                        >
-                            Configure
-                            <ChevronDown className="h-4 w-4 text-[#59678b]" />
-                        </button>
-                        {configureOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setConfigureOpen(false)} />
-                                <div className="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-md border border-[#e6e8ec] bg-white py-1 shadow-lg">
-                                    <Link
-                                        href="/admin/system/statuses?entity_type=opportunity"
-                                        onClick={() => setConfigureOpen(false)}
-                                        className="block px-4 py-2 text-sm text-[#31394d] hover:bg-[#F4F6F9]"
-                                    >
-                                        Statuses
-                                    </Link>
-                                    <Link
-                                        href="/admin/workflows?entity_type=opportunity"
-                                        onClick={() => setConfigureOpen(false)}
-                                        className="block px-4 py-2 text-sm text-[#31394d] hover:bg-[#F4F6F9]"
-                                    >
-                                        Workflows
-                                    </Link>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                }
-            />
+            <AdminPageHeader title={title} subtitle="Pipeline and booking status." />
             <div className="mb-6 flex flex-wrap gap-4">
                 <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[100px]">
                     <div className="text-2xl font-semibold text-alloy-midnight">{total}</div>

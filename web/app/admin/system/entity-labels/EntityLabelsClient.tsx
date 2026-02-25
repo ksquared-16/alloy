@@ -10,14 +10,11 @@ import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 type LabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
 type ApiResponse = {
-    org_industry_id: string | null;
     industry: { key: string; label: string } | null;
     defaults: LabelRow[];
     overrides: LabelRow[];
     effective: LabelRow[];
 };
-
-type IndustryOption = { id: string; key: string; label: string };
 
 export default function EntityLabelsClient() {
     const { canMutate } = useAdminAuth();
@@ -30,18 +27,6 @@ export default function EntityLabelsClient() {
     const [savingKey, setSavingKey] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [resetLoadingKey, setResetLoadingKey] = useState<string | null>(null);
-    const [industries, setIndustries] = useState<IndustryOption[]>([]);
-    const [industryChanging, setIndustryChanging] = useState(false);
-
-    const fetchIndustries = useCallback(async () => {
-        try {
-            const res = await fetch("/api/admin/industries");
-            const json = await res.json().catch(() => ({}));
-            if (res.ok) setIndustries((json as { industries?: IndustryOption[] }).industries ?? []);
-        } catch {
-            setIndustries([]);
-        }
-    }, []);
 
     const fetchData = useCallback(async () => {
         try {
@@ -64,35 +49,6 @@ export default function EntityLabelsClient() {
         setError(null);
         fetchData();
     }, [fetchData]);
-
-    useEffect(() => {
-        fetchIndustries();
-    }, [fetchIndustries]);
-
-    const genericIndustry = industries.find((i) => i.key === "generic");
-    const dropdownValue = data?.org_industry_id ?? genericIndustry?.id ?? "";
-
-    const handleIndustryChange = async (industryId: string) => {
-        if (!canMutate) return;
-        const value = industryId === "" ? null : industryId;
-        setIndustryChanging(true);
-        setSaveError(null);
-        try {
-            const res = await fetch("/api/admin/org/industry", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ industry_id: value }),
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
-            await fetchData();
-            await refreshEntityLabels();
-        } catch (e) {
-            setSaveError((e as Error).message);
-        } finally {
-            setIndustryChanging(false);
-        }
-    };
 
     const getOverrideFor = (entityType: string): { singular: string; plural: string } => {
         if (edits[entityType] !== undefined) return edits[entityType];
@@ -178,6 +134,7 @@ export default function EntityLabelsClient() {
         );
     }
 
+    const industryLabel = data.industry?.label ?? "Generic";
     const effectiveByType = new Map(data.effective.map((e) => [e.entity_type, e]));
 
     return (
@@ -186,38 +143,11 @@ export default function EntityLabelsClient() {
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>
             )}
-            <div className="mb-6 space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                    <label htmlFor="entity-labels-industry" className="text-sm font-medium text-[#31394d]">
-                        Industry
-                    </label>
-                    <select
-                        id="entity-labels-industry"
-                        value={dropdownValue}
-                        onChange={(e) => handleIndustryChange(e.target.value)}
-                        disabled={!canMutate || industryChanging}
-                        className="rounded-md border border-[#e6e8ec] bg-white px-3 py-2 text-sm text-[#31394d] disabled:bg-[#e6e8ec]/50 disabled:opacity-70 min-w-[200px]"
-                    >
-                        {industries.length === 0 ? (
-                            <option value="">Loading…</option>
-                        ) : (
-                            <>
-                                {!dropdownValue && <option value="">— Select industry —</option>}
-                                {industries.map((i) => (
-                                    <option key={i.id} value={i.id}>
-                                        {i.label} ({i.key})
-                                    </option>
-                                ))}
-                            </>
-                        )}
-                    </select>
-                    {industryChanging && <span className="text-sm text-[#59678b]">Updating…</span>}
-                </div>
-                <Link
-                    href="/admin/system/verticals-industries"
-                    className="text-sm text-alloy-blue hover:underline"
-                >
-                    Manage industries & verticals →
+            <div className="mb-6 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3 text-sm text-[#31394d]">
+                Industry defaults: <strong>{industryLabel}</strong>
+                {" — "}
+                <Link href="/admin/system/verticals-industries" className="text-alloy-blue hover:underline">
+                    Change in Verticals / Industries
                 </Link>
             </div>
             {saveError && (

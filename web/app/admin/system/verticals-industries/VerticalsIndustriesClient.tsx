@@ -45,14 +45,9 @@ export default function VerticalsIndustriesClient() {
                     ) : (
                         <ul className="space-y-1.5 text-sm">
                             {industries.map((i) => (
-                                <li key={i.id}>
-                                    <Link
-                                        href={`/admin/system/industries/${i.id}`}
-                                        className="flex items-center gap-2 text-[#31394d] hover:text-alloy-blue hover:underline"
-                                    >
-                                        <span className="font-medium">{i.label}</span>
-                                        <span className="text-[#59678b]">({i.key})</span>
-                                    </Link>
+                                <li key={i.id} className="flex items-center gap-2 text-[#31394d]">
+                                    <span className="font-medium">{i.label}</span>
+                                    <span className="text-[#59678b]">({i.key})</span>
                                 </li>
                             ))}
                         </ul>
