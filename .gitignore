@@ -11,3 +11,7 @@ node_modules/
 .next/
 .vercel
 .env*.local
+
+# local-only
+.env.local
+.vercel/

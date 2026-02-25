@@ -1,6 +1,6 @@
 /**
  * Resolve admin org context from public.user_roles (membership scoping).
- * Use in admin API routes and page components that need org_id.
+ * Use in admin API routes that need org_id and role.
  */
 
 import { createClient } from "@/lib/supabaseServer";
@@ -24,7 +24,7 @@ export type AdminContextResult = AdminContextSuccess | AdminContextFailure;
 
 /**
  * Get current user and their org + role from user_roles.
- * Returns a result object: { ok: true, orgId, role, userId } or { ok: false, status: 401 | 403 }.
+ * Returns { ok: true, orgId, role, userId } or { ok: false, status: 401 | 403 }.
  */
 export async function getAdminContext(): Promise<AdminContextResult> {
     const supabaseAuth = await createClient();
