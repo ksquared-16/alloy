@@ -24,7 +24,7 @@ import {
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
-import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
+import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, useEntityLabels } from "@/contexts/EntityLabelsContext";
 import AlloyLogo from "@/components/admin/AlloyLogo";
 
@@ -165,12 +165,10 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const pathname = usePathname();
     const router = useRouter();
     const sidebarScrollRef = useRef<HTMLElement | null>(null);
-    const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
     const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ People: true, Workflows: true, Settings: true });
     const [profileOpen, setProfileOpen] = useState(false);
-    const [verticalOpen, setVerticalOpen] = useState(false);
 
     useEffect(() => {
         const group = navGroups.find((g) =>
@@ -341,40 +339,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                     <div className="relative">
                         <button
                             type="button"
-                            onClick={() => { setVerticalOpen((o) => !o); setProfileOpen(false); }}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-alloy-midnight/80 border border-alloy-stone/40 rounded-md hover:bg-alloy-stone/30"
-                        >
-                            Vertical: {selectedVerticalId ? verticals.find((v) => v.id === selectedVerticalId)?.name ?? selectedVerticalId.slice(0, 8) : "All"}
-                        </button>
-                        {verticalOpen && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setVerticalOpen(false)} />
-                                <div className="absolute right-0 top-full mt-1 py-1 bg-white border border-alloy-stone/30 rounded-md shadow-lg z-20 min-w-[180px]">
-                                    <button
-                                        type="button"
-                                        onClick={() => { setSelectedVerticalId(null); setVerticalOpen(false); }}
-                                        className="block w-full text-left px-4 py-2 text-sm hover:bg-alloy-stone/30"
-                                    >
-                                        All
-                                    </button>
-                                    {verticals.map((v) => (
-                                        <button
-                                            key={v.id}
-                                            type="button"
-                                            onClick={() => { setSelectedVerticalId(v.id); setVerticalOpen(false); }}
-                                            className="block w-full text-left px-4 py-2 text-sm hover:bg-alloy-stone/30"
-                                        >
-                                            {v.name ?? v.slug ?? v.id.slice(0, 8)}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    <div className="relative">
-                        <button
-                            type="button"
-                            onClick={() => { setProfileOpen((o) => !o); setVerticalOpen(false); }}
+                            onClick={() => setProfileOpen((o) => !o)}
                             className="w-9 h-9 rounded-full bg-alloy-blue text-white text-sm font-medium flex items-center justify-center"
                         >
                             {getInitials(userEmail)}

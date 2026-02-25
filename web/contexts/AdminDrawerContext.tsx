@@ -7,11 +7,13 @@ export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "cus
 interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
     id: string | null;
+    /** When opening workflows with id "new", default the entity_type field to this (e.g. "opportunity"). */
+    defaultWorkflowEntityType?: string;
 }
 
 interface AdminDrawerContextValue {
     drawer: AdminDrawerState;
-    openDrawer: (params: { type: AdminDrawerEntityType; id: string }) => void;
+    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string }) => void;
     closeDrawer: () => void;
 }
 
@@ -26,8 +28,12 @@ export function useAdminDrawer() {
 export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
 
-    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string }) => {
-        setDrawer({ type: params.type, id: params.id });
+    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string }) => {
+        setDrawer({
+            type: params.type,
+            id: params.id,
+            defaultWorkflowEntityType: params.defaultWorkflowEntityType,
+        });
     }, []);
 
     const closeDrawer = useCallback(() => {

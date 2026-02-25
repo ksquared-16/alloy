@@ -1,10 +1,5 @@
-import ComingSoonPlaceholder from "@/components/admin/ComingSoonPlaceholder";
+import StatusesClient from "./StatusesClient";
 
 export default function AdminSystemStatusesPage() {
-    return (
-        <ComingSoonPlaceholder
-            title="Statuses"
-            description="Configure job statuses, schedule statuses, assignment statuses, and other workflow statuses."
-        />
-    );
+    return <StatusesClient />;
 }

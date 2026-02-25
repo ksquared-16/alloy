@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -170,7 +171,7 @@ export default function AdminEntityDrawer() {
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
     const [paymentActionLoading, setPaymentActionLoading] = useState<"run" | "retry" | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-    const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "details">("overview");
+    const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "automation" | "details">("overview");
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -330,7 +331,8 @@ export default function AdminEntityDrawer() {
         if ((data as { _create?: boolean })._create) {
             setWorkflowConditions([]);
             setWorkflowActions([]);
-            setFormData({ name: "", description: "", enabled: true, event_type: "", entity_type: "" });
+            const defaultEntity = drawer.defaultWorkflowEntityType ?? "";
+            setFormData({ name: "", description: "", enabled: true, event_type: "", entity_type: defaultEntity });
             return;
         }
         if (data._conditions) {
@@ -357,7 +359,7 @@ export default function AdminEntityDrawer() {
             }));
             setWorkflowActions(acts);
         }
-    }, [drawer.type, data]);
+    }, [drawer.type, drawer.defaultWorkflowEntityType, data]);
 
     const openReschedule = useCallback((s: { id: string; start_at: string; end_at: string; timezone: string }) => {
         setRescheduleScheduleId(s.id);
@@ -681,7 +683,7 @@ export default function AdminEntityDrawer() {
                             </div>
                             {["jobs", "schedules", "opportunities", "customers", "contacts", "vendors", "locations"].includes(drawer.type) && (
                                 <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
-                                    {(["overview", "related", "details"] as const).map((tab) => (
+                                    {(["overview", "related", ...(drawer.type === "opportunities" ? ["automation" as const] : []), "details"] as const).map((tab) => (
                                         <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
                                     ))}
                                 </div>
@@ -784,6 +786,19 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
                             <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
+                        </div>
+                    )}
+                    {drawerTab === "automation" && drawer.type === "opportunities" && (
+                        <div className="pt-2 space-y-3">
+                            <p className="text-sm text-[#59678b]">Configure statuses and workflows for opportunities.</p>
+                            <ul className="space-y-1.5">
+                                <li>
+                                    <Link href="/admin/system/statuses?entity_type=opportunity" className="text-alloy-blue hover:underline text-sm">Statuses</Link>
+                                </li>
+                                <li>
+                                    <Link href="/admin/workflows?entity_type=opportunity" className="text-alloy-blue hover:underline text-sm">Workflows</Link>
+                                </li>
+                            </ul>
                         </div>
                     )}
                     {drawerTab === "details" && (
