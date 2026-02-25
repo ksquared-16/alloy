@@ -29,7 +29,7 @@ function groupBy<T>(arr: T[], key: (t: T) => string): Record<string, T[]> {
     return out;
 }
 
-export default function RolesClient() {
+export default function RolesClient({ embedded }: { embedded?: boolean }) {
     const { canMutate } = useAdminAuth();
     const [roles, setRoles] = useState<RoleRow[]>([]);
     const [permissions, setPermissions] = useState<PermissionRow[]>([]);
@@ -201,11 +201,18 @@ export default function RolesClient() {
 
     return (
         <>
-            <AdminPageHeader
-                title="Roles & Permissions"
-                subtitle="Manage org-scoped roles and permission grants. Only admins can create or edit."
-            />
-            {!canMutate && (
+            {!embedded && (
+                <AdminPageHeader
+                    title="Roles & Permissions"
+                    subtitle="Manage org-scoped roles and permission grants. Only admins can create or edit."
+                />
+            )}
+            {!embedded && !canMutate && (
+                <p className="mb-4 text-sm text-alloy-midnight/60">
+                    You can view roles and permissions. Only admins can make changes.
+                </p>
+            )}
+            {embedded && !canMutate && (
                 <p className="mb-4 text-sm text-alloy-midnight/60">
                     You can view roles and permissions. Only admins can make changes.
                 </p>

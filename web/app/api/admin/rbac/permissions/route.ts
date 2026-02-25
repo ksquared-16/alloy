@@ -14,7 +14,7 @@ export async function GET() {
 
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
-        .from("permissions")
+        .from("permission_definitions")
         .select("key, group_key, label")
         .eq("is_active", true)
         .order("group_key", { ascending: true })

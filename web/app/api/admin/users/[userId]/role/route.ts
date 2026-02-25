@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ALLOWED_ROLES = ["admin", "ops"] as const;
-
-/** PATCH: update user role in org. Admin only. */
+/** PATCH: update user role in org. Admin only. role must be a role_key from role_definitions for this org. */
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ userId: string }> }
@@ -23,11 +21,23 @@ export async function PATCH(
 
   const body = await request.json().catch(() => ({}));
   const role = typeof body.role === "string" ? body.role.trim() : "";
-  if (!ALLOWED_ROLES.includes(role as (typeof ALLOWED_ROLES)[number])) {
-    return NextResponse.json({ error: "role must be admin or ops" }, { status: 400 });
+  if (!role) {
+    return NextResponse.json({ error: "role is required" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
+
+  const { data: roleRow } = await supabase
+    .from("role_definitions")
+    .select("role_key")
+    .eq("org_id", ctx.orgId)
+    .eq("role_key", role)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!roleRow) {
+    return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from("user_roles")
     .update({ role })

@@ -1,5 +1,5 @@
-import RolesClient from "./RolesClient";
+import { redirect } from "next/navigation";
 
 export default function AdminSystemRolesPage() {
-    return <RolesClient />;
+    redirect("/admin/system/access-control");
 }

@@ -69,7 +69,7 @@ export async function PUT(request: NextRequest) {
     const supabase = createAdminClient();
 
     const { data: activePerms } = await supabase
-        .from("permissions")
+        .from("permission_definitions")
         .select("key")
         .eq("is_active", true);
     const validKeys = new Set((activePerms ?? []).map((p) => (p as { key: string }).key));

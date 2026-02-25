@@ -9,14 +9,10 @@ export type AdminUserRow = {
   created_at: string;
 };
 
-/** GET: list org members. Admin only. */
+/** GET: list org members. Admin + ops can read. */
 export async function GET() {
   const ctx = await getAdminContext();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-
-  if (ctx.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const supabase = createAdminClient();
 
@@ -56,4 +52,67 @@ export async function GET() {
   }
 
   return NextResponse.json({ users: result });
+}
+
+/** POST: invite user to org. Admin only. Body: { email, role } (role = role_key from role_definitions). */
+export async function POST(request: Request) {
+  const ctx = await getAdminContext();
+  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+  if (ctx.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: { email?: string; role?: string } = {};
+  try {
+    body = (await request.json()) as { email?: string; role?: string };
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const role = typeof body.role === "string" ? body.role.trim() : "";
+  if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
+  if (!role) return NextResponse.json({ error: "role is required" }, { status: 400 });
+
+  const supabase = createAdminClient();
+
+  const { data: roleRow } = await supabase
+    .from("role_definitions")
+    .select("role_key")
+    .eq("org_id", ctx.orgId)
+    .eq("role_key", role)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!roleRow) {
+    return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
+  }
+
+  const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/login`.trim() || undefined,
+  });
+  if (inviteError) {
+    return NextResponse.json({ error: inviteError.message }, { status: 400 });
+  }
+  const user = inviteData?.user;
+  if (!user?.id) {
+    return NextResponse.json({ error: "Invite did not return a user" }, { status: 500 });
+  }
+
+  const { error: insertError } = await supabase.from("user_roles").insert({
+    org_id: ctx.orgId,
+    user_id: user.id,
+    role,
+  });
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return NextResponse.json({ error: "User is already in this org" }, { status: 409 });
+    }
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    user_id: user.id,
+    email: user.email ?? email,
+    role,
+  });
 }

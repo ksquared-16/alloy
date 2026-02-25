@@ -1,5 +1,5 @@
-import UsersClient from "./UsersClient";
+import { redirect } from "next/navigation";
 
-export default function UsersPage() {
-  return <UsersClient />;
+export default function AdminUsersPage() {
+  redirect("/admin/system/access-control");
 }
