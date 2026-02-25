@@ -53,6 +53,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                 subItems: [
                     { href: "/admin/customers", label: "Customers", entityType: "customers" },
                     { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
+                    { href: "/admin/customer-members", label: "Members", entityType: "customer_members" },
                     { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
                 ],
             },
@@ -182,7 +183,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         if (group && collapsed[group.label]) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
-        const peoplePaths = ["/admin/customers", "/admin/contacts", "/admin/vendors"];
+        const peoplePaths = ["/admin/customers", "/admin/contacts", "/admin/customer-members", "/admin/vendors"];
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
         const financialsSettingsPaths = ["/admin/financials/pricing", "/admin/discounts", "/admin/financials/accounts", "/admin/financials/settings/subscription"];
         if (peoplePaths.includes(pathname)) {

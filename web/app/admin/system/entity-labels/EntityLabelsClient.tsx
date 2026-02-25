@@ -196,7 +196,7 @@ export default function EntityLabelsClient() {
 
     return (
         <>
-            <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. customer_members → Children for childcare)." />
+            <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. customer_members displays as Children when industry is childcare)." />
             {locked && <ConfigLockBanner />}
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>

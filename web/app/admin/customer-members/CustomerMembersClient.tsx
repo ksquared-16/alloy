@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 type Member = {
     id: string;
@@ -19,10 +21,11 @@ type Member = {
 
 type Customer = { id: string; name: string | null };
 
-const MEMBER_LABEL_PLURAL = "Members";
-const MEMBER_LABEL_SINGULAR = "Member";
-
 export default function CustomerMembersClient() {
+    const { labels } = useEntityLabels();
+    const plural = labels.customer_members?.plural ?? "Members";
+    const singular = labels.customer_members?.singular ?? "Member";
+
     const searchParams = useSearchParams();
     const customerIdFromUrl = searchParams.get("customer_id")?.trim() || undefined;
 
@@ -32,6 +35,7 @@ export default function CustomerMembersClient() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [newOpen, setNewOpen] = useState(false);
     const [customers, setCustomers] = useState<Customer[]>([]);
+    const { canMutate } = useAdminAuth();
 
     const fetchMembers = useCallback(async (customerId?: string) => {
         setLoading(true);
@@ -97,13 +101,14 @@ export default function CustomerMembersClient() {
     return (
         <div>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-                <h1 className="text-3xl font-bold text-alloy-midnight">{MEMBER_LABEL_PLURAL}</h1>
+                <h1 className="text-3xl font-bold text-alloy-midnight">{plural}</h1>
                 <button
                     type="button"
                     onClick={() => { setSelectedId(null); setNewOpen(true); }}
-                    className="rounded-md border border-alloy-stone/50 bg-white px-4 py-2 text-sm font-medium text-alloy-midnight hover:bg-alloy-stone/20"
+                    disabled={!canMutate}
+                    className="rounded-md border border-alloy-stone/50 bg-white px-4 py-2 text-sm font-medium text-alloy-midnight hover:bg-alloy-stone/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    New {MEMBER_LABEL_SINGULAR}
+                    New {singular}
                 </button>
             </div>
 
@@ -124,13 +129,21 @@ export default function CustomerMembersClient() {
             <Drawer
                 isOpen={isDrawerOpen}
                 onClose={() => { setSelectedId(null); setNewOpen(false); }}
-                title={selected ? `${MEMBER_LABEL_SINGULAR}: ${selected.display_name || selected.id}` : `New ${MEMBER_LABEL_SINGULAR}`}
+                title={selected ? `${singular}: ${selected.display_name || selected.id}` : `New ${singular}`}
             >
                 {selected ? (
-                    <MemberDetail member={selected} onClose={() => setSelectedId(null)} onSaved={() => fetchMembers()} />
+                    <MemberDetail
+                        member={selected}
+                        singular={singular}
+                        canMutate={canMutate}
+                        onClose={() => setSelectedId(null)}
+                        onSaved={() => fetchMembers()}
+                    />
                 ) : newOpen ? (
                     <MemberForm
                         customers={customers}
+                        singular={singular}
+                        canMutate={canMutate}
                         defaultCustomerId={customerIdFromUrl}
                         onClose={() => setNewOpen(false)}
                         onSaved={() => { setNewOpen(false); fetchMembers(customerIdFromUrl); }}
@@ -141,7 +154,19 @@ export default function CustomerMembersClient() {
     );
 }
 
-function MemberDetail({ member, onClose, onSaved }: { member: Member; onClose: () => void; onSaved: () => void }) {
+function MemberDetail({
+    member,
+    singular,
+    canMutate,
+    onClose,
+    onSaved,
+}: {
+    member: Member;
+    singular: string;
+    canMutate: boolean;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
     const [editing, setEditing] = useState(false);
     const [display_name, setDisplayName] = useState(member.display_name ?? "");
     const [relationship, setRelationship] = useState(member.relationship ?? "");
@@ -183,7 +208,7 @@ function MemberDetail({ member, onClose, onSaved }: { member: Member; onClose: (
     };
 
     const handleDelete = async () => {
-        if (!confirm(`Delete this ${MEMBER_LABEL_SINGULAR.toLowerCase()}?`)) return;
+        if (!confirm(`Delete this ${singular.toLowerCase()}?`)) return;
         setDeleting(true);
         setFormError(null);
         try {
@@ -251,21 +276,27 @@ function MemberDetail({ member, onClose, onSaved }: { member: Member; onClose: (
             <div><strong className="text-alloy-midnight/70">Created</strong> {new Date(member.created_at).toLocaleString()}</div>
             <div><strong className="text-alloy-midnight/70">Customer ID</strong> {member.customer_id}</div>
             {formError && <p className="text-sm text-red-600">{formError}</p>}
-            <div className="flex gap-2 pt-2 border-t border-alloy-stone/30">
-                <button type="button" onClick={() => setEditing(true)} className="rounded bg-alloy-blue px-4 py-2 text-sm font-medium text-white">Edit</button>
-                <button type="button" onClick={handleDelete} disabled={deleting} className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50">Delete</button>
-            </div>
+            {canMutate && (
+                <div className="flex gap-2 pt-2 border-t border-alloy-stone/30">
+                    <button type="button" onClick={() => setEditing(true)} className="rounded bg-alloy-blue px-4 py-2 text-sm font-medium text-white">Edit</button>
+                    <button type="button" onClick={handleDelete} disabled={deleting} className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50">Delete</button>
+                </div>
+            )}
         </div>
     );
 }
 
 function MemberForm({
     customers,
+    singular,
+    canMutate,
     onClose,
     onSaved,
     defaultCustomerId,
 }: {
     customers: Customer[];
+    singular: string;
+    canMutate: boolean;
     onClose: () => void;
     onSaved: () => void;
     defaultCustomerId?: string;
@@ -353,7 +384,7 @@ function MemberForm({
                 <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="w-full rounded border border-alloy-stone/40 px-3 py-2 text-sm" />
             </div>
             <div className="flex gap-2 pt-2">
-                <button type="submit" disabled={saving} className="rounded bg-alloy-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                <button type="submit" disabled={saving || !canMutate} className="rounded bg-alloy-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
                     {saving ? "Creating…" : "Create"}
                 </button>
                 <button type="button" onClick={onClose} className="rounded border border-alloy-stone/50 px-4 py-2 text-sm font-medium">
