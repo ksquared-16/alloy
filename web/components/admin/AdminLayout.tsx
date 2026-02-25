@@ -14,6 +14,7 @@ const navItems = [
     { href: "/admin/opportunities", label: "Opportunities" },
     { href: "/admin/jobs", label: "Jobs" },
     { href: "/admin/customers", label: "Customers" },
+    { href: "/admin/customer-members", label: "Members" },
     { href: "/admin/contacts", label: "Contacts" },
     { href: "/admin/discounts", label: "Discounts" },
     { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
