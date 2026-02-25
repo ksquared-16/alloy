@@ -9,3 +9,7 @@ __pycache__/
 # node
 node_modules/
 .next/
+
+# local only
+.env.local
+.vercel/
