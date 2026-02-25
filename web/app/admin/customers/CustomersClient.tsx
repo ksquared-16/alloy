@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 interface Customer {
   id: string;
@@ -28,8 +29,7 @@ type Member = {
   created_at: string;
 };
 
-const MEMBER_LABEL_PLURAL = "Members";
-const MEMBER_LABEL_SINGULAR = "Member";
+const CUSTOMER_MEMBERS_ENTITY_TYPE = "customer_members";
 
 interface CustomersClientProps {
   initialData: Customer[];
@@ -40,6 +40,10 @@ export default function CustomersClient({
   initialData,
   error,
 }: CustomersClientProps) {
+  const { getLabel } = useEntityLabels();
+  const membersPlural = getLabel(CUSTOMER_MEMBERS_ENTITY_TYPE, "plural");
+  const membersSingular = getLabel(CUSTOMER_MEMBERS_ENTITY_TYPE, "singular");
+
   const [selectedRow, setSelectedRow] = useState<Customer | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -150,18 +154,18 @@ export default function CustomersClient({
 
             <div className="border-t border-alloy-stone/30 pt-4">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-semibold text-alloy-midnight">{MEMBER_LABEL_PLURAL}</h3>
+                <h3 className="text-sm font-semibold text-alloy-midnight">{membersPlural}</h3>
                 <Link
                   href={`/admin/customer-members?customer_id=${encodeURIComponent(selectedRow.id)}`}
                   className="text-sm font-medium text-alloy-blue hover:underline"
                 >
-                  Add {MEMBER_LABEL_SINGULAR}
+                  Add {membersSingular}
                 </Link>
               </div>
               {membersLoading ? (
                 <p className="text-sm text-alloy-midnight/60">Loading…</p>
               ) : members.length === 0 ? (
-                <p className="text-sm text-alloy-midnight/60">No {MEMBER_LABEL_PLURAL.toLowerCase()} yet.</p>
+                <p className="text-sm text-alloy-midnight/60">No {membersPlural.toLowerCase()} yet.</p>
               ) : (
                 <ul className="space-y-2">
                   {members.map((m) => (
