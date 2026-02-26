@@ -184,6 +184,17 @@ export default function AdminEntityDrawer() {
     const [memberRelatedContacts, setMemberRelatedContacts] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; created_at?: string }[]>([]);
     const [memberRelatedLoading, setMemberRelatedLoading] = useState(false);
     const [memberRelatedError, setMemberRelatedError] = useState<string | null>(null);
+    type MemberLink = { id: string; customer_member_id: string; contact_id: string; role_key: string; is_active: boolean; contact: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null };
+    const [memberRelatedLinks, setMemberRelatedLinks] = useState<MemberLink[]>([]);
+    const [memberRelatedLinksLoading, setMemberRelatedLinksLoading] = useState(false);
+    const [memberRelatedRoles, setMemberRelatedRoles] = useState<{ id: string; role_key: string; role_label: string; sort_order: number }[]>([]);
+    const [memberLinkModalOpen, setMemberLinkModalOpen] = useState(false);
+    const [memberLinkRoleKey, setMemberLinkRoleKey] = useState("");
+    const [memberLinkContactId, setMemberLinkContactId] = useState("");
+    const [memberLinkSaving, setMemberLinkSaving] = useState(false);
+    const [memberLinkError, setMemberLinkError] = useState<string | null>(null);
+    const [memberLinkContactOptions, setMemberLinkContactOptions] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }[]>([]);
+    const [memberUnlinkingId, setMemberUnlinkingId] = useState<string | null>(null);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -209,6 +220,15 @@ export default function AdminEntityDrawer() {
             setMemberRelatedContacts([]);
             setMemberRelatedLoading(false);
             setMemberRelatedError(null);
+            setMemberRelatedLinks([]);
+            setMemberRelatedLinksLoading(false);
+            setMemberRelatedRoles([]);
+            setMemberLinkModalOpen(false);
+            setMemberLinkRoleKey("");
+            setMemberLinkContactId("");
+            setMemberLinkError(null);
+            setMemberLinkContactOptions([]);
+            setMemberUnlinkingId(null);
             return;
         }
         setDrawerTab("overview");
@@ -365,7 +385,15 @@ export default function AdminEntityDrawer() {
                 return r.json();
             })
             .then((json: { contacts?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; created_at?: string }[] }) => {
-                setMemberRelatedContacts(json.contacts ?? []);
+                const list = (json.contacts ?? []).map((c) => ({
+                    id: c.id,
+                    first_name: c.first_name ?? null,
+                    last_name: c.last_name ?? null,
+                    email: c.email ?? null,
+                    phone: c.phone ?? null,
+                    created_at: c.created_at,
+                }));
+                setMemberRelatedContacts(list);
             })
             .catch((e: Error) => {
                 setMemberRelatedError(e.message);
@@ -373,6 +401,36 @@ export default function AdminEntityDrawer() {
             })
             .finally(() => setMemberRelatedLoading(false));
     }, [drawer.type, data?.customer_id, (data as { _create?: boolean })?._create]);
+
+    const refetchMemberLinks = useCallback(() => {
+        if (drawer.type !== "customer_members" || !drawer.id || drawer.id === "new") return;
+        setMemberRelatedLinksLoading(true);
+        fetch(`/api/admin/customer-member-contacts?customer_member_id=${encodeURIComponent(drawer.id)}`)
+            .then((r) => (r.ok ? r.json() : { links: [] }))
+            .then((json: { links?: MemberLink[] }) => setMemberRelatedLinks(json.links ?? []))
+            .catch(() => setMemberRelatedLinks([]))
+            .finally(() => setMemberRelatedLinksLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "customer_members") {
+            setMemberRelatedRoles([]);
+            setMemberRelatedLinks([]);
+            return;
+        }
+        fetch("/api/admin/customer-member-contact-roles")
+            .then((r) => (r.ok ? r.json() : { roles: [] }))
+            .then((json: { roles?: { id: string; role_key: string; role_label: string; sort_order: number }[] }) => setMemberRelatedRoles(json.roles ?? []))
+            .catch(() => setMemberRelatedRoles([]));
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "customer_members" || drawer.id === "new" || !drawer.id) {
+            setMemberRelatedLinks([]);
+            return;
+        }
+        refetchMemberLinks();
+    }, [drawer.type, drawer.id, refetchMemberLinks]);
 
     useEffect(() => {
         if (drawer.type !== "customer_members" || !data) return;
@@ -892,42 +950,109 @@ export default function AdminEntityDrawer() {
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                         </div>
                     )}
-                    {drawerTab === "related" && drawer.type === "customer_members" && data && (
+                    {drawerTab === "related" && drawer.type === "customer_members" && (
                         <div className="pt-2 space-y-4 mb-4">
                             <section>
-                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Parent / Family (Customer)</h4>
-                                {(data.customer_id as string) ? (
-                                    <DrawerLinkWithName label="Customer" id={data.customer_id as string} type="customers" displayName={data._customer_name as string} />
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Family/Customer</h4>
+                                {!data ? (
+                                    <p className="text-sm text-[#59678b]">Loading…</p>
+                                ) : (data.customer_id as string) ? (
+                                    <DrawerLinkWithName
+                                        label="Customer"
+                                        id={data.customer_id as string}
+                                        type="customers"
+                                        displayName={(data._customer_name as string) ?? (data.customer_id as string) ?? null}
+                                    />
                                 ) : (
                                     <p className="text-sm text-[#59678b]">No family/customer linked.</p>
                                 )}
                             </section>
                             <section>
-                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Contacts (Guardians)</h4>
-                                {!(data.customer_id as string) ? (
-                                    <p className="text-sm text-[#59678b]">No customer linked — contacts not available.</p>
-                                ) : memberRelatedLoading ? (
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b]">Linked contacts (Guardians)</h4>
+                                    {canMutate && data && (data.customer_id as string) && drawer.id && drawer.id !== "new" && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMemberLinkModalOpen(true);
+                                                setMemberLinkRoleKey(memberRelatedRoles[0]?.role_key ?? "");
+                                                setMemberLinkContactId("");
+                                                setMemberLinkError(null);
+                                                const cid = data.customer_id as string;
+                                                fetch(`/api/admin/related/customer/${cid}`)
+                                                    .then((r) => (r.ok ? r.json() : { contacts: [] }))
+                                                    .then((json: { contacts?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] }) => {
+                                                        const opts = (json.contacts ?? []).map((c) => ({
+                                                            id: c.id,
+                                                            first_name: c.first_name ?? null,
+                                                            last_name: c.last_name ?? null,
+                                                            email: c.email ?? null,
+                                                            phone: c.phone ?? null,
+                                                        }));
+                                                        setMemberLinkContactOptions(opts);
+                                                    })
+                                                    .catch(() => setMemberLinkContactOptions([]));
+                                            }}
+                                            className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight"
+                                        >
+                                            Link contact
+                                        </button>
+                                    )}
+                                </div>
+                                {!data ? (
                                     <p className="text-sm text-[#59678b]">Loading…</p>
-                                ) : memberRelatedError ? (
-                                    <p className="text-sm text-red-600">{memberRelatedError}</p>
-                                ) : memberRelatedContacts.length === 0 ? (
-                                    <p className="text-sm text-[#59678b]">No related contacts.</p>
+                                ) : !(data.customer_id as string) ? (
+                                    <p className="text-sm text-[#59678b]">No customer linked — link a family/customer first.</p>
+                                ) : memberRelatedLinksLoading ? (
+                                    <p className="text-sm text-[#59678b]">Loading…</p>
+                                ) : memberRelatedLinks.length === 0 ? (
+                                    <p className="text-sm text-[#59678b]">No linked contacts. Use “Link contact” to add guardians.</p>
                                 ) : (
-                                    <ul className="space-y-1.5">
-                                        {memberRelatedContacts.map((c) => {
-                                            const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.phone || c.id.slice(0, 8) + "…";
+                                    <div className="space-y-3">
+                                        {memberRelatedRoles.map((role) => {
+                                            const linksForRole = memberRelatedLinks.filter((l) => l.role_key === role.role_key && l.is_active);
+                                            if (linksForRole.length === 0) return null;
                                             return (
-                                                <li key={c.id}>
-                                                    <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-sm text-left">
-                                                        {name}
-                                                    </button>
-                                                    {(c.email || c.phone) && (
-                                                        <span className="text-xs text-[#59678b] ml-2">{[c.email, c.phone].filter(Boolean).join(" · ")}</span>
-                                                    )}
-                                                </li>
+                                                <div key={role.id}>
+                                                    <h5 className="text-xs font-medium text-[#45506c] mb-1.5">{role.role_label}</h5>
+                                                    <ul className="space-y-1.5">
+                                                        {linksForRole.map((link) => {
+                                                            const c = link.contact;
+                                                            const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.phone || c.id.slice(0, 8) + "…" : link.contact_id.slice(0, 8) + "…";
+                                                            return (
+                                                                <li key={link.id} className="flex items-center gap-2 flex-wrap">
+                                                                    <button type="button" onClick={() => c && openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-sm text-left">
+                                                                        {name}
+                                                                    </button>
+                                                                    {c && (c.email || c.phone) && (
+                                                                        <span className="text-xs text-[#59678b]">{[c.email, c.phone].filter(Boolean).join(" · ")}</span>
+                                                                    )}
+                                                                    {canMutate && (
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={memberUnlinkingId === link.id}
+                                                                            onClick={async () => {
+                                                                                setMemberUnlinkingId(link.id);
+                                                                                try {
+                                                                                    const res = await fetch(`/api/admin/customer-member-contacts/${link.id}`, { method: "DELETE" });
+                                                                                    if (res.ok) refetchMemberLinks();
+                                                                                } finally {
+                                                                                    setMemberUnlinkingId(null);
+                                                                                }
+                                                                            }}
+                                                                            className="text-xs px-1.5 py-0.5 border border-red-200 text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
+                                                                        >
+                                                                            {memberUnlinkingId === link.id ? "…" : "Unlink"}
+                                                                        </button>
+                                                                    )}
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ul>
+                                                </div>
                                             );
                                         })}
-                                    </ul>
+                                    </div>
                                 )}
                             </section>
                         </div>
@@ -2210,6 +2335,72 @@ export default function AdminEntityDrawer() {
                     })()}
                     </>
                     )}
+                </div>
+            )}
+            {memberLinkModalOpen && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Link contact" onClick={() => setMemberLinkModalOpen(false)}>
+                    <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-4 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-sm font-semibold text-alloy-midnight mb-3">Link contact</h3>
+                        {memberLinkError && <p className="text-red-600 text-sm mb-2">{memberLinkError}</p>}
+                        <div className="mb-3">
+                            <label className="block text-xs font-medium text-[#59678b] mb-1">Role</label>
+                            <select
+                                value={memberLinkRoleKey}
+                                onChange={(e) => setMemberLinkRoleKey(e.target.value)}
+                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
+                            >
+                                <option value="">— Select role —</option>
+                                {memberRelatedRoles.map((r) => (
+                                    <option key={r.id} value={r.role_key}>{r.role_label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="mb-3">
+                            <label className="block text-xs font-medium text-[#59678b] mb-1">Contact</label>
+                            <select
+                                value={memberLinkContactId}
+                                onChange={(e) => setMemberLinkContactId(e.target.value)}
+                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
+                            >
+                                <option value="">— Select contact —</option>
+                                {memberLinkContactOptions.map((c) => {
+                                    const label = [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.phone || c.id.slice(0, 8) + "…";
+                                    return <option key={c.id} value={c.id}>{label}</option>;
+                                })}
+                            </select>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <button type="button" onClick={() => { setMemberLinkModalOpen(false); setMemberLinkError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20">Cancel</button>
+                            <button
+                                type="button"
+                                disabled={memberLinkSaving || !memberLinkRoleKey || !memberLinkContactId}
+                                onClick={async () => {
+                                    if (!drawer.id || drawer.id === "new" || !memberLinkRoleKey || !memberLinkContactId) return;
+                                    setMemberLinkSaving(true);
+                                    setMemberLinkError(null);
+                                    try {
+                                        const res = await fetch("/api/admin/customer-member-contacts", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ customer_member_id: drawer.id, contact_id: memberLinkContactId, role_key: memberLinkRoleKey }),
+                                        });
+                                        const json = await res.json().catch(() => ({}));
+                                        if (!res.ok) {
+                                            setMemberLinkError((json as { error?: string }).error ?? "Failed to link");
+                                            return;
+                                        }
+                                        setMemberLinkModalOpen(false);
+                                        refetchMemberLinks();
+                                    } finally {
+                                        setMemberLinkSaving(false);
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded hover:opacity-90 disabled:opacity-50"
+                            >
+                                {memberLinkSaving ? "Saving…" : "Link"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
             {setLocationOpen && setLocationEntity && drawer.id && (

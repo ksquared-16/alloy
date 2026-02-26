@@ -35,7 +35,15 @@ export async function GET(
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    return NextResponse.json(row);
+    const out: Record<string, unknown> = { ...row };
+    const customerId = (row as { customer_id: string | null }).customer_id;
+    if (customerId) {
+        const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+        (out as Record<string, unknown>)._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+    } else {
+        (out as Record<string, unknown>)._customer_name = null;
+    }
+    return NextResponse.json(out);
 }
 
 /** PATCH: update customer_member. Admin only. */
