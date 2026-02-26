@@ -65,8 +65,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/admin/workflow-runs", label: "Runs" },
                 ],
             },
-            { href: "/admin/messaging", label: "Messaging", entityType: "messages" },
-            { href: "/admin/messages-outbox", label: "Outbox" },
+            { href: "/admin/messaging", label: "Messages", entityType: "messages" },
         ],
     },
     {
