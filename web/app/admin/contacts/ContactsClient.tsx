@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
-import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import SectionCard from "@/components/admin/SectionCard";
-import Drawer from "@/components/admin/Drawer";
+import DataTable from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { Filter } from "lucide-react";
 
 type Contact = {
     id: string;
@@ -26,33 +28,19 @@ type Contact = {
     archived_by?: string | null;
 };
 
-const EMPTY_FORM = {
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    company_name: "",
-    notes: "",
-    status: "active",
-    customer_id: "",
-    vendor_id: "",
-    vendor_contact_role: "",
-};
-
 export default function ContactsClient() {
     const { labels } = useEntityLabels();
     const title = labels?.contacts?.plural ?? "Contacts";
+    const { openDrawer } = useAdminDrawer();
+    const { canMutate } = useAdminAuth();
+
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [searchApplied, setSearchApplied] = useState("");
     const [includeArchived, setIncludeArchived] = useState(false);
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState(EMPTY_FORM);
-    const [saveLoading, setSaveLoading] = useState(false);
-    const [saveError, setSaveError] = useState<string | null>(null);
-    const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+    const [filterOpen, setFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
 
     const fetchList = useCallback(async () => {
         setLoading(true);
@@ -64,7 +52,11 @@ export default function ContactsClient() {
             const json = await res.json();
             if (res.ok) {
                 setContacts(json.contacts ?? []);
+            } else {
+                setContacts([]);
             }
+        } catch {
+            setContacts([]);
         } finally {
             setLoading(false);
         }
@@ -74,322 +66,122 @@ export default function ContactsClient() {
         fetchList();
     }, [fetchList]);
 
-    const openCreate = () => {
-        setEditingId(null);
-        setForm(EMPTY_FORM);
-        setSaveError(null);
-        setDrawerOpen(true);
-    };
+    useEffect(() => {
+        const onFocus = () => fetchList();
+        window.addEventListener("focus", onFocus);
+        return () => window.removeEventListener("focus", onFocus);
+    }, [fetchList]);
 
-    const openEdit = (c: Contact) => {
-        setEditingId(c.id);
-        setForm({
-            first_name: c.first_name ?? "",
-            last_name: c.last_name ?? "",
-            email: c.email ?? "",
-            phone: c.phone ?? "",
-            company_name: (c as { company_name?: string }).company_name ?? "",
-            notes: (c as { notes?: string }).notes ?? "",
-            status: c.status ?? "active",
-            customer_id: (c as { customer_id?: string }).customer_id ?? "",
-            vendor_id: (c as { vendor_id?: string }).vendor_id ?? "",
-            vendor_contact_role: (c as { vendor_contact_role?: string }).vendor_contact_role ?? "",
-        });
-        setSaveError(null);
-        setDrawerOpen(true);
-    };
-
-    const handleSave = async () => {
-        setSaveLoading(true);
-        setSaveError(null);
-        try {
-            if (editingId) {
-                const res = await fetch(`/api/admin/contacts/${editingId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        first_name: form.first_name || null,
-                        last_name: form.last_name || null,
-                        email: form.email || null,
-                        phone: form.phone || null,
-                        company_name: form.company_name || null,
-                        notes: form.notes || null,
-                        status: form.status || null,
-                        customer_id: form.customer_id || null,
-                        vendor_id: form.vendor_id || null,
-                        vendor_contact_role: form.vendor_contact_role || null,
-                    }),
-                });
-                const json = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    setSaveError((json as { error?: string }).error ?? "Update failed");
-                    return;
-                }
-            } else {
-                const res = await fetch("/api/admin/contacts", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        first_name: form.first_name || null,
-                        last_name: form.last_name || null,
-                        email: form.email || null,
-                        phone: form.phone || null,
-                        company_name: form.company_name || null,
-                        notes: form.notes || null,
-                        status: form.status || null,
-                        customer_id: form.customer_id || null,
-                        vendor_id: form.vendor_id || null,
-                        vendor_contact_role: form.vendor_contact_role || null,
-                    }),
-                });
-                const json = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    setSaveError((json as { error?: string }).error ?? "Create failed");
-                    return;
-                }
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+                setFilterOpen(false);
             }
-            setDrawerOpen(false);
-            fetchList();
-        } finally {
-            setSaveLoading(false);
-        }
-    };
-
-    const archive = async (id: string) => {
-        setActionLoadingId(id);
-        try {
-            const res = await fetch(`/api/admin/contacts/${id}/archive`, { method: "POST" });
-            if (res.ok) fetchList();
-        } finally {
-            setActionLoadingId(null);
-        }
-    };
-
-    const unarchive = async (id: string) => {
-        setActionLoadingId(id);
-        try {
-            const res = await fetch(`/api/admin/contacts/${id}/unarchive`, { method: "POST" });
-            if (res.ok) fetchList();
-        } finally {
-            setActionLoadingId(null);
-        }
-    };
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const name = (c: Contact) => [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
 
+    const columns = [
+        { key: "name" as keyof Contact, label: "Name", sortable: true, render: (_: unknown, r: Contact) => name(r) },
+        { key: "email", label: "Email", sortable: true, render: (v: string | null) => v ?? "—" },
+        { key: "phone", label: "Phone", sortable: true, render: (v: string | null) => v ?? "—" },
+        { key: "status", label: "Status", sortable: true, render: (_: unknown, r: Contact) => <StatusBadge label={r.status} variant={r.status === "active" ? "success" : "neutral"} /> },
+        { key: "archived_at", label: "Archived", sortable: true, render: (v: string | null) => (v ? "Yes" : "—") },
+        { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
+    ];
+
     return (
         <>
-            <AdminPageHeader title={title} subtitle="Contact records scoped by your org. Create, edit, and archive." />
-            <SectionCard title="Filters" className="mb-4">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Search (name, email, phone, company)</label>
-                        <div className="flex gap-1">
-                            <input
-                                type="text"
-                                placeholder="Search…"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), setSearchApplied(search.trim()))}
-                                className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-56"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setSearchApplied(search.trim())}
-                                className="px-3 py-1.5 text-sm bg-alloy-stone/30 rounded hover:bg-alloy-stone/50"
-                            >
-                                Apply
-                            </button>
-                            {searchApplied && (
-                                <button type="button" onClick={() => { setSearch(""); setSearchApplied(""); }} className="px-2 py-1.5 text-sm text-alloy-midnight/70 hover:underline">
-                                    Clear
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            id="include_archived"
-                            checked={includeArchived}
-                            onChange={(e) => setIncludeArchived(e.target.checked)}
-                            className="rounded border-alloy-stone/40"
-                        />
-                        <label htmlFor="include_archived" className="text-sm text-alloy-midnight/70">Include archived</label>
-                    </div>
-                </div>
-            </SectionCard>
-            <SectionCard title="Contacts">
-                <div className="flex items-center justify-between gap-4 mb-4">
-                    <span className="text-sm text-alloy-midnight/60">{contacts.length} contact(s)</span>
+            <AdminPageHeader title={title} subtitle="Contact records scoped by your org. Click a row to open." />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="relative flex items-center gap-2" ref={filterRef}>
                     <button
                         type="button"
-                        onClick={openCreate}
+                        onClick={() => setFilterOpen((o) => !o)}
+                        className="flex items-center gap-1.5 rounded-md border border-[#e6e8ec] bg-white px-2.5 py-1.5 text-sm text-[#45506c] hover:bg-[#F4F6F9]"
+                        aria-expanded={filterOpen}
+                        aria-haspopup="true"
+                    >
+                        <Filter className="h-4 w-4 text-[#59678b]" />
+                        Filters
+                        {(searchApplied || includeArchived) && (
+                            <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />
+                        )}
+                    </button>
+                    {filterOpen && (
+                        <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-[#e6e8ec] bg-white p-3 shadow-lg">
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-[#59678b] mb-1">Search (name, email, phone, company)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Search…"
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && (setSearchApplied(search.trim()), setFilterOpen(false))}
+                                        className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
+                                    />
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={includeArchived}
+                                        onChange={(e) => setIncludeArchived(e.target.checked)}
+                                        className="rounded border-alloy-stone/40"
+                                    />
+                                    <span className="text-sm text-alloy-midnight/70">Include archived</span>
+                                </label>
+                                <div className="flex gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchApplied(search.trim());
+                                            setFilterOpen(false);
+                                        }}
+                                        className="px-2.5 py-1.5 text-sm bg-alloy-midnight text-white rounded hover:opacity-90"
+                                    >
+                                        Apply
+                                    </button>
+                                    {searchApplied && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSearch("");
+                                                setSearchApplied("");
+                                                setFilterOpen(false);
+                                            }}
+                                            className="px-2.5 py-1.5 text-sm text-alloy-midnight/70 hover:underline"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {canMutate && (
+                    <button
+                        type="button"
+                        onClick={() => openDrawer({ type: "contacts", id: "new" })}
                         className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
                     >
                         New contact
                     </button>
-                </div>
-                {loading ? (
-                    <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                    <th className="pb-2 pr-4">Name</th>
-                                    <th className="pb-2 pr-4">Email</th>
-                                    <th className="pb-2 pr-4">Phone</th>
-                                    <th className="pb-2 pr-4">Status</th>
-                                    <th className="pb-2 pr-4">Archived</th>
-                                    <th className="pb-2 pr-4">Created</th>
-                                    <th className="pb-2 pr-4">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {contacts.length === 0 ? (
-                                    <tr><td colSpan={7} className="py-4 text-alloy-midnight/60">No contacts found.</td></tr>
-                                ) : (
-                                    contacts.map((c) => (
-                                        <tr key={c.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                                            <td className="py-2 pr-4">{name(c)}</td>
-                                            <td className="py-2 pr-4">{c.email ?? "—"}</td>
-                                            <td className="py-2 pr-4">{c.phone ?? "—"}</td>
-                                            <td className="py-2 pr-4"><StatusBadge label={c.status} variant={c.status === "active" ? "success" : "neutral"} /></td>
-                                            <td className="py-2 pr-4">{c.archived_at ? "Yes" : "—"}</td>
-                                            <td className="py-2 pr-4">{formatDateTime(c.created_at)}</td>
-                                            <td className="py-2 pr-4">
-                                                <span className="flex flex-wrap gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openEdit(c)}
-                                                        className="text-xs px-2 py-0.5 text-alloy-blue hover:underline"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    {c.archived_at ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => unarchive(c.id)}
-                                                            disabled={actionLoadingId === c.id}
-                                                            className="text-xs px-2 py-0.5 text-alloy-midnight/70 hover:underline disabled:opacity-50"
-                                                        >
-                                                            Unarchive
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => archive(c.id)}
-                                                            disabled={actionLoadingId === c.id}
-                                                            className="text-xs px-2 py-0.5 text-amber-700 hover:underline disabled:opacity-50"
-                                                        >
-                                                            Archive
-                                                        </button>
-                                                    )}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
                 )}
-            </SectionCard>
-
-            <Drawer
-                isOpen={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                title={editingId ? "Edit contact" : "New contact"}
-                zIndexBackdrop={60}
-                zIndexPanel={70}
-            >
-                <div className="space-y-4">
-                    {saveError && (
-                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{saveError}</p>
-                    )}
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">First name</label>
-                            <input
-                                value={form.first_name}
-                                onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Last name</label>
-                            <input
-                                value={form.last_name}
-                                onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Email</label>
-                            <input
-                                type="email"
-                                value={form.email}
-                                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Phone</label>
-                            <input
-                                value={form.phone}
-                                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Company name</label>
-                            <input
-                                value={form.company_name}
-                                onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status</label>
-                            <select
-                                value={form.status}
-                                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            >
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Notes</label>
-                            <textarea
-                                value={form.notes}
-                                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                                rows={2}
-                                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                        <button
-                            type="button"
-                            onClick={handleSave}
-                            disabled={saveLoading}
-                            className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                        >
-                            {saveLoading ? "Saving…" : editingId ? "Update" : "Create"}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setDrawerOpen(false)}
-                            className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            </Drawer>
+            </div>
+            <DataTable
+                data={contacts}
+                columns={columns}
+                onRowClick={(row) => openDrawer({ type: "contacts", id: row.id })}
+                searchable={false}
+                filters={[]}
+                hideToolbar
+                loading={loading}
+            />
         </>
     );
 }

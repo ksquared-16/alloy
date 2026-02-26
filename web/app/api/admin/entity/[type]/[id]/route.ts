@@ -81,6 +81,9 @@ export async function GET(
             return NextResponse.json(out);
         }
         if (type === "contacts") {
+            if (id === "new") {
+                return NextResponse.json({ _create: true });
+            }
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const contact = data as { vendor_id?: string | null };

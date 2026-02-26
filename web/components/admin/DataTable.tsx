@@ -23,6 +23,8 @@ interface DataTableProps<T> {
     searchable?: boolean;
     onRowClick?: (row: T) => void;
     loading?: boolean;
+    /** When true, do not render the search/filters bar (use with custom toolbar e.g. filter icon). */
+    hideToolbar?: boolean;
 }
 
 export default function DataTable<T extends Record<string, any>>({
@@ -32,6 +34,7 @@ export default function DataTable<T extends Record<string, any>>({
     searchable = true,
     onRowClick,
     loading = false,
+    hideToolbar = false,
 }: DataTableProps<T>) {
     const [search, setSearch] = useState("");
     const [sortColumn, setSortColumn] = useState<keyof T | string | null>(null);
@@ -126,6 +129,7 @@ export default function DataTable<T extends Record<string, any>>({
     return (
         <div className="rounded-lg border border-[#e6e8ec] bg-white">
             {/* Search and Filters */}
+            {!hideToolbar && (
             <div className="space-y-4 border-b border-[#e6e8ec] p-4">
                 {searchable && (
                     <div>
@@ -168,6 +172,7 @@ export default function DataTable<T extends Record<string, any>>({
                     </div>
                 )}
             </div>
+            )}
 
             {/* Table */}
             <div className="overflow-x-auto">

@@ -196,6 +196,8 @@ export default function AdminEntityDrawer() {
     const [memberLinkContactOptions, setMemberLinkContactOptions] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }[]>([]);
     const [memberUnlinkingId, setMemberUnlinkingId] = useState<string | null>(null);
     const [memberRelationshipOptions, setMemberRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
+    const [contactCreateSaving, setContactCreateSaving] = useState(false);
+    const [contactCreateError, setContactCreateError] = useState<string | null>(null);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -231,6 +233,8 @@ export default function AdminEntityDrawer() {
             setMemberLinkContactOptions([]);
             setMemberUnlinkingId(null);
             setMemberRelationshipOptions([]);
+            setContactCreateSaving(false);
+            setContactCreateError(null);
             return;
         }
         setDrawerTab("overview");
@@ -457,6 +461,22 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.defaultCustomerId, data]);
 
     useEffect(() => {
+        if (drawer.type !== "contacts" || !data || !(data as { _create?: boolean })._create) return;
+        setFormData({
+            first_name: "",
+            last_name: "",
+            email: "",
+            phone: "",
+            company_name: "",
+            notes: "",
+            status: "active",
+            customer_id: "",
+            vendor_id: "",
+            vendor_contact_role: "",
+        });
+    }, [drawer.type, data]);
+
+    useEffect(() => {
         if (drawer.type !== "schedules" || !drawer.id) {
             setScheduleVendors([]);
             setScheduleRescheduleForm(null);
@@ -572,7 +592,12 @@ export default function AdminEntityDrawer() {
                 last_name: data.last_name ?? "",
                 email: data.email ?? "",
                 phone: data.phone ?? "",
-                status: data.status ?? "",
+                company_name: (data.company_name as string) ?? "",
+                notes: (data.notes as string) ?? "",
+                status: data.status ?? "active",
+                customer_id: (data.customer_id as string) ?? "",
+                vendor_id: (data.vendor_id as string) ?? "",
+                vendor_contact_role: (data.vendor_contact_role as string) ?? "",
             });
         } else if (drawer.type === "customers") {
             setFormData({
@@ -794,7 +819,9 @@ export default function AdminEntityDrawer() {
 
     const title: React.ReactNode = data
         ? drawer.type === "contacts"
-            ? `Contact: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
+            ? (data as { _create?: boolean })._create
+                ? "New contact"
+                : `Contact: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
             : drawer.type === "customers"
               ? `Customer: ${(data.name as string) || drawer.id}`
               : drawer.type === "customer_members"
@@ -855,7 +882,9 @@ export default function AdminEntityDrawer() {
                                 {canEditInDrawer(drawer.type) && (
                                     !isEditing ? (
                                         <>
-                                            <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                            {canMutate && !(data as { _create?: boolean })?._create && (
+                                                <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                            )}
                                             {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
                                             {drawer.type === "jobs" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>}
                                             {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
@@ -868,7 +897,7 @@ export default function AdminEntityDrawer() {
                                     )
                                 )}
                             </div>
-                            {["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && (
+                            {["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create && (
                                 <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
                                     {(["overview", "related", ...(drawer.type === "opportunities" ? ["automation" as const] : []), "details"] as const).map((tab) => (
                                         <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
@@ -1125,23 +1154,54 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "overview" && (
                     <>
-                    {drawer.type === "contacts" && (
+                    {drawer.type === "contacts" && (data as { _create?: boolean })?._create ? (
+                        <div className="space-y-4">
+                            {contactCreateError && <p className="text-sm text-red-600">{contactCreateError}</p>}
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status ?? "active")} onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} rows={2} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                            <div className="flex gap-2 pt-2">
+                                <button type="button" disabled={contactCreateSaving || !canMutate} onClick={async () => {
+                                    setContactCreateSaving(true); setContactCreateError(null);
+                                    try {
+                                        const res = await fetch("/api/admin/contacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first_name: (formData.first_name as string)?.trim() || null, last_name: (formData.last_name as string)?.trim() || null, email: (formData.email as string)?.trim() || null, phone: (formData.phone as string)?.trim() || null, company_name: (formData.company_name as string)?.trim() || null, notes: (formData.notes as string)?.trim() || null, status: (formData.status as string) || null, customer_id: (formData.customer_id as string)?.trim() || null, vendor_id: (formData.vendor_id as string)?.trim() || null, vendor_contact_role: (formData.vendor_contact_role as string)?.trim() || null }) });
+                                        const json = await res.json().catch(() => ({}));
+                                        if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+                                        const newId = (json as { id?: string }).id;
+                                        if (newId) { openDrawer({ type: "contacts", id: newId }); router.refresh(); }
+                                        else setContactCreateError("No id returned");
+                                    } catch (e: unknown) { setContactCreateError((e as Error).message); }
+                                    setContactCreateSaving(false);
+                                }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">{contactCreateSaving ? "Creating…" : "Create"}</button>
+                                <button type="button" onClick={closeDrawer} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
+                            </div>
+                        </div>
+                    ) : drawer.type === "contacts" && data && (
                         <>
                             {isEditing ? (
                                 <>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First Name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last Name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><input value={String(formData.status ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status ?? "active")} onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} rows={2} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
                                 </>
                             ) : (
                                 <>
-                                    <Field label="First Name" value={data.first_name as string} />
-                                    <Field label="Last Name" value={data.last_name as string} />
+                                    <Field label="First name" value={data.first_name as string} />
+                                    <Field label="Last name" value={data.last_name as string} />
                                     <Field label="Email" value={data.email as string} />
                                     <Field label="Phone" value={data.phone as string} />
+                                    <Field label="Company name" value={data.company_name as string} />
                                     <Field label="Status" value={data.status as string} />
+                                    <Field label="Notes" value={data.notes as string} />
+                                    <Field label="Archived" value={data.archived_at ? "Yes" : "No"} />
                                 </>
                             )}
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
@@ -1162,6 +1222,15 @@ export default function AdminEntityDrawer() {
                                     );
                                 })()}
                             </div>
+                            {canMutate && !isEditing && (
+                                <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
+                                    {data.archived_at ? (
+                                        <button type="button" onClick={async () => { const res = await fetch(`/api/admin/contacts/${drawer.id}/unarchive`, { method: "POST" }); if (res.ok) { refetch(); router.refresh(); } }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/20">Unarchive</button>
+                                    ) : (
+                                        <button type="button" onClick={async () => { const res = await fetch(`/api/admin/contacts/${drawer.id}/archive`, { method: "POST" }); if (res.ok) { refetch(); router.refresh(); } }} className="px-3 py-1.5 text-sm border border-amber-200 text-amber-800 rounded-md hover:bg-amber-50">Archive</button>
+                                    )}
+                                </div>
+                            )}
                         </>
                     )}
                     {drawer.type === "customer_members" && data && (
