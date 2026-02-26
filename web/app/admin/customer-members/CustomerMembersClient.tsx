@@ -33,6 +33,14 @@ export default function CustomerMembersClient() {
     const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [relationshipOptions, setRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
+
+    useEffect(() => {
+        fetch("/api/admin/customer-member-relationship-types")
+            .then((r) => (r.ok ? r.json() : { options: [] }))
+            .then((json: { options?: { key: string; label: string }[] }) => setRelationshipOptions(json.options ?? []))
+            .catch(() => setRelationshipOptions([]));
+    }, []);
 
     const fetchMembers = useCallback(async (customerId?: string) => {
         setLoading(true);
@@ -70,9 +78,15 @@ export default function CustomerMembersClient() {
         return () => window.removeEventListener("focus", onFocus);
     }, [fetchMembers, customerIdFromUrl]);
 
+    const relationshipLabel = (v: string | null) => {
+        if (!v) return "—";
+        const opt = relationshipOptions.find((o) => o.key === v);
+        return opt ? opt.label : v;
+    };
+
     const columns = [
         { key: "display_name", label: "Name", sortable: true, render: (_: unknown, r: Member) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || "—" },
-        { key: "relationship", label: "Relationship", sortable: true, render: (v: string | null) => v || "—" },
+        { key: "relationship", label: "Relationship", sortable: true, render: (v: string | null) => relationshipLabel(v) },
         { key: "dob", label: "DOB", sortable: true, render: (v: string | null) => v || "—" },
         { key: "is_active", label: "Active", sortable: true, render: (v: boolean) => (v ? "Yes" : "No") },
         { key: "created_at", label: "Created", sortable: true, render: (v: string) => new Date(v).toLocaleString() },

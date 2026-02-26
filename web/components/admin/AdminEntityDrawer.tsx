@@ -195,6 +195,7 @@ export default function AdminEntityDrawer() {
     const [memberLinkError, setMemberLinkError] = useState<string | null>(null);
     const [memberLinkContactOptions, setMemberLinkContactOptions] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }[]>([]);
     const [memberUnlinkingId, setMemberUnlinkingId] = useState<string | null>(null);
+    const [memberRelationshipOptions, setMemberRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -229,6 +230,7 @@ export default function AdminEntityDrawer() {
             setMemberLinkError(null);
             setMemberLinkContactOptions([]);
             setMemberUnlinkingId(null);
+            setMemberRelationshipOptions([]);
             return;
         }
         setDrawerTab("overview");
@@ -416,12 +418,17 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "customer_members") {
             setMemberRelatedRoles([]);
             setMemberRelatedLinks([]);
+            setMemberRelationshipOptions([]);
             return;
         }
         fetch("/api/admin/customer-member-contact-roles")
             .then((r) => (r.ok ? r.json() : { roles: [] }))
             .then((json: { roles?: { id: string; role_key: string; role_label: string; sort_order: number }[] }) => setMemberRelatedRoles(json.roles ?? []))
             .catch(() => setMemberRelatedRoles([]));
+        fetch("/api/admin/customer-member-relationship-types")
+            .then((r) => (r.ok ? r.json() : { options: [] }))
+            .then((json: { options?: { key: string; label: string }[] }) => setMemberRelationshipOptions(json.options ?? []))
+            .catch(() => setMemberRelationshipOptions([]));
     }, [drawer.type]);
 
     useEffect(() => {
@@ -440,6 +447,7 @@ export default function AdminEntityDrawer() {
                 customer_id: defaultId,
                 display_name: "",
                 relationship: "",
+                relationship_custom: "",
                 first_name: "",
                 last_name: "",
                 dob: "",
@@ -639,10 +647,16 @@ export default function AdminEntityDrawer() {
                 access_notes: data.access_notes ?? "",
             });
         } else if (drawer.type === "customer_members") {
+            const rel = (data.relationship as string) ?? "";
+            const meta = (data.metadata as Record<string, unknown>) || {};
+            const custom = (meta.relationship_custom as string) ?? "";
+            const opts = memberRelationshipOptions;
+            const inOpts = opts.some((o) => o.key === rel);
             setFormData({
                 customer_id: data.customer_id ?? "",
                 display_name: data.display_name ?? "",
-                relationship: data.relationship ?? "",
+                relationship: inOpts ? rel : "other",
+                relationship_custom: inOpts ? custom : (custom || rel),
                 first_name: data.first_name ?? "",
                 last_name: data.last_name ?? "",
                 dob: data.dob ?? "",
@@ -651,7 +665,7 @@ export default function AdminEntityDrawer() {
         }
         setSaveError(null);
         setIsEditing(true);
-    }, [data, drawer.type]);
+    }, [data, drawer.type, memberRelationshipOptions]);
 
     const saveEdit = useCallback(async () => {
         if (!drawer.type || !drawer.id) return;
@@ -682,13 +696,19 @@ export default function AdminEntityDrawer() {
                 return;
             }
             if (drawer.type === "customer_members") {
+                const rel = typeof formData.relationship === "string" ? formData.relationship.trim() || null : null;
+                const existingMeta = (data?.metadata as Record<string, unknown>) || {};
+                const meta = rel === "other"
+                    ? { ...existingMeta, relationship_custom: (formData.relationship_custom as string)?.trim() || null }
+                    : existingMeta;
                 const payload = {
                     display_name: typeof formData.display_name === "string" ? formData.display_name.trim() : "",
-                    relationship: typeof formData.relationship === "string" ? formData.relationship.trim() || null : null,
+                    relationship: rel,
                     first_name: typeof formData.first_name === "string" ? formData.first_name.trim() || null : null,
                     last_name: typeof formData.last_name === "string" ? formData.last_name.trim() || null : null,
                     dob: typeof formData.dob === "string" && formData.dob.trim() ? formData.dob.trim() : null,
                     is_active: !!formData.is_active,
+                    metadata: Object.keys(meta).length ? meta : undefined,
                 };
                 const res = await fetch(`/api/admin/customer-members/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                 const json = await res.json().catch(() => ({}));
@@ -1157,7 +1177,16 @@ export default function AdminEntityDrawer() {
                                         </select>
                                     </div>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label><input value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div>
+                                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label>
+                                        <select value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                            <option value="">— Select —</option>
+                                            {memberRelationshipOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                        </select>
+                                        {(formData.relationship as string) === "other" && (
+                                            <input value={String(formData.relationship_custom ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship_custom: e.target.value }))} placeholder="Specify relationship" disabled={!canMutate} className="mt-1 w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" />
+                                        )}
+                                    </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                         <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -1168,7 +1197,9 @@ export default function AdminEntityDrawer() {
                                         <button type="button" disabled={memberCreateSaving || !canMutate || !(formData.display_name as string)?.trim() || !(formData.customer_id as string)?.trim()} onClick={async () => {
                                             setMemberCreateSaving(true); setMemberCreateError(null);
                                             try {
-                                                const res = await fetch("/api/admin/customer-members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: formData.customer_id, display_name: (formData.display_name as string)?.trim(), relationship: (formData.relationship as string)?.trim() || null, first_name: (formData.first_name as string)?.trim() || null, last_name: (formData.last_name as string)?.trim() || null, dob: (formData.dob as string)?.trim() || null, is_active: !!formData.is_active }) });
+                                                const rel = (formData.relationship as string)?.trim() || null;
+                                                const meta = rel === "other" ? { relationship_custom: (formData.relationship_custom as string)?.trim() || null } : undefined;
+                                                const res = await fetch("/api/admin/customer-members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: formData.customer_id, display_name: (formData.display_name as string)?.trim(), relationship: rel, first_name: (formData.first_name as string)?.trim() || null, last_name: (formData.last_name as string)?.trim() || null, dob: (formData.dob as string)?.trim() || null, is_active: !!formData.is_active, metadata: meta }) });
                                                 const json = await res.json().catch(() => ({}));
                                                 if (!res.ok) throw new Error((json.error as string) || "Create failed");
                                                 const newId = (json as { id?: string }).id;
@@ -1183,7 +1214,16 @@ export default function AdminEntityDrawer() {
                             ) : isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label><input value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                    <div>
+                                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label>
+                                        <select value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                            <option value="">— Select —</option>
+                                            {memberRelationshipOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                        </select>
+                                        {(formData.relationship as string) === "other" && (
+                                            <input value={String(formData.relationship_custom ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship_custom: e.target.value }))} placeholder="Specify relationship" disabled={!canMutate} className="mt-1 w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" />
+                                        )}
+                                    </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                         <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -1194,7 +1234,18 @@ export default function AdminEntityDrawer() {
                             ) : (
                                 <>
                                     <Field label="Display name" value={data.display_name as string} />
-                                    <Field label="Relationship" value={data.relationship as string} />
+                                    <Field
+                                        label="Relationship"
+                                        value={(() => {
+                                            const rel = (data.relationship as string) ?? "";
+                                            if (rel === "other") {
+                                                const custom = ((data.metadata as Record<string, unknown>)?.relationship_custom as string) ?? "";
+                                                return custom || "Other";
+                                            }
+                                            const opt = memberRelationshipOptions.find((o) => o.key === rel);
+                                            return opt ? opt.label : (rel || "—");
+                                        })()}
+                                    />
                                     <Field label="First name" value={data.first_name as string} />
                                     <Field label="Last name" value={data.last_name as string} />
                                     <Field label="DOB" value={data.dob as string} />
