@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
@@ -207,12 +207,167 @@ export default function StatusesClient() {
 
     const filterLabel = entityTypeFilter ? entityTypeDisplayLabel(entityTypeFilter, labels ?? {}) : "";
 
+    const statusesByEntityType = useMemo(() => {
+        const map: Record<string, StatusDef[]> = {};
+        for (const s of statuses) {
+            (map[s.entity_type] = map[s.entity_type] ?? []).push(s);
+        }
+        return map;
+    }, [statuses]);
+
+    const sortedEntityTypes = useMemo(
+        () => Object.keys(statusesByEntityType).sort((a, b) => a.localeCompare(b)),
+        [statusesByEntityType]
+    );
+
+    const renderTable = (rows: StatusDef[], emptyMessage: string) => (
+        <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+                <thead>
+                    <tr className="border-b border-[#e6e8ec] text-[#59678b]">
+                        <th className="pb-2 pr-4 font-semibold">Label</th>
+                        <th className="pb-2 pr-4 font-semibold">Key</th>
+                        <th className="pb-2 pr-4 font-semibold">Sort</th>
+                        <th className="pb-2 pr-4 font-semibold">Active</th>
+                        <th className="pb-2 pr-4 font-semibold">System</th>
+                        {canMutate && <th className="pb-2 font-semibold">Actions</th>}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.length === 0 ? (
+                        <tr>
+                            <td colSpan={canMutate ? 6 : 5} className="py-4 text-[#59678b]">
+                                {emptyMessage}
+                            </td>
+                        </tr>
+                    ) : (
+                        rows.map((row) => (
+                            <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
+                                {editingId === row.id ? (
+                                    <>
+                                        <td className="py-2 pr-4">
+                                            <input
+                                                type="text"
+                                                value={editLabel}
+                                                onChange={(e) => setEditLabel(e.target.value)}
+                                                className="w-full min-w-[120px] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                            />
+                                        </td>
+                                        <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
+                                        <td className="py-2 pr-4">
+                                            <input
+                                                type="number"
+                                                value={editSortOrder}
+                                                onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
+                                                className="w-20 rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                            />
+                                        </td>
+                                        <td className="py-2 pr-4">
+                                            <input
+                                                type="checkbox"
+                                                checked={editActive}
+                                                onChange={(e) => setEditActive(e.target.checked)}
+                                            />
+                                        </td>
+                                        <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
+                                        <td className="py-2 flex flex-wrap gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={saveEdit}
+                                                disabled={editSaving}
+                                                className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20 disabled:opacity-50"
+                                            >
+                                                {editSaving ? "Saving…" : "Save"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={cancelEdit}
+                                                className="rounded border border-[#e6e8ec] px-2 py-1 text-xs font-medium hover:bg-[#eef0f4]"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </td>
+                                    </>
+                                ) : (
+                                    <>
+                                        <td className="py-2 pr-4 font-medium text-[#31394d]">
+                                            {row.status_label ?? "—"}
+                                        </td>
+                                        <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
+                                        <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
+                                        <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
+                                        <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
+                                        {canMutate && (
+                                            <td className="py-2 flex flex-wrap gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => startEdit(row)}
+                                                    className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
+                                                >
+                                                    Edit
+                                                </button>
+                                                {deleteConfirmId === row.id ? (
+                                                    <>
+                                                        <span className="text-xs text-[#59678b]">
+                                                            {row.is_system ? "Deactivate?" : "Delete?"}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDelete(row)}
+                                                            disabled={deleteSaving}
+                                                            className="rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                                        >
+                                                            {deleteSaving ? "…" : row.is_system ? "Deactivate" : "Delete"}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDeleteConfirmId(null)}
+                                                            className="rounded border border-[#e6e8ec] px-2 py-1 text-xs font-medium hover:bg-[#eef0f4]"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeleteConfirmId(row.id)}
+                                                        className="rounded border border-amber-200 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50"
+                                                    >
+                                                        {row.is_system ? "Deactivate" : "Delete"}
+                                                    </button>
+                                                )}
+                                            </td>
+                                        )}
+                                    </>
+                                )}
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+
     return (
         <>
-            <AdminPageHeader
-                title="Statuses"
-                subtitle="Configure statuses per entity type (org-scoped)."
-            />
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <AdminPageHeader
+                        title={entityTypeFilter ? `Statuses — ${filterLabel}` : "Statuses"}
+                        subtitle={entityTypeFilter ? undefined : "Manage workflow states for each entity."}
+                    />
+                </div>
+                {canMutate && (
+                    <button
+                        type="button"
+                        onClick={openNewModal}
+                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
+                    >
+                        New Status
+                    </button>
+                )}
+            </div>
+
             {entityTypeFilter && (
                 <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3 text-sm">
                     <span className="text-[#31394d]">
@@ -234,155 +389,37 @@ export default function StatusesClient() {
                 </div>
             )}
 
-            {!loading && (
+            {!loading && !error && entityTypeFilter && (
                 <SectionCard title="Status definitions">
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                        <span className="text-sm text-[#59678b]">{statuses.length} status(es)</span>
-                        {canMutate && (
-                            <button
-                                type="button"
-                                onClick={openNewModal}
-                                className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                            >
-                                New Status
-                            </button>
-                        )}
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[520px] text-left text-sm">
-                            <thead>
-                                <tr className="border-b border-[#e6e8ec] text-[#59678b]">
-                                    <th className="pb-2 pr-4 font-semibold">Label</th>
-                                    <th className="pb-2 pr-4 font-semibold">Key</th>
-                                    <th className="pb-2 pr-4 font-semibold">Sort</th>
-                                    <th className="pb-2 pr-4 font-semibold">Active</th>
-                                    <th className="pb-2 pr-4 font-semibold">System</th>
-                                    {canMutate && <th className="pb-2 font-semibold">Actions</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {statuses.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={canMutate ? 6 : 5}
-                                            className="py-4 text-[#59678b]"
-                                        >
-                                            No statuses found.
-                                            {entityTypeFilter
-                                                ? " Try clearing the filter or add a new status."
-                                                : " Add a status to get started."}
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    statuses.map((row) => (
-                                        <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
-                                            {editingId === row.id ? (
-                                                <>
-                                                    <td className="py-2 pr-4">
-                                                        <input
-                                                            type="text"
-                                                            value={editLabel}
-                                                            onChange={(e) => setEditLabel(e.target.value)}
-                                                            className="w-full min-w-[120px] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
-                                                    <td className="py-2 pr-4">
-                                                        <input
-                                                            type="number"
-                                                            value={editSortOrder}
-                                                            onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
-                                                            className="w-20 rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 pr-4">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editActive}
-                                                            onChange={(e) => setEditActive(e.target.checked)}
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
-                                                    <td className="py-2 flex flex-wrap gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={saveEdit}
-                                                            disabled={editSaving}
-                                                            className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20 disabled:opacity-50"
-                                                        >
-                                                            {editSaving ? "Saving…" : "Save"}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={cancelEdit}
-                                                            className="rounded border border-[#e6e8ec] px-2 py-1 text-xs font-medium hover:bg-[#eef0f4]"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    </td>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <td className="py-2 pr-4 font-medium text-[#31394d]">
-                                                        {row.status_label ?? "—"}
-                                                    </td>
-                                                    <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
-                                                    <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
-                                                    <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
-                                                    <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
-                                                    {canMutate && (
-                                                        <td className="py-2 flex flex-wrap gap-1">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => startEdit(row)}
-                                                                className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
-                                                            >
-                                                                Edit
-                                                            </button>
-                                                            {deleteConfirmId === row.id ? (
-                                                                <>
-                                                                    <span className="text-xs text-[#59678b]">
-                                                                        {row.is_system ? "Deactivate?" : "Delete?"}
-                                                                    </span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleDelete(row)}
-                                                                        disabled={deleteSaving}
-                                                                        className="rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                                                                    >
-                                                                        {deleteSaving ? "…" : row.is_system ? "Deactivate" : "Delete"}
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setDeleteConfirmId(null)}
-                                                                        className="rounded border border-[#e6e8ec] px-2 py-1 text-xs font-medium hover:bg-[#eef0f4]"
-                                                                    >
-                                                                        Cancel
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setDeleteConfirmId(row.id)}
-                                                                    className="rounded border border-amber-200 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50"
-                                                                >
-                                                                    {row.is_system ? "Deactivate" : "Delete"}
-                                                                </button>
-                                                            )}
-                                                        </td>
-                                                    )}
-                                                </>
-                                            )}
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    {editError && (
-                        <p className="mt-2 text-sm text-red-600">{editError}</p>
-                    )}
+                    {renderTable(statuses, "No statuses found. Try clearing the filter or add a new status.")}
+                    {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                 </SectionCard>
+            )}
+
+            {!loading && !error && !entityTypeFilter && (
+                <>
+                    {sortedEntityTypes.length === 0 ? (
+                        <SectionCard title="Status definitions">
+                            {renderTable([], "No statuses found. Add a status to get started.")}
+                            {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
+                        </SectionCard>
+                    ) : (
+                        <div className="space-y-8">
+                            {sortedEntityTypes.map((entityType) => (
+                                <SectionCard
+                                    key={entityType}
+                                    title={entityTypeDisplayLabel(entityType, labels ?? {})}
+                                >
+                                    {renderTable(
+                                        statusesByEntityType[entityType] ?? [],
+                                        "No statuses for this entity type."
+                                    )}
+                                    {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
+                                </SectionCard>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
 
             {modalOpen && (
