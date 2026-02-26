@@ -37,7 +37,9 @@ const EMPTY_FORM = {
 export default function JobsClient() {
   const { openDrawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
-  const title = labels?.jobs?.plural ?? "Jobs";
+  const plural = labels?.jobs?.plural ?? "Jobs";
+  const singular = labels?.jobs?.singular ?? "Job";
+  const title = plural;
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -156,7 +158,7 @@ export default function JobsClient() {
     <>
       <AdminPageHeader
         title={title}
-        subtitle="Jobs scoped by your org. Customer is required. Only admins can create, edit, or archive."
+        subtitle={`${plural} scoped by your org. Customer is required. Only admins can create, edit, or archive.`}
       />
       <SectionCard title="Filters" className="mb-4">
         <div className="flex flex-wrap items-end gap-4">
@@ -197,15 +199,15 @@ export default function JobsClient() {
           </div>
         </div>
       </SectionCard>
-      <SectionCard title="Jobs">
+      <SectionCard title={plural}>
         <div className="flex items-center justify-between gap-4 mb-4">
-          <span className="text-sm text-alloy-midnight/60">{jobs.length} job(s)</span>
+          <span className="text-sm text-alloy-midnight/60">{jobs.length} {plural.toLowerCase()}</span>
           <button
             type="button"
             onClick={openCreate}
             className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
           >
-            New Job
+            New {singular}
           </button>
         </div>
         {loading ? (
@@ -227,7 +229,7 @@ export default function JobsClient() {
               </thead>
               <tbody>
                 {jobs.length === 0 ? (
-                  <tr><td colSpan={8} className="py-4 text-alloy-midnight/60">No jobs found.</td></tr>
+                  <tr><td colSpan={8} className="py-4 text-alloy-midnight/60">No {plural.toLowerCase()} found.</td></tr>
                 ) : (
                   jobs.map((j) => (
                     <tr
@@ -260,7 +262,7 @@ export default function JobsClient() {
         )}
       </SectionCard>
 
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title="New job" zIndexBackdrop={60} zIndexPanel={70}>
+      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={`New ${singular}`} zIndexBackdrop={60} zIndexPanel={70}>
         <div className="space-y-4">
           {saveError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{saveError}</p>}
           <div className="grid grid-cols-1 gap-3 text-sm">

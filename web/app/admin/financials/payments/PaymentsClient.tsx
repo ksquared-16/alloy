@@ -37,7 +37,8 @@ function StatusBadge({ statusKey }: { statusKey: string }) {
 export default function PaymentsClient() {
     const { openDrawer } = useAdminDrawer();
     const { labels } = useEntityLabels();
-    const title = labels?.payments?.plural ?? "Payments";
+    const plural = labels?.payments?.plural ?? "Payments";
+    const title = plural;
     const [payments, setPayments] = useState<PaymentRow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -137,7 +138,7 @@ export default function PaymentsClient() {
                     </div>
                 </div>
             </SectionCard>
-            <SectionCard title="Payments (view-only)">
+            <SectionCard title={`${plural} (view-only)`}>
                 {loading ? (
                     <p className="text-sm text-alloy-midnight/60">Loading…</p>
                 ) : (

@@ -125,6 +125,14 @@ export default function AdminEntityDrawer() {
     const { labels } = useEntityLabels();
     const memberSingular = labels.customer_members?.singular ?? "Member";
     const memberPlural = labels.customer_members?.plural ?? "Members";
+    const contactSingular = labels.contacts?.singular ?? "Contact";
+    const customerSingular = labels.customers?.singular ?? "Customer";
+    const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
+    const jobSingular = labels.jobs?.singular ?? "Job";
+    const scheduleSingular = labels.schedules?.singular ?? "Schedule";
+    const workflowSingular = labels.workflows?.singular ?? "Workflow";
+    const vendorSingular = labels.vendors?.singular ?? "Vendor";
+    const subscriptionSingular = labels.subscriptions?.singular ?? "Subscription";
     const router = useRouter();
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
@@ -198,6 +206,8 @@ export default function AdminEntityDrawer() {
     const [memberRelationshipOptions, setMemberRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
     const [contactCreateSaving, setContactCreateSaving] = useState(false);
     const [contactCreateError, setContactCreateError] = useState<string | null>(null);
+    const [statusDefsForDrawer, setStatusDefsForDrawer] = useState<{ status_label: string | null }[]>([]);
+    const [statusDefsLoading, setStatusDefsLoading] = useState(false);
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -820,18 +830,24 @@ export default function AdminEntityDrawer() {
     const title: React.ReactNode = data
         ? drawer.type === "contacts"
             ? (data as { _create?: boolean })._create
-                ? "New contact"
-                : `Contact: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
+                ? `New ${contactSingular}`
+                : `${contactSingular}: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
             : drawer.type === "customers"
-              ? `Customer: ${(data.name as string) || drawer.id}`
+              ? (data as { _create?: boolean })._create
+                  ? `New ${customerSingular}`
+                  : `${customerSingular}: ${(data.name as string) || drawer.id}`
               : drawer.type === "customer_members"
                 ? (data as { _create?: boolean })._create
                   ? `New ${memberSingular}`
                   : `${memberSingular}: ${(data.display_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
               : drawer.type === "opportunities"
-                ? `Opportunity: ${(data.name as string) || drawer.id}`
+                ? (data as { _create?: boolean })._create
+                    ? `New ${opportunitySingular}`
+                    : `${opportunitySingular}: ${(data.name as string) || drawer.id}`
                 : drawer.type === "jobs"
-                    ? (
+                    ? (data as { _create?: boolean })._create
+                        ? `New ${jobSingular}`
+                        : (
                         <div className="flex flex-col gap-1 min-w-0">
                             <span className="truncate">{(data._customer_name as string) || (data.title as string) || drawer.id}</span>
                             <span className="text-sm font-normal text-alloy-midnight/70">
@@ -846,19 +862,23 @@ export default function AdminEntityDrawer() {
                         </div>
                     )
                   : drawer.type === "schedules"
-                    ? `Schedule: ${drawer.id}`
+                    ? (data as { _create?: boolean })._create
+                        ? `New ${scheduleSingular}`
+                        : `${scheduleSingular}: ${drawer.id}`
                     : drawer.type === "locations"
                       ? `Location: ${(data.label as string) || (data.address1 as string) || drawer.id.slice(0, 8) + "…"}`
                       : drawer.type === "discount_redemptions"
                       ? `Redemption: ${(data.discount_code as string) || drawer.id}`
                       : drawer.type === "workflows"
                         ? (data as { _create?: boolean })._create
-                          ? "New workflow"
-                          : `Workflow: ${(data.name as string) || drawer.id}`
+                          ? `New ${workflowSingular}`
+                          : `${workflowSingular}: ${(data.name as string) || drawer.id}`
                         : drawer.type === "vendors"
-                          ? `Vendor: ${(data.name as string) || drawer.id}`
+                          ? (data as { _create?: boolean })._create
+                              ? `New ${vendorSingular}`
+                              : `${vendorSingular}: ${(data.name as string) || drawer.id}`
                           : drawer.type === "subscriptions"
-                            ? `Subscription: ${(data._customer_name as string) || drawer.id.slice(0, 8)}…`
+                            ? `${subscriptionSingular}: ${(data._customer_name as string) || drawer.id.slice(0, 8)}…`
                             : "Details"
         : loading
           ? "Loading…"
@@ -885,7 +905,7 @@ export default function AdminEntityDrawer() {
                                             {canMutate && !(data as { _create?: boolean })?._create && (
                                                 <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
                                             )}
-                                            {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run workflow</button>}
+                                            {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
                                             {drawer.type === "jobs" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>}
                                             {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
                                         </>
@@ -909,8 +929,8 @@ export default function AdminEntityDrawer() {
                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                     {drawerTab === "related" && drawer.type === "opportunities" && data && (
                         <div className="pt-2 space-y-3 mb-4">
-                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
-                            <DrawerLinkWithName label="Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+<DrawerLinkWithName label={customerSingular} id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                                    <DrawerLinkWithName label={contactSingular} id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "jobs" && data && (
@@ -1756,9 +1776,9 @@ export default function AdminEntityDrawer() {
                             )}
                             <Field label="Gross Price" value={formatMoneyFromCents(data.gross_price_cents as number)} />
                             <Field label="Payout" value={formatMoneyFromCents(data.contractor_payout_cents as number)} />
-                            <DrawerLinkWithName label="Opportunity" id={(data.opportunity_id as string) ?? null} type="opportunities" displayName={data._opportunity_name as string} />
-                            <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
-                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                            <DrawerLinkWithName label={opportunitySingular} id={(data.opportunity_id as string) ?? null} type="opportunities" displayName={data._opportunity_name as string} />
+                            <DrawerLinkWithName label={`Primary ${contactSingular}`} id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+                            <DrawerLinkWithName label={customerSingular} id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <Field label="Offer Code" value={data.offer_code as string} />
                             {jobSchedules.length > 0 && (
                                 <div className="pt-4 border-t border-[#e6e8ec]">
@@ -1846,7 +1866,7 @@ export default function AdminEntityDrawer() {
                         <>
                             {(data.job_id as string) && (
                                 <div>
-                                    <strong className="text-alloy-midnight/70">Job</strong>
+                                    <strong className="text-alloy-midnight/70">{jobSingular}</strong>
                                     <button type="button" onClick={() => openDrawer({ type: "jobs", id: data.job_id as string })} className="ml-2 text-alloy-blue hover:underline text-sm">
                                         {(data._job as { title?: string })?.title ?? (data.job_id as string).slice(0, 8) + "…"}
                                     </button>
@@ -1855,19 +1875,19 @@ export default function AdminEntityDrawer() {
                             )}
                             {(data._customer as { id?: string; name?: string }) && (
                                 <div>
-                                    <strong className="text-alloy-midnight/70">Customer</strong>
+                                    <strong className="text-alloy-midnight/70">{customerSingular}</strong>
                                     <button type="button" onClick={() => openDrawer({ type: "customers", id: (data._customer as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._customer as { name?: string }).name ?? (data._customer as { id: string }).id.slice(0, 8) + "…"}</button>
                                 </div>
                             )}
                             {(data._contact as { id?: string; email?: string; phone?: string }) && (
                                 <div>
-                                    <strong className="text-alloy-midnight/70">Contact</strong>
+                                    <strong className="text-alloy-midnight/70">{contactSingular}</strong>
                                     <button type="button" onClick={() => openDrawer({ type: "contacts", id: (data._contact as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._contact as { email?: string }).email ?? (data._contact as { phone?: string }).phone ?? (data._contact as { id: string }).id.slice(0, 8) + "…"}</button>
                                 </div>
                             )}
                             {(data._opportunity as { id?: string; name?: string }) && (
                                 <div>
-                                    <strong className="text-alloy-midnight/70">Opportunity</strong>
+                                    <strong className="text-alloy-midnight/70">{opportunitySingular}</strong>
                                     <button type="button" onClick={() => openDrawer({ type: "opportunities", id: (data._opportunity as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._opportunity as { name?: string }).name ?? (data._opportunity as { id: string }).id.slice(0, 8) + "…"}</button>
                                 </div>
                             )}
@@ -1975,7 +1995,7 @@ export default function AdminEntityDrawer() {
                             {!(data.canceled_at as string) && (
                                 <div className="pt-2 border-t border-[#e6e8ec] flex flex-wrap gap-2">
                                     {!scheduleCancelPrompt ? (
-                                        <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-amber-600 text-amber-700 rounded hover:bg-amber-50">Cancel schedule</button>
+                                        <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-amber-600 text-amber-700 rounded hover:bg-amber-50">Cancel {scheduleSingular.toLowerCase()}</button>
                                     ) : (
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <input value={scheduleCancelReason} onChange={(e) => setScheduleCancelReason(e.target.value)} placeholder="Reason (optional)" className="px-2 py-1.5 border rounded text-sm w-40" />
@@ -2023,7 +2043,7 @@ export default function AdminEntityDrawer() {
                     {drawer.type === "locations" && data && (
                         <>
                             <Field label="Type" value={(data._location_type_label as string) ?? ((data.location_type as string) ? String(data.location_type).charAt(0).toUpperCase() + String(data.location_type).slice(1).toLowerCase() : "—")} />
-                            <Field label="Owner" value={(data.customer_id as string) ? "Customer location" : "Org location"} />
+                            <Field label="Owner" value={(data.customer_id as string) ? `${customerSingular} location` : "Org location"} />
                             {isEditing ? (
                                 <>
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.label ?? "")} onChange={(e) => setFormData((f) => ({ ...f, label: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -2363,7 +2383,7 @@ export default function AdminEntityDrawer() {
                                     {runModalOpen && drawer.id && drawer.id !== "new" && (
                                         <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onClick={() => setRunModalOpen(false)}>
                                             <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-auto p-4 border border-[#59678b]/40" onClick={(e) => e.stopPropagation()}>
-                                                <h3 className="font-semibold text-alloy-midnight mb-2">Run workflow</h3>
+                                                <h3 className="font-semibold text-alloy-midnight mb-2">Run {workflowSingular.toLowerCase()}</h3>
                                                 <label className="block text-sm text-alloy-midnight/70 mb-1">Event payload (JSON)</label>
                                                 <textarea value={runPayload} onChange={(e) => { setRunPayload(e.target.value); setRunJsonError(null); }} className="w-full px-2 py-1.5 border rounded text-sm font-mono" rows={8} />
                                                 {runJsonError && <p className="text-red-600 text-sm mt-1">{runJsonError}</p>}
@@ -2476,13 +2496,13 @@ export default function AdminEntityDrawer() {
                             </select>
                         </div>
                         <div className="mb-3">
-                            <label className="block text-xs font-medium text-[#59678b] mb-1">Contact</label>
+                            <label className="block text-xs font-medium text-[#59678b] mb-1">{contactSingular}</label>
                             <select
                                 value={memberLinkContactId}
                                 onChange={(e) => setMemberLinkContactId(e.target.value)}
                                 className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
                             >
-                                <option value="">— Select contact —</option>
+                                <option value="">— Select {contactSingular.toLowerCase()} —</option>
                                 {memberLinkContactOptions.map((c) => {
                                     const label = [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.phone || c.id.slice(0, 8) + "…";
                                     return <option key={c.id} value={c.id}>{label}</option>;

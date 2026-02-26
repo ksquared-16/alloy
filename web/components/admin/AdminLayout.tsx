@@ -42,21 +42,22 @@ const iconClass = "h-4 w-4 shrink-0 text-[#59678b]/80";
 
 const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
     {
+        label: "People",
+        icon: Users,
+        items: [
+            { href: "/admin/customers", label: "Customers", entityType: "customers" },
+            { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
+            { href: "/admin/customer-members", label: "Members", entityType: "customer_members" },
+            { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
+        ],
+    },
+    {
         label: "Operations",
         icon: Briefcase,
         items: [
             { href: "/admin/opportunities", label: "Opportunities", entityType: "opportunities" },
             { href: "/admin/jobs", label: "Jobs", entityType: "jobs" },
             { href: "/admin/schedules", label: "Schedules", entityType: "schedules" },
-            {
-                label: "People",
-                subItems: [
-                    { href: "/admin/customers", label: "Customers", entityType: "customers" },
-                    { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
-                    { href: "/admin/customer-members", label: "Members", entityType: "customer_members" },
-                    { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
-                ],
-            },
             {
                 label: "Workflows",
                 subItems: [
@@ -129,7 +130,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
 }
 
 function getInitialCollapsed(): Record<string, boolean> {
-    const defaults = { Operations: false, Financials: true, System: true };
+    const defaults = { People: false, Operations: false, Financials: true, System: true };
     if (typeof window === "undefined") {
         return defaults;
     }
@@ -182,12 +183,8 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         if (group && collapsed[group.label]) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
-        const peoplePaths = ["/admin/customers", "/admin/contacts", "/admin/customer-members", "/admin/vendors"];
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
         const financialsSettingsPaths = ["/admin/financials/pricing", "/admin/discounts", "/admin/financials/accounts", "/admin/financials/settings/subscription"];
-        if (peoplePaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev.People === false ? prev : { ...prev, People: false }));
-        }
         if (workflowPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev.Workflows === false ? prev : { ...prev, Workflows: false }));
         }

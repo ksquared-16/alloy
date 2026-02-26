@@ -7,6 +7,7 @@ import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 
 type ScheduleRecord = Record<string, unknown> & {
     _job_title?: string | null;
@@ -46,11 +47,13 @@ export default function ScheduleDetailClient({
     const [cancelReason, setCancelReason] = useState("");
     const [cancelLoading, setCancelLoading] = useState(false);
 
+    const { labels } = useEntityLabels();
+    const scheduleSingular = labels?.schedules?.singular ?? "Schedule";
     const isAdmin = role === "admin";
     const jobId = schedule.job_id as string | null | undefined;
     const canceledAt = schedule.canceled_at as string | null | undefined;
     const vendorName = (schedule._assigned_vendor_name as string) ?? null;
-    const title = `Schedule · ${schedule.start_at ? formatDateTime(schedule.start_at as string) : scheduleId}`;
+    const title = `${scheduleSingular} · ${schedule.start_at ? formatDateTime(schedule.start_at as string) : scheduleId}`;
 
     useEffect(() => {
         if (tab !== "related" || !jobId) return;
@@ -151,7 +154,7 @@ export default function ScheduleDetailClient({
                 }
             />
 
-            <SectionCard title="Schedule" className="mb-4">
+            <SectionCard title={scheduleSingular} className="mb-4">
                 <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5 mb-4">
                     {TABS.map((t) => (
                         <button

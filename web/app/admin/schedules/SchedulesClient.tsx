@@ -36,7 +36,9 @@ const EMPTY_FORM = {
 export default function SchedulesClient() {
   const { openDrawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
-  const title = labels?.schedules?.plural ?? "Schedules";
+  const plural = labels?.schedules?.plural ?? "Schedules";
+  const singular = labels?.schedules?.singular ?? "Schedule";
+  const title = plural;
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [jobs, setJobs] = useState<JobOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +149,7 @@ export default function SchedulesClient() {
     <>
       <AdminPageHeader
         title={title}
-        subtitle="Org-scoped schedules. Job is required. Only admins can create, edit, or cancel."
+        subtitle={`Org-scoped ${plural.toLowerCase()}. Job is required. Only admins can create, edit, or cancel.`}
       />
       <SectionCard title="Filters" className="mb-4">
         <div className="flex flex-wrap items-end gap-4">
@@ -194,15 +196,15 @@ export default function SchedulesClient() {
           </div>
         </div>
       </SectionCard>
-      <SectionCard title="Schedules">
+      <SectionCard title={plural}>
         <div className="flex items-center justify-between gap-4 mb-4">
-          <span className="text-sm text-alloy-midnight/60">{schedules.length} schedule(s)</span>
+          <span className="text-sm text-alloy-midnight/60">{schedules.length} {plural.toLowerCase()}</span>
           <button
             type="button"
             onClick={openCreate}
             className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
           >
-            New Schedule
+            New {singular}
           </button>
         </div>
         {loading ? (
@@ -225,7 +227,7 @@ export default function SchedulesClient() {
               </thead>
               <tbody>
                 {schedules.length === 0 ? (
-                  <tr><td colSpan={9} className="py-4 text-alloy-midnight/60">No schedules found.</td></tr>
+                  <tr><td colSpan={9} className="py-4 text-alloy-midnight/60">No {plural.toLowerCase()} found.</td></tr>
                 ) : (
                   schedules.map((s) => (
                     <tr
@@ -257,7 +259,7 @@ export default function SchedulesClient() {
         )}
       </SectionCard>
 
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title="New schedule" zIndexBackdrop={60} zIndexPanel={70}>
+      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={`New ${singular}`} zIndexBackdrop={60} zIndexPanel={70}>
         <div className="space-y-4">
           {saveError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{saveError}</p>}
           <div className="grid grid-cols-1 gap-3 text-sm">
@@ -322,8 +324,8 @@ export default function SchedulesClient() {
       {cancelTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
           <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Cancel schedule</h3>
-            <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this schedule? Start: {formatDateTime(cancelTarget.start_at)}</p>
+            <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Cancel {singular.toLowerCase()}</h3>
+            <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this {singular.toLowerCase()}? Start: {formatDateTime(cancelTarget.start_at)}</p>
             <div className="mb-4">
               <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Reason (optional)</label>
               <input
@@ -336,7 +338,7 @@ export default function SchedulesClient() {
             </div>
             <div className="flex gap-2 justify-end">
               <button type="button" onClick={() => { setCancelTarget(null); setCancelReason(""); }} disabled={cancelLoading} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50">Back</button>
-              <button type="button" onClick={handleCancelConfirm} disabled={cancelLoading} className="px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded hover:opacity-90 disabled:opacity-50">{cancelLoading ? "Canceling…" : "Cancel schedule"}</button>
+              <button type="button" onClick={handleCancelConfirm} disabled={cancelLoading} className="px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded hover:opacity-90 disabled:opacity-50">{cancelLoading ? "Canceling…" : `Cancel ${singular.toLowerCase()}`}</button>
             </div>
           </div>
         </div>

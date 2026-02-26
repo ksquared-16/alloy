@@ -30,7 +30,9 @@ type Contact = {
 
 export default function ContactsClient() {
     const { labels } = useEntityLabels();
-    const title = labels?.contacts?.plural ?? "Contacts";
+    const plural = labels?.contacts?.plural ?? "Contacts";
+    const singular = labels?.contacts?.singular ?? "Contact";
+    const title = plural;
     const { openDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
 
@@ -169,7 +171,7 @@ export default function ContactsClient() {
                         onClick={() => openDrawer({ type: "contacts", id: "new" })}
                         className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
                     >
-                        New contact
+                        New {singular}
                     </button>
                 )}
             </div>

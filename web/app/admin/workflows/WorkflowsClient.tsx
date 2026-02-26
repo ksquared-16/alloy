@@ -28,7 +28,9 @@ export default function WorkflowsClient({
 }: WorkflowsClientProps) {
     const { openDrawer } = useAdminDrawer();
     const { labels } = useEntityLabels();
-    const title = labels?.workflows?.plural ?? "Workflows";
+    const plural = labels?.workflows?.plural ?? "Workflows";
+    const singular = labels?.workflows?.singular ?? "Workflow";
+    const title = plural;
 
     const columns = [
         { key: "name", label: "Name", sortable: true },
@@ -43,7 +45,7 @@ export default function WorkflowsClient({
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold text-alloy-midnight">{title}</h1>
                 <PrimaryButton onClick={() => openDrawer({ type: "workflows", id: "new" })}>
-                    New workflow
+                    New {singular}
                 </PrimaryButton>
             </div>
             {error && (
