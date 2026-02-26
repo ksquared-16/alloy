@@ -471,6 +471,20 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.defaultCustomerId, data]);
 
     useEffect(() => {
+        const typesWithStatusComingSoon = ["customer_members", "opportunities", "schedules"];
+        if (!drawer.type || !typesWithStatusComingSoon.includes(drawer.type) || drawer.id === "new") {
+            setStatusDefsForDrawer([]);
+            return;
+        }
+        setStatusDefsLoading(true);
+        fetch(`/api/admin/status-definitions?entity_type=${encodeURIComponent(drawer.type)}`)
+            .then((r) => (r.ok ? r.json() : { statuses: [] }))
+            .then((json: { statuses?: { status_label: string | null }[] }) => setStatusDefsForDrawer(json.statuses ?? []))
+            .catch(() => setStatusDefsForDrawer([]))
+            .finally(() => setStatusDefsLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
         if (drawer.type !== "contacts" || !data || !(data as { _create?: boolean })._create) return;
         setFormData({
             first_name: "",
@@ -1339,6 +1353,17 @@ export default function AdminEntityDrawer() {
                                     <Field label="Last name" value={data.last_name as string} />
                                     <Field label="DOB" value={data.dob as string} />
                                     <Field label="Active" value={data.is_active ? "Yes" : "No"} />
+                                    <div className="py-1.5 border-t border-[#e6e8ec]">
+                                        <strong className="text-[#45506c] text-sm">Status (coming soon)</strong>
+                                        {statusDefsLoading ? (
+                                            <p className="text-sm text-[#59678b] mt-0.5">Loading…</p>
+                                        ) : statusDefsForDrawer.length > 0 ? (
+                                            <p className="text-sm text-[#59678b] mt-0.5">{statusDefsForDrawer.map((s) => s.status_label ?? "—").join(", ")}</p>
+                                        ) : (
+                                            <p className="text-sm text-[#59678b] mt-0.5">No statuses configured.</p>
+                                        )}
+                                        <Link href="/admin/system/statuses?entity_type=customer_members" className="text-xs text-alloy-blue hover:underline mt-0.5 inline-block">Configure statuses</Link>
+                                    </div>
                                     <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                                     {canMutate && (
                                         <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
@@ -1579,6 +1604,17 @@ export default function AdminEntityDrawer() {
                                     <Field label="Notes" value={((data.metadata as Record<string, unknown>)?.notes as string) ?? "-"} />
                                 </>
                             )}
+                            <div className="py-1.5 border-t border-[#e6e8ec]">
+                                <strong className="text-[#45506c] text-sm">Status (coming soon)</strong>
+                                {statusDefsLoading ? (
+                                    <p className="text-sm text-[#59678b] mt-0.5">Loading…</p>
+                                ) : statusDefsForDrawer.length > 0 ? (
+                                    <p className="text-sm text-[#59678b] mt-0.5">{statusDefsForDrawer.map((s) => s.status_label ?? "—").join(", ")}</p>
+                                ) : (
+                                    <p className="text-sm text-[#59678b] mt-0.5">No statuses configured.</p>
+                                )}
+                                <Link href="/admin/system/statuses?entity_type=opportunities" className="text-xs text-alloy-blue hover:underline mt-0.5 inline-block">Configure statuses</Link>
+                            </div>
                             <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
                             <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
                         </>
@@ -1904,6 +1940,17 @@ export default function AdminEntityDrawer() {
                                     <Field label="Timezone" value={data.timezone as string} />
                                 </>
                             )}
+                            <div className="py-1.5 border-t border-[#e6e8ec]">
+                                <strong className="text-[#45506c] text-sm">Status (coming soon)</strong>
+                                {statusDefsLoading ? (
+                                    <p className="text-sm text-[#59678b] mt-0.5">Loading…</p>
+                                ) : statusDefsForDrawer.length > 0 ? (
+                                    <p className="text-sm text-[#59678b] mt-0.5">{statusDefsForDrawer.map((s) => s.status_label ?? "—").join(", ")}</p>
+                                ) : (
+                                    <p className="text-sm text-[#59678b] mt-0.5">No statuses configured.</p>
+                                )}
+                                <Link href="/admin/system/statuses?entity_type=schedules" className="text-xs text-alloy-blue hover:underline mt-0.5 inline-block">Configure statuses</Link>
+                            </div>
                             {(data.canceled_at as string) && (
                                 <div className="text-amber-700 text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
                             )}
