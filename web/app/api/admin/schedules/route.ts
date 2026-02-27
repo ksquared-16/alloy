@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const includeCanceled = searchParams.get("include_canceled") === "true";
   const jobId = (searchParams.get("job_id") ?? "").trim();
+  const statusKey = (searchParams.get("status_key") ?? "").trim();
   const from = (searchParams.get("from") ?? "").trim();
   const to = (searchParams.get("to") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("schedules")
     .select(
-      "id, job_id, org_id, location_id, start_at, end_at, timezone, canceled_at, canceled_by, cancel_reason, duration_minutes",
+      "id, job_id, org_id, location_id, start_at, end_at, timezone, status_key, canceled_at, canceled_by, cancel_reason, duration_minutes",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
     q = q.is("canceled_at", null);
   }
   if (jobId) q = q.eq("job_id", jobId);
+  if (statusKey) q = q.eq("status_key", statusKey);
   if (from) q = q.gte("start_at", from);
   if (to) q = q.lte("start_at", to);
 

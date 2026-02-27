@@ -10,13 +10,14 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = (searchParams.get("search") ?? "").trim();
   const includeArchived = searchParams.get("include_archived") === "true";
+  const statusKey = (searchParams.get("status_key") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
   let q = supabase
     .from("jobs")
     .select(
-      "id, created_at, title, description, job_status_id, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at",
+      "id, created_at, title, description, job_status_id, status_key, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -25,6 +26,9 @@ export async function GET(request: NextRequest) {
 
   if (!includeArchived) {
     q = q.is("archived_at", null);
+  }
+  if (statusKey) {
+    q = q.eq("status_key", statusKey);
   }
 
   if (search) {

@@ -1,14 +1,19 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import VendorsClient from "./VendorsClient";
 
-export default async function VendorsPage() {
-    const supabase = createAdminClient();
+type SearchParams = { status_key?: string };
 
-    const { data: vendors, error: vendorsError } = await supabase
+export default async function VendorsPage({ searchParams }: { searchParams: SearchParams }) {
+    const supabase = createAdminClient();
+    const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
+
+    let q = supabase
         .from("vendors")
-        .select("id, created_at, submitted_at, name, company_name, email, phone, vendor_status_id, service_area_zip_codes, days_available")
+        .select("id, created_at, submitted_at, name, company_name, email, phone, vendor_status_id, status_key, service_area_zip_codes, days_available")
         .order("created_at", { ascending: false })
         .limit(1000);
+    if (statusKey) q = q.eq("status_key", statusKey);
+    const { data: vendors, error: vendorsError } = await q;
 
     let statusById: Record<string, { key: string; label: string }> = {};
     const statusRes = await supabase

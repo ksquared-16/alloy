@@ -8,6 +8,7 @@ const ALLOWED_KEYS = [
     "title",
     "description",
     "job_status_id",
+    "status_key",
     "is_recurring",
     "assigned_vendor_id",
     "metadata",

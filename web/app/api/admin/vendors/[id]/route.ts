@@ -4,6 +4,7 @@ import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth"
 
 const ALLOWED_KEYS = [
     "vendor_status_id",
+    "status_key",
     "name",
     "company_name",
     "phone",
@@ -46,6 +47,8 @@ export async function PATCH(
             const raw = body[key];
             if (key === "vendor_status_id") {
                 updates[key] = raw === "" || raw === null ? null : raw;
+            } else if (key === "status_key") {
+                updates[key] = raw === "" || raw === null ? null : (typeof raw === "string" ? raw.trim() : raw);
             } else if (key === "days_available" || key === "service_area_zip_codes") {
                 updates[key] = Array.isArray(raw) ? raw : null;
             } else if (key === "owns_supplies") {

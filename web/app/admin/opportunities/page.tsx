@@ -1,16 +1,21 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import OpportunitiesClient from "./OpportunitiesClient";
 
-export default async function OpportunitiesPage() {
-    const supabase = createAdminClient();
+type SearchParams = { status_key?: string };
 
-    const { data: opportunities, error } = await supabase
+export default async function OpportunitiesPage({ searchParams }: { searchParams: SearchParams }) {
+    const supabase = createAdminClient();
+    const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
+
+    let q = supabase
         .from("opportunities")
         .select(
-            "id, created_at, name, status, job_date, job_time_window, quote_total, customer_id, primary_contact_id, external_id, vertical_id, pipeline_stage_id"
+            "id, created_at, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, external_id, vertical_id, pipeline_stage_id"
         )
         .order("created_at", { ascending: false })
         .limit(1000);
+    if (statusKey) q = q.eq("status_key", statusKey);
+    const { data: opportunities, error } = await q;
 
     const [stagesRes, customersRes, contactsRes] = await Promise.all([
         supabase.from("pipeline_stages").select("id, name, pipeline_id").order("position", { ascending: true }),

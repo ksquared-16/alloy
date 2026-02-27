@@ -45,6 +45,8 @@ export default function JobsClient() {
   const [search, setSearch] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [statusKeyFilter, setStatusKeyFilter] = useState("");
+  const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [jobStatuses, setJobStatuses] = useState<JobStatusOption[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -53,11 +55,18 @@ export default function JobsClient() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetch("/api/admin/status-definitions?entity_type=jobs")
+      .then((r) => r.ok ? r.json() : { statuses: [] })
+      .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+  }, []);
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (searchApplied) params.set("search", searchApplied);
     if (includeArchived) params.set("include_archived", "true");
+    if (statusKeyFilter) params.set("status_key", statusKeyFilter);
     try {
       const res = await fetch(`/api/admin/jobs?${params}`);
       const json = await res.json();
@@ -65,7 +74,7 @@ export default function JobsClient() {
     } finally {
       setLoading(false);
     }
-  }, [searchApplied, includeArchived]);
+  }, [searchApplied, includeArchived, statusKeyFilter]);
 
   const fetchCustomers = useCallback(async () => {
     try {
@@ -186,6 +195,19 @@ export default function JobsClient() {
                 </button>
               )}
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status</label>
+            <select
+              value={statusKeyFilter}
+              onChange={(e) => setStatusKeyFilter(e.target.value)}
+              className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-40"
+            >
+              <option value="">All</option>
+              {statusOptions.map((s) => (
+                <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+              ))}
+            </select>
           </div>
           <div className="flex items-center gap-2">
             <input

@@ -9,6 +9,7 @@ export type PaymentListItem = {
     provider_payment_id: string | null;
     payment_status_id: string;
     job_id: string | null;
+    status_key: string | null;
     payment_statuses: { key: string } | null;
 };
 
@@ -17,7 +18,8 @@ export async function GET(request: NextRequest) {
     if (forbidden) return forbidden;
 
     const { searchParams } = new URL(request.url);
-    const statusKey = searchParams.get("status"); // paid | pending | failed
+    const statusKey = searchParams.get("status"); // paid | pending | failed (payment_statuses.key)
+    const statusKeyParam = searchParams.get("status_key")?.trim(); // payments.status_key column
     const fromDate = searchParams.get("from_date");
     const toDate = searchParams.get("to_date");
     const jobId = searchParams.get("job_id");
@@ -27,11 +29,12 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("payments")
-        .select("id, created_at, amount_cents, provider_payment_id, payment_status_id, job_id, payment_statuses(key)", { count: "exact" })
+        .select("id, created_at, amount_cents, provider_payment_id, payment_status_id, job_id, status_key, payment_statuses(key)", { count: "exact" })
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
     if (jobId) q = q.eq("job_id", jobId);
+    if (statusKeyParam) q = q.eq("status_key", statusKeyParam);
     if (fromDate) q = q.gte("created_at", fromDate);
     if (toDate) q = q.lte("created_at", toDate);
 
@@ -51,6 +54,7 @@ export async function GET(request: NextRequest) {
             provider_payment_id: r.provider_payment_id ?? null,
             payment_status_id: r.payment_status_id,
             job_id: r.job_id ?? null,
+            status_key: (r as { status_key?: string | null }).status_key ?? null,
             payment_statuses: statusObj as { key: string } | null,
         };
     });

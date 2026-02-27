@@ -1,16 +1,21 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import CustomersClient from "./CustomersClient";
 
-export default async function CustomersPage() {
-    const supabase = createAdminClient();
+type SearchParams = { status_key?: string };
 
-    const { data: customers, error } = await supabase
+export default async function CustomersPage({ searchParams }: { searchParams: SearchParams }) {
+    const supabase = createAdminClient();
+    const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
+
+    let q = supabase
         .from("customers")
         .select(
-            "id, created_at, name, status, stripe_customer_id, default_payment_method_id, vertical_id, external_id"
+            "id, created_at, name, status, status_key, stripe_customer_id, default_payment_method_id, vertical_id, external_id"
         )
         .order("created_at", { ascending: false })
         .limit(1000);
+    if (statusKey) q = q.eq("status_key", statusKey);
+    const { data: customers, error } = await q;
 
     if (error) {
         console.error("Error fetching customers:", error);

@@ -12,6 +12,7 @@ const PATCH_ALLOWED = [
     "company_name",
     "notes",
     "status",
+    "status_key",
     "customer_id",
     "vendor_id",
     "vendor_contact_role",

@@ -43,10 +43,18 @@ export default function PaymentsClient() {
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState("");
+    const [statusKeyFilter, setStatusKeyFilter] = useState("");
+    const [statusKeyOptions, setStatusKeyOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
     const [jobIdSearch, setJobIdSearch] = useState("");
     const [jobIdApplied, setJobIdApplied] = useState("");
+
+    useEffect(() => {
+        fetch("/api/admin/status-definitions?entity_type=payments")
+            .then((r) => r.ok ? r.json() : { statuses: [] })
+            .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusKeyOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    }, []);
 
     const fetchList = useCallback(async () => {
         setLoading(true);
@@ -54,6 +62,7 @@ export default function PaymentsClient() {
         params.set("limit", "100");
         params.set("offset", "0");
         if (status) params.set("status", status);
+        if (statusKeyFilter) params.set("status_key", statusKeyFilter);
         if (fromDate) params.set("from_date", fromDate);
         if (toDate) params.set("to_date", toDate);
         if (jobIdApplied) params.set("job_id", jobIdApplied);
@@ -67,7 +76,7 @@ export default function PaymentsClient() {
         } finally {
             setLoading(false);
         }
-    }, [status, fromDate, toDate, jobIdApplied]);
+    }, [status, statusKeyFilter, fromDate, toDate, jobIdApplied]);
 
     useEffect(() => {
         fetchList();
@@ -79,7 +88,7 @@ export default function PaymentsClient() {
             <SectionCard title="Filters" className="mb-4">
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status</label>
+                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Payment status</label>
                         <select
                             value={status}
                             onChange={(e) => setStatus(e.target.value)}
@@ -87,6 +96,19 @@ export default function PaymentsClient() {
                         >
                             {STATUS_OPTIONS.map((o) => (
                                 <option key={o.value || "all"} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status (config)</label>
+                        <select
+                            value={statusKeyFilter}
+                            onChange={(e) => setStatusKeyFilter(e.target.value)}
+                            className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm min-w-[120px]"
+                        >
+                            <option value="">All</option>
+                            {statusKeyOptions.map((s) => (
+                                <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
                             ))}
                         </select>
                     </div>

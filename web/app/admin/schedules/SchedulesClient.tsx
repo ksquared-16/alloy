@@ -46,6 +46,8 @@ export default function SchedulesClient() {
   const [to, setTo] = useState("");
   const [jobIdFilter, setJobIdFilter] = useState("");
   const [includeCanceled, setIncludeCanceled] = useState(false);
+  const [statusKeyFilter, setStatusKeyFilter] = useState("");
+  const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -55,11 +57,18 @@ export default function SchedulesClient() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  useEffect(() => {
+    fetch("/api/admin/status-definitions?entity_type=schedules")
+      .then((r) => r.ok ? r.json() : { statuses: [] })
+      .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+  }, []);
+
   const fetchSchedules = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (includeCanceled) params.set("include_canceled", "true");
     if (jobIdFilter) params.set("job_id", jobIdFilter);
+    if (statusKeyFilter) params.set("status_key", statusKeyFilter);
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     try {
@@ -69,7 +78,7 @@ export default function SchedulesClient() {
     } finally {
       setLoading(false);
     }
-  }, [includeCanceled, jobIdFilter, from, to]);
+  }, [includeCanceled, jobIdFilter, statusKeyFilter, from, to]);
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -181,6 +190,19 @@ export default function SchedulesClient() {
               <option value="">All jobs</option>
               {jobs.map((j) => (
                 <option key={j.id} value={j.id}>{j.title ?? j.id}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status</label>
+            <select
+              value={statusKeyFilter}
+              onChange={(e) => setStatusKeyFilter(e.target.value)}
+              className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-40"
+            >
+              <option value="">All</option>
+              {statusOptions.map((s) => (
+                <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
               ))}
             </select>
           </div>

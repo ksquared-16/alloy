@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
@@ -14,6 +15,7 @@ interface Opportunity {
     created_at: string;
     name: string | null;
     status: string | null;
+    status_key?: string | null;
     job_date: string | null;
     job_time_window: string | null;
     quote_total: number | null;
@@ -41,6 +43,8 @@ interface OpportunitiesClientProps {
     error?: string;
 }
 
+type StatusOption = { status_key: string; status_label: string | null };
+
 export default function OpportunitiesClient({
     initialData,
     stages = [],
@@ -49,7 +53,16 @@ export default function OpportunitiesClient({
     const { openDrawer } = useAdminDrawer();
     const { selectedVerticalId } = useAdminVertical();
     const { labels } = useEntityLabels();
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const statusKeyParam = searchParams.get("status_key") ?? "";
     const title = labels?.opportunities?.plural ?? "Opportunities";
+    const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+    useEffect(() => {
+        fetch("/api/admin/status-definitions?entity_type=opportunities")
+            .then((r) => r.ok ? r.json() : { statuses: [] })
+            .then((j: { statuses?: StatusOption[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    }, []);
     const data = useMemo(() => {
         if (!selectedVerticalId) return initialData;
         return initialData.filter((r) => r.vertical_id === selectedVerticalId);
@@ -88,6 +101,24 @@ export default function OpportunitiesClient({
     return (
         <div>
             <AdminPageHeader title={title} subtitle="Pipeline and booking status." />
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+                <label className="text-sm text-[#45506c]">Status:</label>
+                <select
+                    value={statusKeyParam}
+                    onChange={(e) => {
+                        const v = e.target.value;
+                        const next = new URLSearchParams(searchParams.toString());
+                        if (v) next.set("status_key", v); else next.delete("status_key");
+                        router.push(`/admin/opportunities?${next.toString()}`);
+                    }}
+                    className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm"
+                >
+                    <option value="">All</option>
+                    {statusOptions.map((s) => (
+                        <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                    ))}
+                </select>
+            </div>
             <div className="mb-6 flex flex-wrap gap-4">
                 <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[100px]">
                     <div className="text-2xl font-semibold text-alloy-midnight">{total}</div>

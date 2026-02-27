@@ -23,7 +23,7 @@ export async function GET(
     const supabase = createAdminClient();
     const { data: row, error } = await supabase
         .from("customer_members")
-        .select("id, org_id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, metadata, created_at, updated_at")
+        .select("id, org_id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, metadata, created_at, updated_at")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -74,6 +74,7 @@ export async function PATCH(
         last_name?: string;
         dob?: string | null;
         is_active?: boolean;
+        status_key?: string | null;
         metadata?: Record<string, unknown>;
     } = {};
     try {
@@ -91,6 +92,7 @@ export async function PATCH(
     if (body.last_name !== undefined) updates.last_name = typeof body.last_name === "string" ? body.last_name.trim() || null : null;
     if (body.dob !== undefined) updates.dob = typeof body.dob === "string" && body.dob.trim() ? body.dob.trim() : null;
     if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
+    if (body.status_key !== undefined) updates.status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
     if (body.metadata !== undefined) updates.metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : null;
 
     if (Object.keys(updates).length === 0) {

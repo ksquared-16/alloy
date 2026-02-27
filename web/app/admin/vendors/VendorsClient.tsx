@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
@@ -15,11 +17,14 @@ interface Vendor {
     email: string | null;
     phone: string | null;
     vendor_status_id: string | null;
+    status_key?: string | null;
     service_area_zip_codes: string[] | null;
     days_available: string[] | null;
     _vendor_status_key: string;
     _vendor_status_label: string;
 }
+
+type StatusOption = { status_key: string; status_label: string | null };
 
 interface VendorsClientProps {
     initialData: Vendor[];
@@ -49,7 +54,17 @@ export default function VendorsClient({
 }: VendorsClientProps) {
     const { openDrawer } = useAdminDrawer();
     const { labels } = useEntityLabels();
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const statusKeyParam = searchParams.get("status_key") ?? "";
     const title = labels?.vendors?.plural ?? "Vendors";
+
+    const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+    useEffect(() => {
+        fetch("/api/admin/status-definitions?entity_type=vendors")
+            .then((r) => r.ok ? r.json() : { statuses: [] })
+            .then((j: { statuses?: StatusOption[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    }, []);
 
     const columns = [
         { key: "submitted_at", label: "Submitted", sortable: true, render: (_: unknown, row: Vendor) => formatVendorDate(row) },
@@ -85,6 +100,25 @@ export default function VendorsClient({
                     Error: {error}
                 </div>
             )}
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+                <label className="text-sm text-[#45506c]">Status:</label>
+                <select
+                    value={statusKeyParam}
+                    onChange={(e) => {
+                        const v = e.target.value;
+                        const next = new URLSearchParams(searchParams.toString());
+                        if (v) next.set("status_key", v); else next.delete("status_key");
+                        router.push(`/admin/vendors?${next.toString()}`);
+                    }}
+                    className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm"
+                >
+                    <option value="">All</option>
+                    {statusOptions.map((s) => (
+                        <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                    ))}
+                </select>
+            </div>
 
             <DataTable
                 data={initialData}

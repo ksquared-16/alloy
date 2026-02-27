@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
@@ -14,6 +15,7 @@ interface Customer {
   created_at: string;
   name: string | null;
   status: string | null;
+  status_key: string | null;
   stripe_customer_id: string | null;
   default_payment_method_id: string | null;
   vertical_id: string | null;
@@ -26,6 +28,8 @@ interface CustomersClientProps {
   error?: string;
 }
 
+type StatusOption = { status_key: string; status_label: string | null };
+
 export default function CustomersClient({
   initialData,
   error,
@@ -33,7 +37,18 @@ export default function CustomersClient({
   const { openDrawer } = useAdminDrawer();
   const { selectedVerticalId } = useAdminVertical();
   const { labels } = useEntityLabels();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const title = labels?.customers?.plural ?? "Customers";
+  const statusKeyParam = searchParams.get("status_key") ?? "";
+
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+  useEffect(() => {
+    fetch("/api/admin/status-definitions?entity_type=customers")
+      .then((r) => r.ok ? r.json() : { statuses: [] })
+      .then((j: { statuses?: StatusOption[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+  }, []);
+
   const data = useMemo(() => {
     if (!selectedVerticalId) return initialData;
     return initialData.filter((r) => r.vertical_id === selectedVerticalId);
@@ -47,15 +62,7 @@ export default function CustomersClient({
   ];
 
   const filters = [
-    {
-      key: "status",
-      label: "Status",
-      type: "select" as const,
-      options: [
-        { value: "active", label: "Active" },
-        { value: "inactive", label: "Inactive" },
-      ],
-    },
+    { key: "status", label: "Status", type: "select" as const, options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
   ];
 
   return (
@@ -67,6 +74,25 @@ export default function CustomersClient({
           Error: {error}
         </div>
       )}
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <label className="text-sm text-[#45506c]">Status:</label>
+        <select
+          value={statusKeyParam}
+          onChange={(e) => {
+            const v = e.target.value;
+            const next = new URLSearchParams(searchParams.toString());
+            if (v) next.set("status_key", v); else next.delete("status_key");
+            router.push(`/admin/customers?${next.toString()}`);
+          }}
+          className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm"
+        >
+          <option value="">All</option>
+          {statusOptions.map((s) => (
+            <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+          ))}
+        </select>
+      </div>
 
       <DataTable
         data={data}

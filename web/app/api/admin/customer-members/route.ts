@@ -13,16 +13,20 @@ export async function GET(request: NextRequest) {
     }
 
     const customerId = request.nextUrl.searchParams.get("customer_id")?.trim() || undefined;
+    const statusKey = request.nextUrl.searchParams.get("status_key")?.trim() || undefined;
     const supabase = createAdminClient();
 
     let query = supabase
         .from("customer_members")
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, created_at")
+        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at")
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false });
 
     if (customerId) {
         query = query.eq("customer_id", customerId);
+    }
+    if (statusKey) {
+        query = query.eq("status_key", statusKey);
     }
 
     const { data: rows, error } = await query;
@@ -40,6 +44,7 @@ export async function GET(request: NextRequest) {
         last_name: (r as { last_name: string | null }).last_name ?? null,
         dob: (r as { dob: string | null }).dob ?? null,
         is_active: (r as { is_active: boolean }).is_active ?? true,
+        status_key: (r as { status_key?: string | null }).status_key ?? null,
         created_at: (r as { created_at: string }).created_at,
     }));
 
@@ -67,6 +72,7 @@ export async function POST(request: NextRequest) {
         last_name?: string;
         dob?: string | null;
         is_active?: boolean;
+        status_key?: string | null;
         metadata?: Record<string, unknown>;
     } = {};
     try {
@@ -98,6 +104,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Customer not found or not in your org" }, { status: 400 });
     }
 
+    const status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
     const { data: inserted, error: insertErr } = await supabase
         .from("customer_members")
         .insert({
@@ -109,9 +116,10 @@ export async function POST(request: NextRequest) {
             last_name: typeof body.last_name === "string" ? body.last_name.trim() || null : null,
             dob: typeof body.dob === "string" && body.dob.trim() ? body.dob.trim() : null,
             is_active: body.is_active !== false,
+            status_key,
             metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
         })
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, created_at")
+        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at")
         .single();
 
     if (insertErr) {

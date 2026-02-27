@@ -11,6 +11,7 @@ const CREATE_ALLOWED: readonly string[] = [
     "company_name",
     "notes",
     "status",
+    "status_key",
     "customer_id",
     "vendor_id",
     "vendor_contact_role",
@@ -26,18 +27,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get("search") ?? "").trim();
     const includeArchived = searchParams.get("include_archived") === "true";
+    const statusKey = (searchParams.get("status_key") ?? "").trim();
     const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
     const supabase = createAdminClient();
     let q = supabase
         .from("contacts")
-        .select("id, created_at, updated_at, first_name, last_name, email, phone, company_name, status, notes, customer_id, vendor_id, vendor_contact_role, archived_at, archived_by", { count: "exact" })
+        .select("id, created_at, updated_at, first_name, last_name, email, phone, company_name, status, status_key, notes, customer_id, vendor_id, vendor_contact_role, archived_at, archived_by", { count: "exact" })
         .eq("org_id", orgId)
         .order("created_at", { ascending: false })
         .limit(limit);
 
     if (!includeArchived) {
         q = q.is("archived_at", null);
+    }
+    if (statusKey) {
+        q = q.eq("status_key", statusKey);
     }
 
     if (search) {

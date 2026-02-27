@@ -20,6 +20,7 @@ type Contact = {
     phone: string | null;
     company_name?: string | null;
     status: string | null;
+    status_key?: string | null;
     notes?: string | null;
     customer_id?: string | null;
     vendor_id?: string | null;
@@ -27,6 +28,8 @@ type Contact = {
     archived_at: string | null;
     archived_by?: string | null;
 };
+
+type StatusOption = { status_key: string; status_label: string | null };
 
 export default function ContactsClient() {
     const { labels } = useEntityLabels();
@@ -41,14 +44,23 @@ export default function ContactsClient() {
     const [search, setSearch] = useState("");
     const [searchApplied, setSearchApplied] = useState("");
     const [includeArchived, setIncludeArchived] = useState(false);
+    const [statusKeyFilter, setStatusKeyFilter] = useState("");
+    const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [filterOpen, setFilterOpen] = useState(false);
     const filterRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        fetch("/api/admin/status-definitions?entity_type=contacts")
+            .then((r) => r.ok ? r.json() : { statuses: [] })
+            .then((j: { statuses?: StatusOption[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    }, []);
 
     const fetchList = useCallback(async () => {
         setLoading(true);
         const params = new URLSearchParams();
         if (searchApplied) params.set("search", searchApplied);
         if (includeArchived) params.set("include_archived", "true");
+        if (statusKeyFilter) params.set("status_key", statusKeyFilter);
         try {
             const res = await fetch(`/api/admin/contacts?${params}`);
             const json = await res.json();
@@ -62,7 +74,7 @@ export default function ContactsClient() {
         } finally {
             setLoading(false);
         }
-    }, [searchApplied, includeArchived]);
+    }, [searchApplied, includeArchived, statusKeyFilter]);
 
     useEffect(() => {
         fetchList();
@@ -109,7 +121,7 @@ export default function ContactsClient() {
                     >
                         <Filter className="h-4 w-4 text-[#59678b]" />
                         Filters
-                        {(searchApplied || includeArchived) && (
+                        {(searchApplied || includeArchived || statusKeyFilter) && (
                             <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />
                         )}
                     </button>
@@ -126,6 +138,19 @@ export default function ContactsClient() {
                                         onKeyDown={(e) => e.key === "Enter" && (setSearchApplied(search.trim()), setFilterOpen(false))}
                                         className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-[#59678b] mb-1">Status</label>
+                                    <select
+                                        value={statusKeyFilter}
+                                        onChange={(e) => setStatusKeyFilter(e.target.value)}
+                                        className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
+                                    >
+                                        <option value="">All</option>
+                                        {statusOptions.map((s) => (
+                                            <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -147,12 +172,13 @@ export default function ContactsClient() {
                                     >
                                         Apply
                                     </button>
-                                    {searchApplied && (
+                                    {(searchApplied || statusKeyFilter) && (
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setSearch("");
                                                 setSearchApplied("");
+                                                setStatusKeyFilter("");
                                                 setFilterOpen(false);
                                             }}
                                             className="px-2.5 py-1.5 text-sm text-alloy-midnight/70 hover:underline"

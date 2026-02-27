@@ -16,8 +16,11 @@ type Member = {
     last_name: string | null;
     dob: string | null;
     is_active: boolean;
+    status_key?: string | null;
     created_at: string;
 };
+
+type StatusOption = { status_key: string; status_label: string | null };
 
 export default function CustomerMembersClient() {
     const { labels } = useEntityLabels();
@@ -34,6 +37,8 @@ export default function CustomerMembersClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [relationshipOptions, setRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
+    const [statusKeyFilter, setStatusKeyFilter] = useState("");
+    const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
 
     useEffect(() => {
         fetch("/api/admin/customer-member-relationship-types")
@@ -41,14 +46,20 @@ export default function CustomerMembersClient() {
             .then((json: { options?: { key: string; label: string }[] }) => setRelationshipOptions(json.options ?? []))
             .catch(() => setRelationshipOptions([]));
     }, []);
+    useEffect(() => {
+        fetch("/api/admin/status-definitions?entity_type=customer_members")
+            .then((r) => r.ok ? r.json() : { statuses: [] })
+            .then((j: { statuses?: StatusOption[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    }, []);
 
     const fetchMembers = useCallback(async (customerId?: string) => {
         setLoading(true);
         setError(null);
         try {
-            const url = customerId
-                ? `/api/admin/customer-members?customer_id=${encodeURIComponent(customerId)}`
-                : "/api/admin/customer-members";
+            const params = new URLSearchParams();
+            if (customerId) params.set("customer_id", customerId);
+            if (statusKeyFilter) params.set("status_key", statusKeyFilter);
+            const url = `/api/admin/customer-members?${params.toString()}`;
             const res = await fetch(url);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load");
@@ -59,7 +70,7 @@ export default function CustomerMembersClient() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [statusKeyFilter]);
 
     useEffect(() => {
         fetchMembers(customerIdFromUrl);
@@ -94,6 +105,19 @@ export default function CustomerMembersClient() {
 
     return (
         <div>
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+                <label className="text-sm text-[#45506c]">Status:</label>
+                <select
+                    value={statusKeyFilter}
+                    onChange={(e) => setStatusKeyFilter(e.target.value)}
+                    className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm"
+                >
+                    <option value="">All</option>
+                    {statusOptions.map((s) => (
+                        <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                    ))}
+                </select>
+            </div>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold text-alloy-midnight">{plural}</h1>
                 <button

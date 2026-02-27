@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
-const ALLOWED_KEYS = ["name", "status"] as const;
+const ALLOWED_KEYS = ["name", "status", "status_key"] as const;
 
 export async function PATCH(
     request: NextRequest,
