@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -83,6 +84,10 @@ export default function StatusesClient() {
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [deleteSaving, setDeleteSaving] = useState(false);
 
+    const [expandedEntityType, setExpandedEntityType] = useState<string | null>(null);
+    const [modalEntityTypeLocked, setModalEntityTypeLocked] = useState(false);
+    const hasAutoExpandedRef = useRef(false);
+
     const fetchStatuses = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -106,8 +111,14 @@ export default function StatusesClient() {
         fetchStatuses();
     }, [fetchStatuses]);
 
-    const openNewModal = () => {
-        setModalEntityType(entityTypeFilter || ENTITY_TYPES[0]);
+    const openNewModal = (forEntityType?: string) => {
+        if (forEntityType != null) {
+            setModalEntityType(forEntityType);
+            setModalEntityTypeLocked(true);
+        } else {
+            setModalEntityType(entityTypeFilter || ENTITY_TYPES[0]);
+            setModalEntityTypeLocked(!!entityTypeFilter);
+        }
         setModalKey("");
         setModalLabel("");
         setModalSortOrder(100);
@@ -219,6 +230,14 @@ export default function StatusesClient() {
         () => Object.keys(statusesByEntityType).sort((a, b) => a.localeCompare(b)),
         [statusesByEntityType]
     );
+
+    useEffect(() => {
+        if (entityTypeFilter || sortedEntityTypes.length !== 1) return;
+        if (!hasAutoExpandedRef.current) {
+            hasAutoExpandedRef.current = true;
+            setExpandedEntityType(sortedEntityTypes[0]);
+        }
+    }, [entityTypeFilter, sortedEntityTypes]);
 
     const renderTable = (rows: StatusDef[], emptyMessage: string) => (
         <div className="overflow-x-auto">
@@ -360,7 +379,7 @@ export default function StatusesClient() {
                 {canMutate && (
                     <button
                         type="button"
-                        onClick={openNewModal}
+                        onClick={() => openNewModal()}
                         className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
                     >
                         New Status
@@ -404,19 +423,58 @@ export default function StatusesClient() {
                             {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                         </SectionCard>
                     ) : (
-                        <div className="space-y-8">
-                            {sortedEntityTypes.map((entityType) => (
-                                <SectionCard
-                                    key={entityType}
-                                    title={entityTypeDisplayLabel(entityType, labels ?? {})}
-                                >
-                                    {renderTable(
-                                        statusesByEntityType[entityType] ?? [],
-                                        "No statuses for this entity type."
-                                    )}
-                                    {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
-                                </SectionCard>
-                            ))}
+                        <div className="space-y-3">
+                            {sortedEntityTypes.map((entityType) => {
+                                const isExpanded = expandedEntityType === entityType;
+                                const rows = statusesByEntityType[entityType] ?? [];
+                                const count = rows.length;
+                                const label = entityTypeDisplayLabel(entityType, labels ?? {});
+                                return (
+                                    <section
+                                        key={entityType}
+                                        className="rounded-xl border border-[#e6e8ec] bg-white shadow-sm overflow-hidden"
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => setExpandedEntityType((prev) => (prev === entityType ? null : entityType))}
+                                            className="w-full flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-left border-b border-[#e6e8ec] bg-[#F4F6F9]/50 hover:bg-[#eef0f4] transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <ChevronDown
+                                                    className={`h-4 w-4 shrink-0 text-[#59678b] transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                                    aria-hidden
+                                                />
+                                                <span className="text-sm font-semibold uppercase tracking-wider text-[#31394d]">
+                                                    {label}
+                                                </span>
+                                                <span className="text-sm text-[#59678b]">
+                                                    {count} {count === 1 ? "status" : "statuses"}
+                                                </span>
+                                            </div>
+                                            {canMutate && (
+                                                <span onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openNewModal(entityType);
+                                                        }}
+                                                        className="shrink-0 px-2 py-1 text-xs font-medium bg-alloy-midnight text-white rounded hover:opacity-90"
+                                                    >
+                                                        New Status
+                                                    </button>
+                                                </span>
+                                            )}
+                                        </button>
+                                        {isExpanded && (
+                                            <div className="p-5">
+                                                {renderTable(rows, "No statuses for this entity type.")}
+                                                {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
+                                            </div>
+                                        )}
+                                    </section>
+                                );
+                            })}
                         </div>
                     )}
                 </>
@@ -433,21 +491,22 @@ export default function StatusesClient() {
                     >
                         <h3 className="mb-4 text-lg font-semibold text-[#31394d]">New Status</h3>
                         <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Entity type</label>
-                                <select
-                                    value={modalEntityType}
-                                    onChange={(e) => setModalEntityType(e.target.value)}
-                                    disabled={!!entityTypeFilter}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-[#e6e8ec]/50"
-                                >
-                                    {ENTITY_TYPES.map((t) => (
-                                        <option key={t} value={t}>
-                                            {entityTypeDisplayLabel(t, labels ?? {})}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            {!modalEntityTypeLocked && (
+                                <div>
+                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Entity type</label>
+                                    <select
+                                        value={modalEntityType}
+                                        onChange={(e) => setModalEntityType(e.target.value)}
+                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    >
+                                        {ENTITY_TYPES.map((t) => (
+                                            <option key={t} value={t}>
+                                                {entityTypeDisplayLabel(t, labels ?? {})}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-medium text-[#59678b] mb-0.5">Status key (lowercase, 2–32 chars)</label>
                                 <input
