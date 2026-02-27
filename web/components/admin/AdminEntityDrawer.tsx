@@ -175,6 +175,10 @@ export default function AdminEntityDrawer() {
     const [vendorPayoutJobIdInput, setVendorPayoutJobIdInput] = useState("");
     const [vendorPayoutJobOptions, setVendorPayoutJobOptions] = useState<{ id: string; title: string | null }[]>([]);
     const [vendorPayoutLoading, setVendorPayoutLoading] = useState(false);
+    type VendorPayoutOverridePolicy = { mode: "flat" | "tiered"; value?: number; basis?: string; completed_status_key?: string; tiers?: { from: number; to: number | null; value: number }[] };
+    const [vendorPayoutOverrideEnabled, setVendorPayoutOverrideEnabled] = useState(false);
+    const [vendorPayoutOverrideForm, setVendorPayoutOverrideForm] = useState<VendorPayoutOverridePolicy>({ mode: "flat", value: 80, completed_status_key: "completed", tiers: [{ from: 1, to: null, value: 80 }] });
+    const [vendorPayoutOverrideSaving, setVendorPayoutOverrideSaving] = useState(false);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
     const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
@@ -190,7 +194,7 @@ export default function AdminEntityDrawer() {
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
     const [paymentActionLoading, setPaymentActionLoading] = useState<"run" | "retry" | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-    type JobPayoutSchedule = { schedule_id: string; status_key: string | null; scheduled_at: string | null; completed_at: string | null; occurrence_number: number | null; payout_percent: number | null };
+    type JobPayoutSchedule = { schedule_id: string; assigned_vendor_id: string | null; status_key: string | null; scheduled_at: string | null; completed_at: string | null; occurrence_number: number | null; payout_percent: number | null };
     type JobPayoutResponse = {
         policy: { mode: string; type?: string; basis?: string | null; completed_status_key?: string | null; value?: number | null; tiers?: unknown[] | null };
         source: string;
@@ -791,6 +795,25 @@ export default function AdminEntityDrawer() {
             .then((j: { jobs?: { id: string; title: string | null }[] }) => setVendorPayoutJobOptions(j.jobs ?? []))
             .catch(() => setVendorPayoutJobOptions([]));
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "vendors" || !data) return;
+        const meta = data.metadata as { vendor_payout_policy?: VendorPayoutOverridePolicy } | undefined;
+        const p = meta?.vendor_payout_policy;
+        if (p && typeof p === "object" && (p.mode === "flat" || p.mode === "tiered")) {
+            setVendorPayoutOverrideEnabled(true);
+            setVendorPayoutOverrideForm({
+                mode: p.mode ?? "flat",
+                value: typeof p.value === "number" ? p.value : 80,
+                basis: p.basis ?? "job_completed_occurrences",
+                completed_status_key: p.completed_status_key ?? "completed",
+                tiers: Array.isArray(p.tiers) && p.tiers.length ? p.tiers : [{ from: 1, to: null, value: 80 }],
+            });
+        } else {
+            setVendorPayoutOverrideEnabled(false);
+            setVendorPayoutOverrideForm({ mode: "flat", value: 80, completed_status_key: "completed", tiers: [{ from: 1, to: null, value: 80 }] });
+        }
+    }, [drawer.type, data?.id, (data as { metadata?: unknown })?.metadata]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id) {
@@ -1653,7 +1676,51 @@ export default function AdminEntityDrawer() {
                                                         ) : (
                                                             <p className="text-sm text-alloy-midnight/80">Payout: <strong>{vendorPayout.payout_percent}%</strong></p>
                                                         )}
-                                                        <Link href="/admin/settings" className="text-xs text-alloy-blue hover:underline inline-block">Configure payout defaults</Link>
+                                                        <Link href="/admin/system/payouts" className="text-xs text-alloy-blue hover:underline inline-block">Configure payout defaults</Link>
+                                                        {canMutate && (
+                                                            <div className="mt-3 pt-3 border-t border-alloy-stone/20 space-y-2">
+                                                                <label className="flex items-center gap-2 text-sm">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={vendorPayoutOverrideEnabled}
+                                                                        onChange={(e) => setVendorPayoutOverrideEnabled(e.target.checked)}
+                                                                    />
+                                                                    Override org default
+                                                                </label>
+                                                                {vendorPayoutOverrideEnabled ? (
+                                                                    <div className="space-y-2 pl-0">
+                                                                        <div className="flex flex-wrap gap-2 items-center">
+                                                                            <select value={vendorPayoutOverrideForm.mode} onChange={(e) => setVendorPayoutOverrideForm((f) => ({ ...f, mode: e.target.value as "flat" | "tiered" }))} className="px-2 py-1 border rounded text-sm">
+                                                                                <option value="flat">Flat</option>
+                                                                                <option value="tiered">Tiered</option>
+                                                                            </select>
+                                                                            {vendorPayoutOverrideForm.mode === "flat" && (
+                                                                                <input type="number" min={0} max={100} step={0.5} value={vendorPayoutOverrideForm.value ?? 80} onChange={(e) => setVendorPayoutOverrideForm((f) => ({ ...f, value: Number(e.target.value) || 80 }))} className="w-16 px-2 py-1 border rounded text-sm" />
+                                                                            )}
+                                                                            {vendorPayoutOverrideForm.mode === "tiered" && (
+                                                                                <>
+                                                                                    <select value={vendorPayoutOverrideForm.basis ?? "job_completed_occurrences"} onChange={(e) => setVendorPayoutOverrideForm((f) => ({ ...f, basis: e.target.value }))} className="px-2 py-1 border rounded text-sm">
+                                                                                        <option value="job_completed_occurrences">Job occurrences</option>
+                                                                                        <option value="vendor_job_completed_occurrences">Vendor job occurrences</option>
+                                                                                    </select>
+                                                                                    <input type="text" placeholder="completed" value={vendorPayoutOverrideForm.completed_status_key ?? "completed"} onChange={(e) => setVendorPayoutOverrideForm((f) => ({ ...f, completed_status_key: e.target.value || "completed" }))} className="w-24 px-2 py-1 border rounded text-sm" />
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                        {vendorPayoutOverrideForm.mode === "tiered" && (vendorPayoutOverrideForm.tiers ?? []).length > 0 && (
+                                                                            <div className="text-xs">
+                                                                                Tiers: {(vendorPayoutOverrideForm.tiers ?? []).map((t, i) => (
+                                                                                    <span key={i}> {t.from}-{t.to ?? "∞"}→{t.value}%</span>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                        <button type="button" disabled={vendorPayoutOverrideSaving} onClick={async () => { if (!drawer.id) return; setVendorPayoutOverrideSaving(true); try { const res = await fetch(`/api/admin/vendors/${drawer.id}/payout-policy`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_payout_policy: { mode: vendorPayoutOverrideForm.mode, type: "percentage", value: vendorPayoutOverrideForm.mode === "flat" ? (vendorPayoutOverrideForm.value ?? 80) : undefined, basis: vendorPayoutOverrideForm.mode === "tiered" ? (vendorPayoutOverrideForm.basis ?? "job_completed_occurrences") : undefined, completed_status_key: vendorPayoutOverrideForm.completed_status_key ?? "completed", tiers: vendorPayoutOverrideForm.mode === "tiered" ? (vendorPayoutOverrideForm.tiers ?? []) : undefined } }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => prev ? { ...prev, metadata: { ...(prev.metadata as object || {}), vendor_payout_policy: vendorPayoutOverrideForm } } : prev); refetch(); const payoutRes = await fetch(`/api/admin/vendors/${drawer.id}/payout${vendorPayoutJobId ? `?job_id=${encodeURIComponent(vendorPayoutJobId)}` : ""}`); if (payoutRes.ok) { const payoutJson = await payoutRes.json(); setVendorPayout({ policy: payoutJson.policy, source: payoutJson.source ?? "org", completed_occurrences: payoutJson.completed_occurrences ?? 0, payout_percent: payoutJson.payout_percent ?? 80 }); } } catch (e) { alert((e as Error).message); } finally { setVendorPayoutOverrideSaving(false); } }} className="px-2 py-1 text-xs bg-alloy-blue text-white rounded hover:opacity-90 disabled:opacity-50">Save override</button>
+                                                                    </div>
+                                                                ) : vendorPayout?.source === "vendor" ? (
+                                                                    <button type="button" disabled={vendorPayoutOverrideSaving} onClick={async () => { if (!drawer.id) return; setVendorPayoutOverrideSaving(true); try { const res = await fetch(`/api/admin/vendors/${drawer.id}/payout-policy`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_payout_policy: null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => prev ? { ...prev, metadata: { ...(prev.metadata as object || {}), vendor_payout_policy: null } } : prev); setVendorPayoutOverrideEnabled(false); refetch(); } catch (e) { alert((e as Error).message); } finally { setVendorPayoutOverrideSaving(false); } }} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Clear override</button>
+                                                                ) : null}
+                                                            </div>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <p className="text-sm text-alloy-midnight/60">Could not load payout policy.</p>
@@ -1948,20 +2015,26 @@ export default function AdminEntityDrawer() {
                                                     if (!drawer.id) return;
                                                     setJobAssignedVendorSaving(true);
                                                     try {
-                                                        const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
-                                                            method: "PATCH",
-                                                            headers: { "Content-Type": "application/json" },
-                                                            body: JSON.stringify({ assigned_vendor_id: jobAssignedVendorId || null }),
-                                                        });
-                                                        const json = await res.json().catch(() => ({}));
-                                                        if (!res.ok) throw new Error((json.error as string) || "Save failed");
-                                                        setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null } : prev));
-                                                        if (applyVendorToUpcoming && jobAssignedVendorId) {
-                                                            const applyRes = await fetch(`/api/admin/jobs/${drawer.id}/apply-vendor-to-upcoming`, { method: "POST" });
-                                                            if (!applyRes.ok) {
-                                                                const applyJson = await applyRes.json().catch(() => ({}));
-                                                                throw new Error((applyJson.error as string) || "Apply to upcoming failed");
-                                                            }
+                                                        if (applyVendorToUpcoming && canMutate) {
+                                                            const res = await fetch(`/api/admin/jobs/${drawer.id}/assign-vendor`, {
+                                                                method: "POST",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ vendor_id: jobAssignedVendorId || null, apply_to_future_schedules: true }),
+                                                            });
+                                                            const json = await res.json().catch(() => ({}));
+                                                            if (!res.ok) throw new Error((json.error as string) || "Reassign failed");
+                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null } : prev));
+                                                            const payoutRes = await fetch(`/api/admin/jobs/${drawer.id}/payout`);
+                                                            if (payoutRes.ok) setJobPayout(await payoutRes.json());
+                                                        } else {
+                                                            const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
+                                                                method: "PATCH",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ assigned_vendor_id: jobAssignedVendorId || null }),
+                                                            });
+                                                            const json = await res.json().catch(() => ({}));
+                                                            if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null } : prev));
                                                         }
                                                         refetch();
                                                         router.refresh();
@@ -2008,6 +2081,7 @@ export default function AdminEntityDrawer() {
                                                                 <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
                                                                     <th className="py-1.5 pr-2">Scheduled At</th>
                                                                     <th className="py-1.5 pr-2">Status</th>
+                                                                    <th className="py-1.5 pr-2">Assigned vendor</th>
                                                                     <th className="py-1.5 pr-2">Occurrence #</th>
                                                                     <th className="py-1.5 pr-2">Payout %</th>
                                                                 </tr>
@@ -2017,6 +2091,7 @@ export default function AdminEntityDrawer() {
                                                                     <tr key={s.schedule_id} className="border-b border-alloy-stone/10">
                                                                         <td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td>
                                                                         <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.assigned_vendor_id ? s.assigned_vendor_id.slice(0, 8) + "…" : "—"}</td>
                                                                         <td className="py-1 pr-2">{s.occurrence_number != null ? s.occurrence_number : "—"}</td>
                                                                         <td className="py-1 pr-2">{s.payout_percent != null ? `${s.payout_percent}%` : "—"}</td>
                                                                     </tr>

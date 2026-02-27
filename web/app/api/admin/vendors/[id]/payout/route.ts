@@ -52,15 +52,20 @@ export async function GET(
         vendor: vendor as VendorRow,
     });
 
+    const completedStatusKey = policy.completed_status_key ?? "completed";
     let completedOccurrences = 0;
-    if (jobId && ctx.orgId && policy.mode === "tiered" && policy.completed_status_key) {
-        const statusKey = policy.completed_status_key;
-        const { count, error: countErr } = await supabase
+    if (jobId && ctx.orgId && policy.mode === "tiered") {
+        const basis = policy.basis === "vendor_job_completed_occurrences" ? "vendor_job_completed_occurrences" : "job_completed_occurrences";
+        let q = supabase
             .from("schedules")
             .select("id", { count: "exact", head: true })
             .eq("org_id", ctx.orgId)
             .eq("job_id", jobId)
-            .eq("status_key", statusKey);
+            .eq("status_key", completedStatusKey);
+        if (basis === "vendor_job_completed_occurrences") {
+            q = q.eq("assigned_vendor_id", vendorId);
+        }
+        const { count, error: countErr } = await q;
         if (!countErr && count != null) completedOccurrences = count;
     }
 
@@ -70,6 +75,7 @@ export async function GET(
         policy: {
             mode: policy.mode,
             type: policy.type,
+            basis: policy.basis ?? null,
             value: policy.value,
             completed_status_key: policy.completed_status_key ?? null,
             tiers: policy.tiers ?? null,

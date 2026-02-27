@@ -9,10 +9,13 @@ export type PayoutTier = {
     value: number;
 };
 
+/** Basis for tiered payout: job-level completed count vs vendor-attributed count. */
+export type PayoutBasis = "job_completed_occurrences" | "vendor_job_completed_occurrences";
+
 export type VendorPayoutPolicy = {
     mode: "flat" | "tiered";
     type: "percentage";
-    basis?: string;
+    basis?: PayoutBasis | string;
     completed_status_key?: string;
     tiers?: PayoutTier[];
     value?: number;

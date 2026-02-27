@@ -13,9 +13,10 @@ type ScheduleRow = {
     status_key: string | null;
     start_at: string | null;
     created_at?: string | null;
+    assigned_vendor_id?: string | null;
 };
 
-/** GET: payout policy + per-schedule payout for a job. Admin/ops read. */
+/** GET: payout policy + per-schedule payout for a job. Per-schedule payout uses schedule.assigned_vendor_id (history-safe). */
 export async function GET(
     _request: Request,
     context: { params: Promise<{ id: string }> }
@@ -43,7 +44,7 @@ export async function GET(
     if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 500 });
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    const assignedVendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
+    const jobAssignedVendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
 
     const { data: orgSettingsRow, error: orgErr } = await supabase
         .from("org_settings")
@@ -54,41 +55,9 @@ export async function GET(
     if (orgErr) return NextResponse.json({ error: orgErr.message }, { status: 500 });
     const orgSettings: OrgSettingsRow | null = orgSettingsRow as OrgSettingsRow | null;
 
-    let policy: ReturnType<typeof resolveVendorPayoutPolicy>["policy"];
-    let source: ReturnType<typeof resolveVendorPayoutPolicy>["source"];
-
-    if (assignedVendorId) {
-        const { data: vendor, error: vendorErr } = await supabase
-            .from("vendors")
-            .select("id, org_id, payout_override_type, payout_override_value, metadata")
-            .eq("id", assignedVendorId)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
-
-        if (vendorErr) return NextResponse.json({ error: vendorErr.message }, { status: 500 });
-        const resolved = resolveVendorPayoutPolicy({
-            orgSettings,
-            vendor: (vendor ?? null) as VendorRow | null,
-        });
-        policy = resolved.policy;
-        source = resolved.source;
-    } else {
-        const resolved = resolveVendorPayoutPolicy({
-            orgSettings,
-            vendor: null,
-        });
-        policy = resolved.policy;
-        source = resolved.source;
-    }
-
-    const completedStatusKey = policy.completed_status_key ?? "completed";
-    const useTieredBasis =
-        (policy.basis === "job_completed_occurrences" || (!policy.basis && policy.mode === "tiered")) &&
-        completedStatusKey;
-
     const { data: scheduleRows, error: schedErr } = await supabase
         .from("schedules")
-        .select("id, status_key, start_at, created_at")
+        .select("id, status_key, start_at, created_at, assigned_vendor_id")
         .eq("org_id", ctx.orgId)
         .eq("job_id", jobId)
         .order("start_at", { ascending: true, nullsFirst: false });
@@ -102,10 +71,50 @@ export async function GET(
         return ta.localeCompare(tb);
     });
 
-    let occurrenceCounter = 0;
+    const vendorIds = [...new Set(ordered.map((r) => r.assigned_vendor_id).filter(Boolean))] as string[];
+    const vendorMap = new Map<string, VendorRow>();
+    if (vendorIds.length > 0) {
+        const { data: vendors } = await supabase
+            .from("vendors")
+            .select("id, org_id, payout_override_type, payout_override_value, metadata")
+            .eq("org_id", ctx.orgId)
+            .in("id", vendorIds);
+        (vendors ?? []).forEach((v) => vendorMap.set((v as { id: string }).id, v as VendorRow));
+    }
+
+    const basisJob = "job_completed_occurrences";
+    const basisVendorJob = "vendor_job_completed_occurrences";
+
+    let jobOccurrenceCounter = 0;
+    const vendorOccurrenceCounters = new Map<string, number>();
+
     const schedules = ordered.map((row) => {
+        const scheduleVendorId = row.assigned_vendor_id ?? null;
+        const vendor = scheduleVendorId ? vendorMap.get(scheduleVendorId) ?? null : null;
+        const { policy } = resolveVendorPayoutPolicy({ orgSettings, vendor });
+        const completedStatusKey = policy.completed_status_key ?? "completed";
         const isCompleted = (row.status_key ?? "") === completedStatusKey;
-        const occurrenceNumber = useTieredBasis && isCompleted ? ++occurrenceCounter : null;
+
+        const basis =
+            policy.basis === basisVendorJob ? basisVendorJob : basisJob;
+        const useTiered =
+            policy.mode === "tiered" &&
+            (basis === basisJob || basis === basisVendorJob) &&
+            completedStatusKey;
+
+        let occurrenceNumber: number | null = null;
+        if (useTiered && isCompleted) {
+            if (basis === basisJob) {
+                occurrenceNumber = ++jobOccurrenceCounter;
+            } else {
+                if (scheduleVendorId) {
+                    const next = (vendorOccurrenceCounters.get(scheduleVendorId) ?? 0) + 1;
+                    vendorOccurrenceCounters.set(scheduleVendorId, next);
+                    occurrenceNumber = next;
+                }
+            }
+        }
+
         const payoutPercent =
             occurrenceNumber != null
                 ? computePayoutPercent({ policy, completedOccurrences: occurrenceNumber })
@@ -113,6 +122,7 @@ export async function GET(
 
         return {
             schedule_id: row.id,
+            assigned_vendor_id: scheduleVendorId,
             status_key: row.status_key ?? null,
             scheduled_at: row.start_at ?? null,
             completed_at: null as string | null,
@@ -121,26 +131,49 @@ export async function GET(
         };
     });
 
-    const completedOccurrencesTotal = occurrenceCounter;
+    const jobVendor = jobAssignedVendorId ? vendorMap.get(jobAssignedVendorId) ?? null : null;
+    const { policy: jobPolicy, source } = resolveVendorPayoutPolicy({
+        orgSettings,
+        vendor: jobVendor,
+    });
+    const jobCompletedStatusKey = jobPolicy.completed_status_key ?? "completed";
+    const jobBasis =
+        jobPolicy.basis === basisVendorJob ? basisVendorJob : basisJob;
+
+    let completedOccurrencesForCurrentVendor = 0;
+    if (jobPolicy.mode === "tiered" && jobAssignedVendorId) {
+        if (jobBasis === basisJob) {
+            completedOccurrencesForCurrentVendor = ordered.filter(
+                (r) => (r.status_key ?? "") === jobCompletedStatusKey
+            ).length;
+        } else {
+            completedOccurrencesForCurrentVendor = ordered.filter(
+                (r) =>
+                    (r.status_key ?? "") === jobCompletedStatusKey &&
+                    (r.assigned_vendor_id ?? null) === jobAssignedVendorId
+            ).length;
+        }
+    }
+
     const currentPayoutPercent = computePayoutPercent({
-        policy,
-        completedOccurrences: completedOccurrencesTotal,
+        policy: jobPolicy,
+        completedOccurrences: completedOccurrencesForCurrentVendor,
     });
 
     return NextResponse.json({
         policy: {
-            mode: policy.mode,
-            type: policy.type,
-            basis: policy.basis ?? null,
-            completed_status_key: policy.completed_status_key ?? null,
-            value: policy.value ?? null,
-            tiers: policy.tiers ?? null,
+            mode: jobPolicy.mode,
+            type: jobPolicy.type,
+            basis: jobPolicy.basis ?? null,
+            completed_status_key: jobPolicy.completed_status_key ?? null,
+            value: jobPolicy.value ?? null,
+            tiers: jobPolicy.tiers ?? null,
         },
         source,
         job: {
             id: (job as { id: string }).id,
-            assigned_vendor_id: assignedVendorId,
-            completed_occurrences_total: completedOccurrencesTotal,
+            assigned_vendor_id: jobAssignedVendorId,
+            completed_occurrences_total: completedOccurrencesForCurrentVendor,
             current_payout_percent: currentPayoutPercent,
         },
         schedules,
