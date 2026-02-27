@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const search = (searchParams.get("search") ?? "").trim();
   const includeArchived = searchParams.get("include_archived") === "true";
   const statusKey = (searchParams.get("status_key") ?? "").trim();
+  const assignedVendorId = (searchParams.get("assigned_vendor_id") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
@@ -29,6 +30,9 @@ export async function GET(request: NextRequest) {
   }
   if (statusKey) {
     q = q.eq("status_key", statusKey);
+  }
+  if (assignedVendorId) {
+    q = q.eq("assigned_vendor_id", assignedVendorId);
   }
 
   if (search) {

@@ -173,6 +173,7 @@ export default function AdminEntityDrawer() {
     const [vendorPayout, setVendorPayout] = useState<{ policy: { mode: string; value?: number }; source: string; completed_occurrences: number; payout_percent: number } | null>(null);
     const [vendorPayoutJobId, setVendorPayoutJobId] = useState("");
     const [vendorPayoutJobIdInput, setVendorPayoutJobIdInput] = useState("");
+    const [vendorPayoutJobOptions, setVendorPayoutJobOptions] = useState<{ id: string; title: string | null }[]>([]);
     const [vendorPayoutLoading, setVendorPayoutLoading] = useState(false);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
@@ -189,6 +190,15 @@ export default function AdminEntityDrawer() {
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
     const [paymentActionLoading, setPaymentActionLoading] = useState<"run" | "retry" | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    type JobPayoutSchedule = { schedule_id: string; status_key: string | null; scheduled_at: string | null; completed_at: string | null; occurrence_number: number | null; payout_percent: number | null };
+    type JobPayoutResponse = {
+        policy: { mode: string; type?: string; basis?: string | null; completed_status_key?: string | null; value?: number | null; tiers?: unknown[] | null };
+        source: string;
+        job: { id: string; assigned_vendor_id: string | null; completed_occurrences_total: number; current_payout_percent: number };
+        schedules: JobPayoutSchedule[];
+    };
+    const [jobPayout, setJobPayout] = useState<JobPayoutResponse | null>(null);
+    const [jobPayoutLoading, setJobPayoutLoading] = useState(false);
     const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "automation" | "details">("overview");
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
@@ -755,6 +765,7 @@ export default function AdminEntityDrawer() {
             setVendorPayout(null);
             setVendorPayoutJobId("");
             setVendorPayoutJobIdInput("");
+            setVendorPayoutJobOptions([]);
             return;
         }
         setVendorPayoutLoading(true);
@@ -769,6 +780,30 @@ export default function AdminEntityDrawer() {
             .catch(() => setVendorPayout(null))
             .finally(() => setVendorPayoutLoading(false));
     }, [drawer.type, drawer.id, vendorPayoutJobId]);
+
+    useEffect(() => {
+        if (drawer.type !== "vendors" || !drawer.id) {
+            setVendorPayoutJobOptions([]);
+            return;
+        }
+        fetch(`/api/admin/jobs?assigned_vendor_id=${encodeURIComponent(drawer.id)}&limit=100`)
+            .then((r) => (r.ok ? r.json() : { jobs: [] }))
+            .then((j: { jobs?: { id: string; title: string | null }[] }) => setVendorPayoutJobOptions(j.jobs ?? []))
+            .catch(() => setVendorPayoutJobOptions([]));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs" || !drawer.id) {
+            setJobPayout(null);
+            return;
+        }
+        setJobPayoutLoading(true);
+        fetch(`/api/admin/jobs/${drawer.id}/payout`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: JobPayoutResponse | null) => setJobPayout(j))
+            .catch(() => setJobPayout(null))
+            .finally(() => setJobPayoutLoading(false));
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
@@ -1603,14 +1638,16 @@ export default function AdminEntityDrawer() {
                                                                     <p className="text-sm text-alloy-midnight/60">Select a job to preview tier.</p>
                                                                 )}
                                                                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Job ID"
-                                                                        value={vendorPayoutJobIdInput}
-                                                                        onChange={(e) => setVendorPayoutJobIdInput(e.target.value)}
-                                                                        className="px-2 py-1 border border-alloy-stone/40 rounded text-sm w-48 font-mono text-xs"
-                                                                    />
-                                                                    <button type="button" onClick={() => setVendorPayoutJobId(vendorPayoutJobIdInput.trim())} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Preview payout for job</button>
+                                                                    <select
+                                                                        value={vendorPayoutJobId}
+                                                                        onChange={(e) => setVendorPayoutJobId(e.target.value)}
+                                                                        className="px-2 py-1 border border-alloy-stone/40 rounded text-sm min-w-[180px]"
+                                                                    >
+                                                                        <option value="">— Select job —</option>
+                                                                        {vendorPayoutJobOptions.map((j) => (
+                                                                            <option key={j.id} value={j.id}>{j.title ?? j.id.slice(0, 8)}</option>
+                                                                        ))}
+                                                                    </select>
                                                                 </div>
                                                             </>
                                                         ) : (
@@ -1946,6 +1983,53 @@ export default function AdminEntityDrawer() {
                                             </label>
                                         )}
                                     </div>
+                                    <details className="pt-2 pb-2 border-b border-[#e6e8ec]" open>
+                                        <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Payout</summary>
+                                        {jobPayoutLoading ? (
+                                            <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                        ) : !(data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? (
+                                            <p className="text-sm text-alloy-midnight/70">No vendor assigned to this job.</p>
+                                        ) : jobPayout ? (
+                                            <div className="space-y-2">
+                                                <p className="text-sm text-alloy-midnight/80">
+                                                    <strong>Policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}
+                                                    {jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/60">
+                                                    Source: {jobPayout.source === "vendor" ? "Vendor override" : jobPayout.source === "org" ? "Org default" : "Legacy"}
+                                                </p>
+                                                <p className="text-sm text-alloy-midnight/80">
+                                                    Completed occurrences: {jobPayout.job.completed_occurrences_total} · Current payout: <strong>{jobPayout.job.current_payout_percent}%</strong>
+                                                </p>
+                                                {jobPayout.schedules.length > 0 && (
+                                                    <div className="overflow-x-auto mt-2">
+                                                        <table className="w-full text-sm border border-alloy-stone/20">
+                                                            <thead>
+                                                                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
+                                                                    <th className="py-1.5 pr-2">Scheduled At</th>
+                                                                    <th className="py-1.5 pr-2">Status</th>
+                                                                    <th className="py-1.5 pr-2">Occurrence #</th>
+                                                                    <th className="py-1.5 pr-2">Payout %</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {jobPayout.schedules.map((s) => (
+                                                                    <tr key={s.schedule_id} className="border-b border-alloy-stone/10">
+                                                                        <td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.occurrence_number != null ? s.occurrence_number : "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.payout_percent != null ? `${s.payout_percent}%` : "—"}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>
+                                        )}
+                                    </details>
                                     {(isEditing || (drawer.type === "jobs" && !(data as { _create?: boolean })?._create)) ? (
                                         <>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Scheduled (local)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
