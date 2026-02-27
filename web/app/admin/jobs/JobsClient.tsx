@@ -15,6 +15,7 @@ type JobRow = {
   title: string | null;
   description: string | null;
   job_status_id: string | null;
+  status_key: string | null;
   is_recurring: boolean | null;
   customer_id: string | null;
   _customer_name?: string | null;
@@ -94,6 +95,14 @@ export default function JobsClient() {
 
   useEffect(() => {
     fetchJobs();
+  }, [fetchJobs]);
+  useEffect(() => {
+    const onSaved = (e: Event) => {
+      const d = (e as CustomEvent<{ type: string; id: string }>)?.detail;
+      if (d?.type === "jobs") fetchJobs();
+    };
+    window.addEventListener("admin-entity-saved", onSaved);
+    return () => window.removeEventListener("admin-entity-saved", onSaved);
   }, [fetchJobs]);
   useEffect(() => {
     fetchCustomers();
@@ -262,7 +271,7 @@ export default function JobsClient() {
                       <td className="py-2 pr-4 text-alloy-blue hover:underline">{j.title ?? "—"}</td>
                       <td className="py-2 pr-4">{j._customer_name ?? "—"}</td>
                       <td className="py-2 pr-4">{j._location_label ?? "—"}</td>
-                      <td className="py-2 pr-4"><StatusBadge label={statusLabel(j.job_status_id)} variant="neutral" /></td>
+                      <td className="py-2 pr-4"><StatusBadge label={statusOptions.find((s) => s.status_key === j.status_key)?.status_label ?? j.status_key ?? "—"} variant="neutral" /></td>
                       <td className="py-2 pr-4">{j._assigned_vendor_name ?? "—"}</td>
                       <td className="py-2 pr-4">{j.is_recurring ? "Yes" : "No"}</td>
                       <td className="py-2 pr-4">{formatDateTime(j.created_at)}</td>

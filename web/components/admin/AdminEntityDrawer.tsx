@@ -169,6 +169,7 @@ export default function AdminEntityDrawer() {
     const [setLocationError, setSetLocationError] = useState<string | null>(null);
     const [setLocationList, setSetLocationList] = useState<{ id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[]>([]);
     const [locationTypes, setLocationTypes] = useState<{ id: string; key: string; label: string; position: number; is_active: boolean }[]>([]);
+    const [initialJobFormData, setInitialJobFormData] = useState<Record<string, unknown> | null>(null);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
     const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
@@ -744,6 +745,30 @@ export default function AdminEntityDrawer() {
         setFormData((prev) => (prev.status_key === undefined || prev.status_key === "" ? { ...prev, status_key: def } : prev));
     }, [drawer.type, data, statusDefsForDrawer.length, defaultStatusKeyForCreate]);
 
+    const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "job_status_id", "internal_notes"] as const;
+    useEffect(() => {
+        if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
+            setInitialJobFormData(null);
+            return;
+        }
+        const meta = (data.metadata as Record<string, unknown>) || {};
+        const snapshot = {
+            scheduled_at: data.scheduled_at ? new Date(data.scheduled_at as string).toISOString().slice(0, 16) : "",
+            service_frequency_key: (data.service_frequency_key as string) ?? "",
+            is_recurring: data.is_recurring ?? false,
+            job_status_id: data.job_status_id ?? "",
+            status_key: (data.status_key as string) ?? "",
+            internal_notes: (meta.internal_notes as string) ?? "",
+        };
+        setFormData((prev) => ({ ...prev, ...snapshot }));
+        setInitialJobFormData(snapshot);
+    }, [drawer.type, drawer.id, data?.id]);
+
+    const jobFormDirty = useMemo(() => {
+        if (drawer.type !== "jobs" || !initialJobFormData) return false;
+        return JOB_FORM_KEYS.some((k) => String(formData[k] ?? "") !== String(initialJobFormData[k] ?? ""));
+    }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.job_status_id, formData.internal_notes]);
+
     const saveEdit = useCallback(async () => {
         if (!drawer.type || !drawer.id) return;
         setSaving(true);
@@ -857,6 +882,10 @@ export default function AdminEntityDrawer() {
             refetch();
             setIsEditing(false);
             router.refresh();
+            if (drawer.type === "jobs" && drawer.id) {
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: drawer.id } }));
+                setInitialJobFormData(JOB_FORM_KEYS.reduce((acc, k) => ({ ...acc, [k]: formData[k] }), {} as Record<string, unknown>));
+            }
         } catch (e: unknown) {
             setSaveError((e as Error).message);
         } finally {
@@ -945,14 +974,24 @@ export default function AdminEntityDrawer() {
                     {canEditInDrawer(drawer.type) && (
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#e6e8ec]">
                             <div className="flex gap-2">
-                                {canEditInDrawer(drawer.type) && (
+                                {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && (
+                                    <>
+                                        {jobFormDirty && (
+                                            <>
+                                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                                <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                                            </>
+                                        )}
+                                        <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>
+                                    </>
+                                )}
+                                {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
                                     !isEditing ? (
                                         <>
                                             {canMutate && !(data as { _create?: boolean })?._create && (
                                                 <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
                                             )}
                                             {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
-                                            {drawer.type === "jobs" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>}
                                             {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
                                         </>
                                     ) : (
@@ -1839,21 +1878,21 @@ export default function AdminEntityDrawer() {
                                             </label>
                                         )}
                                     </div>
-                                    {isEditing ? (
+                                    {(isEditing || (drawer.type === "jobs" && !(data as { _create?: boolean })?._create)) ? (
                                         <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Scheduled (local)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency key</label><input value={String(formData.service_frequency_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, service_frequency_key: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_recurring} onChange={(e) => setFormData((f) => ({ ...f, is_recurring: e.target.checked }))} /> Recurring</label></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Scheduled (local)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency key</label><input value={String(formData.service_frequency_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, service_frequency_key: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                            <div><label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_recurring} onChange={(e) => setFormData((f) => ({ ...f, is_recurring: e.target.checked }))} disabled={drawer.type === "jobs" ? !canMutate : false} /> Recurring</label></div>
                                             {statusDefsLoading ? null : (
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                             )}
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status ID</label><input value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status ID</label><input value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" rows={2} /></div>
                                         </>
                                     ) : (
                                         <>
                                             <Field label="Recurring" value={data.is_recurring ? "Yes" : "No"} />
-                                            <Field label="Scheduled" value={formatDateTime(data.scheduled_at as string)} />
+                                            <Field label="Scheduled at" value={formatDateTime(data.scheduled_at as string)} />
                                             <div className="py-1.5">
                                                 <strong className="text-[#45506c] text-sm">Status</strong>
                                                 {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=jobs" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
