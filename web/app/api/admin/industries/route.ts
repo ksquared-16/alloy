@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-/** GET: list active industries (for config UI). Admin + ops can read. */
+/** GET: list all active industries (for config UI). No allowlist—includes insurance and any industry with is_active=true. Admin + ops can read. */
 export async function GET() {
     const ctx = await getAdminContext();
     if (!ctx.ok) {

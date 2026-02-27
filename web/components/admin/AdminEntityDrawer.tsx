@@ -170,6 +170,10 @@ export default function AdminEntityDrawer() {
     const [setLocationList, setSetLocationList] = useState<{ id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[]>([]);
     const [locationTypes, setLocationTypes] = useState<{ id: string; key: string; label: string; position: number; is_active: boolean }[]>([]);
     const [initialJobFormData, setInitialJobFormData] = useState<Record<string, unknown> | null>(null);
+    const [vendorPayout, setVendorPayout] = useState<{ policy: { mode: string; value?: number }; source: string; completed_occurrences: number; payout_percent: number } | null>(null);
+    const [vendorPayoutJobId, setVendorPayoutJobId] = useState("");
+    const [vendorPayoutJobIdInput, setVendorPayoutJobIdInput] = useState("");
+    const [vendorPayoutLoading, setVendorPayoutLoading] = useState(false);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
     const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
     const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
@@ -746,6 +750,26 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, data, statusDefsForDrawer.length, defaultStatusKeyForCreate]);
 
     const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "job_status_id", "internal_notes"] as const;
+    useEffect(() => {
+        if (drawer.type !== "vendors" || !drawer.id) {
+            setVendorPayout(null);
+            setVendorPayoutJobId("");
+            setVendorPayoutJobIdInput("");
+            return;
+        }
+        setVendorPayoutLoading(true);
+        const params = new URLSearchParams();
+        if (vendorPayoutJobId.trim()) params.set("job_id", vendorPayoutJobId.trim());
+        fetch(`/api/admin/vendors/${drawer.id}/payout?${params.toString()}`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((j: { policy?: { mode: string; value?: number }; source?: string; completed_occurrences?: number; payout_percent?: number } | null) => {
+                if (j?.policy) setVendorPayout({ policy: j.policy, source: j.source ?? "legacy", completed_occurrences: j.completed_occurrences ?? 0, payout_percent: j.payout_percent ?? 80 });
+                else setVendorPayout(null);
+            })
+            .catch(() => setVendorPayout(null))
+            .finally(() => setVendorPayoutLoading(false));
+    }, [drawer.type, drawer.id, vendorPayoutJobId]);
+
     useEffect(() => {
         if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
             setInitialJobFormData(null);
@@ -1552,6 +1576,50 @@ export default function AdminEntityDrawer() {
                                                 </div>
                                                         <DrawerLinkWithName label="Primary contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                                     </>
+                                                )}
+                                            </div>
+                                        </details>
+                                        <details className="border-b border-[#e6e8ec] pb-5 pt-4" open>
+                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Payout</summary>
+                                            <div className="space-y-2">
+                                                {vendorPayoutLoading ? (
+                                                    <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                                ) : vendorPayout ? (
+                                                    <>
+                                                        <p className="text-sm text-alloy-midnight/80">
+                                                            <strong>Policy:</strong> {vendorPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}
+                                                            {vendorPayout.policy.mode === "flat" && vendorPayout.policy.value != null && ` · ${vendorPayout.policy.value}%`}
+                                                        </p>
+                                                        <p className="text-xs text-alloy-midnight/60">
+                                                            Source: {vendorPayout.source === "vendor" ? "Vendor override" : vendorPayout.source === "org" ? "Org default" : "Legacy"}
+                                                        </p>
+                                                        {vendorPayout.policy.mode === "tiered" ? (
+                                                            <>
+                                                                {vendorPayoutJobId ? (
+                                                                    <p className="text-sm text-alloy-midnight/80">
+                                                                        Completed occurrences: {vendorPayout.completed_occurrences} · Payout: <strong>{vendorPayout.payout_percent}%</strong>
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="text-sm text-alloy-midnight/60">Select a job to preview tier.</p>
+                                                                )}
+                                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Job ID"
+                                                                        value={vendorPayoutJobIdInput}
+                                                                        onChange={(e) => setVendorPayoutJobIdInput(e.target.value)}
+                                                                        className="px-2 py-1 border border-alloy-stone/40 rounded text-sm w-48 font-mono text-xs"
+                                                                    />
+                                                                    <button type="button" onClick={() => setVendorPayoutJobId(vendorPayoutJobIdInput.trim())} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Preview payout for job</button>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <p className="text-sm text-alloy-midnight/80">Payout: <strong>{vendorPayout.payout_percent}%</strong></p>
+                                                        )}
+                                                        <Link href="/admin/settings" className="text-xs text-alloy-blue hover:underline inline-block">Configure payout defaults</Link>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-sm text-alloy-midnight/60">Could not load payout policy.</p>
                                                 )}
                                             </div>
                                         </details>
