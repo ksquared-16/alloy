@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import ConfigLockBanner from "@/components/admin/ConfigLockBanner";
@@ -10,6 +10,14 @@ import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 type LabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
 type IndustryOption = { id: string; key: string; label: string };
+
+function dedupeIndustriesByKey(list: IndustryOption[]): IndustryOption[] {
+    const byKey = new Map<string, IndustryOption>();
+    for (const i of list) {
+        if (!byKey.has(i.key)) byKey.set(i.key, i);
+    }
+    return [...byKey.values()];
+}
 
 type ApiResponse = {
     org_industry_id: string | null;
@@ -58,7 +66,9 @@ export default function EntityLabelsClient() {
             const json = await res.json().catch(() => ({}));
             if (res.ok) {
                 const list = (json as { industries?: IndustryOption[] }).industries ?? [];
-                setIndustries(list);
+                setIndustries(dedupeIndustriesByKey(list));
+            } else {
+                setIndustries([]);
             }
         } catch {
             setIndustries([]);
@@ -151,6 +161,13 @@ export default function EntityLabelsClient() {
 
     const industrySelectValue = data?.org_industry_id ?? GENERIC_VALUE;
 
+    const industryDropdownOptions = useMemo(() => {
+        const deduped = dedupeIndustriesByKey(industries);
+        return deduped
+            .filter((i) => i.key !== "generic")
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    }, [industries]);
+
     const handleIndustryChange = async (value: string) => {
         if (!canMutate || configLocked) return;
         const industry_id = value === GENERIC_VALUE ? null : value;
@@ -210,7 +227,7 @@ export default function EntityLabelsClient() {
                     className="rounded border border-[#e6e8ec] bg-white px-3 py-1.5 text-sm text-[#31394d] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                     <option value={GENERIC_VALUE}>Generic</option>
-                    {industries.map((i) => (
+                    {industryDropdownOptions.map((i) => (
                         <option key={i.id} value={i.id}>{i.label}</option>
                     ))}
                 </select>
