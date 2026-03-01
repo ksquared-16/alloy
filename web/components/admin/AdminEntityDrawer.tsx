@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
@@ -132,7 +132,9 @@ export default function AdminEntityDrawer() {
     const jobSingular = labels.jobs?.singular ?? "Job";
     const scheduleSingular = labels.schedules?.singular ?? "Schedule";
     const workflowSingular = labels.workflows?.singular ?? "Workflow";
-    const vendorSingular = labels.vendors?.singular ?? "Vendor";
+    const vendorSingular = getEntityLabel(labels, "vendors", "singular");
+    const vendorPlural = getEntityLabel(labels, "vendors", "plural");
+    const jobPlural = getEntityLabel(labels, "jobs", "plural");
     const subscriptionSingular = labels.subscriptions?.singular ?? "Subscription";
     const router = useRouter();
     const [data, setData] = useState<Record<string, unknown> | null>(null);
@@ -187,6 +189,7 @@ export default function AdminEntityDrawer() {
     const [scheduleRescheduleForm, setScheduleRescheduleForm] = useState<{ start_at: string; end_at: string; copy_assignment: boolean } | null>(null);
     const [scheduleRescheduleSaving, setScheduleRescheduleSaving] = useState(false);
     const [jobVendorsForAssign, setJobVendorsForAssign] = useState<{ id: string; name: string }[]>([]);
+    const [jobVendorOptions, setJobVendorOptions] = useState<{ id: string; name: string }[]>([]);
     const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
@@ -288,6 +291,7 @@ export default function AdminEntityDrawer() {
             setJobSchedules([]);
             setRescheduleForm(null);
             setJobVendorsForAssign([]);
+            setJobVendorOptions([]);
             setJobAssignedVendorId(null);
             setJobPayments([]);
             return;
@@ -300,6 +304,10 @@ export default function AdminEntityDrawer() {
             .then((res) => res.ok ? res.json() : { vendors: [] })
             .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorsForAssign(json.vendors ?? []))
             .catch(() => setJobVendorsForAssign([]));
+        fetch("/api/admin/vendor-options")
+            .then((res) => res.ok ? res.json() : { vendors: [] })
+            .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorOptions(json.vendors ?? []))
+            .catch(() => setJobVendorOptions([]));
     }, [drawer.type, drawer.id]);
 
     const refetchJobPayments = useCallback(() => {
@@ -1135,13 +1143,13 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && drawer.type === "schedules" && data && (
                         <div className="pt-2 space-y-3 mb-4">
                             {(data.job_id as string) && (
-                                <DrawerLinkWithName label="Job" id={data.job_id as string} type="jobs" displayName={(data._job as { title?: string })?.title ?? null} />
+                                <DrawerLinkWithName label={jobSingular} id={data.job_id as string} type="jobs" displayName={(data._job as { title?: string })?.title ?? null} />
                             )}
                             {(data._customer as { id?: string; name?: string }) && (
                                 <DrawerLinkWithName label="Customer" id={(data._customer as { id: string }).id} type="customers" displayName={(data._customer as { name?: string }).name ?? null} />
                             )}
                             <div className="py-1.5">
-                                <strong className="text-[#45506c] text-sm">Assigned vendor:</strong>{" "}
+                                <strong className="text-[#45506c] text-sm">Assigned {vendorSingular}:</strong>{" "}
                                 {(data._vendor as { id?: string; name?: string }) ? (
                                     <button type="button" onClick={() => openDrawer({ type: "vendors", id: (data._vendor as { id: string }).id })} className="text-alloy-blue hover:underline text-sm">{(data._vendor as { name?: string }).name ?? "Vendor"}</button>
                                 ) : (data._job_assigned_vendor as { id?: string; name?: string }) ? (
@@ -1707,17 +1715,46 @@ export default function AdminEntityDrawer() {
                                                                                 </>
                                                                             )}
                                                                         </div>
-                                                                        {vendorPayoutOverrideForm.mode === "tiered" && (vendorPayoutOverrideForm.tiers ?? []).length > 0 && (
-                                                                            <div className="text-xs">
-                                                                                Tiers: {(vendorPayoutOverrideForm.tiers ?? []).map((t, i) => (
-                                                                                    <span key={i}> {t.from}-{t.to ?? "∞"}→{t.value}%</span>
-                                                                                ))}
+                                                                        {vendorPayoutOverrideForm.mode === "tiered" && (
+                                                                            <div className="space-y-1">
+                                                                                <span className="text-xs font-medium text-alloy-midnight/70">Tiers (from / to / value %)</span>
+                                                                                <div className="border border-alloy-stone/20 rounded overflow-hidden">
+                                                                                    <table className="w-full text-sm">
+                                                                                        <thead className="bg-alloy-stone/10">
+                                                                                            <tr>
+                                                                                                <th className="text-left px-2 py-1 font-medium text-xs">From</th>
+                                                                                                <th className="text-left px-2 py-1 font-medium text-xs">To (blank = ∞)</th>
+                                                                                                <th className="text-left px-2 py-1 font-medium text-xs">Value %</th>
+                                                                                                <th className="w-14" />
+                                                                                            </tr>
+                                                                                        </thead>
+                                                                                        <tbody>
+                                                                                            {(vendorPayoutOverrideForm.tiers ?? []).map((tier, i) => (
+                                                                                                <tr key={i} className="border-t border-alloy-stone/10">
+                                                                                                    <td className="px-2 py-1">
+                                                                                                        <input type="number" min={0} value={tier.from} onChange={(e) => setVendorPayoutOverrideForm((f) => { const tiers = [...(f.tiers ?? [])]; tiers[i] = { ...tiers[i]!, from: Number(e.target.value) || 0 }; return { ...f, tiers }; })} className="w-14 px-1.5 py-0.5 border rounded text-sm" />
+                                                                                                    </td>
+                                                                                                    <td className="px-2 py-1">
+                                                                                                        <input type="number" min={0} placeholder="∞" value={tier.to ?? ""} onChange={(e) => setVendorPayoutOverrideForm((f) => { const tiers = [...(f.tiers ?? [])]; tiers[i] = { ...tiers[i]!, to: e.target.value === "" ? null : Number(e.target.value) }; return { ...f, tiers }; })} className="w-14 px-1.5 py-0.5 border rounded text-sm" />
+                                                                                                    </td>
+                                                                                                    <td className="px-2 py-1">
+                                                                                                        <input type="number" min={0} max={100} step={0.5} value={tier.value} onChange={(e) => setVendorPayoutOverrideForm((f) => { const tiers = [...(f.tiers ?? [])]; tiers[i] = { ...tiers[i]!, value: Number(e.target.value) || 0 }; return { ...f, tiers }; })} className="w-14 px-1.5 py-0.5 border rounded text-sm" />
+                                                                                                    </td>
+                                                                                                    <td className="px-2 py-1">
+                                                                                                        <button type="button" onClick={() => setVendorPayoutOverrideForm((f) => { const tiers = (f.tiers ?? []).filter((_, idx) => idx !== i); return { ...f, tiers: tiers.length ? tiers : [{ from: 1, to: null, value: 80 }] }; })} className="text-red-600 hover:underline text-xs">Remove</button>
+                                                                                                    </td>
+                                                                                                </tr>
+                                                                                            ))}
+                                                                                        </tbody>
+                                                                                    </table>
+                                                                                </div>
+                                                                                <button type="button" onClick={() => setVendorPayoutOverrideForm((f) => { const tiers = [...(f.tiers ?? [])]; const last = tiers[tiers.length - 1]; const nextFrom = last && typeof last.to === "number" ? last.to + 1 : (last?.from ?? 0) + 1; return { ...f, tiers: [...tiers, { from: nextFrom, to: null, value: 80 }] }; })} className="text-xs text-alloy-blue hover:underline">Add tier</button>
                                                                             </div>
                                                                         )}
                                                                         <button type="button" disabled={vendorPayoutOverrideSaving} onClick={async () => { if (!drawer.id) return; setVendorPayoutOverrideSaving(true); try { const res = await fetch(`/api/admin/vendors/${drawer.id}/payout-policy`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_payout_policy: { mode: vendorPayoutOverrideForm.mode, type: "percentage", value: vendorPayoutOverrideForm.mode === "flat" ? (vendorPayoutOverrideForm.value ?? 80) : undefined, basis: vendorPayoutOverrideForm.mode === "tiered" ? (vendorPayoutOverrideForm.basis ?? "job_completed_occurrences") : undefined, completed_status_key: vendorPayoutOverrideForm.completed_status_key ?? "completed", tiers: vendorPayoutOverrideForm.mode === "tiered" ? (vendorPayoutOverrideForm.tiers ?? []) : undefined } }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => prev ? { ...prev, metadata: { ...(prev.metadata as object || {}), vendor_payout_policy: vendorPayoutOverrideForm } } : prev); refetch(); const payoutRes = await fetch(`/api/admin/vendors/${drawer.id}/payout${vendorPayoutJobId ? `?job_id=${encodeURIComponent(vendorPayoutJobId)}` : ""}`); if (payoutRes.ok) { const payoutJson = await payoutRes.json(); setVendorPayout({ policy: payoutJson.policy, source: payoutJson.source ?? "org", completed_occurrences: payoutJson.completed_occurrences ?? 0, payout_percent: payoutJson.payout_percent ?? 80 }); } } catch (e) { alert((e as Error).message); } finally { setVendorPayoutOverrideSaving(false); } }} className="px-2 py-1 text-xs bg-alloy-blue text-white rounded hover:opacity-90 disabled:opacity-50">Save override</button>
                                                                     </div>
                                                                 ) : vendorPayout?.source === "vendor" ? (
-                                                                    <button type="button" disabled={vendorPayoutOverrideSaving} onClick={async () => { if (!drawer.id) return; setVendorPayoutOverrideSaving(true); try { const res = await fetch(`/api/admin/vendors/${drawer.id}/payout-policy`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_payout_policy: null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => prev ? { ...prev, metadata: { ...(prev.metadata as object || {}), vendor_payout_policy: null } } : prev); setVendorPayoutOverrideEnabled(false); refetch(); } catch (e) { alert((e as Error).message); } finally { setVendorPayoutOverrideSaving(false); } }} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Clear override</button>
+                                                                    <button type="button" disabled={vendorPayoutOverrideSaving} onClick={async () => { if (!drawer.id) return; setVendorPayoutOverrideSaving(true); try { const res = await fetch(`/api/admin/vendors/${drawer.id}/payout-policy`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_payout_policy: null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => prev ? { ...prev, metadata: { ...(prev.metadata as object || {}), vendor_payout_policy: null } } : prev); setVendorPayoutOverrideEnabled(false); refetch(); const payoutRes = await fetch(`/api/admin/vendors/${drawer.id}/payout${vendorPayoutJobId ? `?job_id=${encodeURIComponent(vendorPayoutJobId)}` : ""}`); if (payoutRes.ok) { const payoutJson = await payoutRes.json(); setVendorPayout({ policy: payoutJson.policy, source: payoutJson.source ?? "org", completed_occurrences: payoutJson.completed_occurrences ?? 0, payout_percent: payoutJson.payout_percent ?? 80 }); } } catch (e) { alert((e as Error).message); } finally { setVendorPayoutOverrideSaving(false); } }} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Clear override</button>
                                                                 ) : null}
                                                             </div>
                                                         )}
@@ -1759,7 +1796,7 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Jobs & Schedule</summary>
+                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">{jobPlural} & Schedule</summary>
                                             {((data._vendor_jobs as VendorDrawerJob[]) ?? []).length === 0 ? (
                                                 <p className="text-sm text-alloy-midnight/60">No jobs assigned yet.</p>
                                             ) : (
@@ -1861,7 +1898,7 @@ export default function AdminEntityDrawer() {
                                     ) : (
                                         <>
                                             <Field label="Stage" value={(data._stage_name as string) ?? (data.status as string) ?? "-"} />
-                                            <Field label="Job Date" value={formatDate(data.job_date as string)} />
+                                            <Field label={`${jobSingular} Date`} value={formatDate(data.job_date as string)} />
                                             <Field label="Time Window" value={data.job_time_window as string} />
                                             <Field label="Quote Total" value={formatMoneyFromDollars(data.quote_total as number)} />
                                             <Field label="Notes" value={((data.metadata as Record<string, unknown>)?.notes as string) ?? "-"} />
@@ -1996,16 +2033,16 @@ export default function AdminEntityDrawer() {
                                     </div>
                                     <Field label="Title" value={data.title as string} />
                                     <div className="pt-2 pb-2 border-b border-[#e6e8ec]">
-                                        <strong className="text-alloy-midnight/70 block mb-2">Default vendor</strong>
+                                        <strong className="text-alloy-midnight/70 block mb-2">Default {vendorSingular}</strong>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <select
                                                 value={jobAssignedVendorId ?? ""}
                                                 onChange={(e) => setJobAssignedVendorId(e.target.value || null)}
                                                 className="px-2 py-1.5 border rounded text-sm min-w-[140px]"
                                             >
-                                                <option value="">— None —</option>
-                                                {jobVendorsForAssign.map((v) => (
-                                                    <option key={v.id} value={v.id}>{v.name}</option>
+                                                <option value="">(none)</option>
+                                                {jobVendorOptions.map((v) => (
+                                                    <option key={v.id} value={v.id}>{v.name ?? v.id}</option>
                                                 ))}
                                             </select>
                                             <button
@@ -2015,6 +2052,7 @@ export default function AdminEntityDrawer() {
                                                     if (!drawer.id) return;
                                                     setJobAssignedVendorSaving(true);
                                                     try {
+                                                        const vendorOption = jobAssignedVendorId ? jobVendorOptions.find((v) => v.id === jobAssignedVendorId) ?? null : null;
                                                         if (applyVendorToUpcoming && canMutate) {
                                                             const res = await fetch(`/api/admin/jobs/${drawer.id}/assign-vendor`, {
                                                                 method: "POST",
@@ -2023,9 +2061,7 @@ export default function AdminEntityDrawer() {
                                                             });
                                                             const json = await res.json().catch(() => ({}));
                                                             if (!res.ok) throw new Error((json.error as string) || "Reassign failed");
-                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null } : prev));
-                                                            const payoutRes = await fetch(`/api/admin/jobs/${drawer.id}/payout`);
-                                                            if (payoutRes.ok) setJobPayout(await payoutRes.json());
+                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
                                                         } else {
                                                             const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
                                                                 method: "PATCH",
@@ -2034,10 +2070,15 @@ export default function AdminEntityDrawer() {
                                                             });
                                                             const json = await res.json().catch(() => ({}));
                                                             if (!res.ok) throw new Error((json.error as string) || "Save failed");
-                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null } : prev));
+                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
                                                         }
+                                                        const payoutRes = await fetch(`/api/admin/jobs/${drawer.id}/payout`);
+                                                        if (payoutRes.ok) setJobPayout(await payoutRes.json());
                                                         refetch();
                                                         router.refresh();
+                                                        if (drawer.type === "jobs" && drawer.id) {
+                                                            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: drawer.id } }));
+                                                        }
                                                     } catch (e) {
                                                         setSaveError((e as Error).message);
                                                     } finally {
@@ -2049,10 +2090,10 @@ export default function AdminEntityDrawer() {
                                                 {jobAssignedVendorSaving ? "Saving…" : "Save"}
                                             </button>
                                         </div>
-                                        {jobAssignedVendorId && (
+                                        {canMutate && (
                                             <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
                                                 <input type="checkbox" checked={applyVendorToUpcoming} onChange={(e) => setApplyVendorToUpcoming(e.target.checked)} />
-                                                Apply to all upcoming schedules for this job (safe)
+                                                Apply to all upcoming schedules
                                             </label>
                                         )}
                                     </div>
@@ -2061,7 +2102,7 @@ export default function AdminEntityDrawer() {
                                         {jobPayoutLoading ? (
                                             <p className="text-sm text-alloy-midnight/60">Loading…</p>
                                         ) : !(data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? (
-                                            <p className="text-sm text-alloy-midnight/70">No vendor assigned to this job.</p>
+                                            <p className="text-sm text-alloy-midnight/70">No {vendorSingular} assigned to this {jobSingular.toLowerCase()}.</p>
                                         ) : jobPayout ? (
                                             <div className="space-y-2">
                                                 <p className="text-sm text-alloy-midnight/80">
@@ -2081,7 +2122,7 @@ export default function AdminEntityDrawer() {
                                                                 <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
                                                                     <th className="py-1.5 pr-2">Scheduled At</th>
                                                                     <th className="py-1.5 pr-2">Status</th>
-                                                                    <th className="py-1.5 pr-2">Assigned vendor</th>
+                                                                    <th className="py-1.5 pr-2">Assigned {vendorSingular}</th>
                                                                     <th className="py-1.5 pr-2">Occurrence #</th>
                                                                     <th className="py-1.5 pr-2">Payout %</th>
                                                                 </tr>
@@ -2304,7 +2345,7 @@ export default function AdminEntityDrawer() {
                                                 <p className="text-alloy-midnight/60">No schedule assignment yet</p>
                                                 {(data._job_assigned_vendor as { id: string; name: string } | null) ? (
                                                     <div className="mt-2 space-y-2">
-                                                        <p className="text-alloy-midnight/70">Default vendor (job): {(data._job_assigned_vendor as { name: string }).name}</p>
+                                                        <p className="text-alloy-midnight/70">Default {vendorSingular} ({jobSingular}): {(data._job_assigned_vendor as { name: string }).name}</p>
                                                         {!(data.canceled_at as string) && (
                                                             <button
                                                                 type="button"
@@ -2330,7 +2371,7 @@ export default function AdminEntityDrawer() {
                                         )}
                                         {!(data.canceled_at as string) && scheduleVendors.length > 0 && ((data._assignment as { id?: string }) || !(data._job_assigned_vendor as { id?: string })) && (
                                             <div className="mt-2 flex items-center gap-2">
-                                                <label className="text-sm text-alloy-midnight/70">{(data._assignment as { id?: string }) ? "Override vendor" : "Assign vendor"}</label>
+                                                <label className="text-sm text-alloy-midnight/70">{(data._assignment as { id?: string }) ? `Override ${vendorSingular}` : `Assign ${vendorSingular}`}</label>
                                                 <select
                                                     value=""
                                                     onChange={async (e) => {
@@ -2780,7 +2821,7 @@ export default function AdminEntityDrawer() {
                                     <Field label="Total" value={formatMoneyFromDollars(data.quote_total as number)} />
                                     <Field label="Contact ID" value={data.contact_id as string} />
                                     <Field label="Opportunity ID" value={data.opportunity_id as string} />
-                                    <Field label="Job ID" value={data.job_id as string} />
+                                    <Field label={`${jobSingular} ID`} value={data.job_id as string} />
                                 </>
                             )}
                             {drawer.type === "subscriptions" && data && (() => {

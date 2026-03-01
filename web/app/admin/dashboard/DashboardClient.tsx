@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import KpiCard from "@/components/admin/KpiCard";
 import SectionCard from "@/components/admin/SectionCard";
@@ -24,20 +25,26 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ data }: DashboardClientProps) {
     const { jobs, opportunities, schedules, vendors, attention, upcomingSchedules, financialSnapshot } = data;
+    const { labels } = useEntityLabels();
+    const jobPlural = getEntityLabel(labels, "jobs", "plural");
+    const vendorSingular = getEntityLabel(labels, "vendors", "singular");
+    const vendorPlural = getEntityLabel(labels, "vendors", "plural");
+    const schedulePlural = getEntityLabel(labels, "schedules", "plural");
+    const opportunityPlural = getEntityLabel(labels, "opportunities", "plural");
 
     return (
         <div className="space-y-8">
             <AdminPageHeader
                 title="Alloy Admin"
-                subtitle="Overview of jobs, opportunities, schedules, and vendors."
+                subtitle={`Overview of ${jobPlural.toLowerCase()}, opportunities, ${schedulePlural.toLowerCase()}, and ${vendorPlural.toLowerCase()}.`}
             />
 
             {/* KPI row */}
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <KpiCard value={jobs.total} label="Jobs" href="/admin/jobs" accent="navy" />
-                <KpiCard value={jobs.withDefaultVendor} label="Jobs with default vendor" href="/admin/jobs" accent="gold" />
-                <KpiCard value={opportunities.total} label="Opportunities" href="/admin/opportunities" accent="slate" />
-                <KpiCard value={opportunities.booked} label="Opportunities booked" href="/admin/opportunities" accent="juniper" />
+                <KpiCard value={jobs.total} label={jobPlural} href="/admin/jobs" accent="navy" />
+                <KpiCard value={jobs.withDefaultVendor} label={`${jobPlural} with default ${vendorSingular.toLowerCase()}`} href="/admin/jobs" accent="gold" />
+                <KpiCard value={opportunities.total} label={opportunityPlural} href="/admin/opportunities" accent="slate" />
+                <KpiCard value={opportunities.booked} label={`${opportunityPlural} booked`} href="/admin/opportunities" accent="juniper" />
             </section>
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <KpiCard value={schedules.upcoming} label="Upcoming schedules" href="/admin/schedules" accent="navy" />
@@ -66,7 +73,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
 
             {/* Pipeline / funnel tiles */}
             <section className="grid gap-4 sm:grid-cols-2">
-                <SectionCard title="Vendor funnel">
+                <SectionCard title={`${vendorSingular} funnel`}>
                     <div className="flex flex-wrap gap-4">
                         <div className="rounded-lg bg-[#F4F6F9] px-4 py-2"><span className="text-xs text-[#59678b]">Pending</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.pending}</span></div>
                         <div className="rounded-lg bg-[#e6d3a0]/30 px-4 py-2 border border-[#DBC078]/50"><span className="text-xs text-[#59678b]">Approved</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.approved}</span></div>
@@ -132,7 +139,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                     <SectionCard title="Quick actions">
                         <div className="flex flex-col gap-2">
                             <Link href="/admin/schedules" className="text-sm text-[#00458C] hover:underline">View Schedules</Link>
-                            <Link href="/admin/vendors" className="text-sm text-[#00458C] hover:underline">View Vendors</Link>
+                            <Link href="/admin/vendors" className="text-sm text-[#00458C] hover:underline">View {vendorPlural}</Link>
                             <Link href="/admin/messages-outbox" className="text-sm text-[#00458C] hover:underline">View Messages Outbox</Link>
                             <Link href="/admin/opportunities" className="text-sm text-[#00458C] hover:underline">View Opportunities</Link>
                             <Link href="/admin/jobs" className="text-sm text-[#00458C] hover:underline">View Jobs</Link>

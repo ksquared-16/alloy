@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -51,6 +52,9 @@ export default function JobDetailClient({
     const [payments, setPayments] = useState<PaymentRow[]>([]);
     const [jobStatuses, setJobStatuses] = useState<JobStatusOption[]>([]);
     const [vendors, setVendors] = useState<VendorOption[]>([]);
+    const { labels } = useEntityLabels();
+    const vendorSingular = getEntityLabel(labels, "vendors", "singular");
+    const jobSingular = getEntityLabel(labels, "jobs", "singular");
     const [loadingSchedules, setLoadingSchedules] = useState(false);
     const [loadingPayments, setLoadingPayments] = useState(false);
     const [assignDrawerOpen, setAssignDrawerOpen] = useState(false);
@@ -235,7 +239,7 @@ export default function JobDetailClient({
         }
     };
 
-    const title = (job.title as string) ?? "Job";
+    const title = (job.title as string) ?? jobSingular;
     const customerName = (job._customer_name as string) ?? "—";
     const vendorName = (job._assigned_vendor_name as string) ?? null;
     const scheduledAt = job.scheduled_at as string | null | undefined;
@@ -245,11 +249,11 @@ export default function JobDetailClient({
         <>
             <AdminPageHeader
                 title={title}
-                subtitle={`Job details · ${customerName}`}
+                subtitle={`${jobSingular} details · ${customerName}`}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge label={statusLabel(job.job_status_id as string)} variant="neutral" />
-                        <StatusBadge label={vendorName ?? "Unassigned"} variant="default" />
+                        <StatusBadge label={vendorName ?? `Unassigned`} variant="default" />
                         {isAdmin ? (
                         <>
                             <button
@@ -261,7 +265,7 @@ export default function JobDetailClient({
                                 }}
                                 className="px-3 py-1.5 text-sm font-medium border border-alloy-stone/40 rounded-md hover:bg-alloy-stone/10"
                             >
-                                Assign vendor
+                                Assign {vendorSingular}
                             </button>
                             <button
                                 type="button"
@@ -280,7 +284,7 @@ export default function JobDetailClient({
                 }
             />
 
-            <SectionCard title="Job" className="mb-4">
+            <SectionCard title={jobSingular} className="mb-4">
                 <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5 mb-4">
                     {TABS.map((t) => (
                         <button
@@ -341,7 +345,7 @@ export default function JobDetailClient({
                             </div>
                         )}
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned vendor</h3>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>
@@ -459,11 +463,11 @@ export default function JobDetailClient({
             </SectionCard>
 
             {/* Assign vendor drawer */}
-            <Drawer isOpen={assignDrawerOpen} onClose={() => setAssignDrawerOpen(false)} title="Assign vendor" zIndexBackdrop={60} zIndexPanel={70}>
+            <Drawer isOpen={assignDrawerOpen} onClose={() => setAssignDrawerOpen(false)} title={`Assign ${vendorSingular}`} zIndexBackdrop={60} zIndexPanel={70}>
                 <div className="space-y-4">
                     {assignError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{assignError}</p>}
                     <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Vendor</label>
+                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">{vendorSingular}</label>
                         <select
                             value={assignVendorId}
                             onChange={(e) => setAssignVendorId(e.target.value)}

@@ -25,7 +25,7 @@ import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { EntityLabelsProvider, useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { EntityLabelsProvider, useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import AlloyLogo from "@/components/admin/AlloyLogo";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
@@ -160,7 +160,7 @@ interface AdminLayoutProps {
 }
 
 function navLinkLabel(link: NavLink, labels: Record<string, { singular: string | null; plural: string | null }>): string {
-    if (link.entityType && labels[link.entityType]?.plural) return labels[link.entityType].plural!;
+    if (link.entityType) return getEntityLabel(labels, link.entityType, "plural");
     return link.label;
 }
 

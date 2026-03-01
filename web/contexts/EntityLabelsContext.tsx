@@ -8,6 +8,42 @@ const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export type EntityLabelEntry = { singular: string | null; plural: string | null };
 export type EntityLabelsMap = Record<string, EntityLabelEntry>;
 
+/** Default display labels when entity_labels has no override (DB entity type unchanged). */
+const DEFAULT_ENTITY_LABELS: Record<string, { singular: string; plural: string }> = {
+    vendors: { singular: "Vendor", plural: "Vendors" },
+    jobs: { singular: "Job", plural: "Jobs" },
+    schedules: { singular: "Schedule", plural: "Schedules" },
+    customers: { singular: "Customer", plural: "Customers" },
+    contacts: { singular: "Contact", plural: "Contacts" },
+    customer_members: { singular: "Member", plural: "Members" },
+    opportunities: { singular: "Opportunity", plural: "Opportunities" },
+    workflows: { singular: "Workflow", plural: "Workflows" },
+    locations: { singular: "Location", plural: "Locations" },
+    subscriptions: { singular: "Subscription", plural: "Subscriptions" },
+    payments: { singular: "Payment", plural: "Payments" },
+    messages: { singular: "Message", plural: "Messages" },
+};
+
+/**
+ * Get display label for an entity type. Use for UI only; DB entity types stay vendors/jobs/etc.
+ * @param labels - from useEntityLabels().labels
+ * @param entityType - e.g. "vendors", "jobs"
+ * @param form - "singular" or "plural"
+ */
+export function getEntityLabel(
+    labels: EntityLabelsMap,
+    entityType: string,
+    form: "singular" | "plural"
+): string {
+    const entry = labels[entityType];
+    const value = form === "singular" ? entry?.singular : entry?.plural;
+    if (value != null && value.trim() !== "") return value.trim();
+    const defaults = DEFAULT_ENTITY_LABELS[entityType];
+    if (defaults) return defaults[form];
+    const fallback = form === "singular" ? entityType.replace(/s$/, "") : entityType;
+    return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+}
+
 type EntityLabelsContextValue = {
     labels: EntityLabelsMap;
     loading: boolean;

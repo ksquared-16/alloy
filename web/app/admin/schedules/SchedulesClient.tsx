@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
-import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -36,8 +36,9 @@ const EMPTY_FORM = {
 export default function SchedulesClient() {
   const { openDrawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
-  const plural = labels?.schedules?.plural ?? "Schedules";
-  const singular = labels?.schedules?.singular ?? "Schedule";
+  const plural = getEntityLabel(labels, "schedules", "plural");
+  const singular = getEntityLabel(labels, "schedules", "singular");
+  const vendorSingular = getEntityLabel(labels, "vendors", "singular");
   const title = plural;
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [jobs, setJobs] = useState<JobOption[]>([]);
@@ -241,7 +242,7 @@ export default function SchedulesClient() {
                   <th className="pb-2 pr-4">Job</th>
                   <th className="pb-2 pr-4">Customer</th>
                   <th className="pb-2 pr-4">Location</th>
-                  <th className="pb-2 pr-4">Assigned vendor</th>
+                  <th className="pb-2 pr-4">Assigned {vendorSingular}</th>
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2 pr-4">Canceled?</th>
                   <th className="pb-2 pr-4">Actions</th>

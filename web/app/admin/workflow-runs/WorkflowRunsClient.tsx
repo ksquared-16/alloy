@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
@@ -38,16 +39,21 @@ type WorkflowActionRunRow = {
     outputs: Record<string, unknown>;
 };
 
-/** Best-effort admin route for entity_type. Returns null if unknown. */
-function entityAdminRoute(entityType: string | null, _entityId: string): { href: string; label: string } | null {
+/** Best-effort admin route for entity_type. Returns null if unknown. Uses labels for display when provided. */
+function entityAdminRoute(
+    entityType: string | null,
+    _entityId: string,
+    labels?: Record<string, { singular: string | null; plural: string | null }>
+): { href: string; label: string } | null {
     if (!entityType) return null;
     const t = entityType.toLowerCase();
-    if (t === "job") return { href: "/admin/jobs", label: "Jobs" };
-    if (t === "schedule") return { href: "/admin/schedules", label: "Schedules" };
-    if (t === "customer") return { href: "/admin/customers", label: "Customers" };
-    if (t === "contact") return { href: "/admin/contacts", label: "Contacts" };
-    if (t === "vendor") return { href: "/admin/vendors", label: "Vendors" };
-    if (t === "opportunity") return { href: "/admin/opportunities", label: "Opportunities" };
+    const label = (key: string) => (labels ? getEntityLabel(labels, key, "plural") : key.charAt(0).toUpperCase() + key.slice(1));
+    if (t === "job" || t === "jobs") return { href: "/admin/jobs", label: label("jobs") };
+    if (t === "schedule" || t === "schedules") return { href: "/admin/schedules", label: label("schedules") };
+    if (t === "customer" || t === "customers") return { href: "/admin/customers", label: label("customers") };
+    if (t === "contact" || t === "contacts") return { href: "/admin/contacts", label: label("contacts") };
+    if (t === "vendor" || t === "vendors") return { href: "/admin/vendors", label: label("vendors") };
+    if (t === "opportunity" || t === "opportunities") return { href: "/admin/opportunities", label: label("opportunities") };
     return null;
 }
 
@@ -125,6 +131,7 @@ function ActionRunItem({
 }
 
 export default function WorkflowRunsClient() {
+    const { labels } = useEntityLabels();
     const [runs, setRuns] = useState<WorkflowRunRow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -425,12 +432,12 @@ export default function WorkflowRunsClient() {
                                         >
                                             Copy ID
                                         </button>
-                                        {entityAdminRoute(selected.entity_type, selected.entity_id) && (
+                                        {entityAdminRoute(selected.entity_type, selected.entity_id, labels) && (
                                             <Link
-                                                href={entityAdminRoute(selected.entity_type, selected.entity_id)!.href}
+                                                href={entityAdminRoute(selected.entity_type, selected.entity_id, labels)!.href}
                                                 className="text-alloy-blue hover:underline text-xs"
                                             >
-                                                View {entityAdminRoute(selected.entity_type, selected.entity_id)!.label}
+                                                View {entityAdminRoute(selected.entity_type, selected.entity_id, labels)!.label}
                                             </Link>
                                         )}
                                     </span>
