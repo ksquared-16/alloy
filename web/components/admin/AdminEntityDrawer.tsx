@@ -1049,11 +1049,54 @@ export default function AdminEntityDrawer() {
             ? "Loading…"
             : "Details";
 
+    const drawerHeaderExtra =
+        data && !loading && canEditInDrawer(drawer.type) ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <div className="flex gap-2">
+                    {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && (
+                        <>
+                            {jobFormDirty && (
+                                <>
+                                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                    <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                                </>
+                            )}
+                            <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>
+                        </>
+                    )}
+                    {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
+                        !isEditing ? (
+                            <>
+                                {canMutate && !(data as { _create?: boolean })?._create && (
+                                    <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
+                                )}
+                                {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
+                                {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
+                            </>
+                        ) : (
+                            <>
+                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                            </>
+                        )
+                    )}
+                </div>
+                {["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create && (
+                    <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
+                        {(["overview", "related", ...(drawer.type === "opportunities" ? ["automation" as const] : []), "details"] as const).map((tab) => (
+                            <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        ) : undefined;
+
     return (
         <Drawer
             isOpen
             onClose={closeDrawer}
             title={title}
+            headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
         >
@@ -1061,46 +1104,6 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-red-600">Error: {error}</p>}
             {data && !loading && (
                 <div className="space-y-6">
-                    {canEditInDrawer(drawer.type) && (
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#e6e8ec]">
-                            <div className="flex gap-2">
-                                {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && (
-                                    <>
-                                        {jobFormDirty && (
-                                            <>
-                                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                                <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                                            </>
-                                        )}
-                                        <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>
-                                    </>
-                                )}
-                                {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
-                                    !isEditing ? (
-                                        <>
-                                            {canMutate && !(data as { _create?: boolean })?._create && (
-                                                <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                                            )}
-                                            {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
-                                            {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                            <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                                        </>
-                                    )
-                                )}
-                            </div>
-                            {["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create && (
-                                <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
-                                    {(["overview", "related", ...(drawer.type === "opportunities" ? ["automation" as const] : []), "details"] as const).map((tab) => (
-                                        <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                     {drawerTab === "related" && drawer.type === "opportunities" && data && (
                         <div className="pt-2 space-y-3 mb-4">

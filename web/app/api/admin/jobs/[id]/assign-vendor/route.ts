@@ -37,6 +37,9 @@ export async function POST(
               : null;
     const applyToFutureSchedules = body.apply_to_future_schedules === true;
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+    if (supabaseUrl) console.log("SUPABASE_URL_HOST", new URL(supabaseUrl).host);
+
     const supabase = createAdminClient();
 
     const { data: job, error: jobErr } = await supabase

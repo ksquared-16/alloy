@@ -32,6 +32,9 @@ export async function GET(
     const { id: jobId } = await context.params;
     if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+    if (supabaseUrl) console.log("SUPABASE_URL_HOST", new URL(supabaseUrl).host);
+
     const supabase = createAdminClient();
 
     const { data: job, error: jobErr } = await supabase

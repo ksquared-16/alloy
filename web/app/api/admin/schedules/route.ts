@@ -7,6 +7,9 @@ export async function GET(request: NextRequest) {
   const ctx = await getAdminContext();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  if (supabaseUrl) console.log("SUPABASE_URL_HOST", new URL(supabaseUrl).host);
+
   const { searchParams } = new URL(request.url);
   const includeCanceled = searchParams.get("include_canceled") === "true";
   const jobId = (searchParams.get("job_id") ?? "").trim();
@@ -19,7 +22,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("schedules")
     .select(
-      "id, job_id, org_id, location_id, start_at, end_at, timezone, status_key, canceled_at, canceled_by, cancel_reason, duration_minutes",
+      "id, job_id, org_id, location_id, start_at, end_at, timezone, status_key, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -154,7 +157,7 @@ export async function POST(request: NextRequest) {
   };
   if (location_id) row.location_id = location_id;
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
-  if (typeof body.schedule_status_id === "string" && body.schedule_status_id) row.schedule_status_id = body.schedule_status_id;
+  if (typeof body.status_key === "string" && body.status_key.trim()) row.status_key = body.status_key.trim();
 
   const durationMs = new Date(end_at).getTime() - new Date(start_at).getTime();
   const duration_minutes = Math.round(durationMs / 60000);

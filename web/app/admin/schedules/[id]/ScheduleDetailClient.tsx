@@ -49,6 +49,7 @@ export default function ScheduleDetailClient({
 
     const { labels } = useEntityLabels();
     const scheduleSingular = labels?.schedules?.singular ?? "Schedule";
+    const vendorSingular = labels?.vendors?.singular ?? "Vendor";
     const isAdmin = role === "admin";
     const jobId = schedule.job_id as string | null | undefined;
     const canceledAt = schedule.canceled_at as string | null | undefined;
@@ -222,7 +223,7 @@ export default function ScheduleDetailClient({
                             <p className="text-sm text-alloy-midnight">{(schedule._customer_name as string) ?? "—"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned vendor</h3>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>

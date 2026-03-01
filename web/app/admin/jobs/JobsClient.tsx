@@ -40,6 +40,7 @@ export default function JobsClient() {
   const { labels } = useEntityLabels();
   const plural = labels?.jobs?.plural ?? "Jobs";
   const singular = labels?.jobs?.singular ?? "Job";
+  const vendorSingular = labels?.vendors?.singular ?? "Vendor";
   const title = plural;
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,7 +253,7 @@ export default function JobsClient() {
                   <th className="pb-2 pr-4">Customer</th>
                   <th className="pb-2 pr-4">Location</th>
                   <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2 pr-4">Assigned vendor</th>
+                  <th className="pb-2 pr-4">Assigned {vendorSingular}</th>
                   <th className="pb-2 pr-4">Recurring</th>
                   <th className="pb-2 pr-4">Created</th>
                   <th className="pb-2 pr-4">Actions</th>

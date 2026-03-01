@@ -26,6 +26,9 @@ export async function GET(
 
     const jobId = request.nextUrl.searchParams.get("job_id")?.trim() || null;
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+    if (supabaseUrl) console.log("SUPABASE_URL_HOST", new URL(supabaseUrl).host);
+
     const supabase = createAdminClient();
 
     const { data: vendor, error: vendorErr } = await supabase
