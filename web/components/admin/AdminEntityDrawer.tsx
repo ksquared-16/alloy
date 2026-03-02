@@ -61,6 +61,22 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
+function getJobTitleFromData(job: unknown): string | null {
+    if (job != null && typeof job === "object" && "title" in job) {
+        const t = (job as Record<string, unknown>).title;
+        return t != null ? String(t) : null;
+    }
+    return null;
+}
+
+function getMetaString(meta: unknown, key: string): string {
+    if (meta != null && typeof meta === "object" && key in meta) {
+        const v = (meta as Record<string, unknown>)[key];
+        return v != null ? String(v) : "";
+    }
+    return "";
+}
+
 function SubscriptionGenerateNextButton({ subscriptionId, onDone }: { subscriptionId: string; onDone: () => void }) {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -1030,6 +1046,7 @@ export default function AdminEntityDrawer() {
 
     if (!drawer.type || !drawer.id) return null;
 
+    const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
     const paymentStatusLabel = jobPayments.some((p) => p.payment_statuses?.key === "paid")
         ? "Paid"
         : jobPayments.length === 0
@@ -1152,8 +1169,8 @@ export default function AdminEntityDrawer() {
                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                     {drawerTab === "related" && drawer.type === "opportunities" && data && (
                         <div className="pt-2 space-y-3 mb-4">
-                            <DrawerLinkWithName label={customerSingular} id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
-                            <DrawerLinkWithName label={contactSingular} id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+                            <DrawerLinkWithName label={customerSingular} id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
+                            <DrawerLinkWithName label={contactSingular} id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "jobs" && data && (
@@ -1171,10 +1188,10 @@ export default function AdminEntityDrawer() {
                                         const display = name ?? `${(data.location_id as string).slice(0, 8)}…`;
                                         return (
                                             <>
-                                                <button type="button" onClick={() => openDrawer({ type: "locations", id: data.location_id as string })} className="text-alloy-blue hover:underline">
+                                                <button type="button" onClick={() => openDrawer({ type: "locations", id: data?.location_id != null ? String(data.location_id) : "" })} className="text-alloy-blue hover:underline">
                                                     {display}
                                                 </button>
-                                                {canMutate && <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "locations", id: data.location_id as string }); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Edit</button>}
+                                                {canMutate && <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "locations", id: data?.location_id != null ? String(data.location_id) : "" }); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Edit</button>}
                                                 {canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button>}
                                             </>
                                         );
@@ -1191,7 +1208,7 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && drawer.type === "schedules" && data && (
                         <div className="pt-2 space-y-3 mb-4">
                             {(data.job_id as string) && (
-                                <DrawerLinkWithName label={jobSingular} id={data.job_id as string} type="jobs" displayName={(data._job as { title?: string })?.title ?? null} />
+                                <DrawerLinkWithName label={jobSingular} id={data?.job_id != null ? String(data.job_id) : ""} type="jobs" displayName={getJobTitleFromData(data?._job)} />
                             )}
                             {(data._customer as { id?: string; name?: string }) && (
                                 <DrawerLinkWithName label="Customer" id={(data._customer as { id: string }).id} type="customers" displayName={(data._customer as { name?: string }).name ?? null} />
@@ -1239,7 +1256,7 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "related" && drawer.type === "locations" && data && (
                         <div className="pt-2 space-y-3 mb-4">
-                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                            <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "customer_members" && (
@@ -1251,7 +1268,7 @@ export default function AdminEntityDrawer() {
                                 ) : (data.customer_id as string) ? (
                                     <DrawerLinkWithName
                                         label="Customer"
-                                        id={data.customer_id as string}
+                                        id={data?.customer_id != null ? String(data.customer_id) : ""}
                                         type="customers"
                                         displayName={(data._customer_name as string) ?? (data.customer_id as string) ?? null}
                                     />
@@ -1441,20 +1458,20 @@ export default function AdminEntityDrawer() {
                                         </>
                                     ) : (
                                         <>
-                                            <Field label="First name" value={data.first_name as string} />
-                                            <Field label="Last name" value={data.last_name as string} />
-                                            <Field label="Email" value={data.email as string} />
-                                            <Field label="Phone" value={data.phone as string} />
-                                            <Field label="Company name" value={data.company_name as string} />
+                                            <Field label="First name" value={String(data?.first_name ?? "")} />
+                                            <Field label="Last name" value={String(data?.last_name ?? "")} />
+                                            <Field label="Email" value={String(data?.email ?? "")} />
+                                            <Field label="Phone" value={String(data?.phone ?? "")} />
+                                            <Field label="Company name" value={String(data?.company_name ?? "")} />
                                             <div className="py-1.5">
                                                 <strong className="text-[#45506c] text-sm">Status</strong>
                                                 {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=contacts`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
                                             </div>
-                                            <Field label="Notes" value={data.notes as string} />
+                                            <Field label="Notes" value={String(data?.notes ?? "")} />
                                             <Field label="Archived" value={data.archived_at ? "Yes" : "No"} />
                                         </>
                                     )}
-                                    <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                                    <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     <div className="pt-2 border-t border-[#e6e8ec]">
                                         <strong className="text-alloy-midnight/70">Vendor:</strong>{" "}
                                         {(() => {
@@ -1559,7 +1576,7 @@ export default function AdminEntityDrawer() {
                                 </>
                             ) : (
                                 <>
-                                    <Field label="Display name" value={data.display_name as string} />
+                                    <Field label="Display name" value={String(data?.display_name ?? "")} />
                                             <Field
                                                 label="Relationship"
                                                 value={(() => {
@@ -1572,15 +1589,15 @@ export default function AdminEntityDrawer() {
                                                     return opt ? opt.label : (rel || "—");
                                                 })()}
                                             />
-                                            <Field label="First name" value={data.first_name as string} />
-                                            <Field label="Last name" value={data.last_name as string} />
-                                            <Field label="DOB" value={data.dob as string} />
+                                            <Field label="First name" value={String(data?.first_name ?? "")} />
+                                            <Field label="Last name" value={String(data?.last_name ?? "")} />
+                                            <Field label="DOB" value={String(data?.dob ?? "")} />
                                     <Field label="Active" value={data.is_active ? "Yes" : "No"} />
                                     <div className="py-1.5">
                                         <strong className="text-[#45506c] text-sm">Status</strong>
                                         {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=customer_members`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
                                     </div>
-                                    <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                                    <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                             {canMutate && (
                                                 <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
                                                     {!memberDeleteConfirm ? (
@@ -1620,7 +1637,7 @@ export default function AdminEntityDrawer() {
                                 </>
                             ) : (
                                 <>
-                                    <Field label="Name" value={data.name as string} />
+                                    <Field label="Name" value={String(data?.name ?? "")} />
                                     <div className="py-1.5">
                                         <strong className="text-[#45506c] text-sm">Status</strong>
                                         {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=customers`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
@@ -1666,8 +1683,8 @@ export default function AdminEntityDrawer() {
                                         <details open className="border-b border-[#e6e8ec] pb-5 pt-1">
                                             <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Overview</summary>
                                             <div className="space-y-0">
-                                                <Field label="ID" value={data.id as string} />
-                                                <Field label="Submitted" value={data.submitted_at ? formatDateTime(data.submitted_at as string) : formatDateTime(data.created_at as string)} />
+                                                <Field label="ID" value={String(data?.id ?? "")} />
+                                                <Field label="Submitted" value={data.submitted_at ? formatDateTime(String(data.submitted_at)) : formatDateTime(String(data?.created_at ?? ""))} />
                                                 {isEditing ? (
                                                     <>
                                                         <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -1680,15 +1697,15 @@ export default function AdminEntityDrawer() {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Field label="Name" value={data.name as string} />
-                                                        <Field label="Company name" value={(data.company_name as string)?.trim() ? (data.company_name as string) : "—"} />
-                                                        <Field label="Email" value={data.email as string} />
-                                                        <Field label="Phone" value={data.phone as string} />
+                                                        <Field label="Name" value={String(data?.name ?? "")} />
+                                                        <Field label="Company name" value={String(data?.company_name ?? "").trim() ? String(data?.company_name ?? "") : "—"} />
+                                                        <Field label="Email" value={String(data?.email ?? "")} />
+                                                        <Field label="Phone" value={String(data?.phone ?? "")} />
                                                         <div className="py-1.5">
                                                     <strong className="text-[#45506c] text-sm">Status</strong>
                                                     {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=vendors`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
                                                 </div>
-                                                        <DrawerLinkWithName label="Primary contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
+                                                        <DrawerLinkWithName label="Primary contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                                     </>
                                                 )}
                                             </div>
@@ -1905,8 +1922,8 @@ export default function AdminEntityDrawer() {
                                                 ) : (
                                                     <>
                                                         <Field label="Address" value={[data.address_line1, data.city, data.state, data.postal_code].filter(Boolean).join(", ") || "—"} />
-                                                        <Field label="Service area zips" value={Array.isArray(data.service_area_zip_codes) ? (data.service_area_zip_codes as string[]).join(", ") : (data.service_area_zip_codes as string) ?? "—"} />
-                                                        <Field label="Days available" value={Array.isArray(data.days_available) ? (data.days_available as string[]).join(", ") : (data.days_available as string) ?? "—"} />
+                                                        <Field label="Service area zips" value={Array.isArray(data.service_area_zip_codes) ? Array.from(data.service_area_zip_codes).join(", ") : String(data?.service_area_zip_codes ?? "") || "—"} />
+                                                        <Field label="Days available" value={Array.isArray(data.days_available) ? Array.from(data.days_available).join(", ") : String(data?.days_available ?? "") || "—"} />
                                                         <Field label="Hours" value={[data.operating_hours_open, data.operating_hours_close].filter(Boolean).join(" – ") || "—"} />
                                                         <Field label="Owns supplies" value={data.owns_supplies ? "Yes" : "No"} />
                                                         <Field label="Max daily jobs" value={data.max_daily_jobs != null ? String(data.max_daily_jobs) : "—"} />
@@ -1923,7 +1940,7 @@ export default function AdminEntityDrawer() {
                             )}
                             {drawer.type === "opportunities" && (
                                 <>
-                                    <Field label="Name" value={data.name as string} />
+                                    <Field label="Name" value={String(data?.name ?? "")} />
                                     {isEditing ? (
                                         <>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
@@ -1949,24 +1966,25 @@ export default function AdminEntityDrawer() {
                                         </>
                                     ) : (
                                         <>
-                                            <Field label="Stage" value={(data._stage_name as string) ?? (data.status as string) ?? "-"} />
-                                            <Field label={`${jobSingular} Date`} value={formatDate(data.job_date as string)} />
-                                            <Field label="Time Window" value={data.job_time_window as string} />
-                                            <Field label="Quote Total" value={formatMoneyFromDollars(data.quote_total as number)} />
-                                            <Field label="Notes" value={((data.metadata as Record<string, unknown>)?.notes as string) ?? "-"} />
+                                            <Field label="Stage" value={String(data?._stage_name ?? data?.status ?? "") || "-"} />
+                                            <Field label={`${jobSingular} Date`} value={formatDate(String(data?.job_date ?? ""))} />
+                                            <Field label="Time Window" value={String(data?.job_time_window ?? "")} />
+                                            <Field label="Quote Total" value={formatMoneyFromDollars(Number(data?.quote_total ?? 0))} />
+                                            <Field label="Notes" value={getMetaString(data?.metadata, "notes") || "-"} />
                                             <div className="py-1.5">
                                                 <strong className="text-[#45506c] text-sm">Status</strong>
                                                 {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=opportunities" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
                                             </div>
                                         </>
                                     )}
-                                    <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
-                                    <DrawerLinkWithName label="Primary Contact" id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
+                                    <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
+                                    <DrawerLinkWithName label="Primary Contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
                                 </>
                             )}
                             {drawer.type === "jobs" && (
                                 <>
-                                    {!(data as { _create?: boolean })?._create && (
+                                    {isJobExistingView && (
+                                    <>
                                     <div className="rounded-lg border border-alloy-stone/30 bg-[#F4F6F9]/50 p-3 mb-4">
                                         <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Quick Actions</p>
                                         <div className="flex flex-wrap gap-2">
@@ -2084,7 +2102,7 @@ export default function AdminEntityDrawer() {
                                             )}
                                         </div>
                                     </div>
-                                    <Field label="Title" value={data.title as string} />
+                                    <Field label="Title" value={data && typeof data === "object" && "title" in data ? String(data.title) : ""} />
                                     <div className="pt-2 pb-2 border-b border-[#e6e8ec]">
                                         <strong className="text-alloy-midnight/70 block mb-2">Default {vendorSingular}</strong>
                                         <div className="flex flex-wrap items-center gap-2">
@@ -2213,6 +2231,7 @@ export default function AdminEntityDrawer() {
                                             <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>
                                         )}
                                     </details>
+                                    </>
                                     )}
                                     {(isEditing || drawer.type === "jobs") ? (
                                         <>
@@ -2238,21 +2257,21 @@ export default function AdminEntityDrawer() {
                                     ) : (
                                         <>
                                             <Field label="Recurring" value={data.is_recurring ? "Yes" : "No"} />
-                                            <Field label="Scheduled at" value={formatDateTime(data.scheduled_at as string)} />
+                                            <Field label="Scheduled at" value={formatDateTime(String(data?.scheduled_at ?? ""))} />
                                             <div className="py-1.5">
                                                 <strong className="text-[#45506c] text-sm">Status</strong>
                                                 {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=jobs" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
                                             </div>
-                                            <Field label="Status ID" value={data.job_status_id as string} />
-                                            <Field label="Internal notes" value={((data.metadata as Record<string, unknown>)?.internal_notes as string) ?? "-"} />
+                                            <Field label="Status ID" value={String(data?.job_status_id ?? "")} />
+                                            <Field label="Internal notes" value={getMetaString(data?.metadata, "internal_notes") || "-"} />
                                         </>
                                     )}
-                                    <Field label="Gross Price" value={formatMoneyFromCents(data.gross_price_cents as number)} />
-                                    <Field label="Payout" value={formatMoneyFromCents(data.contractor_payout_cents as number)} />
-                                    <DrawerLinkWithName label={opportunitySingular} id={(data.opportunity_id as string) ?? null} type="opportunities" displayName={data._opportunity_name as string} />
-                                    <DrawerLinkWithName label={`Primary ${contactSingular}`} id={(data.primary_contact_id as string) ?? null} type="contacts" displayName={data._contact_name as string} />
-                                    <DrawerLinkWithName label={customerSingular} id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
-                                    <Field label="Offer Code" value={data.offer_code as string} />
+                                    <Field label="Gross Price" value={formatMoneyFromCents(Number(data?.gross_price_cents ?? 0))} />
+                                    <Field label="Payout" value={formatMoneyFromCents(Number(data?.contractor_payout_cents ?? 0))} />
+                                    <DrawerLinkWithName label={opportunitySingular} id={data?.opportunity_id != null ? String(data.opportunity_id) : null} type="opportunities" displayName={String(data?._opportunity_name ?? "")} />
+                                    <DrawerLinkWithName label={`Primary ${contactSingular}`} id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
+                                    <DrawerLinkWithName label={customerSingular} id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
+                                    <Field label="Offer Code" value={String(data?.offer_code ?? "")} />
                                     {jobSchedules.length > 0 && (
                                         <div className="pt-4 border-t border-[#e6e8ec]">
                                             <strong className="text-alloy-midnight/70 block mb-2">Reschedule</strong>
@@ -2340,7 +2359,7 @@ export default function AdminEntityDrawer() {
                                     {(data.job_id as string) && (
                                         <div>
                                             <strong className="text-alloy-midnight/70">{jobSingular}</strong>
-                                            <button type="button" onClick={() => openDrawer({ type: "jobs", id: data.job_id as string })} className="ml-2 text-alloy-blue hover:underline text-sm">
+                                            <button type="button" onClick={() => openDrawer({ type: "jobs", id: data?.job_id != null ? String(data.job_id) : "" })} className="ml-2 text-alloy-blue hover:underline text-sm">
                                                 {(data._job as { title?: string })?.title ?? (data.job_id as string).slice(0, 8) + "…"}
                                             </button>
                                             <span className="text-alloy-midnight/50 text-xs ml-1">({(data.job_id as string).slice(0, 8)}…)</span>
@@ -2375,9 +2394,9 @@ export default function AdminEntityDrawer() {
                                         </>
                                     ) : (
                                         <>
-                                            <Field label="Start" value={formatDateTime(data.start_at as string)} />
-                                            <Field label="End" value={formatDateTime(data.end_at as string)} />
-                                            <Field label="Timezone" value={data.timezone as string} />
+                                            <Field label="Start" value={formatDateTime(String(data?.start_at ?? ""))} />
+                                            <Field label="End" value={formatDateTime(String(data?.end_at ?? ""))} />
+                                            <Field label="Timezone" value={String(data?.timezone ?? "")} />
                                             <div className="py-1.5">
                                                 <strong className="text-[#45506c] text-sm">Status</strong>
                                                 {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=schedules" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
@@ -2538,17 +2557,17 @@ export default function AdminEntityDrawer() {
                                         </>
                                     ) : (
                                         <>
-                                            <Field label="Name" value={data.label as string} />
-                                            <Field label="Address 1" value={data.address1 as string} />
-                                            <Field label="Address 2" value={data.address2 as string} />
-                                            <Field label="City" value={data.city as string} />
-                                            <Field label="State" value={data.state as string} />
-                                            <Field label="Postal code" value={data.postal_code as string} />
-                                            <Field label="Country" value={data.country as string} />
+                                            <Field label="Name" value={String(data?.label ?? "")} />
+                                            <Field label="Address 1" value={String(data?.address1 ?? "")} />
+                                            <Field label="Address 2" value={String(data?.address2 ?? "")} />
+                                            <Field label="City" value={String(data?.city ?? "")} />
+                                            <Field label="State" value={String(data?.state ?? "")} />
+                                            <Field label="Postal code" value={String(data?.postal_code ?? "")} />
+                                            <Field label="Country" value={String(data?.country ?? "")} />
                                             <Field label="Primary" value={data.is_primary ? "Yes" : "No"} />
                                             <Field label="Active" value={data.is_active ? "Yes" : "No"} />
-                                            <Field label="Access notes" value={data.access_notes as string} />
-                                            <DrawerLinkWithName label="Customer" id={(data.customer_id as string) ?? null} type="customers" displayName={data._customer_name as string} />
+                                            <Field label="Access notes" value={String(data?.access_notes ?? "")} />
+                                            <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                         </>
                                     )}
                                 </>
@@ -2843,8 +2862,8 @@ export default function AdminEntityDrawer() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Field label="ID" value={data.id as string} />
-                                                    <Field label="Name" value={data.name as string} />
+                                                    <Field label="ID" value={String(data?.id ?? "")} />
+                                                    <Field label="Name" value={String(data?.name ?? "")} />
                                                     <Field label="Description" value={(data.description as string) ?? "-"} />
                                                     <Field label="Enabled" value={data.enabled ? "Yes" : "No"} />
                                                     <Field label="Event type" value={(data.event_type as string) ?? "-"} />
@@ -2891,15 +2910,15 @@ export default function AdminEntityDrawer() {
                             )}
                             {drawer.type === "discount_redemptions" && (
                                 <>
-                                    <Field label="ID" value={data.id as string} />
+                                    <Field label="ID" value={String(data?.id ?? "")} />
                                     <Field label="Created" value={formatDateTime(data.created_at as string)} />
-                                    <Field label="Discount Code" value={data.discount_code as string} />
+                                    <Field label="Discount Code" value={String(data?.discount_code ?? "")} />
                                     <Field label="Subtotal" value={formatMoneyFromDollars(data.quote_subtotal as number)} />
                                     <Field label="Discount Amount" value={formatMoneyFromDollars(data.discount_amount as number)} />
                                     <Field label="Total" value={formatMoneyFromDollars(data.quote_total as number)} />
-                                    <Field label="Contact ID" value={data.contact_id as string} />
-                                    <Field label="Opportunity ID" value={data.opportunity_id as string} />
-                                    <Field label={`${jobSingular} ID`} value={data.job_id as string} />
+                                    <Field label="Contact ID" value={String(data?.contact_id ?? "")} />
+                                    <Field label="Opportunity ID" value={String(data?.opportunity_id ?? "")} />
+                                    <Field label={`${jobSingular} ID`} value={String(data?.job_id ?? "")} />
                                 </>
                             )}
                             {drawer.type === "subscriptions" && data && (() => {
