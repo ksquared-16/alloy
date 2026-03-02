@@ -56,20 +56,24 @@ export async function GET(
     });
 
     const completedStatusKey = policy.completed_status_key ?? "completed";
+    const completedStatusKeyNorm = String(completedStatusKey ?? "completed").trim().toLowerCase();
     let completedOccurrences = 0;
     if (jobId && ctx.orgId && policy.mode === "tiered") {
         const basis = policy.basis === "vendor_job_completed_occurrences" ? "vendor_job_completed_occurrences" : "job_completed_occurrences";
-        let q = supabase
+        const { data: scheduleRows, error: schedErr } = await supabase
             .from("schedules")
-            .select("id", { count: "exact", head: true })
+            .select("id, status_key, assigned_vendor_id")
             .eq("org_id", ctx.orgId)
-            .eq("job_id", jobId)
-            .eq("status_key", completedStatusKey);
-        if (basis === "vendor_job_completed_occurrences") {
-            q = q.eq("assigned_vendor_id", vendorId);
+            .eq("job_id", jobId);
+        if (!schedErr && scheduleRows?.length) {
+            const completed = (scheduleRows as { id: string; status_key?: string | null; assigned_vendor_id?: string | null }[]).filter((r) => {
+                const rowStatusNorm = String(r.status_key ?? "").trim().toLowerCase();
+                if (rowStatusNorm !== completedStatusKeyNorm) return false;
+                if (basis === "vendor_job_completed_occurrences") return (r.assigned_vendor_id ?? null) === vendorId;
+                return true;
+            });
+            completedOccurrences = completed.length;
         }
-        const { count, error: countErr } = await q;
-        if (!countErr && count != null) completedOccurrences = count;
     }
 
     const payout_percent = computePayoutPercent({ policy, completedOccurrences });
@@ -86,5 +90,6 @@ export async function GET(
         source,
         completed_occurrences: completedOccurrences,
         payout_percent,
+        completed_status_key_used: completedStatusKeyNorm,
     });
 }

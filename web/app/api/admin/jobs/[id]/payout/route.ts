@@ -97,7 +97,9 @@ export async function GET(
         const vendor = scheduleVendorId ? vendorMap.get(scheduleVendorId) ?? null : null;
         const { policy } = resolveVendorPayoutPolicy({ orgSettings, vendor });
         const completedStatusKey = policy.completed_status_key ?? "completed";
-        const isCompleted = (row.status_key ?? "") === completedStatusKey;
+        const completedStatusKeyNorm = String(completedStatusKey).trim().toLowerCase();
+        const rowStatusNorm = String(row.status_key ?? "").trim().toLowerCase();
+        const isCompleted = rowStatusNorm === completedStatusKeyNorm;
 
         const basis =
             policy.basis === basisVendorJob ? basisVendorJob : basisJob;
@@ -142,6 +144,7 @@ export async function GET(
         vendor: jobVendor,
     });
     const jobCompletedStatusKey = jobPolicy.completed_status_key ?? "completed";
+    const completedStatusKeyNorm = String(jobCompletedStatusKey ?? "completed").trim().toLowerCase();
     const jobBasis =
         jobPolicy.basis === basisVendorJob ? basisVendorJob : basisJob;
 
@@ -149,12 +152,12 @@ export async function GET(
     if (jobPolicy.mode === "tiered" && jobAssignedVendorId) {
         if (jobBasis === basisJob) {
             completedOccurrencesForCurrentVendor = ordered.filter(
-                (r) => (r.status_key ?? "") === jobCompletedStatusKey
+                (r) => String(r.status_key ?? "").trim().toLowerCase() === completedStatusKeyNorm
             ).length;
         } else {
             completedOccurrencesForCurrentVendor = ordered.filter(
                 (r) =>
-                    (r.status_key ?? "") === jobCompletedStatusKey &&
+                    String(r.status_key ?? "").trim().toLowerCase() === completedStatusKeyNorm &&
                     (r.assigned_vendor_id ?? null) === jobAssignedVendorId
             ).length;
         }
@@ -170,7 +173,8 @@ export async function GET(
         const effective_price_cents = row
             ? (row.price_cents ?? jobGrossPriceCents ?? 0)
             : 0;
-        const isCompleted = (row?.status_key ?? "") === jobCompletedStatusKey;
+        const rowStatusNorm = String(row?.status_key ?? "").trim().toLowerCase();
+        const isCompleted = rowStatusNorm === completedStatusKeyNorm;
         const payoutPercent = s.payout_percent;
         const payout_cents =
             isCompleted && payoutPercent != null && effective_price_cents > 0
@@ -215,6 +219,7 @@ export async function GET(
             completed_revenue_cents_total,
             completed_payout_cents_total,
             completed_alloy_fee_cents_total,
+            completed_status_key_used: completedStatusKeyNorm,
         },
         schedules: schedulesWithMoney,
     });
