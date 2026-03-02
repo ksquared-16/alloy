@@ -1,12 +1,7 @@
-"use client";
-
-import { useRouter } from "next/navigation";
 import Section from "@/components/Section";
-import CleaningQuickQuoteForm from "@/components/cleaning/CleaningQuickQuoteForm";
+import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 
 export default function CleaningQuoteStandalonePage() {
-  const router = useRouter();
-
   return (
     <div className="min-h-screen bg-white">
       <Section className="py-12 md:py-16" maxWidth="xl">
@@ -24,11 +19,7 @@ export default function CleaningQuoteStandalonePage() {
               </p>
             </div>
             <div className="p-4 md:p-6">
-              <CleaningQuickQuoteForm
-                onSuccess={() => {
-                  router.push("/book-v2");
-                }}
-              />
+              <CleaningQuoteForm />
             </div>
           </div>
         </div>
