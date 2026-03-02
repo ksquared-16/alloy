@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { validateDiscountCodeForJob } from "@/lib/admin/validateDiscountCode";
 
 const ALLOWED_KEYS = [
     "title",
@@ -21,6 +22,10 @@ const ALLOWED_KEYS = [
     "customer_id",
     "opportunity_id",
     "location_id",
+    "discount_code_id",
+    "discount_code",
+    "discount_amount",
+    "discounted",
 ] as const;
 
 const JOB_ACTIONS = ["assign_vendor", "mark_completed"] as const;
@@ -132,8 +137,50 @@ export async function PATCH(
             }
         }
 
+        // Discount fields: validate and recompute when discount_code_id is present
+        const bodyDiscountCodeId = typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
+        if (body.discount_code_id !== undefined) {
+            if (bodyDiscountCodeId) {
+                const { data: jobRow } = await supabase.from("jobs").select("gross_price_cents, vertical_id").eq("id", id).eq("org_id", ctx.orgId).single();
+                const currentGross = (jobRow as { gross_price_cents?: number | null } | null)?.gross_price_cents ?? 0;
+                const gross = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : currentGross;
+                const verticalId = (jobRow as { vertical_id?: string | null } | null)?.vertical_id ?? null;
+                let jobVerticalSlug: string | null = null;
+                if (verticalId) {
+                    const { data: vert } = await supabase.from("verticals").select("slug").eq("id", verticalId).maybeSingle();
+                    jobVerticalSlug = (vert as { slug?: string | null } | null)?.slug ?? null;
+                }
+                const { data: codeRow, error: codeErr } = await supabase
+                    .from("discount_codes")
+                    .select("id, code, is_active, discount_type, discount_value, applies_to_vertical_slug, starts_at, ends_at")
+                    .eq("id", bodyDiscountCodeId)
+                    .maybeSingle();
+                if (codeErr) {
+                    return NextResponse.json({ error: codeErr.message }, { status: 500 });
+                }
+                const result = validateDiscountCodeForJob(
+                    codeRow as Parameters<typeof validateDiscountCodeForJob>[0],
+                    gross,
+                    jobVerticalSlug
+                );
+                if ("error" in result) {
+                    return NextResponse.json({ error: result.error }, { status: 400 });
+                }
+                updates.discount_code_id = bodyDiscountCodeId;
+                updates.discount_code = result.code;
+                updates.discount_amount = result.discount_amount_cents;
+                updates.discounted = true;
+            } else {
+                updates.discount_code_id = null;
+                updates.discount_code = null;
+                updates.discount_amount = 0;
+                updates.discounted = false;
+            }
+        }
+
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
+            if (key === "discount_code_id" || key === "discount_code" || key === "discount_amount" || key === "discounted") continue; // handled above
             if (key === "assigned_vendor_id" || key === "primary_contact_id" || key === "customer_id" || key === "opportunity_id" || key === "location_id") {
                 updates[key] = body[key] === "" || body[key] == null ? null : body[key];
                 continue;

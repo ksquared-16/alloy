@@ -60,6 +60,13 @@ export async function GET(
                 out._location_label = null;
                 out._location = null;
             }
+            const verticalId = (data as { vertical_id?: string | null }).vertical_id;
+            if (verticalId) {
+                const { data: vert } = await supabase.from("verticals").select("slug").eq("id", verticalId).maybeSingle();
+                out._vertical_slug = (vert as { slug?: string | null } | null)?.slug ?? null;
+            } else {
+                out._vertical_slug = null;
+            }
             return NextResponse.json(out);
         }
         if (type === "opportunities") {

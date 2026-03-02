@@ -344,8 +344,7 @@ export default function AdminEntityDrawer() {
     const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean }>({ relationships: true, financials: true, scheduling: true });
-    const [jobDiscountType, setJobDiscountType] = useState<"none" | "percent" | "fixed">("none");
-    const [jobDiscountValue, setJobDiscountValue] = useState<number>(0);
+    const [jobDiscountCodeOptions, setJobDiscountCodeOptions] = useState<{ id: string; code: string; discount_type: string | null; discount_value: number | string | null; applies_to_vertical_slug: string | null; first_job_only: boolean | null }[]>([]);
     const [scheduleCreateForm, setScheduleCreateForm] = useState<{ start_at: string; end_at: string; timezone: string }>({ start_at: "", end_at: "", timezone: "" });
     const [scheduleCreateSaving, setScheduleCreateSaving] = useState(false);
 
@@ -941,10 +940,25 @@ export default function AdminEntityDrawer() {
             ...prev,
             customer_id: "",
             primary_contact_id: "",
+            discount_code_id: "",
         }));
     }, [drawer.type, data?.id, (data as { _create?: boolean })?._create]);
 
-    const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "primary_contact_id", "customer_id", "opportunity_id", "location_id"] as const;
+    useEffect(() => {
+        if (drawer.type !== "jobs") {
+            setJobDiscountCodeOptions([]);
+            return;
+        }
+        const verticalSlug = (data as { _vertical_slug?: string | null } | null)?._vertical_slug ?? null;
+        const params = new URLSearchParams();
+        if (verticalSlug) params.set("vertical_slug", verticalSlug);
+        fetch(`/api/admin/discount-code-options?${params.toString()}`)
+            .then((r) => (r.ok ? r.json() : { discount_codes: [] }))
+            .then((j: { discount_codes?: { id: string; code: string; discount_type: string | null; discount_value: number | string | null; applies_to_vertical_slug: string | null; first_job_only: boolean | null }[] }) => setJobDiscountCodeOptions(j.discount_codes ?? []))
+            .catch(() => setJobDiscountCodeOptions([]));
+    }, [drawer.type, (data as { _vertical_slug?: string | null } | null)?._vertical_slug]);
+
+    const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
             setVendorPayout(null);
@@ -1091,7 +1105,6 @@ export default function AdminEntityDrawer() {
             return;
         }
         const meta = (data.metadata as Record<string, unknown>) || {};
-        const discount = meta.discount as { type?: string; value?: number } | null | undefined;
         const snapshot = {
             customer_id: (data.customer_id as string) ?? "",
             opportunity_id: (data.opportunity_id as string) ?? "",
@@ -1103,17 +1116,10 @@ export default function AdminEntityDrawer() {
             internal_notes: (meta.internal_notes as string) ?? "",
             gross_price_cents: data.gross_price_cents ?? null,
             primary_contact_id: (data.primary_contact_id as string) ?? "",
+            discount_code_id: (data.discount_code_id as string) ?? "",
         };
         setFormData((prev) => ({ ...prev, ...snapshot }));
         setInitialJobFormData(snapshot);
-        if (discount && typeof discount === "object") {
-            const t = discount.type === "percent" || discount.type === "fixed" ? discount.type : "none";
-            setJobDiscountType(t);
-            setJobDiscountValue(typeof discount.value === "number" ? discount.value : 0);
-        } else {
-            setJobDiscountType("none");
-            setJobDiscountValue(0);
-        }
     }, [drawer.type, drawer.id, data?.id]);
 
     const jobFormDirty = useMemo(() => {
@@ -1125,7 +1131,7 @@ export default function AdminEntityDrawer() {
             if (typeof a === "number" && typeof b === "number") return a !== b;
             return String(a ?? "") !== String(b ?? "");
         });
-    }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id]);
+    }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id, formData.discount_code_id]);
 
     const saveEdit = useCallback(async () => {
         if (!drawer.type || !drawer.id) return;
@@ -1197,23 +1203,27 @@ export default function AdminEntityDrawer() {
                 }
                 const existingMeta = (data?.metadata as Record<string, unknown>) || {};
                 const internalNotes = formData.internal_notes !== undefined ? (formData.internal_notes === "" ? null : formData.internal_notes) : (existingMeta.internal_notes ?? null);
-                let meta: Record<string, unknown> = { ...existingMeta, internal_notes: internalNotes };
-                const grossCents = typeof formData.gross_price_cents === "number" ? formData.gross_price_cents : (data?.gross_price_cents as number) ?? 0;
-                let netCents = grossCents;
-                if (jobDiscountType === "percent" && jobDiscountValue > 0) {
-                    netCents = Math.round(grossCents * (1 - jobDiscountValue / 100));
-                } else if (jobDiscountType === "fixed" && jobDiscountValue > 0) {
-                    netCents = Math.max(0, Math.round(grossCents - jobDiscountValue * 100));
+                payload.metadata = { ...existingMeta, internal_notes: internalNotes };
+                const grossCents = Number(formData.gross_price_cents ?? 0);
+                const discountCodeId = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null;
+                const selectedCode = discountCodeId ? jobDiscountCodeOptions.find((c) => c.id === discountCodeId) : null;
+                let discountCents = 0;
+                if (selectedCode) {
+                    const type = String(selectedCode.discount_type ?? "").trim().toLowerCase();
+                    const val = selectedCode.discount_value;
+                    if (type === "percent") {
+                        const percent = Math.min(100, Math.max(0, Number(val) ?? 0));
+                        discountCents = Math.round(grossCents * percent / 100);
+                    } else if (type === "fixed") {
+                        const dollars = Number(val) ?? 0;
+                        discountCents = Math.min(grossCents, Math.max(0, Math.round(dollars * 100)));
+                    }
                 }
-                payload.gross_price_cents = netCents;
-                if (jobDiscountType === "none") {
-                    delete meta.discount;
-                    delete meta.discount_original_gross_price_cents;
-                } else {
-                    meta.discount = { type: jobDiscountType, value: jobDiscountValue };
-                    meta.discount_original_gross_price_cents = grossCents;
-                }
-                payload.metadata = meta;
+                payload.gross_price_cents = grossCents;
+                payload.discount_code_id = discountCodeId ?? null;
+                payload.discount_code = selectedCode ? selectedCode.code : null;
+                payload.discount_amount = discountCents;
+                payload.discounted = !!selectedCode;
                 if (payload.customer_id === "") payload.customer_id = null;
                 if (payload.opportunity_id === "") payload.opportunity_id = null;
                 if (payload.location_id === "") payload.location_id = null;
@@ -1273,7 +1283,7 @@ export default function AdminEntityDrawer() {
         } finally {
             setSaving(false);
         }
-    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router, jobDiscountType, jobDiscountValue, data]);
+    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router, jobDiscountCodeOptions, data]);
 
     const openJobLocationChange = useCallback(() => {
         setSetLocationEntity("job");
@@ -2291,19 +2301,8 @@ export default function AdminEntityDrawer() {
                                         {jobExpandedSections.financials && (
                                             <div className="space-y-3 pb-3">
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Gross price ($)</label><input type="number" step="0.01" min="0" value={formData.gross_price_cents != null && formData.gross_price_cents !== "" ? (Number(formData.gross_price_cents) / 100) : ""} onChange={(e) => { const v = e.target.value; const cents = v === "" ? null : Math.round(parseFloat(v) * 100); setFormData((f) => ({ ...f, gross_price_cents: cents })); }} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="0.00" /></div>
-                                                <div>
-                                                    <label className="block text-sm text-alloy-midnight/70 mb-0.5">Discount</label>
-                                                    <div className="flex gap-2 items-center flex-wrap">
-                                                        <select value={jobDiscountType} onChange={(e) => setJobDiscountType(e.target.value as "none" | "percent" | "fixed")} className="px-2 py-1.5 border rounded text-sm">
-                                                            <option value="none">None</option>
-                                                            <option value="percent">Percent</option>
-                                                            <option value="fixed">Fixed $</option>
-                                                        </select>
-                                                        {jobDiscountType === "percent" && <input type="number" min="0" max="100" step="0.5" value={jobDiscountValue} onChange={(e) => setJobDiscountValue(Number(e.target.value) || 0)} className="w-20 px-2 py-1.5 border rounded text-sm" />}
-                                                        {jobDiscountType === "fixed" && <input type="number" min="0" step="0.01" value={jobDiscountValue} onChange={(e) => setJobDiscountValue(Number(e.target.value) || 0)} className="w-24 px-2 py-1.5 border rounded text-sm" />}
-                                                    </div>
-                                                </div>
-                                                <p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents((() => { const gross = typeof formData.gross_price_cents === "number" ? formData.gross_price_cents : 0; if (jobDiscountType === "percent") return Math.round(gross * (1 - jobDiscountValue / 100)); if (jobDiscountType === "fixed") return Math.max(0, Math.round(gross - jobDiscountValue * 100)); return gross; })())}</p>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Discount code</label><select value={String(formData.discount_code_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, discount_code_id: e.target.value || null }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">(none)</option>{jobDiscountCodeOptions.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}</select></div>
+                                                {(() => { const gross = Number(formData.gross_price_cents ?? 0); const codeId = typeof formData.discount_code_id === "string" ? formData.discount_code_id : ""; const selectedCode = codeId ? jobDiscountCodeOptions.find((c) => c.id === codeId) ?? null : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(gross * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(gross, Math.max(0, Math.round(dollars * 100))); } } const netCents = Math.max(0, gross - discountCents); return (<><p className="text-sm text-alloy-midnight/80"><strong>Discount amount:</strong> {discountCents > 0 ? `-${formatMoneyFromCents(discountCents)}` : formatMoneyFromCents(0)}</p><p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents(netCents)}</p></>); })()}
                                                 <details className="pt-2" open>
                                                     <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Payout</summary>
                                                     {jobPayoutLoading ? <p className="text-sm text-alloy-midnight/60">Loading…</p> : !(data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/70">No {vendorSingular} assigned.</p> : jobPayout ? (
@@ -2362,9 +2361,11 @@ export default function AdminEntityDrawer() {
                                                     </div>
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency</label><select value={String(formData.service_frequency_key ?? "")} onChange={(e) => { const v = e.target.value; const opt = jobFrequencyOptions.find((f) => f.key === v); setFormData((f) => ({ ...f, service_frequency_key: v, is_recurring: opt?.is_recurring ?? false })); }} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— None —</option>{jobFrequencyOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select></div>
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Gross price ($)</label><input type="number" step="0.01" min="0" value={formData.gross_price_cents != null ? Number(formData.gross_price_cents) / 100 : ""} onChange={(e) => { const v = e.target.value; const cents = v === "" ? null : Math.round(parseFloat(v) * 100); setFormData((f) => ({ ...f, gross_price_cents: cents })); }} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="0.00" /></div>
+                                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Discount code</label><select value={String(formData.discount_code_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, discount_code_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">(none)</option>{jobDiscountCodeOptions.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}</select></div>
+                                                    {(() => { const gross = Number(formData.gross_price_cents ?? 0); const codeId = typeof formData.discount_code_id === "string" ? formData.discount_code_id : ""; const selectedCode = codeId ? jobDiscountCodeOptions.find((c) => c.id === codeId) ?? null : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(gross * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(gross, Math.max(0, Math.round(dollars * 100))); } } const netCents = Math.max(0, gross - discountCents); return (<><p className="text-sm text-alloy-midnight/80"><strong>Discount amount:</strong> {discountCents > 0 ? `-${formatMoneyFromCents(discountCents)}` : formatMoneyFromCents(0)}</p><p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents(netCents)}</p></>); })()}
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
                                                     <div className="flex gap-2 pt-1">
-                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.status_key as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: (formData.customer_id as string)?.trim(), status_key: (formData.status_key as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: typeof formData.gross_price_cents === "number" ? formData.gross_price_cents : null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
+                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.status_key as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const grossCents = Number(formData.gross_price_cents ?? 0); const discountCodeId = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null; const selectedCode = discountCodeId ? jobDiscountCodeOptions.find((c) => c.id === discountCodeId) : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(grossCents * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(grossCents, Math.max(0, Math.round(dollars * 100))); } } const body: Record<string, unknown> = { customer_id: (formData.customer_id as string)?.trim(), status_key: (formData.status_key as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: grossCents || null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null, discount_code_id: discountCodeId || null, discount_code: selectedCode ? selectedCode.code : null, discount_amount: discountCents, discounted: !!selectedCode }; const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
                                                     </div>
                                                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                                                 </>

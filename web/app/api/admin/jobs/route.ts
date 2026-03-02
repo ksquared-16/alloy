@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { validateDiscountCodeForJob } from "@/lib/admin/validateDiscountCode";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
   const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
   const gross_price_cents = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : null;
   const primary_contact_id = typeof body.primary_contact_id === "string" && body.primary_contact_id.trim() ? body.primary_contact_id.trim() : null;
+  const discount_code_id = typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
 
   if (!customer_id) {
     return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
@@ -142,6 +144,36 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let job_vertical_slug: string | null = null;
+  const body_vertical_id = typeof body.vertical_id === "string" && body.vertical_id.trim() ? body.vertical_id.trim() : null;
+  if (body_vertical_id) {
+    const { data: vert } = await supabase.from("verticals").select("slug").eq("id", body_vertical_id).maybeSingle();
+    job_vertical_slug = (vert as { slug?: string | null } | null)?.slug ?? null;
+  }
+
+  let discount_code: string | null = null;
+  let discount_amount: number = 0;
+  let discounted = false;
+  if (discount_code_id) {
+    const { data: codeRow, error: codeErr } = await supabase
+      .from("discount_codes")
+      .select("id, code, is_active, discount_type, discount_value, applies_to_vertical_slug, starts_at, ends_at")
+      .eq("id", discount_code_id)
+      .maybeSingle();
+    if (codeErr) return NextResponse.json({ error: codeErr.message }, { status: 500 });
+    const result = validateDiscountCodeForJob(
+      codeRow as Parameters<typeof validateDiscountCodeForJob>[0],
+      gross_price_cents ?? 0,
+      job_vertical_slug
+    );
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    discount_code = result.code;
+    discount_amount = result.discount_amount_cents;
+    discounted = true;
+  }
+
   const row: Record<string, unknown> = {
     org_id: ctx.orgId,
     customer_id,
@@ -156,6 +188,10 @@ export async function POST(request: NextRequest) {
     assigned_vendor_id: typeof body.assigned_vendor_id === "string" && body.assigned_vendor_id.trim() ? body.assigned_vendor_id.trim() : null,
     location_id: location_id ?? undefined,
     metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
+    discount_code_id: discount_code_id ?? null,
+    discount_code,
+    discount_amount,
+    discounted,
   };
 
   const { data, error } = await supabase.from("jobs").insert(row).select().single();

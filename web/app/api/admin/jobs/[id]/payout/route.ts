@@ -40,7 +40,7 @@ export async function GET(
 
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
-        .select("id, org_id, assigned_vendor_id, gross_price_cents")
+        .select("id, org_id, assigned_vendor_id, gross_price_cents, discount_amount")
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -138,6 +138,8 @@ export async function GET(
     });
 
     const jobGrossPriceCents = (job as { gross_price_cents?: number | null }).gross_price_cents ?? null;
+    const jobDiscountCents = Number((job as { discount_amount?: number | string | null }).discount_amount ?? 0);
+    const jobNetCents = Math.max(0, (jobGrossPriceCents ?? 0) - jobDiscountCents);
     const jobVendor = jobAssignedVendorId ? vendorMap.get(jobAssignedVendorId) ?? null : null;
     const { policy: jobPolicy, source } = resolveVendorPayoutPolicy({
         orgSettings,
@@ -171,7 +173,7 @@ export async function GET(
     const schedulesWithMoney = schedules.map((s) => {
         const row = ordered.find((r) => r.id === s.schedule_id);
         const effective_price_cents = row
-            ? (row.price_cents ?? jobGrossPriceCents ?? 0)
+            ? (row.price_cents ?? jobNetCents)
             : 0;
         const rowStatusNorm = String(row?.status_key ?? "").trim().toLowerCase();
         const isCompleted = rowStatusNorm === completedStatusKeyNorm;
