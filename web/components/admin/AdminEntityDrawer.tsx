@@ -226,6 +226,7 @@ export default function AdminEntityDrawer() {
     const [jobCustomerOptions, setJobCustomerOptions] = useState<{ id: string; name: string | null; status_key?: string | null }[]>([]);
     const [jobFrequencyOptions, setJobFrequencyOptions] = useState<{ key: string; label: string; is_recurring: boolean }[]>([]);
     const [jobContactOptions, setJobContactOptions] = useState<{ id: string; label: string }[]>([]);
+    const [jobContactOptionsLoading, setJobContactOptionsLoading] = useState(false);
     const [jobCreateSaving, setJobCreateSaving] = useState(false);
     const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "automation" | "details">("overview");
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
@@ -873,6 +874,7 @@ export default function AdminEntityDrawer() {
             setJobCustomerOptions([]);
             setJobFrequencyOptions([]);
             setJobContactOptions([]);
+            setJobContactOptionsLoading(false);
             return;
         }
         fetch("/api/admin/customer-options")
@@ -887,15 +889,18 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "jobs") return;
-        const cid = formData.customer_id;
-        if (typeof cid !== "string" || !cid.trim()) {
+        const cid = typeof formData.customer_id === "string" ? formData.customer_id.trim() : "";
+        if (!cid) {
             setJobContactOptions([]);
+            setJobContactOptionsLoading(false);
             return;
         }
-        fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(cid.trim())}`)
+        setJobContactOptionsLoading(true);
+        fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(cid)}`)
             .then((r) => (r.ok ? r.json() : { contacts: [] }))
             .then((j: { contacts?: { id: string; label: string }[] }) => setJobContactOptions(j.contacts ?? []))
-            .catch(() => setJobContactOptions([]));
+            .catch(() => setJobContactOptions([]))
+            .finally(() => setJobContactOptionsLoading(false));
     }, [drawer.type, formData.customer_id]);
 
     useEffect(() => {
@@ -2263,7 +2268,21 @@ export default function AdminEntityDrawer() {
                                                     {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60">Loading status…</p> : (
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status (required)</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">Select status</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                                     )}
-                                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Primary {contactSingular}</label><select value={String(formData.primary_contact_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))} disabled={!formData.customer_id} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">Select {contactSingular.toLowerCase()}</option>{jobContactOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
+                                                    <div>
+                                                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Primary {contactSingular}</label>
+                                                        <select
+                                                            value={String(formData.primary_contact_id ?? "")}
+                                                            onChange={(e) => setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
+                                                            disabled={!(typeof formData.customer_id === "string" && formData.customer_id.trim()) || jobContactOptionsLoading || (typeof formData.customer_id === "string" && formData.customer_id.trim() && jobContactOptions.length === 0)}
+                                                            className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"
+                                                        >
+                                                            <option value="">Select {contactSingular.toLowerCase()}</option>
+                                                            {jobContactOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                                        </select>
+                                                        {(!(typeof formData.customer_id === "string" && formData.customer_id.trim()) || jobContactOptionsLoading || (typeof formData.customer_id === "string" && formData.customer_id.trim() && jobContactOptions.length === 0)) && (
+                                                            <p className="text-xs text-alloy-midnight/50 mt-0.5">Select a customer to load contacts</p>
+                                                        )}
+                                                    </div>
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency</label><select value={String(formData.service_frequency_key ?? "")} onChange={(e) => { const v = e.target.value; const opt = jobFrequencyOptions.find((f) => f.key === v); setFormData((f) => ({ ...f, service_frequency_key: v, is_recurring: opt?.is_recurring ?? false })); }} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— None —</option>{jobFrequencyOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select></div>
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Gross price ($)</label><input type="number" step="0.01" min="0" value={formData.gross_price_cents != null ? Number(formData.gross_price_cents) / 100 : ""} onChange={(e) => { const v = e.target.value; const cents = v === "" ? null : Math.round(parseFloat(v) * 100); setFormData((f) => ({ ...f, gross_price_cents: cents })); }} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="0.00" /></div>
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
