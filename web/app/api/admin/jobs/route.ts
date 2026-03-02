@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ jobs: result, total: count ?? result.length });
 }
 
-/** POST: create job. Admin only. customer_id, job_status_id, is_recurring required. org_id from context. */
+/** POST: create job. Admin only. customer_id required; status_key (from status_definitions?entity_type=jobs) required. org_id from context. */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContext();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -92,17 +92,18 @@ export async function POST(request: NextRequest) {
     // ignore
   }
   const customer_id = typeof body.customer_id === "string" ? body.customer_id.trim() : null;
+  const status_key = typeof body.status_key === "string" ? body.status_key.trim() : null;
   const job_status_id = typeof body.job_status_id === "string" ? body.job_status_id.trim() : null;
-  const is_recurring = body.is_recurring;
+  const is_recurring = body.is_recurring === true;
+  const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
+  const gross_price_cents = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : null;
+  const primary_contact_id = typeof body.primary_contact_id === "string" && body.primary_contact_id.trim() ? body.primary_contact_id.trim() : null;
 
   if (!customer_id) {
     return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
   }
-  if (!job_status_id) {
-    return NextResponse.json({ error: "job_status_id is required" }, { status: 400 });
-  }
-  if (typeof is_recurring !== "boolean") {
-    return NextResponse.json({ error: "is_recurring is required (boolean)" }, { status: 400 });
+  if (!status_key) {
+    return NextResponse.json({ error: "status_key is required (use status_definitions?entity_type=jobs)" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -134,11 +135,22 @@ export async function POST(request: NextRequest) {
     if (primaryLoc?.id) location_id = (primaryLoc as { id: string }).id;
   }
 
+  if (primary_contact_id) {
+    const { data: contact } = await supabase.from("contacts").select("id, customer_id, org_id").eq("id", primary_contact_id).maybeSingle();
+    if (!contact || (contact as { org_id?: string }).org_id !== ctx.orgId || (contact as { customer_id?: string }).customer_id !== customer_id) {
+      return NextResponse.json({ error: "Primary contact not found or does not belong to this customer" }, { status: 400 });
+    }
+  }
+
   const row: Record<string, unknown> = {
     org_id: ctx.orgId,
     customer_id,
-    job_status_id,
+    status_key,
+    job_status_id: job_status_id || null,
     is_recurring,
+    service_frequency_key: service_frequency_key ?? null,
+    gross_price_cents: gross_price_cents ?? null,
+    primary_contact_id: primary_contact_id ?? null,
     title: typeof body.title === "string" ? body.title.trim() || null : null,
     description: typeof body.description === "string" ? body.description.trim() || null : null,
     assigned_vendor_id: typeof body.assigned_vendor_id === "string" && body.assigned_vendor_id.trim() ? body.assigned_vendor_id.trim() : null,

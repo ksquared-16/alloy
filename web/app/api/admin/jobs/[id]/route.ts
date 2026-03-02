@@ -16,6 +16,8 @@ const ALLOWED_KEYS = [
     "service_frequency_key",
     "internal_notes",
     "completed_at",
+    "gross_price_cents",
+    "primary_contact_id",
 ] as const;
 
 const JOB_ACTIONS = ["assign_vendor", "mark_completed"] as const;
@@ -129,8 +131,12 @@ export async function PATCH(
 
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
-            if (key === "assigned_vendor_id") {
+            if (key === "assigned_vendor_id" || key === "primary_contact_id") {
                 updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+                continue;
+            }
+            if (key === "gross_price_cents" && (body[key] === "" || body[key] == null)) {
+                updates[key] = null;
                 continue;
             }
             if (key === "internal_notes") {
