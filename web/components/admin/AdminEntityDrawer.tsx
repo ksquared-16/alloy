@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
@@ -176,6 +176,97 @@ function LinkedRow({
     );
 }
 
+/** Job drawer: Relationships collapsible section (Customer, Primary contact, Location, Opportunity, Default vendor). */
+function JobDrawerRelationshipsSection(props: {
+    formData: Record<string, unknown>;
+    setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+    canMutate: boolean;
+    jobExpandedSections: { relationships: boolean; financials: boolean; scheduling: boolean };
+    setJobExpandedSections: React.Dispatch<React.SetStateAction<{ relationships: boolean; financials: boolean; scheduling: boolean }>>;
+    jobCustomerOptions: { id: string; name: string | null }[];
+    jobContactOptions: { id: string; label: string }[];
+    primaryContactDisabled: boolean;
+    jobLocationOptions: { id: string; label: string }[];
+    jobOpportunityOptions: { id: string; label: string }[];
+    jobVendorOptions: { id: string; name: string | null }[];
+    jobAssignedVendorId: string | null;
+    setJobAssignedVendorId: (v: string | null) => void;
+    jobAssignedVendorSaving: boolean;
+    applyVendorToUpcoming: boolean;
+    setApplyVendorToUpcoming: (v: boolean) => void;
+    customerSingular: string;
+    contactSingular: string;
+    opportunitySingular: string;
+    vendorSingular: string;
+    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => void;
+    openJobLocationChange: () => void;
+    saveJobAssignedVendor: () => void;
+}) {
+    const p = props;
+    return (
+        <div className="border-b border-[#e6e8ec]">
+            <button type="button" onClick={() => p.setJobExpandedSections((s) => ({ ...s, relationships: !s.relationships }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                Relationships
+                <span className="text-alloy-midnight opacity-60">{p.jobExpandedSections.relationships ? "▼" : "▶"}</span>
+            </button>
+            {p.jobExpandedSections.relationships && (
+                <div className="space-y-3 pb-3">
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">{p.customerSingular}</label>
+                        <div className="flex gap-2 items-center flex-wrap">
+                            <select value={String(p.formData.customer_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, customer_id: e.target.value, primary_contact_id: "", opportunity_id: "" }))} disabled={!p.canMutate} className="flex-1 min-w-[140px] px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                <option value="">(none)</option>
+                                {p.jobCustomerOptions.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}
+                            </select>
+                            {String(p.formData.customer_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "customers", id: String(p.formData.customer_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Primary {p.contactSingular}</label>
+                        <select value={String(p.formData.primary_contact_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))} disabled={!p.canMutate || p.primaryContactDisabled} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                            <option value="">(none)</option>
+                            {p.jobContactOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Location</label>
+                        <div className="flex gap-2 items-center flex-wrap">
+                            <select value={String(p.formData.location_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, location_id: e.target.value || null }))} disabled={!p.canMutate} className="flex-1 min-w-[140px] px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                <option value="">(none)</option>
+                                {p.jobLocationOptions.map((loc) => <option key={loc.id} value={loc.id}>{loc.label}</option>)}
+                            </select>
+                            {String(p.formData.location_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "locations", id: String(p.formData.location_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
+                            {p.canMutate && <button type="button" onClick={p.openJobLocationChange} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Change</button>}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">{p.opportunitySingular}</label>
+                        <div className="flex gap-2 items-center flex-wrap">
+                            <select value={String(p.formData.opportunity_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, opportunity_id: e.target.value || null }))} disabled={!p.canMutate} className="flex-1 min-w-[140px] px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                <option value="">(none)</option>
+                                {p.jobOpportunityOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                            </select>
+                            {String(p.formData.opportunity_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "opportunities", id: String(p.formData.opportunity_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
+                        </div>
+                    </div>
+                    <div>
+                        <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select value={p.jobAssignedVendorId ?? ""} onChange={(e) => p.setJobAssignedVendorId(e.target.value || null)} className="px-2 py-1.5 border rounded text-sm min-w-[140px]">
+                                <option value="">(none)</option>
+                                {p.jobVendorOptions.map((v) => <option key={v.id} value={v.id}>{v.name ?? v.id}</option>)}
+                            </select>
+                            {p.jobAssignedVendorId ? <button type="button" onClick={() => p.openDrawer({ type: "vendors", id: p.jobAssignedVendorId as string })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
+                            <button type="button" disabled={p.jobAssignedVendorSaving} onClick={p.saveJobAssignedVendor} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{p.jobAssignedVendorSaving ? "Saving…" : "Save"}</button>
+                        </div>
+                        {p.canMutate && <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70"><input type="checkbox" checked={p.applyVendorToUpcoming} onChange={(e) => p.setApplyVendorToUpcoming(e.target.checked)} />Apply to all upcoming schedules</label>}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
@@ -250,6 +341,17 @@ export default function AdminEntityDrawer() {
     const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
+    const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
+    const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
+    const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean }>({ relationships: true, financials: true, scheduling: true });
+    const [jobDiscountType, setJobDiscountType] = useState<"none" | "percent" | "fixed">("none");
+    const [jobDiscountValue, setJobDiscountValue] = useState<number>(0);
+    const [scheduleCreateForm, setScheduleCreateForm] = useState<{ start_at: string; end_at: string; timezone: string }>({ start_at: "", end_at: "", timezone: "" });
+    const [scheduleCreateSaving, setScheduleCreateSaving] = useState(false);
+
+    useEffect(() => {
+        if (drawer.type === "schedules" && drawer.id === "new") setScheduleCreateForm({ start_at: "", end_at: "", timezone: "" });
+    }, [drawer.type, drawer.id]);
     const [jobPayments, setJobPayments] = useState<{ id: string; created_at: string; amount_cents: number; provider_payment_id: string | null; payment_status_id: string; payment_statuses: { key: string } | null }[]>([]);
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
     const [paymentActionLoading, setPaymentActionLoading] = useState<"run" | "retry" | null>(null);
@@ -842,7 +944,7 @@ export default function AdminEntityDrawer() {
         }));
     }, [drawer.type, data?.id, (data as { _create?: boolean })?._create]);
 
-    const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "primary_contact_id"] as const;
+    const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "primary_contact_id", "customer_id", "opportunity_id", "location_id"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
             setVendorPayout(null);
@@ -944,6 +1046,33 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, formData.customer_id]);
 
     useEffect(() => {
+        if (drawer.type !== "jobs") {
+            setJobLocationOptions([]);
+            return;
+        }
+        fetch("/api/admin/location-options")
+            .then((r) => (r.ok ? r.json() : { locations: [] }))
+            .then((j: { locations?: { id: string; label: string }[] }) => setJobLocationOptions(j.locations ?? []))
+            .catch(() => setJobLocationOptions([]));
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs") {
+            setJobOpportunityOptions([]);
+            return;
+        }
+        const cid = typeof formData.customer_id === "string" ? formData.customer_id.trim() : "";
+        if (!cid) {
+            setJobOpportunityOptions([]);
+            return;
+        }
+        fetch(`/api/admin/opportunity-options?customer_id=${encodeURIComponent(cid)}`)
+            .then((r) => (r.ok ? r.json() : { opportunities: [] }))
+            .then((j: { opportunities?: { id: string; label: string }[] }) => setJobOpportunityOptions(j.opportunities ?? []))
+            .catch(() => setJobOpportunityOptions([]));
+    }, [drawer.type, formData.customer_id]);
+
+    useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
             setJobPayout(null);
             return;
@@ -962,8 +1091,11 @@ export default function AdminEntityDrawer() {
             return;
         }
         const meta = (data.metadata as Record<string, unknown>) || {};
+        const discount = meta.discount as { type?: string; value?: number } | null | undefined;
         const snapshot = {
             customer_id: (data.customer_id as string) ?? "",
+            opportunity_id: (data.opportunity_id as string) ?? "",
+            location_id: (data.location_id as string) ?? "",
             scheduled_at: data.scheduled_at ? new Date(data.scheduled_at as string).toISOString().slice(0, 16) : "",
             service_frequency_key: (data.service_frequency_key as string) ?? "",
             is_recurring: data.is_recurring ?? false,
@@ -974,6 +1106,14 @@ export default function AdminEntityDrawer() {
         };
         setFormData((prev) => ({ ...prev, ...snapshot }));
         setInitialJobFormData(snapshot);
+        if (discount && typeof discount === "object") {
+            const t = discount.type === "percent" || discount.type === "fixed" ? discount.type : "none";
+            setJobDiscountType(t);
+            setJobDiscountValue(typeof discount.value === "number" ? discount.value : 0);
+        } else {
+            setJobDiscountType("none");
+            setJobDiscountValue(0);
+        }
     }, [drawer.type, drawer.id, data?.id]);
 
     const jobFormDirty = useMemo(() => {
@@ -985,7 +1125,7 @@ export default function AdminEntityDrawer() {
             if (typeof a === "number" && typeof b === "number") return a !== b;
             return String(a ?? "") !== String(b ?? "");
         });
-    }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.primary_contact_id]);
+    }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id]);
 
     const saveEdit = useCallback(async () => {
         if (!drawer.type || !drawer.id) return;
@@ -1049,10 +1189,34 @@ export default function AdminEntityDrawer() {
                 delete payload.notes;
                 if (notes !== undefined) payload.notes = notes === "" ? null : notes;
             }
-            if (drawer.type === "jobs" && "internal_notes" in payload) {
-                const internal_notes = payload.internal_notes;
-                delete payload.internal_notes;
-                if (internal_notes !== undefined) payload.internal_notes = internal_notes === "" ? null : internal_notes;
+            if (drawer.type === "jobs") {
+                if ("internal_notes" in payload) {
+                    const internal_notes = payload.internal_notes;
+                    delete payload.internal_notes;
+                    if (internal_notes !== undefined) payload.internal_notes = internal_notes === "" ? null : internal_notes;
+                }
+                const existingMeta = (data?.metadata as Record<string, unknown>) || {};
+                const internalNotes = formData.internal_notes !== undefined ? (formData.internal_notes === "" ? null : formData.internal_notes) : (existingMeta.internal_notes ?? null);
+                let meta: Record<string, unknown> = { ...existingMeta, internal_notes: internalNotes };
+                const grossCents = typeof formData.gross_price_cents === "number" ? formData.gross_price_cents : (data?.gross_price_cents as number) ?? 0;
+                let netCents = grossCents;
+                if (jobDiscountType === "percent" && jobDiscountValue > 0) {
+                    netCents = Math.round(grossCents * (1 - jobDiscountValue / 100));
+                } else if (jobDiscountType === "fixed" && jobDiscountValue > 0) {
+                    netCents = Math.max(0, Math.round(grossCents - jobDiscountValue * 100));
+                }
+                payload.gross_price_cents = netCents;
+                if (jobDiscountType === "none") {
+                    delete meta.discount;
+                    delete meta.discount_original_gross_price_cents;
+                } else {
+                    meta.discount = { type: jobDiscountType, value: jobDiscountValue };
+                    meta.discount_original_gross_price_cents = grossCents;
+                }
+                payload.metadata = meta;
+                if (payload.customer_id === "") payload.customer_id = null;
+                if (payload.opportunity_id === "") payload.opportunity_id = null;
+                if (payload.location_id === "") payload.location_id = null;
             }
             if (drawer.type === "schedules") {
                 if (payload.start_at) payload.start_at = new Date(payload.start_at as string).toISOString();
@@ -1109,7 +1273,54 @@ export default function AdminEntityDrawer() {
         } finally {
             setSaving(false);
         }
-    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router]);
+    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router, jobDiscountType, jobDiscountValue, data]);
+
+    const openJobLocationChange = useCallback(() => {
+        setSetLocationEntity("job");
+        setSetLocationSelectedId((formData.location_id as string) ?? null);
+        setSetLocationError(null);
+        fetch("/api/admin/locations")
+            .then((r) => r.ok ? r.json() : { locations: [] })
+            .then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? []))
+            .catch(() => setSetLocationList([]));
+        setSetLocationOpen(true);
+    }, [formData.location_id]);
+
+    const saveJobAssignedVendor = useCallback(async () => {
+        if (!drawer.id || drawer.type !== "jobs") return;
+        setJobAssignedVendorSaving(true);
+        try {
+            const vendorOption = jobAssignedVendorId ? jobVendorOptions.find((v) => v.id === jobAssignedVendorId) ?? null : null;
+            if (applyVendorToUpcoming && canMutate) {
+                const res = await fetch(`/api/admin/jobs/${drawer.id}/assign-vendor`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ vendor_id: jobAssignedVendorId || null, apply_to_future_schedules: true }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Reassign failed");
+                setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
+            } else {
+                const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assigned_vendor_id: jobAssignedVendorId || null }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
+            }
+            const payoutRes = await fetch(`/api/admin/jobs/${drawer.id}/payout`);
+            if (payoutRes.ok) setJobPayout(await payoutRes.json());
+            refetch();
+            router.refresh();
+            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: drawer.id } }));
+        } catch (e) {
+            setSaveError((e as Error).message);
+        } finally {
+            setJobAssignedVendorSaving(false);
+        }
+    }, [drawer.id, drawer.type, jobAssignedVendorId, jobVendorOptions, applyVendorToUpcoming, canMutate, refetch, router]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -1252,6 +1463,15 @@ export default function AdminEntityDrawer() {
             {data && !loading && (
                 <div className="space-y-6">
                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                    {drawer.type === "schedules" && (data as { _create?: boolean })?._create && (
+                        <div className="space-y-4">
+                            <p className="text-sm text-alloy-midnight/70">Create a new schedule. {drawer.defaultSchedulePrefill?.job_id ? `${jobSingular} is prefilled.` : "Enter start and end times."}</p>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Start (required)</label><input type="datetime-local" value={scheduleCreateForm.start_at} onChange={(e) => setScheduleCreateForm((f) => ({ ...f, start_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">End (required)</label><input type="datetime-local" value={scheduleCreateForm.end_at} onChange={(e) => setScheduleCreateForm((f) => ({ ...f, end_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Timezone</label><input value={scheduleCreateForm.timezone} onChange={(e) => setScheduleCreateForm((f) => ({ ...f, timezone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="e.g. America/Los_Angeles" /></div>
+                            <button type="button" disabled={scheduleCreateSaving || !scheduleCreateForm.start_at || !scheduleCreateForm.end_at || !drawer.defaultSchedulePrefill?.job_id} onClick={async () => { setScheduleCreateSaving(true); setSaveError(null); try { const prefill = drawer.defaultSchedulePrefill!; const start = new Date(scheduleCreateForm.start_at); const end = new Date(scheduleCreateForm.end_at); if (end <= start) { setSaveError("End must be after start"); return; } const res = await fetch("/api/admin/schedules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: prefill.job_id, start_at: start.toISOString(), end_at: end.toISOString(), timezone: scheduleCreateForm.timezone || null, location_id: prefill.location_id || null, status_key: prefill.status_key || null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { openDrawer({ type: "schedules", id: newId }); router.refresh(); } } catch (e) { setSaveError((e as Error).message); } finally { setScheduleCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{scheduleCreateSaving ? "Creating…" : "Create Schedule"}</button>
+                        </div>
+                    )}
                     {drawerTab === "related" && drawer.type === "opportunities" && data && (
                         <div className="pt-2 space-y-3 mb-4">
                             <DrawerLinkWithName label={customerSingular} id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
@@ -2038,156 +2258,83 @@ export default function AdminEntityDrawer() {
                                 <>
                                     {isJobExistingView && (
                                     <>
-                                    <Field label="Title" value={data && typeof data === "object" && "title" in data && data.title != null && String(data.title).trim() !== "" ? String(data.title) : "—"} />
-                                    <div className="space-y-0 border-b border-[#e6e8ec] pb-3">
-                                        <LinkedRow label={customerSingular} value={data?._customer_name != null ? String(data._customer_name) : null} onOpen={data?.customer_id ? () => openDrawer({ type: "customers", id: String(data.customer_id) }) : undefined} />
-                                        <LinkedRow label={opportunitySingular} value={data?._opportunity_name != null ? String(data._opportunity_name) : null} onOpen={data?.opportunity_id ? () => openDrawer({ type: "opportunities", id: String(data.opportunity_id) }) : undefined} />
-                                        <LinkedRow
-                                            label="Location"
-                                            value={data?.location_id ? (() => {
-                                                const loc = data._location as { address1?: string | null; city?: string | null; postal_code?: string | null } | null | undefined;
-                                                let name: string | null = (data._location_label as string) ?? null;
-                                                if (!name && loc) {
-                                                    const parts = [loc.address1, loc.city, loc.postal_code].filter(Boolean);
-                                                    name = parts.length ? parts.join(", ") : null;
-                                                }
-                                                return name ?? `${String(data.location_id).slice(0, 8)}…`;
-                                            })() : null}
-                                            onOpen={data?.location_id ? () => openDrawer({ type: "locations", id: String(data.location_id) }) : undefined}
-                                            action={canMutate ? <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button> : undefined}
-                                        />
-                                    </div>
-                                    <div className="pt-2 pb-2 border-b border-[#e6e8ec]">
-                                        <strong className="text-alloy-midnight/70 block mb-2">Default {vendorSingular}</strong>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <select
-                                                value={jobAssignedVendorId ?? ""}
-                                                onChange={(e) => setJobAssignedVendorId(e.target.value || null)}
-                                                className="px-2 py-1.5 border rounded text-sm min-w-[140px]"
-                                            >
-                                                <option value="">(none)</option>
-                                                {jobVendorOptions.map((v) => (
-                                                    <option key={v.id} value={v.id}>{v.name ?? v.id}</option>
-                                                ))}
-                                            </select>
-                                            {jobAssignedVendorId && (
-                                                <button type="button" onClick={() => openDrawer({ type: "vendors", id: jobAssignedVendorId })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Open</button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                disabled={jobAssignedVendorSaving}
-                                                onClick={async () => {
-                                                    if (!drawer.id) return;
-                                                    setJobAssignedVendorSaving(true);
-                                                    try {
-                                                        const vendorOption = jobAssignedVendorId ? jobVendorOptions.find((v) => v.id === jobAssignedVendorId) ?? null : null;
-                                                        if (applyVendorToUpcoming && canMutate) {
-                                                            const res = await fetch(`/api/admin/jobs/${drawer.id}/assign-vendor`, {
-                                                                method: "POST",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ vendor_id: jobAssignedVendorId || null, apply_to_future_schedules: true }),
-                                                            });
-                                                            const json = await res.json().catch(() => ({}));
-                                                            if (!res.ok) throw new Error((json.error as string) || "Reassign failed");
-                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
-                                                        } else {
-                                                            const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
-                                                                method: "PATCH",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ assigned_vendor_id: jobAssignedVendorId || null }),
-                                                            });
-                                                            const json = await res.json().catch(() => ({}));
-                                                            if (!res.ok) throw new Error((json.error as string) || "Save failed");
-                                                            setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
-                                                        }
-                                                        const payoutRes = await fetch(`/api/admin/jobs/${drawer.id}/payout`);
-                                                        if (payoutRes.ok) setJobPayout(await payoutRes.json());
-                                                        refetch();
-                                                        router.refresh();
-                                                        if (drawer.type === "jobs" && drawer.id) {
-                                                            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: drawer.id } }));
-                                                        }
-                                                    } catch (e) {
-                                                        setSaveError((e as Error).message);
-                                                    } finally {
-                                                        setJobAssignedVendorSaving(false);
-                                                    }
-                                                }}
-                                                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                            >
-                                                {jobAssignedVendorSaving ? "Saving…" : "Save"}
-                                            </button>
-                                        </div>
-                                        {canMutate && (
-                                            <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
-                                                <input type="checkbox" checked={applyVendorToUpcoming} onChange={(e) => setApplyVendorToUpcoming(e.target.checked)} />
-                                                Apply to all upcoming schedules
-                                            </label>
+                                    <JobDrawerRelationshipsSection
+                                        formData={formData}
+                                        setFormData={setFormData}
+                                        canMutate={canMutate}
+                                        jobExpandedSections={jobExpandedSections}
+                                        setJobExpandedSections={setJobExpandedSections}
+                                        jobCustomerOptions={jobCustomerOptions}
+                                        jobContactOptions={jobContactOptions}
+                                        primaryContactDisabled={primaryContactDisabled}
+                                        jobLocationOptions={jobLocationOptions}
+                                        jobOpportunityOptions={jobOpportunityOptions}
+                                        jobVendorOptions={jobVendorOptions}
+                                        jobAssignedVendorId={jobAssignedVendorId}
+                                        setJobAssignedVendorId={setJobAssignedVendorId}
+                                        jobAssignedVendorSaving={jobAssignedVendorSaving}
+                                        applyVendorToUpcoming={applyVendorToUpcoming}
+                                        setApplyVendorToUpcoming={setApplyVendorToUpcoming}
+                                        customerSingular={customerSingular}
+                                        contactSingular={contactSingular}
+                                        opportunitySingular={opportunitySingular}
+                                        vendorSingular={vendorSingular}
+                                        openDrawer={openDrawer}
+                                        openJobLocationChange={openJobLocationChange}
+                                        saveJobAssignedVendor={saveJobAssignedVendor}
+                                    />
+                                    <div key="financials" className="border-b border-[#e6e8ec]">
+                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, financials: !s.financials }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                                            Financials
+                                            <span className="text-alloy-midnight opacity-60">{jobExpandedSections.financials ? "▼" : "▶"}</span>
+                                        </button>
+                                        {jobExpandedSections.financials && (
+                                            <div className="space-y-3 pb-3">
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Gross price ($)</label><input type="number" step="0.01" min="0" value={formData.gross_price_cents != null && formData.gross_price_cents !== "" ? (Number(formData.gross_price_cents) / 100) : ""} onChange={(e) => { const v = e.target.value; const cents = v === "" ? null : Math.round(parseFloat(v) * 100); setFormData((f) => ({ ...f, gross_price_cents: cents })); }} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="0.00" /></div>
+                                                <div>
+                                                    <label className="block text-sm text-alloy-midnight/70 mb-0.5">Discount</label>
+                                                    <div className="flex gap-2 items-center flex-wrap">
+                                                        <select value={jobDiscountType} onChange={(e) => setJobDiscountType(e.target.value as "none" | "percent" | "fixed")} className="px-2 py-1.5 border rounded text-sm">
+                                                            <option value="none">None</option>
+                                                            <option value="percent">Percent</option>
+                                                            <option value="fixed">Fixed $</option>
+                                                        </select>
+                                                        {jobDiscountType === "percent" && <input type="number" min="0" max="100" step="0.5" value={jobDiscountValue} onChange={(e) => setJobDiscountValue(Number(e.target.value) || 0)} className="w-20 px-2 py-1.5 border rounded text-sm" />}
+                                                        {jobDiscountType === "fixed" && <input type="number" min="0" step="0.01" value={jobDiscountValue} onChange={(e) => setJobDiscountValue(Number(e.target.value) || 0)} className="w-24 px-2 py-1.5 border rounded text-sm" />}
+                                                    </div>
+                                                </div>
+                                                <p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents((() => { const gross = typeof formData.gross_price_cents === "number" ? formData.gross_price_cents : 0; if (jobDiscountType === "percent") return Math.round(gross * (1 - jobDiscountValue / 100)); if (jobDiscountType === "fixed") return Math.max(0, Math.round(gross - jobDiscountValue * 100)); return gross; })())}</p>
+                                                <details className="pt-2" open>
+                                                    <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Payout</summary>
+                                                    {jobPayoutLoading ? <p className="text-sm text-alloy-midnight/60">Loading…</p> : !(data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/70">No {vendorSingular} assigned.</p> : jobPayout ? (
+                                                        <div className="space-y-2">
+                                                            <p className="text-sm text-alloy-midnight/80"><strong>Policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}{jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}</p>
+                                                            <p className="text-xs text-alloy-midnight/60">Source: {jobPayout.source === "vendor" ? "Vendor override" : jobPayout.source === "org" ? "Org default" : "Legacy"}</p>
+                                                            <p className="text-sm">Completed: <strong>{jobPayout.job.completed_occurrences_total}</strong> · Payout: <strong>{jobPayout.job.current_payout_percent}%</strong></p>
+                                                            {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout $</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}
+                                                        </div>
+                                                    ) : <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>}
+                                                </details>
+                                            </div>
                                         )}
                                     </div>
-                                    <details className="pt-2 pb-2 border-b border-[#e6e8ec]" open>
-                                        <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Payout</summary>
-                                        {jobPayoutLoading ? (
-                                            <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                                        ) : !(data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? (
-                                            <p className="text-sm text-alloy-midnight/70">No {vendorSingular} assigned to this {jobSingular.toLowerCase()}.</p>
-                                        ) : jobPayout ? (
-                                            <div className="space-y-2">
-                                                <p className="text-sm text-alloy-midnight/80">
-                                                    <strong>Policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}
-                                                    {jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}
-                                                </p>
-                                                <p className="text-xs text-alloy-midnight/60">
-                                                    Source: {jobPayout.source === "vendor" ? "Vendor override" : jobPayout.source === "org" ? "Org default" : "Legacy"}
-                                                </p>
-                                                <div className="space-y-1 text-sm text-alloy-midnight/80">
-                                                    <p>Completed occurrences: <strong>{jobPayout.job.completed_occurrences_total}</strong></p>
-                                                    {jobPayout.job.completed_revenue_cents_total != null && (
-                                                        <>
-                                                            <p>Completed revenue: <strong>{formatMoneyFromCents(jobPayout.job.completed_revenue_cents_total)}</strong></p>
-                                                            <p>Vendor payout total: <strong>{formatMoneyFromCents(jobPayout.job.completed_payout_cents_total ?? 0)}</strong></p>
-                                                            <p>Alloy fee total: <strong>{formatMoneyFromCents(jobPayout.job.completed_alloy_fee_cents_total ?? 0)}</strong></p>
-                                                        </>
-                                                    )}
-                                                    <p>Current payout: <strong>{jobPayout.job.current_payout_percent}%</strong></p>
-                                                </div>
-                                                {jobPayout.schedules.length > 0 && (
-                                                    <div className="overflow-x-auto mt-2">
-                                                        <table className="w-full text-sm border border-alloy-stone/20">
-                                                            <thead>
-                                                                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                                                    <th className="py-1.5 pr-2">Scheduled At</th>
-                                                                    <th className="py-1.5 pr-2">Status</th>
-                                                                    <th className="py-1.5 pr-2">Assigned {vendorSingular}</th>
-                                                                    <th className="py-1.5 pr-2">Occurrence #</th>
-                                                                    <th className="py-1.5 pr-2">Price</th>
-                                                                    <th className="py-1.5 pr-2">Payout %</th>
-                                                                    <th className="py-1.5 pr-2">Payout $</th>
-                                                                    <th className="py-1.5 pr-2">Alloy $</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {jobPayout.schedules.map((s) => (
-                                                                    <tr key={s.schedule_id} className="border-b border-alloy-stone/10">
-                                                                        <td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.assigned_vendor_id ? s.assigned_vendor_id.slice(0, 8) + "…" : "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.occurrence_number != null ? s.occurrence_number : "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.payout_percent != null ? `${s.payout_percent}%` : "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td>
-                                                                        <td className="py-1 pr-2">{s.alloy_fee_cents != null ? formatMoneyFromCents(s.alloy_fee_cents) : "—"}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
+                                    <div className="border-b border-[#e6e8ec]">
+                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, scheduling: !s.scheduling }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                                            Scheduling
+                                            <span className="text-alloy-midnight opacity-60">{jobExpandedSections.scheduling ? "▼" : "▶"}</span>
+                                        </button>
+                                        {jobExpandedSections.scheduling && (
+                                            <div className="space-y-3 pb-3">
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job start date (optional)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency</label><select value={String(formData.service_frequency_key ?? "")} onChange={(e) => { const v = e.target.value; const opt = jobFrequencyOptions.find((f) => f.key === v); setFormData((f) => ({ ...f, service_frequency_key: v, is_recurring: opt?.is_recurring ?? false })); }} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{jobFrequencyOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select></div>
+                                                {statusDefsLoading ? null : <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>}
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" rows={2} /></div>
+                                                {drawer.id && drawer.id !== "new" && (
+                                                    <button type="button" onClick={async () => { const jobId = drawer.id; const custId = (formData.customer_id as string) || (data?.customer_id as string) || null; const locId = (formData.location_id as string) || (data?.location_id as string) || null; const vendorId = jobAssignedVendorId || (data?.assigned_vendor_id as string) || null; let statusKey: string | null = null; try { const r = await fetch("/api/admin/status-definitions?entity_type=schedules"); const j = await r.json().catch(() => ({})); const statuses = (j.statuses ?? j) as { status_key: string; is_active: boolean; sort_order: number }[]; const active = Array.isArray(statuses) ? statuses.filter((s: { is_active: boolean }) => s.is_active).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order) : []; statusKey = active[0]?.status_key ?? null; } catch { } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId as string, customer_id: custId, location_id: locId || null, assigned_vendor_id: vendorId, status_key: statusKey } }); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">New Schedule</button>
                                                 )}
                                             </div>
-                                        ) : (
-                                            <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>
                                         )}
-                                    </details>
+                                    </div>
                                     </>
                                     )}
                                     {(isEditing || drawer.type === "jobs") ? (
@@ -2222,9 +2369,9 @@ export default function AdminEntityDrawer() {
                                                     {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                                                 </>
                                             )}
-                                            {!(data as { _create?: boolean })?._create && (
+                                            {!(data as { _create?: boolean })?._create && drawer.type !== "jobs" && (
                                             <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job start date (optional)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job start date (optional)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
                                             {drawer.type === "jobs" && (
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency</label><select value={String(formData.service_frequency_key ?? "")} onChange={(e) => { const v = e.target.value; const opt = jobFrequencyOptions.find((f) => f.key === v); setFormData((f) => ({ ...f, service_frequency_key: v, is_recurring: opt?.is_recurring ?? false })); }} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{jobFrequencyOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select></div>
                                             )}
@@ -2347,7 +2494,7 @@ export default function AdminEntityDrawer() {
                                     </div>
                                 </>
                             )}
-                            {drawer.type === "schedules" && (
+                            {drawer.type === "schedules" && !(data as { _create?: boolean })?._create && (
                                 <>
                                     {(data.job_id as string) && (
                                         <div>

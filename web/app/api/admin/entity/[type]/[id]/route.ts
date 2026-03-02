@@ -154,6 +154,9 @@ export async function GET(
             return NextResponse.json(out);
         }
         if (type === "schedules") {
+            if (id === "new") {
+                return NextResponse.json({ _create: true });
+            }
             const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).single();
             if (error || !schedule) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...schedule };

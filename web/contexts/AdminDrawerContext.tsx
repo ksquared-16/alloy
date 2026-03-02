@@ -4,6 +4,14 @@ import { createContext, useCallback, useContext, useState, ReactNode } from "rea
 
 export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "customers" | "customer_members" | "schedules" | "discount_redemptions" | "workflows" | "vendors" | "subscriptions" | "locations";
 
+export type SchedulePrefill = {
+    job_id: string;
+    customer_id?: string | null;
+    location_id?: string | null;
+    assigned_vendor_id?: string | null;
+    status_key?: string | null;
+};
+
 interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
     id: string | null;
@@ -11,11 +19,13 @@ interface AdminDrawerState {
     defaultWorkflowEntityType?: string;
     /** When opening customer_members with id "new", prefill customer_id. */
     defaultCustomerId?: string;
+    /** When opening schedules with id "new", prefill job_id, customer_id, location_id, assigned_vendor_id, status_key. */
+    defaultSchedulePrefill?: SchedulePrefill;
 }
 
 interface AdminDrawerContextValue {
     drawer: AdminDrawerState;
-    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string }) => void;
+    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => void;
     closeDrawer: () => void;
 }
 
@@ -30,12 +40,13 @@ export function useAdminDrawer() {
 export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
 
-    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string }) => {
+    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => {
         setDrawer({
             type: params.type,
             id: params.id,
             defaultWorkflowEntityType: params.defaultWorkflowEntityType,
             defaultCustomerId: params.defaultCustomerId,
+            defaultSchedulePrefill: params.defaultSchedulePrefill,
         });
     }, []);
 
