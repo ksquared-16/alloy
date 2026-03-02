@@ -207,6 +207,9 @@ export default function AdminEntityDrawer() {
     };
     const [jobPayout, setJobPayout] = useState<JobPayoutResponse | null>(null);
     const [jobPayoutLoading, setJobPayoutLoading] = useState(false);
+    const [jobCustomerOptions, setJobCustomerOptions] = useState<{ id: string; name: string | null; status_key?: string | null }[]>([]);
+    const [jobStatusOptionsForCreate, setJobStatusOptionsForCreate] = useState<{ id: string; label: string | null }[]>([]);
+    const [jobCreateSaving, setJobCreateSaving] = useState(false);
     const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "automation" | "details">("overview");
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
@@ -288,7 +291,7 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
-        if (drawer.type !== "jobs" || !drawer.id) {
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
             setJobSchedules([]);
             setRescheduleForm(null);
             setJobVendorsForAssign([]);
@@ -312,7 +315,7 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id]);
 
     const refetchJobPayments = useCallback(() => {
-        if (drawer.type !== "jobs" || !drawer.id) return;
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
         setJobPaymentsLoading(true);
         fetch(`/api/admin/jobs/${drawer.id}/payments`)
             .then((res) => (res.ok ? res.json() : { payments: [] }))
@@ -772,6 +775,16 @@ export default function AdminEntityDrawer() {
         setFormData((prev) => (prev.status_key === undefined || prev.status_key === "" ? { ...prev, status_key: def } : prev));
     }, [drawer.type, data, statusDefsForDrawer.length, defaultStatusKeyForCreate]);
 
+    useEffect(() => {
+        if (drawer.type !== "jobs" || !data || !(data as { _create?: boolean })._create) return;
+        const firstJobStatusId = jobStatusOptionsForCreate[0]?.id ?? "";
+        setFormData((prev) => ({
+            ...prev,
+            customer_id: "",
+            job_status_id: (prev.job_status_id as string) || firstJobStatusId,
+        }));
+    }, [drawer.type, data?.id, (data as { _create?: boolean })?._create, jobStatusOptionsForCreate]);
+
     const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "job_status_id", "internal_notes"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
@@ -840,7 +853,23 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, data?.id, (data as { metadata?: unknown })?.metadata]);
 
     useEffect(() => {
-        if (drawer.type !== "jobs" || !drawer.id) {
+        if (drawer.type !== "jobs") {
+            setJobCustomerOptions([]);
+            setJobStatusOptionsForCreate([]);
+            return;
+        }
+        fetch("/api/admin/customer-options")
+            .then((r) => (r.ok ? r.json() : { customers: [] }))
+            .then((j: { customers?: { id: string; name: string | null; status_key?: string | null }[] }) => setJobCustomerOptions(j.customers ?? []))
+            .catch(() => setJobCustomerOptions([]));
+        fetch("/api/admin/job-statuses")
+            .then((r) => (r.ok ? r.json() : { job_statuses: [] }))
+            .then((j: { job_statuses?: { id: string; label: string | null }[] }) => setJobStatusOptionsForCreate(j.job_statuses ?? []))
+            .catch(() => setJobStatusOptionsForCreate([]));
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
             setJobPayout(null);
             return;
         }
@@ -1937,6 +1966,7 @@ export default function AdminEntityDrawer() {
                             )}
                             {drawer.type === "jobs" && (
                                 <>
+                                    {!(data as { _create?: boolean })?._create && (
                                     <div className="rounded-lg border border-alloy-stone/30 bg-[#F4F6F9]/50 p-3 mb-4">
                                         <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Quick Actions</p>
                                         <div className="flex flex-wrap gap-2">
@@ -2183,15 +2213,26 @@ export default function AdminEntityDrawer() {
                                             <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>
                                         )}
                                     </details>
-                                    {(isEditing || (drawer.type === "jobs" && !(data as { _create?: boolean })?._create)) ? (
+                                    )}
+                                    {(isEditing || drawer.type === "jobs") ? (
                                         <>
+                                            {(drawer.type === "jobs" && (data as { _create?: boolean })?._create) && (
+                                                <>
+                                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">{customerSingular} (required)</label><select value={String(formData.customer_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, customer_id: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">Select {customerSingular.toLowerCase()}</option>{jobCustomerOptions.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}</select></div>
+                                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status (required)</label><select value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">Select status</option>{jobStatusOptionsForCreate.map((s) => <option key={s.id} value={s.id}>{s.label ?? s.id}</option>)}</select></div>
+                                                    <div className="flex gap-2 pt-1">
+                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.job_status_id as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: (formData.customer_id as string)?.trim(), job_status_id: (formData.job_status_id as string)?.trim(), is_recurring: !!formData.is_recurring, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
+                                                    </div>
+                                                    {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                                                </>
+                                            )}
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Scheduled (local)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency key</label><input value={String(formData.service_frequency_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, service_frequency_key: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
                                             <div><label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_recurring} onChange={(e) => setFormData((f) => ({ ...f, is_recurring: e.target.checked }))} disabled={drawer.type === "jobs" ? !canMutate : false} /> Recurring</label></div>
                                             {statusDefsLoading ? null : (
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                             )}
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status ID</label><input value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                            {!(data as { _create?: boolean })?._create && <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status ID</label><input value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>}
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" rows={2} /></div>
                                         </>
                                     ) : (

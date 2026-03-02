@@ -5,7 +5,6 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import SectionCard from "@/components/admin/SectionCard";
-import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
 
@@ -24,17 +23,6 @@ type JobRow = {
   archived_at?: string | null;
 };
 
-type CustomerOption = { id: string; name: string | null };
-type JobStatusOption = { id: string; label: string | null };
-
-const EMPTY_FORM = {
-  title: "",
-  customer_id: "",
-  job_status_id: "",
-  is_recurring: false,
-  description: "",
-};
-
 export default function JobsClient() {
   const { openDrawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
@@ -49,12 +37,6 @@ export default function JobsClient() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [statusKeyFilter, setStatusKeyFilter] = useState("");
   const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
-  const [jobStatuses, setJobStatuses] = useState<JobStatusOption[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,22 +60,6 @@ export default function JobsClient() {
     }
   }, [searchApplied, includeArchived, statusKeyFilter]);
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/customers");
-      const json = await res.json();
-      if (res.ok) setCustomers(json.customers ?? []);
-    } catch (_) {}
-  }, []);
-
-  const fetchJobStatuses = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/job-statuses");
-      const json = await res.json();
-      if (res.ok) setJobStatuses(json.job_statuses ?? []);
-    } catch (_) {}
-  }, []);
-
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
@@ -105,46 +71,9 @@ export default function JobsClient() {
     window.addEventListener("admin-entity-saved", onSaved);
     return () => window.removeEventListener("admin-entity-saved", onSaved);
   }, [fetchJobs]);
-  useEffect(() => {
-    fetchCustomers();
-    fetchJobStatuses();
-  }, [fetchCustomers, fetchJobStatuses]);
 
   const openCreate = () => {
-    setForm(EMPTY_FORM);
-    setSaveError(null);
-    setDrawerOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.customer_id || !form.job_status_id) {
-      setSaveError("Customer and Status are required.");
-      return;
-    }
-    setSaveLoading(true);
-    setSaveError(null);
-    try {
-      const res = await fetch("/api/admin/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title || null,
-          description: form.description || null,
-          customer_id: form.customer_id,
-          job_status_id: form.job_status_id,
-          is_recurring: form.is_recurring,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSaveError((json as { error?: string }).error ?? "Create failed");
-        return;
-      }
-      setDrawerOpen(false);
-      fetchJobs();
-    } finally {
-      setSaveLoading(false);
-    }
+    openDrawer({ type: "jobs", id: "new" });
   };
 
   const archive = async (id: string) => {
@@ -165,12 +94,6 @@ export default function JobsClient() {
     } finally {
       setActionLoadingId(null);
     }
-  };
-
-  const statusLabel = (id: string | null) => {
-    if (!id) return "—";
-    const s = jobStatuses.find((x) => x.id === id);
-    return s?.label ?? id;
   };
 
   return (
@@ -293,64 +216,6 @@ export default function JobsClient() {
           </div>
         )}
       </SectionCard>
-
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={`New ${singular}`} zIndexBackdrop={60} zIndexPanel={70}>
-        <div className="space-y-4">
-          {saveError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{saveError}</p>}
-          <div className="grid grid-cols-1 gap-3 text-sm">
-            <div>
-              <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Title (required)</label>
-              <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded" placeholder="Job title" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Customer (required)</label>
-              <select
-                value={form.customer_id}
-                onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value }))}
-                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-              >
-                <option value="">Select customer</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name ?? c.id}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status (required)</label>
-              <select
-                value={form.job_status_id}
-                onChange={(e) => setForm((f) => ({ ...f, job_status_id: e.target.value }))}
-                className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-              >
-                <option value="">Select status</option>
-                {jobStatuses.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label ?? s.id}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="job_recurring"
-                checked={form.is_recurring}
-                onChange={(e) => setForm((f) => ({ ...f, is_recurring: e.target.checked }))}
-                className="rounded border-alloy-stone/40"
-              />
-              <label htmlFor="job_recurring" className="text-sm text-alloy-midnight/70">Recurring</label>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Description</label>
-              <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded" />
-            </div>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={handleSave} disabled={saveLoading} className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90 disabled:opacity-50">
-              {saveLoading ? "Saving…" : "Create"}
-            </button>
-            <button type="button" onClick={() => setDrawerOpen(false)} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20">Cancel</button>
-          </div>
-        </div>
-      </Drawer>
     </>
   );
 }
