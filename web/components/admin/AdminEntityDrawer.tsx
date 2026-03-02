@@ -1073,6 +1073,8 @@ export default function AdminEntityDrawer() {
 
     if (!drawer.type || !drawer.id) return null;
 
+    const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
+    const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
     const paymentStatusLabel = jobPayments.some((p) => p.payment_statuses?.key === "paid")
         ? "Paid"
@@ -2273,13 +2275,13 @@ export default function AdminEntityDrawer() {
                                                         <select
                                                             value={String(formData.primary_contact_id ?? "")}
                                                             onChange={(e) => setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
-                                                            disabled={!(typeof formData.customer_id === "string" && formData.customer_id.trim()) || jobContactOptionsLoading || (typeof formData.customer_id === "string" && formData.customer_id.trim() && jobContactOptions.length === 0)}
+                                                            disabled={primaryContactDisabled}
                                                             className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"
                                                         >
                                                             <option value="">Select {contactSingular.toLowerCase()}</option>
                                                             {jobContactOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                                                         </select>
-                                                        {(!(typeof formData.customer_id === "string" && formData.customer_id.trim()) || jobContactOptionsLoading || (typeof formData.customer_id === "string" && formData.customer_id.trim() && jobContactOptions.length === 0)) && (
+                                                        {primaryContactDisabled && (
                                                             <p className="text-xs text-alloy-midnight/50 mt-0.5">Select a customer to load contacts</p>
                                                         )}
                                                     </div>
