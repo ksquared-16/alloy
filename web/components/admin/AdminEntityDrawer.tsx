@@ -136,6 +136,46 @@ function DrawerLinkWithName({
     );
 }
 
+/** Single row: label, value, and optional "open" button to open linked record. */
+function LinkedRow({
+    label,
+    value,
+    onOpen,
+    disabled,
+    action,
+}: {
+    label: string;
+    value: string | null;
+    onOpen?: () => void;
+    disabled?: boolean;
+    action?: React.ReactNode;
+}) {
+    const display = (value && value.trim()) ? value.trim() : "—";
+    const canOpen = !disabled && onOpen && display !== "—";
+    return (
+        <div className="py-1.5 flex items-center justify-between gap-2 flex-wrap">
+            <div className="min-w-0">
+                <strong className="text-[#45506c] text-sm">{label}:</strong>
+                <span className="ml-2 text-[#31394d]">{display}</span>
+            </div>
+            {(canOpen || action) && (
+                <div className="flex items-center gap-1 shrink-0">
+                    {action}
+                    {canOpen && (
+                        <button
+                            type="button"
+                            onClick={onOpen}
+                            className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80"
+                        >
+                            Open
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
@@ -1083,6 +1123,19 @@ export default function AdminEntityDrawer() {
             : (jobPayments[0]?.payment_statuses?.key ?? "pending").charAt(0).toUpperCase() + (jobPayments[0]?.payment_statuses?.key ?? "pending").slice(1);
     const paymentStatusVariant = jobPayments.some((p) => p.payment_statuses?.key === "paid") ? "success" : jobPayments[0]?.payment_statuses?.key === "failed" ? "warning" : "default";
 
+    const jobQuickActionsNode = isJobExistingView && drawer.id ? (
+        <div className="flex flex-wrap gap-2 items-center">
+            {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
+                <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("run"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Run payment failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{paymentActionLoading === "run" ? "…" : "Run Payment"}</button>
+            )}
+            {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
+                <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("retry"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm border border-amber-500/60 text-amber-700 rounded-md hover:bg-amber-50 disabled:opacity-50">{paymentActionLoading === "retry" ? "…" : "Retry Failed"}</button>
+            )}
+            <button type="button" disabled={!!jobActionLoading} onClick={async () => { if (!drawer.id) return; setJobActionLoading("mark_completed"); try { const res = await fetch(`/api/admin/jobs/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark_completed" }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => (prev ? { ...prev, ...json } : prev)); refetch(); router.refresh(); } catch (e) { console.error("Mark completed failed", e); } finally { setJobActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobActionLoading === "mark_completed" ? "…" : "Mark completed"}</button>
+            {jobSchedules.length > 0 && !rescheduleForm && <button type="button" onClick={() => openReschedule(jobSchedules[0])} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Reschedule</button>}
+        </div>
+    ) : null;
+
     const title: React.ReactNode = data
         ? drawer.type === "contacts"
             ? (data as { _create?: boolean })._create
@@ -1142,20 +1195,22 @@ export default function AdminEntityDrawer() {
 
     const drawerHeaderExtra =
         data && !loading && canEditInDrawer(drawer.type) ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                <div className="flex gap-2">
-                    {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && (
-                        <>
-                            {jobFormDirty && (
-                                <>
-                                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                    <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                                </>
-                            )}
-                            <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{(data?.location_id as string) ? "Change location" : "Set location"}</button>
-                        </>
-                    )}
-                    {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
+            <div className="space-y-2 pt-2">
+                {drawer.type === "jobs" && isJobExistingView && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        {jobQuickActionsNode}
+                        <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+                    </div>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex gap-2">
+                        {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
+                            <>
+                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                            </>
+                        )}
+                        {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
                         !isEditing ? (
                             <>
                                 {canMutate && !(data as { _create?: boolean })?._create && (
@@ -1179,6 +1234,7 @@ export default function AdminEntityDrawer() {
                         ))}
                     </div>
                 )}
+                </div>
             </div>
         ) : undefined;
 
@@ -1200,38 +1256,6 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-3 mb-4">
                             <DrawerLinkWithName label={customerSingular} id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                             <DrawerLinkWithName label={contactSingular} id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
-                        </div>
-                    )}
-                    {drawerTab === "related" && drawer.type === "jobs" && data && (
-                        <div className="pt-2 space-y-3 mb-4">
-                            <div className="py-1.5 flex items-center gap-2 flex-wrap">
-                                <strong className="text-[#45506c] text-sm">Location:</strong>{" "}
-                                {data.location_id ? (
-                                    (() => {
-                                        const loc = data._location as { address1?: string | null; city?: string | null; postal_code?: string | null } | null | undefined;
-                                        let name: string | null = (data._location_label as string) ?? null;
-                                        if (!name && loc) {
-                                            const parts = [loc.address1, loc.city, loc.postal_code].filter(Boolean);
-                                            name = parts.length ? parts.join(", ") : null;
-                                        }
-                                        const display = name ?? `${(data.location_id as string).slice(0, 8)}…`;
-                                        return (
-                                            <>
-                                                <button type="button" onClick={() => openDrawer({ type: "locations", id: data?.location_id != null ? String(data.location_id) : "" })} className="text-alloy-blue hover:underline">
-                                                    {display}
-                                                </button>
-                                                {canMutate && <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "locations", id: data?.location_id != null ? String(data.location_id) : "" }); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Edit</button>}
-                                                {canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button>}
-                                            </>
-                                        );
-                                    })()
-                                ) : (
-                                    <>
-                                        <span className="text-[#31394d]">Unassigned</span>
-                                        {canMutate && <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId(null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-blue">Set location</button>}
-                                    </>
-                                )}
-                            </div>
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "schedules" && data && (
@@ -2014,124 +2038,25 @@ export default function AdminEntityDrawer() {
                                 <>
                                     {isJobExistingView && (
                                     <>
-                                    <div className="rounded-lg border border-alloy-stone/30 bg-[#F4F6F9]/50 p-3 mb-4">
-                                        <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Quick Actions</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
-                                                <button
-                                                    type="button"
-                                                    disabled={!!paymentActionLoading}
-                                                    onClick={async () => {
-                                                        if (!drawer.id) return;
-                                                        setPaymentActionLoading("run");
-                                                        setPaymentToast(null);
-                                                        try {
-                                                            const res = await fetch("/api/admin/payments/run", {
-                                                                method: "POST",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ job_id: drawer.id }),
-                                                            });
-                                                            const json = await res.json().catch(() => ({}));
-                                                            if (res.status === 409) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" });
-                                                                refetchJobPayments();
-                                                                return;
-                                                            }
-                                                            if (!res.ok) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Run payment failed" });
-                                                                return;
-                                                            }
-                                                            setPaymentToast({ type: "success", message: "Payment succeeded" });
-                                                            refetchJobPayments();
-                                                            refetch();
-                                                        } catch (e) {
-                                                            setPaymentToast({ type: "error", message: (e as Error).message });
-                                                        } finally {
-                                                            setPaymentActionLoading(null);
-                                                        }
-                                                    }}
-                                                    className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                                >
-                                                    {paymentActionLoading === "run" ? "…" : "Run Payment"}
-                                                </button>
-                                            )}
-                                            {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
-                                                <button
-                                                    type="button"
-                                                    disabled={!!paymentActionLoading}
-                                                    onClick={async () => {
-                                                        if (!drawer.id) return;
-                                                        setPaymentActionLoading("retry");
-                                                        setPaymentToast(null);
-                                                        try {
-                                                            const res = await fetch("/api/admin/payments/run", {
-                                                                method: "POST",
-                                                                headers: { "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ job_id: drawer.id }),
-                                                            });
-                                                            const json = await res.json().catch(() => ({}));
-                                                            if (res.status === 409) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" });
-                                                                refetchJobPayments();
-                                                                return;
-                                                            }
-                                                            if (!res.ok) {
-                                                                setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" });
-                                                                return;
-                                                            }
-                                                            setPaymentToast({ type: "success", message: "Payment succeeded" });
-                                                            refetchJobPayments();
-                                                            refetch();
-                                                        } catch (e) {
-                                                            setPaymentToast({ type: "error", message: (e as Error).message });
-                                                        } finally {
-                                                            setPaymentActionLoading(null);
-                                                        }
-                                                    }}
-                                                    className="px-3 py-1.5 text-sm border border-amber-500/60 text-amber-700 rounded-md hover:bg-amber-50 disabled:opacity-50"
-                                                >
-                                                    {paymentActionLoading === "retry" ? "…" : "Retry Failed"}
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                disabled={!!jobActionLoading}
-                                                onClick={async () => {
-                                                    if (!drawer.id) return;
-                                                    setJobActionLoading("mark_completed");
-                                                    try {
-                                                        const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
-                                                            method: "PATCH",
-                                                            headers: { "Content-Type": "application/json" },
-                                                            body: JSON.stringify({ action: "mark_completed" }),
-                                                        });
-                                                        const json = await res.json().catch(() => ({}));
-                                                        if (!res.ok) throw new Error((json.error as string) || "Failed");
-                                                        setData((prev) => (prev ? { ...prev, ...json } : prev));
-                                                        refetch();
-                                                        router.refresh();
-                                                    } catch (e) {
-                                                        console.error("Mark completed failed", e);
-                                                    } finally {
-                                                        setJobActionLoading(null);
-                                                    }
-                                                }}
-                                                className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                            >
-                                                {jobActionLoading === "mark_completed" ? "…" : "Mark completed"}
-                                            </button>
-                                            {jobSchedules.length > 0 && !rescheduleForm && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openReschedule(jobSchedules[0])}
-                                                    className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
-                                                >
-                                                    Reschedule
-                                                </button>
-                                            )}
-                                        </div>
+                                    <Field label="Title" value={data && typeof data === "object" && "title" in data && data.title != null && String(data.title).trim() !== "" ? String(data.title) : "—"} />
+                                    <div className="space-y-0 border-b border-[#e6e8ec] pb-3">
+                                        <LinkedRow label={customerSingular} value={data?._customer_name != null ? String(data._customer_name) : null} onOpen={data?.customer_id ? () => openDrawer({ type: "customers", id: String(data.customer_id) }) : undefined} />
+                                        <LinkedRow label={opportunitySingular} value={data?._opportunity_name != null ? String(data._opportunity_name) : null} onOpen={data?.opportunity_id ? () => openDrawer({ type: "opportunities", id: String(data.opportunity_id) }) : undefined} />
+                                        <LinkedRow
+                                            label="Location"
+                                            value={data?.location_id ? (() => {
+                                                const loc = data._location as { address1?: string | null; city?: string | null; postal_code?: string | null } | null | undefined;
+                                                let name: string | null = (data._location_label as string) ?? null;
+                                                if (!name && loc) {
+                                                    const parts = [loc.address1, loc.city, loc.postal_code].filter(Boolean);
+                                                    name = parts.length ? parts.join(", ") : null;
+                                                }
+                                                return name ?? `${String(data.location_id).slice(0, 8)}…`;
+                                            })() : null}
+                                            onOpen={data?.location_id ? () => openDrawer({ type: "locations", id: String(data.location_id) }) : undefined}
+                                            action={canMutate ? <button type="button" onClick={() => { setSetLocationEntity("job"); setSetLocationSelectedId((data?.location_id as string) ?? null); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Change</button> : undefined}
+                                        />
                                     </div>
-                                    <Field label="Title" value={data && typeof data === "object" && "title" in data ? String(data.title) : ""} />
                                     <div className="pt-2 pb-2 border-b border-[#e6e8ec]">
                                         <strong className="text-alloy-midnight/70 block mb-2">Default {vendorSingular}</strong>
                                         <div className="flex flex-wrap items-center gap-2">
@@ -2145,6 +2070,9 @@ export default function AdminEntityDrawer() {
                                                     <option key={v.id} value={v.id}>{v.name ?? v.id}</option>
                                                 ))}
                                             </select>
+                                            {jobAssignedVendorId && (
+                                                <button type="button" onClick={() => openDrawer({ type: "vendors", id: jobAssignedVendorId })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight/80">Open</button>
+                                            )}
                                             <button
                                                 type="button"
                                                 disabled={jobAssignedVendorSaving}
@@ -2296,7 +2224,7 @@ export default function AdminEntityDrawer() {
                                             )}
                                             {!(data as { _create?: boolean })?._create && (
                                             <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Scheduled (local)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job start date (optional)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={drawer.type === "jobs" ? !canMutate : false} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
                                             {drawer.type === "jobs" && (
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency</label><select value={String(formData.service_frequency_key ?? "")} onChange={(e) => { const v = e.target.value; const opt = jobFrequencyOptions.find((f) => f.key === v); setFormData((f) => ({ ...f, service_frequency_key: v, is_recurring: opt?.is_recurring ?? false })); }} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{jobFrequencyOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select></div>
                                             )}
@@ -2327,7 +2255,7 @@ export default function AdminEntityDrawer() {
                                             <Field label="Internal notes" value={getMetaString(data?.metadata, "internal_notes") || "-"} />
                                         </>
                                     )}
-                                    {!(data as { _create?: boolean })?._create && (
+                                    {!(data as { _create?: boolean })?._create && drawer.type !== "jobs" && (
                                     <>
                                     <Field label="Gross Price" value={formatMoneyFromCents(Number(data?.gross_price_cents ?? 0))} />
                                     <Field label="Payout" value={formatMoneyFromCents(Number(data?.contractor_payout_cents ?? 0))} />
