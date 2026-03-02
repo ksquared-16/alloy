@@ -14,6 +14,7 @@ type ScheduleRow = {
     start_at: string | null;
     created_at?: string | null;
     assigned_vendor_id?: string | null;
+    price_cents?: number | null;
 };
 
 /** GET: payout policy + per-schedule payout for a job. Per-schedule payout uses schedule.assigned_vendor_id (history-safe). */
@@ -39,7 +40,7 @@ export async function GET(
 
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
-        .select("id, org_id, assigned_vendor_id")
+        .select("id, org_id, assigned_vendor_id, gross_price_cents")
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -60,7 +61,7 @@ export async function GET(
 
     const { data: scheduleRows, error: schedErr } = await supabase
         .from("schedules")
-        .select("id, status_key, start_at, created_at, assigned_vendor_id")
+        .select("id, status_key, start_at, created_at, assigned_vendor_id, price_cents")
         .eq("org_id", ctx.orgId)
         .eq("job_id", jobId)
         .order("start_at", { ascending: true, nullsFirst: false });
@@ -134,6 +135,7 @@ export async function GET(
         };
     });
 
+    const jobGrossPriceCents = (job as { gross_price_cents?: number | null }).gross_price_cents ?? null;
     const jobVendor = jobAssignedVendorId ? vendorMap.get(jobAssignedVendorId) ?? null : null;
     const { policy: jobPolicy, source } = resolveVendorPayoutPolicy({
         orgSettings,
@@ -163,6 +165,38 @@ export async function GET(
         completedOccurrences: completedOccurrencesForCurrentVendor,
     });
 
+    const schedulesWithMoney = schedules.map((s) => {
+        const row = ordered.find((r) => r.id === s.schedule_id);
+        const effective_price_cents = row
+            ? (row.price_cents ?? jobGrossPriceCents ?? 0)
+            : 0;
+        const isCompleted = (row?.status_key ?? "") === jobCompletedStatusKey;
+        const payoutPercent = s.payout_percent;
+        const payout_cents =
+            isCompleted && payoutPercent != null && effective_price_cents > 0
+                ? Math.round((effective_price_cents * payoutPercent) / 100)
+                : null;
+        const alloy_fee_cents =
+            isCompleted && payout_cents != null
+                ? effective_price_cents - payout_cents
+                : null;
+        return {
+            ...s,
+            price_cents: effective_price_cents,
+            payout_cents,
+            alloy_fee_cents,
+        };
+    });
+
+    const completed_revenue_cents_total = schedulesWithMoney
+        .filter((s) => s.payout_cents != null)
+        .reduce((sum, s) => sum + (s.price_cents ?? 0), 0);
+    const completed_payout_cents_total = schedulesWithMoney
+        .filter((s) => s.payout_cents != null)
+        .reduce((sum, s) => sum + (s.payout_cents ?? 0), 0);
+    const completed_alloy_fee_cents_total =
+        completed_revenue_cents_total - completed_payout_cents_total;
+
     return NextResponse.json({
         policy: {
             mode: jobPolicy.mode,
@@ -178,7 +212,10 @@ export async function GET(
             assigned_vendor_id: jobAssignedVendorId,
             completed_occurrences_total: completedOccurrencesForCurrentVendor,
             current_payout_percent: currentPayoutPercent,
+            completed_revenue_cents_total,
+            completed_payout_cents_total,
+            completed_alloy_fee_cents_total,
         },
-        schedules,
+        schedules: schedulesWithMoney,
     });
 }

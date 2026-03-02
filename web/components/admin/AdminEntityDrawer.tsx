@@ -176,6 +176,7 @@ export default function AdminEntityDrawer() {
     const [vendorPayoutJobId, setVendorPayoutJobId] = useState("");
     const [vendorPayoutJobIdInput, setVendorPayoutJobIdInput] = useState("");
     const [vendorPayoutJobOptions, setVendorPayoutJobOptions] = useState<{ id: string; title: string | null }[]>([]);
+    const [vendorPayoutJobPayout, setVendorPayoutJobPayout] = useState<{ job: { completed_occurrences_total: number; current_payout_percent: number; completed_payout_cents_total?: number } } | null>(null);
     const [vendorPayoutLoading, setVendorPayoutLoading] = useState(false);
     type VendorPayoutOverridePolicy = { mode: "flat" | "tiered"; value?: number; basis?: string; completed_status_key?: string; tiers?: { from: number; to: number | null; value: number }[] };
     const [vendorPayoutOverrideEnabled, setVendorPayoutOverrideEnabled] = useState(false);
@@ -197,11 +198,11 @@ export default function AdminEntityDrawer() {
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
     const [paymentActionLoading, setPaymentActionLoading] = useState<"run" | "retry" | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-    type JobPayoutSchedule = { schedule_id: string; assigned_vendor_id: string | null; status_key: string | null; scheduled_at: string | null; completed_at: string | null; occurrence_number: number | null; payout_percent: number | null };
+    type JobPayoutSchedule = { schedule_id: string; assigned_vendor_id: string | null; status_key: string | null; scheduled_at: string | null; completed_at: string | null; occurrence_number: number | null; payout_percent: number | null; price_cents?: number; payout_cents?: number | null; alloy_fee_cents?: number | null };
     type JobPayoutResponse = {
         policy: { mode: string; type?: string; basis?: string | null; completed_status_key?: string | null; value?: number | null; tiers?: unknown[] | null };
         source: string;
-        job: { id: string; assigned_vendor_id: string | null; completed_occurrences_total: number; current_payout_percent: number };
+        job: { id: string; assigned_vendor_id: string | null; completed_occurrences_total: number; current_payout_percent: number; completed_revenue_cents_total?: number; completed_payout_cents_total?: number; completed_alloy_fee_cents_total?: number };
         schedules: JobPayoutSchedule[];
     };
     const [jobPayout, setJobPayout] = useState<JobPayoutResponse | null>(null);
@@ -792,6 +793,21 @@ export default function AdminEntityDrawer() {
             .catch(() => setVendorPayout(null))
             .finally(() => setVendorPayoutLoading(false));
     }, [drawer.type, drawer.id, vendorPayoutJobId]);
+
+    useEffect(() => {
+        if (drawer.type !== "vendors" || !vendorPayoutJobId.trim()) {
+            setVendorPayoutJobPayout(null);
+            return;
+        }
+        setVendorPayoutJobPayout(null);
+        fetch(`/api/admin/jobs/${vendorPayoutJobId.trim()}/payout`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { job?: { completed_occurrences_total: number; current_payout_percent: number; completed_payout_cents_total?: number } } | null) => {
+                if (j?.job) setVendorPayoutJobPayout({ job: j.job });
+                else setVendorPayoutJobPayout(null);
+            })
+            .catch(() => setVendorPayoutJobPayout(null));
+    }, [drawer.type, vendorPayoutJobId]);
 
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
@@ -1665,9 +1681,13 @@ export default function AdminEntityDrawer() {
                                                         {vendorPayout.policy.mode === "tiered" ? (
                                                             <>
                                                                 {vendorPayoutJobId ? (
-                                                                    <p className="text-sm text-alloy-midnight/80">
-                                                                        Completed occurrences: {vendorPayout.completed_occurrences} · Payout: <strong>{vendorPayout.payout_percent}%</strong>
-                                                                    </p>
+                                                                    <div className="text-sm text-alloy-midnight/80 space-y-0.5">
+                                                                        <p>Completed occurrences: <strong>{vendorPayout.completed_occurrences}</strong></p>
+                                                                        <p>Current payout: <strong>{vendorPayout.payout_percent}%</strong></p>
+                                                                        {vendorPayoutJobPayout?.job.completed_payout_cents_total != null && (
+                                                                            <p>Payout total: <strong>{formatMoneyFromCents(vendorPayoutJobPayout.job.completed_payout_cents_total)}</strong></p>
+                                                                        )}
+                                                                    </div>
                                                                 ) : (
                                                                     <p className="text-sm text-alloy-midnight/60">Select a job to preview tier.</p>
                                                                 )}
@@ -2115,9 +2135,17 @@ export default function AdminEntityDrawer() {
                                                 <p className="text-xs text-alloy-midnight/60">
                                                     Source: {jobPayout.source === "vendor" ? "Vendor override" : jobPayout.source === "org" ? "Org default" : "Legacy"}
                                                 </p>
-                                                <p className="text-sm text-alloy-midnight/80">
-                                                    Completed occurrences: {jobPayout.job.completed_occurrences_total} · Current payout: <strong>{jobPayout.job.current_payout_percent}%</strong>
-                                                </p>
+                                                <div className="space-y-1 text-sm text-alloy-midnight/80">
+                                                    <p>Completed occurrences: <strong>{jobPayout.job.completed_occurrences_total}</strong></p>
+                                                    {jobPayout.job.completed_revenue_cents_total != null && (
+                                                        <>
+                                                            <p>Completed revenue: <strong>{formatMoneyFromCents(jobPayout.job.completed_revenue_cents_total)}</strong></p>
+                                                            <p>Vendor payout total: <strong>{formatMoneyFromCents(jobPayout.job.completed_payout_cents_total ?? 0)}</strong></p>
+                                                            <p>Alloy fee total: <strong>{formatMoneyFromCents(jobPayout.job.completed_alloy_fee_cents_total ?? 0)}</strong></p>
+                                                        </>
+                                                    )}
+                                                    <p>Current payout: <strong>{jobPayout.job.current_payout_percent}%</strong></p>
+                                                </div>
                                                 {jobPayout.schedules.length > 0 && (
                                                     <div className="overflow-x-auto mt-2">
                                                         <table className="w-full text-sm border border-alloy-stone/20">
@@ -2127,7 +2155,10 @@ export default function AdminEntityDrawer() {
                                                                     <th className="py-1.5 pr-2">Status</th>
                                                                     <th className="py-1.5 pr-2">Assigned {vendorSingular}</th>
                                                                     <th className="py-1.5 pr-2">Occurrence #</th>
+                                                                    <th className="py-1.5 pr-2">Price</th>
                                                                     <th className="py-1.5 pr-2">Payout %</th>
+                                                                    <th className="py-1.5 pr-2">Payout $</th>
+                                                                    <th className="py-1.5 pr-2">Alloy $</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
@@ -2137,7 +2168,10 @@ export default function AdminEntityDrawer() {
                                                                         <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
                                                                         <td className="py-1 pr-2">{s.assigned_vendor_id ? s.assigned_vendor_id.slice(0, 8) + "…" : "—"}</td>
                                                                         <td className="py-1 pr-2">{s.occurrence_number != null ? s.occurrence_number : "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td>
                                                                         <td className="py-1 pr-2">{s.payout_percent != null ? `${s.payout_percent}%` : "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td>
+                                                                        <td className="py-1 pr-2">{s.alloy_fee_cents != null ? formatMoneyFromCents(s.alloy_fee_cents) : "—"}</td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
