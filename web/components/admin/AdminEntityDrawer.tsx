@@ -181,8 +181,8 @@ function JobDrawerRelationshipsSection(props: {
     formData: Record<string, unknown>;
     setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
     canMutate: boolean;
-    jobExpandedSections: { relationships: boolean; financials: boolean; scheduling: boolean };
-    setJobExpandedSections: React.Dispatch<React.SetStateAction<{ relationships: boolean; financials: boolean; scheduling: boolean }>>;
+    jobExpandedSections: { relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean };
+    setJobExpandedSections: React.Dispatch<React.SetStateAction<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>>;
     jobCustomerOptions: { id: string; name: string | null }[];
     jobContactOptions: { id: string; label: string }[];
     primaryContactDisabled: boolean;
@@ -343,7 +343,7 @@ export default function AdminEntityDrawer() {
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
     const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
-    const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean }>({ relationships: true, financials: true, scheduling: true });
+    const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>({ relationships: true, financials: true, scheduling: true, ledger: true });
     const [jobDiscountCodeOptions, setJobDiscountCodeOptions] = useState<{ id: string; code: string; discount_type: string | null; discount_value: number | string | null; applies_to_vertical_slug: string | null; first_job_only: boolean | null }[]>([]);
     const [scheduleCreateForm, setScheduleCreateForm] = useState<{ start_at: string; end_at: string; timezone: string }>({ start_at: "", end_at: "", timezone: "" });
     const [scheduleCreateSaving, setScheduleCreateSaving] = useState(false);
@@ -364,6 +364,20 @@ export default function AdminEntityDrawer() {
     };
     const [jobPayout, setJobPayout] = useState<JobPayoutResponse | null>(null);
     const [jobPayoutLoading, setJobPayoutLoading] = useState(false);
+    const [scheduleFinancials, setScheduleFinancials] = useState<{
+        schedule: { id: string; job_id: string | null; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null };
+        job: { id: string; customer_id: string | null; gross_price_cents: number | null; discount_code: string | null; discount_amount: number | string | null } | null;
+        journal_entry: { id: string; status: string | null; entry_date: string | null; description: string | null; created_at: string | null; lines: { line_no: number; account_id: string; account_code: string | null; account_name: string | null; debit_cents: number; credit_cents: number }[] } | null;
+        computed: { gross_cents: number; discount_cents: number; net_cents: number; payout_percent: number; payout_cents: number; alloy_fee_cents: number };
+    } | null>(null);
+    const [scheduleFinancialsLoading, setScheduleFinancialsLoading] = useState(false);
+    const [jobFinancials, setJobFinancials] = useState<{
+        job: { id: string; customer_id: string | null; assigned_vendor_id: string | null; gross_price_cents: number | null; discount_code: string | null; discount_amount: number | string | null };
+        schedules: { id: string; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null; posted: boolean }[];
+        totals: { total_revenue_credits: number; total_discount_debits: number; total_vendor_payout_debits: number; total_cash_debits: number; total_vendor_payable_credits: number };
+        posted_entries_count: number;
+    } | null>(null);
+    const [jobFinancialsLoading, setJobFinancialsLoading] = useState(false);
     const [jobCustomerOptions, setJobCustomerOptions] = useState<{ id: string; name: string | null; status_key?: string | null }[]>([]);
     const [jobFrequencyOptions, setJobFrequencyOptions] = useState<{ key: string; label: string; is_recurring: boolean }[]>([]);
     const [jobContactOptions, setJobContactOptions] = useState<{ id: string; label: string }[]>([]);
@@ -1097,6 +1111,32 @@ export default function AdminEntityDrawer() {
             .then((j: JobPayoutResponse | null) => setJobPayout(j))
             .catch(() => setJobPayout(null))
             .finally(() => setJobPayoutLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") {
+            setScheduleFinancials(null);
+            return;
+        }
+        setScheduleFinancialsLoading(true);
+        fetch(`/api/admin/financials/schedule/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then(setScheduleFinancials)
+            .catch(() => setScheduleFinancials(null))
+            .finally(() => setScheduleFinancialsLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
+            setJobFinancials(null);
+            return;
+        }
+        setJobFinancialsLoading(true);
+        fetch(`/api/admin/financials/job/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then(setJobFinancials)
+            .catch(() => setJobFinancials(null))
+            .finally(() => setJobFinancialsLoading(false));
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -2334,6 +2374,47 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         )}
                                     </div>
+                                    <div className="border-b border-[#e6e8ec]">
+                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, ledger: !s.ledger }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                                            Ledger
+                                            <span className="text-alloy-midnight opacity-60">{jobExpandedSections.ledger ? "▼" : "▶"}</span>
+                                        </button>
+                                        {jobExpandedSections.ledger && (
+                                            <div className="space-y-3 pb-3">
+                                                {jobFinancialsLoading && <p className="text-sm text-alloy-midnight/60">Loading…</p>}
+                                                {!jobFinancialsLoading && jobFinancials && (
+                                                    <>
+                                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
+                                                            <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
+                                                            <span>Discounts (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_discount_debits)}</span>
+                                                            <span>Vendor payout (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payout_debits)}</span>
+                                                            <span>Cash (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_cash_debits)}</span>
+                                                            <span>Vendor payable (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payable_credits)}</span>
+                                                        </div>
+                                                        <p className="text-xs text-alloy-midnight/60">Posted journal entries: {jobFinancials.posted_entries_count}</p>
+                                                        {jobFinancials.schedules.length > 0 && (
+                                                            <div className="overflow-x-auto">
+                                                                <table className="w-full text-sm border border-alloy-stone/20">
+                                                                    <thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Start</th><th className="py-1 pr-2">Status</th><th className="py-1 pr-2">{vendorSingular}</th><th className="py-1 pr-2">Posted?</th></tr></thead>
+                                                                    <tbody>
+                                                                        {jobFinancials.schedules.map((s) => (
+                                                                            <tr key={s.id} className="border-b border-alloy-stone/10">
+                                                                                <td className="py-1 pr-2">{s.start_at ? formatDateTime(s.start_at) : "—"}</td>
+                                                                                <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
+                                                                                <td className="py-1 pr-2">{s.assigned_vendor_id ? `${String(s.assigned_vendor_id).slice(0, 8)}…` : "—"}</td>
+                                                                                <td className="py-1 pr-2">{s.posted ? "Yes" : "No"}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {!jobFinancialsLoading && !jobFinancials && drawer.id && drawer.id !== "new" && <p className="text-sm text-alloy-midnight/50">Could not load ledger.</p>}
+                                            </div>
+                                        )}
+                                    </div>
                                     </>
                                     )}
                                     {(isEditing || drawer.type === "jobs") ? (
@@ -2678,6 +2759,47 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         </div>
                                     )}
+                                    <div className="pt-4 border-t border-[#e6e8ec]">
+                                        <strong className="text-alloy-midnight/70 block mb-2">Financials</strong>
+                                        {scheduleFinancialsLoading && <p className="text-sm text-alloy-midnight/60">Loading…</p>}
+                                        {!scheduleFinancialsLoading && scheduleFinancials && (
+                                            <div className="space-y-3 text-sm">
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-alloy-midnight/80">
+                                                    <span>Gross</span><span>{formatMoneyFromCents(scheduleFinancials.computed.gross_cents)}</span>
+                                                    <span>Discount</span><span>{formatMoneyFromCents(scheduleFinancials.computed.discount_cents)}</span>
+                                                    <span>Net</span><span>{formatMoneyFromCents(scheduleFinancials.computed.net_cents)}</span>
+                                                    <span>Payout %</span><span>{scheduleFinancials.computed.payout_percent}%</span>
+                                                    <span>Payout $</span><span>{formatMoneyFromCents(scheduleFinancials.computed.payout_cents)}</span>
+                                                    <span>Alloy fee $</span><span>{formatMoneyFromCents(scheduleFinancials.computed.alloy_fee_cents)}</span>
+                                                </div>
+                                                <p className="text-alloy-midnight/70">
+                                                    <strong>Posting status:</strong>{" "}
+                                                    {scheduleFinancials.journal_entry ? (
+                                                        <>Posted · Entry {scheduleFinancials.journal_entry.id.slice(0, 8)}… · {scheduleFinancials.journal_entry.entry_date ?? "—"}</>
+                                                    ) : (
+                                                        "Not posted"
+                                                    )}
+                                                </p>
+                                                {scheduleFinancials.journal_entry && scheduleFinancials.journal_entry.lines.length > 0 && (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-xs border border-[#e6e8ec]">
+                                                            <thead><tr className="border-b bg-[#F4F6F9] text-left"><th className="py-1.5 px-2">Account</th><th className="py-1.5 px-2">Debit</th><th className="py-1.5 px-2">Credit</th></tr></thead>
+                                                            <tbody>
+                                                                {scheduleFinancials.journal_entry.lines.map((line) => (
+                                                                    <tr key={line.line_no} className="border-b border-[#e6e8ec]/50">
+                                                                        <td className="py-1 px-2">{(line.account_code ?? line.account_name ?? line.account_id) || "—"}</td>
+                                                                        <td className="py-1 px-2">{line.debit_cents > 0 ? formatMoneyFromCents(line.debit_cents) : "—"}</td>
+                                                                        <td className="py-1 px-2">{line.credit_cents > 0 ? formatMoneyFromCents(line.credit_cents) : "—"}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {!scheduleFinancialsLoading && !scheduleFinancials && drawer.id && drawer.id !== "new" && <p className="text-sm text-alloy-midnight/50">Could not load financials.</p>}
+                                    </div>
                                 </>
                             )}
                             {drawer.type === "locations" && data && (

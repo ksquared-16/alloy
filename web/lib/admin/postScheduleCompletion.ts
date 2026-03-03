@@ -40,6 +40,7 @@ type JobRow = {
     gross_price_cents: number | null;
     discount_amount: number | string | null;
     customer_id: string | null;
+    assigned_vendor_id: string | null;
 };
 
 export type PostScheduleCompletionResult = {
@@ -116,7 +117,7 @@ export async function postScheduleCompletion(params: {
 
     const { data: job, error: jErr } = await supabase
         .from("jobs")
-        .select("id, org_id, gross_price_cents, discount_amount, customer_id")
+        .select("id, org_id, gross_price_cents, discount_amount, customer_id, assigned_vendor_id")
         .eq("id", jobId)
         .eq("org_id", orgId)
         .maybeSingle();
@@ -271,12 +272,17 @@ export async function postScheduleCompletion(params: {
         .eq("org_id", orgId)
         .eq("entry_id", entryId);
 
-    const lines: { entry_id: string; org_id: string; line_no: number; account_id: string; debit_cents: number; credit_cents: number; description?: string }[] = [];
+    const customerId = (j.customer_id ?? null) as string | null;
+    const vendorId = scheduleVendorId ?? (j.assigned_vendor_id ?? null) ?? null;
+
+    type LineRow = { entry_id: string; org_id: string; job_id: string | null; schedule_id: string; customer_id: string | null; vendor_id: string | null; line_no: number; account_id: string; debit_cents: number; credit_cents: number; description?: string };
+    const stamp = { entry_id: entryId, org_id: orgId, job_id: jobId, schedule_id: scheduleId, customer_id: customerId, vendor_id: vendorId };
+
+    const lines: LineRow[] = [];
 
     // Line 1: DR asset_cash_clearing = net_cents
     lines.push({
-        entry_id: entryId,
-        org_id: orgId,
+        ...stamp,
         line_no: 1,
         account_id: mappingByKey.get("asset_cash_clearing")!,
         debit_cents: netCents,
@@ -286,8 +292,7 @@ export async function postScheduleCompletion(params: {
 
     // Line 2: CR revenue_service = gross_cents
     lines.push({
-        entry_id: entryId,
-        org_id: orgId,
+        ...stamp,
         line_no: 2,
         account_id: mappingByKey.get("revenue_service")!,
         debit_cents: 0,
@@ -298,8 +303,7 @@ export async function postScheduleCompletion(params: {
     // Line 3: DR contra_discounts = effective_discount_cents (skip if 0)
     if (effectiveDiscountCents > 0) {
         lines.push({
-            entry_id: entryId,
-            org_id: orgId,
+            ...stamp,
             line_no: 3,
             account_id: mappingByKey.get("contra_discounts")!,
             debit_cents: effectiveDiscountCents,
@@ -310,8 +314,7 @@ export async function postScheduleCompletion(params: {
 
     // Line 4: DR expense_vendor_payouts = payout_cents
     lines.push({
-        entry_id: entryId,
-        org_id: orgId,
+        ...stamp,
         line_no: lines.length + 1,
         account_id: mappingByKey.get("expense_vendor_payouts")!,
         debit_cents: payoutCents,
@@ -321,8 +324,7 @@ export async function postScheduleCompletion(params: {
 
     // Line 5: CR liability_vendor_payable = payout_cents
     lines.push({
-        entry_id: entryId,
-        org_id: orgId,
+        ...stamp,
         line_no: lines.length + 1,
         account_id: mappingByKey.get("liability_vendor_payable")!,
         debit_cents: 0,
