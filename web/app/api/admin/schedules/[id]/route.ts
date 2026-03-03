@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/admin/postScheduleCompletion";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
+
+function isCompletedStatus(s: string | null | undefined): boolean {
+    return String(s ?? "").trim().toLowerCase() === "completed";
+}
 
 /** GET: single schedule by id, org-scoped. Returns schedule + _job_title, _customer_name, _assigned_vendor_name. */
 export async function GET(
@@ -101,7 +106,7 @@ export async function PATCH(
         const supabase = createAdminClient();
         const { data: schedule, error: fetchErr } = await supabase
             .from("schedules")
-            .select("job_id, start_at, end_at")
+            .select("job_id, start_at, end_at, status_key")
             .eq("id", id)
             .eq("org_id", ctx.orgId)
             .single();
@@ -109,6 +114,7 @@ export async function PATCH(
             return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
         }
 
+        const previousStatusKey = (schedule as { status_key?: string | null }).status_key;
         const finalStart = (updates.start_at as string) ?? (schedule as { start_at?: string }).start_at;
         const finalEnd = (updates.end_at as string) ?? (schedule as { end_at?: string }).end_at;
         if (finalStart && finalEnd) {
@@ -127,6 +133,45 @@ export async function PATCH(
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        const newStatusKey = updates.status_key !== undefined ? (updates.status_key as string | null) : previousStatusKey;
+        const transitionedToCompleted =
+            !isCompletedStatus(previousStatusKey) && isCompletedStatus(newStatusKey);
+        if (transitionedToCompleted) {
+            const postResult = await postScheduleCompletion({
+                supabase,
+                orgId: ctx.orgId,
+                scheduleId: id,
+            });
+            if ("code" in postResult) {
+                const err = postResult as PostScheduleCompletionError;
+                if (err.code === "schedule_not_completed") {
+                    return NextResponse.json(
+                        { error: "Schedule status is not completed; cannot post GL" },
+                        { status: 400 }
+                    );
+                }
+                if (err.code === "missing_mappings") {
+                    return NextResponse.json(
+                        { error: `Missing GL account mappings: ${err.keys.join(", ")}` },
+                        { status: 400 }
+                    );
+                }
+                if (err.code === "entry_unbalanced") {
+                    return NextResponse.json(
+                        {
+                            error: "GL entry unbalanced",
+                            total_debits: err.total_debits,
+                            total_credits: err.total_credits,
+                        },
+                        { status: 500 }
+                    );
+                }
+                if (err.code === "schedule_not_found" || err.code === "job_not_found") {
+                    return NextResponse.json({ error: "Schedule or job not found for GL posting" }, { status: 500 });
+                }
+            }
+        }
 
         const jobId = (schedule as { job_id?: string }).job_id;
         if (jobId && updates.start_at) {
