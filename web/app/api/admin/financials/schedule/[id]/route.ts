@@ -176,10 +176,30 @@ export async function GET(
         };
     }
 
+    const { data: customerPaymentEntry } = await supabase
+        .from("gl_journal_entries")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("source_type", "customer_payment")
+        .eq("source_id", scheduleId)
+        .maybeSingle();
+    const customer_payment_posted = !!customerPaymentEntry;
+
+    const { data: vendorPayoutEntry } = await supabase
+        .from("gl_journal_entries")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("source_type", "vendor_payout")
+        .eq("source_id", scheduleId)
+        .maybeSingle();
+    const vendor_payout_posted = !!vendorPayoutEntry;
+
     return NextResponse.json({
         schedule: { id: s.id, job_id: s.job_id, status_key: s.status_key, start_at: s.start_at, assigned_vendor_id: s.assigned_vendor_id, price_cents: s.price_cents },
         job: { id: j.id, customer_id: j.customer_id, gross_price_cents: j.gross_price_cents, discount_code: j.discount_code, discount_amount: j.discount_amount },
         journal_entry,
+        customer_payment_posted,
+        vendor_payout_posted,
         computed: {
             gross_cents: grossCents,
             discount_cents: effectiveDiscountCents,

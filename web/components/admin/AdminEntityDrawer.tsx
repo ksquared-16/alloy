@@ -107,6 +107,57 @@ function SubscriptionGenerateNextButton({ subscriptionId, onDone }: { subscripti
     );
 }
 
+function ScheduleCashEventButtons({ scheduleId, onSuccess }: { scheduleId: string; onSuccess: () => void }) {
+    const [customerPaymentLoading, setCustomerPaymentLoading] = useState(false);
+    const [vendorPayoutLoading, setVendorPayoutLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const postCustomerPayment = async () => {
+        setCustomerPaymentLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/schedules/${scheduleId}/post-customer-payment`, { method: "POST" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setError((json as { error?: string }).error ?? "Failed to post customer payment");
+                return;
+            }
+            onSuccess();
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setCustomerPaymentLoading(false);
+        }
+    };
+    const postVendorPayout = async () => {
+        setVendorPayoutLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/schedules/${scheduleId}/post-vendor-payout`, { method: "POST" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setError((json as { error?: string }).error ?? "Failed to post vendor payout");
+                return;
+            }
+            onSuccess();
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setVendorPayoutLoading(false);
+        }
+    };
+    return (
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+            <button type="button" onClick={postCustomerPayment} disabled={customerPaymentLoading} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">
+                {customerPaymentLoading ? "Posting…" : "Post customer payment"}
+            </button>
+            <button type="button" onClick={postVendorPayout} disabled={vendorPayoutLoading} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50">
+                {vendorPayoutLoading ? "Posting…" : "Post vendor payout"}
+            </button>
+            {error && <p className="text-red-600 text-sm w-full">{error}</p>}
+        </div>
+    );
+}
+
 function DrawerLinkWithName({
     label,
     id,
@@ -368,6 +419,8 @@ export default function AdminEntityDrawer() {
         schedule: { id: string; job_id: string | null; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null };
         job: { id: string; customer_id: string | null; gross_price_cents: number | null; discount_code: string | null; discount_amount: number | string | null } | null;
         journal_entry: { id: string; status: string | null; entry_date: string | null; description: string | null; created_at: string | null; lines: { line_no: number; account_id: string; account_code: string | null; account_name: string | null; debit_cents: number; credit_cents: number }[] } | null;
+        customer_payment_posted?: boolean;
+        vendor_payout_posted?: boolean;
         computed: { gross_cents: number; discount_cents: number; net_cents: number; payout_percent: number; payout_cents: number; alloy_fee_cents: number };
     } | null>(null);
     const [scheduleFinancialsLoading, setScheduleFinancialsLoading] = useState(false);
@@ -2780,6 +2833,21 @@ export default function AdminEntityDrawer() {
                                                         "Not posted"
                                                     )}
                                                 </p>
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-alloy-midnight/80 text-sm">
+                                                    <span>Customer payment posted?</span><span>{scheduleFinancials.customer_payment_posted ? "Yes" : "No"}</span>
+                                                    <span>Vendor payout posted?</span><span>{scheduleFinancials.vendor_payout_posted ? "Yes" : "No"}</span>
+                                                </div>
+                                                {canMutate && (
+                                                    <ScheduleCashEventButtons
+                                                        scheduleId={drawer.id}
+                                                        onSuccess={() => {
+                                                            fetch(`/api/admin/financials/schedule/${drawer.id}`)
+                                                                .then((r) => (r.ok ? r.json() : null))
+                                                                .then(setScheduleFinancials)
+                                                                .catch(() => setScheduleFinancials(null));
+                                                        }}
+                                                    />
+                                                )}
                                                 {scheduleFinancials.journal_entry && scheduleFinancials.journal_entry.lines.length > 0 && (
                                                     <div className="overflow-x-auto">
                                                         <table className="w-full text-xs border border-[#e6e8ec]">
