@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ORG_ID_FINANCIALS } from "@/lib/financials";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +11,19 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const orgId = ORG_ID_FINANCIALS;
+    const orgId = ctx.orgId;
 
     const { data: txn, error: txnErr } = await supabase
         .from("ledger_transactions")

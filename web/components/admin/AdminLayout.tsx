@@ -73,6 +73,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         label: "Financials",
         icon: DollarSign,
         items: [
+            { href: "/admin/financials", label: "Financials" },
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
             { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
@@ -111,6 +112,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/schedules": Calendar,
         "/admin/messaging": MessageSquare,
         "/admin/messages-outbox": Mail,
+        "/admin/financials": DollarSign,
         "/admin/financials/ledger": FileText,
         "/admin/financials/statements": Receipt,
         "/admin/financials/payments": DollarSign,

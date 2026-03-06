@@ -1,57 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ORG_ID_FINANCIALS } from "@/lib/financials";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/admin/financials/ledger
- * Query: org_id (optional, defaults to ORG_ID_FINANCIALS), start, end, status[], direction, type[], provider, search, limit, offset
+ * Query: date_from, date_to, type, direction, job_id, schedule_id, customer_id, vendor_id, limit (default 100, max 500)
+ * Auth: getAdminContext(); admin/ops can read.
  */
 export async function GET(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+
     const supabase = createAdminClient();
     const { searchParams } = request.nextUrl;
-    const orgId = searchParams.get("org_id") || ORG_ID_FINANCIALS;
-    const start = searchParams.get("start") || "";
-    const end = searchParams.get("end") || "";
-    const statusList = searchParams.get("status"); // comma-separated
-    const direction = searchParams.get("direction"); // in | out
-    const typeList = searchParams.get("type"); // comma-separated
-    const provider = searchParams.get("provider") || "";
-    const search = searchParams.get("search") || "";
-    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
+    const orgId = ctx.orgId;
+    const dateFrom = searchParams.get("date_from") || searchParams.get("start") || "";
+    const dateTo = searchParams.get("date_to") || searchParams.get("end") || "";
+    const type = searchParams.get("type") || "";
+    const direction = searchParams.get("direction") || "";
+    const jobId = searchParams.get("job_id") || "";
+    const scheduleId = searchParams.get("schedule_id") || "";
+    const customerId = searchParams.get("customer_id") || "";
+    const vendorId = searchParams.get("vendor_id") || "";
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "100", 10), 1), 500);
     const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10), 0);
+    const statusList = searchParams.get("status") || "";
+    const providerFilter = searchParams.get("provider") || "";
+    const search = searchParams.get("search") || "";
 
     let q = supabase
         .from("ledger_transactions")
-        .select("id, org_id, occurred_at, status, type, direction, amount_cents, currency, provider, provider_ref, journal_entry_id, metadata, created_at", { count: "exact" })
+        .select("id, occurred_at, type, direction, amount_cents, currency, provider, provider_ref, job_id, schedule_id, customer_id, vendor_id, journal_entry_id", { count: "exact" })
         .eq("org_id", orgId)
         .order("occurred_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
-    if (start) {
-        q = q.gte("occurred_at", start);
-    }
-    if (end) {
-        q = q.lte("occurred_at", end);
-    }
-    if (direction === "in" || direction === "out") {
-        q = q.eq("direction", direction);
-    }
+    if (dateFrom) q = q.gte("occurred_at", dateFrom);
+    if (dateTo) q = q.lte("occurred_at", dateTo);
+    if (direction === "in" || direction === "out") q = q.eq("direction", direction);
+    if (type) q = q.eq("type", type);
+    if (jobId) q = q.eq("job_id", jobId);
+    if (scheduleId) q = q.eq("schedule_id", scheduleId);
+    if (customerId) q = q.eq("customer_id", customerId);
+    if (vendorId) q = q.eq("vendor_id", vendorId);
     if (statusList) {
         const statuses = statusList.split(",").map((s) => s.trim()).filter(Boolean);
         if (statuses.length > 0) q = q.in("status", statuses);
     }
-    if (typeList) {
-        const types = typeList.split(",").map((t) => t.trim()).filter(Boolean);
-        if (types.length > 0) q = q.in("type", types);
-    }
-    if (provider) {
-        q = q.ilike("provider", `%${provider}%`);
-    }
-    if (search) {
-        q = q.ilike("provider_ref", `%${search}%`);
-    }
+    if (providerFilter) q = q.ilike("provider", `%${providerFilter}%`);
+    if (search) q = q.ilike("provider_ref", `%${search}%`);
 
     const { data: rows, error, count } = await q;
 
