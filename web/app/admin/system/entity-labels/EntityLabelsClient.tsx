@@ -43,6 +43,8 @@ export default function EntityLabelsClient() {
     const [savingKey, setSavingKey] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [resetLoadingKey, setResetLoadingKey] = useState<string | null>(null);
+    const [lockConfirmOpen, setLockConfirmOpen] = useState<"lock" | "unlock" | null>(null);
+    const [lockSaving, setLockSaving] = useState(false);
 
     const fetchData = useCallback(async () => {
         try {
@@ -77,7 +79,7 @@ export default function EntityLabelsClient() {
 
     const fetchConfigLock = useCallback(async () => {
         try {
-            const res = await fetch("/api/admin/org-config");
+            const res = await fetch("/api/admin/org-settings");
             const json = await res.json().catch(() => ({}));
             if (res.ok) setConfigLocked(Boolean((json as { config_locked?: boolean }).config_locked));
         } catch {
@@ -168,6 +170,26 @@ export default function EntityLabelsClient() {
             .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
     }, [industries]);
 
+    const handleSetConfigLocked = async (locked: boolean) => {
+        if (!canMutate) return;
+        setLockSaving(true);
+        setLockConfirmOpen(null);
+        try {
+            const res = await fetch("/api/admin/org-settings", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ metadata: { config_locked: locked } }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to update lock");
+            await fetchConfigLock();
+        } catch (e) {
+            setSaveError((e as Error).message);
+        } finally {
+            setLockSaving(false);
+        }
+    };
+
     const handleIndustryChange = async (value: string) => {
         if (!canMutate || configLocked) return;
         const industry_id = value === GENERIC_VALUE ? null : value;
@@ -218,12 +240,45 @@ export default function EntityLabelsClient() {
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>
             )}
+            {canMutate && (
+                <div className="mb-4 flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setLockConfirmOpen(locked ? "unlock" : "lock")}
+                        disabled={lockSaving}
+                        className="rounded border border-[#e6e8ec] bg-white px-3 py-1.5 text-sm text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50"
+                    >
+                        {lockSaving ? "Updating…" : locked ? "Unlock configuration" : "Lock configuration"}
+                    </button>
+                </div>
+            )}
+            {lockConfirmOpen === "lock" && (
+                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    <p className="font-medium">Lock configuration?</p>
+                    <p className="mt-1">Locking configuration prevents industry and label changes until unlocked.</p>
+                    <div className="mt-3 flex gap-2">
+                        <button type="button" onClick={() => handleSetConfigLocked(true)} disabled={lockSaving} className="rounded border border-amber-300 bg-amber-100 px-3 py-1.5 text-sm font-medium hover:bg-amber-200">Confirm lock</button>
+                        <button type="button" onClick={() => setLockConfirmOpen(null)} disabled={lockSaving} className="rounded border border-[#e6e8ec] bg-white px-3 py-1.5 text-sm hover:bg-[#F4F6F9]">Cancel</button>
+                    </div>
+                </div>
+            )}
+            {lockConfirmOpen === "unlock" && (
+                <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                    <p className="font-medium">Unlock configuration?</p>
+                    <p className="mt-1">Unlock configuration to allow changes to industry and entity labels.</p>
+                    <div className="mt-3 flex gap-2">
+                        <button type="button" onClick={() => handleSetConfigLocked(false)} disabled={lockSaving} className="rounded border border-green-300 bg-green-100 px-3 py-1.5 text-sm font-medium hover:bg-green-200">Confirm unlock</button>
+                        <button type="button" onClick={() => setLockConfirmOpen(null)} disabled={lockSaving} className="rounded border border-[#e6e8ec] bg-white px-3 py-1.5 text-sm hover:bg-[#F4F6F9]">Cancel</button>
+                    </div>
+                </div>
+            )}
             <div className="mb-6 flex flex-wrap items-center gap-4 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3">
                 <label className="text-sm font-medium text-[#31394d]">Industry</label>
                 <select
                     value={industrySelectValue}
                     onChange={(e) => handleIndustryChange(e.target.value)}
                     disabled={!canMutate || industrySaving || locked}
+                    title={locked ? "Locked by org configuration" : undefined}
                     className="rounded border border-[#e6e8ec] bg-white px-3 py-1.5 text-sm text-[#31394d] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                     <option value={GENERIC_VALUE}>Generic</option>
@@ -231,6 +286,7 @@ export default function EntityLabelsClient() {
                         <option key={i.id} value={i.id}>{i.label}</option>
                     ))}
                 </select>
+                {locked && <span className="text-xs text-[#59678b]">Locked by org configuration</span>}
                 {industrySaving && <span className="text-sm text-[#59678b]">Saving…</span>}
             </div>
             {saveError && (
@@ -275,6 +331,7 @@ export default function EntityLabelsClient() {
                                                     onChange={(e) => setOverrideFor(eff.entity_type, "singular", e.target.value)}
                                                     disabled={!canMutate || locked}
                                                     placeholder="Override singular"
+                                                    title={locked ? "Locked by org configuration" : undefined}
                                                     className="w-full min-w-[100px] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-[#e6e8ec]/50 disabled:opacity-70"
                                                 />
                                             </td>
@@ -285,6 +342,7 @@ export default function EntityLabelsClient() {
                                                     onChange={(e) => setOverrideFor(eff.entity_type, "plural", e.target.value)}
                                                     disabled={!canMutate || locked}
                                                     placeholder="Override plural"
+                                                    title={locked ? "Locked by org configuration" : undefined}
                                                     className="w-full min-w-[100px] rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-[#e6e8ec]/50 disabled:opacity-70"
                                                 />
                                             </td>

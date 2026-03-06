@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
 
 type LabelRow = { entity_type: string; singular: string | null; plural: string | null };
 
@@ -106,7 +107,7 @@ export async function GET() {
     });
 }
 
-/** PUT: upsert or clear override for one entity_type. Admin only (ops read-only). */
+/** PUT: upsert or clear override for one entity_type. Admin only. Blocked when config is locked. */
 export async function PUT(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -117,6 +118,14 @@ export async function PUT(request: NextRequest) {
     }
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const locked = await getOrgConfigLocked(ctx.orgId);
+    if (locked) {
+        return NextResponse.json(
+            { error: "Configuration is locked. Unlock in Entity Labels / Industry settings to change labels." },
+            { status: 403 }
+        );
     }
 
     let body: { entity_type?: string; singular?: string; plural?: string } = {};
@@ -165,7 +174,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ ok: true });
 }
 
-/** DELETE: remove override for entity_type. Admin only. */
+/** DELETE: remove override for entity_type. Admin only. Blocked when config is locked. */
 export async function DELETE(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -176,6 +185,14 @@ export async function DELETE(request: NextRequest) {
     }
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const locked = await getOrgConfigLocked(ctx.orgId);
+    if (locked) {
+        return NextResponse.json(
+            { error: "Configuration is locked. Unlock in Entity Labels / Industry settings to change labels." },
+            { status: 403 }
+        );
     }
 
     const entity_type = request.nextUrl.searchParams.get("entity_type")?.trim();

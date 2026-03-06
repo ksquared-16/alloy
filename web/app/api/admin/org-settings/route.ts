@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
-import type { VendorPayoutPolicy } from "@/lib/admin/vendorPayoutPolicy";
 
-/** GET: org_settings for current org. Admin/ops read. */
+/** GET: org_settings for current org. Admin/ops read. Includes metadata.config_locked (and top-level config_locked for convenience). */
 export async function GET() {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -22,10 +20,13 @@ export async function GET() {
         .maybeSingle();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data ?? { org_id: ctx.orgId, payout_type: null, payout_value: null, metadata: null });
+    const payload = data ?? { org_id: ctx.orgId, payout_type: null, payout_value: null, metadata: null };
+    const metadata = (payload as { metadata?: Record<string, unknown> }).metadata ?? {};
+    const config_locked = Boolean((metadata as { config_locked?: boolean }).config_locked);
+    return NextResponse.json({ ...payload, config_locked });
 }
 
-/** PATCH: update org_settings (e.g. metadata.vendor_payout_policy). Admin only. Respects config lock. */
+/** PATCH: update org_settings. Admin only. Merges metadata safely (does not overwrite unrelated keys). */
 export async function PATCH(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -38,15 +39,7 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const locked = await getOrgConfigLocked(ctx.orgId);
-    if (locked) {
-        return NextResponse.json(
-            { error: "Configuration is locked. Unlock in System Settings." },
-            { status: 403 }
-        );
-    }
-
-    let body: { metadata?: { vendor_payout_policy?: VendorPayoutPolicy } } = {};
+    let body: { metadata?: Record<string, unknown> } = {};
     try {
         body = (await request.json()) as typeof body;
     } catch {
@@ -65,8 +58,8 @@ export async function PATCH(request: NextRequest) {
 
     const currentMeta = (existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
     const newMeta =
-        body.metadata !== undefined
-            ? { ...currentMeta, vendor_payout_policy: body.metadata.vendor_payout_policy ?? null }
+        body.metadata !== undefined && typeof body.metadata === "object"
+            ? { ...currentMeta, ...body.metadata }
             : currentMeta;
 
     const { error: upsertErr } = await supabase.from("org_settings").upsert(
@@ -85,5 +78,8 @@ export async function PATCH(request: NextRequest) {
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
-    return NextResponse.json(updated ?? { org_id: ctx.orgId, metadata: newMeta });
+    const payload = updated ?? { org_id: ctx.orgId, payout_type: null, payout_value: null, metadata: newMeta };
+    const metadata = (payload as { metadata?: Record<string, unknown> }).metadata ?? {};
+    const config_locked = Boolean((metadata as { config_locked?: boolean }).config_locked);
+    return NextResponse.json({ ...payload, config_locked });
 }

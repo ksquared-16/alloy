@@ -2,7 +2,7 @@
 
 /**
  * Shown on config pages when org config is locked.
- * Tells user to unlock in System Settings.
+ * Industry and entity labels cannot be changed until unlocked.
  */
 export default function ConfigLockBanner() {
     return (
@@ -10,8 +10,7 @@ export default function ConfigLockBanner() {
             className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
             role="alert"
         >
-            <strong>Configuration is locked.</strong> Unlock in System Settings to change
-            entity labels, statuses, or workflows.
+            Configuration is locked for this org. Industry and entity labels cannot be changed.
         </div>
     );
 }
