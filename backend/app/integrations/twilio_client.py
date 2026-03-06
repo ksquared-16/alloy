@@ -1,13 +1,17 @@
 """
 Twilio SMS client wrapper.
-Uses TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER from settings.
+Uses TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE_SID from settings.
 """
 import logging
 from typing import Dict, Any
 
 from twilio.rest import Client
 
-from ..settings import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER
+from ..settings import (
+    TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN,
+    TWILIO_MESSAGING_SERVICE_SID,
+)
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -20,7 +24,7 @@ def _mask_sid(sid: str) -> str:
 
 def send_sms(to_number: str, body: str) -> Dict[str, Any]:
     """
-    Send an SMS via Twilio REST API.
+    Send an SMS via Twilio REST API using the configured Messaging Service.
 
     Args:
         to_number: E.164 destination number (e.g. +15551234567).
@@ -31,7 +35,7 @@ def send_sms(to_number: str, body: str) -> Dict[str, Any]:
 
     Raises:
         ValueError: If to_number or body is empty/None.
-        RuntimeError: If Twilio env vars are not set.
+        RuntimeError: If Twilio env vars are not set (e.g. TWILIO_MESSAGING_SERVICE_SID missing).
     """
     if not to_number or not str(to_number).strip():
         raise ValueError("to_number is required and cannot be empty")
@@ -40,16 +44,17 @@ def send_sms(to_number: str, body: str) -> Dict[str, Any]:
 
     sid_val = (TWILIO_ACCOUNT_SID or "").strip()
     token_val = (TWILIO_AUTH_TOKEN or "").strip()
-    from_val = (TWILIO_FROM_NUMBER or "").strip()
+    messaging_sid = (TWILIO_MESSAGING_SERVICE_SID or "").strip()
     if not sid_val or not token_val:
         raise RuntimeError("TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN must be set")
-    if not from_val:
-        raise RuntimeError("TWILIO_FROM_NUMBER must be set")
+    if not messaging_sid:
+        logger.error("TWILIO_MESSAGING_SERVICE_SID is not set; cannot send SMS")
+        raise RuntimeError("TWILIO_MESSAGING_SERVICE_SID must be set")
 
     client = Client(sid_val, token_val)
     message = client.messages.create(
         body=body.strip(),
-        from_=from_val,
+        messaging_service_sid=messaging_sid,
         to=to_number.strip(),
     )
     sid = message.sid or ""

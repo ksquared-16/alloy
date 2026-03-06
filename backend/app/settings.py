@@ -166,7 +166,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 # Twilio (for message sender / SMS). None if env not set; app must still boot.
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER")
+TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
 
 # Internal cron token for POST /internal/messages/process
 INTERNAL_CRON_TOKEN = os.getenv("INTERNAL_CRON_TOKEN")

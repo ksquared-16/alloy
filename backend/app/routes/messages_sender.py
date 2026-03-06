@@ -11,7 +11,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from ..settings import (
     TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN,
-    TWILIO_FROM_NUMBER,
+    TWILIO_MESSAGING_SERVICE_SID,
     INTERNAL_CRON_TOKEN,
 )
 from ..services.message_sender import process_queued_messages
@@ -24,10 +24,10 @@ router = APIRouter()
 def _log_env_sanity() -> None:
     """Log presence of env vars (booleans only, no values)."""
     logger.info(
-        "ENV_SANITY TWILIO_ACCOUNT_SID=%s TWILIO_AUTH_TOKEN=%s TWILIO_FROM_NUMBER=%s INTERNAL_CRON_TOKEN=%s",
+        "ENV_SANITY TWILIO_ACCOUNT_SID=%s TWILIO_AUTH_TOKEN=%s TWILIO_MESSAGING_SERVICE_SID=%s INTERNAL_CRON_TOKEN=%s",
         bool(TWILIO_ACCOUNT_SID),
         bool(TWILIO_AUTH_TOKEN),
-        bool(TWILIO_FROM_NUMBER),
+        bool(TWILIO_MESSAGING_SERVICE_SID),
         bool(INTERNAL_CRON_TOKEN),
     )
 
@@ -47,10 +47,10 @@ async def post_process_messages(request: Request, x_cron_token: Optional[str] = 
     if x_cron_token is None or (x_cron_token or "").strip() != token:
         raise HTTPException(status_code=401, detail="Invalid or missing x-cron-token")
 
-    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_FROM_NUMBER:
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_MESSAGING_SERVICE_SID:
         raise HTTPException(
             status_code=500,
-            detail="Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER)",
+            detail="Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_MESSAGING_SERVICE_SID)",
         )
 
     try:
