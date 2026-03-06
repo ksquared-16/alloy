@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const ALLOWED_KEYS = ["name", "status", "status_key"] as const;
 
@@ -28,6 +29,15 @@ export async function PATCH(
         }
 
         const supabase = createAdminClient();
+        const { data: existing } = await supabase
+            .from("customers")
+            .select("org_id, status_key, primary_contact_id")
+            .eq("id", id)
+            .maybeSingle();
+        const existingRow = existing as { org_id?: string; status_key?: string | null; primary_contact_id?: string | null } | null;
+        const oldStatusKey = existingRow?.status_key ?? null;
+        const orgId = existingRow?.org_id;
+
         const { data, error } = await supabase
             .from("customers")
             .update(updates)
@@ -36,6 +46,20 @@ export async function PATCH(
             .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (updates.status_key !== undefined && orgId) {
+            const newStatusKey = (updates.status_key as string) ?? null;
+            const metadata: Record<string, unknown> = {};
+            if (existingRow?.primary_contact_id != null) metadata.primary_contact_id = existingRow.primary_contact_id;
+            await emitStatusChangedEvent({
+                supabase,
+                orgId,
+                entityType: "customers",
+                entityId: id,
+                oldStatusKey,
+                newStatusKey,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+            });
+        }
         logAdminAudit({
             entity: "customers",
             id,

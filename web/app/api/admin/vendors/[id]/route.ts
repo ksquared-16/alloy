@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const ALLOWED_KEYS = [
     "vendor_status_id",
@@ -65,6 +66,15 @@ export async function PATCH(
         }
 
         const supabase = createAdminClient();
+        const { data: existing } = await supabase
+            .from("vendors")
+            .select("org_id, status_key")
+            .eq("id", id)
+            .maybeSingle();
+        const existingRow = existing as { org_id?: string; status_key?: string | null } | null;
+        const oldStatusKey = existingRow?.status_key ?? null;
+        const orgId = existingRow?.org_id;
+
         const { data, error } = await supabase
             .from("vendors")
             .update(updates)
@@ -73,6 +83,17 @@ export async function PATCH(
             .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (updates.status_key !== undefined && orgId) {
+            const newStatusKey = (updates.status_key as string) ?? null;
+            await emitStatusChangedEvent({
+                supabase,
+                orgId,
+                entityType: "vendors",
+                entityId: id,
+                oldStatusKey,
+                newStatusKey,
+            });
+        }
         logAdminAudit({
             entity: "vendors",
             id,

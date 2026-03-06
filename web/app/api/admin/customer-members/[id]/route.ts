@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 /** GET: single customer_member by id. Admin + ops can read. */
 export async function GET(
@@ -99,6 +100,14 @@ export async function PATCH(
         return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
     }
 
+    const { data: existing } = await supabase
+        .from("customer_members")
+        .select("status_key")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+    const oldStatusKey = (existing as { status_key?: string | null } | null)?.status_key ?? null;
+
     const { data, error } = await supabase
         .from("customer_members")
         .update(updates)
@@ -112,6 +121,18 @@ export async function PATCH(
     }
     if (!data) {
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+
+    if (updates.status_key !== undefined) {
+        const newStatusKey = (updates.status_key as string) ?? null;
+        await emitStatusChangedEvent({
+            supabase,
+            orgId: ctx.orgId,
+            entityType: "customer_members",
+            entityId: id,
+            oldStatusKey,
+            newStatusKey,
+        });
     }
 
     return NextResponse.json(data);

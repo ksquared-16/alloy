@@ -4,6 +4,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { validateDiscountCodeForJob } from "@/lib/admin/validateDiscountCode";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const ALLOWED_KEYS = [
     "title",
@@ -202,6 +203,14 @@ export async function PATCH(
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
+        const { data: existingJob } = await supabase
+            .from("jobs")
+            .select("status_key, customer_id, assigned_vendor_id")
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        const oldStatusKey = (existingJob as { status_key?: string | null } | null)?.status_key ?? null;
+
         const { data, error } = await supabase
             .from("jobs")
             .update(updates)
@@ -212,6 +221,23 @@ export async function PATCH(
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        const newStatusKey = updates.status_key !== undefined ? (updates.status_key as string | null) : oldStatusKey;
+        if (updates.status_key !== undefined) {
+            const metadata: Record<string, unknown> = {};
+            if ((existingJob as { customer_id?: string | null } | null)?.customer_id != null) metadata.customer_id = (existingJob as { customer_id: string }).customer_id;
+            if ((existingJob as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id != null) metadata.assigned_vendor_id = (existingJob as { assigned_vendor_id: string }).assigned_vendor_id;
+            await emitStatusChangedEvent({
+                supabase,
+                orgId: ctx.orgId,
+                entityType: "jobs",
+                entityId: id,
+                oldStatusKey,
+                newStatusKey: newStatusKey ?? null,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+            });
+        }
+
         logAdminAudit({
             entity: "jobs",
             id,

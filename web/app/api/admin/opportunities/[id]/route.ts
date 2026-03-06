@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const ALLOWED_KEYS = ["job_date", "job_time_window", "status", "status_key", "vertical_id", "quote_total", "notes", "pipeline_stage_id"] as const;
 
@@ -40,6 +41,15 @@ export async function PATCH(
         }
 
         const supabase = createAdminClient();
+        const { data: existing } = await supabase
+            .from("opportunities")
+            .select("org_id, status_key, customer_id, primary_contact_id")
+            .eq("id", id)
+            .maybeSingle();
+        const existingRow = existing as { org_id?: string; status_key?: string | null; customer_id?: string | null; primary_contact_id?: string | null } | null;
+        const oldStatusKey = existingRow?.status_key ?? null;
+        const orgId = existingRow?.org_id;
+
         const { data, error } = await supabase
             .from("opportunities")
             .update(updates)
@@ -48,6 +58,21 @@ export async function PATCH(
             .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (updates.status_key !== undefined && orgId) {
+            const newStatusKey = (updates.status_key as string) ?? null;
+            const metadata: Record<string, unknown> = {};
+            if (existingRow?.customer_id != null) metadata.customer_id = existingRow.customer_id;
+            if (existingRow?.primary_contact_id != null) metadata.primary_contact_id = existingRow.primary_contact_id;
+            await emitStatusChangedEvent({
+                supabase,
+                orgId,
+                entityType: "opportunities",
+                entityId: id,
+                oldStatusKey,
+                newStatusKey,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+            });
+        }
         logAdminAudit({
             entity: "opportunities",
             id,

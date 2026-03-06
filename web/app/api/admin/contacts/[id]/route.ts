@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const PATCH_ALLOWED = [
     "first_name",
@@ -51,6 +52,14 @@ export async function PATCH(
         }
 
         const supabase = createAdminClient();
+        const { data: existing } = await supabase
+            .from("contacts")
+            .select("status_key")
+            .eq("id", id)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        const oldStatusKey = (existing as { status_key?: string | null } | null)?.status_key ?? null;
+
         const { data, error } = await supabase
             .from("contacts")
             .update(updates)
@@ -61,6 +70,18 @@ export async function PATCH(
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        if (updates.status_key !== undefined) {
+            const newStatusKey = (updates.status_key as string) ?? null;
+            await emitStatusChangedEvent({
+                supabase,
+                orgId,
+                entityType: "contacts",
+                entityId: id,
+                oldStatusKey,
+                newStatusKey,
+            });
+        }
 
         logAdminAudit({
             entity: "contacts",

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/admin/postScheduleCompletion";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
@@ -106,7 +107,7 @@ export async function PATCH(
         const supabase = createAdminClient();
         const { data: schedule, error: fetchErr } = await supabase
             .from("schedules")
-            .select("job_id, start_at, end_at, status_key")
+            .select("job_id, start_at, end_at, status_key, assigned_vendor_id")
             .eq("id", id)
             .eq("org_id", ctx.orgId)
             .single();
@@ -171,6 +172,24 @@ export async function PATCH(
                     return NextResponse.json({ error: "Schedule or job not found for GL posting" }, { status: 500 });
                 }
             }
+        }
+
+        if (updates.status_key !== undefined) {
+            const metadata: Record<string, unknown> = {};
+            const jobId = (schedule as { job_id?: string }).job_id;
+            const assignedVendorId = (schedule as { assigned_vendor_id?: string | null }).assigned_vendor_id;
+            if (jobId) metadata.job_id = jobId;
+            if (assignedVendorId != null) metadata.assigned_vendor_id = assignedVendorId;
+            if ((schedule as { start_at?: string }).start_at) metadata.start_at = (schedule as { start_at: string }).start_at;
+            await emitStatusChangedEvent({
+                supabase,
+                orgId: ctx.orgId,
+                entityType: "schedules",
+                entityId: id,
+                oldStatusKey: previousStatusKey ?? null,
+                newStatusKey: (newStatusKey ?? null) as string | null,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+            });
         }
 
         const jobId = (schedule as { job_id?: string }).job_id;
