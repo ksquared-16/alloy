@@ -29,9 +29,9 @@ interface DataTableProps<T> {
 }
 
 const TABLE_BORDER = "border-admin-border";
-const INPUT_CLASS = "w-full rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
-const BTN_PRIMARY = "rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30 focus:ring-offset-1";
-const BTN_SECONDARY = "rounded-lg border border-admin-border px-3 py-1.5 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
+const INPUT_CLASS = "w-full rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-sm text-alloy-forge placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
+const BTN_PRIMARY = "rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-1";
+const BTN_SECONDARY = "rounded-lg border border-admin-border px-3 py-1.5 text-sm font-medium text-alloy-forge/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
 
 export default function DataTable<T extends Record<string, any>>({
     data,
@@ -230,16 +230,16 @@ export default function DataTable<T extends Record<string, any>>({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-admin-border bg-alloy-blue/[0.08]">
+                        <tr className="border-b border-admin-border bg-alloy-pine/5">
                             {columns.map((column) => {
                                 const isSorted = sortColumn === column.key;
                                 return (
                                     <th
                                         key={String(column.key)}
                                         className={`
-                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider
-                                            ${isSorted ? "text-alloy-blue" : "text-alloy-slate"}
-                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-blue/[0.08]" : ""}
+                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-forge/80
+                                            ${isSorted ? "text-alloy-blue" : ""}
+                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-pine/10" : ""}
                                         `}
                                         onClick={() => column.sortable && handleSort(column.key)}
                                     >
@@ -271,7 +271,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     colSpan={columns.length}
                                     className="px-5 py-14 text-center"
                                 >
-                                    <p className="text-sm font-medium text-alloy-midnight">No data found</p>
+                                    <p className="text-sm font-medium text-alloy-forge">No data found</p>
                                     <p className="mt-1 text-xs text-alloy-muted">
                                         {hasActiveFilters || search ? "Try adjusting filters or search." : "There are no records to show."}
                                     </p>
@@ -283,14 +283,14 @@ export default function DataTable<T extends Record<string, any>>({
                                     key={idx}
                                     className={`
                                         transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-juniper/[0.08]" : ""}
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-pine/10" : ""}
                                     `}
                                     onClick={() => onRowClick?.(row)}
                                 >
                                     {columns.map((column) => (
                                         <td
                                             key={String(column.key)}
-                                            className="max-w-[320px] px-5 py-3.5 text-sm text-alloy-midnight/90"
+                                            className="max-w-[320px] px-5 py-3.5 text-sm text-alloy-forge/90"
                                         >
                                             {column.render
                                                 ? column.render(getValue(row, column.key), row)

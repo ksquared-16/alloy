@@ -1,12 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  /* Alloy Brand Colors (primary = Blue, secondary = Juniper, accent = Ember) */
-  --color-alloy-blue: #00458C;
+  /* Alloy Brand Colors — system roles */
+  /* Bend Pine: primary shell (sidebar + top bar) */
   --color-alloy-pine: #273F52;
-  --color-alloy-juniper: #00A283;
+  /* Alloy Blue: primary actions, active states, focus */
+  --color-alloy-blue: #00458C;
+  /* Ember: destructive / warning accents */
   --color-alloy-ember: #BC4300;
+  /* Forge: primary text */
+  --color-alloy-forge: #18273A;
+  /* River Stone: neutral background */
   --color-alloy-stone: #F4F6F9;
+  /* Juniper: success/active (status badges) — alias for Bend Pine in success contexts per spec */
+  --color-alloy-juniper: #00A283;
   --color-alloy-midnight: #18273A;
   /* Admin / productized palette */
   --color-alloy-navy: #31394d;
@@ -15,16 +22,24 @@
   --color-alloy-gold-dark: #d0ad50;
   --color-alloy-muted: #59678b;
   --color-alloy-light: #e6d3a0;
-  /* Admin semantic surfaces: Layer 1 = page bg (River Stone), Layer 2 = header strip (Alloy Blue tint), Layer 3 = cards (white) */
-  --color-admin-page: #f2f4f8;
+  /* Admin semantic: Layer 1 = page bg (River Stone), Layer 2 = header strip (Alloy Blue tint), Layer 3 = cards (white) */
+  --color-admin-page: #eef0f4;
   --color-admin-border: #e2e6ec;
   --color-admin-surface-card: #ffffff;
+  /* Shell: Bend Pine surface and divider (darker pine) */
+  --color-admin-shell: #273F52;
+  --color-admin-shell-divider: #1e323f;
   /* Font */
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }
 
 body {
   background: var(--color-alloy-stone);
-  color: var(--color-alloy-midnight);
+  color: var(--color-alloy-forge);
   font-family: var(--font-poppins), system-ui, sans-serif;
+}
+
+/* Admin primary action: Alloy Blue, white text, focus ring */
+.admin-btn-primary {
+  @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-1;
 }

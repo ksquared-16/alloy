@@ -29,7 +29,7 @@ export default function AdminListPageHeader({
         >
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-2xl font-bold tracking-tight text-alloy-midnight">
+                    <h1 className="text-2xl font-bold tracking-tight text-alloy-forge">
                         {title}
                     </h1>
                     {metrics}
