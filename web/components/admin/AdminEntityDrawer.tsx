@@ -1572,7 +1572,7 @@ export default function AdminEntityDrawer() {
                 <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("run"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Run payment failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{paymentActionLoading === "run" ? "…" : "Run Payment"}</button>
             )}
             {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
-                <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("retry"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm border border-amber-500/60 text-amber-700 rounded-md hover:bg-amber-50 disabled:opacity-50">{paymentActionLoading === "retry" ? "…" : "Retry Failed"}</button>
+                <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("retry"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10 disabled:opacity-50">{paymentActionLoading === "retry" ? "…" : "Retry Failed"}</button>
             )}
             <button type="button" disabled={!!jobActionLoading} onClick={async () => { if (!drawer.id) return; setJobActionLoading("mark_completed"); try { const res = await fetch(`/api/admin/jobs/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark_completed" }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => (prev ? { ...prev, ...json } : prev)); refetch(); router.refresh(); } catch (e) { console.error("Mark completed failed", e); } finally { setJobActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobActionLoading === "mark_completed" ? "…" : "Mark completed"}</button>
             {jobSchedules.length > 0 && !rescheduleForm && <button type="button" onClick={() => openReschedule(jobSchedules[0])} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Reschedule</button>}
@@ -2120,7 +2120,7 @@ export default function AdminEntityDrawer() {
                                             {data.archived_at ? (
                                                 <button type="button" onClick={async () => { const res = await fetch(`/api/admin/contacts/${drawer.id}/unarchive`, { method: "POST" }); if (res.ok) { refetch(); router.refresh(); } }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/20">Unarchive</button>
                                             ) : (
-                                                <button type="button" onClick={async () => { const res = await fetch(`/api/admin/contacts/${drawer.id}/archive`, { method: "POST" }); if (res.ok) { refetch(); router.refresh(); } }} className="px-3 py-1.5 text-sm border border-amber-200 text-amber-800 rounded-md hover:bg-amber-50">Archive</button>
+                                                <button type="button" onClick={async () => { const res = await fetch(`/api/admin/contacts/${drawer.id}/archive`, { method: "POST" }); if (res.ok) { refetch(); router.refresh(); } }} className="px-3 py-1.5 text-sm border border-alloy-ember/40 text-alloy-ember rounded-md hover:bg-alloy-ember/10">Archive</button>
                                             )}
                                         </div>
                                     )}
@@ -2205,7 +2205,7 @@ export default function AdminEntityDrawer() {
                                             {canMutate && (
                                                 <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
                                                     {!memberDeleteConfirm ? (
-                                                        <button type="button" onClick={() => setMemberDeleteConfirm(true)} className="px-3 py-1.5 text-sm border border-red-200 text-red-700 rounded-md hover:bg-red-50">Delete</button>
+                                                        <button type="button" onClick={() => setMemberDeleteConfirm(true)} className="px-3 py-1.5 text-sm border border-alloy-ember/40 text-alloy-ember rounded-md hover:bg-alloy-ember/10">Delete</button>
                                                     ) : (
                                                         <>
                                                             <span className="text-sm text-alloy-midnight/70">Delete this {memberSingular.toLowerCase()}?</span>
@@ -2220,7 +2220,7 @@ export default function AdminEntityDrawer() {
                                                                 } catch (e: unknown) { setMemberCreateError((e as Error).message); }
                                                                 setMemberDeleting(false);
                                                                 setMemberDeleteConfirm(false);
-                                                            }} className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md disabled:opacity-50">Yes, delete</button>
+                                                            }} className="px-3 py-1.5 text-sm bg-alloy-ember text-white rounded-md hover:bg-alloy-ember/90 disabled:opacity-50">Yes, delete</button>
                                                             <button type="button" onClick={() => { setMemberDeleteConfirm(false); setMemberCreateError(null); }} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
                                                         </>
                                                     )}
@@ -2858,7 +2858,7 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                     {(data.canceled_at as string) && (
-                                        <div className="text-amber-700 text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
+                                        <div className="text-alloy-ember text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
                                     )}
                                     <div className="pt-2 border-t border-[#e6e8ec]">
                                         <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
@@ -2948,7 +2948,7 @@ export default function AdminEntityDrawer() {
                                     {!(data.canceled_at as string) && (
                                         <div className="pt-2 border-t border-[#e6e8ec] flex flex-wrap gap-2">
                                             {!scheduleCancelPrompt ? (
-                                                <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-amber-600 text-amber-700 rounded hover:bg-amber-50">Cancel {scheduleSingular.toLowerCase()}</button>
+                                                <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded hover:bg-alloy-ember/10">Cancel {scheduleSingular.toLowerCase()}</button>
                                             ) : (
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <input value={scheduleCancelReason} onChange={(e) => setScheduleCancelReason(e.target.value)} placeholder="Reason (optional)" className="px-2 py-1.5 border rounded text-sm w-40" />
@@ -2960,7 +2960,7 @@ export default function AdminEntityDrawer() {
                                                             setScheduleCancelPrompt(false);
                                                             refetch(); router.refresh();
                                                         } catch (err) { setSaveError((err as Error).message); }
-                                                    }} className="px-2 py-1.5 text-sm bg-amber-100 text-amber-800 rounded">Confirm cancel</button>
+                                                    }} className="px-2 py-1.5 text-sm bg-alloy-ember/15 text-alloy-ember rounded hover:bg-alloy-ember/20">Confirm cancel</button>
                                                     <button type="button" onClick={() => { setScheduleCancelPrompt(false); setScheduleCancelReason(""); }} className="text-sm text-alloy-midnight/60">Back</button>
                                                 </div>
                                             )}

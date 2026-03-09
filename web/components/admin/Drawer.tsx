@@ -48,7 +48,7 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
                 className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-admin-surface-card border border-admin-border shadow-xl flex flex-col ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}
                 style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor } : {}) }}
             >
-                <div className="sticky top-0 z-10 bg-alloy-blue/[0.06] shrink-0 border-b border-admin-border">
+                <div className="sticky top-0 z-10 bg-alloy-pine/[0.06] shrink-0 border-b border-admin-border">
                     <div className="px-6 py-4 flex items-center justify-between gap-4">
                         <div className="min-w-0 flex-1 flex items-center gap-3">
                             <h2 className="text-xl font-bold text-alloy-forge truncate">{typeof title === "string" ? title : title != null ? String(title) : "—"}</h2>
@@ -65,7 +65,7 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
                         </div>
                     </div>
                     {headerExtra != null && headerExtra !== false && (
-                        <div className="px-6 pb-3 border-t border-admin-border bg-alloy-blue/[0.04]">
+                        <div className="px-6 pb-3 border-t border-admin-border bg-alloy-pine/[0.04]">
                             {headerExtra}
                         </div>
                     )}

@@ -245,8 +245,8 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
 
     return (
         <div className="min-h-screen bg-admin-page flex">
-            <aside className="w-64 bg-admin-shell border-r border-admin-shell-divider flex flex-col">
-                <div className="p-5 border-b border-admin-shell-divider">
+            <aside className="w-64 bg-admin-sidebar border-r border-alloy-blue/80 flex flex-col">
+                <div className="p-5 border-b border-white/15">
                     <Link href="/admin" className="block" aria-label="Home">
                         <AlloyLogo variant="light" />
                     </Link>
@@ -285,7 +285,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleNested(item.label)}
-                                                            className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-alloy-blue text-white border-l-2 border-alloy-blue" : "text-white/90 hover:bg-white/10"}`}
+                                                            className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-white/20 text-white border-l-2 border-white/50" : "text-white/90 hover:bg-white/10"}`}
                                                         >
                                                             <span className="flex items-center gap-2 min-w-0">
                                                                 {NestedIcon && <NestedIcon className={`${iconClass} ${hasActiveChild ? "text-white/90" : ""}`} />}
@@ -294,7 +294,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                             {isNestedOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                                                         </button>
                                                         {isNestedOpen && (
-                                                            <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-admin-shell-divider pl-2">
+                                                            <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-white/15 pl-2">
                                                                 {item.subItems.map((sub) => {
                                                                     const isActive = pathname === sub.href;
                                                                     const displayLabel = navLinkLabel(sub, labels);
@@ -302,7 +302,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                                         <li key={sub.href}>
                                                                             <Link
                                                                                 href={sub.href}
-                                                                                className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue text-white border-l-2 border-alloy-blue" : "text-white/90 hover:bg-white/10"}`}
+                                                                                className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-white/20 text-white border-l-2 border-white/50" : "text-white/90 hover:bg-white/10"}`}
                                                                             >
                                                                                 {displayLabel}
                                                                             </Link>
@@ -322,7 +322,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                 <li key={link.href}>
                                                     <Link
                                                         href={link.href}
-                                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue text-white border-l-2 border-alloy-blue" : "text-white/90 hover:bg-white/10"}`}
+                                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-white/20 text-white border-l-2 border-white/50" : "text-white/90 hover:bg-white/10"}`}
                                                     >
                                                         {LinkIcon && <LinkIcon className={`${iconClass} ${isActive ? "text-white/90" : ""}`} />}
                                                         <span className="truncate">{displayLabel}</span>
@@ -338,7 +338,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                 </nav>
             </aside>
             <main className="flex-1 overflow-auto flex flex-col bg-admin-page">
-                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3.5 bg-admin-shell border-b border-admin-shell-divider">
+                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3.5 bg-admin-topbar border-b border-admin-topbar-divider">
                     <div className="relative">
                         <button
                             type="button"
@@ -377,7 +377,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                         <button
                             type="button"
                             onClick={() => { setProfileOpen((o) => !o); setVerticalOpen(false); }}
-                            className="w-9 h-9 rounded-full bg-alloy-blue text-white text-sm font-medium flex items-center justify-center hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-2 focus:ring-offset-admin-shell"
+                            className="w-9 h-9 rounded-full bg-alloy-blue text-white text-sm font-medium flex items-center justify-center hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-2 focus:ring-offset-admin-topbar"
                         >
                             {getInitials(userEmail)}
                         </button>

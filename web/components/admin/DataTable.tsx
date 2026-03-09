@@ -230,7 +230,7 @@ export default function DataTable<T extends Record<string, any>>({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-admin-border bg-alloy-pine/5">
+                        <tr className="border-b border-admin-border bg-alloy-pine/[0.04]">
                             {columns.map((column) => {
                                 const isSorted = sortColumn === column.key;
                                 return (
@@ -239,7 +239,7 @@ export default function DataTable<T extends Record<string, any>>({
                                         className={`
                                             px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-forge/80
                                             ${isSorted ? "text-alloy-blue" : ""}
-                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-pine/10" : ""}
+                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-blue/[0.06]" : ""}
                                         `}
                                         onClick={() => column.sortable && handleSort(column.key)}
                                     >
@@ -283,7 +283,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     key={idx}
                                     className={`
                                         transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-pine/10" : ""}
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-juniper/10" : ""}
                                     `}
                                     onClick={() => onRowClick?.(row)}
                                 >

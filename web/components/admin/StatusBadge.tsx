@@ -9,10 +9,10 @@ type AssignmentStatusKey = "offered" | "accepted" | "declined" | "removed" | "co
 
 const ASSIGNMENT_STYLES: Record<AssignmentStatusKey, string> = {
     offered: "bg-alloy-ember/10 text-alloy-ember border-alloy-ember/30",
-    accepted: "bg-alloy-pine/12 text-alloy-pine border-alloy-pine/30",
+    accepted: "bg-alloy-juniper/12 text-[#007a63] border-alloy-juniper/30",
     declined: "bg-alloy-ember/12 text-alloy-ember border-alloy-ember/35",
     removed: "bg-alloy-stone/60 text-alloy-slate border-admin-border",
-    completed: "bg-alloy-pine/12 text-alloy-pine border-alloy-pine/30",
+    completed: "bg-alloy-juniper/12 text-[#007a63] border-alloy-juniper/30",
     unassigned: "bg-alloy-stone/50 text-alloy-muted border-admin-border",
     canceled: "bg-alloy-ember/12 text-alloy-ember border-alloy-ember/35",
 };
@@ -32,7 +32,7 @@ export function AssignmentStatusBadge({ statusKey, label }: { statusKey: string 
     return <span className={`${PILL_CLASS} ${style}`}>{display}</span>;
 }
 
-/** Semantic variants: success/active/completed=Bend Pine, info/scheduled/in-progress=Alloy Blue, warning/pending=Ember light, error/failed/lost=Ember, neutral/draft=River Stone. */
+/** Semantic variants: success/active/completed=Juniper, info/scheduled=Alloy Blue, warning=Ember light, error/destructive=Ember, neutral=River Stone. */
 export function StatusBadge({
     label,
     variant = "default",
@@ -43,11 +43,11 @@ export function StatusBadge({
     const display = label ?? "—";
     const variants: Record<string, string> = {
         default: "bg-alloy-stone/50 text-alloy-slate border-admin-border",
-        success: "bg-alloy-pine/12 text-alloy-pine border-alloy-pine/30",
+        success: "bg-alloy-juniper/12 text-[#007a63] border-alloy-juniper/30",
         info: "bg-alloy-blue/10 text-alloy-blue border-alloy-blue/30",
         warning: "bg-alloy-ember/10 text-alloy-ember border-alloy-ember/30",
         error: "bg-alloy-ember/12 text-alloy-ember border-alloy-ember/35",
-        neutral: "bg-alloy-stone/50 text-alloy-muted border-admin-border",
+        neutral: "bg-alloy-stone/50 text-alloy-forge/70 border-admin-border",
         gold: "bg-alloy-light/50 text-alloy-gold-dark border-alloy-gold/40",
     };
     const style = variants[variant] ?? variants.default;

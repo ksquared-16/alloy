@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  /* Alloy Brand Colors — system roles */
-  /* Bend Pine: primary shell (sidebar + top bar) */
-  --color-alloy-pine: #273F52;
-  /* Alloy Blue: primary actions, active states, focus */
+  /* Alloy Brand Colors — structural and semantic roles */
+  /* Alloy Blue: sidebar, primary actions, focus, info states */
   --color-alloy-blue: #00458C;
-  /* Ember: destructive / warning accents */
+  /* Bend Pine: top bar, success/active tint in surfaces */
+  --color-alloy-pine: #273F52;
+  /* Ember: destructive, warning, archive, cancelled */
   --color-alloy-ember: #BC4300;
-  /* Forge: primary text */
+  /* Forge: primary/strong text */
   --color-alloy-forge: #18273A;
-  /* River Stone: neutral background */
+  /* River Stone: workspace background, neutral surfaces */
   --color-alloy-stone: #F4F6F9;
-  /* Juniper: success/active (status badges) — alias for Bend Pine in success contexts per spec */
+  /* Juniper: success/active/completed (teal-green accent) */
   --color-alloy-juniper: #00A283;
   --color-alloy-midnight: #18273A;
   /* Admin / productized palette */
@@ -22,13 +22,14 @@
   --color-alloy-gold-dark: #d0ad50;
   --color-alloy-muted: #59678b;
   --color-alloy-light: #e6d3a0;
-  /* Admin semantic: Layer 1 = page bg (River Stone), Layer 2 = header strip (Alloy Blue tint), Layer 3 = cards (white) */
+  /* Admin semantic: workspace = River Stone, cards = white */
   --color-admin-page: #eef0f4;
   --color-admin-border: #e2e6ec;
   --color-admin-surface-card: #ffffff;
-  /* Shell: Bend Pine surface and divider (darker pine) */
-  --color-admin-shell: #273F52;
-  --color-admin-shell-divider: #1e323f;
+  /* Shell: sidebar = Alloy Blue, top bar = Bend Pine */
+  --color-admin-sidebar: #00458C;
+  --color-admin-topbar: #273F52;
+  --color-admin-topbar-divider: #1e323f;
   /* Font */
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }
@@ -42,4 +43,9 @@ body {
 /* Admin primary action: Alloy Blue, white text, focus ring */
 .admin-btn-primary {
   @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-1;
+}
+
+/* Admin destructive action: Ember */
+.admin-btn-danger {
+  @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-ember text-white hover:bg-alloy-ember/90 focus:outline-none focus:ring-2 focus:ring-alloy-ember focus:ring-offset-1;
 }
