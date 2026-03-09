@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
@@ -110,61 +110,65 @@ export default function VendorsClient({
         { key: "days_available", label: "Days available", sortable: false, render: (v: string[] | null) => formatDaysAvailable(v) },
     ];
 
-    return (
-        <div>
-            <AdminPageHeader title={title} subtitle="Vendor status and assignments." />
-
-            {error && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-                    Error: {error}
+    const filterTrigger = (
+        <div className="relative" ref={filterRef}>
+            <button
+                type="button"
+                onClick={() => setFilterOpen((o) => !o)}
+                className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+                aria-expanded={filterOpen}
+                aria-haspopup="true"
+            >
+                <Filter className="h-4 w-4 text-alloy-muted" />
+                Filter
+                {statusKeyParam && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+            </button>
+            {filterOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                    <div className="space-y-3">
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                            >
+                                <option value="">All</option>
+                                {statusOptions.map((s) => (
+                                    <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                            <button type="button" onClick={applyFilter} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
+                            {statusKeyParam && <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>}
+                        </div>
+                    </div>
                 </div>
             )}
+        </div>
+    );
 
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-                <div className="relative" ref={filterRef}>
-                    <button
-                        type="button"
-                        onClick={() => setFilterOpen((o) => !o)}
-                        className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
-                        aria-expanded={filterOpen}
-                        aria-haspopup="true"
-                    >
-                        <Filter className="h-4 w-4 text-alloy-muted" />
-                        Filter
-                        {statusKeyParam && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
-                    </button>
-                    {filterOpen && (
-                        <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
-                            <div className="space-y-3">
-                                <div>
-                                    <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
-                                    <select
-                                        value={filterStatus}
-                                        onChange={(e) => setFilterStatus(e.target.value)}
-                                        className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
-                                    >
-                                        <option value="">All</option>
-                                        {statusOptions.map((s) => (
-                                            <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="flex gap-2 pt-1">
-                                    <button type="button" onClick={applyFilter} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
-                                    {statusKeyParam && <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <DataTable
-                data={initialData}
-                columns={columns}
-                filters={[]}
-                onRowClick={(row) => openDrawer({ type: "vendors", id: row.id })}
+    return (
+        <div>
+            <AdminListPageHeader
+                title={title}
+                subtitle="Vendor status and assignments."
+                toolbarLeft={filterTrigger}
             />
+            <div className="pt-6">
+                {error && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                        Error: {error}
+                    </div>
+                )}
+                <DataTable
+                    data={initialData}
+                    columns={columns}
+                    filters={[]}
+                    onRowClick={(row) => openDrawer({ type: "vendors", id: row.id })}
+                />
+            </div>
         </div>
     );
 }

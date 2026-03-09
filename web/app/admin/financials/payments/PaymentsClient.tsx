@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
-import SectionCard from "@/components/admin/SectionCard";
+import { useCallback, useEffect, useRef, useState } from "react";
+import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { Filter } from "lucide-react";
 
 type PaymentRow = {
     id: string;
@@ -49,6 +49,18 @@ export default function PaymentsClient() {
     const [toDate, setToDate] = useState("");
     const [jobIdSearch, setJobIdSearch] = useState("");
     const [jobIdApplied, setJobIdApplied] = useState("");
+    const [filterOpen, setFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const hasActiveFilters = status || statusKeyFilter || fromDate || toDate || jobIdApplied;
 
     useEffect(() => {
         fetch("/api/admin/status-definitions?entity_type=payments")
@@ -82,76 +94,89 @@ export default function PaymentsClient() {
         fetchList();
     }, [fetchList]);
 
-    return (
-        <>
-            <AdminPageHeader title={title} />
-            <SectionCard title="Filters" className="mb-4">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Payment status</label>
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                            className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm min-w-[120px]"
-                        >
-                            {STATUS_OPTIONS.map((o) => (
-                                <option key={o.value || "all"} value={o.value}>{o.label}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status (config)</label>
-                        <select
-                            value={statusKeyFilter}
-                            onChange={(e) => setStatusKeyFilter(e.target.value)}
-                            className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm min-w-[120px]"
-                        >
-                            <option value="">All</option>
-                            {statusKeyOptions.map((s) => (
-                                <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">From date</label>
-                        <input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                            className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">To date</label>
-                        <input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Job ID</label>
-                        <div className="flex gap-1">
+    const filterTrigger = (
+        <div className="relative" ref={filterRef}>
+            <button
+                type="button"
+                onClick={() => setFilterOpen((o) => !o)}
+                className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+                aria-expanded={filterOpen}
+                aria-haspopup="true"
+            >
+                <Filter className="h-4 w-4 text-alloy-muted" />
+                Filter
+                {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+            </button>
+            {filterOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                    <div className="space-y-3">
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Payment status</label>
+                            <select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                            >
+                                {STATUS_OPTIONS.map((o) => (
+                                    <option key={o.value || "all"} value={o.value}>{o.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Status (config)</label>
+                            <select
+                                value={statusKeyFilter}
+                                onChange={(e) => setStatusKeyFilter(e.target.value)}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                            >
+                                <option value="">All</option>
+                                {statusKeyOptions.map((s) => (
+                                    <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">From date</label>
+                            <input
+                                type="date"
+                                value={fromDate}
+                                onChange={(e) => setFromDate(e.target.value)}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">To date</label>
+                            <input
+                                type="date"
+                                value={toDate}
+                                onChange={(e) => setToDate(e.target.value)}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Job ID</label>
                             <input
                                 type="text"
                                 placeholder="Job ID"
                                 value={jobIdSearch}
                                 onChange={(e) => setJobIdSearch(e.target.value)}
-                                className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-48 font-mono text-xs"
+                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), setJobIdApplied(jobIdSearch.trim()), setFilterOpen(false))}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-mono text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
                             />
+                        </div>
+                        <div className="flex gap-2 pt-1">
                             <button
                                 type="button"
-                                onClick={() => setJobIdApplied(jobIdSearch.trim())}
-                                className="px-3 py-1.5 text-sm bg-alloy-stone/30 rounded hover:bg-alloy-stone/50"
+                                onClick={() => { setJobIdApplied(jobIdSearch.trim()); setFilterOpen(false); }}
+                                className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30"
                             >
                                 Apply
                             </button>
-                            {jobIdApplied && (
+                            {hasActiveFilters && (
                                 <button
                                     type="button"
-                                    onClick={() => { setJobIdSearch(""); setJobIdApplied(""); }}
-                                    className="px-2 py-1.5 text-sm text-alloy-midnight/70 hover:underline"
+                                    onClick={() => { setStatus(""); setStatusKeyFilter(""); setFromDate(""); setToDate(""); setJobIdSearch(""); setJobIdApplied(""); setFilterOpen(false); }}
+                                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline"
                                 >
                                     Clear
                                 </button>
@@ -159,48 +184,64 @@ export default function PaymentsClient() {
                         </div>
                     </div>
                 </div>
-            </SectionCard>
-            <SectionCard title={`${plural} (view-only)`}>
-                {loading ? (
-                    <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                    <th className="pb-2 pr-4">Created</th>
-                                    <th className="pb-2 pr-4">Amount</th>
-                                    <th className="pb-2 pr-4">Status</th>
-                                    <th className="pb-2 pr-4">Job</th>
-                                    <th className="pb-2 pr-4">Provider ID</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {payments.length === 0 ? (
-                                    <tr><td colSpan={5} className="py-4 text-alloy-midnight/60">No payments found.</td></tr>
-                                ) : (
-                                    payments.map((p) => (
-                                        <tr key={p.id} className="border-b border-alloy-stone/20">
-                                            <td className="py-2 pr-4">{formatDateTime(p.created_at)}</td>
-                                            <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
-                                            <td className="py-2 pr-4">{p.payment_statuses?.key ? <StatusBadge statusKey={p.payment_statuses.key} /> : "—"}</td>
-                                            <td className="py-2 pr-4">
-                                                {p.job_id ? (
-                                                    <button type="button" onClick={() => openDrawer({ type: "jobs", id: p.job_id! })} className="text-alloy-blue hover:underline font-mono text-xs text-left">
-                                                        {p.job_id.slice(0, 8)}…
-                                                    </button>
-                                                ) : "—"}
-                                            </td>
-                                            <td className="py-2 pr-4 font-mono text-xs text-alloy-midnight/60">{p.provider_payment_id ?? "—"}</td>
+            )}
+        </div>
+    );
+
+    return (
+        <>
+            <AdminListPageHeader
+                title={title}
+                subtitle="View-only list. Use filters to narrow results."
+                toolbarLeft={filterTrigger}
+            />
+            <div className="pt-6">
+                <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
+                    {loading ? (
+                        <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-alloy-stone/30 bg-alloy-stone/40">
+                                            <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Created</th>
+                                            <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Amount</th>
+                                            <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
+                                            <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Job</th>
+                                            <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Provider ID</th>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-                {!loading && total > 0 && <p className="mt-2 text-xs text-alloy-midnight/60">Showing {payments.length} of {total}</p>}
-            </SectionCard>
+                                    </thead>
+                                    <tbody className="divide-y divide-alloy-stone/30">
+                                        {payments.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={5} className="px-5 py-14 text-center text-sm text-alloy-muted">No payments found.</td>
+                                            </tr>
+                                        ) : (
+                                            payments.map((p) => (
+                                                <tr key={p.id} className="hover:bg-alloy-stone/50">
+                                                    <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(p.created_at)}</td>
+                                                    <td className="px-5 py-3.5 text-alloy-midnight/90">{formatMoneyFromCents(p.amount_cents)}</td>
+                                                    <td className="px-5 py-3.5">{p.payment_statuses?.key ? <StatusBadge statusKey={p.payment_statuses.key} /> : "—"}</td>
+                                                    <td className="px-5 py-3.5">
+                                                        {p.job_id ? (
+                                                            <button type="button" onClick={() => openDrawer({ type: "jobs", id: p.job_id! })} className="text-alloy-blue hover:underline font-mono text-xs text-left">
+                                                                {p.job_id.slice(0, 8)}…
+                                                            </button>
+                                                        ) : "—"}
+                                                    </td>
+                                                    <td className="px-5 py-3.5 font-mono text-xs text-alloy-midnight/60">{p.provider_payment_id ?? "—"}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {total > 0 && <p className="px-5 py-2 text-xs text-alloy-muted border-t border-alloy-stone/30">Showing {payments.length} of {total}</p>}
+                        </>
+                    )}
+                </div>
+            </div>
         </>
     );
 }

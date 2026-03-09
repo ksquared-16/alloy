@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -169,71 +169,74 @@ export default function SchedulesClient() {
 
   const hasActiveFilters = from || to || jobIdFilter || statusKeyFilter || includeCanceled;
 
+  const filterTrigger = (
+    <div className="relative" ref={filterRef}>
+      <button
+        type="button"
+        onClick={() => setFilterOpen((o) => !o)}
+        className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+        aria-expanded={filterOpen}
+        aria-haspopup="true"
+      >
+        <Filter className="h-4 w-4 text-alloy-muted" />
+        Filter
+        {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+      </button>
+      {filterOpen && (
+        <div className="absolute left-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">From (start_at)</label>
+              <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">To (start_at)</label>
+              <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">Job</label>
+              <select value={jobIdFilter} onChange={(e) => setJobIdFilter(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                <option value="">All jobs</option>
+                {jobs.map((j) => (
+                  <option key={j.id} value={j.id}>{j.title ?? j.id}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
+              <select value={statusKeyFilter} onChange={(e) => setStatusKeyFilter(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                <option value="">All</option>
+                {statusOptions.map((s) => (
+                  <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                ))}
+              </select>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" checked={includeCanceled} onChange={(e) => setIncludeCanceled(e.target.checked)} className="rounded border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/20" />
+              <span className="text-sm text-alloy-midnight/80">Include canceled</span>
+            </label>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setFilterOpen(false)} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
+              {hasActiveFilters && (
+                <button type="button" onClick={() => { setFrom(""); setTo(""); setJobIdFilter(""); setStatusKeyFilter(""); setIncludeCanceled(false); setFilterOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <AdminPageHeader
+      <AdminListPageHeader
         title={title}
         subtitle={`Org-scoped ${plural.toLowerCase()}. Job is required. Only admins can create, edit, or cancel.`}
+        toolbarLeft={filterTrigger}
+        toolbarRight={<button type="button" onClick={openCreate} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>}
       />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="relative" ref={filterRef}>
-          <button
-            type="button"
-            onClick={() => setFilterOpen((o) => !o)}
-            className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
-            aria-expanded={filterOpen}
-            aria-haspopup="true"
-          >
-            <Filter className="h-4 w-4 text-alloy-muted" />
-            Filter
-            {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
-          </button>
-          {filterOpen && (
-            <div className="absolute left-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-alloy-muted">From (start_at)</label>
-                  <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-alloy-muted">To (start_at)</label>
-                  <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-alloy-muted">Job</label>
-                  <select value={jobIdFilter} onChange={(e) => setJobIdFilter(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
-                    <option value="">All jobs</option>
-                    {jobs.map((j) => (
-                      <option key={j.id} value={j.id}>{j.title ?? j.id}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
-                  <select value={statusKeyFilter} onChange={(e) => setStatusKeyFilter(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
-                    <option value="">All</option>
-                    {statusOptions.map((s) => (
-                      <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-                    ))}
-                  </select>
-                </div>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input type="checkbox" checked={includeCanceled} onChange={(e) => setIncludeCanceled(e.target.checked)} className="rounded border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/20" />
-                  <span className="text-sm text-alloy-midnight/80">Include canceled</span>
-                </label>
-                <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setFilterOpen(false)} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
-                  {hasActiveFilters && (
-                    <button type="button" onClick={() => { setFrom(""); setTo(""); setJobIdFilter(""); setStatusKeyFilter(""); setIncludeCanceled(false); setFilterOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        <button type="button" onClick={openCreate} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>
-      </div>
-      <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
+      <div className="pt-6">
+        <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
         ) : (
@@ -289,6 +292,7 @@ export default function SchedulesClient() {
             </table>
           </div>
         )}
+        </div>
       </div>
 
       <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={`New ${singular}`} zIndexBackdrop={60} zIndexPanel={70}>
