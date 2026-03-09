@@ -16,9 +16,11 @@ interface DrawerProps {
     /** Optional: use higher z-index when stacking drawers (e.g. 60/70) */
     zIndexBackdrop?: number;
     zIndexPanel?: number;
+    /** Optional: 4px left accent border color (e.g. "rgb(0,69,140)") */
+    accentColor?: string;
 }
 
-export default function Drawer({ isOpen, onClose, title, children, statusBadge, headerActions, headerExtra, zIndexBackdrop = 40, zIndexPanel = 50 }: DrawerProps) {
+export default function Drawer({ isOpen, onClose, title, children, statusBadge, headerActions, headerExtra, zIndexBackdrop = 40, zIndexPanel = 50, accentColor }: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -42,7 +44,10 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
             />
 
             {/* Drawer */}
-            <div className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-xl flex flex-col border-l border-[#59678b]/40" style={{ zIndex: zIndexPanel }}>
+            <div
+                className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-xl flex flex-col ${accentColor ? "" : "border-l border-[#59678b]/40"}`}
+                style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeft: `4px solid ${accentColor}` } : {}) }}
+            >
                 <div className="sticky top-0 z-10 bg-white shrink-0 border-b border-alloy-stone/30 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
                     <div className="px-6 py-4 flex items-center justify-between gap-4">
                         <div className="min-w-0 flex-1 flex items-center gap-3">

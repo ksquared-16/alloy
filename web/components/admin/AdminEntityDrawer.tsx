@@ -56,6 +56,24 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 const DRAWER_ROW_SPACING = "space-y-4";
 
+/** Entity types that use inline-edit (no Edit toggle); always show inputs, save on blur or Save. */
+const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members"] as const;
+
+/** Subtle input styling: looks like text until hover/focus. */
+const INLINE_EDIT_INPUT_CLASS = "w-full px-1.5 py-1 text-sm border border-transparent rounded bg-transparent hover:border-alloy-stone/30 hover:bg-alloy-stone/5 focus:border-alloy-blue focus:bg-white focus:outline-none disabled:opacity-60";
+
+/** Brand accent colors for drawer left border by entity type (Alloy palette). */
+const DRAWER_ACCENT_COLORS: Partial<Record<AdminDrawerEntityType, string>> = {
+    jobs: "rgb(0,69,140)",
+    schedules: "rgb(0,162,131)",
+    customers: "rgb(0,162,131)",
+    vendors: "rgb(188,67,0)",
+    opportunities: "rgb(0,162,131)",
+    contacts: "rgb(39,63,82)",
+    customer_members: "rgb(39,63,82)",
+    locations: "rgb(0,69,140)",
+};
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <div className="py-1.5">
@@ -343,6 +361,7 @@ export default function AdminEntityDrawer() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -1230,6 +1249,100 @@ export default function AdminEntityDrawer() {
         });
     }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id, formData.discount_code_id]);
 
+    useEffect(() => {
+        if (!data || !drawer.type || !INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) || (data as { _create?: boolean })?._create) {
+            if (drawer.type && !INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number])) setInitialInlineFormSnapshot(null);
+            return;
+        }
+        let initial: Record<string, unknown>;
+        if (drawer.type === "contacts") {
+            initial = {
+                first_name: data.first_name ?? "",
+                last_name: data.last_name ?? "",
+                email: data.email ?? "",
+                phone: data.phone ?? "",
+                company_name: (data.company_name as string) ?? "",
+                notes: (data.notes as string) ?? "",
+                status_key: (data.status_key as string) ?? "",
+                customer_id: (data.customer_id as string) ?? "",
+                vendor_id: (data.vendor_id as string) ?? "",
+                vendor_contact_role: (data.vendor_contact_role as string) ?? "",
+            };
+        } else if (drawer.type === "customers") {
+            initial = { name: data.name ?? "", status_key: (data.status_key as string) ?? "" };
+        } else if (drawer.type === "vendors") {
+            const v = data as { name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null };
+            initial = {
+                status_key: (data.status_key as string) ?? "",
+                name: v.name ?? "",
+                company_name: v.company_name ?? "",
+                phone: v.phone ?? "",
+                email: v.email ?? "",
+                address_line1: v.address_line1 ?? "",
+                city: v.city ?? "",
+                state: v.state ?? "",
+                postal_code: v.postal_code ?? "",
+                days_available: Array.isArray(v.days_available) ? v.days_available.join(", ") : "",
+                operating_hours_open: v.operating_hours_open ?? "",
+                operating_hours_close: v.operating_hours_close ?? "",
+                owns_supplies: !!v.owns_supplies,
+                max_daily_jobs: typeof v.max_daily_jobs === "number" ? v.max_daily_jobs : "",
+                payout_percent: typeof v.payout_percent === "number" ? v.payout_percent : "",
+                service_area_zip_codes: Array.isArray(v.service_area_zip_codes) ? v.service_area_zip_codes.join(", ") : "",
+            };
+        } else if (drawer.type === "opportunities") {
+            const meta = (data.metadata as Record<string, unknown>) || {};
+            initial = {
+                job_date: (data.job_date as string)?.slice(0, 10) ?? "",
+                job_time_window: data.job_time_window ?? "",
+                status_key: (data.status_key as string) ?? "",
+                pipeline_stage_id: data.pipeline_stage_id ?? "",
+                vertical_id: data.vertical_id ?? "",
+                quote_total: data.quote_total ?? "",
+                notes: (meta.notes as string) ?? "",
+            };
+        } else if (drawer.type === "schedules") {
+            initial = {
+                start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
+                end_at: data.end_at ? new Date(data.end_at as string).toISOString().slice(0, 16) : "",
+                timezone: data.timezone ?? "",
+                status_key: (data.status_key as string) ?? "",
+            };
+        } else if (drawer.type === "customer_members") {
+            const rel = (data.relationship as string) ?? "";
+            const meta = (data.metadata as Record<string, unknown>) || {};
+            const custom = (meta.relationship_custom as string) ?? "";
+            initial = {
+                customer_id: data.customer_id ?? "",
+                display_name: data.display_name ?? "",
+                relationship: rel,
+                relationship_custom: custom || rel,
+                first_name: data.first_name ?? "",
+                last_name: data.last_name ?? "",
+                dob: data.dob ?? "",
+                is_active: data.is_active ?? true,
+                status_key: (data.status_key as string) ?? "",
+            };
+        } else {
+            return;
+        }
+        setFormData((prev) => ({ ...prev, ...initial }));
+        setInitialInlineFormSnapshot(JSON.stringify(initial));
+    }, [data, drawer.type, drawer.id]);
+
+    const nonJobFormDirty = useMemo(() => {
+        if (!initialInlineFormSnapshot || !INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number])) return false;
+        try {
+            const initial = JSON.parse(initialInlineFormSnapshot) as Record<string, unknown>;
+            for (const k of Object.keys(initial)) {
+                if (JSON.stringify(formData[k as keyof typeof formData]) !== JSON.stringify(initial[k])) return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    }, [drawer.type, initialInlineFormSnapshot, formData]);
+
     const saveEdit = useCallback(async () => {
         if (!drawer.type || !drawer.id) return;
         setSaving(true);
@@ -1512,6 +1625,16 @@ export default function AdminEntityDrawer() {
         ) : null
     ) : null;
 
+    const handleInlineCancel = useCallback(() => {
+        try {
+            const initial = JSON.parse(initialInlineFormSnapshot ?? "{}") as Record<string, unknown>;
+            setFormData((prev) => ({ ...prev, ...initial }));
+            setSaveError(null);
+        } catch {
+            setSaveError(null);
+        }
+    }, [initialInlineFormSnapshot]);
+
     const drawerHeaderActions = data && !loading && canEditInDrawer(drawer.type) ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
             {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
@@ -1521,15 +1644,24 @@ export default function AdminEntityDrawer() {
                     <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                 </>
             )}
-            {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
+            {INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) && !(data as { _create?: boolean })?._create && canMutate && nonJobFormDirty && (
+                <>
+                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                    <button type="button" onClick={handleInlineCancel} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                </>
+            )}
+            {drawer.type === "workflows" && (
+                <>
+                    {!isEditing && canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>}
+                    {!isEditing && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
+                    {isEditing && <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>}
+                    {isEditing && <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>}
+                </>
+            )}
+            {drawer.type === "schedules" && canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
+            {drawer.type === "locations" && (
                 !isEditing ? (
-                    <>
-                        {canMutate && !(data as { _create?: boolean })?._create && (
-                            <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                        )}
-                        {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
-                        {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
-                    </>
+                    canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
                 ) : (
                     <>
                         <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
@@ -1558,6 +1690,7 @@ export default function AdminEntityDrawer() {
             headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
+            accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
         >
             {loading && <p className="text-alloy-midnight/60">Loading…</p>}
             {error && <p className="text-red-600">Error: {error}</p>}
@@ -1885,33 +2018,18 @@ export default function AdminEntityDrawer() {
                                 </div>
                             ) : drawer.type === "contacts" && data && (
                                 <>
-                                    {isEditing ? (
-                                        <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
-                                            {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                            )}
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} rows={2} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Field label="First name" value={String(data?.first_name ?? "")} />
-                                            <Field label="Last name" value={String(data?.last_name ?? "")} />
-                                            <Field label="Email" value={String(data?.email ?? "")} />
-                                            <Field label="Phone" value={String(data?.phone ?? "")} />
-                                            <Field label="Company name" value={String(data?.company_name ?? "")} />
-                                            <div className="py-1.5">
-                                                <strong className="text-[#45506c] text-sm">Status</strong>
-                                                {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=contacts`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
-                                            </div>
-                                            <Field label="Notes" value={String(data?.notes ?? "")} />
-                                            <Field label="Archived" value={data.archived_at ? "Yes" : "No"} />
-                                        </>
-                                    )}
+                                    <div className="space-y-4">
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                            <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
+                                        )}
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} rows={2} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                    </div>
+                                    <Field label="Archived" value={data.archived_at ? "Yes" : "No"} />
                                     <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     <div className="pt-2 border-t border-[#e6e8ec]">
                                         <strong className="text-alloy-midnight/70">Vendor:</strong>{" "}
@@ -1930,7 +2048,7 @@ export default function AdminEntityDrawer() {
                                             );
                                         })()}
                                     </div>
-                                    {canMutate && !isEditing && (
+                                    {canMutate && (
                                         <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
                                             {data.archived_at ? (
                                                 <button type="button" onClick={async () => { const res = await fetch(`/api/admin/contacts/${drawer.id}/unarchive`, { method: "POST" }); if (res.ok) { refetch(); router.refresh(); } }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/20">Unarchive</button>
@@ -1992,53 +2110,31 @@ export default function AdminEntityDrawer() {
                                                 <button type="button" onClick={closeDrawer} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
                                             </div>
                                         </div>
-                                    ) : isEditing ? (
+                                    ) : (
                                         <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div>
-                                                <label className="block text-sm text-alloy-midnight/70 mb-0.5">Relationship</label>
-                                                <select value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60">
-                                                    <option value="">— Select —</option>
-                                                    {memberRelationshipOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                                                </select>
-                                                {(formData.relationship as string) === "other" && (
-                                                    <input value={String(formData.relationship_custom ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship_custom: e.target.value }))} placeholder="Specify relationship" disabled={!canMutate} className="mt-1 w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" />
+                                            <div className="space-y-4">
+                                                <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Relationship</label>
+                                                    <select value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
+                                                        <option value="">— Select —</option>
+                                                        {memberRelationshipOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                                    </select>
+                                                    {(formData.relationship as string) === "other" && (
+                                                        <input value={String(formData.relationship_custom ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship_custom: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} placeholder="Specify relationship" disabled={!canMutate} className={`mt-1 ${INLINE_EDIT_INPUT_CLASS}`} />
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                                </div>
+                                                <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                                {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                                 )}
+                                                <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            </div>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                    )}
-                                    <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
-                                </>
-                            ) : (
-                                <>
-                                    <Field label="Display name" value={String(data?.display_name ?? "")} />
-                                            <Field
-                                                label="Relationship"
-                                                value={(() => {
-                                                    const rel = (data.relationship as string) ?? "";
-                                                    if (rel === "other") {
-                                                        const custom = ((data.metadata as Record<string, unknown>)?.relationship_custom as string) ?? "";
-                                                        return custom || "Other";
-                                                    }
-                                                    const opt = memberRelationshipOptions.find((o) => o.key === rel);
-                                                    return opt ? opt.label : (rel || "—");
-                                                })()}
-                                            />
-                                            <Field label="First name" value={String(data?.first_name ?? "")} />
-                                            <Field label="Last name" value={String(data?.last_name ?? "")} />
-                                            <Field label="DOB" value={String(data?.dob ?? "")} />
-                                    <Field label="Active" value={data.is_active ? "Yes" : "No"} />
-                                    <div className="py-1.5">
-                                        <strong className="text-[#45506c] text-sm">Status</strong>
-                                        {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=customer_members`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
-                                    </div>
-                                    <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
+                                            <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                             {canMutate && (
                                                 <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
                                                     {!memberDeleteConfirm ? (
@@ -2069,20 +2165,12 @@ export default function AdminEntityDrawer() {
                             )}
                     {drawer.type === "customers" && (
                         <>
-                            {isEditing ? (
-                                <>
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
-                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <Field label="Name" value={String(data?.name ?? "")} />
-                                    <div className="py-1.5">
-                                        <strong className="text-[#45506c] text-sm">Status</strong>
-                                        {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=customers`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
-                                    </div>
+                            <div className="space-y-4">
+                                <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "customers" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customers" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
+                                )}
+                            </div>
                                             {(data._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null) && (
                                                 <div className="py-1.5">
                                                     <strong className="text-[#45506c] text-sm">Primary Contact:</strong>{" "}
@@ -2115,8 +2203,6 @@ export default function AdminEntityDrawer() {
                                                 </div>
                                             )}
                                         </>
-                                    )}
-                                </>
                             )}
                             {drawer.type === "vendors" && (
                                 <>
@@ -2126,29 +2212,16 @@ export default function AdminEntityDrawer() {
                                             <div className="space-y-0">
                                                 <Field label="ID" value={String(data?.id ?? "")} />
                                                 <Field label="Submitted" value={data.submitted_at ? formatDateTime(String(data.submitted_at)) : formatDateTime(String(data?.created_at ?? ""))} />
-                                                {isEditing ? (
-                                                    <>
-                                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="Optional" /></div>
-                                                        {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                                )}
-                                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                        <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Field label="Name" value={String(data?.name ?? "")} />
-                                                        <Field label="Company name" value={String(data?.company_name ?? "").trim() ? String(data?.company_name ?? "") : "—"} />
-                                                        <Field label="Email" value={String(data?.email ?? "")} />
-                                                        <Field label="Phone" value={String(data?.phone ?? "")} />
-                                                        <div className="py-1.5">
-                                                    <strong className="text-[#45506c] text-sm">Status</strong>
-                                                    {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href={`/admin/system/statuses?entity_type=vendors`} className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
+                                                <div className="space-y-4">
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} placeholder="Optional" /></div>
+                                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
+                                                    )}
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                                    <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                 </div>
-                                                        <DrawerLinkWithName label="Primary contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
-                                                    </>
-                                                )}
+                                                <DrawerLinkWithName label="Primary contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4" open>
@@ -2382,42 +2455,28 @@ export default function AdminEntityDrawer() {
                             {drawer.type === "opportunities" && (
                                 <>
                                     <Field label="Name" value={String(data?.name ?? "")} />
-                                    {isEditing ? (
-                                        <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div>
-                                                <label className="block text-sm text-alloy-midnight/70 mb-0.5">Stage</label>
-                                                <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm">
-                                                    <option value="">— None —</option>
-                                                    {pipelines.map((p) => {
-                                                        const pipelineStages = stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position);
-                                                        return pipelineStages.map((s) => (
-                                                            <option key={s.id} value={s.id}>{p.name}: {s.name}</option>
-                                                        ));
-                                                    })}
-                                                </select>
-                                            </div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Vertical ID</label><input value={String(formData.vertical_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            {statusDefsLoading ? null : (
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                            )}
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Field label="Stage" value={String(data?._stage_name ?? data?.status ?? "") || "-"} />
-                                            <Field label={`${jobSingular} Date`} value={formatDate(String(data?.job_date ?? ""))} />
-                                            <Field label="Time Window" value={String(data?.job_time_window ?? "")} />
-                                            <Field label="Quote Total" value={formatMoneyFromDollars(Number(data?.quote_total ?? 0))} />
-                                            <Field label="Notes" value={getMetaString(data?.metadata, "notes") || "-"} />
-                                            <div className="py-1.5">
-                                                <strong className="text-[#45506c] text-sm">Status</strong>
-                                                {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=opportunities" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
-                                            </div>
-                                        </>
-                                    )}
+                                    <div className="space-y-4">
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Stage</label>
+                                            <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
+                                                <option value="">— None —</option>
+                                                {pipelines.map((p) => {
+                                                    const pipelineStages = stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position);
+                                                    return pipelineStages.map((s) => (
+                                                        <option key={s.id} value={s.id}>{p.name}: {s.name}</option>
+                                                    ));
+                                                })}
+                                            </select>
+                                        </div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical ID</label><input value={String(formData.vertical_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        {statusDefsLoading ? null : (
+                                            <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
+                                        )}
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} rows={2} /></div>
+                                    </div>
                                     <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     <DrawerLinkWithName label="Primary Contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
                                 </>
@@ -2723,26 +2782,14 @@ export default function AdminEntityDrawer() {
                                             <button type="button" onClick={() => openDrawer({ type: "opportunities", id: (data._opportunity as { id: string }).id })} className="ml-2 text-alloy-blue hover:underline text-sm">{(data._opportunity as { name?: string }).name ?? (data._opportunity as { id: string }).id.slice(0, 8) + "…"}</button>
                                         </div>
                                     )}
-                                    {isEditing ? (
-                                        <>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                            {statusDefsLoading ? null : (
-                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Field label="Start" value={formatDateTime(String(data?.start_at ?? ""))} />
-                                            <Field label="End" value={formatDateTime(String(data?.end_at ?? ""))} />
-                                            <Field label="Timezone" value={String(data?.timezone ?? "")} />
-                                            <div className="py-1.5">
-                                                <strong className="text-[#45506c] text-sm">Status</strong>
-                                                {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=schedules" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
-                                            </div>
-                                        </>
-                                    )}
+                                    <div className="space-y-4">
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        {statusDefsLoading ? null : (
+                                            <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
+                                        )}
+                                    </div>
                                     {(data.canceled_at as string) && (
                                         <div className="text-amber-700 text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
                                     )}
