@@ -1,0 +1,199 @@
+"use client";
+
+import { ReactNode } from "react";
+import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
+import { formatDate, formatDateTime, formatMoneyFromCents, formatMoneyFromDollars } from "@/lib/adminFormatters";
+import { StatusBadge } from "@/components/admin/StatusBadge";
+import EntityDrawerSection from "./EntityDrawerSection";
+import EntityDrawerField from "./EntityDrawerField";
+
+const INLINE_EDIT_INPUT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
+const INLINE_EDIT_SELECT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none disabled:opacity-60";
+
+export type StatusDefOption = { status_key: string; status_label?: string | null; is_active?: boolean; sort_order?: number };
+
+interface EntityDrawerOverviewProps {
+  entityType: EntityPresentationType;
+  data: Record<string, unknown> | null;
+  /** Custom content for sections that have no fields (e.g. relationship links, lists). Key = section.key */
+  customSectionContent?: Record<string, ReactNode>;
+  isEditing?: boolean;
+  formData?: Record<string, unknown>;
+  onFieldChange?: (key: string, value: unknown) => void;
+  onBlur?: () => void;
+  canEdit?: boolean;
+  statusDefs?: StatusDefOption[];
+  getStatusLabel?: (key: string) => string | null;
+}
+
+function formatFieldValue(
+  value: unknown,
+  field: EntityDrawerFieldConfig,
+  getStatusLabel?: (key: string) => string | null
+): ReactNode {
+  if (value === null || value === undefined) return null;
+  const hint = field.renderHint ?? "text";
+  const key = field.key;
+  switch (hint) {
+    case "date":
+      return formatDate(value as string);
+    case "datetime":
+      return formatDateTime(value as string);
+    case "money":
+      return key.endsWith("_cents") ? formatMoneyFromCents(value as number) : formatMoneyFromDollars(value as number);
+    case "status":
+      return (
+        <StatusBadge
+          label={getStatusLabel?.(String(value)) ?? String(value)}
+          variant="default"
+        />
+      );
+    case "link":
+    case "text":
+    case "custom":
+    default:
+      return String(value);
+  }
+}
+
+function renderFieldEditNode(
+  field: EntityDrawerFieldConfig,
+  formData: Record<string, unknown>,
+  onFieldChange: (key: string, value: unknown) => void,
+  onBlur: () => void,
+  statusDefs: StatusDefOption[] | undefined,
+  disabled: boolean
+): ReactNode {
+  const key = field.key;
+  const value = formData[key];
+  const hint = field.renderHint ?? "text";
+
+  if (hint === "status" && statusDefs && statusDefs.length > 0) {
+    const options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    return (
+      <select
+        value={String(value ?? "")}
+        onChange={(e) => onFieldChange(key, e.target.value || null)}
+        onBlur={onBlur}
+        disabled={disabled}
+        className={INLINE_EDIT_SELECT}
+      >
+        <option value="">— None —</option>
+        {options.map((s) => (
+          <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+        ))}
+      </select>
+    );
+  }
+
+  if (hint === "datetime" || hint === "date") {
+    const str = value != null ? String(value) : "";
+    const type = hint === "date" ? "date" : "datetime-local";
+    const normalized = str && str.length >= 16 ? str.slice(0, 16) : str;
+    return (
+      <input
+        type={type}
+        value={normalized}
+        onChange={(e) => onFieldChange(key, e.target.value)}
+        onBlur={onBlur}
+        disabled={disabled}
+        className={INLINE_EDIT_INPUT}
+      />
+    );
+  }
+
+  if (hint === "money" && key.endsWith("_cents")) {
+    const num = typeof value === "number" ? value / 100 : typeof value === "string" ? parseFloat(value) || 0 : 0;
+    return (
+      <input
+        type="number"
+        step={0.01}
+        value={num > 0 ? num : ""}
+        onChange={(e) => {
+          const v = e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null;
+          onFieldChange(key, v);
+        }}
+        onBlur={onBlur}
+        disabled={disabled}
+        className={INLINE_EDIT_INPUT}
+        placeholder="0.00"
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      value={String(value ?? "")}
+      onChange={(e) => onFieldChange(key, e.target.value)}
+      onBlur={onBlur}
+      disabled={disabled}
+      className={INLINE_EDIT_INPUT}
+    />
+  );
+}
+
+/**
+ * Config-driven entity drawer overview: renders overviewSections from presentation config.
+ * Sections with fields use EntityDrawerSection + EntityDrawerField; sections with no fields use customSectionContent.
+ * Supports read and edit mode; collapse/expand from config defaultExpanded and collapsible.
+ */
+export default function EntityDrawerOverview({
+  entityType,
+  data,
+  customSectionContent = {},
+  isEditing = false,
+  formData,
+  onFieldChange,
+  onBlur,
+  canEdit = false,
+  statusDefs,
+  getStatusLabel,
+}: EntityDrawerOverviewProps) {
+  const config = getEntityPresentation(entityType);
+  const sections = config.drawer?.overviewSections ?? [];
+  if (!sections.length) return null;
+
+  const record = data ?? {};
+  const editFormData = formData ?? record;
+  const handleFieldChange = onFieldChange ?? (() => {});
+  const handleBlur = onBlur ?? (() => {});
+
+  return (
+    <div className="space-y-0" data-entity-drawer-overview>
+      {sections.map((section: EntityDrawerSectionConfig) => {
+        const hasFields = section.fields && section.fields.length > 0;
+        const customContent = customSectionContent[section.key];
+
+        const children: ReactNode = hasFields
+          ? section.fields!.map((field: EntityDrawerFieldConfig) => {
+              const rawValue = isEditing && editFormData[field.key] !== undefined ? editFormData[field.key] : record[field.key];
+              const displayValue = formatFieldValue(rawValue, field, getStatusLabel);
+              const showEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
+              const editNode = showEdit
+                ? renderFieldEditNode(field, editFormData, handleFieldChange, handleBlur, statusDefs, !canEdit)
+                : undefined;
+              return (
+                <EntityDrawerField
+                  key={field.key}
+                  label={field.label}
+                  value={displayValue}
+                  span={field.span ?? 1}
+                  editNode={editNode}
+                  isEditing={showEdit}
+                />
+              );
+            })
+          : customContent ?? null;
+
+        if (!hasFields && !customContent) return null;
+
+        return (
+          <EntityDrawerSection key={section.key} config={section}>
+            {children}
+          </EntityDrawerSection>
+        );
+      })}
+    </div>
+  );
+}

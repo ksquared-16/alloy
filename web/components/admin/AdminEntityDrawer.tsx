@@ -16,6 +16,7 @@ import {
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
 import { getEntityPresentation, toPresentationType, type DrawerTabKey } from "@/lib/entityPresentation";
+import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
@@ -1628,6 +1629,54 @@ export default function AdminEntityDrawer() {
     const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
     const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", documents: "Documents" };
 
+    const useConfigDrivenOverview =
+        !!presentationType &&
+        !!presentationConfig?.drawer?.overviewSections?.length &&
+        presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0) &&
+        !(data as { _create?: boolean })?._create;
+
+    const overviewCustomContent = useMemo(() => {
+        if (!data || !drawer.type) return {};
+        const d = data as Record<string, unknown>;
+        if (drawer.type === "customers") {
+            const primaryContact = d._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null | undefined;
+            const primaryLocation = d._primary_location as { id?: string; label?: string; address1?: string } | null | undefined;
+            const counts = d._counts as { contacts?: number; opportunities?: number; jobs?: number; schedules?: number; locations?: number } | undefined;
+            return {
+                details: (
+                    <div className="space-y-2">
+                        {primaryContact && (
+                            <div className="py-1.5">
+                                <span className="text-alloy-slate text-sm font-medium">Primary Contact: </span>
+                                <button type="button" onClick={() => primaryContact.id && openDrawer({ type: "contacts", id: primaryContact.id })} className="text-alloy-blue hover:underline text-sm ml-1">
+                                    {[primaryContact.first_name, primaryContact.last_name].filter(Boolean).join(" ") || String(primaryContact.id).slice(0, 8) + "…"}
+                                </button>
+                                {(primaryContact.email || primaryContact.phone) && (
+                                    <span className="text-alloy-forge/80 text-sm ml-1">({[primaryContact.email, primaryContact.phone].filter(Boolean).join(" · ")})</span>
+                                )}
+                            </div>
+                        )}
+                        {primaryLocation && (
+                            <div className="py-1.5">
+                                <span className="text-alloy-slate text-sm font-medium">Primary Location: </span>
+                                <button type="button" onClick={() => primaryLocation.id && openDrawer({ type: "locations", id: primaryLocation.id })} className="text-alloy-blue hover:underline text-sm ml-1">
+                                    {primaryLocation.label || primaryLocation.address1 || String(primaryLocation.id).slice(0, 8) + "…"}
+                                </button>
+                            </div>
+                        )}
+                        {counts && (
+                            <div className="py-1.5 text-sm text-alloy-muted">
+                                <span className="text-alloy-slate font-medium">Counts: </span>
+                                Contacts {counts.contacts ?? 0} · Opportunities {counts.opportunities ?? 0} · Jobs {counts.jobs ?? 0} · Schedules {counts.schedules ?? 0} · Locations {counts.locations ?? 0}
+                            </div>
+                        )}
+                    </div>
+                ),
+            };
+        }
+        return {};
+    }, [drawer.type, data, openDrawer]);
+
     const drawerStatusBadge = data && !loading && !(data as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
             <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
@@ -1990,7 +2039,21 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
-                    {drawerTab === "overview" && (
+                    {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
+                        <EntityDrawerOverview
+                            entityType={presentationType}
+                            data={data as Record<string, unknown>}
+                            customSectionContent={overviewCustomContent}
+                            isEditing={isEditing}
+                            formData={formData}
+                            onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
+                            onBlur={() => { if (nonJobFormDirty) saveEdit(); }}
+                            canEdit={!!canMutate}
+                            statusDefs={statusDefsForDrawer}
+                            getStatusLabel={getStatusLabel}
+                        />
+                    )}
+                    {drawerTab === "overview" && !useConfigDrivenOverview && (
                         <>
                             {drawer.type === "contacts" && (data as { _create?: boolean })?._create ? (
                                 <div className="space-y-4">

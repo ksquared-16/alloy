@@ -27,7 +27,7 @@ export default function EntityDrawerSection({
   const isCollapsible = config.collapsible ?? false;
   const [expanded, setExpanded] = useState(defaultExpanded ?? config.defaultExpanded ?? true);
   const showContent = !isCollapsible || expanded;
-  const gridCols = config.gridCols === 2 ? "grid-cols-2" : "grid-cols-1";
+  const gridCols = config.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
 
   return (
     <section
@@ -51,7 +51,7 @@ export default function EntityDrawerSection({
         <h3 className={SECTION_HEADER_CLASS}>{config.title}</h3>
       )}
       {showContent && (
-        <div className={`grid gap-x-6 ${gridCols} ${isCollapsible ? "mt-2" : ""}`}>{children}</div>
+        <div className={`grid gap-x-6 gap-y-1 ${gridCols} ${isCollapsible ? "mt-2" : ""}`}>{children}</div>
       )}
     </section>
   );
