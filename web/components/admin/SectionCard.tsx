@@ -10,7 +10,7 @@ interface SectionCardProps {
 
 export default function SectionCard({ title, children, className = "" }: SectionCardProps) {
     return (
-        <section className={`rounded-xl border border-admin-border bg-admin-surface-card shadow-sm ${className}`}>
+        <section className={`rounded-xl border border-admin-border bg-admin-surface-card shadow-sm overflow-hidden ${className}`}>
             <h2 className="border-b border-admin-border px-5 py-3 text-sm font-semibold uppercase tracking-wider text-alloy-muted">
                 {title}
             </h2>

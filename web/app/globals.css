@@ -15,8 +15,8 @@
   --color-alloy-gold-dark: #d0ad50;
   --color-alloy-muted: #59678b;
   --color-alloy-light: #e6d3a0;
-  /* Admin semantic surfaces (river stone / light neutral with subtle blue tint) */
-  --color-admin-page: #eef2f7;
+  /* Admin semantic surfaces: Layer 1 = page bg (River Stone), Layer 2 = header strip (Alloy Blue tint), Layer 3 = cards (white) */
+  --color-admin-page: #f2f4f8;
   --color-admin-border: #e2e6ec;
   --color-admin-surface-card: #ffffff;
   /* Font */

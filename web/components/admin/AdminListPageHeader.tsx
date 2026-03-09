@@ -24,7 +24,7 @@ export default function AdminListPageHeader({
     const hasToolbar = toolbarLeft != null || toolbarRight != null;
     return (
         <header
-            className={`rounded-t-xl bg-alloy-blue/[0.06] ${BORDER_SEP} px-6 py-4`}
+            className={`rounded-t-xl bg-alloy-blue/[0.08] ${BORDER_SEP} px-6 py-4`}
             role="banner"
         >
             <div className="flex flex-wrap items-center justify-between gap-4">

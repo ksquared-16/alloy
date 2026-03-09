@@ -137,14 +137,14 @@ export default function DataTable<T extends Record<string, any>>({
 
     if (loading) {
         return (
-            <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card p-10`}>
+            <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-sm p-10`}>
                 <div className="text-center text-sm text-alloy-muted">Loading…</div>
             </div>
         );
     }
 
     return (
-        <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card overflow-hidden`}>
+        <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-sm overflow-hidden`}>
             {!hideToolbar && (
                 <div className="flex flex-wrap items-center gap-3 border-b border-admin-border px-4 py-3">
                     {searchable && (
@@ -230,7 +230,7 @@ export default function DataTable<T extends Record<string, any>>({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-admin-border bg-alloy-blue/[0.06]">
+                        <tr className="border-b border-admin-border bg-alloy-blue/[0.08]">
                             {columns.map((column) => {
                                 const isSorted = sortColumn === column.key;
                                 return (
@@ -283,7 +283,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     key={idx}
                                     className={`
                                         transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-blue/[0.04]" : ""}
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-juniper/[0.08]" : ""}
                                     `}
                                     onClick={() => onRowClick?.(row)}
                                 >

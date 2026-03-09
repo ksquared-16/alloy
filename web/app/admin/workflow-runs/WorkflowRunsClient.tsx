@@ -331,7 +331,7 @@ export default function WorkflowRunsClient() {
         <>
             <AdminListPageHeader title="Workflow Runs" toolbarLeft={filterTrigger} />
             <div className="pt-6">
-                <div className="rounded-xl border border-admin-border bg-admin-surface-card overflow-hidden">
+                <div className="rounded-xl border border-admin-border bg-admin-surface-card shadow-sm overflow-hidden">
                 {loading ? (
                     <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
                 ) : (
@@ -339,7 +339,7 @@ export default function WorkflowRunsClient() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-admin-border bg-alloy-blue/[0.06]">
+                                    <tr className="border-b border-admin-border bg-alloy-blue/[0.08]">
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Started at</th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Workflow</th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Event</th>
@@ -355,7 +355,7 @@ export default function WorkflowRunsClient() {
                                         runs.map((r) => (
                                             <tr
                                                 key={r.id}
-                                                className="cursor-pointer hover:bg-alloy-stone/50 transition-colors duration-100"
+                                                className="cursor-pointer hover:bg-alloy-juniper/[0.08] transition-colors duration-100"
                                                 onClick={() => setSelected(r)}
                                             >
                                                 <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(r.started_at)}</td>

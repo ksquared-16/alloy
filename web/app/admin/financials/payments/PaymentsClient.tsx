@@ -192,7 +192,7 @@ export default function PaymentsClient() {
         <>
             <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
             <div className="pt-6">
-                <div className="rounded-xl border border-admin-border bg-admin-surface-card overflow-hidden">
+                <div className="rounded-xl border border-admin-border bg-admin-surface-card shadow-sm overflow-hidden">
                     {loading ? (
                         <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
                     ) : (
@@ -200,7 +200,7 @@ export default function PaymentsClient() {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="border-b border-admin-border bg-alloy-blue/[0.06]">
+                                        <tr className="border-b border-admin-border bg-alloy-blue/[0.08]">
                                             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Created</th>
                                             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Amount</th>
                                             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
@@ -215,7 +215,7 @@ export default function PaymentsClient() {
                                             </tr>
                                         ) : (
                                             payments.map((p) => (
-                                                <tr key={p.id} className="hover:bg-alloy-stone/50">
+                                                <tr key={p.id} className="hover:bg-alloy-juniper/[0.08]">
                                                     <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(p.created_at)}</td>
                                                     <td className="px-5 py-3.5 text-alloy-midnight/90">{formatMoneyFromCents(p.amount_cents)}</td>
                                                     <td className="px-5 py-3.5">{p.payment_statuses?.key ? <StatusBadge statusKey={p.payment_statuses.key} /> : "—"}</td>

@@ -235,7 +235,7 @@ export default function SchedulesClient() {
         toolbarRight={<button type="button" onClick={openCreate} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>}
       />
       <div className="pt-6">
-        <div className="rounded-xl border border-admin-border bg-admin-surface-card overflow-hidden">
+        <div className="rounded-xl border border-admin-border bg-admin-surface-card shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
         ) : (
@@ -266,7 +266,7 @@ export default function SchedulesClient() {
                   schedules.map((s) => (
                     <tr
                       key={s.id}
-                      className="transition-colors duration-100 cursor-pointer hover:bg-alloy-stone/50"
+                      className="transition-colors duration-100 cursor-pointer hover:bg-alloy-juniper/[0.08]"
                       onClick={() => openDrawer({ type: "schedules", id: s.id })}
                     >
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.start_at)}</td>
