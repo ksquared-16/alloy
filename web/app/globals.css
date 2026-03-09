@@ -26,10 +26,10 @@
   --color-admin-page: #eef0f4;
   --color-admin-border: #e2e6ec;
   --color-admin-surface-card: #ffffff;
-  /* Shell: sidebar = Alloy Blue, top bar = Bend Pine */
-  --color-admin-sidebar: #00458C;
-  --color-admin-topbar: #273F52;
-  --color-admin-topbar-divider: #1e323f;
+  /* Shell: top bar = full-width Alloy Blue; sidebar = white with Midnight Forge */
+  --color-admin-topbar: #00458C;
+  --color-admin-topbar-divider: rgba(255,255,255,0.15);
+  --color-admin-sidebar-bg: #ffffff;
   /* Font */
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }
@@ -48,4 +48,9 @@ body {
 /* Admin destructive action: Ember */
 .admin-btn-danger {
   @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-ember text-white hover:bg-alloy-ember/90 focus:outline-none focus:ring-2 focus:ring-alloy-ember focus:ring-offset-1;
+}
+
+/* Destructive/archive link or text: Ember */
+.admin-link-danger {
+  @apply text-alloy-ember hover:text-alloy-ember/90 hover:underline focus:outline-none focus:ring-2 focus:ring-alloy-ember/30 focus:ring-offset-1 rounded;
 }

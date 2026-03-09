@@ -1,13 +1,15 @@
 "use client";
 
-/** Alloy brandmark for admin sidebar/header. Clickable parent (Link) is in AdminLayout. Use variant="light" on dark shells (Bend Pine). */
-export default function AlloyLogo({ compact = false, variant = "default" }: { compact?: boolean; variant?: "default" | "light" }) {
+/** Alloy brandmark for admin. Use variant="white" on Alloy Blue top bar; variant="default" on light backgrounds. */
+export default function AlloyLogo({ compact = false, variant = "default" }: { compact?: boolean; variant?: "default" | "light" | "white" }) {
     const size = 28;
-    const textClass = variant === "light" ? "font-semibold text-white tracking-tight" : "font-semibold text-[#31394d] tracking-tight";
+    const isLight = variant === "light" || variant === "white";
+    const textClass = isLight ? "font-semibold text-white tracking-tight" : "font-semibold text-[#31394d] tracking-tight";
+    const logoSrc = variant === "white" ? "/brand/alloy-brandmark-white.svg" : variant === "light" ? "/brand/alloy-brandmark-blue.svg" : "/brand/alloy-brandmark-gradient.svg";
     return (
         <div className="flex items-center gap-2">
             <img
-                src={variant === "light" ? "/brand/alloy-brandmark-blue.svg" : "/brand/alloy-brandmark-gradient.svg"}
+                src={logoSrc}
                 alt="Alloy"
                 width={size}
                 height={size}

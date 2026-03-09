@@ -38,7 +38,7 @@ function isNestedNavItem(item: NavItem): item is { label: string; subItems: NavL
 }
 
 type IconComponent = React.ComponentType<{ className?: string }>;
-const iconClass = "h-4 w-4 shrink-0 text-white/80";
+const iconClassSidebar = "h-4 w-4 shrink-0 text-alloy-midnight/70";
 
 const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
     {
@@ -244,101 +244,14 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     };
 
     return (
-        <div className="min-h-screen bg-admin-page flex">
-            <aside className="w-64 bg-admin-sidebar border-r border-alloy-blue/80 flex flex-col">
-                <div className="p-5 border-b border-white/15">
-                    <Link href="/admin" className="block" aria-label="Home">
-                        <AlloyLogo variant="light" />
-                    </Link>
-                    <p className="mt-2 text-xs text-white/70">Admin</p>
-                </div>
-                <nav
-                    ref={sidebarScrollRef}
-                    className="flex-1 overflow-y-auto overflow-x-hidden p-4"
-                    aria-label="Admin navigation"
-                >
-                    {navGroups.map((group) => {
-                        const GroupIcon = group.icon;
-                        const isCollapsed = collapsed[group.label] ?? true;
-                        return (
-                            <div key={group.label} className="mb-4">
-                                <button
-                                    type="button"
-                                    onClick={() => toggleGroup(group.label)}
-                                    className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white/80 hover:bg-white/10 rounded-md gap-2"
-                                >
-                                    <span className="flex items-center gap-2">
-                                        {GroupIcon && <GroupIcon className={iconClass} />}
-                                        {group.label}
-                                    </span>
-                                    {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-white/60" /> : <ChevronDown className="h-3.5 w-3.5 text-white/60" />}
-                                </button>
-                                {!isCollapsed && (
-                                    <ul className="mt-1.5 space-y-0.5">
-                                        {group.items.map((item) => {
-                                            if (isNestedNavItem(item)) {
-                                                const isNestedOpen = !(nestedCollapsed[item.label] ?? true);
-                                                const hasActiveChild = item.subItems.some((s) => s.href === pathname);
-                                                const NestedIcon = getLinkIcon("", item.label, item.label);
-                                                return (
-                                                    <li key={item.label}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleNested(item.label)}
-                                                            className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-white/20 text-white border-l-2 border-white/50" : "text-white/90 hover:bg-white/10"}`}
-                                                        >
-                                                            <span className="flex items-center gap-2 min-w-0">
-                                                                {NestedIcon && <NestedIcon className={`${iconClass} ${hasActiveChild ? "text-white/90" : ""}`} />}
-                                                                <span className="truncate">{item.label}</span>
-                                                            </span>
-                                                            {isNestedOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                                                        </button>
-                                                        {isNestedOpen && (
-                                                            <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-white/15 pl-2">
-                                                                {item.subItems.map((sub) => {
-                                                                    const isActive = pathname === sub.href;
-                                                                    const displayLabel = navLinkLabel(sub, labels);
-                                                                    return (
-                                                                        <li key={sub.href}>
-                                                                            <Link
-                                                                                href={sub.href}
-                                                                                className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-white/20 text-white border-l-2 border-white/50" : "text-white/90 hover:bg-white/10"}`}
-                                                                            >
-                                                                                {displayLabel}
-                                                                            </Link>
-                                                                        </li>
-                                                                    );
-                                                                })}
-                                                            </ul>
-                                                        )}
-                                                    </li>
-                                                );
-                                            }
-                                            const link = item as NavLink;
-                                            const isActive = pathname === link.href;
-                                            const LinkIcon = getLinkIcon(link.href, link.label);
-                                            const displayLabel = navLinkLabel(link, labels);
-                                            return (
-                                                <li key={link.href}>
-                                                    <Link
-                                                        href={link.href}
-                                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-white/20 text-white border-l-2 border-white/50" : "text-white/90 hover:bg-white/10"}`}
-                                                    >
-                                                        {LinkIcon && <LinkIcon className={`${iconClass} ${isActive ? "text-white/90" : ""}`} />}
-                                                        <span className="truncate">{displayLabel}</span>
-                                                    </Link>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                )}
-                            </div>
-                        );
-                    })}
-                </nav>
-            </aside>
-            <main className="flex-1 overflow-auto flex flex-col bg-admin-page">
-                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3.5 bg-admin-topbar border-b border-admin-topbar-divider">
+        <div className="min-h-screen bg-admin-page flex flex-col">
+            {/* Full-width Alloy Blue top bar: logo left, vertical + avatar right */}
+            <header className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-3 bg-alloy-blue border-b border-[var(--color-admin-topbar-divider)]">
+                <Link href="/admin" className="flex items-center gap-3 py-1" aria-label="Home">
+                    <AlloyLogo variant="white" />
+                    <span className="text-sm font-medium text-white/90">Admin</span>
+                </Link>
+                <div className="flex items-center gap-4">
                     <div className="relative">
                         <button
                             type="button"
@@ -377,7 +290,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                         <button
                             type="button"
                             onClick={() => { setProfileOpen((o) => !o); setVerticalOpen(false); }}
-                            className="w-9 h-9 rounded-full bg-alloy-blue text-white text-sm font-medium flex items-center justify-center hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-2 focus:ring-offset-admin-topbar"
+                            className="w-9 h-9 rounded-full bg-white/20 text-white text-sm font-medium flex items-center justify-center hover:bg-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-alloy-blue"
                         >
                             {getInitials(userEmail)}
                         </button>
@@ -391,14 +304,104 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                             </>
                         )}
                     </div>
-                </header>
-                <div className="p-8 flex-1">
-                    <AdminDrawerProvider>
-                        {children}
-                        <AdminEntityDrawer />
-                    </AdminDrawerProvider>
                 </div>
-            </main>
+            </header>
+            <div className="flex flex-1 min-h-0">
+                <aside className="w-64 flex-shrink-0 bg-[var(--color-admin-sidebar-bg)] border-r border-admin-border flex flex-col">
+                    <nav
+                        ref={sidebarScrollRef}
+                        className="flex-1 overflow-y-auto overflow-x-hidden p-4"
+                        aria-label="Admin navigation"
+                    >
+                        {navGroups.map((group) => {
+                            const GroupIcon = group.icon;
+                            const isCollapsed = collapsed[group.label] ?? true;
+                            return (
+                                <div key={group.label} className="mb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleGroup(group.label)}
+                                        className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-alloy-midnight hover:bg-alloy-stone/50 rounded-md gap-2"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            {GroupIcon && <GroupIcon className={iconClassSidebar} />}
+                                            {group.label}
+                                        </span>
+                                        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-alloy-midnight/50" /> : <ChevronDown className="h-3.5 w-3.5 text-alloy-midnight/50" />}
+                                    </button>
+                                    {!isCollapsed && (
+                                        <ul className="mt-1.5 space-y-0.5">
+                                            {group.items.map((item) => {
+                                                if (isNestedNavItem(item)) {
+                                                    const isNestedOpen = !(nestedCollapsed[item.label] ?? true);
+                                                    const hasActiveChild = item.subItems.some((s) => s.href === pathname);
+                                                    const NestedIcon = getLinkIcon("", item.label, item.label);
+                                                    return (
+                                                        <li key={item.label}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleNested(item.label)}
+                                                                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                            >
+                                                                <span className="flex items-center gap-2 min-w-0">
+                                                                    {NestedIcon && <NestedIcon className={iconClassSidebar} />}
+                                                                    <span className="truncate">{item.label}</span>
+                                                                </span>
+                                                                {isNestedOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/50" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/50" />}
+                                                            </button>
+                                                            {isNestedOpen && (
+                                                                <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-admin-border pl-2">
+                                                                    {item.subItems.map((sub) => {
+                                                                        const isActive = pathname === sub.href;
+                                                                        const displayLabel = navLinkLabel(sub, labels);
+                                                                        return (
+                                                                            <li key={sub.href}>
+                                                                                <Link
+                                                                                    href={sub.href}
+                                                                                    className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                                                >
+                                                                                    {displayLabel}
+                                                                                </Link>
+                                                                            </li>
+                                                                        );
+                                                                    })}
+                                                                </ul>
+                                                            )}
+                                                        </li>
+                                                    );
+                                                }
+                                                const link = item as NavLink;
+                                                const isActive = pathname === link.href;
+                                                const LinkIcon = getLinkIcon(link.href, link.label);
+                                                const displayLabel = navLinkLabel(link, labels);
+                                                return (
+                                                    <li key={link.href}>
+                                                        <Link
+                                                            href={link.href}
+                                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                        >
+                                                            {LinkIcon && <LinkIcon className={iconClassSidebar} />}
+                                                            <span className="truncate">{displayLabel}</span>
+                                                        </Link>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </nav>
+                </aside>
+                <main className="flex-1 overflow-auto flex flex-col bg-admin-page">
+                    <div className="p-8 flex-1">
+                        <AdminDrawerProvider>
+                            {children}
+                            <AdminEntityDrawer />
+                        </AdminDrawerProvider>
+                    </div>
+                </main>
+            </div>
         </div>
     );
 }
