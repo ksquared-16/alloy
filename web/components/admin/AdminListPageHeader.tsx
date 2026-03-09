@@ -2,16 +2,14 @@
 
 import { ReactNode } from "react";
 
-/** Single-row list page header: title (and optional metrics) left, filter + primary CTA right. Subtle branded surface. */
-const BORDER_SEP = "border-b border-admin-border";
-
+/** List page header strip (Layer 3): title + metrics left, filter + CTA right. Brand-tinted surface. */
 interface AdminListPageHeaderProps {
     title: string;
-    /** Optional metrics: pills or counts shown after the title on the same row */
+    /** Optional metrics: pills or counts on the same row as title */
     metrics?: ReactNode;
-    /** Filter button (and any search) – shown on the right */
+    /** Filter / search – right side */
     toolbarLeft?: ReactNode;
-    /** Primary CTA button(s) – shown on the far right */
+    /** Primary CTA – far right */
     toolbarRight?: ReactNode;
 }
 
@@ -24,7 +22,7 @@ export default function AdminListPageHeader({
     const hasToolbar = toolbarLeft != null || toolbarRight != null;
     return (
         <header
-            className={`rounded-t-xl bg-alloy-pine/[0.06] ${BORDER_SEP} px-6 py-4`}
+            className="rounded-xl border border-admin-border bg-alloy-pine/[0.08] px-6 py-4 mb-4 shadow-sm"
             role="banner"
         >
             <div className="flex flex-wrap items-center justify-between gap-4">

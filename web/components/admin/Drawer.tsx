@@ -7,11 +7,11 @@ interface DrawerProps {
     onClose: () => void;
     title: ReactNode;
     children: ReactNode;
-    /** Optional: status badge shown next to title in header */
+    /** Optional: status badge shown on second row with actions */
     statusBadge?: ReactNode;
-    /** Optional: primary action buttons aligned right in header (sticky) */
+    /** Optional: primary action buttons on second row (sticky) */
     headerActions?: ReactNode;
-    /** Optional: sticky content below title row (e.g. tabs). Only body scrolls. */
+    /** Optional: sticky content below title/actions (e.g. tabs). Only body scrolls. */
     headerExtra?: ReactNode;
     /** Optional: use higher z-index when stacking drawers (e.g. 60/70) */
     zIndexBackdrop?: number;
@@ -20,7 +20,7 @@ interface DrawerProps {
     accentColor?: string;
 }
 
-export default function Drawer({ isOpen, onClose, title, children, statusBadge, headerActions, headerExtra, zIndexBackdrop = 40, zIndexPanel = 50, accentColor }: DrawerProps) {
+export default function Drawer({ isOpen, onClose, title, statusBadge, headerActions, headerExtra, children, zIndexBackdrop = 40, zIndexPanel = 50, accentColor }: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -34,38 +34,44 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
 
     if (!isOpen) return null;
 
+    const titleText = typeof title === "string" ? title : title != null ? String(title) : "—";
+
     return (
         <>
-            {/* Backdrop */}
             <div
                 className="fixed inset-0 bg-black/50"
                 style={{ zIndex: zIndexBackdrop }}
                 onClick={onClose}
             />
-
-            {/* Drawer */}
             <div
                 className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-admin-surface-card border border-admin-border shadow-xl flex flex-col ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}
                 style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor } : {}) }}
             >
-                <div className="sticky top-0 z-10 bg-alloy-pine/[0.06] shrink-0 border-b border-admin-border">
-                    <div className="px-6 py-4 flex items-center justify-between gap-4">
-                        <div className="min-w-0 flex-1 flex items-center gap-3">
-                            <h2 className="text-xl font-bold text-alloy-forge truncate">{typeof title === "string" ? title : title != null ? String(title) : "—"}</h2>
+                {/* Sticky header: brand-tinted surface */}
+                <div className="sticky top-0 z-10 shrink-0 border-b border-admin-border bg-alloy-pine/[0.07]">
+                    {/* Row 1: full title only — no truncation */}
+                    <div className="px-6 pt-4 pb-2">
+                        <h2 className="text-xl font-bold text-alloy-forge leading-snug break-words">
+                            {titleText}
+                        </h2>
+                    </div>
+                    {/* Row 2: status + actions + close */}
+                    <div className="px-6 pb-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
                             {statusBadge != null && statusBadge !== false && statusBadge}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
                             {headerActions}
-                            <button
-                                onClick={onClose}
-                                className="text-alloy-muted hover:text-alloy-forge text-2xl leading-none transition-colors"
-                            >
-                                ×
-                            </button>
                         </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="shrink-0 text-alloy-midnight/70 hover:text-alloy-forge text-2xl leading-none transition-colors p-1"
+                            aria-label="Close"
+                        >
+                            ×
+                        </button>
                     </div>
                     {headerExtra != null && headerExtra !== false && (
-                        <div className="px-6 pb-3 border-t border-admin-border bg-alloy-pine/[0.04]">
+                        <div className="px-6 pb-3 pt-0 border-t border-admin-border/80 bg-alloy-blue/[0.04]">
                             {headerExtra}
                         </div>
                     )}
@@ -75,4 +81,3 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
         </>
     );
 }
-

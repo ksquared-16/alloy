@@ -50,6 +50,11 @@ body {
   @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-ember text-white hover:bg-alloy-ember/90 focus:outline-none focus:ring-2 focus:ring-alloy-ember focus:ring-offset-1;
 }
 
+/* Admin success action: Bend Pine / Juniper */
+.admin-btn-success {
+  @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-juniper text-white hover:bg-alloy-juniper/90 focus:outline-none focus:ring-2 focus:ring-alloy-juniper focus:ring-offset-1;
+}
+
 /* Destructive/archive link or text: Ember */
 .admin-link-danger {
   @apply text-alloy-ember hover:text-alloy-ember/90 hover:underline focus:outline-none focus:ring-2 focus:ring-alloy-ember/30 focus:ring-offset-1 rounded;

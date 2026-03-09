@@ -29,7 +29,7 @@ interface DataTableProps<T> {
 }
 
 const TABLE_BORDER = "border-admin-border";
-const INPUT_CLASS = "w-full rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-sm text-alloy-forge placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
+const INPUT_CLASS = "w-full rounded-lg border border-admin-border bg-white px-3 py-2 text-sm text-alloy-forge placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/25";
 const BTN_PRIMARY = "rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:ring-offset-1";
 const BTN_SECONDARY = "rounded-lg border border-admin-border px-3 py-1.5 text-sm font-medium text-alloy-forge/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
 
@@ -137,14 +137,14 @@ export default function DataTable<T extends Record<string, any>>({
 
     if (loading) {
         return (
-            <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-sm p-10`}>
+            <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-md p-10`}>
                 <div className="text-center text-sm text-alloy-muted">Loading…</div>
             </div>
         );
     }
 
     return (
-        <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-sm overflow-hidden`}>
+        <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-md overflow-hidden`}>
             {!hideToolbar && (
                 <div className="flex flex-wrap items-center gap-3 border-b border-admin-border px-4 py-3">
                     {searchable && (

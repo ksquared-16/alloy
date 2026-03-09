@@ -1725,9 +1725,9 @@ export default function AdminEntityDrawer() {
     ) : undefined;
 
     const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
-        <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
+        <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white/60 p-0.5">
             {tabList.map((tab) => (
-                <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-muted hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
+                <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-pine/10"}`}>{tabLabels[tab] ?? tab}</button>
             ))}
         </div>
     ) : undefined;
@@ -1746,10 +1746,10 @@ export default function AdminEntityDrawer() {
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
         >
             {loading && <p className="text-alloy-midnight/60">Loading…</p>}
-            {error && <p className="text-red-600">Error: {error}</p>}
+            {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && (
                 <div className="space-y-6">
-                    {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                    {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                     {drawer.type === "schedules" && (data as { _create?: boolean })?._create && (
                         <div className="space-y-4">
                             <p className="text-sm text-alloy-midnight/70">Create a new schedule. {drawer.defaultSchedulePrefill?.job_id ? `${jobSingular} is prefilled.` : "Enter start and end times."}</p>
@@ -2692,7 +2692,7 @@ export default function AdminEntityDrawer() {
                                                     <div className="flex gap-2 pt-1">
                                                         <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.status_key as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const grossCents = Number(formData.gross_price_cents ?? 0); const discountCodeId = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null; const selectedCode = discountCodeId ? jobDiscountCodeOptions.find((c) => c.id === discountCodeId) : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(grossCents * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(grossCents, Math.max(0, Math.round(dollars * 100))); } } const body: Record<string, unknown> = { customer_id: (formData.customer_id as string)?.trim(), status_key: (formData.status_key as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: grossCents || null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null, discount_code_id: discountCodeId || null, discount_code: selectedCode ? selectedCode.code : null, discount_amount: discountCents, discounted: !!selectedCode }; const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
                                                     </div>
-                                                    {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                                                    {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                                                 </>
                                             )}
                                             {!(data as { _create?: boolean })?._create && drawer.type !== "jobs" && (
@@ -3388,7 +3388,7 @@ export default function AdminEntityDrawer() {
                                                     </div>
                                                 </>
                                             )}
-                                            {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
+                                            {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                                             {runModalOpen && drawer.id && drawer.id !== "new" && (
                                                 <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onClick={() => setRunModalOpen(false)}>
                                                     <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-auto p-4 border border-[#59678b]/40" onClick={(e) => e.stopPropagation()}>

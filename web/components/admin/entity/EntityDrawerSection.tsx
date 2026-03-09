@@ -4,7 +4,7 @@ import { ReactNode, useState } from "react";
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 
 const SECTION_HEADER_CLASS =
-  "text-xs font-semibold uppercase tracking-wider text-alloy-muted border-b border-admin-border pb-2 mb-4";
+  "text-xs font-semibold uppercase tracking-wider text-alloy-midnight/90 border-b border-admin-border pb-2 mb-4";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
