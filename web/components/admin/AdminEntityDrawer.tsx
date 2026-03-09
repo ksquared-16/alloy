@@ -15,6 +15,7 @@ import {
     WORKFLOW_EVENT_TYPES,
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
+import { getEntityPresentation, toPresentationType, type DrawerTabKey } from "@/lib/entityPresentation";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
@@ -459,7 +460,7 @@ export default function AdminEntityDrawer() {
     const [jobContactOptions, setJobContactOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobContactOptionsLoading, setJobContactOptionsLoading] = useState(false);
     const [jobCreateSaving, setJobCreateSaving] = useState(false);
-    const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "financials" | "automation" | "activity">("overview");
+    const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
@@ -1621,9 +1622,11 @@ export default function AdminEntityDrawer() {
             ? "Loading…"
             : "Details";
 
-    const hasFinancialsTab = ["jobs", "schedules", "vendors", "opportunities", "customers"].includes(drawer.type);
-    const tabList = ["overview", "related", ...(hasFinancialsTab ? ["financials" as const] : []), ...(drawer.type === "opportunities" ? ["automation" as const] : []), "activity"] as const;
-    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity" };
+    const presentationType = drawer.type ? toPresentationType(drawer.type) : null;
+    const presentationConfig = presentationType ? getEntityPresentation(presentationType) : null;
+    const configTabs = presentationConfig?.drawer?.tabs;
+    const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
+    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", documents: "Documents" };
 
     const drawerStatusBadge = data && !loading && !(data as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (

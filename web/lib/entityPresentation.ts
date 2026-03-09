@@ -1,0 +1,491 @@
+/**
+ * Entity presentation config — configurable model for list columns, drawer layout, and related records.
+ * Drives admin list tables and entity drawer UI from a single source of truth.
+ *
+ * Extension points (TODO: persist in DB later):
+ * - entity_field_registry: org-level field definitions and visibility
+ * - entity_layouts: org-level layout overrides (section order, collapsed state, column spans)
+ * - entity_relationship_registry: which related modules appear per entity type
+ *
+ * Schema suggestions for future persistence:
+ * - entity_field_registry: (org_id, entity_type, field_key, label, visible, sort_order, user_editable)
+ * - entity_layouts: (org_id, entity_type, layout_key e.g. 'drawer_overview', section_key, expanded, sort_order, grid_cols)
+ * - entity_relationship_registry: (org_id, entity_type, related_entity_type, filter_key, label, visible, sort_order)
+ */
+
+/** Entity type keys used in presentation config. Align with AdminDrawerEntityType where applicable. */
+export type EntityPresentationType =
+  | "customers"
+  | "locations"
+  | "opportunities"
+  | "subscriptions"  // booking
+  | "jobs"
+  | "schedules"
+  | "payments"
+  | "documents"
+  | "vendors"
+  | "contacts"
+  | "customer_members"
+  | "workflows"
+  | "discount_redemptions";
+
+/** Table column definition. renderHint maps to shared renderers (status, date, link, money, etc.). */
+export interface EntityTableColumnConfig {
+  key: string;
+  label: string;
+  sortable?: boolean;
+  /** Hint for shared column renderer; optional. When absent, list page may use custom render. */
+  renderHint?: "text" | "status" | "date" | "datetime" | "money" | "link" | "badge" | "custom";
+  /** If true, this column cannot be removed by user layout config (future). */
+  locked?: boolean;
+}
+
+/** Default sort for list view. */
+export interface EntityDefaultSortConfig {
+  key: string;
+  direction: "asc" | "desc";
+}
+
+/** Drawer field definition for overview/sections. */
+export interface EntityDrawerFieldConfig {
+  key: string;
+  label: string;
+  /** Span in grid: 1 or 2 (for 2-column layout). */
+  span?: 1 | 2;
+  /** Hint for shared field renderer. */
+  renderHint?: "text" | "date" | "datetime" | "money" | "link" | "status" | "custom";
+  /** If true, field cannot be removed by user layout config (future). */
+  locked?: boolean;
+}
+
+/** Drawer section definition. */
+export interface EntityDrawerSectionConfig {
+  key: string;
+  title: string;
+  /** Default expanded state. */
+  defaultExpanded?: boolean;
+  collapsible?: boolean;
+  /** Grid columns for this section (1 or 2). */
+  gridCols?: 1 | 2;
+  /** Ordered list of field keys (or full field configs) to show in this section. */
+  fields: EntityDrawerFieldConfig[];
+  /** If true, section order/visibility cannot be changed by user layout (future). */
+  locked?: boolean;
+}
+
+/** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
+export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "documents";
+
+/** Related record module: which related-entity tabs to show (e.g. jobs, schedules, contacts). */
+export interface RelatedModuleConfig {
+  key: string;
+  label: string;
+  /** Entity type for the related list (e.g. "jobs", "schedules"). */
+  entityType: string;
+  /** Optional filter key on the related API (e.g. customer_id, job_id). */
+  filterKey?: string;
+  locked?: boolean;
+}
+
+/** Quick action in drawer header or overview. */
+export interface EntityQuickActionConfig {
+  key: string;
+  label: string;
+  /** e.g. "primary" | "secondary" | "danger" */
+  variant?: "primary" | "secondary" | "danger";
+  /** When true, action is shown in header; otherwise in overview. */
+  inHeader?: boolean;
+  locked?: boolean;
+}
+
+/** Header fields shown in drawer title area (e.g. status, type). */
+export interface EntityDrawerHeaderFieldConfig {
+  key: string;
+  renderHint?: "status" | "text" | "badge";
+  locked?: boolean;
+}
+
+/** Full presentation config for one entity type. */
+export interface EntityPresentationConfig {
+  entityType: EntityPresentationType;
+  /** Table columns in order. */
+  table: {
+    columns: EntityTableColumnConfig[];
+    defaultSort?: EntityDefaultSortConfig;
+  };
+  /** Drawer: tabs that appear (in order). */
+  drawer: {
+    tabs: DrawerTabKey[];
+    /** Fields to show in drawer header (e.g. status badge). */
+    headerFields?: EntityDrawerHeaderFieldConfig[];
+    /** Layout mode for overview: 1 or 2 column. Responsive can fallback to 1. */
+    layoutMode?: 1 | 2;
+    /** Section definitions for overview tab (ordered). When present, overview can be rendered from config; otherwise entity-specific JSX. */
+    overviewSections?: EntityDrawerSectionConfig[];
+    /** Related record modules (for Related tab). */
+    relatedModules?: RelatedModuleConfig[];
+    /** Quick actions available for this entity. */
+    quickActions?: EntityQuickActionConfig[];
+  };
+}
+
+/** Registry: entity type -> full presentation config. */
+const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresentationConfig> = {
+  customers: {
+    entityType: "customers",
+    table: {
+      columns: [
+        { key: "created_at", label: "Created", sortable: true, renderHint: "datetime" },
+        { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "_vertical_name", label: "Vertical", sortable: false, renderHint: "text" },
+        { key: "_primary_contact_name", label: "Primary contact", sortable: false, renderHint: "text" },
+        { key: "phone", label: "Phone", sortable: true, renderHint: "text" },
+        { key: "email", label: "Email", sortable: true, renderHint: "text" },
+        { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
+        { key: "_open_jobs_count", label: "Open jobs", sortable: false, renderHint: "text" },
+        { key: "_upcoming_schedule_count", label: "Upcoming schedule", sortable: false, renderHint: "text" },
+        { key: "_lifetime_value_cents", label: "Lifetime value", sortable: false, renderHint: "money" },
+        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "updated_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "financials", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+      ],
+      relatedModules: [
+        { key: "contacts", label: "Contacts", entityType: "contacts", filterKey: "customer_id", locked: true },
+        { key: "locations", label: "Locations", entityType: "locations", filterKey: "customer_id", locked: true },
+        { key: "opportunities", label: "Opportunities", entityType: "opportunities", filterKey: "customer_id", locked: true },
+        { key: "jobs", label: "Jobs", entityType: "jobs", filterKey: "customer_id", locked: true },
+        { key: "schedules", label: "Schedules", entityType: "schedules", filterKey: "customer_id", locked: true },
+        { key: "payments", label: "Payments", entityType: "payments", filterKey: "customer_id", locked: true },
+        { key: "documents", label: "Documents", entityType: "documents", filterKey: "customer_id", locked: true },
+      ],
+    },
+  },
+  locations: {
+    entityType: "locations",
+    table: {
+      columns: [
+        { key: "label", label: "Name", sortable: true, renderHint: "text", locked: true },
+        { key: "location_type", label: "Type", sortable: true, renderHint: "text" },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
+        { key: "address1", label: "Address", sortable: false, renderHint: "text" },
+        { key: "city", label: "City", sortable: true, renderHint: "text" },
+        { key: "state", label: "State", sortable: true, renderHint: "text" },
+        { key: "_active_jobs_count", label: "Active jobs", sortable: false, renderHint: "text" },
+        { key: "_upcoming_schedule_count", label: "Upcoming schedule", sortable: false, renderHint: "text" },
+        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "updated_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+      ],
+      relatedModules: [
+        { key: "customer", label: "Customer", entityType: "customers", filterKey: "customer_id", locked: true },
+        { key: "jobs", label: "Jobs", entityType: "jobs", filterKey: "location_id", locked: true },
+        { key: "schedules", label: "Schedules", entityType: "schedules", filterKey: "location_id", locked: true },
+        { key: "documents", label: "Documents", entityType: "documents", filterKey: "location_id", locked: true },
+      ],
+    },
+  },
+  opportunities: {
+    entityType: "opportunities",
+    table: {
+      columns: [
+        { key: "name", label: "Title", sortable: true, renderHint: "text", locked: true },
+        { key: "_customer_name", label: "Customer / Lead", sortable: false, renderHint: "link" },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "_stage_name", label: "Stage", sortable: false, renderHint: "badge" },
+        { key: "quote_total", label: "Value", sortable: true, renderHint: "money" },
+        { key: "source", label: "Source", sortable: false, renderHint: "text" },
+        { key: "_owner_name", label: "Owner", sortable: false, renderHint: "text" },
+        { key: "_last_activity_at", label: "Last activity", sortable: false, renderHint: "datetime" },
+        { key: "created_at", label: "Created", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "created_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "financials", "automation", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "customer_contact", title: "Customer / Contact", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "quote", title: "Quote context", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "notes", title: "Notes", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [
+        { key: "booking_job", label: "Related booking / job", entityType: "jobs", filterKey: "opportunity_id", locked: true },
+        { key: "documents", label: "Documents", entityType: "documents", filterKey: "opportunity_id", locked: true },
+      ],
+    },
+  },
+  subscriptions: {
+    entityType: "subscriptions",
+    table: {
+      columns: [
+        { key: "_ref", label: "Ref", sortable: false, renderHint: "text" },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
+        { key: "service_type", label: "Service", sortable: false, renderHint: "text" },
+        { key: "frequency", label: "Frequency", sortable: false, renderHint: "text" },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
+        { key: "_scheduled_for", label: "Scheduled for", sortable: false, renderHint: "datetime" },
+        { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
+        { key: "_vendor_name", label: "Vendor", sortable: false, renderHint: "text" },
+        { key: "_total_cents", label: "Total", sortable: false, renderHint: "money" },
+        { key: "created_at", label: "Created", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "created_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status" }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "location", title: "Location", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "pricing", title: "Pricing", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "schedules", title: "Schedules", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "vendor", title: "Vendor", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [],
+    },
+  },
+  jobs: {
+    entityType: "jobs",
+    table: {
+      columns: [
+        { key: "_ref", label: "Ref", sortable: false, renderHint: "text" },
+        { key: "_customer_name", label: "Customer", sortable: true, renderHint: "link", locked: true },
+        { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
+        { key: "job_type", label: "Job type", sortable: false, renderHint: "text" },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "_assigned_vendor_name", label: "Vendor", sortable: false, renderHint: "text" },
+        { key: "_scheduled_date", label: "Scheduled date", sortable: false, renderHint: "date" },
+        { key: "_total_cents", label: "Total", sortable: false, renderHint: "money" },
+        { key: "_payment_status", label: "Payment status", sortable: false, renderHint: "status" },
+        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "updated_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "financials", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "location", title: "Location", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "schedule", title: "Schedule", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "vendor", title: "Vendor", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "payments", title: "Payments", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [
+        { key: "schedules", label: "Schedules", entityType: "schedules", filterKey: "job_id", locked: true },
+        { key: "payments", label: "Payments", entityType: "payments", filterKey: "job_id", locked: true },
+        { key: "documents", label: "Documents", entityType: "documents", filterKey: "job_id", locked: true },
+      ],
+      quickActions: [
+        { key: "run_payment", label: "Run payment", variant: "primary", inHeader: true, locked: true },
+        { key: "mark_completed", label: "Mark completed", variant: "secondary", inHeader: true, locked: true },
+        { key: "reschedule", label: "Reschedule", variant: "secondary", inHeader: false, locked: true },
+      ],
+    },
+  },
+  schedules: {
+    entityType: "schedules",
+    table: {
+      columns: [
+        { key: "start_at", label: "Date", sortable: true, renderHint: "datetime" },
+        { key: "time_window", label: "Time window", sortable: false, renderHint: "text" },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
+        { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
+        { key: "_job_title", label: "Job", sortable: false, renderHint: "link" },
+        { key: "_assigned_vendor_name", label: "Vendor", sortable: false, renderHint: "text" },
+        { key: "service_type", label: "Service type", sortable: false, renderHint: "text" },
+        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "start_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "financials", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status" }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "job", title: "Job", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "location", title: "Location", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "vendor", title: "Vendor", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "reschedule_history", title: "Reschedule / Cancel history", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [],
+    },
+  },
+  payments: {
+    entityType: "payments",
+    table: {
+      columns: [
+        { key: "created_at", label: "Payment date", sortable: true, renderHint: "datetime" },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
+        { key: "_job_id", label: "Related job / booking", sortable: false, renderHint: "link" },
+        { key: "amount_cents", label: "Amount", sortable: true, renderHint: "money" },
+        { key: "method", label: "Method", sortable: false, renderHint: "text" },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
+        { key: "posted_at", label: "Posted date", sortable: false, renderHint: "date" },
+        { key: "provider_payment_id", label: "Reference", sortable: false, renderHint: "text" },
+        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "created_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status" }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "applied_to", title: "Applied to", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "method_reference", title: "Method / Reference", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "posting", title: "Posting / Reconciliation", defaultExpanded: false, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "ledger", title: "Ledger entries", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [],
+    },
+  },
+  documents: {
+    entityType: "documents",
+    table: {
+      columns: [
+        { key: "name", label: "Name", sortable: true, renderHint: "text" },
+        { key: "document_type", label: "Type", sortable: true, renderHint: "text" },
+        { key: "_linked_record_type", label: "Linked record", sortable: false, renderHint: "text" },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
+        { key: "_uploaded_by", label: "Uploaded by", sortable: false, renderHint: "text" },
+        { key: "uploaded_at", label: "Uploaded at", sortable: true, renderHint: "datetime" },
+        { key: "_ai_extraction_status", label: "AI extraction", sortable: false, renderHint: "text" },
+      ],
+      defaultSort: { key: "uploaded_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status" }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "preview_metadata", title: "Preview / Metadata", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "linked_records", title: "Linked records", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "extracted_fields", title: "Extracted fields", defaultExpanded: false, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "version_audit", title: "Version / Audit", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [],
+    },
+  },
+  vendors: {
+    entityType: "vendors",
+    table: {
+      columns: [
+        { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
+        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "vendor_type", label: "Type", sortable: false, renderHint: "text" },
+        { key: "_coverage_area", label: "Coverage area", sortable: false, renderHint: "text" },
+        { key: "_active_jobs_count", label: "Active jobs", sortable: false, renderHint: "text" },
+        { key: "_upcoming_schedules_count", label: "Upcoming schedules", sortable: false, renderHint: "text" },
+        { key: "_rating_score", label: "Rating / Score", sortable: false, renderHint: "text" },
+        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "updated_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "financials", "activity"],
+      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      layoutMode: 2,
+      overviewSections: [
+        { key: "overview", title: "Overview", defaultExpanded: true, collapsible: false, gridCols: 2, fields: [], locked: true },
+        { key: "contact_info", title: "Contact info", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
+        { key: "tags_skills", title: "Tags / Skills", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "jobs", title: "Jobs", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "schedules", title: "Schedules", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        { key: "performance", title: "Performance / Activity", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+      ],
+      relatedModules: [],
+    },
+  },
+  contacts: {
+    entityType: "contacts",
+    table: {
+      columns: [],
+      defaultSort: { key: "created_at", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [],
+      relatedModules: [],
+    },
+  },
+  customer_members: {
+    entityType: "customer_members",
+    table: { columns: [], defaultSort: { key: "created_at", direction: "desc" } },
+    drawer: { tabs: ["overview", "related", "activity"], layoutMode: 2, overviewSections: [], relatedModules: [] },
+  },
+  workflows: {
+    entityType: "workflows",
+    table: { columns: [], defaultSort: { key: "updated_at", direction: "desc" } },
+    drawer: { tabs: ["overview", "activity"], layoutMode: 1, overviewSections: [], relatedModules: [] },
+  },
+  discount_redemptions: {
+    entityType: "discount_redemptions",
+    table: { columns: [], defaultSort: { key: "created_at", direction: "desc" } },
+    drawer: { tabs: ["overview", "activity"], layoutMode: 1, overviewSections: [], relatedModules: [] },
+  },
+};
+
+/**
+ * Get presentation config for an entity type.
+ * TODO: Merge with org-level entity_layouts / entity_field_registry when persisted.
+ */
+export function getEntityPresentation(entityType: EntityPresentationType): EntityPresentationConfig {
+  const config = ENTITY_PRESENTATION_REGISTRY[entityType];
+  if (!config) {
+    return {
+      entityType,
+      table: { columns: [], defaultSort: { key: "updated_at", direction: "desc" } },
+      drawer: { tabs: ["overview", "activity"], layoutMode: 1, overviewSections: [], relatedModules: [] },
+    };
+  }
+  return config;
+}
+
+/** All entity types that have table config (for list pages). */
+export function getEntityTypesWithTableConfig(): EntityPresentationType[] {
+  return (Object.keys(ENTITY_PRESENTATION_REGISTRY) as EntityPresentationType[]).filter(
+    (t) => ENTITY_PRESENTATION_REGISTRY[t].table.columns.length > 0
+  );
+}
+
+/** Map AdminDrawerEntityType to EntityPresentationType (they align; this is for type safety). */
+export function toPresentationType(drawerType: string): EntityPresentationType | null {
+  if (drawerType in ENTITY_PRESENTATION_REGISTRY) return drawerType as EntityPresentationType;
+  return null;
+}

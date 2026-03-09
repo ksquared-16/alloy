@@ -5,10 +5,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { formatDateTime } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { Filter } from "lucide-react";
 
 interface Customer {
@@ -87,12 +87,13 @@ export default function CustomersClient({
     setFilterOpen(false);
   };
 
-  const columns = [
-    { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
-    { key: "name", label: "Name", sortable: true },
-    { key: "status", label: "Status", sortable: true, render: (_: unknown, row: Customer) => <StatusBadge label={row.status} /> },
-    { key: "_vertical_name", label: "Vertical", sortable: false, render: (_: unknown, row: Customer) => row._vertical_name ?? "—" },
-  ];
+  const columns = useMemo(
+    () =>
+      buildEntityTableColumns<Customer>("customers", {
+        status_key: (_, row) => <StatusBadge label={row.status ?? row.status_key} />,
+      }),
+    []
+  );
 
   const filterTrigger = (
     <div className="relative" ref={filterRef}>
