@@ -1542,6 +1542,16 @@ export default function AdminEntityDrawer() {
         }
     }, [drawer.id, drawer.type, jobAssignedVendorId, jobVendorOptions, applyVendorToUpcoming, canMutate, refetch, router]);
 
+    const handleInlineCancel = useCallback(() => {
+        try {
+            const initial = JSON.parse(initialInlineFormSnapshot ?? "{}") as Record<string, unknown>;
+            setFormData((prev) => ({ ...prev, ...initial }));
+            setSaveError(null);
+        } catch {
+            setSaveError(null);
+        }
+    }, [initialInlineFormSnapshot]);
+
     if (!drawer.type || !drawer.id) return null;
 
     const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
@@ -1624,16 +1634,6 @@ export default function AdminEntityDrawer() {
             <StatusBadge label={getStatusLabel((data as { status_key: string }).status_key) ?? (data as { status_key: string }).status_key} variant="default" />
         ) : null
     ) : null;
-
-    const handleInlineCancel = useCallback(() => {
-        try {
-            const initial = JSON.parse(initialInlineFormSnapshot ?? "{}") as Record<string, unknown>;
-            setFormData((prev) => ({ ...prev, ...initial }));
-            setSaveError(null);
-        } catch {
-            setSaveError(null);
-        }
-    }, [initialInlineFormSnapshot]);
 
     const drawerHeaderActions = data && !loading && canEditInDrawer(drawer.type) ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
