@@ -51,7 +51,7 @@ export default function EntityDrawerSection({
         <h3 className={SECTION_HEADER_CLASS}>{config.title}</h3>
       )}
       {showContent && (
-        <div className={`grid gap-x-6 gap-y-1 ${gridCols} ${isCollapsible ? "mt-2" : ""}`}>{children}</div>
+        <div className={`grid gap-x-6 gap-y-4 ${gridCols} ${isCollapsible ? "mt-2" : ""}`}>{children}</div>
       )}
     </section>
   );

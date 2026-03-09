@@ -2047,7 +2047,7 @@ export default function AdminEntityDrawer() {
                             isEditing={isEditing}
                             formData={formData}
                             onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
-                            onBlur={() => { if (nonJobFormDirty) saveEdit(); }}
+                            onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
                             canEdit={!!canMutate}
                             statusDefs={statusDefsForDrawer}
                             getStatusLabel={getStatusLabel}

@@ -56,17 +56,37 @@ function formatFieldValue(
   }
 }
 
+function makeKeydownHandlers(
+  key: string,
+  onBlur: () => void,
+  onEscape: (key: string) => void
+) {
+  return (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      (e.target as HTMLElement).blur();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onEscape(key);
+      (e.target as HTMLElement).blur();
+    }
+  };
+}
+
 function renderFieldEditNode(
   field: EntityDrawerFieldConfig,
   formData: Record<string, unknown>,
   onFieldChange: (key: string, value: unknown) => void,
   onBlur: () => void,
+  onEscape: (key: string) => void,
   statusDefs: StatusDefOption[] | undefined,
   disabled: boolean
 ): ReactNode {
   const key = field.key;
   const value = formData[key];
   const hint = field.renderHint ?? "text";
+  const onKeyDown = makeKeydownHandlers(key, onBlur, onEscape);
 
   if (hint === "status" && statusDefs && statusDefs.length > 0) {
     const options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
@@ -75,6 +95,7 @@ function renderFieldEditNode(
         value={String(value ?? "")}
         onChange={(e) => onFieldChange(key, e.target.value || null)}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         disabled={disabled}
         className={INLINE_EDIT_SELECT}
       >
@@ -96,6 +117,7 @@ function renderFieldEditNode(
         value={normalized}
         onChange={(e) => onFieldChange(key, e.target.value)}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         disabled={disabled}
         className={INLINE_EDIT_INPUT}
       />
@@ -114,6 +136,7 @@ function renderFieldEditNode(
           onFieldChange(key, v);
         }}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         disabled={disabled}
         className={INLINE_EDIT_INPUT}
         placeholder="0.00"
@@ -127,6 +150,7 @@ function renderFieldEditNode(
       value={String(value ?? "")}
       onChange={(e) => onFieldChange(key, e.target.value)}
       onBlur={onBlur}
+      onKeyDown={onKeyDown}
       disabled={disabled}
       className={INLINE_EDIT_INPUT}
     />
@@ -158,6 +182,11 @@ export default function EntityDrawerOverview({
   const editFormData = formData ?? record;
   const handleFieldChange = onFieldChange ?? (() => {});
   const handleBlur = onBlur ?? (() => {});
+  /** Revert one field to record value and blur (Escape). */
+  const handleEscape = (key: string) => {
+    handleFieldChange(key, record[key]);
+    handleBlur();
+  };
 
   return (
     <div className="space-y-0" data-entity-drawer-overview>
@@ -167,11 +196,11 @@ export default function EntityDrawerOverview({
 
         const children: ReactNode = hasFields
           ? section.fields!.map((field: EntityDrawerFieldConfig) => {
-              const rawValue = isEditing && editFormData[field.key] !== undefined ? editFormData[field.key] : record[field.key];
+              const rawValue = editFormData[field.key] !== undefined ? editFormData[field.key] : record[field.key];
               const displayValue = formatFieldValue(rawValue, field, getStatusLabel);
-              const showEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
+              const showEdit = !!(canEdit && field.editable && onFieldChange);
               const editNode = showEdit
-                ? renderFieldEditNode(field, editFormData, handleFieldChange, handleBlur, statusDefs, !canEdit)
+                ? renderFieldEditNode(field, editFormData, handleFieldChange, handleBlur, handleEscape, statusDefs, !canEdit)
                 : undefined;
               return (
                 <EntityDrawerField

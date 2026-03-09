@@ -54,7 +54,7 @@ export interface EntityDrawerFieldConfig {
   span?: 1 | 2;
   /** Hint for shared field renderer. */
   renderHint?: "text" | "date" | "datetime" | "money" | "link" | "status" | "custom";
-  /** If true, field can be edited in drawer when entity supports inline edit. */
+  /** If true, field is inline-editable in overview (save on blur/Enter, cancel on Escape). Omit or false = read-only. */
   editable?: boolean;
   /** If true, field cannot be removed by user layout config (future). */
   locked?: boolean;
@@ -256,7 +256,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "name", label: "Title", span: 2, renderHint: "text", editable: true, locked: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
             { key: "_stage_name", label: "Stage", span: 1, renderHint: "text" },
-            { key: "quote_total", label: "Value", span: 1, renderHint: "money" },
+            { key: "quote_total", label: "Value", span: 1, renderHint: "money", editable: true },
             { key: "source", label: "Source", span: 1, renderHint: "text" },
             { key: "_owner_name", label: "Owner", span: 1, renderHint: "text" },
             { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
