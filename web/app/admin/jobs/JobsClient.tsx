@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import SectionCard from "@/components/admin/SectionCard";
+import DataTable from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { Filter } from "lucide-react";
 
 type JobRow = {
   id: string;
@@ -38,11 +39,23 @@ export default function JobsClient() {
   const [statusKeyFilter, setStatusKeyFilter] = useState("");
   const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/admin/status-definitions?entity_type=jobs")
       .then((r) => r.ok ? r.json() : { statuses: [] })
       .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const fetchJobs = useCallback(async () => {
@@ -72,9 +85,7 @@ export default function JobsClient() {
     return () => window.removeEventListener("admin-entity-saved", onSaved);
   }, [fetchJobs]);
 
-  const openCreate = () => {
-    openDrawer({ type: "jobs", id: "new" });
-  };
+  const openCreate = () => openDrawer({ type: "jobs", id: "new" });
 
   const archive = async (id: string) => {
     setActionLoadingId(id);
@@ -96,126 +107,120 @@ export default function JobsClient() {
     }
   };
 
+  const applyFilter = () => {
+    setSearchApplied(search.trim());
+    setFilterOpen(false);
+  };
+
+  const clearFilter = () => {
+    setSearch("");
+    setSearchApplied("");
+    setStatusKeyFilter("");
+    setFilterOpen(false);
+  };
+
+  const hasActiveFilters = searchApplied || statusKeyFilter;
+
+  const columns = [
+    { key: "title" as keyof JobRow, label: "Title", sortable: true, render: (_: unknown, row: JobRow) => <span className="text-alloy-blue">{row.title ?? "—"}</span> },
+    { key: "_customer_name", label: "Customer", sortable: true, render: (_: unknown, row: JobRow) => row._customer_name ?? "—" },
+    { key: "_location_label", label: "Location", sortable: true, render: (_: unknown, row: JobRow) => row._location_label ?? "—" },
+    { key: "status_key", label: "Status", sortable: true, render: (_: unknown, row: JobRow) => <StatusBadge label={statusOptions.find((s) => s.status_key === row.status_key)?.status_label ?? row.status_key ?? "—"} variant="neutral" /> },
+    { key: "_assigned_vendor_name", label: `Assigned ${vendorSingular}`, sortable: true, render: (_: unknown, row: JobRow) => row._assigned_vendor_name ?? "—" },
+    { key: "is_recurring", label: "Recurring", sortable: true, render: (v: boolean | null) => v ? "Yes" : "No" },
+    { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
+    {
+      key: "id",
+      label: "Actions",
+      sortable: false,
+      render: (_: unknown, row: JobRow) => (
+        <span className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+          {row.archived_at ? (
+            <button type="button" onClick={() => unarchive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-muted hover:text-alloy-midnight hover:underline disabled:opacity-50">Unarchive</button>
+          ) : (
+            <button type="button" onClick={() => archive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-amber-700 hover:underline disabled:opacity-50">Archive</button>
+          )}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <>
       <AdminPageHeader
         title={title}
         subtitle={`${plural} scoped by your org. Customer is required. Only admins can create, edit, or archive.`}
       />
-      <SectionCard title="Filters" className="mb-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Search (title)</label>
-            <div className="flex gap-1">
-              <input
-                type="text"
-                placeholder="Search…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), setSearchApplied(search.trim()))}
-                className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-56"
-              />
-              <button
-                type="button"
-                onClick={() => setSearchApplied(search.trim())}
-                className="px-3 py-1.5 text-sm bg-alloy-stone/30 rounded hover:bg-alloy-stone/50"
-              >
-                Apply
-              </button>
-              {searchApplied && (
-                <button type="button" onClick={() => { setSearch(""); setSearchApplied(""); }} className="px-2 py-1.5 text-sm text-alloy-midnight/70 hover:underline">
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Status</label>
-            <select
-              value={statusKeyFilter}
-              onChange={(e) => setStatusKeyFilter(e.target.value)}
-              className="px-2 py-1.5 border border-alloy-stone/40 rounded text-sm w-40"
-            >
-              <option value="">All</option>
-              {statusOptions.map((s) => (
-                <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="include_archived_jobs"
-              checked={includeArchived}
-              onChange={(e) => setIncludeArchived(e.target.checked)}
-              className="rounded border-alloy-stone/40"
-            />
-            <label htmlFor="include_archived_jobs" className="text-sm text-alloy-midnight/70">Include archived</label>
-          </div>
-        </div>
-      </SectionCard>
-      <SectionCard title={plural}>
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <span className="text-sm text-alloy-midnight/60">{jobs.length} {plural.toLowerCase()}</span>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative" ref={filterRef}>
           <button
             type="button"
-            onClick={openCreate}
-            className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
+            onClick={() => setFilterOpen((o) => !o)}
+            className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+            aria-expanded={filterOpen}
+            aria-haspopup="true"
           >
-            New {singular}
+            <Filter className="h-4 w-4 text-alloy-muted" />
+            Filter
+            {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
           </button>
+          {filterOpen && (
+            <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-alloy-muted">Search (title)</label>
+                  <input
+                    type="text"
+                    placeholder="Search…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (applyFilter(), e.preventDefault())}
+                    className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
+                  <select
+                    value={statusKeyFilter}
+                    onChange={(e) => setStatusKeyFilter(e.target.value)}
+                    className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                  >
+                    <option value="">All</option>
+                    {statusOptions.map((s) => (
+                      <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                    ))}
+                  </select>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeArchived}
+                    onChange={(e) => setIncludeArchived(e.target.checked)}
+                    className="rounded border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/20"
+                  />
+                  <span className="text-sm text-alloy-midnight/80">Include archived</span>
+                </label>
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={applyFilter} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
+                  {hasActiveFilters && (
+                    <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-        {loading ? (
-          <p className="text-sm text-alloy-midnight/60">Loading…</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                  <th className="pb-2 pr-4">Title</th>
-                  <th className="pb-2 pr-4">Customer</th>
-                  <th className="pb-2 pr-4">Location</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2 pr-4">Assigned {vendorSingular}</th>
-                  <th className="pb-2 pr-4">Recurring</th>
-                  <th className="pb-2 pr-4">Created</th>
-                  <th className="pb-2 pr-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.length === 0 ? (
-                  <tr><td colSpan={8} className="py-4 text-alloy-midnight/60">No {plural.toLowerCase()} found.</td></tr>
-                ) : (
-                  jobs.map((j) => (
-                    <tr
-                      key={j.id}
-                      className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10 cursor-pointer"
-                      onClick={() => openDrawer({ type: "jobs", id: j.id })}
-                    >
-                      <td className="py-2 pr-4 text-alloy-blue hover:underline">{j.title ?? "—"}</td>
-                      <td className="py-2 pr-4">{j._customer_name ?? "—"}</td>
-                      <td className="py-2 pr-4">{j._location_label ?? "—"}</td>
-                      <td className="py-2 pr-4"><StatusBadge label={statusOptions.find((s) => s.status_key === j.status_key)?.status_label ?? j.status_key ?? "—"} variant="neutral" /></td>
-                      <td className="py-2 pr-4">{j._assigned_vendor_name ?? "—"}</td>
-                      <td className="py-2 pr-4">{j.is_recurring ? "Yes" : "No"}</td>
-                      <td className="py-2 pr-4">{formatDateTime(j.created_at)}</td>
-                      <td className="py-2 pr-4" onClick={(e) => e.stopPropagation()}>
-                        <span className="flex flex-wrap gap-1">
-                          {j.archived_at ? (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); unarchive(j.id); }} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-alloy-midnight/70 hover:underline disabled:opacity-50">Unarchive</button>
-                          ) : (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); archive(j.id); }} disabled={actionLoadingId === j.id} className="text-xs px-2 py-0.5 text-amber-700 hover:underline disabled:opacity-50">Archive</button>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </SectionCard>
+        <button type="button" onClick={openCreate} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>
+      </div>
+      <DataTable
+        data={jobs}
+        columns={columns}
+        filters={[]}
+        searchable={false}
+        hideToolbar
+        loading={loading}
+        onRowClick={(row) => openDrawer({ type: "jobs", id: row.id })}
+      />
     </>
   );
 }

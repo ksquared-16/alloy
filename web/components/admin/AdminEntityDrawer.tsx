@@ -1675,7 +1675,7 @@ export default function AdminEntityDrawer() {
     const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
             {tabList.map((tab) => (
-                <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tabLabels[tab] ?? tab}</button>
+                <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-muted hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
             ))}
         </div>
     ) : undefined;

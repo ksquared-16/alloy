@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { Filter } from "lucide-react";
 
 interface Vendor {
     id: string;
@@ -66,6 +67,38 @@ export default function VendorsClient({
             .then((j: { statuses?: StatusOption[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
     }, []);
 
+    const [filterOpen, setFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
+    const [filterStatus, setFilterStatus] = useState(statusKeyParam);
+
+    useEffect(() => {
+        setFilterStatus(statusKeyParam);
+    }, [statusKeyParam]);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+                setFilterOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const applyFilter = () => {
+        const next = new URLSearchParams(searchParams.toString());
+        if (filterStatus) next.set("status_key", filterStatus);
+        else next.delete("status_key");
+        router.push(`/admin/vendors?${next.toString()}`);
+        setFilterOpen(false);
+    };
+
+    const clearFilter = () => {
+        setFilterStatus("");
+        router.push("/admin/vendors");
+        setFilterOpen(false);
+    };
+
     const columns = [
         { key: "submitted_at", label: "Submitted", sortable: true, render: (_: unknown, row: Vendor) => formatVendorDate(row) },
         { key: "name", label: "Name", sortable: true },
@@ -77,53 +110,59 @@ export default function VendorsClient({
         { key: "days_available", label: "Days available", sortable: false, render: (v: string[] | null) => formatDaysAvailable(v) },
     ];
 
-    const filters = [
-        {
-            key: "_vendor_status_key",
-            label: "Status",
-            type: "select" as const,
-            options: [
-                { value: "pending", label: "Pending" },
-                { value: "approved", label: "Approved" },
-                { value: "rejected", label: "Rejected" },
-                { value: "suspended", label: "Suspended" },
-            ],
-        },
-    ];
-
     return (
         <div>
             <AdminPageHeader title={title} subtitle="Vendor status and assignments." />
 
             {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                     Error: {error}
                 </div>
             )}
 
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                <label className="text-sm text-[#45506c]">Status:</label>
-                <select
-                    value={statusKeyParam}
-                    onChange={(e) => {
-                        const v = e.target.value;
-                        const next = new URLSearchParams(searchParams.toString());
-                        if (v) next.set("status_key", v); else next.delete("status_key");
-                        router.push(`/admin/vendors?${next.toString()}`);
-                    }}
-                    className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-sm"
-                >
-                    <option value="">All</option>
-                    {statusOptions.map((s) => (
-                        <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-                    ))}
-                </select>
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+                <div className="relative" ref={filterRef}>
+                    <button
+                        type="button"
+                        onClick={() => setFilterOpen((o) => !o)}
+                        className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+                        aria-expanded={filterOpen}
+                        aria-haspopup="true"
+                    >
+                        <Filter className="h-4 w-4 text-alloy-muted" />
+                        Filter
+                        {statusKeyParam && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+                    </button>
+                    {filterOpen && (
+                        <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
+                                    <select
+                                        value={filterStatus}
+                                        onChange={(e) => setFilterStatus(e.target.value)}
+                                        className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                                    >
+                                        <option value="">All</option>
+                                        {statusOptions.map((s) => (
+                                            <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                    <button type="button" onClick={applyFilter} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
+                                    {statusKeyParam && <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <DataTable
                 data={initialData}
                 columns={columns}
-                filters={filters}
+                filters={[]}
                 onRowClick={(row) => openDrawer({ type: "vendors", id: row.id })}
             />
         </div>

@@ -115,36 +115,36 @@ export default function ContactsClient() {
                     <button
                         type="button"
                         onClick={() => setFilterOpen((o) => !o)}
-                        className="flex items-center gap-1.5 rounded-md border border-[#e6e8ec] bg-white px-2.5 py-1.5 text-sm text-[#45506c] hover:bg-[#F4F6F9]"
+                        className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
                         aria-expanded={filterOpen}
                         aria-haspopup="true"
                     >
-                        <Filter className="h-4 w-4 text-[#59678b]" />
-                        Filters
+                        <Filter className="h-4 w-4 text-alloy-muted" />
+                        Filter
                         {(searchApplied || includeArchived || statusKeyFilter) && (
-                            <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />
+                            <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />
                         )}
                     </button>
                     {filterOpen && (
-                        <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-[#e6e8ec] bg-white p-3 shadow-lg">
+                        <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-1">Search (name, email, phone, company)</label>
+                                    <label className="mb-1 block text-xs font-medium text-alloy-muted">Search (name, email, phone, company)</label>
                                     <input
                                         type="text"
                                         placeholder="Search…"
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         onKeyDown={(e) => e.key === "Enter" && (setSearchApplied(search.trim()), setFilterOpen(false))}
-                                        className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
+                                        className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-1">Status</label>
+                                    <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
                                     <select
                                         value={statusKeyFilter}
                                         onChange={(e) => setStatusKeyFilter(e.target.value)}
-                                        className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded text-sm"
+                                        className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
                                     >
                                         <option value="">All</option>
                                         {statusOptions.map((s) => (
@@ -152,39 +152,14 @@ export default function ContactsClient() {
                                         ))}
                                     </select>
                                 </div>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={includeArchived}
-                                        onChange={(e) => setIncludeArchived(e.target.checked)}
-                                        className="rounded border-alloy-stone/40"
-                                    />
-                                    <span className="text-sm text-alloy-midnight/70">Include archived</span>
+                                <label className="flex cursor-pointer items-center gap-2">
+                                    <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} className="rounded border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/20" />
+                                    <span className="text-sm text-alloy-midnight/80">Include archived</span>
                                 </label>
                                 <div className="flex gap-2 pt-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSearchApplied(search.trim());
-                                            setFilterOpen(false);
-                                        }}
-                                        className="px-2.5 py-1.5 text-sm bg-alloy-midnight text-white rounded hover:opacity-90"
-                                    >
-                                        Apply
-                                    </button>
+                                    <button type="button" onClick={() => { setSearchApplied(search.trim()); setFilterOpen(false); }} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
                                     {(searchApplied || statusKeyFilter) && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSearch("");
-                                                setSearchApplied("");
-                                                setStatusKeyFilter("");
-                                                setFilterOpen(false);
-                                            }}
-                                            className="px-2.5 py-1.5 text-sm text-alloy-midnight/70 hover:underline"
-                                        >
-                                            Clear
-                                        </button>
+                                        <button type="button" onClick={() => { setSearch(""); setSearchApplied(""); setStatusKeyFilter(""); setFilterOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
                                     )}
                                 </div>
                             </div>
@@ -192,13 +167,7 @@ export default function ContactsClient() {
                     )}
                 </div>
                 {canMutate && (
-                    <button
-                        type="button"
-                        onClick={() => openDrawer({ type: "contacts", id: "new" })}
-                        className="px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                    >
-                        New {singular}
-                    </button>
+                    <button type="button" onClick={() => openDrawer({ type: "contacts", id: "new" })} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>
                 )}
             </div>
             <DataTable
