@@ -244,13 +244,13 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     };
 
     return (
-        <div className="min-h-screen bg-alloy-stone flex">
-            <aside className="w-64 bg-white border-r border-alloy-stone/30 flex flex-col">
-                <div className="p-5 border-b border-[#e6e8ec]">
+        <div className="min-h-screen bg-admin-page flex">
+            <aside className="w-64 bg-admin-surface-card border-r border-admin-border flex flex-col">
+                <div className="p-5 border-b border-admin-border">
                     <Link href="/admin" className="block" aria-label="Home">
                         <AlloyLogo />
                     </Link>
-                    <p className="mt-2 text-xs text-[#59678b]">Admin</p>
+                    <p className="mt-2 text-xs text-alloy-muted">Admin</p>
                 </div>
                 <nav
                     ref={sidebarScrollRef}
@@ -265,13 +265,13 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                 <button
                                     type="button"
                                     onClick={() => toggleGroup(group.label)}
-                                    className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#59678b] hover:bg-[#F4F6F9] rounded-md gap-2"
+                                    className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-alloy-muted hover:bg-alloy-stone/60 rounded-md gap-2"
                                 >
                                     <span className="flex items-center gap-2">
                                         {GroupIcon && <GroupIcon className={iconClass} />}
                                         {group.label}
                                     </span>
-                                    {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-[#59678b]/70" /> : <ChevronDown className="h-3.5 w-3.5 text-[#59678b]/70" />}
+                                    {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-alloy-muted/70" /> : <ChevronDown className="h-3.5 w-3.5 text-alloy-muted/70" />}
                                 </button>
                                 {!isCollapsed && (
                                     <ul className="mt-1.5 space-y-0.5">
@@ -294,7 +294,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                             {isNestedOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />}
                                                         </button>
                                                         {isNestedOpen && (
-                                                            <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-[#e6e8ec] pl-2">
+                                                            <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-admin-border pl-2">
                                                                 {item.subItems.map((sub) => {
                                                                     const isActive = pathname === sub.href;
                                                                     const displayLabel = navLinkLabel(sub, labels);
@@ -337,20 +337,20 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                     })}
                 </nav>
             </aside>
-            <main className="flex-1 overflow-auto flex flex-col">
-                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3.5 bg-alloy-blue/[0.08] border-b border-alloy-stone/40 backdrop-blur-sm">
+            <main className="flex-1 overflow-auto flex flex-col bg-admin-page">
+                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3.5 bg-alloy-blue/[0.08] border-b border-admin-border backdrop-blur-sm">
                     <div className="relative">
                         <button
                             type="button"
                             onClick={() => { setVerticalOpen((o) => !o); setProfileOpen(false); }}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-alloy-midnight/80 border border-alloy-stone/40 rounded-md hover:bg-alloy-stone/30"
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-alloy-midnight/80 border border-admin-border rounded-md hover:bg-alloy-blue/[0.06]"
                         >
                             Vertical: {selectedVerticalId ? verticals.find((v) => v.id === selectedVerticalId)?.name ?? selectedVerticalId.slice(0, 8) : "All"}
                         </button>
                         {verticalOpen && (
                             <>
                                 <div className="fixed inset-0 z-10" onClick={() => setVerticalOpen(false)} />
-                                <div className="absolute right-0 top-full mt-1 py-1 bg-white border border-alloy-stone/30 rounded-md shadow-lg z-20 min-w-[180px]">
+                                <div className="absolute right-0 top-full mt-1 py-1 bg-admin-surface-card border border-admin-border rounded-md shadow-lg z-20 min-w-[180px]">
                                     <button
                                         type="button"
                                         onClick={() => { setSelectedVerticalId(null); setVerticalOpen(false); }}
@@ -372,7 +372,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                             </>
                         )}
                     </div>
-                    <span className="h-6 w-px bg-alloy-stone/40" aria-hidden />
+                    <span className="h-6 w-px bg-admin-border" aria-hidden />
                     <div className="relative">
                         <button
                             type="button"
@@ -384,7 +384,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                         {profileOpen && (
                             <>
                                 <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
-                                <div className="absolute right-0 top-full mt-1 py-2 bg-white border border-alloy-stone/30 rounded-md shadow-lg z-20 min-w-[220px]">
+                                <div className="absolute right-0 top-full mt-1 py-2 bg-admin-surface-card border border-admin-border rounded-md shadow-lg z-20 min-w-[220px]">
                                     <p className="px-4 py-2 text-sm text-alloy-midnight/70 border-b border-alloy-stone/20">Signed in as {userEmail}</p>
                                     <button type="button" onClick={handleSignOut} className="block w-full text-left px-4 py-2 text-sm text-alloy-midnight hover:bg-alloy-stone/30">Sign out</button>
                                 </div>

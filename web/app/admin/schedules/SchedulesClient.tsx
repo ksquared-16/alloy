@@ -235,7 +235,7 @@ export default function SchedulesClient() {
         toolbarRight={<button type="button" onClick={openCreate} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>}
       />
       <div className="pt-6">
-        <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
+        <div className="rounded-xl border border-admin-border bg-admin-surface-card overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
         ) : (

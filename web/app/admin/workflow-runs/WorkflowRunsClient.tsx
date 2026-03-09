@@ -331,7 +331,7 @@ export default function WorkflowRunsClient() {
         <>
             <AdminListPageHeader title="Workflow Runs" toolbarLeft={filterTrigger} />
             <div className="pt-6">
-                <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
+                <div className="rounded-xl border border-admin-border bg-admin-surface-card overflow-hidden">
                 {loading ? (
                     <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
                 ) : (
@@ -339,7 +339,7 @@ export default function WorkflowRunsClient() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-alloy-stone/30 bg-alloy-stone/40">
+                                    <tr className="border-b border-admin-border bg-alloy-blue/[0.06]">
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Started at</th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Workflow</th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Event</th>
@@ -381,7 +381,7 @@ export default function WorkflowRunsClient() {
                                 </tbody>
                             </table>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-t border-alloy-stone/30">
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-t border-admin-border">
                             <p className="text-xs text-alloy-muted">
                                 Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total}
                             </p>

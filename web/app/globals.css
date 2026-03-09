@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* Alloy Brand Colors */
+  /* Alloy Brand Colors (primary = Blue, secondary = Juniper, accent = Ember) */
   --color-alloy-blue: #00458C;
   --color-alloy-pine: #273F52;
   --color-alloy-juniper: #00A283;
@@ -15,6 +15,10 @@
   --color-alloy-gold-dark: #d0ad50;
   --color-alloy-muted: #59678b;
   --color-alloy-light: #e6d3a0;
+  /* Admin semantic surfaces (river stone / light neutral with subtle blue tint) */
+  --color-admin-page: #eef2f7;
+  --color-admin-border: #e2e6ec;
+  --color-admin-surface-card: #ffffff;
   /* Font */
   --font-sans: var(--font-poppins), system-ui, sans-serif;
 }

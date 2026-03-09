@@ -180,7 +180,7 @@ export default function CustomerMembersClient() {
                     <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
                 )}
                 {loading ? (
-                    <div className="rounded-xl border border-alloy-stone/30 bg-white p-10 text-center text-sm text-alloy-muted">Loading…</div>
+                    <div className="rounded-xl border border-admin-border bg-admin-surface-card p-10 text-center text-sm text-alloy-muted">Loading…</div>
                 ) : (
                     <DataTable
                         data={members}

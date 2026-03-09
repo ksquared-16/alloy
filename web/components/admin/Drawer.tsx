@@ -45,10 +45,10 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
 
             {/* Drawer */}
             <div
-                className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-xl flex flex-col ${accentColor ? "" : "border-l border-[#59678b]/40"}`}
-                style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeft: `4px solid ${accentColor}` } : {}) }}
+                className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-admin-surface-card shadow-xl flex flex-col ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}
+                style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor } : {}) }}
             >
-                <div className="sticky top-0 z-10 bg-white shrink-0 border-b border-alloy-stone/30 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+                <div className="sticky top-0 z-10 bg-alloy-blue/[0.04] shrink-0 border-b border-admin-border">
                     <div className="px-6 py-4 flex items-center justify-between gap-4">
                         <div className="min-w-0 flex-1 flex items-center gap-3">
                             <h2 className="text-xl font-bold text-alloy-midnight truncate">{typeof title === "string" ? title : title != null ? String(title) : "—"}</h2>
@@ -58,19 +58,19 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
                             {headerActions}
                             <button
                                 onClick={onClose}
-                                className="text-alloy-midnight/60 hover:text-alloy-midnight text-2xl leading-none"
+                                className="text-alloy-muted hover:text-alloy-midnight text-2xl leading-none transition-colors"
                             >
                                 ×
                             </button>
                         </div>
                     </div>
                     {headerExtra != null && headerExtra !== false && (
-                        <div className="px-6 pb-3 border-t border-alloy-stone/20 bg-white">
+                        <div className="px-6 pb-3 border-t border-admin-border bg-alloy-blue/[0.02]">
                             {headerExtra}
                         </div>
                     )}
                 </div>
-                <div className="flex-1 overflow-y-auto p-6">{children}</div>
+                <div className="flex-1 overflow-y-auto p-6 bg-admin-surface-card">{children}</div>
             </div>
         </>
     );

@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 
 /** Single-row list page header: title (and optional metrics) left, filter + primary CTA right. Subtle branded surface. */
-const BORDER_SEP = "border-b border-alloy-stone/40";
+const BORDER_SEP = "border-b border-admin-border";
 
 interface AdminListPageHeaderProps {
     title: string;

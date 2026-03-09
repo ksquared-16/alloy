@@ -192,7 +192,7 @@ export default function PaymentsClient() {
         <>
             <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
             <div className="pt-6">
-                <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
+                <div className="rounded-xl border border-admin-border bg-admin-surface-card overflow-hidden">
                     {loading ? (
                         <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>
                     ) : (
@@ -200,7 +200,7 @@ export default function PaymentsClient() {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="border-b border-alloy-stone/30 bg-alloy-stone/40">
+                                        <tr className="border-b border-admin-border bg-alloy-blue/[0.06]">
                                             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Created</th>
                                             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Amount</th>
                                             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
@@ -233,7 +233,7 @@ export default function PaymentsClient() {
                                     </tbody>
                                 </table>
                             </div>
-                            {total > 0 && <p className="px-5 py-2 text-xs text-alloy-muted border-t border-alloy-stone/30">Showing {payments.length} of {total}</p>}
+                            {total > 0 && <p className="px-5 py-2 text-xs text-alloy-muted border-t border-admin-border">Showing {payments.length} of {total}</p>}
                         </>
                     )}
                 </div>

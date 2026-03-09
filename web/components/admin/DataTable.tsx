@@ -28,10 +28,10 @@ interface DataTableProps<T> {
     hideToolbar?: boolean;
 }
 
-const TABLE_BORDER = "border-alloy-stone/30";
-const INPUT_CLASS = "w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
-const BTN_PRIMARY = "rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30";
-const BTN_SECONDARY = "rounded-lg border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
+const TABLE_BORDER = "border-admin-border";
+const INPUT_CLASS = "w-full rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
+const BTN_PRIMARY = "rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-blue text-white hover:bg-alloy-blue/90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30 focus:ring-offset-1";
+const BTN_SECONDARY = "rounded-lg border border-admin-border px-3 py-1.5 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20";
 
 export default function DataTable<T extends Record<string, any>>({
     data,
@@ -137,16 +137,16 @@ export default function DataTable<T extends Record<string, any>>({
 
     if (loading) {
         return (
-            <div className={`rounded-xl border ${TABLE_BORDER} bg-white p-10`}>
+            <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card p-10`}>
                 <div className="text-center text-sm text-alloy-muted">Loading…</div>
             </div>
         );
     }
 
     return (
-        <div className={`rounded-xl border ${TABLE_BORDER} bg-white overflow-hidden`}>
+        <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card overflow-hidden`}>
             {!hideToolbar && (
-                <div className="flex flex-wrap items-center gap-3 border-b border-alloy-stone/30 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-3 border-b border-admin-border px-4 py-3">
                     {searchable && (
                         <input
                             type="text"
@@ -164,7 +164,7 @@ export default function DataTable<T extends Record<string, any>>({
                             <button
                                 type="button"
                                 onClick={() => setFilterOpen((o) => !o)}
-                                className={`flex items-center gap-2 ${BTN_SECONDARY} ${filterOpen ? "border-alloy-blue bg-alloy-blue/5 ring-2 ring-alloy-blue/20" : ""}`}
+                                className={`flex items-center gap-2 ${BTN_SECONDARY} ${filterOpen ? "border-alloy-blue bg-alloy-blue/10 ring-2 ring-alloy-blue/25 text-alloy-blue" : ""}`}
                                 aria-expanded={filterOpen}
                                 aria-haspopup="true"
                             >
@@ -175,7 +175,7 @@ export default function DataTable<T extends Record<string, any>>({
                                 )}
                             </button>
                             {filterOpen && (
-                                <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                                <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-lg border border-admin-border bg-admin-surface-card p-4 shadow-lg">
                                     <div className="space-y-3">
                                         {filters.map((filter) => (
                                             <div key={filter.key}>
@@ -230,23 +230,23 @@ export default function DataTable<T extends Record<string, any>>({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-alloy-stone/30 bg-alloy-stone/40">
+                        <tr className="border-b border-admin-border bg-alloy-blue/[0.06]">
                             {columns.map((column) => {
                                 const isSorted = sortColumn === column.key;
                                 return (
                                     <th
                                         key={String(column.key)}
                                         className={`
-                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate
-                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-stone/60" : ""}
-                                            ${isSorted ? "text-alloy-blue" : ""}
+                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider
+                                            ${isSorted ? "text-alloy-blue" : "text-alloy-slate"}
+                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-blue/[0.08]" : ""}
                                         `}
                                         onClick={() => column.sortable && handleSort(column.key)}
                                     >
                                         <div className="flex items-center gap-1.5">
                                             {column.label}
                                             {column.sortable && (
-                                                <span className="inline-flex text-alloy-muted" aria-hidden>
+                                                <span className={`inline-flex ${isSorted ? "text-alloy-blue" : "text-alloy-muted"}`} aria-hidden>
                                                     {isSorted ? (
                                                         sortDirection === "asc" ? (
                                                             <ChevronUp className="h-4 w-4" />
@@ -264,14 +264,14 @@ export default function DataTable<T extends Record<string, any>>({
                             })}
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-alloy-stone/30">
+                    <tbody className="divide-y divide-admin-border">
                         {paginatedData.length === 0 ? (
                             <tr>
                                 <td
                                     colSpan={columns.length}
                                     className="px-5 py-14 text-center"
                                 >
-                                    <p className="text-sm font-medium text-alloy-midnight/80">No data found</p>
+                                    <p className="text-sm font-medium text-alloy-midnight">No data found</p>
                                     <p className="mt-1 text-xs text-alloy-muted">
                                         {hasActiveFilters || search ? "Try adjusting filters or search." : "There are no records to show."}
                                     </p>
@@ -283,7 +283,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     key={idx}
                                     className={`
                                         transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-stone/50" : ""}
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-blue/[0.04]" : ""}
                                     `}
                                     onClick={() => onRowClick?.(row)}
                                 >
@@ -305,7 +305,7 @@ export default function DataTable<T extends Record<string, any>>({
             </div>
 
             {totalPages > 1 && (
-                <div className="flex items-center justify-between border-t border-alloy-stone/30 px-4 py-3">
+                <div className="flex items-center justify-between border-t border-admin-border px-4 py-3">
                     <div className="text-sm text-alloy-muted">
                         Showing {(page - 1) * pageSize + 1} to{" "}
                         {Math.min(page * pageSize, sortedData.length)} of {sortedData.length} results
