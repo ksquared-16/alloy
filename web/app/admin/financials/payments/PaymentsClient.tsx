@@ -190,11 +190,7 @@ export default function PaymentsClient() {
 
     return (
         <>
-            <AdminListPageHeader
-                title={title}
-                subtitle="View-only list. Use filters to narrow results."
-                toolbarLeft={filterTrigger}
-            />
+            <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
             <div className="pt-6">
                 <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
                     {loading ? (

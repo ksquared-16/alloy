@@ -169,7 +169,6 @@ export default function ContactsClient() {
         <>
             <AdminListPageHeader
                 title={title}
-                subtitle="Contact records scoped by your org. Click a row to open."
                 toolbarLeft={filterTrigger}
                 toolbarRight={canMutate ? (
                     <button type="button" onClick={() => openDrawer({ type: "contacts", id: "new" })} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>

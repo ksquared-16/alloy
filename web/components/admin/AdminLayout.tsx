@@ -338,7 +338,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                 </nav>
             </aside>
             <main className="flex-1 overflow-auto flex flex-col">
-                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3 bg-white border-b border-alloy-stone/30">
+                <header className="flex-shrink-0 flex items-center justify-end gap-4 px-6 py-3.5 bg-alloy-blue/[0.08] border-b border-alloy-stone/40 backdrop-blur-sm">
                     <div className="relative">
                         <button
                             type="button"
@@ -372,6 +372,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                             </>
                         )}
                     </div>
+                    <span className="h-6 w-px bg-alloy-stone/40" aria-hidden />
                     <div className="relative">
                         <button
                             type="button"

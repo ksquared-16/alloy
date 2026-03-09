@@ -113,9 +113,24 @@ export default function OpportunitiesClient({
         setFilterOpen(false);
     };
 
-    const total = data.length;
-    const booked = data.filter((r) => (r.status ?? "").toLowerCase() === "closed" || (r._stage_name ?? "").toLowerCase().includes("book")).length;
-    const notBooked = total - booked;
+    /** Counts per status_key from dynamic status definitions */
+    const statusCounts = useMemo(() => {
+        const map: Record<string, number> = {};
+        for (const opt of statusOptions) {
+            map[opt.status_key] = data.filter((r) => (r.status_key ?? "") === opt.status_key).length;
+        }
+        return statusOptions.map((opt) => ({ ...opt, count: map[opt.status_key] ?? 0 }));
+    }, [data, statusOptions]);
+
+    const metricsPills = statusCounts.length > 0 ? (
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-alloy-muted">
+            {statusCounts.map(({ status_key, status_label, count }) => (
+                <span key={status_key} className="font-medium text-alloy-midnight/80">
+                    {status_label ?? status_key} <span className="text-alloy-muted">{count}</span>
+                </span>
+            ))}
+        </span>
+    ) : null;
 
     const filterTrigger = (
         <div className="relative" ref={filterRef}>
@@ -160,24 +175,10 @@ export default function OpportunitiesClient({
         <div>
             <AdminListPageHeader
                 title={title}
-                subtitle="Pipeline and booking status."
+                metrics={metricsPills}
                 toolbarLeft={filterTrigger}
             />
             <div className="pt-6">
-                <div className="mb-6 flex flex-wrap gap-4">
-                    <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[100px]">
-                        <div className="text-2xl font-semibold text-alloy-midnight">{total}</div>
-                        <div className="text-xs text-alloy-midnight/60">Total</div>
-                    </div>
-                    <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[100px]">
-                        <div className="text-2xl font-semibold text-alloy-midnight">{booked}</div>
-                        <div className="text-xs text-alloy-midnight/60">Booked</div>
-                    </div>
-                    <div className="bg-white border border-alloy-stone/30 rounded-lg px-4 py-3 min-w-[100px]">
-                        <div className="text-2xl font-semibold text-alloy-midnight">{notBooked}</div>
-                        <div className="text-xs text-alloy-midnight/60">Not booked</div>
-                    </div>
-                </div>
                 {error && (
                     <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
                         Error: {error}

@@ -329,11 +329,7 @@ export default function WorkflowRunsClient() {
 
     return (
         <>
-            <AdminListPageHeader
-                title="Workflow Runs"
-                subtitle="Read-only view of workflow_runs for the current org."
-                toolbarLeft={filterTrigger}
-            />
+            <AdminListPageHeader title="Workflow Runs" toolbarLeft={filterTrigger} />
             <div className="pt-6">
                 <div className="rounded-xl border border-alloy-stone/30 bg-white overflow-hidden">
                 {loading ? (

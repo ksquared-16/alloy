@@ -153,11 +153,7 @@ export default function CustomersClient({
 
   return (
     <div>
-      <AdminListPageHeader
-        title={title}
-        subtitle="Customer records and verticals."
-        toolbarLeft={filterTrigger}
-      />
+      <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
       <div className="pt-6">
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">

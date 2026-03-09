@@ -163,7 +163,6 @@ export default function CustomerMembersClient() {
         <div>
             <AdminListPageHeader
                 title={plural}
-                subtitle="Family and household members. Click a row to open."
                 toolbarLeft={filterTrigger}
                 toolbarRight={
                     <button

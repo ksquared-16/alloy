@@ -210,7 +210,6 @@ export default function JobsClient() {
     <>
       <AdminListPageHeader
         title={title}
-        subtitle={`${plural} scoped by your org. Customer is required. Only admins can create, edit, or archive.`}
         toolbarLeft={filterTrigger}
         toolbarRight={<button type="button" onClick={openCreate} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>}
       />
