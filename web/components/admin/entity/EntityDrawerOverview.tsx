@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
-import { formatDate, formatDateTime, formatMoneyFromCents, formatMoneyFromDollars } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoney } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
@@ -40,7 +40,7 @@ function formatFieldValue(
     case "datetime":
       return formatDateTime(value as string);
     case "money":
-      return key.endsWith("_cents") ? formatMoneyFromCents(value as number) : formatMoneyFromDollars(value as number);
+      return formatMoney(value as number | string | null | undefined, key);
     case "status":
       return (
         <StatusBadge
