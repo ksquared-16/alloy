@@ -42,7 +42,7 @@ export function formatMoney(
     return new Intl.NumberFormat("en-US", usdOptions).format(dollars);
 }
 
-/** Display as MM/DD/YYYY (local date only). */
+/** Display as MM/DD/YYYY. Uses UTC so server and client output match (avoids hydration #418). */
 export function formatDate(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";
     const d = typeof value === "object" ? value : new Date(value);
@@ -51,6 +51,7 @@ export function formatDate(value: string | number | Date | null | undefined): st
         month: "2-digit",
         day: "2-digit",
         year: "numeric",
+        timeZone: "UTC",
     }).format(d as Date);
 }
 
@@ -62,7 +63,7 @@ export function formatFrequencyLabel(cadence: string | null | undefined, interva
     return n === 1 ? "Every 1 month" : `Every ${n} months`;
 }
 
-/** Display as MM/DD/YYYY, h:mm A (local date-time). */
+/** Display as MM/DD/YYYY, h:mm A. Uses UTC so server and client output match (avoids hydration #418). */
 export function formatDateTime(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";
     const d = typeof value === "object" ? value : new Date(value);
@@ -74,5 +75,6 @@ export function formatDateTime(value: string | number | Date | null | undefined)
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
+        timeZone: "UTC",
     }).format(d as Date);
 }

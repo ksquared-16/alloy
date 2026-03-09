@@ -51,7 +51,7 @@ export default function Drawer({ isOpen, onClose, title, children, statusBadge, 
                 <div className="sticky top-0 z-10 bg-white shrink-0 border-b border-alloy-stone/30 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
                     <div className="px-6 py-4 flex items-center justify-between gap-4">
                         <div className="min-w-0 flex-1 flex items-center gap-3">
-                            <h2 className="text-xl font-bold text-alloy-midnight truncate">{title}</h2>
+                            <h2 className="text-xl font-bold text-alloy-midnight truncate">{typeof title === "string" ? title : title != null ? String(title) : "—"}</h2>
                             {statusBadge != null && statusBadge !== false && statusBadge}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">

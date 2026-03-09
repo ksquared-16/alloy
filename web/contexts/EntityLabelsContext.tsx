@@ -91,7 +91,8 @@ export function useEntityLabels(): EntityLabelsContextValue {
 }
 
 export function EntityLabelsProvider({ children }: { children: ReactNode }) {
-    const [labels, setLabels] = useState<EntityLabelsMap>(() => loadFromCache() ?? {});
+    // Always start with {} so server and client first paint match (avoids hydration #418 when cache exists).
+    const [labels, setLabels] = useState<EntityLabelsMap>(() => ({}));
     const [loading, setLoading] = useState(true);
 
     const refreshEntityLabels = useCallback(async () => {

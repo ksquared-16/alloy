@@ -1680,11 +1680,12 @@ export default function AdminEntityDrawer() {
         </div>
     ) : undefined;
 
+    const drawerTitle = typeof title === "string" ? title : title != null ? String(title) : "—";
     return (
         <Drawer
             isOpen
             onClose={closeDrawer}
-            title={title}
+            title={drawerTitle}
             statusBadge={drawerStatusBadge}
             headerActions={drawerHeaderActions}
             headerExtra={drawerHeaderExtra}
