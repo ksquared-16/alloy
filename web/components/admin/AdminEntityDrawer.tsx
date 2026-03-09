@@ -1554,8 +1554,6 @@ export default function AdminEntityDrawer() {
         }
     }, [initialInlineFormSnapshot]);
 
-    if (!drawer.type || !drawer.id) return null;
-
     const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
@@ -1583,19 +1581,19 @@ export default function AdminEntityDrawer() {
         ? drawer.type === "contacts"
             ? (data as { _create?: boolean })._create
                 ? `New ${contactSingular}`
-                : `${contactSingular}: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
+                : `${contactSingular}: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "")}`
             : drawer.type === "customers"
                 ? (data as { _create?: boolean })._create
                     ? `New ${customerSingular}`
-                    : `${customerSingular}: ${(data.name as string) || drawer.id}`
+                    : `${customerSingular}: ${(data.name as string) || (drawer.id ?? "")}`
                 : drawer.type === "customer_members"
                     ? (data as { _create?: boolean })._create
                         ? `New ${memberSingular}`
-                        : `${memberSingular}: ${(data.display_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || drawer.id}`
+                        : `${memberSingular}: ${(data.display_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "")}`
                     : drawer.type === "opportunities"
                         ? (data as { _create?: boolean })._create
                             ? `New ${opportunitySingular}`
-                            : `${opportunitySingular}: ${(data.name as string) || drawer.id}`
+                            : `${opportunitySingular}: ${(data.name as string) || (drawer.id ?? "")}`
                         : drawer.type === "jobs"
                             ? (data as { _create?: boolean })._create
                                 ? `New ${jobSingular}`
@@ -1603,21 +1601,21 @@ export default function AdminEntityDrawer() {
                             : drawer.type === "schedules"
                                 ? (data as { _create?: boolean })._create
                                     ? `New ${scheduleSingular}`
-                                    : `${scheduleSingular}: ${drawer.id}`
+                                    : `${scheduleSingular}: ${drawer.id ?? ""}`
                                 : drawer.type === "locations"
-                                    ? `Location: ${(data.label as string) || (data.address1 as string) || drawer.id.slice(0, 8) + "…"}`
+                                    ? `Location: ${(data.label as string) || (data.address1 as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                     : drawer.type === "discount_redemptions"
-                                        ? `Redemption: ${(data.discount_code as string) || drawer.id}`
+                                        ? `Redemption: ${(data.discount_code as string) || (drawer.id ?? "")}`
                                         : drawer.type === "workflows"
                                             ? (data as { _create?: boolean })._create
                                                 ? `New ${workflowSingular}`
-                                                : `${workflowSingular}: ${(data.name as string) || drawer.id}`
+                                                : `${workflowSingular}: ${(data.name as string) || (drawer.id ?? "")}`
                                             : drawer.type === "vendors"
                                                 ? (data as { _create?: boolean })._create
                                                     ? `New ${vendorSingular}`
-                                                    : `${vendorSingular}: ${(data.name as string) || drawer.id}`
+                                                    : `${vendorSingular}: ${(data.name as string) || (drawer.id ?? "")}`
                                                 : drawer.type === "subscriptions"
-                                                    ? `${subscriptionSingular}: ${(data._customer_name as string) || drawer.id.slice(0, 8)}…`
+                                                    ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
                                                     : "Details"
         : loading
             ? "Loading…"
@@ -1676,6 +1674,8 @@ export default function AdminEntityDrawer() {
         }
         return {};
     }, [drawer.type, data, openDrawer]);
+
+    if (!drawer.type || !drawer.id) return null;
 
     const drawerStatusBadge = data && !loading && !(data as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
