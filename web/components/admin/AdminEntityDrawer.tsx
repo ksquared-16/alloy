@@ -52,6 +52,10 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
 }
 
+/** Shared spacing: 24px container (drawer body has p-6), 16px between rows, section title with divider */
+const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
+const DRAWER_ROW_SPACING = "space-y-4";
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <div className="py-1.5">
@@ -436,7 +440,7 @@ export default function AdminEntityDrawer() {
     const [jobContactOptions, setJobContactOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobContactOptionsLoading, setJobContactOptionsLoading] = useState(false);
     const [jobCreateSaving, setJobCreateSaving] = useState(false);
-    const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "automation" | "details">("overview");
+    const [drawerTab, setDrawerTab] = useState<"overview" | "related" | "financials" | "automation" | "activity">("overview");
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
@@ -1470,20 +1474,7 @@ export default function AdminEntityDrawer() {
                         : drawer.type === "jobs"
                             ? (data as { _create?: boolean })._create
                                 ? `New ${jobSingular}`
-                                : (
-                                    <div className="flex flex-col gap-1 min-w-0">
-                                        <span className="truncate">{(data._customer_name as string) || (data.title as string) || drawer.id}</span>
-                                        <span className="text-sm font-normal text-alloy-midnight/70">
-                                            {((data.title as string) || "Cleaning").trim() || "Cleaning"}
-                                            {(data.gross_price_cents != null || (data as { estimated_total_cents?: number }).estimated_total_cents != null) && (
-                                                <> · {formatMoneyFromCents((data.gross_price_cents as number) ?? (data as { estimated_total_cents?: number }).estimated_total_cents ?? 0)}</>
-                                            )}
-                                        </span>
-                                        <span className="mt-0.5">
-                                            <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
-                                        </span>
-                                    </div>
-                                )
+                                : `${(data._customer_name as string) || (data.title as string) || "Job"} · ${((data.title as string) || "Cleaning").trim() || "Cleaning"}`
                             : drawer.type === "schedules"
                                 ? (data as { _create?: boolean })._create
                                     ? `New ${scheduleSingular}`
@@ -1507,56 +1498,63 @@ export default function AdminEntityDrawer() {
             ? "Loading…"
             : "Details";
 
-    const drawerHeaderExtra =
-        data && !loading && canEditInDrawer(drawer.type) ? (
-            <div className="space-y-2 pt-2">
-                {drawer.type === "jobs" && isJobExistingView && (
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        {jobQuickActionsNode}
-                        <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
-                    </div>
-                )}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <div className="flex gap-2">
-                        {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
-                            <>
-                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                            </>
+    const hasFinancialsTab = ["jobs", "schedules", "vendors", "opportunities", "customers"].includes(drawer.type);
+    const tabList = ["overview", "related", ...(hasFinancialsTab ? ["financials" as const] : []), ...(drawer.type === "opportunities" ? ["automation" as const] : []), "activity"] as const;
+    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity" };
+
+    const drawerStatusBadge = data && !loading && !(data as { _create?: boolean })?._create ? (
+        drawer.type === "jobs" && isJobExistingView ? (
+            <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+        ) : drawer.type === "schedules" && data?.status_key ? (
+            <StatusBadge label={getStatusLabel(data.status_key as string) ?? (data.status_key as string)} variant="default" />
+        ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (data as { status_key?: string }).status_key ? (
+            <StatusBadge label={getStatusLabel((data as { status_key: string }).status_key) ?? (data as { status_key: string }).status_key} variant="default" />
+        ) : null
+    ) : null;
+
+    const drawerHeaderActions = data && !loading && canEditInDrawer(drawer.type) ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+            {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
+            {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
+                <>
+                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                    <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                </>
+            )}
+            {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
+                !isEditing ? (
+                    <>
+                        {canMutate && !(data as { _create?: boolean })?._create && (
+                            <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
                         )}
-                        {canEditInDrawer(drawer.type) && drawer.type !== "jobs" && (
-                        !isEditing ? (
-                            <>
-                                {canMutate && !(data as { _create?: boolean })?._create && (
-                                    <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                                )}
-                                {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
-                                {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
-                            </>
-                        ) : (
-                            <>
-                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                            </>
-                        )
-                    )}
-                </div>
-                {["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create && (
-                    <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
-                        {(["overview", "related", ...(drawer.type === "opportunities" ? ["automation" as const] : []), "details"] as const).map((tab) => (
-                            <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
-                        ))}
-                    </div>
-                )}
-                </div>
-            </div>
-        ) : undefined;
+                        {drawer.type === "workflows" && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
+                        {drawer.type === "schedules" && canMutate && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
+                    </>
+                ) : (
+                    <>
+                        <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                        <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                    </>
+                )
+            )}
+        </div>
+    ) : undefined;
+
+    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+        <div className="flex gap-0.5 rounded-md border border-[#e6e8ec] bg-[#F4F6F9]/50 p-0.5">
+            {tabList.map((tab) => (
+                <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-[#31394d] text-white shadow-sm" : "text-[#59678b] hover:bg-[#eef0f4]"}`}>{tabLabels[tab] ?? tab}</button>
+            ))}
+        </div>
+    ) : undefined;
 
     return (
         <Drawer
             isOpen
             onClose={closeDrawer}
             title={title}
+            statusBadge={drawerStatusBadge}
+            headerActions={drawerHeaderActions}
             headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
@@ -1747,6 +1745,73 @@ export default function AdminEntityDrawer() {
                             <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
                         </div>
                     )}
+                    {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
+                        <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Payments &amp; pricing</h3>
+                            {jobPayments.length > 0 ? (
+                                <ul className="space-y-2">
+                                    {jobPayments.map((p) => (
+                                        <li key={p.id} className="text-sm">
+                                            {formatMoneyFromCents(p.amount_cents)} — {(p.payment_statuses?.key ?? "pending")}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No payments yet.</p>
+                            )}
+                            {jobPayoutLoading ? <p className="text-sm text-alloy-midnight/60 mt-4">Loading payout…</p> : jobPayout && (data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? (
+                                <div className="mt-4 space-y-2">
+                                    <p className="text-sm"><strong>Payout policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}{jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}</p>
+                                    {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}</div>
+                            ) : (data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/60 mt-4">Could not load payout.</p> : null}
+                            {!jobFinancialsLoading && jobFinancials && (
+                                <>
+                                    <h3 className={`${DRAWER_SECTION_HEADER_CLASS} mt-6`}>Ledger</h3>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
+                                        <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
+                                        <span>Discounts (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_discount_debits)}</span>
+                                        <span>Vendor payout (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payout_debits)}</span>
+                                        <span>Cash (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_cash_debits)}</span>
+                                        <span>Vendor payable (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payable_credits)}</span>
+                                    </div>
+                                    <p className="text-xs text-alloy-midnight/60 mt-2">Posted journal entries: {jobFinancials.posted_entries_count}</p>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {drawerTab === "financials" && drawer.type === "schedules" && drawer.id && drawer.id !== "new" && (
+                        <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Schedule financials</h3>
+                            {scheduleFinancialsLoading && <p className="text-sm text-alloy-midnight/60">Loading…</p>}
+                            {!scheduleFinancialsLoading && scheduleFinancials && (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
+                                        <span>Price</span><span>{scheduleFinancials.schedule?.price_cents != null ? formatMoneyFromCents(scheduleFinancials.schedule.price_cents) : "—"}</span>
+                                        <span>Customer payment posted?</span><span>{scheduleFinancials.customer_payment_posted ? "Yes" : "No"}</span>
+                                        <span>Vendor payout posted?</span><span>{scheduleFinancials.vendor_payout_posted ? "Yes" : "No"}</span>
+                                    </div>
+                                    {canMutate && (
+                                        <ScheduleCashEventButtons
+                                            scheduleId={drawer.id}
+                                            onSuccess={() => {
+                                                fetch(`/api/admin/financials/schedule/${drawer.id}`)
+                                                    .then((r) => (r.ok ? r.json() : null))
+                                                    .then(setScheduleFinancials)
+                                                    .catch(() => setScheduleFinancials(null));
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                            {!scheduleFinancialsLoading && !scheduleFinancials && <p className="text-sm text-alloy-midnight/50">Could not load financials.</p>}
+                        </div>
+                    )}
+                    {drawerTab === "financials" && ["vendors", "opportunities", "customers"].includes(drawer.type) && (
+                        <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Financials</h3>
+                            <p className="text-sm text-alloy-midnight/60">Financial details for {drawer.type} are available in the Financials section of the admin.</p>
+                        </div>
+                    )}
                     {drawerTab === "automation" && drawer.type === "opportunities" && (
                         <div className="pt-2 space-y-3">
                             <p className="text-sm text-[#59678b]">Configure statuses and workflows for opportunities.</p>
@@ -1760,9 +1825,9 @@ export default function AdminEntityDrawer() {
                             </ul>
                         </div>
                     )}
-                    {drawerTab === "details" && (
-                        <div className="space-y-3 pt-2">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2">IDs &amp; raw fields</h3>
+                    {drawerTab === "activity" && (
+                        <div className={`${DRAWER_ROW_SPACING} pt-2`}>
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>
                             {drawer.type === "customer_members" ? (
                                 <>
                                     {["id", "org_id", "customer_id", "external_source", "external_id", "created_at", "updated_at"].map((key) => {

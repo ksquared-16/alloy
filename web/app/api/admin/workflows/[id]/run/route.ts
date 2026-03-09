@@ -28,14 +28,23 @@ export async function POST(
                 { status: 500 }
             );
         }
-        return NextResponse.json({
+        const json: Record<string, unknown> = {
             ok: result.ok,
             status: result.status,
             workflow_run_id: result.workflow_run_id,
             logs: result.logs,
-        });
+        };
+        if (result.skip_reason) json.skip_reason = result.skip_reason;
+        return NextResponse.json(json);
     } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.startsWith("VALIDATION:")) {
+            return NextResponse.json(
+                { error: msg.replace(/^VALIDATION:\s*/, ""), code: "validation_error" },
+                { status: 400 }
+            );
+        }
         console.error("[WORKFLOW_RUN]", err);
-        return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
 }

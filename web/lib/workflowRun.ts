@@ -468,6 +468,7 @@ export interface WorkflowRunResult {
     status: "completed" | "skipped" | "failed";
     workflow_run_id: string;
     error?: string;
+    skip_reason?: string;
     logs?: string[];
 }
 
@@ -527,6 +528,75 @@ export type ExecuteWorkflowRunOptions = {
     org_id?: string | null;
 };
 
+/** Canonical entity type for matching (plural form used in workflow_events). */
+const ENTITY_TYPE_ALIASES: Record<string, string> = {
+    job: "jobs",
+    jobs: "jobs",
+    schedule: "schedules",
+    schedules: "schedules",
+    opportunity: "opportunities",
+    opportunities: "opportunities",
+    contact: "contacts",
+    contacts: "contacts",
+    customer: "customers",
+    vendor: "vendors",
+    vendors: "vendors",
+    customer_member: "customer_members",
+    customer_members: "customer_members",
+};
+
+function normalizeEntityType(raw: string | null | undefined): string | null {
+    if (raw == null || String(raw).trim() === "") return null;
+    const key = String(raw).trim().toLowerCase();
+    return ENTITY_TYPE_ALIASES[key] ?? key;
+}
+
+/**
+ * Pre-run validation: entity_type, event_type, and for entity_status_changed required payload.
+ * Returns a skip reason code (for logging/traceability) or null if validation passes.
+ */
+function validateWorkflowEventMatch(
+    workflow: { entity_type?: string | null; event_type?: string | null },
+    payload: Record<string, unknown>,
+    isEventDriven: boolean
+): string | null {
+    const wfEntityType = normalizeEntityType(workflow.entity_type ?? null);
+    const wfEventType = workflow.event_type != null ? String(workflow.event_type).trim() : null;
+    const payloadEntityType = normalizeEntityType((payload.entity_type as string) ?? null);
+    const payloadEventType = payload.event_type != null ? String(payload.event_type).trim() : null;
+
+    if (isEventDriven) {
+        if (!wfEntityType || wfEntityType === "") {
+            return "invalid_trigger_config";
+        }
+        if (!payloadEntityType) {
+            return "entity_type_mismatch";
+        }
+        if (wfEntityType !== payloadEntityType) {
+            return "entity_type_mismatch";
+        }
+        if (wfEventType) {
+            if (!payloadEventType || wfEventType !== payloadEventType) {
+                return "event_type_mismatch";
+            }
+        }
+        if (payloadEventType === "entity_status_changed") {
+            const nested = payload.payload as Record<string, unknown> | null | undefined;
+            const newStatusKey =
+                (payload.new_status_key != null ? String(payload.new_status_key) : null) ||
+                (nested?.new_status_key != null ? String(nested.new_status_key) : null);
+            if (newStatusKey === "" || newStatusKey == null) {
+                return "missing_status_key";
+            }
+        }
+    } else {
+        if (wfEntityType && payloadEntityType && wfEntityType !== payloadEntityType) {
+            return "entity_type_mismatch";
+        }
+    }
+    return null;
+}
+
 /**
  * Execute a workflow run: insert run row, evaluate conditions, execute actions.
  * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor) when available.
@@ -562,6 +632,45 @@ export async function executeWorkflowRun(
         throw new Error("Workflow not found");
     }
 
+    const isEventDriven = options?.event_id != null && String(options.event_id).trim() !== "";
+    const skipReason = validateWorkflowEventMatch(
+        workflow as { entity_type?: string | null; event_type?: string | null },
+        payload as Record<string, unknown>,
+        isEventDriven
+    );
+
+    if (skipReason) {
+        if (!isEventDriven && skipReason === "entity_type_mismatch") {
+            throw new Error("VALIDATION:entity_type_mismatch: Workflow entity type does not match payload entity type.");
+        }
+        const runId = crypto.randomUUID();
+        const completedAt = new Date().toISOString();
+        const runPayload = { ...payload, metadata: { ...((payload.metadata as Record<string, unknown>) ?? {}), skip_reason: skipReason } };
+        const { error: runInsertErr } = await supabase.from("workflow_runs").insert({
+            id: runId,
+            workflow_id: workflowId,
+            event_id: options?.event_id ?? null,
+            org_id: options?.org_id ?? null,
+            status: "skipped",
+            error: null,
+            started_at: completedAt,
+            completed_at: completedAt,
+            event_payload: runPayload,
+        });
+        if (runInsertErr) {
+            throw new Error(runInsertErr.message);
+        }
+        if (typeof console !== "undefined" && console.debug) {
+            console.debug("[workflowRun] skipped", { workflow_id: workflowId, skip_reason: skipReason, event_id: options?.event_id });
+        }
+        return {
+            ok: true,
+            status: "skipped",
+            workflow_run_id: runId,
+            skip_reason: skipReason,
+        };
+    }
+
     const runId = crypto.randomUUID();
     const startedAt = new Date().toISOString();
     const defaultEntityType = (workflow as { entity_type?: string }).entity_type ?? null;
@@ -595,11 +704,19 @@ export async function executeWorkflowRun(
     });
 
     if (!allPass) {
+        const runPayloadWithReason = {
+            ...payload,
+            metadata: { ...((payload.metadata as Record<string, unknown>) ?? {}), skip_reason: "conditions_not_met" as const },
+        };
         await supabase
             .from("workflow_runs")
-            .update({ status: "skipped", completed_at: new Date().toISOString() })
+            .update({
+                status: "skipped",
+                completed_at: new Date().toISOString(),
+                event_payload: runPayloadWithReason,
+            })
             .eq("id", runId);
-        return { ok: true, status: "skipped", workflow_run_id: runId };
+        return { ok: true, status: "skipped", workflow_run_id: runId, skip_reason: "conditions_not_met" };
     }
 
     const { data: actions } = await supabase
