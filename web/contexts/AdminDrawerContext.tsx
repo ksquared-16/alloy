@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
 
-export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "customers" | "customer_members" | "schedules" | "discount_redemptions" | "workflows" | "vendors" | "subscriptions" | "locations";
+export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "customers" | "customer_members" | "schedules" | "discount_redemptions" | "workflows" | "vendors" | "subscriptions" | "locations" | "payments";
 
 export type SchedulePrefill = {
     job_id: string;
