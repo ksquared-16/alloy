@@ -7,6 +7,7 @@ import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
+import { formatPayoutPercent } from "@/lib/adminFormatters";
 import { Filter } from "lucide-react";
 
 export interface Vendor {
@@ -65,6 +66,8 @@ export default function VendorsClient({
     const [filterOpen, setFilterOpen] = useState(false);
     const filterRef = useRef<HTMLDivElement>(null);
     const [filterStatus, setFilterStatus] = useState(statusKeyParam);
+    const [search, setSearch] = useState("");
+    const [searchApplied, setSearchApplied] = useState("");
 
     useEffect(() => {
         setFilterStatus(statusKeyParam);
@@ -81,6 +84,7 @@ export default function VendorsClient({
     }, []);
 
     const applyFilter = () => {
+        setSearchApplied(search.trim());
         const next = new URLSearchParams(searchParams.toString());
         if (filterStatus) next.set("status_key", filterStatus);
         else next.delete("status_key");
@@ -90,17 +94,32 @@ export default function VendorsClient({
 
     const clearFilter = () => {
         setFilterStatus("");
+        setSearch("");
+        setSearchApplied("");
         router.push("/admin/vendors");
         setFilterOpen(false);
     };
 
+    const filteredData = useMemo(() => {
+        let result = initialData;
+        if (searchApplied.trim()) {
+            const q = searchApplied.toLowerCase();
+            result = result.filter(
+                (row) =>
+                    (row.name ?? "").toLowerCase().includes(q) ||
+                    (row.company_name ?? "").toLowerCase().includes(q) ||
+                    (row._primary_contact_name ?? "").toLowerCase().includes(q) ||
+                    (row._vendor_email ?? "").toLowerCase().includes(q) ||
+                    (row._vendor_phone ?? "").toLowerCase().includes(q)
+            );
+        }
+        return result;
+    }, [initialData, searchApplied]);
+
     const columns = useMemo(
         () =>
             buildEntityTableColumns<Vendor>("vendors", {
-                payout_percent: (_value, row) =>
-                    row.payout_percent != null && !Number.isNaN(Number(row.payout_percent))
-                        ? `${Number(row.payout_percent)}%`
-                        : "—",
+                payout_percent: (_value, row) => formatPayoutPercent(row.payout_percent),
                 _jobs_count: (value) => (value != null && value !== "" ? String(value) : "0"),
             }),
         []
@@ -117,11 +136,22 @@ export default function VendorsClient({
             >
                 <Filter className="h-4 w-4 text-alloy-muted" />
                 Filter
-                {statusKeyParam && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+                {(searchApplied || statusKeyParam) && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
             </button>
             {filterOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
                     <div className="space-y-3">
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Search (name, company, contact, email, phone)</label>
+                            <input
+                                type="text"
+                                placeholder="Search…"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && (setSearchApplied(search.trim()), setFilterOpen(false))}
+                                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-muted/70 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+                            />
+                        </div>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
                             <select
@@ -137,7 +167,9 @@ export default function VendorsClient({
                         </div>
                         <div className="flex gap-2 pt-1">
                             <button type="button" onClick={applyFilter} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
-                            {statusKeyParam && <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>}
+                            {(searchApplied || statusKeyParam) && (
+                                <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -155,9 +187,11 @@ export default function VendorsClient({
                     </div>
                 )}
                 <DataTable
-                    data={initialData}
+                    data={filteredData}
                     columns={columns}
                     filters={[]}
+                    searchable={false}
+                    hideToolbar
                     onRowClick={(row) => openDrawer({ type: "vendors", id: row.id })}
                 />
             </div>

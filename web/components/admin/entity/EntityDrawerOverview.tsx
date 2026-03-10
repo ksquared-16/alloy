@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
-import { formatDate, formatDateTime, formatMoney, formatPhoneUS } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoney, formatPhoneUS, formatPayoutPercent } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
@@ -74,6 +74,7 @@ function formatFieldValue(
     case "text":
     case "custom":
     default:
+      if (key === "payout_percent") return formatPayoutPercent(value as number | null | undefined);
       return String(value);
   }
 }

@@ -42,6 +42,18 @@ export function formatMoney(
     return new Intl.NumberFormat("en-US", usdOptions).format(dollars);
 }
 
+/**
+ * Format payout_percent for display. Stored as decimal (0.7) -> show 70%.
+ * If value is already 1–100, show as-is with %.
+ */
+export function formatPayoutPercent(value: number | string | null | undefined): string {
+    if (value === null || value === undefined) return "—";
+    const n = typeof value === "string" ? parseFloat(value) : value;
+    if (Number.isNaN(n)) return "—";
+    const display = n > 0 && n <= 1 ? n * 100 : n;
+    return `${display}%`;
+}
+
 /** Display as MM/DD/YYYY. Uses UTC so server and client output match (avoids hydration #418). */
 export function formatDate(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";

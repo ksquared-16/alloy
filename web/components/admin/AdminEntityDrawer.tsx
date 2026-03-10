@@ -8,7 +8,7 @@ import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill } from
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
-import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS } from "@/lib/adminFormatters";
+import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS, formatPayoutPercent } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -3203,7 +3203,7 @@ export default function AdminEntityDrawer() {
                                                                 {vendorPayoutJobId ? (
                                                                     <div className="text-sm text-alloy-midnight/80 space-y-0.5">
                                                                         <p>Completed occurrences: <strong>{vendorPayout.completed_occurrences}</strong></p>
-                                                                        <p>Current payout: <strong>{vendorPayout.payout_percent}%</strong></p>
+                                                                        <p>Current payout: <strong>{formatPayoutPercent(vendorPayout.payout_percent)}</strong></p>
                                                                         {vendorPayoutJobPayout?.job.completed_payout_cents_total != null && (
                                                                             <p>Payout total: <strong>{formatMoneyFromCents(vendorPayoutJobPayout.job.completed_payout_cents_total)}</strong></p>
                                                                         )}
@@ -3225,7 +3225,7 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                             </>
                                                         ) : (
-                                                            <p className="text-sm text-alloy-midnight/80">Payout: <strong>{vendorPayout.payout_percent}%</strong></p>
+                                                            <p className="text-sm text-alloy-midnight/80">Payout: <strong>{formatPayoutPercent(vendorPayout.payout_percent)}</strong></p>
                                                         )}
                                                         <Link href="/admin/system/payouts" className="text-xs text-alloy-blue hover:underline inline-block">Configure payout defaults</Link>
                                                         {canMutate && (
@@ -3401,7 +3401,7 @@ export default function AdminEntityDrawer() {
                                                         <Field label="Hours" value={[data.operating_hours_open, data.operating_hours_close].filter(Boolean).join(" – ") || "—"} />
                                                         <Field label="Owns supplies" value={data.owns_supplies ? "Yes" : "No"} />
                                                         <Field label="Max daily jobs" value={data.max_daily_jobs != null ? String(data.max_daily_jobs) : "—"} />
-                                                        <Field label="Payout %" value={data.payout_percent != null ? String(data.payout_percent) : "—"} />
+                                                        <Field label="Payout %" value={formatPayoutPercent(data.payout_percent)} />
                                                         <Field label="Consent (agreement)" value={data.consent_contractor_agreement ? "Yes" : "No"} />
                                                         <Field label="Consent (marketing)" value={data.consent_marketing ? "Yes" : "No"} />
                                                         <Field label="Consent (legal)" value={data.consent_legal ? "Yes" : "No"} />
@@ -3486,7 +3486,7 @@ export default function AdminEntityDrawer() {
                                                         <div className="space-y-2">
                                                             <p className="text-sm text-alloy-midnight/80"><strong>Policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}{jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}</p>
                                                             <p className="text-xs text-alloy-midnight/60">Source: {jobPayout.source === "vendor" ? "Vendor override" : jobPayout.source === "org" ? "Org default" : "Legacy"}</p>
-                                                            <p className="text-sm">Completed: <strong>{jobPayout.job.completed_occurrences_total}</strong> · Payout: <strong>{jobPayout.job.current_payout_percent}%</strong></p>
+                                                            <p className="text-sm">Completed: <strong>{jobPayout.job.completed_occurrences_total}</strong> · Payout: <strong>{formatPayoutPercent(jobPayout.job.current_payout_percent)}</strong></p>
                                                             {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout $</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}
                                                         </div>
                                                     ) : <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>}
@@ -3893,7 +3893,7 @@ export default function AdminEntityDrawer() {
                                                     <span>Gross</span><span>{formatMoneyFromCents(scheduleFinancials.computed.gross_cents)}</span>
                                                     <span>Discount</span><span>{formatMoneyFromCents(scheduleFinancials.computed.discount_cents)}</span>
                                                     <span>Net</span><span>{formatMoneyFromCents(scheduleFinancials.computed.net_cents)}</span>
-                                                    <span>Payout %</span><span>{scheduleFinancials.computed.payout_percent}%</span>
+                                                    <span>Payout %</span><span>{formatPayoutPercent(scheduleFinancials.computed.payout_percent)}</span>
                                                     <span>Payout $</span><span>{formatMoneyFromCents(scheduleFinancials.computed.payout_cents)}</span>
                                                     <span>Alloy fee $</span><span>{formatMoneyFromCents(scheduleFinancials.computed.alloy_fee_cents)}</span>
                                                 </div>
