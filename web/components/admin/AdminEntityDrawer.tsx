@@ -366,6 +366,7 @@ export default function AdminEntityDrawer() {
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [saving, setSaving] = useState(false);
     const [jobSchedules, setJobSchedules] = useState<{ id: string; job_id: string; start_at: string; end_at: string; timezone: string }[]>([]);
     const [rescheduleForm, setRescheduleForm] = useState<{ start_at: string; end_at: string; timezone: string } | null>(null);
@@ -1299,6 +1300,7 @@ export default function AdminEntityDrawer() {
                 company_name: (data.company_name as string) ?? "",
                 notes: (data.notes as string) ?? "",
                 status_key: (data.status_key as string) ?? "",
+                contact_type: (data.contact_type as string) ?? "",
                 customer_id: (data.customer_id as string) ?? "",
                 vendor_id: (data.vendor_id as string) ?? "",
                 vendor_contact_role: (data.vendor_contact_role as string) ?? "",
@@ -1429,6 +1431,45 @@ export default function AdminEntityDrawer() {
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
                 setIsEditing(false);
+                router.refresh();
+                return;
+            }
+            if (drawer.type === "contacts") {
+                const contactPayload: Record<string, unknown> = {
+                    first_name: typeof formData.first_name === "string" ? (formData.first_name.trim() || null) : null,
+                    last_name: typeof formData.last_name === "string" ? (formData.last_name.trim() || null) : null,
+                    email: typeof formData.email === "string" ? (formData.email.trim() || null) : null,
+                    phone: typeof formData.phone === "string" ? (formData.phone.trim() || null) : null,
+                    company_name: typeof formData.company_name === "string" ? (formData.company_name.trim() || null) : null,
+                    notes: typeof formData.notes === "string" ? (formData.notes.trim() || null) : null,
+                    status_key: typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null,
+                    contact_type: typeof formData.contact_type === "string" ? (formData.contact_type.trim() || null) : null,
+                    customer_id: typeof formData.customer_id === "string" && formData.customer_id.trim() ? formData.customer_id.trim() : null,
+                    vendor_id: typeof formData.vendor_id === "string" && formData.vendor_id.trim() ? formData.vendor_id.trim() : null,
+                    vendor_contact_role: typeof formData.vendor_contact_role === "string" ? (formData.vendor_contact_role.trim() || null) : null,
+                };
+                const res = await fetch(`/api/admin/contacts/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(contactPayload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                setFormData((prev) => ({ ...prev, ...json }));
+                setInitialInlineFormSnapshot(JSON.stringify({
+                    first_name: json.first_name ?? "",
+                    last_name: json.last_name ?? "",
+                    email: json.email ?? "",
+                    phone: json.phone ?? "",
+                    company_name: (json.company_name as string) ?? "",
+                    notes: (json.notes as string) ?? "",
+                    status_key: (json.status_key as string) ?? "",
+                    contact_type: (json.contact_type as string) ?? "",
+                    customer_id: (json.customer_id as string) ?? "",
+                    vendor_id: (json.vendor_id as string) ?? "",
+                    vendor_contact_role: (json.vendor_contact_role as string) ?? "",
+                }));
+                setSaveError(null);
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 2500);
+                refetch();
                 router.refresh();
                 return;
             }
@@ -1790,8 +1831,9 @@ export default function AdminEntityDrawer() {
                     <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                 </>
             )}
-            {INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) && !(data as { _create?: boolean })?._create && canMutate && nonJobFormDirty && (
+            {INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) && !(data as { _create?: boolean })?._create && canMutate && (nonJobFormDirty || saving || saveSuccess) && (
                 <>
+                    {saveSuccess && <span className="text-sm text-alloy-juniper font-medium">Saved</span>}
                     <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
                     <button type="button" onClick={handleInlineCancel} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                 </>
