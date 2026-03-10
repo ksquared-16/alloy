@@ -5,15 +5,15 @@ import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { formatDate, formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
-import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { Filter } from "lucide-react";
 
-interface Opportunity {
+export interface Opportunity {
     id: string;
-    created_at: string;
+    created_at: string | null;
+    updated_at?: string | null;
     name: string | null;
     status: string | null;
     status_key?: string | null;
@@ -25,11 +25,19 @@ interface Opportunity {
     external_id: string | null;
     vertical_id: string | null;
     pipeline_stage_id?: string | null;
+    source?: string | null;
+    estimated_price_cents?: number | null;
+    monetary_value_cents?: number | null;
     _customer_name?: string | null;
     _contact_name?: string | null;
+    _primary_contact_name?: string | null;
     _contact_email?: string | null;
     _contact_phone?: string | null;
     _stage_name?: string | null;
+    _pipeline_stage_name?: string | null;
+    _status_display?: string | null;
+    _quote_total_display?: number | null;
+    _updated?: string | null;
 }
 
 interface Stage {
@@ -69,17 +77,7 @@ export default function OpportunitiesClient({
         return initialData.filter((r) => r.vertical_id === selectedVerticalId);
     }, [initialData, selectedVerticalId]);
 
-    const columns = [
-        { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
-        { key: "name", label: "Name", sortable: true },
-        { key: "status", label: "Status", sortable: true, render: (_: unknown, row: Opportunity) => <StatusBadge label={row.status} variant={row.status === "closed" ? "success" : "default"} /> },
-        { key: "_stage_name", label: "Stage", sortable: false, render: (_: unknown, row: Opportunity) => <StatusBadge label={row._stage_name} /> },
-        { key: "job_date", label: "Job Date", sortable: true, render: (v: string | null) => (v ? formatDate(v) : "—") },
-        { key: "job_time_window", label: "Time Window", sortable: false },
-        { key: "quote_total", label: "Quote Total", sortable: true, render: (v: number | null) => formatMoneyFromDollars(v) },
-        { key: "_customer_name", label: "Customer", sortable: false, render: (_: unknown, row: Opportunity) => row._customer_name ?? "—" },
-        { key: "_contact_name", label: "Contact", sortable: false, render: (_: unknown, row: Opportunity) => row._contact_name ?? row._contact_email ?? row._contact_phone ?? "—" },
-    ];
+    const columns = useMemo(() => buildEntityTableColumns<Opportunity>("opportunities"), []);
 
     const [filterOpen, setFilterOpen] = useState(false);
     const [filterStatus, setFilterStatus] = useState(statusKeyParam);
@@ -188,6 +186,8 @@ export default function OpportunitiesClient({
                     data={data}
                     columns={columns}
                     filters={[]}
+                    searchable={false}
+                    hideToolbar
                     onRowClick={(row) => openDrawer({ type: "opportunities", id: row.id })}
                 />
             </div>

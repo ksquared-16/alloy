@@ -3,7 +3,12 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
-const ALLOWED_KEYS = ["job_date", "job_time_window", "status", "status_key", "vertical_id", "quote_total", "notes", "pipeline_stage_id"] as const;
+const ALLOWED_KEYS = [
+    "name", "job_date", "job_time_window", "status", "status_key", "vertical_id", "quote_total", "notes", "pipeline_stage_id",
+    "source", "assigned_to", "lost_reason", "appointment_id",
+    "quote_subtotal", "discount_amount", "discount_code",
+    "external_source", "external_id",
+] as const;
 
 export async function PATCH(
     request: NextRequest,
@@ -27,6 +32,11 @@ export async function PATCH(
             if (key === "vertical_id" && val === "") val = null;
             if (key === "quote_total" && (val === "" || val === null)) val = null;
             if (key === "pipeline_stage_id" && (val === "" || val === null)) val = null;
+            if (key === "quote_subtotal" && (val === "" || val === null)) val = null;
+            if (key === "discount_amount" && (val === "" || val === null)) val = null;
+            if (["name", "source", "assigned_to", "lost_reason", "appointment_id", "discount_code", "external_source", "external_id"].includes(key)) {
+                val = typeof val === "string" ? val.trim() || null : val;
+            }
             updates[key] = val;
         }
         if (body.notes !== undefined) {

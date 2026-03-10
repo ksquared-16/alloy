@@ -94,14 +94,27 @@ export async function GET(
         }
 
         if (entity === "opportunity") {
-            const jobsRes = await supabase.from("jobs").select("id, created_at, title, scheduled_at").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(LIMIT);
+            const [jobsRes, documentsRes] = await Promise.all([
+                supabase.from("jobs").select("id, created_at, title, scheduled_at, job_status_id, customer_id, opportunity_id").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("documents").select("id, name, original_filename, document_type, status, uploaded_at, created_at").or("entity_type.eq.opportunity,entity_type.eq.opportunities").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+            ]);
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
+            let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];
+            if (jobIds.length > 0) {
+                const redRes = await supabase.from("discount_redemptions").select("id, created_at, discount_code_id, customer_id, job_id").in("job_id", jobIds).order("created_at", { ascending: false }).limit(LIMIT);
+                discountRedemptions = redRes.data ?? [];
+            }
             const schedulesRes = jobIds.length > 0
                 ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false }).limit(LIMIT)
                 : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
+                documents: documentsRes.data ?? [],
+                discount_redemptions: discountRedemptions,
+                quotes: [],
+                messages: [],
+                opportunity_tags: [],
             });
         }
 

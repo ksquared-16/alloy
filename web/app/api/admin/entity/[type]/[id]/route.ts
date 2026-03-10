@@ -72,22 +72,45 @@ export async function GET(
         if (type === "opportunities") {
             const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
-            if (data.customer_id) {
-                const customer = await supabase.from("customers").select("name").eq("id", data.customer_id).single();
+            out._status_display = opp.status_key ?? opp.status ?? null;
+            if (opp.customer_id) {
+                const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).single();
                 out._customer_name = customer.data?.name ?? null;
+            } else {
+                out._customer_name = null;
             }
-            if (data.primary_contact_id) {
-                const contact = await supabase.from("contacts").select("first_name, last_name").eq("id", data.primary_contact_id).single();
+            if (opp.primary_contact_id) {
+                const contact = await supabase.from("contacts").select("first_name, last_name").eq("id", opp.primary_contact_id).single();
                 const c = contact.data;
-                out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+                const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+                out._contact_name = name;
+                out._primary_contact_name = name;
+            } else {
+                out._contact_name = null;
+                out._primary_contact_name = null;
             }
-            if ((data as { pipeline_stage_id?: string }).pipeline_stage_id) {
-                const stage = await supabase.from("pipeline_stages").select("name").eq("id", (data as { pipeline_stage_id: string }).pipeline_stage_id).single();
+            if (opp.pipeline_stage_id) {
+                const stage = await supabase.from("pipeline_stages").select("name").eq("id", opp.pipeline_stage_id).single();
                 out._stage_name = stage.data?.name ?? null;
+                out._pipeline_stage_name = stage.data?.name ?? null;
             } else {
                 out._stage_name = null;
+                out._pipeline_stage_name = null;
             }
+            if (opp.location_id) {
+                const loc = await supabase.from("locations").select("id, label, address1, city, state").eq("id", opp.location_id).maybeSingle();
+                const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null } | null;
+                out._location_name = l ? (l.label || [l.address1, l.city, l.state].filter(Boolean).join(", ") || null) : null;
+            } else {
+                out._location_name = null;
+            }
+            const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)
+                : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents)) ? Number(opp.estimated_price_cents) / 100
+                : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
+                : null;
+            out._quote_total_display = qt;
             return NextResponse.json(out);
         }
         if (type === "contacts") {

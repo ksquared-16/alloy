@@ -545,6 +545,17 @@ export default function AdminEntityDrawer() {
     };
     const [vendorRelatedData, setVendorRelatedData] = useState<VendorRelatedPayload | null>(null);
     const [vendorRelatedLoading, setVendorRelatedLoading] = useState(false);
+    type OpportunityRelatedPayload = {
+        jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null; customer_id?: string | null }[];
+        schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
+        documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
+        discount_redemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[];
+        quotes: unknown[];
+        messages: unknown[];
+        opportunity_tags: unknown[];
+    };
+    const [opportunityRelatedData, setOpportunityRelatedData] = useState<OpportunityRelatedPayload | null>(null);
+    const [opportunityRelatedLoading, setOpportunityRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -588,12 +599,14 @@ export default function AdminEntityDrawer() {
             setContactRelatedData(null);
             setCustomerRelatedData(null);
             setVendorRelatedData(null);
+            setOpportunityRelatedData(null);
             return;
         }
         setDrawerTab("overview");
         setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
+        setOpportunityRelatedData(null);
         setLoading(true);
         setError(null);
         setIsEditing(false);
@@ -651,6 +664,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setVendorRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, vendorRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id) {
+            setOpportunityRelatedData(null);
+            return;
+        }
+        if ((drawerTab === "related" || drawerTab === "documents") && !opportunityRelatedData) {
+            setOpportunityRelatedLoading(true);
+            fetch(`/api/admin/related/opportunity/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: OpportunityRelatedPayload | null) => setOpportunityRelatedData(json ?? null))
+                .catch(() => setOpportunityRelatedData(null))
+                .finally(() => setOpportunityRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, opportunityRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
@@ -1022,14 +1050,25 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
             setFormData({
+                name: (data.name as string) ?? "",
                 job_date: (data.job_date as string)?.slice(0, 10) ?? "",
-                job_time_window: data.job_time_window ?? "",
-                status: data.status ?? "",
+                job_time_window: (data.job_time_window as string) ?? "",
+                status: (data.status as string) ?? "",
                 status_key: (data.status_key as string) ?? "",
-                pipeline_stage_id: data.pipeline_stage_id ?? "",
-                vertical_id: data.vertical_id ?? "",
+                pipeline_stage_id: (data.pipeline_stage_id as string) ?? "",
+                vertical_id: (data.vertical_id as string) ?? "",
                 quote_total: data.quote_total ?? "",
+                quote_subtotal: data.quote_subtotal ?? "",
+                discount_amount: data.discount_amount ?? "",
+                discount_code: (data.discount_code as string) ?? "",
+                source: (data.source as string) ?? "",
+                assigned_to: (data.assigned_to as string) ?? "",
+                lost_reason: (data.lost_reason as string) ?? "",
+                appointment_id: (data.appointment_id as string) ?? "",
+                external_source: (data.external_source as string) ?? "",
+                external_id: (data.external_id as string) ?? "",
                 notes: (meta.notes as string) ?? "",
+                customer_notes: (meta.notes as string) ?? "",
             });
         } else if (drawer.type === "jobs") {
             const meta = (data.metadata as Record<string, unknown>) || {};
@@ -1467,13 +1506,24 @@ export default function AdminEntityDrawer() {
         } else if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
             initial = {
+                name: (data.name as string) ?? "",
                 job_date: (data.job_date as string)?.slice(0, 10) ?? "",
-                job_time_window: data.job_time_window ?? "",
+                job_time_window: (data.job_time_window as string) ?? "",
                 status_key: (data.status_key as string) ?? "",
-                pipeline_stage_id: data.pipeline_stage_id ?? "",
-                vertical_id: data.vertical_id ?? "",
+                pipeline_stage_id: (data.pipeline_stage_id as string) ?? "",
+                vertical_id: (data.vertical_id as string) ?? "",
                 quote_total: data.quote_total ?? "",
+                quote_subtotal: data.quote_subtotal ?? "",
+                discount_amount: data.discount_amount ?? "",
+                discount_code: (data.discount_code as string) ?? "",
+                source: (data.source as string) ?? "",
+                assigned_to: (data.assigned_to as string) ?? "",
+                lost_reason: (data.lost_reason as string) ?? "",
+                appointment_id: (data.appointment_id as string) ?? "",
+                external_source: (data.external_source as string) ?? "",
+                external_id: (data.external_id as string) ?? "",
                 notes: (meta.notes as string) ?? "",
+                customer_notes: (meta.notes as string) ?? "",
             };
         } else if (drawer.type === "schedules") {
             initial = {
@@ -1617,10 +1667,11 @@ export default function AdminEntityDrawer() {
             const url = `/api/admin/${drawer.type}/${drawer.id}`;
             const payload: Record<string, unknown> = { ...formData };
             if ("status_label" in payload) delete payload.status_label;
-            if (drawer.type === "opportunities" && "notes" in payload) {
-                const notes = payload.notes;
-                delete payload.notes;
-                if (notes !== undefined) payload.notes = notes === "" ? null : notes;
+            if (drawer.type === "opportunities") {
+                const notes = formData.customer_notes !== undefined ? formData.customer_notes : payload.notes;
+                if ("notes" in payload) delete payload.notes;
+                if ("customer_notes" in payload) delete payload.customer_notes;
+                if (notes !== undefined) payload.notes = (typeof notes === "string" && notes.trim() === "") ? null : notes;
             }
             if (drawer.type === "jobs") {
                 if ("internal_notes" in payload) {
@@ -2151,10 +2202,48 @@ export default function AdminEntityDrawer() {
                             <button type="button" disabled={scheduleCreateSaving || !scheduleCreateForm.start_at || !scheduleCreateForm.end_at || !drawer.defaultSchedulePrefill?.job_id} onClick={async () => { setScheduleCreateSaving(true); setSaveError(null); try { const prefill = drawer.defaultSchedulePrefill!; const start = new Date(scheduleCreateForm.start_at); const end = new Date(scheduleCreateForm.end_at); if (end <= start) { setSaveError("End must be after start"); return; } const res = await fetch("/api/admin/schedules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: prefill.job_id, start_at: start.toISOString(), end_at: end.toISOString(), timezone: scheduleCreateForm.timezone || null, location_id: prefill.location_id || null, status_key: prefill.status_key || null }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { openDrawer({ type: "schedules", id: newId }); router.refresh(); } } catch (e) { setSaveError((e as Error).message); } finally { setScheduleCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{scheduleCreateSaving ? "Creating…" : "Create Schedule"}</button>
                         </div>
                     )}
-                    {drawerTab === "related" && drawer.type === "opportunities" && data && (
-                        <div className="pt-2 space-y-3 mb-4">
-                            <DrawerLinkWithName label={customerSingular} id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
-                            <DrawerLinkWithName label={contactSingular} id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
+                    {drawerTab === "related" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-related>
+                            {opportunityRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : opportunityRelatedData ? (() => {
+                                const d = opportunityRelatedData;
+                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
+                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "discount_redemptions", title: "Discounts / Promotions", defaultExpanded: false, items: (d.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined })) },
+                                ];
+                                const visible = sections.filter((s) => s.items.length > 0);
+                                if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                return (
+                                    <>
+                                        {visible.map((sec) => (
+                                            <EntityDrawerSection
+                                                key={sec.key}
+                                                config={{ key: sec.key, title: sec.title, defaultExpanded: sec.defaultExpanded, collapsible: true, gridCols: 1, fields: [] }}
+                                                defaultExpanded={sec.defaultExpanded}
+                                            >
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {sec.items.map((item) => (
+                                                        <li key={item.id}>
+                                                            {item.entityType ? (
+                                                                <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                </button>
+                                                            ) : (
+                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                    <div className="font-medium">{item.label}</div>
+                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                </div>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        ))}
+                                    </>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "schedules" && data && (
@@ -2652,9 +2741,9 @@ export default function AdminEntityDrawer() {
                             })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
-                    {drawerTab === "related" && ["opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
+                    {drawerTab === "related" && ["jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
-                            <RelatedRecordsTabs entityType={drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
+                            <RelatedRecordsTabs entityType={drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
@@ -2816,6 +2905,25 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
+                    {drawerTab === "documents" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            {opportunityRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : (opportunityRelatedData?.documents?.length ?? 0) > 0 ? (
+                                <ul className="space-y-2">
+                                    {(opportunityRelatedData?.documents ?? []).map((doc) => (
+                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
+                                            <span className="font-medium text-alloy-forge/90">{doc.name ?? doc.original_filename ?? "Document"}</span>
+                                            <span className="text-alloy-muted text-xs">{[doc.document_type, doc.status, doc.uploaded_at ? formatDateTime(doc.uploaded_at) : doc.created_at ? formatDateTime(doc.created_at) : ""].filter(Boolean).join(" · ")}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
+                            )}
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-4">
                             <section>
@@ -2915,6 +3023,19 @@ export default function AdminEntityDrawer() {
                                             {(data as { submitted_at?: string | null })?.submitted_at != null ? <li>Submitted: {formatDateTime(String((data as { submitted_at: string }).submitted_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && !(data as { submitted_at?: string | null })?.submitted_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
                                         )}
                                     </section>
