@@ -4,7 +4,7 @@ import { ReactNode, useState } from "react";
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 
 const SECTION_HEADER_CLASS =
-  "text-xs font-semibold uppercase tracking-wider text-alloy-midnight/90 border-b border-admin-border pb-2 mb-4";
+  "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
@@ -51,7 +51,7 @@ export default function EntityDrawerSection({
         <h3 className={SECTION_HEADER_CLASS}>{config.title}</h3>
       )}
       {showContent && (
-        <div className={`grid gap-x-6 gap-y-4 ${gridCols} ${isCollapsible ? "mt-2" : ""}`}>{children}</div>
+        <div className={`grid gap-x-6 gap-y-4 ${gridCols} ${isCollapsible ? "mt-2" : ""} mt-3`}>{children}</div>
       )}
     </section>
   );

@@ -189,7 +189,7 @@ export default function EntityDrawerOverview({
   };
 
   return (
-    <div className="space-y-0" data-entity-drawer-overview>
+    <div className="space-y-0 pt-5" data-entity-drawer-overview>
       {sections.map((section: EntityDrawerSectionConfig) => {
         const hasFields = section.fields && section.fields.length > 0;
         const customContent = customSectionContent[section.key];
