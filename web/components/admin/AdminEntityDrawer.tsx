@@ -3427,11 +3427,11 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {(data?.created_at != null || (data as { redeemed_at?: string | null })?.redeemed_at != null) ? (
-                                                <li>Redemption created: {formatDateTime(String((data?.created_at ?? (data as { redeemed_at: string }).redeemed_at)))}</li>
+                                            {data?.created_at != null ? (
+                                                <li>Redemption created: {formatDateTime(String(data.created_at))}</li>
                                             ) : null}
                                         </ul>
-                                        {!data?.created_at && !(data as { redeemed_at?: string | null })?.redeemed_at && (
+                                        {!data?.created_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
                                         )}
                                     </section>

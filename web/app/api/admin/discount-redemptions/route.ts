@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const { data: rows, error, count } = await supabase
         .from("discount_redemptions")
         .select("*", { count: "exact" })
-        .order("redeemed_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
     if (error) {
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const redemptions: DiscountRedemptionListItem[] = list.map((r) => {
         const row = r as Record<string, unknown> & { discount_code_id: string; customer_id: string; contact_id?: string | null; opportunity_id?: string | null; job_id?: string | null; quote_subtotal?: number | null; discount_amount?: number | null; quote_total?: number | null };
-        const createdAt = (row.created_at as string) ?? (row.redeemed_at as string) ?? "";
+        const createdAt = (row.created_at as string) ?? "";
         return {
             id: row.id as string,
             created_at: createdAt,

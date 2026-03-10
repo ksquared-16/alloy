@@ -376,7 +376,6 @@ export async function GET(
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const redemption = data as Record<string, unknown> & { discount_code_id: string; customer_id?: string | null; contact_id?: string | null; opportunity_id?: string | null; job_id?: string | null };
             const out: Record<string, unknown> = { ...redemption };
-            if (redemption.created_at == null && (redemption.redeemed_at != null)) out.created_at = redemption.redeemed_at;
             const codeId = redemption.discount_code_id;
             if (codeId) {
                 const { data: dc } = await supabase.from("discount_codes").select("code, discount_type, discount_value, is_active, first_job_only").eq("id", codeId).maybeSingle();
