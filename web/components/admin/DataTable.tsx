@@ -144,7 +144,7 @@ export default function DataTable<T extends Record<string, any>>({
     }
 
     return (
-        <div className={`rounded-xl border ${TABLE_BORDER} bg-admin-surface-card shadow-md overflow-hidden`}>
+        <div className={`rounded-xl border ${TABLE_BORDER} border-l-4 border-l-alloy-blue bg-admin-surface-card shadow-md overflow-hidden`}>
             {!hideToolbar && (
                 <div className="flex flex-wrap items-center gap-3 border-b border-admin-border px-4 py-3">
                     {searchable && (
@@ -230,7 +230,7 @@ export default function DataTable<T extends Record<string, any>>({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-admin-border bg-alloy-stone/25">
+                        <tr className="border-b border-admin-border bg-alloy-stone/40">
                             {columns.map((column) => {
                                 const isSorted = sortColumn === column.key;
                                 return (
@@ -239,7 +239,7 @@ export default function DataTable<T extends Record<string, any>>({
                                         className={`
                                             px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-forge
                                             ${isSorted ? "text-alloy-blue" : ""}
-                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-stone/40" : ""}
+                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-stone/50" : ""}
                                         `}
                                         onClick={() => column.sortable && handleSort(column.key)}
                                     >

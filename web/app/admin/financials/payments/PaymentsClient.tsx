@@ -191,7 +191,7 @@ export default function PaymentsClient() {
     return (
         <>
             <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
-            <div className="pt-6">
+            <div className="pt-4">
                 <div className="rounded-xl border border-admin-border bg-admin-surface-card shadow-sm overflow-hidden">
                     {loading ? (
                         <div className="p-10 text-center text-sm text-alloy-muted">Loading…</div>

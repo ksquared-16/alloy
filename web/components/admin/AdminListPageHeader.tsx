@@ -22,7 +22,7 @@ export default function AdminListPageHeader({
     const hasToolbar = toolbarLeft != null || toolbarRight != null;
     return (
         <header
-            className="rounded-xl border border-admin-border border-l-4 border-l-alloy-blue bg-admin-surface-card px-6 py-4 mb-4 shadow-sm"
+            className="rounded-xl border border-admin-border border-l-4 border-l-alloy-blue bg-admin-surface-card px-6 py-4 mb-3 shadow-sm"
             role="banner"
         >
             <div className="flex flex-wrap items-center justify-between gap-4">
