@@ -18,6 +18,17 @@ const PATCH_ALLOWED = [
     "vendor_id",
     "vendor_contact_role",
     "metadata",
+    "contact_type",
+    "source",
+    "external_source",
+    "external_id",
+    "address_line1",
+    "address_line2",
+    "city",
+    "state",
+    "postal_code",
+    "country",
+    "timezone",
 ] as const;
 
 export async function PATCH(

@@ -96,7 +96,25 @@ export async function GET(
             }
             const { data, error } = await supabase.from("contacts").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const contact = data as { vendor_id?: string | null };
+            const contact = data as { customer_id?: string | null; vendor_id?: string | null };
+            let _linked_customer_name: string | null = null;
+            let _linked_vendor_name: string | null = null;
+            if (contact.customer_id) {
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", contact.customer_id).maybeSingle();
+                _linked_customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            }
+            if (contact.vendor_id) {
+                const { data: vend } = await supabase.from("vendors").select("name").eq("id", contact.vendor_id).maybeSingle();
+                _linked_vendor_name = (vend as { name?: string | null } | null)?.name ?? null;
+            }
+            const [custPrimary, vendPrimary] = await Promise.all([
+                supabase.from("customers").select("id").eq("primary_contact_id", id).limit(1).maybeSingle(),
+                supabase.from("vendors").select("id").eq("primary_contact_id", id).limit(1).maybeSingle(),
+            ]);
+            const pc: string[] = [];
+            if (custPrimary.data) pc.push("Customer");
+            if (vendPrimary.data) pc.push("Vendor");
+            const _primary_contact_for = pc.length > 0 ? pc.join(", ") : "—";
             let _contact_vendor: { id: string; name: string | null; vendor_status_id: string | null; created_at: string } | null = null;
             if (contact.vendor_id) {
                 const { data: vendor } = await supabase
@@ -106,7 +124,13 @@ export async function GET(
                     .single();
                 if (vendor) _contact_vendor = { id: vendor.id, name: vendor.name ?? null, vendor_status_id: vendor.vendor_status_id ?? null, created_at: vendor.created_at };
             }
-            return NextResponse.json({ ...data, _contact_vendor });
+            return NextResponse.json({
+                ...data,
+                _contact_vendor,
+                _linked_customer_name,
+                _linked_vendor_name,
+                _primary_contact_for,
+            });
         }
         if (type === "customers") {
             const { data, error } = await supabase.from("customers").select("*").eq("id", id).single();

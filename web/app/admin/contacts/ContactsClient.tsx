@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import DataTable from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { formatDateTime } from "@/lib/adminFormatters";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { Filter } from "lucide-react";
 
 type Contact = {
@@ -21,12 +21,17 @@ type Contact = {
     company_name?: string | null;
     status: string | null;
     status_key?: string | null;
+    contact_type?: string | null;
     notes?: string | null;
     customer_id?: string | null;
     vendor_id?: string | null;
     vendor_contact_role?: string | null;
     archived_at: string | null;
     archived_by?: string | null;
+    _name?: string;
+    _linked_to?: string;
+    _primary_contact_for?: string;
+    _updated?: string;
 };
 
 type StatusOption = { status_key: string; status_label: string | null };
@@ -96,16 +101,9 @@ export default function ContactsClient() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const name = (c: Contact) => [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
-
-    const columns = [
-        { key: "name" as keyof Contact, label: "Name", sortable: true, render: (_: unknown, r: Contact) => name(r) },
-        { key: "email", label: "Email", sortable: true, render: (v: string | null) => v ?? "—" },
-        { key: "phone", label: "Phone", sortable: true, render: (v: string | null) => v ?? "—" },
-        { key: "status", label: "Status", sortable: true, render: (_: unknown, r: Contact) => <StatusBadge label={r.status} variant={r.status === "active" ? "success" : "neutral"} /> },
-        { key: "archived_at", label: "Archived", sortable: true, render: (v: string | null) => (v ? "Yes" : "—") },
-        { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
-    ];
+    const columns = buildEntityTableColumns<Contact>("contacts", {
+        status_key: (_v, row) => <StatusBadge label={row.status ?? row.status_key ?? null} variant="neutral" />,
+    });
 
     const filterTrigger = (
         <div className="relative flex items-center gap-2" ref={filterRef}>

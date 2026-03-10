@@ -487,6 +487,21 @@ export default function AdminEntityDrawer() {
     type StatusDefOption = { status_key: string; status_label: string | null; sort_order: number; is_active: boolean };
     const [statusDefsForDrawer, setStatusDefsForDrawer] = useState<StatusDefOption[]>([]);
     const [statusDefsLoading, setStatusDefsLoading] = useState(false);
+    type ContactRelatedPayload = {
+        linkedCustomer: { id: string; name: string | null } | null;
+        linkedVendor: { id: string; name: string | null } | null;
+        opportunities: { id: string; created_at?: string; name?: string | null; status?: string | null; job_date?: string | null; quote_total?: number | null }[];
+        jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; opportunity_id?: string | null }[];
+        customer_subscriptions: { id: string; created_at?: string; customer_id?: string; status?: string; start_date?: string | null }[];
+        customer_member_contacts: { id: string; customer_member_id?: string; contact_id?: string }[];
+        vendor_contacts: { id: string; vendor_id?: string; contact_id?: string; role?: string | null }[];
+        messages: { id: string; created_at?: string; to_phone?: string | null; status?: string | null }[];
+        documents: { id: string; name: string | null; document_type?: string | null; uploaded_at?: string | null }[];
+        discount_redemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string }[];
+        contact_tags: unknown[];
+    };
+    const [contactRelatedData, setContactRelatedData] = useState<ContactRelatedPayload | null>(null);
+    const [contactRelatedLoading, setContactRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -525,9 +540,11 @@ export default function AdminEntityDrawer() {
             setMemberRelationshipOptions([]);
             setContactCreateSaving(false);
             setContactCreateError(null);
+            setContactRelatedData(null);
             return;
         }
         setDrawerTab("overview");
+        setContactRelatedData(null);
         setLoading(true);
         setError(null);
         setIsEditing(false);
@@ -540,6 +557,21 @@ export default function AdminEntityDrawer() {
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "contacts" || !drawer.id || drawer.id === "new") {
+            setContactRelatedData(null);
+            return;
+        }
+        if ((drawerTab === "related" || drawerTab === "documents") && !contactRelatedData) {
+            setContactRelatedLoading(true);
+            fetch(`/api/admin/related/contact/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: ContactRelatedPayload | null) => setContactRelatedData(json ?? null))
+                .catch(() => setContactRelatedData(null))
+                .finally(() => setContactRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, contactRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
@@ -1926,9 +1958,122 @@ export default function AdminEntityDrawer() {
                             </section>
                         </div>
                     )}
-                    {drawerTab === "related" && ["contacts", "customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
+                    {drawerTab === "related" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2">
-                            <RelatedRecordsTabs entityType={drawer.type === "contacts" ? "contact" : drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
+                            {contactRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related…</p>
+                            ) : contactRelatedData ? (
+                                <div className="space-y-6">
+                                    {(contactRelatedData.linkedCustomer || contactRelatedData.linkedVendor) && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Linked Records</h3>
+                                            <ul className="space-y-1.5 text-sm">
+                                                {contactRelatedData.linkedCustomer && (
+                                                    <li><button type="button" onClick={() => openDrawer({ type: "customers", id: contactRelatedData!.linkedCustomer!.id })} className="text-alloy-blue hover:underline">{contactRelatedData.linkedCustomer.name ?? contactRelatedData.linkedCustomer.id}</button> (Customer)</li>
+                                                )}
+                                                {contactRelatedData.linkedVendor && (
+                                                    <li><button type="button" onClick={() => openDrawer({ type: "vendors", id: contactRelatedData!.linkedVendor!.id })} className="text-alloy-blue hover:underline">{contactRelatedData.linkedVendor.name ?? contactRelatedData.linkedVendor.id}</button> (Vendor)</li>
+                                                )}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {(contactRelatedData.opportunities.length > 0 || contactRelatedData.jobs.length > 0 || contactRelatedData.customer_subscriptions.length > 0) && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Operational Relationships</h3>
+                                            <div className="space-y-3 text-sm">
+                                                {contactRelatedData.opportunities.length > 0 && (
+                                                    <div>
+                                                        <p className="text-alloy-muted text-xs font-medium mb-1">Opportunities (primary contact)</p>
+                                                        <ul className="space-y-1">
+                                                            {contactRelatedData.opportunities.map((o) => (
+                                                                <li key={o.id}><button type="button" onClick={() => openDrawer({ type: "opportunities", id: o.id })} className="text-alloy-blue hover:underline">{o.name ?? o.id}</button> {o.job_date ? formatDate(o.job_date) : ""}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                                {contactRelatedData.jobs.length > 0 && (
+                                                    <div>
+                                                        <p className="text-alloy-muted text-xs font-medium mb-1">Jobs (primary contact)</p>
+                                                        <ul className="space-y-1">
+                                                            {contactRelatedData.jobs.map((j) => (
+                                                                <li key={j.id}><button type="button" onClick={() => openDrawer({ type: "jobs", id: j.id })} className="text-alloy-blue hover:underline">{j.title ?? j.id}</button> {j.scheduled_at ? formatDateTime(j.scheduled_at) : ""}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                                {contactRelatedData.customer_subscriptions.length > 0 && (
+                                                    <div>
+                                                        <p className="text-alloy-muted text-xs font-medium mb-1">Customer subscriptions (primary contact)</p>
+                                                        <ul className="space-y-1">
+                                                            {contactRelatedData.customer_subscriptions.map((s) => (
+                                                                <li key={s.id}><span className="font-mono text-xs">{s.id.slice(0, 8)}…</span> {s.status ?? ""} {s.start_date ? formatDate(s.start_date) : ""}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </section>
+                                    )}
+                                    {(contactRelatedData.customer_member_contacts.length > 0 || contactRelatedData.vendor_contacts.length > 0) && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Membership / Association</h3>
+                                            <div className="space-y-2 text-sm">
+                                                {contactRelatedData.customer_member_contacts.length > 0 && (
+                                                    <p>Customer member contacts: {contactRelatedData.customer_member_contacts.length}</p>
+                                                )}
+                                                {contactRelatedData.vendor_contacts.length > 0 && (
+                                                    <p>Vendor contacts: {contactRelatedData.vendor_contacts.length}</p>
+                                                )}
+                                            </div>
+                                        </section>
+                                    )}
+                                    {(contactRelatedData.messages.length > 0 || contactRelatedData.documents.length > 0 || contactRelatedData.discount_redemptions.length > 0) && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communication / Ownership</h3>
+                                            <div className="space-y-2 text-sm">
+                                                {contactRelatedData.messages.length > 0 && <p>Messages: {contactRelatedData.messages.length}</p>}
+                                                {contactRelatedData.documents.length > 0 && <p>Documents: {contactRelatedData.documents.length}</p>}
+                                                {contactRelatedData.discount_redemptions.length > 0 && <p>Discount redemptions: {contactRelatedData.discount_redemptions.length}</p>}
+                                            </div>
+                                        </section>
+                                    )}
+                                    {contactRelatedData.contact_tags.length > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Tags</h3>
+                                            <p className="text-sm">Contact tags: {contactRelatedData.contact_tags.length}</p>
+                                        </section>
+                                    )}
+                                    {!contactRelatedData.linkedCustomer && !contactRelatedData.linkedVendor && contactRelatedData.opportunities.length === 0 && contactRelatedData.jobs.length === 0 && contactRelatedData.customer_subscriptions.length === 0 && contactRelatedData.customer_member_contacts.length === 0 && contactRelatedData.vendor_contacts.length === 0 && contactRelatedData.messages.length === 0 && contactRelatedData.documents.length === 0 && contactRelatedData.discount_redemptions.length === 0 && contactRelatedData.contact_tags.length === 0 && (
+                                        <p className="text-sm text-alloy-midnight/60">No related records.</p>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No related data.</p>
+                            )}
+                        </div>
+                    )}
+                    {drawerTab === "related" && ["customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
+                        <div className="pt-2">
+                            <RelatedRecordsTabs entityType={drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
+                        </div>
+                    )}
+                    {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            {contactRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : ((contactRelatedData?.documents?.length ?? 0) > 0) ? (
+                                <ul className="space-y-2">
+                                    {(contactRelatedData?.documents ?? []).map((doc) => (
+                                        <li key={doc.id} className="text-sm flex items-center justify-between gap-2">
+                                            <span className="text-alloy-forge/90">{doc.name ?? "Untitled"}</span>
+                                            <span className="text-alloy-muted text-xs">{doc.document_type ?? ""} {doc.uploaded_at ? formatDateTime(doc.uploaded_at) : ""}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No documents linked to this contact.</p>
+                            )}
                         </div>
                     )}
                     {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
