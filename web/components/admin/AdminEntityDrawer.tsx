@@ -1979,7 +1979,7 @@ export default function AdminEntityDrawer() {
                                 : drawer.type === "locations"
                                     ? `Location: ${(data.label as string) || (data.address1 as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                     : drawer.type === "discount_redemptions"
-                                        ? `Redemption: ${(data.discount_code as string) || (drawer.id ?? "")}`
+                                        ? `Redemption: ${(data._code as string) || "Discount"}${(data._customer_name as string) ? ` · ${data._customer_name}` : ""}`
                                         : drawer.type === "workflows"
                                             ? (data as { _create?: boolean })._create
                                                 ? `New ${workflowSingular}`
@@ -1990,9 +1990,7 @@ export default function AdminEntityDrawer() {
                                                     : `${vendorSingular}: ${(data.name as string) || (drawer.id ?? "")}`
                                                 : drawer.type === "payments"
                                                     ? `Payment: ${(data._payment_label as string) || ("Payment #" + (drawer.id ?? "").slice(-6))}`
-                                                    : drawer.type === "discount_redemptions"
-                                                        ? `Redemption: ${(data._code as string) || "Discount"}${(data._customer_name as string) ? ` · ${data._customer_name}` : ""}`
-                                                        : drawer.type === "subscriptions"
+                                                    : drawer.type === "subscriptions"
                                                         ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
                                                         : "Details"
         : loading
