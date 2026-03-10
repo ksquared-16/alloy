@@ -559,7 +559,7 @@ export default function AdminEntityDrawer() {
         schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
         documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
         discount_redemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[];
-        quotes: unknown[];
+        quotes: { id: string; created_at?: string }[];
         messages: unknown[];
         opportunity_tags: unknown[];
     };
@@ -2248,7 +2248,7 @@ export default function AdminEntityDrawer() {
                                 const customerItem = opp?.customer_id ? [{ id: opp.customer_id, entityType: "customers" as const, label: (opp._customer_name as string)?.trim() || customerSingular, meta: undefined }] : [];
                                 const contactItem = opp?.primary_contact_id ? [{ id: opp.primary_contact_id, entityType: "contacts" as const, label: (opp._primary_contact_name ?? opp._contact_name as string)?.trim() || contactSingular, meta: undefined }] : [];
                                 const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
-                                const quoteItems = (d?.quotes ?? []).map((q: { id: string; created_at?: string }) => ({ id: (q as { id: string }).id, label: "Quote", meta: (q as { created_at?: string }).created_at ? formatDate((q as { created_at: string }).created_at) : undefined }));
+                                const quoteItems = (d?.quotes ?? []).map((q) => ({ id: q.id, label: "Quote", meta: q.created_at ? formatDate(q.created_at) : undefined }));
                                 const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined }));
                                 const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
                                     { key: "customer", title: customerSingular, defaultExpanded: true, items: customerItem },
