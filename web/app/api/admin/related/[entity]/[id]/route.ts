@@ -56,17 +56,26 @@ export async function GET(
         }
 
         if (entity === "customer") {
-            const [contactsRes, oppRes, jobsRes, locationsRes, membersRes] = await Promise.all([
-                supabase.from("contacts").select("id, created_at, first_name, last_name, email, phone").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
-                supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
-                supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+            const primaryContactId = await supabase.from("customers").select("primary_contact_id").eq("id", id).single().then((r) => (r.data as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null);
+            const [contactsRes, oppRes, jobsRes, locationsRes, membersRes, paymentsRes, subsRes, redemptionsRes, documentsRes] = await Promise.all([
+                supabase.from("contacts").select("id, created_at, first_name, last_name, email, phone, status_key").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total, pipeline_stage_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id, job_status_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("locations").select("id, label, address1, city, state, postal_code, is_primary, is_active, location_type").eq("customer_id", id).eq("org_id", ctx.orgId).order("is_primary", { ascending: false }).order("label", { ascending: true }).limit(LIMIT),
                 supabase.from("customer_members").select("id, created_at, display_name, relationship, first_name, last_name, dob, is_active").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("payments").select("id, created_at, amount_cents, paid_at, status_key, provider_payment_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase.from("customer_subscriptions").select("id, created_at, status, start_date, primary_contact_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase.from("discount_redemptions").select("id, created_at, discount_code_id, customer_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase.from("documents").select("id, name, document_type, uploaded_at, status").eq("entity_type", "customer").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
             ]);
             const jobIds = (jobsRes.data ?? []).map((j) => j.id);
             const schedulesRes = jobIds.length > 0
                 ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false }).limit(LIMIT)
-                : { data: [] as any[] };
+                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
+            const contactIds = (contactsRes.data ?? []).map((c: { id: string }) => c.id);
+            const messagesRes = contactIds.length > 0
+                ? await supabase.from("messages_outbox").select("id, created_at, to_phone, status, body").in("to_contact_id", contactIds).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r))
+                : { data: [] as { id: string; created_at: string; to_phone?: string; status?: string; body?: string }[] };
             return NextResponse.json({
                 contacts: contactsRes.data ?? [],
                 opportunities: oppRes.data ?? [],
@@ -74,6 +83,13 @@ export async function GET(
                 schedules: schedulesRes.data ?? [],
                 locations: locationsRes.data ?? [],
                 customer_members: membersRes.data ?? [],
+                payments: paymentsRes.data ?? [],
+                customer_subscriptions: subsRes.data ?? [],
+                discount_redemptions: redemptionsRes.data ?? [],
+                documents: documentsRes.data ?? [],
+                messages: messagesRes.data ?? [],
+                customer_tags: [],
+                _primary_contact_id: primaryContactId,
             });
         }
 

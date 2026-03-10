@@ -24,12 +24,16 @@ interface EntityDrawerOverviewProps {
   canEdit?: boolean;
   statusDefs?: StatusDefOption[];
   getStatusLabel?: (key: string) => string | null;
+  /** When a field has linkTarget, call this to open the related entity drawer. */
+  onOpenDrawer?: (entityType: string, id: string) => void;
 }
 
 function formatFieldValue(
   value: unknown,
   field: EntityDrawerFieldConfig,
-  getStatusLabel?: (key: string) => string | null
+  getStatusLabel?: (key: string) => string | null,
+  record?: Record<string, unknown> | null,
+  onOpenDrawer?: (entityType: string, id: string) => void
 ): ReactNode {
   if (value === null || value === undefined) return null;
   const hint = field.renderHint ?? "text";
@@ -50,6 +54,21 @@ function formatFieldValue(
         />
       );
     case "link":
+      if (field.linkTarget && record && onOpenDrawer) {
+        const id = record[field.linkTarget.idField];
+        if (id != null && String(id).trim() !== "") {
+          return (
+            <button
+              type="button"
+              onClick={() => onOpenDrawer(field.linkTarget!.entityType, String(id))}
+              className="text-alloy-blue hover:underline text-left"
+            >
+              {String(value)}
+            </button>
+          );
+        }
+      }
+      return String(value);
     case "text":
     case "custom":
     default:
@@ -174,6 +193,7 @@ export default function EntityDrawerOverview({
   canEdit = false,
   statusDefs,
   getStatusLabel,
+  onOpenDrawer,
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
   const sections = config.drawer?.overviewSections ?? [];
@@ -198,7 +218,7 @@ export default function EntityDrawerOverview({
         const children: ReactNode = hasFields
           ? section.fields!.map((field: EntityDrawerFieldConfig) => {
               const rawValue = editFormData[field.key] !== undefined ? editFormData[field.key] : record[field.key];
-              const displayValue = formatFieldValue(rawValue, field, getStatusLabel);
+              const displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
               const showEdit = !!(canEdit && field.editable && onFieldChange);
               const editNode = showEdit
                 ? renderFieldEditNode(field, editFormData, handleFieldChange, handleBlur, handleEscape, statusDefs, !canEdit)

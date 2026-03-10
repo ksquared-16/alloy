@@ -46,6 +46,14 @@ export interface EntityDefaultSortConfig {
   direction: "asc" | "desc";
 }
 
+/** When present, link-type fields open another entity drawer (e.g. primary contact). */
+export interface EntityDrawerLinkTarget {
+  /** Field key on the record that holds the related entity id (e.g. primary_contact_id). */
+  idField: string;
+  /** Entity type to open in drawer (e.g. "contacts"). */
+  entityType: string;
+}
+
 /** Drawer field definition for overview/sections. */
 export interface EntityDrawerFieldConfig {
   key: string;
@@ -58,6 +66,8 @@ export interface EntityDrawerFieldConfig {
   editable?: boolean;
   /** If true, field cannot be removed by user layout config (future). */
   locked?: boolean;
+  /** When set with renderHint "link", value is rendered as a button that opens this entity drawer. */
+  linkTarget?: EntityDrawerLinkTarget;
 }
 
 /** Drawer section definition. */
@@ -76,7 +86,7 @@ export interface EntityDrawerSectionConfig {
 }
 
 /** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
-export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "documents";
+export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "payments" | "documents";
 
 /** Related record module: which related-entity tabs to show (e.g. jobs, schedules, contacts). */
 export interface RelatedModuleConfig {
@@ -139,44 +149,93 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       columns: [
         { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
-        { key: "_primary_contact_name", label: "Primary contact", sortable: false, renderHint: "text" },
-        { key: "phone", label: "Phone", sortable: true, renderHint: "text" },
-        { key: "email", label: "Email", sortable: true, renderHint: "text" },
-        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+        { key: "_primary_contact_name", label: "Primary Contact", sortable: false, renderHint: "text" },
+        { key: "_customer_email", label: "Email", sortable: false, renderHint: "text" },
+        { key: "_customer_phone", label: "Phone", sortable: false, renderHint: "phone" },
+        { key: "customer_type", label: "Customer Type", sortable: true, renderHint: "text" },
+        { key: "_active_jobs_count", label: "Active Jobs", sortable: false, renderHint: "text" },
+        { key: "_open_opportunities_count", label: "Open Opportunities", sortable: false, renderHint: "text" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
       ],
-      defaultSort: { key: "updated_at", direction: "desc" },
+      defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "financials", "activity"],
+      tabs: ["overview", "related", "activity", "payments", "documents"],
       headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
       layoutMode: 2,
       overviewSections: [
         {
-          key: "overview",
-          title: "Overview",
+          key: "account_info",
+          title: "Account Info",
           defaultExpanded: true,
-          collapsible: false,
+          collapsible: true,
           gridCols: 2,
           fields: [
             { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
+            { key: "customer_type", label: "Customer Type", span: 1, renderHint: "text", editable: true },
             { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text", locked: true },
-            { key: "phone", label: "Phone", span: 1, renderHint: "text", editable: true },
-            { key: "email", label: "Email", span: 1, renderHint: "text", editable: true },
-            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
-            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "_primary_contact_name", label: "Primary Contact", span: 1, renderHint: "link", locked: true, linkTarget: { idField: "primary_contact_id", entityType: "contacts" } },
+            { key: "stripe_customer_id", label: "Stripe Customer ID", span: 1, renderHint: "text", locked: true },
+            { key: "external_source", label: "External Source", span: 1, renderHint: "text", editable: true },
+            { key: "external_id", label: "External ID", span: 1, renderHint: "text", editable: true },
           ],
           locked: true,
         },
-        { key: "details", title: "Primary contact & location", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
+        {
+          key: "contact_snapshot",
+          title: "Contact Snapshot",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "_primary_contact_name", label: "Primary Contact", span: 1, renderHint: "link", locked: true, linkTarget: { idField: "primary_contact_id", entityType: "contacts" } },
+            { key: "_primary_contact_email", label: "Primary Contact Email", span: 1, renderHint: "text", locked: true },
+            { key: "_primary_contact_phone", label: "Primary Contact Phone", span: 1, renderHint: "phone", locked: true },
+            { key: "_metadata_email", label: "Metadata Email", span: 1, renderHint: "text", locked: true },
+            { key: "_metadata_phone", label: "Metadata Phone", span: 1, renderHint: "phone", locked: true },
+            { key: "_metadata_source", label: "Metadata Source", span: 1, renderHint: "text", locked: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "payment_profile",
+          title: "Payment Profile",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "payment_method_brand", label: "Card Brand", span: 1, renderHint: "text", locked: true },
+            { key: "payment_method_last4", label: "Last 4", span: 1, renderHint: "text", locked: true },
+            { key: "default_payment_method_id", label: "Default Payment Method ID", span: 1, renderHint: "text", locked: true },
+            { key: "setup_intent_id", label: "Setup Intent ID", span: 1, renderHint: "text", locked: true },
+            { key: "stripe_customer_id", label: "Stripe Customer ID", span: 1, renderHint: "text", locked: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text", locked: true },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime", locked: true },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime", locked: true },
+            { key: "org_id", label: "Org ID", span: 1, renderHint: "text", locked: true },
+            { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text", locked: true },
+          ],
+          locked: true,
+        },
       ],
       relatedModules: [
         { key: "contacts", label: "Contacts", entityType: "contacts", filterKey: "customer_id", locked: true },
         { key: "locations", label: "Locations", entityType: "locations", filterKey: "customer_id", locked: true },
         { key: "opportunities", label: "Opportunities", entityType: "opportunities", filterKey: "customer_id", locked: true },
         { key: "jobs", label: "Jobs", entityType: "jobs", filterKey: "customer_id", locked: true },
-        { key: "schedules", label: "Schedules", entityType: "schedules", filterKey: "customer_id", locked: true },
         { key: "payments", label: "Payments", entityType: "payments", filterKey: "customer_id", locked: true },
+        { key: "subscriptions", label: "Subscriptions", entityType: "subscriptions", filterKey: "customer_id", locked: true },
         { key: "documents", label: "Documents", entityType: "documents", filterKey: "customer_id", locked: true },
       ],
     },

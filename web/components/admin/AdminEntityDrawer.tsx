@@ -503,6 +503,21 @@ export default function AdminEntityDrawer() {
     };
     const [contactRelatedData, setContactRelatedData] = useState<ContactRelatedPayload | null>(null);
     const [contactRelatedLoading, setContactRelatedLoading] = useState(false);
+    type CustomerRelatedPayload = {
+        contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null }[];
+        opportunities: { id: string; name?: string | null; status?: string | null; job_date?: string | null; quote_total?: number | null }[];
+        jobs: { id: string; title?: string | null; scheduled_at?: string | null; opportunity_id?: string | null }[];
+        locations: { id: string; label?: string | null; location_type?: string | null; city?: string | null; state?: string | null }[];
+        customer_members: { id: string; display_name?: string | null; relationship?: string | null }[];
+        payments: { id: string; amount_cents?: number; status_key?: string | null; paid_at?: string | null; created_at?: string; provider_payment_id?: string | null }[];
+        customer_subscriptions: { id: string; status?: string; start_date?: string | null; created_at?: string }[];
+        discount_redemptions: { id: string; created_at?: string; discount_code_id?: string }[];
+        documents: { id: string; name?: string | null; document_type?: string | null; uploaded_at?: string | null; status?: string | null }[];
+        messages: { id: string; created_at?: string; to_phone?: string | null; status?: string | null; body?: string | null }[];
+        _primary_contact_id?: string | null;
+    };
+    const [customerRelatedData, setCustomerRelatedData] = useState<CustomerRelatedPayload | null>(null);
+    const [customerRelatedLoading, setCustomerRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -542,10 +557,12 @@ export default function AdminEntityDrawer() {
             setContactCreateSaving(false);
             setContactCreateError(null);
             setContactRelatedData(null);
+            setCustomerRelatedData(null);
             return;
         }
         setDrawerTab("overview");
         setContactRelatedData(null);
+        setCustomerRelatedData(null);
         setLoading(true);
         setError(null);
         setIsEditing(false);
@@ -573,6 +590,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setContactRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, contactRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "customers" || !drawer.id) {
+            setCustomerRelatedData(null);
+            return;
+        }
+        if ((drawerTab === "related" || drawerTab === "payments" || drawerTab === "documents") && !customerRelatedData) {
+            setCustomerRelatedLoading(true);
+            fetch(`/api/admin/related/customer/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: CustomerRelatedPayload | null) => setCustomerRelatedData(json ?? null))
+                .catch(() => setCustomerRelatedData(null))
+                .finally(() => setCustomerRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, customerRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
@@ -1306,7 +1338,13 @@ export default function AdminEntityDrawer() {
                 vendor_contact_role: (data.vendor_contact_role as string) ?? "",
             };
         } else if (drawer.type === "customers") {
-            initial = { name: data.name ?? "", status_key: (data.status_key as string) ?? "" };
+            initial = {
+                name: data.name ?? "",
+                status_key: (data.status_key as string) ?? "",
+                customer_type: (data.customer_type as string) ?? "",
+                external_source: (data.external_source as string) ?? "",
+                external_id: (data.external_id as string) ?? "",
+            };
         } else if (drawer.type === "vendors") {
             const v = data as { name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null };
             initial = {
@@ -1699,7 +1737,7 @@ export default function AdminEntityDrawer() {
     const presentationConfig = presentationType ? getEntityPresentation(presentationType) : null;
     const configTabs = presentationConfig?.drawer?.tabs;
     const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
-    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", documents: "Documents" };
+    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", payments: "Payments", documents: "Documents" };
 
     const useConfigDrivenOverview =
         !!presentationType &&
@@ -2288,9 +2326,61 @@ export default function AdminEntityDrawer() {
                             </ul>
                         </div>
                     )}
+                    {drawerTab === "payments" && drawer.type === "customers" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Payments</h3>
+                            {customerRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : (customerRelatedData?.payments?.length ?? 0) > 0 ? (
+                                <ul className="space-y-2">
+                                    {(customerRelatedData?.payments ?? []).map((p) => (
+                                        <li key={p.id} className="text-sm flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            <span className="font-medium text-alloy-forge/90">{formatMoneyFromCents(p.amount_cents ?? 0)}</span>
+                                            <span className="text-alloy-midnight/70">{p.status_key ?? "—"}</span>
+                                            <span className="text-alloy-muted text-xs">{p.paid_at ? formatDateTime(p.paid_at) : p.created_at ? formatDateTime(p.created_at) : ""}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No payments available.</p>
+                            )}
+                        </div>
+                    )}
+                    {drawerTab === "documents" && drawer.type === "customers" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            {customerRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : (customerRelatedData?.documents?.length ?? 0) > 0 ? (
+                                <ul className="space-y-2">
+                                    {(customerRelatedData?.documents ?? []).map((doc) => (
+                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
+                                            <span className="font-medium text-alloy-forge/90">{doc.name ?? "Untitled"}</span>
+                                            <span className="text-alloy-muted text-xs">{[doc.document_type, doc.status, doc.uploaded_at ? formatDateTime(doc.uploaded_at) : ""].filter(Boolean).join(" · ")}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
+                            )}
+                        </div>
+                    )}
                     {drawerTab === "activity" && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>
-                            {drawer.type === "contacts" && drawer.id && drawer.id !== "new" ? (
+                            {drawer.type === "customers" && drawer.id && drawer.id !== "new" ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "contacts" && drawer.id && drawer.id !== "new" ? (
                                 <div className="space-y-6">
                                     {(contactRelatedData?.messages?.length ?? 0) > 0 && (
                                         <section>
@@ -2363,6 +2453,7 @@ export default function AdminEntityDrawer() {
                             canEdit={!!canMutate}
                             statusDefs={statusDefsForDrawer}
                             getStatusLabel={getStatusLabel}
+                            onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                         />
                     )}
                     {drawerTab === "overview" && !useConfigDrivenOverview && (

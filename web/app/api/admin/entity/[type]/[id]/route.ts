@@ -4,7 +4,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations"] as const;
 
-type ContactRow = { id: string; first_name?: string; last_name?: string; email?: string; phone?: string };
+type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
 
 export async function GET(
     request: NextRequest,
@@ -138,11 +138,31 @@ export async function GET(
             const out: Record<string, unknown> = { ...data };
             const orgId = (data as { org_id?: string }).org_id;
             const primaryContactId = (data as { primary_contact_id?: string | null }).primary_contact_id;
+            const verticalId = (data as { vertical_id?: string | null }).vertical_id;
+            const metadata = (data as { metadata?: Record<string, unknown> | null }).metadata;
             if (primaryContactId) {
                 const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone").eq("id", primaryContactId).maybeSingle();
                 out._primary_contact = contact ?? null;
+                const c = contact as ContactRow | null;
+                out._primary_contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+                out._primary_contact_email = c?.email ?? null;
+                out._primary_contact_phone = c?.phone ?? null;
             } else {
                 out._primary_contact = null;
+                out._primary_contact_name = null;
+                out._primary_contact_email = null;
+                out._primary_contact_phone = null;
+            }
+            const meta = metadata && typeof metadata === "object" ? metadata : {};
+            out._metadata_email = (meta.email as string) ?? null;
+            out._metadata_phone = (meta.phone as string) ?? null;
+            out._metadata_source = (meta.source as string) ?? null;
+            if (verticalId) {
+                const { data: vert } = await supabase.from("verticals").select("id, name, slug").eq("id", verticalId).maybeSingle();
+                const v = vert as { name?: string | null; slug?: string | null } | null;
+                out._vertical_name = v ? (v.name ?? v.slug ?? null) : null;
+            } else {
+                out._vertical_name = null;
             }
             const { data: primaryLoc } = await supabase
                 .from("locations")

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useState, useRef } from "react";
+import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -11,30 +11,39 @@ import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { Filter } from "lucide-react";
 
-interface Customer {
+export interface Customer {
   id: string;
-  created_at: string;
+  created_at: string | null;
+  updated_at: string | null;
   name: string | null;
   status: string | null;
   status_key: string | null;
-  stripe_customer_id: string | null;
-  default_payment_method_id: string | null;
+  customer_type: string | null;
+  primary_contact_id: string | null;
   vertical_id: string | null;
+  org_id: string | null;
+  metadata?: Record<string, unknown> | null;
+  stripe_customer_id: string | null;
+  external_source: string | null;
   external_id: string | null;
+  default_payment_method_id: string | null;
+  payment_method_brand: string | null;
+  payment_method_last4: string | null;
+  setup_intent_id: string | null;
+  _primary_contact_name?: string | null;
+  _primary_contact_email?: string | null;
+  _primary_contact_phone?: string | null;
+  _customer_email?: string | null;
+  _customer_phone?: string | null;
   _vertical_name?: string | null;
-}
-
-interface CustomersClientProps {
-  initialData: Customer[];
-  error?: string;
+  _active_jobs_count?: number;
+  _open_opportunities_count?: number;
+  _updated?: string | null;
 }
 
 type StatusOption = { status_key: string; status_label: string | null };
 
-export default function CustomersClient({
-  initialData,
-  error,
-}: CustomersClientProps) {
+export default function CustomersClient() {
   const { openDrawer } = useAdminDrawer();
   const { selectedVerticalId } = useAdminVertical();
   const { labels } = useEntityLabels();
@@ -43,10 +52,39 @@ export default function CustomersClient({
   const title = labels?.customers?.plural ?? "Customers";
   const statusKeyParam = searchParams.get("status_key") ?? "";
 
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState(statusKeyParam);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  const fetchList = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams();
+    if (statusKeyParam) params.set("status_key", statusKeyParam);
+    try {
+      const res = await fetch(`/api/admin/customers?${params}`);
+      const json = await res.json();
+      if (res.ok) {
+        setCustomers(json.customers ?? []);
+      } else {
+        setCustomers([]);
+        setError(json.error ?? "Failed to load customers");
+      }
+    } catch {
+      setCustomers([]);
+      setError("Failed to load customers");
+    } finally {
+      setLoading(false);
+    }
+  }, [statusKeyParam]);
+
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
 
   useEffect(() => {
     fetch("/api/admin/status-definitions?entity_type=customers")
@@ -69,9 +107,9 @@ export default function CustomersClient({
   }, []);
 
   const data = useMemo(() => {
-    if (!selectedVerticalId) return initialData;
-    return initialData.filter((r) => r.vertical_id === selectedVerticalId);
-  }, [initialData, selectedVerticalId]);
+    if (!selectedVerticalId) return customers;
+    return customers.filter((r) => r.vertical_id === selectedVerticalId);
+  }, [customers, selectedVerticalId]);
 
   const applyFilter = () => {
     const next = new URLSearchParams(searchParams.toString());
@@ -158,15 +196,19 @@ export default function CustomersClient({
       <div className="pt-4">
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-            Error: {error}
+            {error}
           </div>
         )}
-        <DataTable
-        data={data}
-        columns={columns}
-        filters={[]}
-        onRowClick={(row) => openDrawer({ type: "customers", id: row.id })}
-        />
+        {loading ? (
+          <div className="py-8 text-center text-sm text-alloy-muted">Loading…</div>
+        ) : (
+          <DataTable
+            data={data}
+            columns={columns}
+            filters={[]}
+            onRowClick={(row) => openDrawer({ type: "customers", id: row.id })}
+          />
+        )}
       </div>
     </div>
   );

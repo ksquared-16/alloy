@@ -19,7 +19,7 @@ interface TabConfig {
     dataKey: string;
 }
 
-const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [] };
+const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [] };
 
 export default function RelatedRecordsTabs({
     entityType,
@@ -81,6 +81,7 @@ export default function RelatedRecordsTabs({
     }, [entityType, addLocationOpen]);
 
     const tabs: TabConfig[] = [];
+    const primaryContactId = entityType === "customer" ? (data as { _primary_contact_id?: string | null })._primary_contact_id : null;
 
     if (entityType === "contact") {
         tabs.push(
@@ -105,10 +106,11 @@ export default function RelatedRecordsTabs({
     } else if (entityType === "customer") {
         tabs.push(
             { key: "contacts", label: "Contacts", entityType: "contacts", dataKey: "contacts", columns: [
+                { key: "_primary", label: " ", render: (_v, row) => (row?.id && primaryContactId && row.id === primaryContactId ? "Primary" : "") },
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
-                { key: "first_name", label: "First" },
-                { key: "last_name", label: "Last" },
+                { key: "first_name", label: "Name", render: (_v, row) => (row ? [row.first_name, row.last_name].filter(Boolean).join(" ") || (row.email as string) || "—" : "—") },
                 { key: "email", label: "Email" },
+                { key: "phone", label: "Phone" },
             ]},
             { key: "customer_members", label: membersPlural, entityType: "customer_members", dataKey: "customer_members", columns: [
                 { key: "display_name", label: "Name", render: (v, row) => (v as string) || (row ? [row.first_name, row.last_name].filter(Boolean).join(" ") : null) || "—" },
@@ -134,11 +136,22 @@ export default function RelatedRecordsTabs({
             { key: "locations", label: "Locations", entityType: "locations", dataKey: "locations", columns: [
                 { key: "label", label: "Name" },
                 { key: "location_type", label: "Type", render: (v) => (v && typeof v === "string") ? (v as string).charAt(0).toUpperCase() + (v as string).slice(1).toLowerCase() : "—" },
-                { key: "address1", label: "Address" },
                 { key: "city", label: "City" },
-                { key: "postal_code", label: "ZIP" },
-                { key: "is_primary", label: "Primary", render: (v) => v ? "Yes" : "No" },
-                { key: "is_active", label: "Active", render: (v) => v ? "Yes" : "No" },
+                { key: "state", label: "State" },
+            ]},
+            { key: "payments", label: "Payments", entityType: "payments", dataKey: "payments", columns: [
+                { key: "amount_cents", label: "Amount", render: (v) => v != null ? formatMoneyFromDollars(Number(v) / 100) : "—" },
+                { key: "status_key", label: "Status" },
+                { key: "paid_at", label: "Payment date", render: (v, row) => (v ? new Date(v as string).toLocaleDateString() : (row?.created_at ? new Date((row as { created_at: string }).created_at).toLocaleDateString() : "—")) },
+            ]},
+            { key: "customer_subscriptions", label: "Subscriptions", entityType: "subscriptions", dataKey: "customer_subscriptions", columns: [
+                { key: "status", label: "Status" },
+                { key: "start_date", label: "Start date", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
+                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
+            ]},
+            { key: "discount_redemptions", label: "Discounts / Promotions", entityType: "discount_redemptions", dataKey: "discount_redemptions", columns: [
+                { key: "created_at", label: "Redeemed", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
+                { key: "discount_code_id", label: "Code ID", render: (v) => (v && typeof v === "string") ? (v as string).slice(0, 8) + "…" : "—" },
             ]},
         );
     } else if (entityType === "opportunity") {

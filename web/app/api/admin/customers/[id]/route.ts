@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
-const ALLOWED_KEYS = ["name", "status", "status_key"] as const;
+const ALLOWED_KEYS = ["name", "status", "status_key", "customer_type", "external_source", "external_id"] as const;
 
 export async function PATCH(
     request: NextRequest,
