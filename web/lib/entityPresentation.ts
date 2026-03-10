@@ -86,7 +86,7 @@ export interface EntityDrawerSectionConfig {
 }
 
 /** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
-export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "payments" | "documents";
+export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "payments" | "documents" | "ledger";
 
 /** Related record module: which related-entity tabs to show (e.g. jobs, schedules, contacts). */
 export interface RelatedModuleConfig {
@@ -608,43 +608,79 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "payments",
     table: {
       columns: [
-        { key: "created_at", label: "Date", sortable: true, renderHint: "datetime" },
-        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
-        { key: "amount_cents", label: "Amount", sortable: true, renderHint: "money" },
-        { key: "method", label: "Method", sortable: false, renderHint: "text" },
-        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
-        { key: "updated_at", label: "Updated", sortable: true, renderHint: "datetime" },
+        { key: "_payment_label", label: "Payment", sortable: false, renderHint: "text", locked: true },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link", locked: true },
+        { key: "_job_label", label: "Job", sortable: false, renderHint: "link" },
+        { key: "_amount_display", label: "Amount", sortable: true, renderHint: "money", locked: true },
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "provider", label: "Provider", sortable: false, renderHint: "text" },
+        { key: "paid_at", label: "Paid At", sortable: true, renderHint: "datetime" },
+        { key: "_posted_yes_no", label: "Posted", sortable: false, renderHint: "primary_yes_no" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime", locked: true },
       ],
-      defaultSort: { key: "created_at", direction: "desc" },
+      defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "activity"],
-      headerFields: [{ key: "status_key", renderHint: "status" }],
+      tabs: ["overview", "related", "activity", "ledger"],
+      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
       layoutMode: 2,
       overviewSections: [
         {
-          key: "overview",
-          title: "Overview",
+          key: "payment_details",
+          title: "Payment Details",
           defaultExpanded: true,
-          collapsible: false,
+          collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "created_at", label: "Payment date", span: 1, renderHint: "datetime" },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status" },
+            { key: "_payment_label", label: "Payment", span: 1, renderHint: "text" },
+            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "amount_cents", label: "Amount", span: 1, renderHint: "money" },
-            { key: "method", label: "Method", span: 1, renderHint: "text" },
-            { key: "posted_at", label: "Posted date", span: 1, renderHint: "date" },
-            { key: "provider_payment_id", label: "Reference", span: 1, renderHint: "text" },
-            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "currency", label: "Currency", span: 1, renderHint: "text" },
+            { key: "provider", label: "Provider", span: 1, renderHint: "text" },
+            { key: "provider_payment_id", label: "Provider reference", span: 1, renderHint: "text" },
+            { key: "paid_at", label: "Paid at", span: 1, renderHint: "datetime", editable: true },
+            { key: "posted_to_ledger_at", label: "Posted to ledger", span: 1, renderHint: "datetime" },
           ],
           locked: true,
         },
-        { key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
-        { key: "applied_to", title: "Applied to", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
-        { key: "method_reference", title: "Method / Reference", defaultExpanded: true, collapsible: true, gridCols: 2, fields: [], locked: true },
-        { key: "posting", title: "Posting / Reconciliation", defaultExpanded: false, collapsible: true, gridCols: 2, fields: [], locked: true },
-        { key: "ledger", title: "Ledger entries", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
-        { key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [], locked: true },
+        {
+          key: "linked_records",
+          title: "Linked Records",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "_customer_name", label: "Customer", span: 1, renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } },
+            { key: "_job_label", label: "Job", span: 1, renderHint: "link", linkTarget: { idField: "job_id", entityType: "jobs" } },
+          ],
+          locked: true,
+        },
+        {
+          key: "notes",
+          title: "Notes",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 1,
+          fields: [
+            { key: "notes", label: "Notes", span: 1, renderHint: "text", editable: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text" },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "org_id", label: "Org", span: 1, renderHint: "text" },
+            { key: "payment_status_id", label: "Status ID", span: 1, renderHint: "text" },
+          ],
+          locked: true,
+        },
       ],
       relatedModules: [],
     },

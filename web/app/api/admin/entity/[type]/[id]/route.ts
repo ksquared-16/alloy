@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments"] as const;
 
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
 
@@ -488,6 +488,36 @@ export async function GET(
             return NextResponse.json(out);
         }
 
+        if (type === "payments") {
+            const { data, error } = await supabase.from("payments").select("*").eq("id", id).single();
+            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            const payment = data as Record<string, unknown> & { customer_id?: string | null; job_id?: string | null; status_key?: string | null; payment_status_id?: string | null; provider_payment_id?: string | null };
+            const out: Record<string, unknown> = { ...payment };
+            out._payment_label = (payment.provider_payment_id && String(payment.provider_payment_id).trim()) ? payment.provider_payment_id : `Payment #${(payment.id as string).slice(-6)}`;
+            if (payment.customer_id) {
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", payment.customer_id).maybeSingle();
+                out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._customer_name = null;
+            }
+            if (payment.job_id) {
+                const { data: job } = await supabase.from("jobs").select("id, title, service_key, job_number_for_customer").eq("id", payment.job_id).maybeSingle();
+                const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
+                out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(payment.job_id as string).slice(-6)}`) : null;
+            } else {
+                out._job_label = null;
+            }
+            const statusKey = payment.status_key ?? null;
+            if (statusKey) {
+                out._status_display = statusKey;
+            } else if (payment.payment_status_id) {
+                const { data: ps } = await supabase.from("payment_statuses").select("key, label").eq("id", payment.payment_status_id).maybeSingle();
+                out._status_display = (ps as { key?: string | null; label?: string | null } | null)?.label ?? (ps as { key?: string | null } | null)?.key ?? null;
+            } else {
+                out._status_display = null;
+            }
+            return NextResponse.json(out);
+        }
         if (type === "customer_members") {
             const ctx = await getAdminContext();
             if (!ctx.ok) {

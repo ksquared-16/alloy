@@ -236,6 +236,58 @@ export async function GET(
             });
         }
 
+        if (entity === "payment") {
+            const { data: paymentRow } = await supabase.from("payments").select("id, customer_id, job_id, provider_payment_id, org_id").eq("id", id).maybeSingle();
+            if (!paymentRow) {
+                return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+            }
+            const payment = paymentRow as { customer_id?: string | null; job_id?: string | null; provider_payment_id?: string | null; org_id?: string | null };
+            const customerId = payment.customer_id ?? null;
+            const jobId = payment.job_id ?? null;
+            const providerRef = payment.provider_payment_id?.trim() || null;
+            const orgId = payment.org_id ?? ctx.orgId;
+
+            const [customerRes, jobRes, ledgerRes] = await Promise.all([
+                customerId ? supabase.from("customers").select("id, name, created_at").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
+                jobId ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer, created_at, job_status_id").eq("id", jobId).maybeSingle() : Promise.resolve({ data: null }),
+                providerRef && orgId
+                    ? supabase
+                        .from("ledger_transactions")
+                        .select("id, occurred_at, type, direction, amount_cents, currency, provider, provider_ref, journal_entry_id")
+                        .eq("org_id", orgId)
+                        .eq("provider_ref", providerRef)
+                        .order("occurred_at", { ascending: false })
+                        .limit(LIMIT)
+                    : { data: [] as { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string; journal_entry_id?: string | null }[] },
+            ]);
+
+            const ledgerTransactions = (ledgerRes.data ?? []) as { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string; journal_entry_id?: string | null }[];
+            const entryIds = [...new Set(ledgerTransactions.map((lt) => lt.journal_entry_id).filter(Boolean))] as string[];
+            let glJournalLines: { id: string; entry_id: string; line_no?: number; account_id?: string; amount_cents?: number; created_at?: string; [k: string]: unknown }[] = [];
+            if (entryIds.length > 0) {
+                const linesRes = await supabase
+                    .from("gl_journal_lines")
+                    .select("id, entry_id, line_no, amount_cents, created_at")
+                    .in("entry_id", entryIds)
+                    .order("entry_id")
+                    .order("line_no", { ascending: true })
+                    .limit(LIMIT * 5);
+                glJournalLines = (linesRes.data ?? []) as { id: string; entry_id: string; line_no?: number; amount_cents?: number; created_at?: string }[];
+            }
+
+            const job = jobRes.data as { id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
+            const _job_label = job
+                ? ((job.title && String(job.title).trim()) || (job.service_key && String(job.service_key).trim()) || (job.job_number_for_customer && String(job.job_number_for_customer).trim()) || `Job #${job.id.slice(-6)}`)
+                : null;
+
+            return NextResponse.json({
+                customer: customerRes.data ?? null,
+                job: jobRes.data ? { ...jobRes.data, _job_label } : null,
+                ledger_transactions: ledgerTransactions,
+                gl_journal_lines: glJournalLines,
+            });
+        }
+
         if (entity === "customer_member") {
             const { data: memberRow } = await supabase
                 .from("customer_members")

@@ -73,11 +73,10 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         label: "Financials",
         icon: DollarSign,
         items: [
-            { href: "/admin/financials", label: "Financials" },
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
             { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
-            { href: "/admin/subscriptions", label: "Subscriptions", entityType: "subscriptions" },
+            { href: "/admin/subscriptions", label: "Plans", entityType: "subscriptions" },
             { href: "/admin/financials/pricing", label: "Pricing" },
             { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
             {
@@ -86,7 +85,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/admin/discounts", label: "Discounts" },
                     { href: "/admin/financials/accounts", label: "GL Account Setup" },
                     { href: "/admin/financials/settings/subscription", label: "Subscription Setup" },
-                    { href: "/admin/financials/pricing", label: "Pricing setup" },
                 ],
             },
         ],
@@ -112,7 +110,6 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/schedules": Calendar,
         "/admin/messaging": MessageSquare,
         "/admin/messages-outbox": Mail,
-        "/admin/financials": DollarSign,
         "/admin/financials/ledger": FileText,
         "/admin/financials/statements": Receipt,
         "/admin/financials/payments": DollarSign,

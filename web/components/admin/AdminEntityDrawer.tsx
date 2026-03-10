@@ -21,7 +21,7 @@ import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -69,7 +69,7 @@ const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wi
 const DRAWER_ROW_SPACING = "space-y-4";
 
 /** Entity types that use inline-edit (no Edit toggle); always show inputs, save on blur or Save. */
-const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members"] as const;
+const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments"] as const;
 
 /** Subtle input styling: looks like text until hover/focus. */
 const INLINE_EDIT_INPUT_CLASS = "w-full px-1.5 py-1 text-sm border border-transparent rounded bg-transparent hover:border-alloy-stone/30 hover:bg-alloy-stone/5 focus:border-alloy-blue focus:bg-white focus:outline-none disabled:opacity-60";
@@ -546,6 +546,14 @@ export default function AdminEntityDrawer() {
     };
     const [customerRelatedData, setCustomerRelatedData] = useState<CustomerRelatedPayload | null>(null);
     const [customerRelatedLoading, setCustomerRelatedLoading] = useState(false);
+    type PaymentRelatedPayload = {
+        customer: { id: string; name: string | null; created_at?: string } | null;
+        job: ({ id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null; created_at?: string; _job_label?: string | null } & Record<string, unknown>) | null;
+        ledger_transactions: { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string }[];
+        gl_journal_lines: { id: string; entry_id: string; line_no?: number; amount_cents?: number; created_at?: string }[];
+    };
+    const [paymentRelatedData, setPaymentRelatedData] = useState<PaymentRelatedPayload | null>(null);
+    const [paymentRelatedLoading, setPaymentRelatedLoading] = useState(false);
     type VendorRelatedPayload = {
         jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null }[];
         schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
@@ -565,7 +573,7 @@ export default function AdminEntityDrawer() {
     };
     const [opportunityRelatedData, setOpportunityRelatedData] = useState<OpportunityRelatedPayload | null>(null);
     const [opportunityRelatedLoading, setOpportunityRelatedLoading] = useState(false);
-    const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules"];
+    const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules", "payments"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -605,13 +613,14 @@ export default function AdminEntityDrawer() {
             setMemberRelatedDataLoading(false);
             setContactCreateSaving(false);
             setContactCreateError(null);
-            setContactRelatedData(null);
-            setCustomerRelatedData(null);
-            setVendorRelatedData(null);
-            setOpportunityRelatedData(null);
-            return;
-        }
-        setDrawerTab("overview");
+        setContactRelatedData(null);
+        setCustomerRelatedData(null);
+        setVendorRelatedData(null);
+        setOpportunityRelatedData(null);
+        setPaymentRelatedData(null);
+        return;
+    }
+    setDrawerTab("overview");
         setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
@@ -658,6 +667,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setCustomerRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, customerRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "payments" || !drawer.id) {
+            setPaymentRelatedData(null);
+            return;
+        }
+        if ((drawerTab === "related" || drawerTab === "activity" || drawerTab === "ledger") && !paymentRelatedData) {
+            setPaymentRelatedLoading(true);
+            fetch(`/api/admin/related/payment/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: PaymentRelatedPayload | null) => setPaymentRelatedData(json ?? null))
+                .catch(() => setPaymentRelatedData(null))
+                .finally(() => setPaymentRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, paymentRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
@@ -1585,6 +1609,12 @@ export default function AdminEntityDrawer() {
                 external_source: (data.external_source as string) ?? "",
                 external_id: (data.external_id as string) ?? "",
             };
+        } else if (drawer.type === "payments") {
+            initial = {
+                status_key: (data.status_key as string) ?? "",
+                paid_at: data.paid_at ? new Date(data.paid_at as string).toISOString().slice(0, 16) : "",
+                notes: (data.notes as string) ?? "",
+            };
         } else {
             return;
         }
@@ -1659,6 +1689,22 @@ export default function AdminEntityDrawer() {
                 refetch();
                 setIsEditing(false);
                 router.refresh();
+                return;
+            }
+            if (drawer.type === "payments") {
+                const payload = {
+                    status_key: typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null,
+                    paid_at: typeof formData.paid_at === "string" && formData.paid_at.trim() ? new Date(formData.paid_at).toISOString() : null,
+                    notes: typeof formData.notes === "string" ? (formData.notes.trim() || null) : null,
+                };
+                const res = await fetch(`/api/admin/payments/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 2000);
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "payments", id: drawer.id } }));
                 return;
             }
             if (drawer.type === "contacts") {
@@ -1917,9 +1963,11 @@ export default function AdminEntityDrawer() {
                                                 ? (data as { _create?: boolean })._create
                                                     ? `New ${vendorSingular}`
                                                     : `${vendorSingular}: ${(data.name as string) || (drawer.id ?? "")}`
-                                                : drawer.type === "subscriptions"
-                                                    ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
-                                                    : "Details"
+                                                : drawer.type === "payments"
+                                                    ? `Payment: ${(data._payment_label as string) || ("Payment #" + (drawer.id ?? "").slice(-6))}`
+                                                    : drawer.type === "subscriptions"
+                                                        ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
+                                                        : "Details"
         : loading
             ? "Loading…"
             : "Details";
@@ -1928,7 +1976,7 @@ export default function AdminEntityDrawer() {
     const presentationConfig = presentationType ? getEntityPresentation(presentationType) : null;
     const configTabs = presentationConfig?.drawer?.tabs;
     const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
-    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", payments: "Payments", documents: "Documents" };
+    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", payments: "Payments", documents: "Documents", ledger: "Ledger" };
 
     const useConfigDrivenOverview =
         !!presentationType &&
@@ -2203,7 +2251,7 @@ export default function AdminEntityDrawer() {
         </div>
     );
 
-    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
@@ -2849,6 +2897,104 @@ export default function AdminEntityDrawer() {
                             })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
+                    {drawerTab === "related" && drawer.type === "payments" && drawer.id && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-related>
+                            {paymentRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : paymentRelatedData ? (() => {
+                                const d = paymentRelatedData;
+                                const hasCustomer = !!d.customer;
+                                const hasJob = !!d.job;
+                                const hasLedger = (d.ledger_transactions?.length ?? 0) > 0;
+                                const hasGl = (d.gl_journal_lines?.length ?? 0) > 0;
+                                if (!hasCustomer && !hasJob && !hasLedger && !hasGl) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                return (
+                                    <>
+                                        {hasCustomer && (
+                                            <EntityDrawerSection key="customer" config={{ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <button type="button" onClick={() => openDrawer({ type: "customers", id: d.customer!.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                    <div className="font-medium text-alloy-forge/90 text-sm">{(d.customer as { name?: string | null }).name ?? "Customer"}</div>
+                                                    {d.customer?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.customer.created_at)}</div>}
+                                                </button>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasJob && (
+                                            <EntityDrawerSection key="job" config={{ key: "job", title: "Job", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <button type="button" onClick={() => openDrawer({ type: "jobs", id: (d.job as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                    <div className="font-medium text-alloy-forge/90 text-sm">{(d.job as { _job_label?: string | null })._job_label ?? (d.job as { title?: string | null }).title ?? "Job"}</div>
+                                                    {(d.job as { created_at?: string })?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime((d.job as { created_at: string }).created_at)}</div>}
+                                                </button>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasLedger && (
+                                            <EntityDrawerSection key="ledger_transactions" config={{ key: "ledger_transactions", title: "Ledger Transactions", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {(d.ledger_transactions ?? []).map((lt) => (
+                                                        <li key={lt.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                            <div className="font-medium">{(lt.type ?? "Transaction")} · {(lt.direction ?? "")} {lt.amount_cents != null ? formatMoneyFromCents(lt.amount_cents) : ""}</div>
+                                                            {lt.occurred_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(lt.occurred_at)}</div>}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasGl && (
+                                            <EntityDrawerSection key="gl_journal_lines" config={{ key: "gl_journal_lines", title: "GL Journal Lines", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {(d.gl_journal_lines ?? []).map((line) => (
+                                                        <li key={line.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                            <div className="font-medium">Line {line.line_no ?? ""} {line.amount_cents != null ? formatMoneyFromCents(line.amount_cents) : ""}</div>
+                                                            {line.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(line.created_at)}</div>}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        )}
+                                    </>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No related records.</p>}
+                        </div>
+                    )}
+                    {drawerTab === "ledger" && drawer.type === "payments" && drawer.id && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-ledger>
+                            {paymentRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading ledger…</p>
+                            ) : paymentRelatedData ? (() => {
+                                const d = paymentRelatedData;
+                                const hasLedger = (d.ledger_transactions?.length ?? 0) > 0;
+                                const hasGl = (d.gl_journal_lines?.length ?? 0) > 0;
+                                if (!hasLedger && !hasGl) return <p className="text-sm text-alloy-midnight/60">No ledger activity recorded.</p>;
+                                return (
+                                    <>
+                                        {hasLedger && (
+                                            <EntityDrawerSection key="ledger_transactions" config={{ key: "ledger_transactions", title: "Ledger Transactions", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {(d.ledger_transactions ?? []).map((lt) => (
+                                                        <li key={lt.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                            <div className="font-medium">{(lt.type ?? "Transaction")} · {(lt.direction ?? "")} {lt.amount_cents != null ? formatMoneyFromCents(lt.amount_cents) : ""}</div>
+                                                            {lt.occurred_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(lt.occurred_at)}</div>}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasGl && (
+                                            <EntityDrawerSection key="gl_journal_lines" config={{ key: "gl_journal_lines", title: "GL Journal Lines", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {(d.gl_journal_lines ?? []).map((line) => (
+                                                        <li key={line.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                            <div className="font-medium">Line {line.line_no ?? ""} {line.amount_cents != null ? formatMoneyFromCents(line.amount_cents) : ""}</div>
+                                                            {line.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(line.created_at)}</div>}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        )}
+                                    </>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No ledger activity recorded.</p>}
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -3077,7 +3223,22 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "activity" && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>
-                            {drawer.type === "customers" && drawer.id && drawer.id !== "new" ? (
+                            {drawer.type === "payments" && drawer.id ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.paid_at != null ? <li>Paid At: {formatDateTime(String(data.paid_at))}</li> : null}
+                                            {data?.posted_to_ledger_at != null ? <li>Posted To Ledger At: {formatDateTime(String(data.posted_to_ledger_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && !data?.paid_at && !data?.posted_to_ledger_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "customers" && drawer.id && drawer.id !== "new" ? (
                                 <div className="space-y-4">
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
