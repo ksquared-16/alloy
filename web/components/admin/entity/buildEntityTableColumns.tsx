@@ -1,8 +1,9 @@
 "use client";
 
 import { getEntityPresentation, type EntityPresentationType, type EntityTableColumnConfig } from "@/lib/entityPresentation";
-import { formatDate, formatDateTime, formatMoneyFromCents, formatMoneyFromDollars } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoneyFromCents, formatMoneyFromDollars, formatPhoneUS } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { getStatusVariant } from "@/components/admin/StatusBadge";
 
 /**
  * Build DataTable columns from entity presentation config.
@@ -52,7 +53,7 @@ function defaultRenderForHint<T>(
       return (_value: unknown, row: T) => {
         const v = getVal(row);
         const label = v != null ? String(v) : null;
-        return <StatusBadge label={label} variant="neutral" />;
+        return <StatusBadge label={label} variant={getStatusVariant(label)} />;
       };
     case "datetime":
       return (value: unknown) => (value != null && value !== "" ? formatDateTime(String(value)) : "—");
@@ -74,6 +75,13 @@ function defaultRenderForHint<T>(
       return (value: unknown) => (value != null && value !== "" ? String(value) : "—");
     case "badge":
       return (value: unknown) => (value != null && value !== "" ? String(value) : "—");
+    case "primary_yes_no":
+      return (_value: unknown, row: T) => {
+        const v = getVal(row);
+        return v === true ? "Yes" : "No";
+      };
+    case "phone":
+      return (value: unknown) => (value != null && value !== "" ? formatPhoneUS(String(value)) : "—");
     case "text":
     default:
       return (value: unknown) => (value != null && value !== "" ? String(value) : "—");

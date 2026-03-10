@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
-import { formatDate, formatDateTime, formatMoney } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoney, formatPhoneUS } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
@@ -34,6 +34,7 @@ function formatFieldValue(
   if (value === null || value === undefined) return null;
   const hint = field.renderHint ?? "text";
   const key = field.key;
+  if (hint === "phone") return formatPhoneUS(value as string | null | undefined);
   switch (hint) {
     case "date":
       return formatDate(value as string);

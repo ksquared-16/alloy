@@ -290,7 +290,8 @@ export default function DataTable<T extends Record<string, any>>({
                                     {columns.map((column) => (
                                         <td
                                             key={String(column.key)}
-                                            className="max-w-[320px] px-5 py-3.5 text-sm text-alloy-forge/90"
+                                            className="max-w-[200px] px-5 py-3.5 text-sm text-alloy-forge/90 truncate align-middle"
+                                            title={typeof getValue(row, column.key) === "string" ? String(getValue(row, column.key) ?? "") : undefined}
                                         >
                                             {column.render
                                                 ? column.render(getValue(row, column.key), row)

@@ -63,6 +63,17 @@ export function formatFrequencyLabel(cadence: string | null | undefined, interva
     return n === 1 ? "Every 1 month" : `Every ${n} months`;
 }
 
+/** Format US phone for display: (541) 654-3217. Accepts E.164, digits-only, or already formatted. */
+export function formatPhoneUS(value: string | null | undefined): string {
+    if (value == null || value === "") return "—";
+    const digits = String(value).replace(/\D/g, "");
+    if (digits.length < 10) return String(value);
+    const area = digits.slice(-10, -7);
+    const mid = digits.slice(-7, -4);
+    const last = digits.slice(-4);
+    return `(${area}) ${mid}-${last}`;
+}
+
 /** Display as MM/DD/YYYY, h:mm A. Uses UTC so server and client output match (avoids hydration #418). */
 export function formatDateTime(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";

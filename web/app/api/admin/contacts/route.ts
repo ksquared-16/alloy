@@ -96,16 +96,10 @@ export async function GET(request: NextRequest) {
 
     const contacts = list.map((r) => {
         const _name = [r.first_name, r.last_name].filter(Boolean).join(" ") || "—";
-        const linked: string[] = [];
-        if (r.customer_id && customerNames[r.customer_id]) linked.push(customerNames[r.customer_id]);
-        if (r.vendor_id && vendorNames[r.vendor_id]) linked.push(vendorNames[r.vendor_id]);
-        const _linked_to = linked.length > 0 ? linked.join(", ") : "—";
-        const pc: string[] = [];
-        if (primaryForCustomer.has(r.id)) pc.push("Customer");
-        if (primaryForVendor.has(r.id)) pc.push("Vendor");
-        const _primary_contact_for = pc.length > 0 ? pc.join(", ") : "—";
+        const _customer_name = r.customer_id && customerNames[r.customer_id] ? customerNames[r.customer_id] : "—";
+        const _is_primary_contact = primaryForCustomer.has(r.id) || primaryForVendor.has(r.id);
         const _updated = r.updated_at ?? r.created_at ?? "";
-        return { ...r, _name, _linked_to, _primary_contact_for, _updated };
+        return { ...r, _name, _customer_name, _is_primary_contact, _updated };
     });
 
     return NextResponse.json({

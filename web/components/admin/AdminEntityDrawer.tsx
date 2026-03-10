@@ -563,7 +563,7 @@ export default function AdminEntityDrawer() {
             setContactRelatedData(null);
             return;
         }
-        if ((drawerTab === "related" || drawerTab === "documents") && !contactRelatedData) {
+        if ((drawerTab === "related" || drawerTab === "documents" || drawerTab === "activity") && !contactRelatedData) {
             setContactRelatedLoading(true);
             fetch(`/api/admin/related/contact/${drawer.id}`)
                 .then((r) => (r.ok ? r.json() : null))
@@ -949,6 +949,7 @@ export default function AdminEntityDrawer() {
                 notes: (data.notes as string) ?? "",
                 status: data.status ?? "active",
                 status_key: (data.status_key as string) ?? "",
+                contact_type: (data.contact_type as string) ?? "",
                 customer_id: (data.customer_id as string) ?? "",
                 vendor_id: (data.vendor_id as string) ?? "",
                 vendor_contact_role: (data.vendor_contact_role as string) ?? "",
@@ -1668,6 +1669,67 @@ export default function AdminEntityDrawer() {
     const overviewCustomContent = useMemo(() => {
         if (!data || !drawer.type) return {};
         const d = data as Record<string, unknown>;
+        if (drawer.type === "contacts") {
+            const customerId = d.customer_id as string | null | undefined;
+            const vendorId = d.vendor_id as string | null | undefined;
+            const customerName = d._linked_customer_name as string | null | undefined;
+            const vendorName = d._linked_vendor_name as string | null | undefined;
+            const primaryFor = d._primary_contact_for as string | null | undefined;
+            return {
+                association: (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="py-1.5">
+                            <span className="text-alloy-slate text-sm font-medium">Linked Customer: </span>
+                            {customerId ? (
+                                <button type="button" onClick={() => openDrawer({ type: "customers", id: customerId })} className="text-alloy-blue hover:underline text-sm ml-1">
+                                    {customerName && customerName !== "—" ? customerName : "Open"}
+                                </button>
+                            ) : (
+                                <span className="text-[#31394d] ml-1">—</span>
+                            )}
+                        </div>
+                        <div className="py-1.5">
+                            <span className="text-alloy-slate text-sm font-medium">Linked Vendor: </span>
+                            {vendorId ? (
+                                <button type="button" onClick={() => openDrawer({ type: "vendors", id: vendorId })} className="text-alloy-blue hover:underline text-sm ml-1">
+                                    {vendorName && vendorName !== "—" ? vendorName : "Open"}
+                                </button>
+                            ) : (
+                                <span className="text-[#31394d] ml-1">—</span>
+                            )}
+                        </div>
+                        {primaryFor && primaryFor !== "—" && (
+                            <div className="py-1.5 sm:col-span-2">
+                                <span className="text-alloy-slate text-sm font-medium">Primary Contact for: </span>
+                                <span className="text-[#31394d] ml-1">{primaryFor}</span>
+                            </div>
+                        )}
+                        {((d.source as string) ?? (d.external_source as string) ?? (d.external_id as string)) && (
+                            <>
+                                {d.source != null && String(d.source).trim() !== "" && (
+                                    <div className="py-1.5 sm:col-span-2">
+                                        <span className="text-alloy-slate text-sm font-medium">Source: </span>
+                                        <span className="text-[#31394d] ml-1">{String(d.source)}</span>
+                                    </div>
+                                )}
+                                {d.external_source != null && String(d.external_source).trim() !== "" && (
+                                    <div className="py-1.5 sm:col-span-2">
+                                        <span className="text-alloy-slate text-sm font-medium">External source: </span>
+                                        <span className="text-[#31394d] ml-1">{String(d.external_source)}</span>
+                                    </div>
+                                )}
+                                {d.external_id != null && String(d.external_id).trim() !== "" && (
+                                    <div className="py-1.5 sm:col-span-2">
+                                        <span className="text-alloy-slate text-sm font-medium">External ID: </span>
+                                        <span className="text-[#31394d] ml-1">{String(d.external_id)}</span>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                ),
+            };
+        }
         if (drawer.type === "customers") {
             const primaryContact = d._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null | undefined;
             const primaryLocation = d._primary_location as { id?: string; label?: string; address1?: string } | null | undefined;
@@ -1986,7 +2048,10 @@ export default function AdminEntityDrawer() {
                                                         <p className="text-alloy-muted text-xs font-medium mb-1">Opportunities (primary contact)</p>
                                                         <ul className="space-y-1">
                                                             {contactRelatedData.opportunities.map((o) => (
-                                                                <li key={o.id}><button type="button" onClick={() => openDrawer({ type: "opportunities", id: o.id })} className="text-alloy-blue hover:underline">{o.name ?? o.id}</button> {o.job_date ? formatDate(o.job_date) : ""}</li>
+                                                                <li key={o.id} className="flex flex-col gap-0.5 py-1">
+                                                                    <button type="button" onClick={() => openDrawer({ type: "opportunities", id: o.id })} className="text-alloy-blue hover:underline text-left">{o.name ?? "Opportunity"}</button>
+                                                                    <span className="text-xs text-alloy-muted">{o.job_date ? formatDate(o.job_date) : ""}{o.status ? ` · ${o.status}` : ""}</span>
+                                                                </li>
                                                             ))}
                                                         </ul>
                                                     </div>
@@ -1996,7 +2061,10 @@ export default function AdminEntityDrawer() {
                                                         <p className="text-alloy-muted text-xs font-medium mb-1">Jobs (primary contact)</p>
                                                         <ul className="space-y-1">
                                                             {contactRelatedData.jobs.map((j) => (
-                                                                <li key={j.id}><button type="button" onClick={() => openDrawer({ type: "jobs", id: j.id })} className="text-alloy-blue hover:underline">{j.title ?? j.id}</button> {j.scheduled_at ? formatDateTime(j.scheduled_at) : ""}</li>
+                                                                <li key={j.id} className="flex flex-col gap-0.5 py-1">
+                                                                    <button type="button" onClick={() => openDrawer({ type: "jobs", id: j.id })} className="text-alloy-blue hover:underline text-left">{j.title ?? "Job"}</button>
+                                                                    <span className="text-xs text-alloy-muted">{j.scheduled_at ? formatDateTime(j.scheduled_at) : ""}</span>
+                                                                </li>
                                                             ))}
                                                         </ul>
                                                     </div>
@@ -2004,9 +2072,14 @@ export default function AdminEntityDrawer() {
                                                 {contactRelatedData.customer_subscriptions.length > 0 && (
                                                     <div>
                                                         <p className="text-alloy-muted text-xs font-medium mb-1">Customer subscriptions (primary contact)</p>
-                                                        <ul className="space-y-1">
+                                                        <ul className="space-y-2">
                                                             {contactRelatedData.customer_subscriptions.map((s) => (
-                                                                <li key={s.id}><span className="font-mono text-xs">{s.id.slice(0, 8)}…</span> {s.status ?? ""} {s.start_date ? formatDate(s.start_date) : ""}</li>
+                                                                <li key={s.id} className="flex flex-col">
+                                                                    <button type="button" onClick={() => openDrawer({ type: "subscriptions", id: s.id })} className="text-alloy-blue hover:underline text-left text-sm">
+                                                                        {s.status ?? "Subscription"} {s.start_date ? ` · ${formatDate(s.start_date)}` : ""}
+                                                                    </button>
+                                                                    <span className="text-xs text-alloy-muted">Subscription</span>
+                                                                </li>
                                                             ))}
                                                         </ul>
                                                     </div>
@@ -2030,11 +2103,26 @@ export default function AdminEntityDrawer() {
                                     {(contactRelatedData.messages.length > 0 || contactRelatedData.documents.length > 0 || contactRelatedData.discount_redemptions.length > 0) && (
                                         <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communication / Ownership</h3>
-                                            <div className="space-y-2 text-sm">
-                                                {contactRelatedData.messages.length > 0 && <p>Messages: {contactRelatedData.messages.length}</p>}
-                                                {contactRelatedData.documents.length > 0 && <p>Documents: {contactRelatedData.documents.length}</p>}
-                                                {contactRelatedData.discount_redemptions.length > 0 && <p>Discount redemptions: {contactRelatedData.discount_redemptions.length}</p>}
-                                            </div>
+                                            <ul className="space-y-2 text-sm">
+                                                {contactRelatedData.messages.length > 0 && contactRelatedData.messages.slice(0, 10).map((m) => (
+                                                    <li key={m.id} className="flex flex-col gap-0.5 py-1">
+                                                        <span className="text-alloy-forge/90">Message</span>
+                                                        <span className="text-xs text-alloy-muted">{m.created_at ? formatDateTime(m.created_at) : ""}{m.status ? ` · ${m.status}` : ""}</span>
+                                                    </li>
+                                                ))}
+                                                {contactRelatedData.documents.length > 0 && contactRelatedData.documents.map((doc) => (
+                                                    <li key={doc.id} className="flex flex-col gap-0.5 py-1">
+                                                        <span className="text-alloy-forge/90">{doc.name ?? "Document"}</span>
+                                                        <span className="text-xs text-alloy-muted">{doc.document_type ?? ""}{doc.uploaded_at ? ` · ${formatDateTime(doc.uploaded_at)}` : ""}</span>
+                                                    </li>
+                                                ))}
+                                                {contactRelatedData.discount_redemptions.length > 0 && contactRelatedData.discount_redemptions.slice(0, 5).map((r) => (
+                                                    <li key={r.id} className="flex flex-col gap-0.5 py-1">
+                                                        <span className="text-alloy-forge/90">Discount redemption</span>
+                                                        <span className="text-xs text-alloy-muted">{r.created_at ? formatDateTime(r.created_at) : ""}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </section>
                                     )}
                                     {contactRelatedData.contact_tags.length > 0 && (
@@ -2063,16 +2151,18 @@ export default function AdminEntityDrawer() {
                             {contactRelatedLoading ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading…</p>
                             ) : ((contactRelatedData?.documents?.length ?? 0) > 0) ? (
-                                <ul className="space-y-2">
+                                <ul className="space-y-1">
                                     {(contactRelatedData?.documents ?? []).map((doc) => (
-                                        <li key={doc.id} className="text-sm flex items-center justify-between gap-2">
-                                            <span className="text-alloy-forge/90">{doc.name ?? "Untitled"}</span>
-                                            <span className="text-alloy-muted text-xs">{doc.document_type ?? ""} {doc.uploaded_at ? formatDateTime(doc.uploaded_at) : ""}</span>
+                                        <li key={doc.id}>
+                                            <button type="button" className="w-full text-left text-sm rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors flex flex-col gap-0.5">
+                                                <span className="text-alloy-forge/90 font-medium">{doc.name ?? "Untitled"}</span>
+                                                <span className="text-alloy-muted text-xs">{doc.document_type ?? ""}{doc.uploaded_at ? ` · ${formatDateTime(doc.uploaded_at)}` : ""}</span>
+                                            </button>
                                         </li>
                                     ))}
                                 </ul>
                             ) : (
-                                <p className="text-sm text-alloy-midnight/60">No documents linked to this contact.</p>
+                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
                             )}
                         </div>
                     )}
@@ -2158,9 +2248,41 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "activity" && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>
-                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>
-                            {drawer.type === "customer_members" ? (
+                            {drawer.type === "contacts" && drawer.id && drawer.id !== "new" ? (
+                                <div className="space-y-6">
+                                    {(contactRelatedData?.messages?.length ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Messages</h3>
+                                            <ul className="space-y-2">
+                                                {(contactRelatedData?.messages ?? []).map((m) => (
+                                                    <li key={m.id} className="text-sm text-alloy-forge/90">
+                                                        {m.created_at ? formatDateTime(m.created_at) : ""}
+                                                        {m.to_phone ? ` · ${m.to_phone}` : ""}
+                                                        {m.status ? ` · ${m.status}` : ""}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {(data as { archived_at?: string | null })?.archived_at != null ? <li>Archived: {formatDateTime(String((data as { archived_at: string }).archived_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && !(data as { archived_at?: string | null })?.archived_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No timeline events.</p>
+                                        )}
+                                    </section>
+                                    {(contactRelatedData?.messages?.length === 0 && !data?.created_at && !data?.updated_at && !(data as { archived_at?: string | null })?.archived_at && !contactRelatedLoading) && (
+                                        <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                    )}
+                                    {contactRelatedLoading && !contactRelatedData && <p className="text-sm text-alloy-midnight/60">Loading…</p>}
+                                </div>
+                            ) : drawer.type === "customer_members" ? (
                                 <>
+                                    <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>
                                     {["id", "org_id", "customer_id", "external_source", "external_id", "created_at", "updated_at"].map((key) => {
                                         const val = data[key];
                                         if (val === undefined) return null;
@@ -2176,11 +2298,14 @@ export default function AdminEntityDrawer() {
                                     )}
                                 </>
                             ) : (
-                                ["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
-                                    const val = data[key];
-                                    if (val === undefined) return null;
-                                    return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
-                                })
+                                <>
+                                    <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>
+                                    {["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
+                                        const val = data[key];
+                                        if (val === undefined) return null;
+                                        return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
+                                    })}
+                                </>
                             )}
                         </div>
                     )}

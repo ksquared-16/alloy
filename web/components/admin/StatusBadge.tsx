@@ -32,6 +32,28 @@ export function AssignmentStatusBadge({ statusKey, label }: { statusKey: string 
     return <span className={`${PILL_CLASS} ${style}`}>{display}</span>;
 }
 
+const STATUS_VARIANTS: Record<string, string> = {
+    default: "bg-alloy-stone/50 text-alloy-slate border-admin-border",
+    success: "bg-alloy-juniper/12 text-[#007a63] border-alloy-juniper/30",
+    info: "bg-alloy-blue/10 text-alloy-blue border-alloy-blue/30",
+    warning: "bg-alloy-ember/10 text-alloy-ember border-alloy-ember/30",
+    error: "bg-alloy-ember/12 text-alloy-ember border-alloy-ember/35",
+    neutral: "bg-alloy-stone/50 text-alloy-forge/70 border-admin-border",
+    gold: "bg-alloy-light/50 text-alloy-gold-dark border-alloy-gold/40",
+};
+
+/** Map status_key to semantic variant for consistent status badge colors across entities. */
+export function getStatusVariant(statusKey: string | null | undefined): "default" | "success" | "warning" | "neutral" | "info" | "error" | "gold" {
+    if (!statusKey) return "neutral";
+    const k = statusKey.toLowerCase();
+    if (["active", "completed", "success", "accepted", "posted"].some((x) => k.includes(x))) return "success";
+    if (["pending", "new", "draft", "scheduled", "offered", "in_progress"].some((x) => k.includes(x))) return "info";
+    if (["inactive", "archived", "canceled", "cancelled", "removed", "unassigned", "declined"].some((x) => k.includes(x))) return "neutral";
+    if (["failed", "error", "lost"].some((x) => k.includes(x))) return "error";
+    if (["warning", "attention"].some((x) => k.includes(x))) return "warning";
+    return "neutral";
+}
+
 /** Semantic variants: success/active/completed=Juniper, info/scheduled=Alloy Blue, warning=Ember light, error/destructive=Ember, neutral=River Stone. */
 export function StatusBadge({
     label,
@@ -41,16 +63,8 @@ export function StatusBadge({
     variant?: "default" | "success" | "warning" | "neutral" | "gold" | "info" | "error";
 }) {
     const display = label ?? "—";
-    const variants: Record<string, string> = {
-        default: "bg-alloy-stone/50 text-alloy-slate border-admin-border",
-        success: "bg-alloy-juniper/12 text-[#007a63] border-alloy-juniper/30",
-        info: "bg-alloy-blue/10 text-alloy-blue border-alloy-blue/30",
-        warning: "bg-alloy-ember/10 text-alloy-ember border-alloy-ember/30",
-        error: "bg-alloy-ember/12 text-alloy-ember border-alloy-ember/35",
-        neutral: "bg-alloy-stone/50 text-alloy-forge/70 border-admin-border",
-        gold: "bg-alloy-light/50 text-alloy-gold-dark border-alloy-gold/40",
-    };
-    const style = variants[variant] ?? variants.default;
+    const resolvedVariant = variant === "default" ? getStatusVariant(label ?? null) : variant;
+    const style = STATUS_VARIANTS[resolvedVariant] ?? STATUS_VARIANTS.default;
     return <span className={`${PILL_CLASS} ${style}`}>{display}</span>;
 }
 

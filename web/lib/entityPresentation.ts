@@ -35,7 +35,7 @@ export interface EntityTableColumnConfig {
   label: string;
   sortable?: boolean;
   /** Hint for shared column renderer; optional. When absent, list page may use custom render. */
-  renderHint?: "text" | "status" | "date" | "datetime" | "money" | "link" | "badge" | "custom";
+  renderHint?: "text" | "status" | "date" | "datetime" | "money" | "link" | "badge" | "phone" | "primary_yes_no" | "custom";
   /** If true, this column cannot be removed by user layout config (future). */
   locked?: boolean;
 }
@@ -53,7 +53,7 @@ export interface EntityDrawerFieldConfig {
   /** Span in grid: 1 or 2 (for 2-column layout). */
   span?: 1 | 2;
   /** Hint for shared field renderer. */
-  renderHint?: "text" | "date" | "datetime" | "money" | "link" | "status" | "custom";
+  renderHint?: "text" | "date" | "datetime" | "money" | "link" | "status" | "phone" | "custom";
   /** If true, field is inline-editable in overview (save on blur/Enter, cancel on Escape). Omit or false = read-only. */
   editable?: boolean;
   /** If true, field cannot be removed by user layout config (future). */
@@ -563,10 +563,10 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         { key: "_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "contact_type", label: "Contact Type", sortable: true, renderHint: "text" },
-        { key: "_linked_to", label: "Linked To", sortable: false, renderHint: "text" },
-        { key: "_primary_contact_for", label: "Primary Contact", sortable: false, renderHint: "text" },
+        { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
+        { key: "_is_primary_contact", label: "Primary Contact", sortable: false, renderHint: "primary_yes_no" },
         { key: "email", label: "Email", sortable: true, renderHint: "text" },
-        { key: "phone", label: "Phone", sortable: true, renderHint: "text" },
+        { key: "phone", label: "Phone", sortable: true, renderHint: "phone" },
         { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
       ],
       defaultSort: { key: "_updated", direction: "desc" },
@@ -586,7 +586,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "first_name", label: "First name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "last_name", label: "Last name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "email", label: "Email", span: 1, renderHint: "text", editable: true },
-            { key: "phone", label: "Phone", span: 1, renderHint: "text", editable: true },
+            { key: "phone", label: "Phone", span: 1, renderHint: "phone", editable: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "contact_type", label: "Contact Type", span: 1, renderHint: "text", editable: true },
             { key: "company_name", label: "Company name", span: 1, renderHint: "text", editable: true },
@@ -597,7 +597,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         {
           key: "association",
           title: "Association",
-          defaultExpanded: true,
+          defaultExpanded: false,
           collapsible: true,
           gridCols: 2,
           fields: [
@@ -630,7 +630,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         {
           key: "notes",
           title: "Notes",
-          defaultExpanded: true,
+          defaultExpanded: false,
           collapsible: true,
           gridCols: 1,
           fields: [

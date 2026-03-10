@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import DataTable from "@/components/admin/DataTable";
-import { StatusBadge } from "@/components/admin/StatusBadge";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -29,8 +28,8 @@ type Contact = {
     archived_at: string | null;
     archived_by?: string | null;
     _name?: string;
-    _linked_to?: string;
-    _primary_contact_for?: string;
+    _customer_name?: string;
+    _is_primary_contact?: boolean;
     _updated?: string;
 };
 
@@ -86,12 +85,6 @@ export default function ContactsClient() {
     }, [fetchList]);
 
     useEffect(() => {
-        const onFocus = () => fetchList();
-        window.addEventListener("focus", onFocus);
-        return () => window.removeEventListener("focus", onFocus);
-    }, [fetchList]);
-
-    useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
                 setFilterOpen(false);
@@ -101,9 +94,7 @@ export default function ContactsClient() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const columns = buildEntityTableColumns<Contact>("contacts", {
-        status_key: (_v, row) => <StatusBadge label={row.status ?? row.status_key ?? null} variant="neutral" />,
-    });
+    const columns = buildEntityTableColumns<Contact>("contacts", {});
 
     const filterTrigger = (
         <div className="relative flex items-center gap-2" ref={filterRef}>
@@ -121,7 +112,7 @@ export default function ContactsClient() {
                 )}
             </button>
             {filterOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                <div className="absolute right-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg" style={{ left: "auto" }}>
                     <div className="space-y-3">
                         <div>
                             <label className="mb-1 block text-xs font-medium text-alloy-muted">Search (name, email, phone, company)</label>

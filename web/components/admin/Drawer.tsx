@@ -71,7 +71,7 @@ export default function Drawer({ isOpen, onClose, title, statusBadge, headerActi
                         </button>
                     </div>
                     {headerExtra != null && headerExtra !== false && (
-                        <div className="px-6 pb-3 pt-0 border-t border-admin-border border-t-alloy-blue/30">
+                        <div className="px-6 pb-3 pt-2 border-t border-admin-border border-t-alloy-blue/30">
                             {headerExtra}
                         </div>
                     )}
