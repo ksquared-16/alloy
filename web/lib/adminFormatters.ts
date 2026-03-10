@@ -46,9 +46,9 @@ export function formatMoney(
  * Format payout_percent for display. Stored as decimal (0.7) -> show 70%.
  * If value is already 1–100, show as-is with %.
  */
-export function formatPayoutPercent(value: number | string | null | undefined): string {
+export function formatPayoutPercent(value: number | string | null | undefined | unknown): string {
     if (value === null || value === undefined) return "—";
-    const n = typeof value === "string" ? parseFloat(value) : value;
+    const n = typeof value === "string" ? parseFloat(value) : typeof value === "number" ? value : Number(value);
     if (Number.isNaN(n)) return "—";
     const display = n > 0 && n <= 1 ? n * 100 : n;
     return `${display}%`;
