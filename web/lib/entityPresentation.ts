@@ -293,7 +293,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       columns: [
         { key: "name", label: "Opportunity", sortable: true, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
-        { key: "_primary_contact_name", label: "Contact", sortable: false, renderHint: "text" },
         { key: "_pipeline_stage_name", label: "Stage", sortable: false, renderHint: "text" },
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_quote_total_display", label: "Quote Total", sortable: false, renderHint: "money" },

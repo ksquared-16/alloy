@@ -2242,11 +2242,20 @@ export default function AdminEntityDrawer() {
                         <div className="space-y-0 pt-5" data-entity-drawer-related>
                             {opportunityRelatedLoading ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
-                            ) : opportunityRelatedData ? (() => {
+                            ) : (() => {
                                 const d = opportunityRelatedData;
+                                const opp = data as { customer_id?: string | null; _customer_name?: string | null; primary_contact_id?: string | null; _primary_contact_name?: string | null; _contact_name?: string | null } | null | undefined;
+                                const customerItem = opp?.customer_id ? [{ id: opp.customer_id, entityType: "customers" as const, label: (opp._customer_name as string)?.trim() || customerSingular, meta: undefined }] : [];
+                                const contactItem = opp?.primary_contact_id ? [{ id: opp.primary_contact_id, entityType: "contacts" as const, label: (opp._primary_contact_name ?? opp._contact_name as string)?.trim() || contactSingular, meta: undefined }] : [];
+                                const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
+                                const quoteItems = (d?.quotes ?? []).map((q: { id: string; created_at?: string }) => ({ id: (q as { id: string }).id, label: "Quote", meta: (q as { created_at?: string }).created_at ? formatDate((q as { created_at: string }).created_at) : undefined }));
+                                const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined }));
                                 const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
-                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
-                                    { key: "discount_redemptions", title: "Discounts / Promotions", defaultExpanded: false, items: (d.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined })) },
+                                    { key: "customer", title: customerSingular, defaultExpanded: true, items: customerItem },
+                                    { key: "contact", title: contactSingular, defaultExpanded: true, items: contactItem },
+                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems },
+                                    { key: "quotes", title: "Quotes", defaultExpanded: false, items: quoteItems },
+                                    { key: "discount_redemptions", title: "Discounts / Promotions", defaultExpanded: false, items: discountItems },
                                 ];
                                 const visible = sections.filter((s) => s.items.length > 0);
                                 if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
@@ -2261,8 +2270,8 @@ export default function AdminEntityDrawer() {
                                                 <ul className="space-y-0 list-none p-0 m-0">
                                                     {sec.items.map((item) => (
                                                         <li key={item.id}>
-                                                            {item.entityType ? (
-                                                                <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                            {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
+                                                                <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                                     <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
                                                                     {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
                                                                 </button>
@@ -2279,7 +2288,7 @@ export default function AdminEntityDrawer() {
                                         ))}
                                     </>
                                 );
-                            })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
+                            })()}
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "schedules" && data && (
