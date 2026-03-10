@@ -175,6 +175,59 @@ export async function GET(
             });
         }
 
+        if (entity === "customer_member") {
+            const { data: memberRow } = await supabase
+                .from("customer_members")
+                .select("id, customer_id, org_id")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (!memberRow) {
+                return NextResponse.json({ error: "Member not found" }, { status: 404 });
+            }
+            const customerId = (memberRow as { customer_id: string | null }).customer_id;
+            const [linkedContactsRes, customerRes, documentsRes] = await Promise.all([
+                supabase
+                    .from("customer_member_contacts")
+                    .select("id, contact_id, role_key, is_active, contact:contacts(id, first_name, last_name, email, phone)")
+                    .eq("org_id", ctx.orgId)
+                    .eq("customer_member_id", id),
+                customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : { data: null },
+                supabase
+                    .from("documents")
+                    .select("id, name, original_filename, document_type, status, uploaded_at, created_at")
+                    .eq("entity_type", "customer_member")
+                    .eq("entity_id", id)
+                    .order("uploaded_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
+            ]);
+            const linkRows = linkedContactsRes.data ?? [];
+            const roleKeys = [...new Set(linkRows.map((l: Record<string, unknown>) => l.role_key as string).filter(Boolean))];
+            const { data: roleRows } = roleKeys.length
+                ? await supabase.from("customer_member_contact_roles").select("role_key, label").eq("org_id", ctx.orgId).in("role_key", roleKeys)
+                : { data: [] as { role_key: string; label: string | null }[] };
+            const roleLabelMap = new Map((roleRows ?? []).map((r: { role_key: string; label: string | null }) => [r.role_key, r.label ?? r.role_key]));
+            const linkedContacts = linkRows.map((l: Record<string, unknown>) => {
+                const contact = (l.contact ?? l.contacts) as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null } | null;
+                return {
+                    id: l.id,
+                    contact_id: l.contact_id,
+                    contact_name: contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") || null : null,
+                    email: contact?.email ?? null,
+                    phone: contact?.phone ?? null,
+                    role_key: l.role_key ?? null,
+                    role_label: l.role_key ? (roleLabelMap.get(l.role_key as string) ?? l.role_key) : null,
+                    is_active: l.is_active ?? true,
+                };
+            });
+            return NextResponse.json({
+                linkedContacts,
+                customer: customerRes.data ?? null,
+                documents: documentsRes.data ?? [],
+            });
+        }
+
         return NextResponse.json({ error: "Invalid entity" }, { status: 400 });
     } catch (e: unknown) {
         console.error("[ADMIN_RELATED]", e);

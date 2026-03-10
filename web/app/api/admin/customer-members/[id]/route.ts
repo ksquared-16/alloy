@@ -76,6 +76,8 @@ export async function PATCH(
         dob?: string | null;
         is_active?: boolean;
         status_key?: string | null;
+        external_source?: string | null;
+        external_id?: string | null;
         metadata?: Record<string, unknown>;
     } = {};
     try {
@@ -94,6 +96,8 @@ export async function PATCH(
     if (body.dob !== undefined) updates.dob = typeof body.dob === "string" && body.dob.trim() ? body.dob.trim() : null;
     if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
     if (body.status_key !== undefined) updates.status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
+    if (body.external_source !== undefined) updates.external_source = typeof body.external_source === "string" ? body.external_source.trim() || null : null;
+    if (body.external_id !== undefined) updates.external_id = typeof body.external_id === "string" ? body.external_id.trim() || null : null;
     if (body.metadata !== undefined) updates.metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : null;
 
     if (Object.keys(updates).length === 0) {

@@ -8,7 +8,7 @@ import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill } from
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
-import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime } from "@/lib/adminFormatters";
+import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -484,6 +484,13 @@ export default function AdminEntityDrawer() {
     const [memberLinkContactOptions, setMemberLinkContactOptions] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }[]>([]);
     const [memberUnlinkingId, setMemberUnlinkingId] = useState<string | null>(null);
     const [memberRelationshipOptions, setMemberRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
+    type MemberRelatedPayload = {
+        linkedContacts: { id: string; contact_id: string; contact_name: string | null; email: string | null; phone: string | null; role_key: string | null; role_label: string | null; is_active: boolean }[];
+        customer: { id: string; name: string | null } | null;
+        documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
+    };
+    const [memberRelatedData, setMemberRelatedData] = useState<MemberRelatedPayload | null>(null);
+    const [memberRelatedDataLoading, setMemberRelatedDataLoading] = useState(false);
     const [contactCreateSaving, setContactCreateSaving] = useState(false);
     const [contactCreateError, setContactCreateError] = useState<string | null>(null);
     type StatusDefOption = { status_key: string; status_label: string | null; sort_order: number; is_active: boolean };
@@ -557,6 +564,8 @@ export default function AdminEntityDrawer() {
             setMemberLinkContactOptions([]);
             setMemberUnlinkingId(null);
             setMemberRelationshipOptions([]);
+            setMemberRelatedData(null);
+            setMemberRelatedDataLoading(false);
             setContactCreateSaving(false);
             setContactCreateError(null);
             setContactRelatedData(null);
@@ -805,6 +814,30 @@ export default function AdminEntityDrawer() {
         }
         refetchMemberLinks();
     }, [drawer.type, drawer.id, refetchMemberLinks]);
+
+    const refetchMemberRelated = useCallback(() => {
+        if (drawer.type !== "customer_member" && drawer.type !== "customer_members") return;
+        if (!drawer.id || drawer.id === "new") return;
+        setMemberRelatedDataLoading(true);
+        fetch(`/api/admin/related/customer_member/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : { linkedContacts: [], customer: null, documents: [] }))
+            .then((json: MemberRelatedPayload) => setMemberRelatedData(json))
+            .catch(() => setMemberRelatedData(null))
+            .finally(() => setMemberRelatedDataLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "customer_members" || !drawer.id || drawer.id === "new") {
+            setMemberRelatedData(null);
+            return;
+        }
+        setMemberRelatedDataLoading(true);
+        fetch(`/api/admin/related/customer_member/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : { linkedContacts: [], customer: null, documents: [] }))
+            .then((json: MemberRelatedPayload) => setMemberRelatedData(json))
+            .catch(() => setMemberRelatedData(null))
+            .finally(() => setMemberRelatedDataLoading(false));
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "customer_members" || !data) return;
@@ -1081,6 +1114,8 @@ export default function AdminEntityDrawer() {
                 dob: data.dob ?? "",
                 is_active: data.is_active ?? true,
                 status_key: (data.status_key as string) ?? "",
+                external_source: (data.external_source as string) ?? "",
+                external_id: (data.external_id as string) ?? "",
             });
         }
         setSaveError(null);
@@ -1400,6 +1435,8 @@ export default function AdminEntityDrawer() {
                 dob: data.dob ?? "",
                 is_active: data.is_active ?? true,
                 status_key: (data.status_key as string) ?? "",
+                external_source: (data.external_source as string) ?? "",
+                external_id: (data.external_id as string) ?? "",
             };
         } else {
             return;
@@ -1464,6 +1501,8 @@ export default function AdminEntityDrawer() {
                     dob: typeof formData.dob === "string" && formData.dob.trim() ? formData.dob.trim() : null,
                     is_active: !!formData.is_active,
                     status_key,
+                    external_source: typeof formData.external_source === "string" ? formData.external_source.trim() || null : null,
+                    external_id: typeof formData.external_id === "string" ? formData.external_id.trim() || null : null,
                     metadata: Object.keys(meta).length ? meta : undefined,
                 };
                 const res = await fetch(`/api/admin/customer-members/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -1848,8 +1887,113 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "customer_members") {
+            const linkedFromData = d._linked_contacts as Array<{ contact_id?: string; contact_name?: string | null; email?: string | null; phone?: string | null; role_label?: string | null; is_active?: boolean }> | undefined;
+            const hasLinkedFromData = Array.isArray(linkedFromData) && linkedFromData.length > 0;
+            const contactRows = hasLinkedFromData
+                ? linkedFromData
+                : (memberRelatedLinks as MemberLink[]).map((l) => {
+                    const c = l.contact;
+                    const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+                    const role = memberRelatedRoles.find((r) => r.role_key === l.role_key);
+                    return {
+                        contact_id: c?.id ?? l.contact_id,
+                        contact_name: name,
+                        email: c?.email ?? null,
+                        phone: c?.phone ?? null,
+                        role_label: role?.role_label ?? l.role_key ?? null,
+                        is_active: l.is_active,
+                    };
+                });
+            return {
+                basic_info: (
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Display name</label>
+                            <input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
+                            <select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
+                                <option value="">— None —</option>
+                                {statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => (
+                                    <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Relationship</label>
+                            <select value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
+                                <option value="">— Select —</option>
+                                {memberRelationshipOptions.map((o) => (
+                                    <option key={o.key} value={o.key}>{o.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Customer</label>
+                            {d.customer_id ? (
+                                <button type="button" onClick={() => openDrawer({ type: "customers", id: String(d.customer_id) })} className="text-alloy-blue hover:underline text-left">
+                                    {d._customer_name ? String(d._customer_name) : "Open"}
+                                </button>
+                            ) : (
+                                <span className="text-alloy-midnight/60">—</span>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">First name</label>
+                            <input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Last name</label>
+                            <input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">DOB</label>
+                            <input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Age</label>
+                            <span className="text-alloy-midnight/90">{d._age != null ? String(d._age) : "—"}</span>
+                        </div>
+                    </div>
+                ),
+                contact_roles: (
+                    <div className="space-y-2">
+                        {contactRows.length === 0 ? (
+                            <p className="text-sm text-alloy-midnight/60">No linked contacts.</p>
+                        ) : (
+                            <ul className="space-y-2">
+                                {contactRows.map((row: { contact_id?: string; contact_name?: string | null; email?: string | null; phone?: string | null; role_label?: string | null; is_active?: boolean }, idx: number) => (
+                                    <li key={(row as { contact_id?: string }).contact_id ?? idx} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={() => (row as { contact_id?: string }).contact_id && openDrawer({ type: "contacts", id: (row as { contact_id: string }).contact_id })}
+                                            className="text-alloy-blue hover:underline text-left font-medium"
+                                        >
+                                            {(row as { contact_name?: string | null }).contact_name || "Contact"}
+                                        </button>
+                                        {(row as { role_label?: string | null }).role_label && (
+                                            <span className="text-alloy-muted">{(row as { role_label: string }).role_label}</span>
+                                        )}
+                                        {((row as { email?: string | null }).email || (row as { phone?: string | null }).phone) && (
+                                            <span className="text-alloy-midnight/70">
+                                                {[(row as { email?: string | null }).email, (row as { phone?: string | null }).phone ? formatPhoneUS((row as { phone: string }).phone) : null].filter(Boolean).join(" · ")}
+                                            </span>
+                                        )}
+                                        {(row as { is_active?: boolean }).is_active === false && (
+                                            <span className="text-xs text-alloy-muted">(inactive)</span>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ),
+            };
+        }
         return {};
-    }, [drawer.type, data, openDrawer]);
+    }, [drawer.type, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -2006,22 +2150,122 @@ export default function AdminEntityDrawer() {
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "customer_members" && (
+                        <div className="pt-2 mb-4">
+                            {memberRelatedDataLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related…</p>
+                            ) : memberRelatedData ? (() => {
+                                const { linkedContacts, customer, documents } = memberRelatedData;
+                                const hasContacts = linkedContacts.length > 0;
+                                const hasCustomer = !!customer;
+                                const hasDocuments = documents.length > 0;
+                                if (!hasContacts && !hasCustomer && !hasDocuments) {
+                                    return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                }
+                                return (
+                                    <div className="space-y-0">
+                                        {hasContacts && (
+                                            <EntityDrawerSection config={{ key: "linked_contacts", title: "Linked Contacts", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }}>
+                                                <div className="flex flex-col gap-2">
+                                                    {canMutate && data && (data.customer_id as string) && drawer.id && drawer.id !== "new" && (
+                                                        <div className="flex justify-end">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setMemberLinkModalOpen(true);
+                                                                    setMemberLinkRoleKey(memberRelatedRoles[0]?.role_key ?? "");
+                                                                    setMemberLinkContactId("");
+                                                                    setMemberLinkError(null);
+                                                                    const cid = data.customer_id as string;
+                                                                    fetch(`/api/admin/related/customer/${cid}`)
+                                                                        .then((r) => (r.ok ? r.json() : { contacts: [] }))
+                                                                        .then((json: { contacts?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] }) => {
+                                                                            const opts = (json.contacts ?? []).map((c) => ({
+                                                                                id: c.id,
+                                                                                first_name: c.first_name ?? null,
+                                                                                last_name: c.last_name ?? null,
+                                                                                email: c.email ?? null,
+                                                                                phone: c.phone ?? null,
+                                                                            }));
+                                                                            setMemberLinkContactOptions(opts);
+                                                                        })
+                                                                        .catch(() => setMemberLinkContactOptions([]));
+                                                                }}
+                                                                className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight"
+                                                            >
+                                                                Link contact
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <ul className="space-y-2">
+                                                        {linkedContacts.map((c) => (
+                                                            <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.contact_id })} className="text-alloy-blue hover:underline text-left font-medium">
+                                                                    {c.contact_name || "Contact"}
+                                                                </button>
+                                                                {c.role_label && <span className="text-alloy-muted">{c.role_label}</span>}
+                                                                {(c.email || c.phone) && (
+                                                                    <span className="text-alloy-midnight/70">
+                                                                        {[c.email, c.phone ? formatPhoneUS(c.phone) : null].filter(Boolean).join(" · ")}
+                                                                    </span>
+                                                                )}
+                                                                {!c.is_active && <span className="text-xs text-alloy-muted">(inactive)</span>}
+                                                                {canMutate && (
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={memberUnlinkingId === c.id}
+                                                                        onClick={async () => {
+                                                                            setMemberUnlinkingId(c.id);
+                                                                            try {
+                                                                                const res = await fetch(`/api/admin/customer-member-contacts/${c.id}`, { method: "DELETE" });
+                                                                                if (res.ok) { refetchMemberLinks(); refetchMemberRelated(); }
+                                                                            } finally { setMemberUnlinkingId(null); }
+                                                                        }}
+                                                                        className="text-xs px-1.5 py-0.5 border border-red-200 text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
+                                                                    >
+                                                                        {memberUnlinkingId === c.id ? "…" : "Unlink"}
+                                                                    </button>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasCustomer && (
+                                            <EntityDrawerSection config={{ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }}>
+                                                <div>
+                                                    <button type="button" onClick={() => openDrawer({ type: "customers", id: customer.id })} className="text-alloy-blue hover:underline text-sm">
+                                                        {customer.name || "Customer"}
+                                                    </button>
+                                                </div>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasDocuments && (
+                                            <EntityDrawerSection config={{ key: "documents", title: "Documents", defaultExpanded: false, collapsible: true, gridCols: 1, fields: [] }}>
+                                                <ul className="space-y-1.5 text-sm">
+                                                    {documents.map((doc) => (
+                                                        <li key={doc.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                            <span className="font-medium">{(doc as { name?: string | null }).name || (doc as { original_filename?: string | null }).original_filename || "Document"}</span>
+                                                            {(doc as { document_type?: string | null }).document_type && <span className="text-alloy-muted">{(doc as { document_type: string }).document_type}</span>}
+                                                            {(doc as { status?: string | null }).status && <span className="text-alloy-muted">{(doc as { status: string }).status}</span>}
+                                                            {((doc as { uploaded_at?: string | null }).uploaded_at || (doc as { created_at?: string | null }).created_at) && (
+                                                                <span className="text-alloy-muted text-xs">{formatDateTime((doc as { uploaded_at?: string | null }).uploaded_at || (doc as { created_at?: string }).created_at || "")}</span>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        )}
+                                    </div>
+                                );
+                            })() : (
+                                <p className="text-sm text-alloy-midnight/60">No related records.</p>
+                            )}
+                        </div>
+                    )}
+                    {/* Legacy customer_members related block removed - now using memberRelatedData + EntityDrawerSection above */}
+                    {false && drawer.type === "customer_members_legacy_remove" && (
                         <div className="pt-2 space-y-4 mb-4">
-                            <section>
-                                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Family/Customer</h4>
-                                {!data ? (
-                                    <p className="text-sm text-[#59678b]">Loading…</p>
-                                ) : (data.customer_id as string) ? (
-                                    <DrawerLinkWithName
-                                        label="Customer"
-                                        id={data?.customer_id != null ? String(data.customer_id) : ""}
-                                        type="customers"
-                                        displayName={(data._customer_name as string) ?? (data.customer_id as string) ?? null}
-                                    />
-                                ) : (
-                                    <p className="text-sm text-[#59678b]">No family/customer linked.</p>
-                                )}
-                            </section>
                             <section>
                                 <div className="flex items-center justify-between gap-2 mb-2">
                                     <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b]">Linked contacts (Guardians)</h4>
@@ -2419,6 +2663,25 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
+                    {drawerTab === "documents" && drawer.type === "customer_members" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            {memberRelatedDataLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : (memberRelatedData?.documents?.length ?? 0) > 0 ? (
+                                <ul className="space-y-2">
+                                    {(memberRelatedData?.documents ?? []).map((doc) => (
+                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
+                                            <span className="font-medium text-alloy-forge/90">{(doc as { name?: string | null }).name || (doc as { original_filename?: string | null }).original_filename || "Document"}</span>
+                                            <span className="text-alloy-muted text-xs">{[(doc as { document_type?: string | null }).document_type, (doc as { status?: string | null }).status, (doc as { uploaded_at?: string | null }).uploaded_at ? formatDateTime((doc as { uploaded_at: string }).uploaded_at) : (doc as { created_at?: string | null }).created_at ? formatDateTime((doc as { created_at: string }).created_at) : ""].filter(Boolean).join(" · ")}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
+                            )}
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "customers" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -2485,23 +2748,19 @@ export default function AdminEntityDrawer() {
                                     )}
                                     {contactRelatedLoading && !contactRelatedData && <p className="text-sm text-alloy-midnight/60">Loading…</p>}
                                 </div>
-                            ) : drawer.type === "customer_members" ? (
-                                <>
-                                    <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>
-                                    {["id", "org_id", "customer_id", "external_source", "external_id", "created_at", "updated_at"].map((key) => {
-                                        const val = data[key];
-                                        if (val === undefined) return null;
-                                        return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
-                                    })}
-                                    {data.metadata != null && (
-                                        <div className="text-sm">
-                                            <span className="text-alloy-midnight/60">metadata:</span>
-                                            <pre className="mt-1 p-2 bg-alloy-stone/20 rounded text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words">
-                                                {typeof data.metadata === "object" ? JSON.stringify(data.metadata, null, 2) : String(data.metadata)}
-                                            </pre>
-                                        </div>
-                                    )}
-                                </>
+                            ) : drawer.type === "customer_members" && drawer.id && drawer.id !== "new" ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
                             ) : (
                                 <>
                                     <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>

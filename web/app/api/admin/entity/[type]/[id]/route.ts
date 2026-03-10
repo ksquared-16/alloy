@@ -432,6 +432,55 @@ export async function GET(
             } else {
                 out._customer_name = null;
             }
+            const relationshipKey = (row as { relationship?: string | null }).relationship ?? null;
+            if (relationshipKey) {
+                const { data: relRow } = await supabase
+                    .from("customer_member_relationship_types")
+                    .select("label")
+                    .eq("org_id", ctx.orgId)
+                    .eq("key", relationshipKey)
+                    .maybeSingle();
+                out._relationship_label = (relRow as { label?: string | null } | null)?.label ?? relationshipKey;
+            } else {
+                out._relationship_label = null;
+            }
+            const dob = (row as { dob?: string | null }).dob ?? null;
+            if (dob && dob.trim()) {
+                const d = new Date(dob);
+                if (!Number.isNaN(d.getTime())) {
+                    const today = new Date();
+                    let age = today.getFullYear() - d.getFullYear();
+                    if (today.getMonth() < d.getMonth() || (today.getMonth() === d.getMonth() && today.getDate() < d.getDate())) age--;
+                    out._age = age >= 0 ? age : null;
+                } else {
+                    out._age = null;
+                }
+            } else {
+                out._age = null;
+            }
+            const { data: linkRows } = await supabase
+                .from("customer_member_contacts")
+                .select("id, contact_id, role_key, is_active, contact:contacts(id, first_name, last_name, email, phone)")
+                .eq("org_id", ctx.orgId)
+                .eq("customer_member_id", id);
+            const roleKeys = [...new Set((linkRows ?? []).map((l: Record<string, unknown>) => l.role_key as string).filter(Boolean))];
+            const { data: roleRows } = roleKeys.length
+                ? await supabase.from("customer_member_contact_roles").select("role_key, label").eq("org_id", ctx.orgId).in("role_key", roleKeys)
+                : { data: [] as { role_key: string; label: string | null }[] };
+            const roleLabelMap = new Map((roleRows ?? []).map((r: { role_key: string; label: string | null }) => [r.role_key, r.label ?? r.role_key]));
+            out._linked_contacts = (linkRows ?? []).map((l: Record<string, unknown>) => {
+                const contact = (l.contact ?? l.contacts) as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null } | null;
+                const name = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.email || contact.phone || null : null;
+                return {
+                    contact_id: l.contact_id,
+                    contact_name: name,
+                    email: contact?.email ?? null,
+                    phone: contact?.phone ?? null,
+                    role_key: l.role_key ?? null,
+                    role_label: l.role_key ? (roleLabelMap.get(l.role_key as string) ?? l.role_key) : null,
+                    is_active: l.is_active ?? true,
+                };
+            });
             return NextResponse.json(out);
         }
 

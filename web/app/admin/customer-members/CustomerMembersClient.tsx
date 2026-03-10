@@ -7,7 +7,7 @@ import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { Filter } from "lucide-react";
 
 type Member = {
@@ -21,6 +21,12 @@ type Member = {
     is_active: boolean;
     status_key?: string | null;
     created_at: string;
+    updated_at?: string | null;
+    _customer_name?: string | null;
+    _relationship_label?: string | null;
+    _age?: number | null;
+    _linked_contacts_count?: number;
+    _updated?: string;
 };
 
 type StatusOption = { status_key: string; status_label: string | null };
@@ -39,7 +45,6 @@ export default function CustomerMembersClient() {
     const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [relationshipOptions, setRelationshipOptions] = useState<{ key: string; label: string }[]>([]);
     const [statusKeyFilter, setStatusKeyFilter] = useState("");
     const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [filterOpen, setFilterOpen] = useState(false);
@@ -55,12 +60,6 @@ export default function CustomerMembersClient() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        fetch("/api/admin/customer-member-relationship-types")
-            .then((r) => (r.ok ? r.json() : { options: [] }))
-            .then((json: { options?: { key: string; label: string }[] }) => setRelationshipOptions(json.options ?? []))
-            .catch(() => setRelationshipOptions([]));
-    }, []);
     useEffect(() => {
         fetch("/api/admin/status-definitions?entity_type=customer_members")
             .then((r) => r.ok ? r.json() : { statuses: [] })
@@ -104,19 +103,9 @@ export default function CustomerMembersClient() {
         return () => window.removeEventListener("focus", onFocus);
     }, [fetchMembers, customerIdFromUrl]);
 
-    const relationshipLabel = (v: string | null) => {
-        if (!v) return "—";
-        const opt = relationshipOptions.find((o) => o.key === v);
-        return opt ? opt.label : v;
-    };
-
-    const columns = [
-        { key: "display_name", label: "Name", sortable: true, render: (_: unknown, r: Member) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || "—" },
-        { key: "relationship", label: "Relationship", sortable: true, render: (v: string | null) => relationshipLabel(v) },
-        { key: "dob", label: "DOB", sortable: true, render: (v: string | null) => v || "—" },
-        { key: "is_active", label: "Active", sortable: true, render: (v: boolean) => (v ? "Yes" : "No") },
-        { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
-    ];
+    const columns = buildEntityTableColumns<Member>("customer_members", {
+        display_name: (_v, r) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || "—",
+    });
 
     const filterTrigger = (
         <div className="relative" ref={filterRef}>

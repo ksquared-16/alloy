@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
         .from("customer_members")
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at")
+        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at, updated_at")
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false });
 
@@ -35,18 +35,61 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const members = (rows ?? []).map((r) => ({
-        id: (r as { id: string }).id,
-        customer_id: (r as { customer_id: string }).customer_id,
-        display_name: (r as { display_name: string | null }).display_name ?? null,
-        relationship: (r as { relationship: string | null }).relationship ?? null,
-        first_name: (r as { first_name: string | null }).first_name ?? null,
-        last_name: (r as { last_name: string | null }).last_name ?? null,
-        dob: (r as { dob: string | null }).dob ?? null,
-        is_active: (r as { is_active: boolean }).is_active ?? true,
-        status_key: (r as { status_key?: string | null }).status_key ?? null,
-        created_at: (r as { created_at: string }).created_at,
-    }));
+    const memberIds = (rows ?? []).map((r) => (r as { id: string }).id);
+    const customerIds = [...new Set((rows ?? []).map((r) => (r as { customer_id: string }).customer_id).filter(Boolean))];
+
+    const [customerRows, relationshipRows, linkCounts] = await Promise.all([
+        customerIds.length
+            ? supabase.from("customers").select("id, name").in("id", customerIds)
+            : { data: [] as { id: string; name: string | null }[] },
+        supabase.from("customer_member_relationship_types").select("key, label").eq("org_id", ctx.orgId).eq("is_active", true),
+        memberIds.length
+            ? supabase.from("customer_member_contacts").select("customer_member_id").eq("org_id", ctx.orgId).in("customer_member_id", memberIds)
+            : { data: [] as { customer_member_id: string }[] },
+    ]);
+
+    const customerMap = new Map((customerRows.data ?? []).map((c) => [c.id, c.name ?? null]));
+    const relationshipMap = new Map((relationshipRows.data ?? []).map((r: { key: string; label: string | null }) => [r.key, r.label ?? r.key]));
+    const countByMember = new Map<string, number>();
+    for (const link of linkCounts.data ?? []) {
+        const mid = (link as { customer_member_id: string }).customer_member_id;
+        countByMember.set(mid, (countByMember.get(mid) ?? 0) + 1);
+    }
+
+    function ageFromDob(dob: string | null): number | null {
+        if (!dob || !dob.trim()) return null;
+        const d = new Date(dob);
+        if (Number.isNaN(d.getTime())) return null;
+        const today = new Date();
+        let age = today.getFullYear() - d.getFullYear();
+        if (today.getMonth() < d.getMonth() || (today.getMonth() === d.getMonth() && today.getDate() < d.getDate())) age--;
+        return age >= 0 ? age : null;
+    }
+
+    const members = (rows ?? []).map((r) => {
+        const id = (r as { id: string }).id;
+        const relationshipKey = (r as { relationship: string | null }).relationship ?? null;
+        const created_at = (r as { created_at: string }).created_at;
+        const updated_at = (r as { updated_at?: string | null }).updated_at ?? null;
+        return {
+            id,
+            customer_id: (r as { customer_id: string }).customer_id,
+            display_name: (r as { display_name: string | null }).display_name ?? null,
+            relationship: relationshipKey,
+            first_name: (r as { first_name: string | null }).first_name ?? null,
+            last_name: (r as { last_name: string | null }).last_name ?? null,
+            dob: (r as { dob: string | null }).dob ?? null,
+            is_active: (r as { is_active: boolean }).is_active ?? true,
+            status_key: (r as { status_key?: string | null }).status_key ?? null,
+            created_at,
+            updated_at,
+            _customer_name: customerMap.get((r as { customer_id: string }).customer_id) ?? null,
+            _relationship_label: relationshipKey ? (relationshipMap.get(relationshipKey) ?? relationshipKey) : null,
+            _age: ageFromDob((r as { dob: string | null }).dob),
+            _linked_contacts_count: countByMember.get(id) ?? 0,
+            _updated: updated_at || created_at,
+        };
+    });
 
     return NextResponse.json({ members });
 }
