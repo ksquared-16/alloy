@@ -74,7 +74,9 @@ export async function GET(request: NextRequest) {
 
     let payments: PaymentListItem[] = list.map((r) => {
         const status = r.payment_statuses;
-        const statusObj = Array.isArray(status) ? status[0] ?? null : (status as { key?: string; label?: string | null } | null) ?? null;
+        const rawStatus = Array.isArray(status) ? status[0] ?? null : (status as { key?: string; label?: string | null } | null) ?? null;
+        const statusObj: { key: string; label?: string | null } | null =
+            rawStatus != null && typeof rawStatus.key === "string" ? { key: rawStatus.key, label: rawStatus.label ?? null } : null;
         const statusKeyVal = (r as { status_key?: string | null }).status_key ?? null;
         const _status_display = statusKeyVal ?? (statusObj?.label ?? statusObj?.key ?? null);
         const _payment_label = (r as { provider_payment_id?: string | null }).provider_payment_id?.trim() || `Payment #${(r as { id: string }).id.slice(-6)}`;
