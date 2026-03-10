@@ -1,26 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import DataTable from "@/components/admin/DataTable";
-import { StatusBadge } from "@/components/admin/StatusBadge";
+import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
+import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { Filter } from "lucide-react";
 
-type JobRow = {
+export type JobRow = {
   id: string;
   created_at: string;
+  updated_at?: string | null;
   title: string | null;
   description: string | null;
   job_status_id: string | null;
   status_key: string | null;
+  service_key?: string | null;
+  job_number_for_customer?: string | null;
   is_recurring: boolean | null;
   customer_id: string | null;
+  assigned_vendor_id: string | null;
+  location_id: string | null;
+  gross_price_cents?: number | null;
+  estimated_total_cents?: number | null;
   _customer_name?: string | null;
   _assigned_vendor_name?: string | null;
+  _vendor_name?: string | null;
   _location_label?: string | null;
+  _job_label?: string | null;
+  _status_display?: string | null;
+  _next_schedule?: string | null;
+  _price_display?: number | null;
+  _updated?: string | null;
   archived_at?: string | null;
 };
 
@@ -121,29 +135,51 @@ export default function JobsClient() {
 
   const hasActiveFilters = searchApplied || statusKeyFilter;
 
-  const columns = [
-    { key: "title" as keyof JobRow, label: "Title", sortable: true, render: (_: unknown, row: JobRow) => <span className="text-alloy-blue">{row.title ?? "—"}</span> },
-    { key: "_customer_name", label: "Customer", sortable: true, render: (_: unknown, row: JobRow) => row._customer_name ?? "—" },
-    { key: "_location_label", label: "Location", sortable: true, render: (_: unknown, row: JobRow) => row._location_label ?? "—" },
-    { key: "status_key", label: "Status", sortable: true, render: (_: unknown, row: JobRow) => <StatusBadge label={statusOptions.find((s) => s.status_key === row.status_key)?.status_label ?? row.status_key ?? "—"} variant="neutral" /> },
-    { key: "_assigned_vendor_name", label: `Assigned ${vendorSingular}`, sortable: true, render: (_: unknown, row: JobRow) => row._assigned_vendor_name ?? "—" },
-    { key: "is_recurring", label: "Recurring", sortable: true, render: (v: boolean | null) => v ? "Yes" : "No" },
-    { key: "created_at", label: "Created", sortable: true, render: (v: string) => formatDateTime(v) },
-    {
-      key: "id",
-      label: "Actions",
-      sortable: false,
-      render: (_: unknown, row: JobRow) => (
-        <span className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-          {row.archived_at ? (
-            <button type="button" onClick={() => unarchive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-muted hover:text-alloy-midnight hover:underline disabled:opacity-50">Unarchive</button>
-          ) : (
-            <button type="button" onClick={() => archive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-ember hover:underline disabled:opacity-50">Archive</button>
-          )}
-        </span>
-      ),
-    },
-  ];
+  const columns = useMemo(() => {
+    const base = buildEntityTableColumns<JobRow>("jobs", {
+      _customer_name: (_value: unknown, row: JobRow) => {
+        const name = row._customer_name ?? "—";
+        const id = row.customer_id;
+        if (!id) return <span className="text-alloy-midnight/70">{name}</span>;
+        return (
+          <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "customers", id }); }} className="text-left text-alloy-blue hover:underline">
+            {name}
+          </button>
+        );
+      },
+      _vendor_name: (_value: unknown, row: JobRow) => {
+        const name = row._vendor_name ?? row._assigned_vendor_name ?? "—";
+        const id = row.assigned_vendor_id;
+        if (!id) return <span className="text-alloy-midnight/70">{name}</span>;
+        return (
+          <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer({ type: "vendors", id }); }} className="text-left text-alloy-blue hover:underline">
+            {name}
+          </button>
+        );
+      },
+      _status_display: (_value: unknown, row: JobRow) => {
+        const label = statusOptions.find((s) => s.status_key === row._status_display)?.status_label ?? row._status_display ?? "—";
+        return <StatusBadge label={label} variant={getStatusVariant(row._status_display ?? null)} />;
+      },
+    });
+    return [
+      ...base,
+      {
+        key: "id" as keyof JobRow,
+        label: "Actions",
+        sortable: false,
+        render: (_: unknown, row: JobRow) => (
+          <span className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+            {row.archived_at ? (
+              <button type="button" onClick={() => unarchive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-muted hover:text-alloy-midnight hover:underline disabled:opacity-50">Unarchive</button>
+            ) : (
+              <button type="button" onClick={() => archive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-ember hover:underline disabled:opacity-50">Archive</button>
+            )}
+          </span>
+        ),
+      },
+    ];
+  }, [openDrawer, statusOptions, actionLoadingId]);
 
   const filterTrigger = (
     <div className="relative" ref={filterRef}>

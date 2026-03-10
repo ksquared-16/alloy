@@ -25,39 +25,51 @@ export async function GET(
             const { data, error } = await supabase.from("jobs").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...data };
-            if (data.opportunity_id) {
-                const opp = await supabase.from("opportunities").select("name").eq("id", data.opportunity_id).single();
+            if ((data as { opportunity_id?: string }).opportunity_id) {
+                const opp = await supabase.from("opportunities").select("name").eq("id", (data as { opportunity_id: string }).opportunity_id).single();
                 out._opportunity_name = opp.data?.name ?? null;
+            } else {
+                out._opportunity_name = null;
             }
-            if (data.primary_contact_id) {
-                const contact = await supabase.from("contacts").select("first_name, last_name").eq("id", data.primary_contact_id).single();
-                const c = contact.data;
+            if ((data as { primary_contact_id?: string }).primary_contact_id) {
+                const contact = await supabase.from("contacts").select("first_name, last_name").eq("id", (data as { primary_contact_id: string }).primary_contact_id).single();
+                const c = contact.data as { first_name?: string | null; last_name?: string | null } | null;
                 out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+            } else {
+                out._contact_name = null;
             }
-            if (data.customer_id) {
-                const customer = await supabase.from("customers").select("name").eq("id", data.customer_id).single();
+            if ((data as { customer_id?: string }).customer_id) {
+                const customer = await supabase.from("customers").select("name").eq("id", (data as { customer_id: string }).customer_id).single();
                 out._customer_name = customer.data?.name ?? null;
+            } else {
+                out._customer_name = null;
             }
             const assignedVendorId = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id;
             if (assignedVendorId) {
                 const { data: vendor } = await supabase.from("vendors").select("id, name").eq("id", assignedVendorId).single();
                 out._assigned_vendor = vendor ?? null;
+                out._vendor_name = (vendor as { name?: string | null } | null)?.name ?? null;
             } else {
                 out._assigned_vendor = null;
+                out._vendor_name = null;
             }
             const jobLocationId = (data as { location_id?: string | null }).location_id;
             if (jobLocationId) {
                 const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", jobLocationId).maybeSingle();
                 if (loc) {
                     const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
-                    out._location_label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+                    const label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+                    out._location_label = label;
+                    out._location_name = label;
                     out._location = loc;
                 } else {
                     out._location_label = null;
+                    out._location_name = null;
                     out._location = null;
                 }
             } else {
                 out._location_label = null;
+                out._location_name = null;
                 out._location = null;
             }
             const verticalId = (data as { vertical_id?: string | null }).vertical_id;
@@ -67,6 +79,29 @@ export async function GET(
             } else {
                 out._vertical_slug = null;
             }
+            const jobStatusId = (data as { job_status_id?: string | null }).job_status_id;
+            const statusKey = (data as { status_key?: string | null }).status_key;
+            if (statusKey) {
+                out._status_display = statusKey;
+            } else if (jobStatusId) {
+                const { data: js } = await supabase.from("job_statuses").select("status_key, label").eq("id", jobStatusId).maybeSingle();
+                out._status_display = (js as { status_key?: string | null; label?: string | null } | null)?.status_key ?? (js as { label?: string | null } | null)?.label ?? null;
+            } else {
+                out._status_display = null;
+            }
+            const gross = (data as { gross_price_cents?: number | null }).gross_price_cents;
+            const estimated = (data as { estimated_total_cents?: number | null }).estimated_total_cents;
+            out._price_display = gross != null ? gross / 100 : estimated != null ? estimated / 100 : null;
+            const { data: nextSched } = await supabase
+                .from("schedules")
+                .select("start_at")
+                .eq("job_id", id)
+                .is("canceled_at", null)
+                .gte("start_at", new Date().toISOString())
+                .order("start_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            out._next_schedule = (nextSched as { start_at?: string } | null)?.start_at ?? null;
             return NextResponse.json(out);
         }
         if (type === "opportunities") {

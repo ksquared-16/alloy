@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("jobs")
     .select(
-      "id, created_at, title, description, job_status_id, status_key, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at",
+      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at, gross_price_cents, estimated_total_cents",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -46,34 +46,84 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const jobs = rows ?? [];
+  const jobIds = jobs.map((j) => (j as { id: string }).id);
   const customerIds = [...new Set(jobs.map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
   const vendorIds = [...new Set(jobs.map((j) => (j as { assigned_vendor_id?: string }).assigned_vendor_id).filter(Boolean))] as string[];
   const locationIds = [...new Set(jobs.map((j) => (j as { location_id?: string }).location_id).filter(Boolean))] as string[];
-  const { data: custRows } = customerIds.length
-    ? await supabase.from("customers").select("id, name").in("id", customerIds)
-    : { data: [] };
-  const { data: vendorRows } = vendorIds.length
-    ? await supabase.from("vendors").select("id, name").in("id", vendorIds)
-    : { data: [] };
-  const { data: locationRows } = locationIds.length
-    ? await supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds)
-    : { data: [] };
-  const customerMap = new Map((custRows ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
-  const vendorMap = new Map((vendorRows ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
-  const locationMap = new Map((locationRows ?? []).map((loc) => {
+  const jobStatusIds = [...new Set(jobs.map((j) => (j as { job_status_id?: string }).job_status_id).filter(Boolean))] as string[];
+
+  const [custRes, vendorRes, locationRes, statusRes, nextSchedulesRes] = await Promise.all([
+    customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] },
+    vendorIds.length ? supabase.from("vendors").select("id, name").in("id", vendorIds) : { data: [] },
+    locationIds.length ? supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds) : { data: [] },
+    jobStatusIds.length ? supabase.from("job_statuses").select("id, status_key, label").in("id", jobStatusIds) : { data: [] },
+    jobIds.length
+      ? supabase
+          .from("schedules")
+          .select("job_id, start_at")
+          .in("job_id", jobIds)
+          .is("canceled_at", null)
+          .gte("start_at", new Date().toISOString())
+          .order("start_at", { ascending: true })
+      : { data: [] },
+  ]);
+
+  const customerMap = new Map((custRes.data ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
+  const vendorMap = new Map((vendorRes.data ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
+  const locationMap = new Map((locationRes.data ?? []).map((loc) => {
     const l = loc as { id: string; label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
-    const summary =
-      l.label ??
-      ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+    const summary = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
     return [l.id, summary];
   }));
+  const statusByKey = new Map((statusRes.data ?? []).map((s) => [(s as { status_key: string }).status_key, (s as { label?: string | null }).label ?? null]));
+  const statusById = new Map((statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { label?: string | null }).label ?? null]));
+  const nextScheduleByJobId = new Map<string, string>();
+  for (const s of nextSchedulesRes.data ?? []) {
+    const row = s as { job_id: string; start_at: string };
+    if (!nextScheduleByJobId.has(row.job_id)) nextScheduleByJobId.set(row.job_id, row.start_at);
+  }
 
-  const result = jobs.map((j) => ({
-    ...j,
-    _customer_name: (j as { customer_id?: string }).customer_id ? customerMap.get((j as { customer_id: string }).customer_id) ?? null : null,
-    _assigned_vendor_name: (j as { assigned_vendor_id?: string }).assigned_vendor_id ? vendorMap.get((j as { assigned_vendor_id: string }).assigned_vendor_id) ?? null : null,
-    _location_label: (j as { location_id?: string }).location_id ? locationMap.get((j as { location_id: string }).location_id) ?? null : null,
-  }));
+  const result = jobs.map((j) => {
+    const jr = j as {
+      id: string;
+      title?: string | null;
+      service_key?: string | null;
+      job_number_for_customer?: string | null;
+      status_key?: string | null;
+      job_status_id?: string | null;
+      updated_at?: string | null;
+      created_at?: string;
+      gross_price_cents?: number | null;
+      estimated_total_cents?: number | null;
+      customer_id?: string | null;
+      assigned_vendor_id?: string | null;
+      location_id?: string | null;
+    };
+    const _job_label =
+      (jr.title && String(jr.title).trim()) ||
+      (jr.service_key && String(jr.service_key).trim()) ||
+      (jr.job_number_for_customer && String(jr.job_number_for_customer).trim()) ||
+      (jr.id ? jr.id.slice(-6) : "—");
+    const statusKey = jr.status_key ?? (jr.job_status_id ? statusById.get(jr.job_status_id) ?? null : null);
+    const _status_display = statusKey ?? (jr.job_status_id ? statusById.get(jr.job_status_id) ?? null : null);
+    const _next_schedule = nextScheduleByJobId.get(jr.id) ?? null;
+    const _vendor_name = jr.assigned_vendor_id ? vendorMap.get(jr.assigned_vendor_id) ?? null : null;
+    const priceCents = jr.gross_price_cents ?? jr.estimated_total_cents ?? null;
+    const _price_display = priceCents != null ? priceCents / 100 : null;
+    const _updated = jr.updated_at ?? jr.created_at ?? null;
+    return {
+      ...j,
+      _customer_name: jr.customer_id ? customerMap.get(jr.customer_id) ?? null : null,
+      _assigned_vendor_name: _vendor_name,
+      _vendor_name,
+      _location_label: jr.location_id ? locationMap.get(jr.location_id) ?? null : null,
+      _job_label,
+      _status_display,
+      _next_schedule,
+      _price_display,
+      _updated,
+    };
+  });
 
   return NextResponse.json({ jobs: result, total: count ?? result.length });
 }

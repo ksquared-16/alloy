@@ -9,6 +9,8 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 const ALLOWED_KEYS = [
     "title",
     "description",
+    "job_type",
+    "service_key",
     "job_status_id",
     "status_key",
     "is_recurring",

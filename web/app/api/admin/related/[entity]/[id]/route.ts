@@ -119,17 +119,61 @@ export async function GET(
         }
 
         if (entity === "job") {
-            const { data: jobRow } = await supabase.from("jobs").select("location_id").eq("id", id).maybeSingle();
-            const locationId = (jobRow as { location_id?: string | null } | null)?.location_id ?? null;
+            const { data: jobRow } = await supabase.from("jobs").select("location_id, opportunity_id").eq("id", id).maybeSingle();
+            const jr = jobRow as { location_id?: string | null; opportunity_id?: string | null } | null;
+            const locationId = jr?.location_id ?? null;
+            const opportunityId = jr?.opportunity_id ?? null;
             let location: Record<string, unknown> | null = null;
             if (locationId) {
                 const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active").eq("id", locationId).maybeSingle();
                 if (loc) location = loc as Record<string, unknown>;
             }
-            const schedulesRes = await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").eq("job_id", id).order("start_at", { ascending: false }).limit(LIMIT);
+            const [schedulesRes, opportunityRes, discountRedemptionsRes, documentsRes] = await Promise.all([
+                supabase.from("schedules").select("id, job_id, start_at, end_at, timezone, status_key, price_cents, canceled_at").eq("job_id", id).order("start_at", { ascending: true }).limit(LIMIT),
+                opportunityId ? supabase.from("opportunities").select("id, name, created_at, status_key, quote_total").eq("id", opportunityId).maybeSingle() : Promise.resolve({ data: null }),
+                supabase.from("discount_redemptions").select("id, created_at, discount_code_id, job_id").eq("job_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("documents").select("id, name, original_filename, document_type, status, uploaded_at, created_at").or("entity_type.eq.job,entity_type.eq.jobs").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+            ]);
+            const schedules = (schedulesRes.data ?? []) as { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string; status_key?: string | null; price_cents?: number | null; canceled_at?: string | null }[];
+            const scheduleIds = schedules.map((s) => s.id);
+            let assignments: { schedule_id: string; vendor_id: string }[] = [];
+            let vendorNames: Map<string, string> = new Map();
+            if (scheduleIds.length > 0) {
+                const assignRes = await supabase.from("assignments").select("schedule_id, vendor_id").in("schedule_id", scheduleIds);
+                assignments = (assignRes.data ?? []) as { schedule_id: string; vendor_id: string }[];
+                const vids = [...new Set(assignments.map((a) => a.vendor_id))];
+                if (vids.length > 0) {
+                    const vRes = await supabase.from("vendors").select("id, name").in("id", vids);
+                    vendorNames = new Map((vRes.data ?? []).map((v) => [(v as { id: string }).id, (v as { name?: string | null }).name ?? ""]));
+                }
+            }
+            const schedulesWithVendor = schedules.map((s, idx) => {
+                const assign = assignments.find((a) => a.schedule_id === s.id);
+                const vendorName = assign ? vendorNames.get(assign.vendor_id) ?? null : null;
+                return {
+                    ...s,
+                    _visit_label: `Visit #${idx + 1}`,
+                    _vendor_name: vendorName,
+                };
+            });
+            const redemptionIds = (discountRedemptionsRes.data ?? []).map((r: { discount_code_id?: string }) => r.discount_code_id).filter(Boolean);
+            let discountCodes: { id: string; code?: string | null; discount_type?: string | null; discount_value?: number | null }[] = [];
+            if (redemptionIds.length > 0) {
+                const dcRes = await supabase.from("discount_codes").select("id, code, discount_type, discount_value").in("id", redemptionIds);
+                discountCodes = dcRes.data ?? [];
+            }
+            const discountCodeMap = new Map(discountCodes.map((dc) => [(dc as { id: string }).id, dc]));
+            const discountsWithCode = (discountRedemptionsRes.data ?? []).map((r: { id: string; created_at?: string; discount_code_id?: string }) => ({
+                ...r,
+                _code: r.discount_code_id ? (discountCodeMap.get(r.discount_code_id) as { code?: string | null } | undefined)?.code ?? null : null,
+            }));
             return NextResponse.json({
-                schedules: schedulesRes.data ?? [],
+                schedules: schedulesWithVendor,
                 location,
+                opportunity: opportunityRes.data ?? null,
+                messages: [],
+                discounts: discountsWithCode,
+                documents: documentsRes.data ?? [],
             });
         }
 

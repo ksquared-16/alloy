@@ -379,6 +379,15 @@ export default function AdminEntityDrawer() {
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [saving, setSaving] = useState(false);
     const [jobSchedules, setJobSchedules] = useState<{ id: string; job_id: string; start_at: string; end_at: string; timezone: string }[]>([]);
+    type JobRelatedPayload = {
+        schedules: { id: string; start_at?: string; end_at?: string; status_key?: string | null; price_cents?: number | null; _visit_label?: string; _vendor_name?: string | null }[];
+        opportunity: { id: string; name?: string | null; created_at?: string; status_key?: string | null; quote_total?: number | null } | null;
+        messages: unknown[];
+        discounts: { id: string; created_at?: string; _code?: string | null }[];
+        documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
+    };
+    const [jobRelatedData, setJobRelatedData] = useState<JobRelatedPayload | null>(null);
+    const [jobRelatedLoading, setJobRelatedLoading] = useState(false);
     const [rescheduleForm, setRescheduleForm] = useState<{ start_at: string; end_at: string; timezone: string } | null>(null);
     const [rescheduleScheduleId, setRescheduleScheduleId] = useState<string | null>(null);
     const [rescheduleSaving, setRescheduleSaving] = useState(false);
@@ -683,6 +692,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
             setJobSchedules([]);
+            setJobRelatedData(null);
             setRescheduleForm(null);
             setJobVendorsForAssign([]);
             setJobVendorOptions([]);
@@ -690,10 +700,22 @@ export default function AdminEntityDrawer() {
             setJobPayments([]);
             return;
         }
+        setJobRelatedLoading(true);
         fetch(`/api/admin/related/job/${drawer.id}`)
-            .then((res) => res.ok ? res.json() : { schedules: [] })
-            .then((json: { schedules?: { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] }) => setJobSchedules(json.schedules ?? []))
-            .catch(() => setJobSchedules([]));
+            .then((res) => res.ok ? res.json() : { schedules: [], opportunity: null, messages: [], discounts: [], documents: [] })
+            .then((json: { schedules?: { id: string; job_id?: string; start_at: string; end_at: string; timezone: string }[]; opportunity?: { id: string; name?: string | null; created_at?: string; status_key?: string | null; quote_total?: number | null } | null; messages?: unknown[]; discounts?: { id: string; created_at?: string; _code?: string | null }[]; documents?: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[] }) => {
+                const opp = json.opportunity && typeof (json.opportunity as { id?: string }).id === "string" ? json.opportunity : null;
+                setJobRelatedData({
+                    schedules: json.schedules ?? [],
+                    opportunity: opp,
+                    messages: json.messages ?? [],
+                    discounts: (json.discounts ?? []) as JobRelatedPayload["discounts"],
+                    documents: (json.documents ?? []) as JobRelatedPayload["documents"],
+                });
+                setJobSchedules((json.schedules ?? []) as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[]);
+            })
+            .catch(() => { setJobSchedules([]); setJobRelatedData(null); })
+            .finally(() => setJobRelatedLoading(false));
         fetch(`/api/admin/jobs/${drawer.id}/vendors-for-assign`)
             .then((res) => res.ok ? res.json() : { vendors: [] })
             .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorsForAssign(json.vendors ?? []))
@@ -1073,13 +1095,20 @@ export default function AdminEntityDrawer() {
         } else if (drawer.type === "jobs") {
             const meta = (data.metadata as Record<string, unknown>) || {};
             setFormData({
+                title: (data.title as string) ?? "",
+                service_key: (data.service_key as string) ?? "",
+                job_type: (data.job_type as string) ?? "",
+                description: (data.description as string) ?? "",
                 scheduled_at: data.scheduled_at ? new Date(data.scheduled_at as string).toISOString().slice(0, 16) : "",
+                completed_at: data.completed_at ? new Date(data.completed_at as string).toISOString().slice(0, 16) : "",
                 service_frequency_key: (data.service_frequency_key as string) ?? "",
                 is_recurring: data.is_recurring ?? false,
-                job_status_id: data.job_status_id ?? "",
+                job_status_id: (data.job_status_id as string) ?? "",
                 status_key: (data.status_key as string) ?? "",
                 internal_notes: (meta.internal_notes as string) ?? "",
                 assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
+                gross_price_cents: data.gross_price_cents ?? null,
+                discount_amount: data.discount_amount ?? null,
             });
         } else if (drawer.type === "contacts") {
             setFormData({
@@ -1245,7 +1274,7 @@ export default function AdminEntityDrawer() {
             .catch(() => setJobDiscountCodeOptions([]));
     }, [drawer.type, (data as { _vertical_slug?: string | null } | null)?._vertical_slug]);
 
-    const JOB_FORM_KEYS = ["scheduled_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id"] as const;
+    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id", "assigned_vendor_id"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
             setVendorPayout(null);
@@ -1419,17 +1448,24 @@ export default function AdminEntityDrawer() {
         }
         const meta = (data.metadata as Record<string, unknown>) || {};
         const snapshot = {
+            title: (data.title as string) ?? "",
+            service_key: (data.service_key as string) ?? "",
+            job_type: (data.job_type as string) ?? "",
+            description: (data.description as string) ?? "",
             customer_id: (data.customer_id as string) ?? "",
             opportunity_id: (data.opportunity_id as string) ?? "",
             location_id: (data.location_id as string) ?? "",
             scheduled_at: data.scheduled_at ? new Date(data.scheduled_at as string).toISOString().slice(0, 16) : "",
+            completed_at: data.completed_at ? new Date(data.completed_at as string).toISOString().slice(0, 16) : "",
             service_frequency_key: (data.service_frequency_key as string) ?? "",
             is_recurring: data.is_recurring ?? false,
             status_key: (data.status_key as string) ?? "",
             internal_notes: (meta.internal_notes as string) ?? "",
             gross_price_cents: data.gross_price_cents ?? null,
+            discount_amount: data.discount_amount ?? null,
             primary_contact_id: (data.primary_contact_id as string) ?? "",
             discount_code_id: (data.discount_code_id as string) ?? "",
+            assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
         };
         setFormData((prev) => ({ ...prev, ...snapshot }));
         setInitialJobFormData(snapshot);
@@ -1444,7 +1480,7 @@ export default function AdminEntityDrawer() {
             if (typeof a === "number" && typeof b === "number") return a !== b;
             return String(a ?? "") !== String(b ?? "");
         });
-    }, [drawer.type, initialJobFormData, formData.scheduled_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id, formData.discount_code_id]);
+    }, [drawer.type, initialJobFormData, formData.title, formData.service_key, formData.job_type, formData.description, formData.scheduled_at, formData.completed_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.discount_amount, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id, formData.discount_code_id, formData.assigned_vendor_id]);
 
     useEffect(() => {
         if (!data || !drawer.type || !INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) || (data as { _create?: boolean })?._create) {
@@ -2741,9 +2777,67 @@ export default function AdminEntityDrawer() {
                             })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
-                    {drawerTab === "related" && ["jobs", "locations"].includes(drawer.type) && drawer.id && (
+                    {drawerTab === "related" && drawer.type === "locations" && drawer.id && (
                         <div className="pt-2">
-                            <RelatedRecordsTabs entityType={drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
+                            <RelatedRecordsTabs entityType="location" entityId={drawer.id} />
+                        </div>
+                    )}
+                    {drawerTab === "related" && drawer.type === "jobs" && drawer.id && drawer.id !== "new" && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-related>
+                            {jobRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : jobRelatedData ? (() => {
+                                const d = jobRelatedData;
+                                const scheduleItems = (d.schedules ?? []).filter((s) => !(s as { canceled_at?: string | null }).canceled_at).map((s) => ({
+                                    id: s.id,
+                                    entityType: "schedules" as const,
+                                    label: (s as { _visit_label?: string })._visit_label ?? "Visit",
+                                    meta: [s.start_at ? formatDateTime(s.start_at) : null, s.end_at ? formatDateTime(s.end_at) : null, (s as { _vendor_name?: string | null })._vendor_name, (s as { status_key?: string | null }).status_key].filter(Boolean).join(" · ") || undefined,
+                                }));
+                                const opp = d.opportunity;
+                                const messageItems = (d.messages ?? []).map((m: unknown) => {
+                                    const x = m as { id: string; created_at?: string };
+                                    return { id: x.id, label: "Message", meta: x.created_at ? formatDateTime(x.created_at) : undefined };
+                                });
+                                const discountItems = (d.discounts ?? []).map((r) => ({ id: r.id, label: (r as { _code?: string | null })._code ?? "Discount", meta: r.created_at ? formatDate(r.created_at) : undefined }));
+                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
+                                    { key: "schedules", title: "Schedules", defaultExpanded: true, items: scheduleItems },
+                                    { key: "opportunity", title: "Opportunity", defaultExpanded: !!opp, items: opp ? [{ id: opp.id, entityType: "opportunities" as const, label: (opp.name as string) || "Opportunity", meta: opp.created_at ? formatDate(opp.created_at as string) : undefined }] : [] },
+                                    { key: "messages", title: "Messages", defaultExpanded: false, items: messageItems },
+                                    { key: "discounts", title: "Discounts", defaultExpanded: false, items: discountItems },
+                                ];
+                                const visible = sections.filter((s) => s.items.length > 0);
+                                if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                return (
+                                    <>
+                                        {visible.map((sec) => (
+                                            <EntityDrawerSection
+                                                key={sec.key}
+                                                config={{ key: sec.key, title: sec.title, defaultExpanded: sec.defaultExpanded, collapsible: true, gridCols: 1, fields: [] }}
+                                                defaultExpanded={sec.defaultExpanded}
+                                            >
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {sec.items.map((item) => (
+                                                        <li key={item.id}>
+                                                            {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
+                                                                <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                </button>
+                                                            ) : (
+                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                    <div className="font-medium">{item.label}</div>
+                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                </div>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        ))}
+                                    </>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
@@ -2924,6 +3018,25 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
+                    {drawerTab === "documents" && drawer.type === "jobs" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            {jobRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : (jobRelatedData?.documents?.length ?? 0) > 0 ? (
+                                <ul className="space-y-2">
+                                    {(jobRelatedData?.documents ?? []).map((doc) => (
+                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
+                                            <span className="font-medium text-alloy-forge/90">{doc.name ?? doc.original_filename ?? "Document"}</span>
+                                            <span className="text-alloy-muted text-xs">{[doc.document_type, doc.status, doc.uploaded_at ? formatDateTime(doc.uploaded_at) : doc.created_at ? formatDateTime(doc.created_at) : ""].filter(Boolean).join(" · ")}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
+                            )}
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-4">
                             <section>
@@ -3033,6 +3146,19 @@ export default function AdminEntityDrawer() {
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
                                             {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "jobs" && drawer.id && drawer.id !== "new" ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Job created: {formatDateTime(String(data.created_at))}</li> : null}
                                             {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
