@@ -343,7 +343,7 @@ function JobDrawerRelationshipsSection(props: {
 }
 
 export default function AdminEntityDrawer() {
-    const { drawer, openDrawer, closeDrawer } = useAdminDrawer();
+    const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const memberSingular = labels.customer_members?.singular ?? "Member";
@@ -507,17 +507,28 @@ export default function AdminEntityDrawer() {
         contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null }[];
         opportunities: { id: string; name?: string | null; status?: string | null; job_date?: string | null; quote_total?: number | null }[];
         jobs: { id: string; title?: string | null; scheduled_at?: string | null; opportunity_id?: string | null }[];
-        locations: { id: string; label?: string | null; location_type?: string | null; city?: string | null; state?: string | null }[];
-        customer_members: { id: string; display_name?: string | null; relationship?: string | null }[];
+        schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
+        locations: { id: string; label?: string | null; address1?: string | null; location_type?: string | null; city?: string | null; state?: string | null }[];
+        customer_members: { id: string; display_name?: string | null; relationship?: string | null; first_name?: string | null; last_name?: string | null }[];
         payments: { id: string; amount_cents?: number; status_key?: string | null; paid_at?: string | null; created_at?: string; provider_payment_id?: string | null }[];
         customer_subscriptions: { id: string; status?: string; start_date?: string | null; created_at?: string }[];
         discount_redemptions: { id: string; created_at?: string; discount_code_id?: string }[];
         documents: { id: string; name?: string | null; document_type?: string | null; uploaded_at?: string | null; status?: string | null }[];
         messages: { id: string; created_at?: string; to_phone?: string | null; status?: string | null; body?: string | null }[];
+        customer_tags: { id: string; name?: string | null }[];
         _primary_contact_id?: string | null;
     };
     const [customerRelatedData, setCustomerRelatedData] = useState<CustomerRelatedPayload | null>(null);
     const [customerRelatedLoading, setCustomerRelatedLoading] = useState(false);
+    const [customerRelatedSectionsOpen, setCustomerRelatedSectionsOpen] = useState<Set<string>>(new Set(["contacts", "members", "opportunities", "jobs", "schedules", "locations", "subscriptions", "discounts", "messages", "tags"]));
+    const toggleCustomerRelatedSection = useCallback((key: string) => {
+        setCustomerRelatedSectionsOpen((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    }, []);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -1860,8 +1871,15 @@ export default function AdminEntityDrawer() {
         ) : null
     ) : null;
 
-    const drawerHeaderActions = data && !loading && canEditInDrawer(drawer.type) ? (
+    const drawerHeaderActions = (
         <div className="flex flex-wrap items-center justify-end gap-2">
+            {canGoBack && previousDrawer && (
+                <button type="button" onClick={goBack} className="shrink-0 px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 text-alloy-midnight/90">
+                    ← Back to {getEntityLabel(labels, previousDrawer.type, "singular")}
+                </button>
+            )}
+            {data && !loading && canEditInDrawer(drawer.type) && (
+                <>
             {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
             {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
                 <>
@@ -1895,8 +1913,10 @@ export default function AdminEntityDrawer() {
                     </>
                 )
             )}
+                </>
+            )}
         </div>
-    ) : undefined;
+    );
 
     const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
@@ -2220,9 +2240,68 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
-                    {drawerTab === "related" && ["customers", "opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
+                    {drawerTab === "related" && drawer.type === "customers" && drawer.id && (
+                        <div className="pt-2 space-y-0">
+                            {customerRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : customerRelatedData ? (() => {
+                                const d = customerRelatedData;
+                                const primaryId = d._primary_contact_id ?? null;
+                                const sections: { key: string; title: string; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
+                                    { key: "contacts", title: "Contacts", items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "members", title: memberPlural, items: (d.customer_members ?? []).map((m) => ({ id: m.id, entityType: "customer_members" as const, label: (m.display_name as string) || [m.first_name, m.last_name].filter(Boolean).join(" ") || "Member", meta: (m.relationship as string) || undefined })) },
+                                    { key: "opportunities", title: "Opportunities", items: (d.opportunities ?? []).map((o) => ({ id: o.id, entityType: "opportunities" as const, label: (o.name as string) || "Opportunity", meta: [o.status, o.quote_total != null ? formatMoneyFromDollars(Number(o.quote_total)) : null].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "jobs", title: jobPlural, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "schedules", title: scheduleSingular + "s", items: (d.schedules ?? []).map((s) => ({ id: s.id, entityType: "schedules" as const, label: s.start_at ? formatDateTime(s.start_at) : "Schedule", meta: s.end_at ? `to ${formatDateTime(s.end_at)}` : undefined })) },
+                                    { key: "locations", title: "Locations", items: (d.locations ?? []).map((l) => ({ id: l.id, entityType: "locations" as const, label: (l.label as string) || [l.address1, l.city, l.state].filter(Boolean).join(", ") || "Location", meta: [l.location_type, l.city, l.state].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "subscriptions", title: "Subscriptions", items: (d.customer_subscriptions ?? []).map((s) => ({ id: s.id, entityType: "subscriptions" as const, label: (s.status as string) || "Subscription", meta: s.start_date ? formatDate(s.start_date as string) : undefined })) },
+                                    { key: "discounts", title: "Discounts / Promotions", items: (d.discount_redemptions ?? []).map((r) => ({ id: r.id, entityType: "discount_redemptions" as const, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined })) },
+                                    { key: "messages", title: "Messages", items: (d.messages ?? []).map((m) => ({ id: m.id, label: (m.body as string)?.slice(0, 50) || (m.to_phone as string) || "Message", meta: m.created_at ? formatDateTime(m.created_at as string) : undefined })) },
+                                    { key: "tags", title: "Tags", items: (d.customer_tags ?? []).map((t) => ({ id: t.id, label: (t.name as string) || "Tag" })) },
+                                ];
+                                const visible = sections.filter((s) => s.items.length > 0);
+                                if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                return (
+                                    <div className="space-y-0">
+                                        {visible.map((sec) => {
+                                            const isOpen = customerRelatedSectionsOpen.has(sec.key);
+                                            return (
+                                                <section key={sec.key} className="mb-4">
+                                                    <button type="button" onClick={() => toggleCustomerRelatedSection(sec.key)} className={`w-full flex items-center justify-between gap-2 text-left py-2 border-b border-alloy-stone/30 ${DRAWER_SECTION_HEADER_CLASS} mb-2`} aria-expanded={isOpen}>
+                                                        <span>{sec.title}</span>
+                                                        <span className="text-alloy-muted text-sm">{isOpen ? "−" : "+"}</span>
+                                                    </button>
+                                                    {isOpen && (
+                                                        <ul className="space-y-0 mt-2">
+                                                            {sec.items.map((item) => (
+                                                                <li key={item.id}>
+                                                                    {item.entityType ? (
+                                                                        <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                            <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                            {sec.key === "contacts" && primaryId === item.id && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                            <div className="font-medium">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </div>
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </section>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
+                        </div>
+                    )}
+                    {drawerTab === "related" && ["opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
-                            <RelatedRecordsTabs entityType={drawer.type === "customers" ? "customer" : drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
+                            <RelatedRecordsTabs entityType={drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (

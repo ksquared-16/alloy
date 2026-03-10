@@ -23,9 +23,17 @@ interface AdminDrawerState {
     defaultSchedulePrefill?: SchedulePrefill;
 }
 
+export type DrawerStackItem = { type: AdminDrawerEntityType; id: string };
+
 interface AdminDrawerContextValue {
     drawer: AdminDrawerState;
+    /** When opening a linked record from inside a drawer, the previous drawer is pushed here. */
+    stack: DrawerStackItem[];
+    canGoBack: boolean;
+    /** Top of stack (the drawer we would return to on Back). */
+    previousDrawer: DrawerStackItem | null;
     openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => void;
+    goBack: () => void;
     closeDrawer: () => void;
 }
 
@@ -39,23 +47,43 @@ export function useAdminDrawer() {
 
 export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
+    const [stack, setStack] = useState<DrawerStackItem[]>([]);
 
     const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => {
-        setDrawer({
-            type: params.type,
-            id: params.id,
-            defaultWorkflowEntityType: params.defaultWorkflowEntityType,
-            defaultCustomerId: params.defaultCustomerId,
-            defaultSchedulePrefill: params.defaultSchedulePrefill,
+        setDrawer((prev) => {
+            const prevType = prev.type;
+            const prevId = prev.id;
+            if (prevType != null && prevId != null) {
+                setStack((s) => [...s, { type: prevType, id: prevId }]);
+            }
+            return {
+                type: params.type,
+                id: params.id,
+                defaultWorkflowEntityType: params.defaultWorkflowEntityType,
+                defaultCustomerId: params.defaultCustomerId,
+                defaultSchedulePrefill: params.defaultSchedulePrefill,
+            };
+        });
+    }, []);
+
+    const goBack = useCallback(() => {
+        setStack((s) => {
+            const next = [...s];
+            const item = next.pop();
+            if (item) setDrawer({ type: item.type, id: item.id });
+            return next;
         });
     }, []);
 
     const closeDrawer = useCallback(() => {
         setDrawer({ type: null, id: null });
+        setStack([]);
     }, []);
 
+    const previousDrawer = stack.length > 0 ? stack[stack.length - 1] : null;
+
     return (
-        <AdminDrawerContext.Provider value={{ drawer, openDrawer, closeDrawer }}>
+        <AdminDrawerContext.Provider value={{ drawer, stack, canGoBack: stack.length > 0, previousDrawer, openDrawer, goBack, closeDrawer }}>
             {children}
         </AdminDrawerContext.Provider>
     );

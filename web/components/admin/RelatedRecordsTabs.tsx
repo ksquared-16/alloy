@@ -139,11 +139,6 @@ export default function RelatedRecordsTabs({
                 { key: "city", label: "City" },
                 { key: "state", label: "State" },
             ]},
-            { key: "payments", label: "Payments", entityType: "payments", dataKey: "payments", columns: [
-                { key: "amount_cents", label: "Amount", render: (v) => v != null ? formatMoneyFromDollars(Number(v) / 100) : "—" },
-                { key: "status_key", label: "Status" },
-                { key: "paid_at", label: "Payment date", render: (v, row) => (v ? new Date(v as string).toLocaleDateString() : (row?.created_at ? new Date((row as { created_at: string }).created_at).toLocaleDateString() : "—")) },
-            ]},
             { key: "customer_subscriptions", label: "Subscriptions", entityType: "subscriptions", dataKey: "customer_subscriptions", columns: [
                 { key: "status", label: "Status" },
                 { key: "start_date", label: "Start date", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
