@@ -816,7 +816,7 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id, refetchMemberLinks]);
 
     const refetchMemberRelated = useCallback(() => {
-        if (drawer.type !== "customer_member" && drawer.type !== "customer_members") return;
+        if (drawer.type !== "customer_members") return;
         if (!drawer.id || drawer.id === "new") return;
         setMemberRelatedDataLoading(true);
         fetch(`/api/admin/related/customer_member/${drawer.id}`)
@@ -2264,12 +2264,12 @@ export default function AdminEntityDrawer() {
                         </div>
                     )}
                     {/* Legacy customer_members related block removed - now using memberRelatedData + EntityDrawerSection above */}
-                    {false && drawer.type === "customer_members_legacy_remove" && (
+                    {false && (drawer.type as string) === "customer_members_legacy_remove" && (
                         <div className="pt-2 space-y-4 mb-4">
                             <section>
                                 <div className="flex items-center justify-between gap-2 mb-2">
                                     <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b]">Linked contacts (Guardians)</h4>
-                                    {canMutate && data && (data.customer_id as string) && drawer.id && drawer.id !== "new" && (
+                                    {canMutate && data && (data?.customer_id as string) && drawer.id && drawer.id !== "new" && (
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -2277,7 +2277,7 @@ export default function AdminEntityDrawer() {
                                                 setMemberLinkRoleKey(memberRelatedRoles[0]?.role_key ?? "");
                                                 setMemberLinkContactId("");
                                                 setMemberLinkError(null);
-                                                const cid = data.customer_id as string;
+                                                const cid = data!.customer_id as string;
                                                 fetch(`/api/admin/related/customer/${cid}`)
                                                     .then((r) => (r.ok ? r.json() : { contacts: [] }))
                                                     .then((json: { contacts?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] }) => {
@@ -2300,7 +2300,7 @@ export default function AdminEntityDrawer() {
                                 </div>
                                 {!data ? (
                                     <p className="text-sm text-[#59678b]">Loading…</p>
-                                ) : !(data.customer_id as string) ? (
+                                ) : !(data?.customer_id as string) ? (
                                     <p className="text-sm text-[#59678b]">No customer linked — link a family/customer first.</p>
                                 ) : memberRelatedLinksLoading ? (
                                     <p className="text-sm text-[#59678b]">Loading…</p>
