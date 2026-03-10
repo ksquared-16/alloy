@@ -41,6 +41,15 @@ type VendorFormData = {
     max_daily_jobs?: number | "";
     payout_percent?: number | "";
     service_area_zip_codes?: string;
+    external_source?: string;
+    external_id?: string;
+    w9_received?: boolean;
+    ach_verified?: boolean;
+    consent_contractor_agreement?: boolean;
+    consent_legal?: boolean;
+    consent_marketing?: boolean;
+    payout_override_type?: string;
+    payout_override_value?: number | "";
 };
 
 /** Contact drawer: vendor linked via contacts.vendor_id (from entity GET _contact_vendor). */
@@ -528,6 +537,14 @@ export default function AdminEntityDrawer() {
     };
     const [customerRelatedData, setCustomerRelatedData] = useState<CustomerRelatedPayload | null>(null);
     const [customerRelatedLoading, setCustomerRelatedLoading] = useState(false);
+    type VendorRelatedPayload = {
+        jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null }[];
+        schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
+        contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null; _role?: string | null; _is_primary?: boolean }[];
+        assignments: { id: string; schedule_id?: string; vendor_id?: string; assignment_status_id?: string | null; created_at?: string }[];
+    };
+    const [vendorRelatedData, setVendorRelatedData] = useState<VendorRelatedPayload | null>(null);
+    const [vendorRelatedLoading, setVendorRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -570,11 +587,13 @@ export default function AdminEntityDrawer() {
             setContactCreateError(null);
             setContactRelatedData(null);
             setCustomerRelatedData(null);
+            setVendorRelatedData(null);
             return;
         }
         setDrawerTab("overview");
         setContactRelatedData(null);
         setCustomerRelatedData(null);
+        setVendorRelatedData(null);
         setLoading(true);
         setError(null);
         setIsEditing(false);
@@ -617,6 +636,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setCustomerRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, customerRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "vendors" || !drawer.id) {
+            setVendorRelatedData(null);
+            return;
+        }
+        if (drawerTab === "related" && !vendorRelatedData) {
+            setVendorRelatedLoading(true);
+            fetch(`/api/admin/related/vendor/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: VendorRelatedPayload | null) => setVendorRelatedData(json ?? null))
+                .catch(() => setVendorRelatedData(null))
+                .finally(() => setVendorRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, vendorRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
@@ -1047,10 +1081,19 @@ export default function AdminEntityDrawer() {
                 owns_supplies?: boolean | null;
                 max_daily_jobs?: number | null;
                 payout_percent?: number | null;
+                external_source?: string | null;
+                external_id?: string | null;
+                w9_received?: boolean | null;
+                ach_verified?: boolean | null;
+                consent_contractor_agreement?: boolean | null;
+                consent_legal?: boolean | null;
+                consent_marketing?: boolean | null;
+                payout_override_type?: string | null;
+                payout_override_value?: number | null;
             };
             const vendorForm: VendorFormData = {
                 vendor_status_id: vendorData.vendor_status_id ?? "",
-                status_key: (data.status_key as string) ?? "",
+                status_key: (data.status_key ?? (data as { status?: string | null }).status) as string ?? "",
                 name: vendorData.name ?? "",
                 company_name: vendorData.company_name ?? "",
                 phone: vendorData.phone ?? "",
@@ -1066,6 +1109,15 @@ export default function AdminEntityDrawer() {
                 max_daily_jobs: typeof vendorData.max_daily_jobs === "number" ? vendorData.max_daily_jobs : "",
                 payout_percent: typeof vendorData.payout_percent === "number" ? vendorData.payout_percent : "",
                 service_area_zip_codes: Array.isArray(vendorData.service_area_zip_codes) ? vendorData.service_area_zip_codes.join(", ") : "",
+                external_source: vendorData.external_source ?? "",
+                external_id: vendorData.external_id ?? "",
+                w9_received: !!vendorData.w9_received,
+                ach_verified: !!vendorData.ach_verified,
+                consent_contractor_agreement: !!vendorData.consent_contractor_agreement,
+                consent_legal: !!vendorData.consent_legal,
+                consent_marketing: !!vendorData.consent_marketing,
+                payout_override_type: vendorData.payout_override_type ?? "",
+                payout_override_value: typeof vendorData.payout_override_value === "number" ? vendorData.payout_override_value : "",
             };
             setFormData(vendorForm);
         } else if (drawer.type === "schedules") {
@@ -1384,9 +1436,9 @@ export default function AdminEntityDrawer() {
                 external_id: (data.external_id as string) ?? "",
             };
         } else if (drawer.type === "vendors") {
-            const v = data as { name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null };
+            const v = data as { name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null; external_source?: string | null; external_id?: string | null; w9_received?: boolean | null; ach_verified?: boolean | null; consent_contractor_agreement?: boolean | null; consent_legal?: boolean | null; consent_marketing?: boolean | null; payout_override_type?: string | null; payout_override_value?: number | null };
             initial = {
-                status_key: (data.status_key as string) ?? "",
+                status_key: ((data.status_key ?? (data as { status?: string | null }).status) as string) ?? "",
                 name: v.name ?? "",
                 company_name: v.company_name ?? "",
                 phone: v.phone ?? "",
@@ -1402,6 +1454,15 @@ export default function AdminEntityDrawer() {
                 max_daily_jobs: typeof v.max_daily_jobs === "number" ? v.max_daily_jobs : "",
                 payout_percent: typeof v.payout_percent === "number" ? v.payout_percent : "",
                 service_area_zip_codes: Array.isArray(v.service_area_zip_codes) ? v.service_area_zip_codes.join(", ") : "",
+                external_source: v.external_source ?? "",
+                external_id: v.external_id ?? "",
+                w9_received: !!v.w9_received,
+                ach_verified: !!v.ach_verified,
+                consent_contractor_agreement: !!v.consent_contractor_agreement,
+                consent_legal: !!v.consent_legal,
+                consent_marketing: !!v.consent_marketing,
+                payout_override_type: v.payout_override_type ?? "",
+                payout_override_value: typeof v.payout_override_value === "number" ? v.payout_override_value : "",
             };
         } else if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
@@ -1607,6 +1668,7 @@ export default function AdminEntityDrawer() {
                 payload.service_area_zip_codes = zipsStr ? String(zipsStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
                 if (payload.max_daily_jobs === "") payload.max_daily_jobs = null;
                 if (payload.payout_percent === "") payload.payout_percent = null;
+                if (payload.payout_override_value === "") payload.payout_override_value = null;
             }
             if (drawer.type === "locations") {
                 const locPayload: Record<string, unknown> = {};
@@ -2537,6 +2599,59 @@ export default function AdminEntityDrawer() {
                             })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
+                    {drawerTab === "related" && drawer.type === "vendors" && drawer.id && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-related>
+                            {vendorRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : vendorRelatedData ? (() => {
+                                const d = vendorRelatedData;
+                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string; isPrimary?: boolean }[] }[] = [
+                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || (c.status_key as string) || undefined, isPrimary: !!(c as { _is_primary?: boolean })._is_primary })) },
+                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.job_status_id ? "Job" : null, j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "assignments", title: "Assignments", defaultExpanded: false, items: (d.assignments ?? []).map((a) => ({ id: a.id, label: `Assignment`, meta: a.created_at ? formatDateTime(a.created_at as string) : undefined })) },
+                                ];
+                                const visible = sections.filter((s) => s.items.length > 0);
+                                if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                return (
+                                    <>
+                                        {visible.map((sec) => (
+                                            <EntityDrawerSection
+                                                key={sec.key}
+                                                config={{
+                                                    key: sec.key,
+                                                    title: sec.title,
+                                                    defaultExpanded: sec.defaultExpanded,
+                                                    collapsible: true,
+                                                    gridCols: 1,
+                                                    fields: [],
+                                                }}
+                                                defaultExpanded={sec.defaultExpanded}
+                                            >
+                                                <ul className="space-y-0 list-none p-0 m-0">
+                                                    {sec.items.map((item) => (
+                                                        <li key={item.id}>
+                                                            {item.entityType ? (
+                                                                <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                    {(item as { isPrimary?: boolean }).isPrimary && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
+                                                                </button>
+                                                            ) : (
+                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                    <div className="font-medium">{item.label}</div>
+                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                </div>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </EntityDrawerSection>
+                                        ))}
+                                    </>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
+                        </div>
+                    )}
                     {drawerTab === "related" && ["opportunities", "jobs", "locations"].includes(drawer.type) && drawer.id && (
                         <div className="pt-2">
                             <RelatedRecordsTabs entityType={drawer.type === "opportunities" ? "opportunity" : drawer.type === "locations" ? "location" : "job"} entityId={drawer.id} />
@@ -2701,6 +2816,35 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
+                    {drawerTab === "documents" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-4">
+                            <section>
+                                <h3 className={DRAWER_SECTION_HEADER_CLASS}>Verification Documents</h3>
+                                {(() => {
+                                    const insurancePath = (data as { insurance_doc_path?: string | null })?.insurance_doc_path;
+                                    const driversPath = (data as { drivers_license_doc_path?: string | null })?.drivers_license_doc_path;
+                                    const hasAny = insurancePath || driversPath;
+                                    if (!hasAny) return <p className="text-sm text-alloy-midnight/60">No documents available.</p>;
+                                    return (
+                                        <ul className="space-y-2">
+                                            {insurancePath && (
+                                                <li className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-alloy-stone/10">
+                                                    <span className="text-sm font-medium text-alloy-forge/90">Insurance document</span>
+                                                    <button type="button" onClick={async () => { const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(insurancePath)}`); const json = await res.json().catch(() => ({})); if (json.ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank"); else alert((json as { error?: string }).error || "Failed to get link"); }} className="text-xs px-2 py-1 border border-alloy-blue/50 rounded hover:bg-alloy-blue/10 text-alloy-blue shrink-0">View</button>
+                                                </li>
+                                            )}
+                                            {driversPath && (
+                                                <li className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-alloy-stone/10">
+                                                    <span className="text-sm font-medium text-alloy-forge/90">Driver&apos;s license</span>
+                                                    <button type="button" onClick={async () => { const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(driversPath)}`); const json = await res.json().catch(() => ({})); if (json.ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank"); else alert((json as { error?: string }).error || "Failed to get link"); }} className="text-xs px-2 py-1 border border-alloy-blue/50 rounded hover:bg-alloy-blue/10 text-alloy-blue shrink-0">View</button>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    );
+                                })()}
+                            </section>
+                        </div>
+                    )}
                     {drawerTab === "activity" && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>
                             {drawer.type === "customers" && drawer.id && drawer.id !== "new" ? (
@@ -2757,6 +2901,20 @@ export default function AdminEntityDrawer() {
                                             {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "vendors" && drawer.id && drawer.id !== "new" ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {(data as { submitted_at?: string | null })?.submitted_at != null ? <li>Submitted: {formatDateTime(String((data as { submitted_at: string }).submitted_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && !(data as { submitted_at?: string | null })?.submitted_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
                                         )}
                                     </section>

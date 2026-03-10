@@ -69,6 +69,8 @@ function formatFieldValue(
         }
       }
       return String(value);
+    case "primary_yes_no":
+      return value === true ? "Yes" : "No";
     case "text":
     case "custom":
     default:
@@ -164,6 +166,22 @@ function renderFieldEditNode(
     );
   }
 
+  if (hint === "primary_yes_no") {
+    return (
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={!!value}
+          onChange={(e) => onFieldChange(key, e.target.checked)}
+          onBlur={onBlur}
+          disabled={disabled}
+          className="rounded border-admin-border"
+        />
+        <span className="text-sm text-alloy-forge/90">{value ? "Yes" : "No"}</span>
+      </label>
+    );
+  }
+
   return (
     <input
       type="text"
@@ -217,7 +235,7 @@ export default function EntityDrawerOverview({
 
         const children: ReactNode = hasFields
           ? section.fields!.map((field: EntityDrawerFieldConfig) => {
-              const rawValue = editFormData[field.key] !== undefined ? editFormData[field.key] : record[field.key];
+              const rawValue = editFormData[field.key] !== undefined ? editFormData[field.key] : (field.key === "status_key" && record._status_display != null ? record._status_display : record[field.key]);
               const displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
               const showEdit = !!(canEdit && field.editable && onFieldChange);
               const editNode = showEdit

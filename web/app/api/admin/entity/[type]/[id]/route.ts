@@ -335,7 +335,10 @@ export async function GET(
         if (type === "vendors") {
             const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).single();
             if (vErr || !vendor) return NextResponse.json(vErr?.message || "Not found", { status: vErr?.code === "PGRST116" ? 404 : 500 });
+            const v = vendor as Record<string, unknown> & { status_key?: string | null; status?: string | null; primary_contact_id?: string | null };
             const out: Record<string, unknown> = { ...vendor };
+            out._status_display = v.status_key ?? v.status ?? null;
+
             const statusId = (vendor as { vendor_status_id?: string }).vendor_status_id;
             if (statusId) {
                 const { data: statusRow } = await supabase.from("vendor_statuses").select("key, label").eq("id", statusId).single();
@@ -346,11 +349,36 @@ export async function GET(
             const { data: statusOptions } = await supabase.from("vendor_statuses").select("id, key, label").eq("is_active", true).order("position", { ascending: true });
             out._vendor_status_options = statusOptions ?? [];
 
+            const primaryContactId = v.primary_contact_id;
+            if (primaryContactId) {
+                const { data: pc } = await supabase
+                    .from("contacts")
+                    .select("id, first_name, last_name, email, phone")
+                    .eq("id", primaryContactId)
+                    .single();
+                const c = pc as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null } | null;
+                out._primary_contact = pc;
+                out._primary_contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || null : null;
+                out._primary_contact_email = c?.email ?? null;
+                out._primary_contact_phone = c?.phone ?? null;
+            } else {
+                out._primary_contact = null;
+                out._primary_contact_name = null;
+                out._primary_contact_email = null;
+                out._primary_contact_phone = null;
+            }
+
+            const { data: jobsCountRows } = await supabase
+                .from("jobs")
+                .select("id")
+                .eq("assigned_vendor_id", id);
+            out._jobs_count = (jobsCountRows ?? []).length;
+
             const JOBS_LIMIT = 25;
             const { data: vendorJobs } = await supabase
                 .from("jobs")
-                .select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id")
-                .eq("vendor_id", id)
+                .select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id")
+                .eq("assigned_vendor_id", id)
                 .order("created_at", { ascending: false })
                 .limit(JOBS_LIMIT);
             out._vendor_jobs = vendorJobs ?? [];
@@ -364,22 +392,17 @@ export async function GET(
                 : { data: [] as unknown[] };
             out._vendor_schedules = vendorSchedules ?? [];
 
-            const { data: vendorContactsData } = await supabase
-                .from("contacts")
-                .select("id, first_name, last_name, email, phone, vendor_contact_role")
-                .eq("vendor_id", id);
-            out._vendor_contacts = vendorContactsData ?? [];
-
-            if ((vendor as { primary_contact_id?: string }).primary_contact_id) {
-                const pc = await supabase
-                    .from("contacts")
-                    .select("id, first_name, last_name, email, phone")
-                    .eq("id", (vendor as { primary_contact_id: string }).primary_contact_id)
-                    .single();
-                out._primary_contact = pc.data ?? null;
-            } else {
-                out._primary_contact = null;
-            }
+            const { data: vcRows } = await supabase.from("vendor_contacts").select("contact_id, role").eq("vendor_id", id);
+            const contactIds = (vcRows ?? []).map((r: { contact_id: string }) => r.contact_id);
+            const { data: vendorContactsData } = contactIds.length > 0
+                ? await supabase.from("contacts").select("id, first_name, last_name, email, phone").in("id", contactIds)
+                : { data: [] as unknown[] };
+            type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
+            const contactsWithRole = ((vendorContactsData ?? []) as ContactRow[]).map((c) => {
+                const link = (vcRows ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
+                return { ...c, _role: link?.role ?? null };
+            });
+            out._vendor_contacts = contactsWithRole;
 
             return NextResponse.json(out);
         }

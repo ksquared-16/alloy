@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { Filter } from "lucide-react";
 
-interface Vendor {
+export interface Vendor {
     id: string;
-    created_at: string;
+    created_at: string | null;
+    updated_at: string | null;
     submitted_at: string | null;
     name: string | null;
     company_name: string | null;
@@ -19,10 +20,21 @@ interface Vendor {
     phone: string | null;
     vendor_status_id: string | null;
     status_key?: string | null;
+    status?: string | null;
+    primary_contact_id: string | null;
+    payout_percent: number | null;
+    w9_received?: boolean | null;
+    ach_verified?: boolean | null;
     service_area_zip_codes: string[] | null;
     days_available: string[] | null;
     _vendor_status_key: string;
     _vendor_status_label: string;
+    _status_display: string | null;
+    _primary_contact_name: string | null;
+    _vendor_email: string | null;
+    _vendor_phone: string | null;
+    _jobs_count: number;
+    _updated: string | null;
 }
 
 type StatusOption = { status_key: string; status_label: string | null };
@@ -30,23 +42,6 @@ type StatusOption = { status_key: string; status_label: string | null };
 interface VendorsClientProps {
     initialData: Vendor[];
     error?: string;
-}
-
-function formatVendorDate(row: Vendor): string {
-    const d = row.submitted_at ?? row.created_at;
-    return d ? formatDateTime(d) : "-";
-}
-
-function formatServiceArea(zips: string[] | null): string {
-    if (!zips || zips.length === 0) return "-";
-    const count = zips.length;
-    const first = zips.slice(0, 3).join(", ");
-    return count <= 3 ? first : `${count} zips: ${first}…`;
-}
-
-function formatDaysAvailable(days: string[] | null): string {
-    if (!days || days.length === 0) return "-";
-    return days.join(", ");
 }
 
 export default function VendorsClient({
@@ -99,16 +94,17 @@ export default function VendorsClient({
         setFilterOpen(false);
     };
 
-    const columns = [
-        { key: "submitted_at", label: "Submitted", sortable: true, render: (_: unknown, row: Vendor) => formatVendorDate(row) },
-        { key: "name", label: "Name", sortable: true },
-        { key: "company_name", label: "Company", sortable: true, render: (_: unknown, row: Vendor) => row.company_name ?? "—" },
-        { key: "email", label: "Email", sortable: true },
-        { key: "phone", label: "Phone", sortable: true },
-        { key: "_vendor_status_label", label: "Status", sortable: true, render: (_: unknown, row: Vendor) => row._vendor_status_label || row.vendor_status_id || "—" },
-        { key: "service_area_zip_codes", label: "Service area", sortable: false, render: (v: string[] | null) => formatServiceArea(v) },
-        { key: "days_available", label: "Days available", sortable: false, render: (v: string[] | null) => formatDaysAvailable(v) },
-    ];
+    const columns = useMemo(
+        () =>
+            buildEntityTableColumns<Vendor>("vendors", {
+                payout_percent: (_value, row) =>
+                    row.payout_percent != null && !Number.isNaN(Number(row.payout_percent))
+                        ? `${Number(row.payout_percent)}%`
+                        : "—",
+                _jobs_count: (value) => (value != null && value !== "" ? String(value) : "0"),
+            }),
+        []
+    );
 
     const filterTrigger = (
         <div className="relative" ref={filterRef}>

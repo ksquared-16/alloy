@@ -121,9 +121,10 @@ export async function GET(
         }
 
         if (entity === "vendor") {
-            const [jobsRes, vcRes] = await Promise.all([
-                supabase.from("jobs").select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id").eq("vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+            const [jobsRes, vcRes, assignmentsRes] = await Promise.all([
+                supabase.from("jobs").select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id").eq("assigned_vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("vendor_contacts").select("id, contact_id, role").eq("vendor_id", id),
+                supabase.from("assignments").select("id, schedule_id, vendor_id, assignment_status_id, created_at").eq("vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             const schedulesRes = jobIds.length > 0
@@ -131,16 +132,19 @@ export async function GET(
                 : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
             const contactIds = (vcRes.data ?? []).map((r: { contact_id: string }) => r.contact_id);
             const contactsRes = contactIds.length > 0
-                ? await supabase.from("contacts").select("id, first_name, last_name, email, phone").in("id", contactIds)
-                : { data: [] as { id: string; first_name: string; last_name: string; email: string; phone: string }[] };
+                ? await supabase.from("contacts").select("id, first_name, last_name, email, phone, status_key").in("id", contactIds)
+                : { data: [] as { id: string; first_name: string; last_name: string; email: string; phone: string; status_key?: string }[] };
+            const primaryContactRes = await supabase.from("vendors").select("primary_contact_id").eq("id", id).maybeSingle();
+            const primaryContactId = (primaryContactRes.data as { primary_contact_id?: string } | null)?.primary_contact_id ?? null;
             const contactsWithRole = (contactsRes.data ?? []).map((c) => {
                 const link = (vcRes.data ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
-                return { ...c, _role: link?.role ?? null };
+                return { ...c, _role: link?.role ?? null, _is_primary: c.id === primaryContactId };
             });
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
                 contacts: contactsWithRole,
+                assignments: assignmentsRes.data ?? [],
             });
         }
 

@@ -21,6 +21,15 @@ const ALLOWED_KEYS = [
     "max_daily_jobs",
     "payout_percent",
     "service_area_zip_codes",
+    "external_source",
+    "external_id",
+    "w9_received",
+    "ach_verified",
+    "consent_contractor_agreement",
+    "consent_legal",
+    "consent_marketing",
+    "payout_override_type",
+    "payout_override_value",
 ] as const;
 
 function toNull(v: unknown): unknown {
@@ -52,10 +61,12 @@ export async function PATCH(
                 updates[key] = raw === "" || raw === null ? null : (typeof raw === "string" ? raw.trim() : raw);
             } else if (key === "days_available" || key === "service_area_zip_codes") {
                 updates[key] = Array.isArray(raw) ? raw : null;
-            } else if (key === "owns_supplies") {
+            } else if (key === "owns_supplies" || key === "w9_received" || key === "ach_verified" || key === "consent_contractor_agreement" || key === "consent_legal" || key === "consent_marketing") {
                 updates[key] = !!raw;
-            } else if (key === "max_daily_jobs" || key === "payout_percent") {
+            } else if (key === "max_daily_jobs" || key === "payout_percent" || key === "payout_override_value") {
                 updates[key] = raw === "" || raw === null ? null : (typeof raw === "number" ? raw : Number(raw));
+            } else if (key === "payout_override_type") {
+                updates[key] = raw === "" || raw === null ? null : (typeof raw === "string" ? raw.trim() : raw);
             } else {
                 updates[key] = toNull(raw);
             }
