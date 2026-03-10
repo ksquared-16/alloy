@@ -554,6 +554,15 @@ export default function AdminEntityDrawer() {
     };
     const [paymentRelatedData, setPaymentRelatedData] = useState<PaymentRelatedPayload | null>(null);
     const [paymentRelatedLoading, setPaymentRelatedLoading] = useState(false);
+    type DiscountRedemptionRelatedPayload = {
+        customer: { id: string; name: string | null; created_at?: string } | null;
+        contact: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; created_at?: string } | null;
+        opportunity: { id: string; name?: string | null; created_at?: string; status_key?: string | null; quote_total?: number | null } | null;
+        job: ({ id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null; created_at?: string; _job_label?: string | null } & Record<string, unknown>) | null;
+        discount_code: { id: string; code?: string | null; is_active?: boolean | null; discount_type?: string | null; discount_value?: number | null; first_job_only?: boolean | null; starts_at?: string | null; ends_at?: string | null } | null;
+    };
+    const [redemptionRelatedData, setRedemptionRelatedData] = useState<DiscountRedemptionRelatedPayload | null>(null);
+    const [redemptionRelatedLoading, setRedemptionRelatedLoading] = useState(false);
     type VendorRelatedPayload = {
         jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null }[];
         schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
@@ -618,6 +627,7 @@ export default function AdminEntityDrawer() {
         setVendorRelatedData(null);
         setOpportunityRelatedData(null);
         setPaymentRelatedData(null);
+        setRedemptionRelatedData(null);
         return;
     }
     setDrawerTab("overview");
@@ -682,6 +692,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setPaymentRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, paymentRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "discount_redemptions" || !drawer.id) {
+            setRedemptionRelatedData(null);
+            return;
+        }
+        if ((drawerTab === "related" || drawerTab === "activity") && !redemptionRelatedData) {
+            setRedemptionRelatedLoading(true);
+            fetch(`/api/admin/related/discount_redemption/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: DiscountRedemptionRelatedPayload | null) => setRedemptionRelatedData(json ?? null))
+                .catch(() => setRedemptionRelatedData(null))
+                .finally(() => setRedemptionRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, redemptionRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
@@ -1965,7 +1990,9 @@ export default function AdminEntityDrawer() {
                                                     : `${vendorSingular}: ${(data.name as string) || (drawer.id ?? "")}`
                                                 : drawer.type === "payments"
                                                     ? `Payment: ${(data._payment_label as string) || ("Payment #" + (drawer.id ?? "").slice(-6))}`
-                                                    : drawer.type === "subscriptions"
+                                                    : drawer.type === "discount_redemptions"
+                                                        ? `Redemption: ${(data._code as string) || "Discount"}${(data._customer_name as string) ? ` · ${data._customer_name}` : ""}`
+                                                        : drawer.type === "subscriptions"
                                                         ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
                                                         : "Details"
         : loading
@@ -2251,7 +2278,7 @@ export default function AdminEntityDrawer() {
         </div>
     );
 
-    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments", "discount_redemptions"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
@@ -2995,6 +3022,67 @@ export default function AdminEntityDrawer() {
                             })() : <p className="text-sm text-alloy-midnight/60">No ledger activity recorded.</p>}
                         </div>
                     )}
+                    {drawerTab === "related" && drawer.type === "discount_redemptions" && drawer.id && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-related>
+                            {redemptionRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : redemptionRelatedData ? (() => {
+                                const d = redemptionRelatedData;
+                                const hasCustomer = !!d.customer;
+                                const hasContact = !!d.contact;
+                                const hasOpportunity = !!d.opportunity;
+                                const hasJob = !!d.job;
+                                const hasCode = !!d.discount_code;
+                                if (!hasCustomer && !hasContact && !hasOpportunity && !hasJob && !hasCode) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                return (
+                                    <>
+                                        {hasCustomer && (
+                                            <EntityDrawerSection key="customer" config={{ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <button type="button" onClick={() => openDrawer({ type: "customers", id: d.customer!.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                    <div className="font-medium text-alloy-forge/90 text-sm">{(d.customer as { name?: string | null }).name ?? "Customer"}</div>
+                                                    {d.customer?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.customer.created_at)}</div>}
+                                                </button>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasContact && (
+                                            <EntityDrawerSection key="contact" config={{ key: "contact", title: "Contact", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: (d.contact as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                    <div className="font-medium text-alloy-forge/90 text-sm">{[d.contact.first_name, d.contact.last_name].filter(Boolean).join(" ") || "Contact"}</div>
+                                                    {d.contact.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.contact.created_at)}</div>}
+                                                </button>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasOpportunity && (
+                                            <EntityDrawerSection key="opportunity" config={{ key: "opportunity", title: "Opportunity", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <button type="button" onClick={() => openDrawer({ type: "opportunities", id: (d.opportunity as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                    <div className="font-medium text-alloy-forge/90 text-sm">{(d.opportunity as { name?: string | null }).name ?? "Opportunity"}</div>
+                                                    {(d.opportunity as { created_at?: string }).created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime((d.opportunity as { created_at: string }).created_at)}</div>}
+                                                </button>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasJob && (
+                                            <EntityDrawerSection key="job" config={{ key: "job", title: "Job", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <button type="button" onClick={() => openDrawer({ type: "jobs", id: (d.job as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                    <div className="font-medium text-alloy-forge/90 text-sm">{(d.job as { _job_label?: string | null })._job_label ?? (d.job as { title?: string | null }).title ?? "Job"}</div>
+                                                    {(d.job as { created_at?: string })?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime((d.job as { created_at: string }).created_at)}</div>}
+                                                </button>
+                                            </EntityDrawerSection>
+                                        )}
+                                        {hasCode && (
+                                            <EntityDrawerSection key="discount_code" config={{ key: "discount_code", title: "Discount Code", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
+                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                    <div className="font-medium">{(d.discount_code as { code?: string | null }).code ?? "—"}</div>
+                                                    <div className="text-xs text-alloy-muted mt-0.5">
+                                                        {[(d.discount_code as { is_active?: boolean | null }).is_active != null ? ((d.discount_code as { is_active: boolean }).is_active ? "Active" : "Inactive") : null, (d.discount_code as { discount_type?: string | null }).discount_type, (d.discount_code as { discount_value?: number | null }).discount_value != null ? `${(d.discount_code as { discount_value: number }).discount_value}${(d.discount_code as { discount_type?: string | null }).discount_type === "percent" ? "%" : ""}` : null, (d.discount_code as { first_job_only?: boolean | null }).first_job_only ? "First job only" : null].filter(Boolean).join(" · ") || "—"}
+                                                    </div>
+                                                </div>
+                                            </EntityDrawerSection>
+                                        )}
+                                    </>
+                                );
+                            })() : <p className="text-sm text-alloy-midnight/60">No related records.</p>}
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -3332,6 +3420,20 @@ export default function AdminEntityDrawer() {
                                             {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "discount_redemptions" && drawer.id ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {(data?.created_at != null || (data as { redeemed_at?: string | null })?.redeemed_at != null) ? (
+                                                <li>Redemption created: {formatDateTime(String((data?.created_at ?? (data as { redeemed_at: string }).redeemed_at)))}</li>
+                                            ) : null}
+                                        </ul>
+                                        {!data?.created_at && !(data as { redeemed_at?: string | null })?.redeemed_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
                                         )}
                                     </section>

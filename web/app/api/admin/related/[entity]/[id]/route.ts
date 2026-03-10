@@ -288,6 +288,40 @@ export async function GET(
             });
         }
 
+        if (entity === "discount_redemption") {
+            const { data: redemptionRow } = await supabase.from("discount_redemptions").select("id, discount_code_id, customer_id, contact_id, opportunity_id, job_id").eq("id", id).maybeSingle();
+            if (!redemptionRow) {
+                return NextResponse.json({ error: "Discount redemption not found" }, { status: 404 });
+            }
+            const r = redemptionRow as { discount_code_id: string; customer_id?: string | null; contact_id?: string | null; opportunity_id?: string | null; job_id?: string | null };
+            const customerId = r.customer_id ?? null;
+            const contactId = r.contact_id ?? null;
+            const opportunityId = r.opportunity_id ?? null;
+            const jobId = r.job_id ?? null;
+            const codeId = r.discount_code_id;
+
+            const [customerRes, contactRes, opportunityRes, jobRes, codeRes] = await Promise.all([
+                customerId ? supabase.from("customers").select("id, name, created_at").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
+                contactId ? supabase.from("contacts").select("id, first_name, last_name, email, phone, created_at").eq("id", contactId).maybeSingle() : Promise.resolve({ data: null }),
+                opportunityId ? supabase.from("opportunities").select("id, name, created_at, status_key, quote_total").eq("id", opportunityId).maybeSingle() : Promise.resolve({ data: null }),
+                jobId ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer, created_at").eq("id", jobId).maybeSingle() : Promise.resolve({ data: null }),
+                codeId ? supabase.from("discount_codes").select("id, code, is_active, discount_type, discount_value, first_job_only, starts_at, ends_at").eq("id", codeId).maybeSingle() : Promise.resolve({ data: null }),
+            ]);
+
+            const job = jobRes.data as { id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
+            const _job_label = job
+                ? ((job.title && String(job.title).trim()) || (job.service_key && String(job.service_key).trim()) || (job.job_number_for_customer && String(job.job_number_for_customer).trim()) || `Job #${job.id.slice(-6)}`)
+                : null;
+
+            return NextResponse.json({
+                customer: customerRes.data ?? null,
+                contact: contactRes.data ?? null,
+                opportunity: opportunityRes.data ?? null,
+                job: jobRes.data ? { ...jobRes.data, _job_label } : null,
+                discount_code: codeRes.data ?? null,
+            });
+        }
+
         if (entity === "customer_member") {
             const { data: memberRow } = await supabase
                 .from("customer_members")

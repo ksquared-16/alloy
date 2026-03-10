@@ -374,7 +374,41 @@ export async function GET(
         if (type === "discount_redemptions") {
             const { data, error } = await supabase.from("discount_redemptions").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            return NextResponse.json(data);
+            const redemption = data as Record<string, unknown> & { discount_code_id: string; customer_id?: string | null; contact_id?: string | null; opportunity_id?: string | null; job_id?: string | null };
+            const out: Record<string, unknown> = { ...redemption };
+            if (redemption.created_at == null && (redemption.redeemed_at != null)) out.created_at = redemption.redeemed_at;
+            const codeId = redemption.discount_code_id;
+            if (codeId) {
+                const { data: dc } = await supabase.from("discount_codes").select("code, discount_type, discount_value, is_active, first_job_only").eq("id", codeId).maybeSingle();
+                const c = dc as { code?: string | null; discount_type?: string | null; discount_value?: number | string | null; is_active?: boolean | null; first_job_only?: boolean | null } | null;
+                out._code = c?.code ?? null;
+                out._discount_type = c?.discount_type ?? null;
+                const val = c?.discount_value;
+                if (c?.discount_type === "percent" && val != null) out._discount_value = `${Number(val)}%`;
+                else if (val != null) out._discount_value = typeof val === "number" ? `$${val.toFixed(2)}` : String(val);
+                else out._discount_value = null;
+            } else {
+                out._code = null; out._discount_type = null; out._discount_value = null;
+            }
+            if (redemption.customer_id) {
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", redemption.customer_id).maybeSingle();
+                out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            } else out._customer_name = null;
+            if (redemption.contact_id) {
+                const { data: contact } = await supabase.from("contacts").select("first_name, last_name").eq("id", redemption.contact_id).maybeSingle();
+                const ct = contact as { first_name?: string | null; last_name?: string | null } | null;
+                out._contact_name = ct ? [ct.first_name, ct.last_name].filter(Boolean).join(" ") || null : null;
+            } else out._contact_name = null;
+            if (redemption.opportunity_id) {
+                const { data: opp } = await supabase.from("opportunities").select("name").eq("id", redemption.opportunity_id).maybeSingle();
+                out._opportunity_name = (opp as { name?: string | null } | null)?.name ?? null;
+            } else out._opportunity_name = null;
+            if (redemption.job_id) {
+                const { data: job } = await supabase.from("jobs").select("id, title, service_key, job_number_for_customer").eq("id", redemption.job_id).maybeSingle();
+                const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
+                out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(redemption.job_id as string).slice(-6)}`) : null;
+            } else out._job_label = null;
+            return NextResponse.json(out);
         }
         if (type === "workflows") {
             if (id === "new") {
