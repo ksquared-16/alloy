@@ -48,10 +48,10 @@ export default function DashboardClient({ data }: DashboardClientProps) {
             </section>
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <KpiCard value={schedules.upcoming} label="Upcoming schedules" href="/admin/schedules" accent="navy" />
-                <KpiCard value={schedules.unassigned} label="Unassigned" href="/admin/schedules" />
+                <KpiCard value={schedules.unassigned} label="Unassigned" href="/admin/schedules" accent="gold" />
                 <KpiCard value={schedules.offered} label="Offered" href="/admin/schedules" accent="gold" />
                 <KpiCard value={schedules.accepted} label="Accepted" href="/admin/schedules" accent="juniper" />
-                <KpiCard value={schedules.canceled} label="Canceled" href="/admin/schedules" />
+                <KpiCard value={schedules.canceled} label="Canceled" href="/admin/schedules" accent="ember" />
             </section>
 
             {/* Financial Snapshot (GL-derived) */}

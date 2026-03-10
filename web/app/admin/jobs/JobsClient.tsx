@@ -138,7 +138,7 @@ export default function JobsClient() {
           {row.archived_at ? (
             <button type="button" onClick={() => unarchive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-muted hover:text-alloy-midnight hover:underline disabled:opacity-50">Unarchive</button>
           ) : (
-            <button type="button" onClick={() => archive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-amber-700 hover:underline disabled:opacity-50">Archive</button>
+            <button type="button" onClick={() => archive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-ember hover:underline disabled:opacity-50">Archive</button>
           )}
         </span>
       ),

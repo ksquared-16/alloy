@@ -230,23 +230,23 @@ export default function DataTable<T extends Record<string, any>>({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-admin-border bg-alloy-pine/[0.06]">
+                        <tr className="border-b border-admin-border bg-alloy-stone/25">
                             {columns.map((column) => {
                                 const isSorted = sortColumn === column.key;
                                 return (
                                     <th
                                         key={String(column.key)}
                                         className={`
-                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-midnight
+                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-forge
                                             ${isSorted ? "text-alloy-blue" : ""}
-                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-pine/10" : ""}
+                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-stone/40" : ""}
                                         `}
                                         onClick={() => column.sortable && handleSort(column.key)}
                                     >
                                         <div className="flex items-center gap-1.5">
                                             {column.label}
                                             {column.sortable && (
-                                                <span className={`inline-flex ${isSorted ? "text-alloy-blue" : "text-alloy-midnight/60"}`} aria-hidden>
+                                                <span className={`inline-flex ${isSorted ? "text-alloy-blue" : "text-alloy-forge/60"}`} aria-hidden>
                                                     {isSorted ? (
                                                         sortDirection === "asc" ? (
                                                             <ChevronUp className="h-4 w-4" />
@@ -283,7 +283,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     key={idx}
                                     className={`
                                         transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-juniper/10" : ""}
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-stone/50" : ""}
                                     `}
                                     onClick={() => onRowClick?.(row)}
                                 >
