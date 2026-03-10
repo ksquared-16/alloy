@@ -3042,9 +3042,9 @@ export default function AdminEntityDrawer() {
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
-                                        {hasContact && (
+                                        {hasContact && d.contact && (
                                             <EntityDrawerSection key="contact" config={{ key: "contact", title: "Contact", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
-                                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: (d.contact as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                <button type="button" onClick={() => openDrawer({ type: "contacts", id: d.contact!.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{[d.contact.first_name, d.contact.last_name].filter(Boolean).join(" ") || "Contact"}</div>
                                                     {d.contact.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.contact.created_at)}</div>}
                                                 </button>
