@@ -47,8 +47,8 @@ export default function Drawer({ isOpen, onClose, title, statusBadge, headerActi
                 className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-admin-surface-card border border-admin-border shadow-xl flex flex-col ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}
                 style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor } : {}) }}
             >
-                {/* Sticky header: branded Alloy Blue tint (title + actions + tabs) */}
-                <div className="sticky top-0 z-10 shrink-0 border-b border-alloy-blue/15 bg-alloy-blue/[0.1]">
+                {/* Sticky header: white/light with subtle border (dashboard-style) */}
+                <div className="sticky top-0 z-10 shrink-0 border-b border-admin-border bg-admin-surface-card">
                     {/* Row 1: full title only — no truncation */}
                     <div className="px-6 pt-4 pb-2">
                         <h2 className="text-xl font-bold text-alloy-forge leading-snug break-words">
@@ -71,7 +71,7 @@ export default function Drawer({ isOpen, onClose, title, statusBadge, headerActi
                         </button>
                     </div>
                     {headerExtra != null && headerExtra !== false && (
-                        <div className="px-6 pb-3 pt-0 border-t border-alloy-blue/15 bg-alloy-blue/[0.06]">
+                        <div className="px-6 pb-3 pt-0 border-t border-admin-border">
                             {headerExtra}
                         </div>
                     )}

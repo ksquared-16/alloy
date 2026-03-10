@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 
-/** List page header strip (Layer 3): title + metrics left, filter + CTA right. Brand-tinted surface. */
+/** List page header: white card with accent border (dashboard-style). Title + metrics left, filter + CTA right. */
 interface AdminListPageHeaderProps {
     title: string;
     /** Optional metrics: pills or counts on the same row as title */
@@ -22,7 +22,7 @@ export default function AdminListPageHeader({
     const hasToolbar = toolbarLeft != null || toolbarRight != null;
     return (
         <header
-            className="rounded-xl border border-alloy-blue/20 bg-alloy-blue/[0.12] px-6 py-4 mb-4 shadow-sm"
+            className="rounded-xl border border-admin-border border-l-4 border-l-alloy-blue bg-admin-surface-card px-6 py-4 mb-4 shadow-sm"
             role="banner"
         >
             <div className="flex flex-wrap items-center justify-between gap-4">
