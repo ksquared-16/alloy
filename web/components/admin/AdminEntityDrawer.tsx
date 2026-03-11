@@ -414,6 +414,7 @@ export default function AdminEntityDrawer() {
     const [setLocationError, setSetLocationError] = useState<string | null>(null);
     const [setLocationList, setSetLocationList] = useState<{ id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[]>([]);
     const [locationTypes, setLocationTypes] = useState<{ id: string; key: string; label: string; position: number; is_active: boolean }[]>([]);
+    const [locationCustomerOptions, setLocationCustomerOptions] = useState<{ id: string; name: string | null }[]>([]);
     const [initialJobFormData, setInitialJobFormData] = useState<Record<string, unknown> | null>(null);
     const [vendorPayout, setVendorPayout] = useState<{ policy: { mode: string; value?: number }; source: string; completed_occurrences: number; payout_percent: number } | null>(null);
     const [vendorPayoutJobId, setVendorPayoutJobId] = useState("");
@@ -647,6 +648,12 @@ export default function AdminEntityDrawer() {
         setLoading(true);
         setError(null);
         setIsEditing(false);
+        if (drawer.type === "locations" && drawer.id === "new") {
+            setData({ _create: true });
+            setLoading(false);
+            setIsEditing(true);
+            return;
+        }
         fetch(`/api/admin/entity/${drawer.type}/${drawer.id}`)
             .then((res) => {
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
@@ -883,6 +890,20 @@ export default function AdminEntityDrawer() {
             .then((r) => (r.ok ? r.json() : { location_types: [] }))
             .then((json: { location_types?: { id: string; key: string; label: string; position: number; is_active: boolean }[] }) => setLocationTypes(json.location_types ?? []))
             .catch(() => setLocationTypes([]));
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "locations") {
+            setLocationCustomerOptions([]);
+            return;
+        }
+        fetch("/api/admin/customers")
+            .then((r) => (r.ok ? r.json() : []))
+            .then((json: unknown) => {
+                const list = Array.isArray(json) ? json : (json as { customers?: { id: string; name?: string | null }[] }).customers ?? [];
+                setLocationCustomerOptions(list.map((c: { id: string; name?: string | null }) => ({ id: c.id, name: c.name ?? null })));
+            })
+            .catch(() => setLocationCustomerOptions([]));
     }, [drawer.type]);
 
     useEffect(() => {
@@ -1309,6 +1330,7 @@ export default function AdminEntityDrawer() {
         } else if (drawer.type === "locations") {
             setFormData({
                 label: data.label ?? "",
+                customer_id: (data.customer_id as string) ?? "",
                 location_type_id: (data.location_type_id as string) ?? "",
                 location_type: (data.location_type as string) ?? "",
                 is_active: data.is_active ?? true,
@@ -1964,9 +1986,14 @@ export default function AdminEntityDrawer() {
             }
             if (drawer.type === "locations") {
                 const locPayload: Record<string, unknown> = {};
-                const keys = ["label", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes"] as const;
+                const keys = ["label", "customer_id", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes"] as const;
                 for (const k of keys) {
                     if (formData[k] === undefined) continue;
+                    if (k === "customer_id") {
+                        const v = formData[k];
+                        locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
+                        continue;
+                    }
                     if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
                         locPayload[k] = typeof formData[k] === "string" ? (formData[k] as string).trim() || null : null;
                     } else if (k === "location_type_id") {
@@ -1978,6 +2005,20 @@ export default function AdminEntityDrawer() {
                         locPayload[k] = formData[k];
                     }
                 }
+                if (drawer.id === "new") {
+                    const res = await fetch("/api/admin/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
+                    const json = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error((json.error as string) || "Create failed");
+                    const newId = (json as { id?: string }).id;
+                    if (newId) {
+                        window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }));
+                        openDrawer({ type: "locations", id: newId });
+                        router.refresh();
+                    }
+                    setIsEditing(false);
+                    return;
+                }
+                delete locPayload.customer_id;
                 const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json.error as string) || "Save failed");
@@ -2111,7 +2152,9 @@ export default function AdminEntityDrawer() {
                                     ? `New ${scheduleSingular}`
                                     : `${scheduleSingular}: ${drawer.id ?? ""}`
                                 : drawer.type === "locations"
-                                    ? `Location: ${(data.label as string) || (data.address1 as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                    ? (data as { _create?: boolean })._create
+                                        ? "New Location"
+                                        : `Location: ${(data.label as string) || (data.address1 as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                     : drawer.type === "discount_redemptions"
                                         ? `Redemption: ${(data._code as string) || "Discount"}${(data._customer_name as string) ? ` · ${data._customer_name}` : ""}`
                                         : drawer.type === "workflows"
@@ -4703,10 +4746,13 @@ export default function AdminEntityDrawer() {
                                     <Field label="Owner" value={(data.customer_id as string) ? `${customerSingular} location` : "Org location"} />
                                     {isEditing ? (
                                         <>
+                                            {(data as { _create?: boolean })?._create && (
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Customer (optional)</label><select value={String(formData.customer_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, customer_id: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Org-wide —</option>{locationCustomerOptions.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}</select></div>
+                                            )}
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Name</label><input value={String(formData.label ?? "")} onChange={(e) => setFormData((f) => ({ ...f, label: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Type</label><select value={String(formData.location_type_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, location_type_id: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">— Select —</option>{locationTypes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
                                             <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Active</label></div>
-                                            {(data.customer_id as string) && <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_primary} onChange={(e) => setFormData((f) => ({ ...f, is_primary: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Primary</label></div>}
+                                            {((formData.customer_id as string) || (data.customer_id as string)) && <div className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_primary} onChange={(e) => setFormData((f) => ({ ...f, is_primary: e.target.checked }))} /><label className="text-sm text-alloy-midnight/70">Primary</label></div>}
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 1</label><input value={String(formData.address1 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address1: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Address 2</label><input value={String(formData.address2 ?? "")} onChange={(e) => setFormData((f) => ({ ...f, address2: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                             <div className="grid grid-cols-3 gap-2"><input value={String(formData.city ?? "")} onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.state ?? "")} onChange={(e) => setFormData((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.postal_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, postal_code: e.target.value }))} placeholder="ZIP" className="px-2 py-1.5 border rounded text-sm" /></div>

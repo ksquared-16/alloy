@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Filter } from "lucide-react";
 import { formatMoneyFromCents, formatDateTime } from "@/lib/adminFormatters";
 import type { FirstCleanPriceRow } from "@/app/api/admin/pricing/first-clean-prices/route";
 import type { RecurringPriceRow } from "@/app/api/admin/pricing/recurring-prices/route";
@@ -39,6 +40,8 @@ export default function PricingClient() {
     const [planTemplateId, setPlanTemplateId] = useState("");
     const [isActiveFilter, setIsActiveFilter] = useState<"" | "true" | "false">("");
     const [groupBy, setGroupBy] = useState<"none" | "pricing_mode" | "service_offering" | "plan_template">("none");
+    const [filterOpen, setFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
     const [verticals, setVerticals] = useState<VerticalOption[]>([]);
     const [serviceOfferings, setServiceOfferings] = useState<ServiceOfferingOption[]>([]);
     const [firstCleanRows, setFirstCleanRows] = useState<FirstCleanPriceRow[]>([]);
@@ -101,6 +104,28 @@ export default function PricingClient() {
     }, []);
 
     useEffect(() => { fetchVerticals(); fetchServiceOfferings(); }, [fetchVerticals, fetchServiceOfferings]);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+                setFilterOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const hasActiveFilters = !!(verticalId || serviceOfferingId || pricingModeId || planTemplateId || isActiveFilter || (mainTab === "matrix" && groupBy !== "none"));
+    const applyFilter = () => setFilterOpen(false);
+    const clearFilter = () => {
+        setVerticalId("");
+        setServiceOfferingId("");
+        setPricingModeId("");
+        setPlanTemplateId("");
+        setIsActiveFilter("");
+        setGroupBy("none");
+        setFilterOpen(false);
+    };
 
     const fetchFirstClean = useCallback(async () => {
         setLoadingFirst(true);
@@ -458,58 +483,80 @@ export default function PricingClient() {
             </div>
 
             {(mainTab === "matrix" || mainTab === "legacy") && (
-                <div className="flex flex-wrap items-center gap-4 rounded-lg border border-admin-border border-l-4 border-l-alloy-pine bg-alloy-pine/5 px-4 py-3">
-                    <span className="text-xs font-semibold uppercase text-alloy-pine">Filters</span>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <label className="flex items-center gap-2">
-                            <span className="text-sm text-alloy-forge/80">Vertical</span>
-                            <select value={verticalId} onChange={(e) => setVerticalId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                <option value="">All</option>
-                                {verticals.map((v) => (<option key={v.id} value={v.id}>{v.name ?? v.slug ?? v.id}</option>))}
-                            </select>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <span className="text-sm text-alloy-forge/80">Service Offering</span>
-                            <select value={serviceOfferingId} onChange={(e) => setServiceOfferingId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                <option value="">All</option>
-                                {serviceOfferings.map((s) => (<option key={s.id} value={s.id}>{s.offering_name ?? s.offering_key ?? s.id}</option>))}
-                            </select>
-                        </label>
-                        {mainTab === "matrix" && (
-                            <>
-                                <label className="flex items-center gap-2">
-                                    <span className="text-sm text-alloy-forge/80">Pricing Mode</span>
-                                    <select value={pricingModeId} onChange={(e) => setPricingModeId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                        <option value="">All</option>
-                                        {(opts.pricing_modes ?? []).map((m) => (<option key={m.id} value={m.id}>{m.label}</option>))}
-                                    </select>
-                                </label>
-                                <label className="flex items-center gap-2">
-                                    <span className="text-sm text-alloy-forge/80">Plan Template</span>
-                                    <select value={planTemplateId} onChange={(e) => setPlanTemplateId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                        <option value="">All</option>
-                                        {(opts.matrix_plan_templates ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
-                                    </select>
-                                </label>
-                                <label className="flex items-center gap-2">
-                                    <span className="text-sm text-alloy-forge/80">Group by</span>
-                                    <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as typeof groupBy)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                        <option value="none">None</option>
-                                        <option value="pricing_mode">Pricing Mode</option>
-                                        <option value="service_offering">Service Offering</option>
-                                        <option value="plan_template">Plan Template</option>
-                                    </select>
-                                </label>
-                            </>
+                <div className="flex items-center justify-end">
+                    <div className="relative" ref={filterRef}>
+                        <button
+                            type="button"
+                            onClick={() => setFilterOpen((o) => !o)}
+                            className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+                            aria-expanded={filterOpen}
+                            aria-haspopup="true"
+                        >
+                            <Filter className="h-4 w-4 text-alloy-muted" />
+                            Filter
+                            {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+                        </button>
+                        {filterOpen && (
+                            <div className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="mb-1 block text-xs font-medium text-alloy-muted">Vertical</label>
+                                        <select value={verticalId} onChange={(e) => setVerticalId(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                                            <option value="">All</option>
+                                            {verticals.map((v) => (<option key={v.id} value={v.id}>{v.name ?? v.slug ?? v.id}</option>))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-medium text-alloy-muted">Service Offering</label>
+                                        <select value={serviceOfferingId} onChange={(e) => setServiceOfferingId(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                                            <option value="">All</option>
+                                            {serviceOfferings.map((s) => (<option key={s.id} value={s.id}>{s.offering_name ?? s.offering_key ?? s.id}</option>))}
+                                        </select>
+                                    </div>
+                                    {mainTab === "matrix" && (
+                                        <>
+                                            <div>
+                                                <label className="mb-1 block text-xs font-medium text-alloy-muted">Pricing Mode</label>
+                                                <select value={pricingModeId} onChange={(e) => setPricingModeId(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                                                    <option value="">All</option>
+                                                    {(opts.pricing_modes ?? []).map((m) => (<option key={m.id} value={m.id}>{m.label}</option>))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="mb-1 block text-xs font-medium text-alloy-muted">Plan Template</label>
+                                                <select value={planTemplateId} onChange={(e) => setPlanTemplateId(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                                                    <option value="">All</option>
+                                                    {(opts.matrix_plan_templates ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="mb-1 block text-xs font-medium text-alloy-muted">Group by</label>
+                                                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as typeof groupBy)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                                                    <option value="none">None</option>
+                                                    <option value="pricing_mode">Pricing Mode</option>
+                                                    <option value="service_offering">Service Offering</option>
+                                                    <option value="plan_template">Plan Template</option>
+                                                </select>
+                                            </div>
+                                        </>
+                                    )}
+                                    <div>
+                                        <label className="mb-1 block text-xs font-medium text-alloy-muted">Active</label>
+                                        <select value={isActiveFilter} onChange={(e) => setIsActiveFilter((e.target.value as "" | "true" | "false") || "")} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
+                                            <option value="">All</option>
+                                            <option value="true">Yes</option>
+                                            <option value="false">No</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-2 pt-1">
+                                        <button type="button" onClick={applyFilter} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">Apply</button>
+                                        {hasActiveFilters && (
+                                            <button type="button" onClick={clearFilter} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         )}
-                        <label className="flex items-center gap-2">
-                            <span className="text-sm text-alloy-forge/80">Active</span>
-                            <select value={isActiveFilter} onChange={(e) => setIsActiveFilter((e.target.value as "" | "true" | "false") || "")} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                <option value="">All</option>
-                                <option value="true">Yes</option>
-                                <option value="false">No</option>
-                            </select>
-                        </label>
                     </div>
                 </div>
             )}
