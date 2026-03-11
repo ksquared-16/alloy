@@ -1241,7 +1241,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "activity"],
+      tabs: ["overview", "activity"],
       headerFields: [],
       layoutMode: 2,
       overviewSections: [

@@ -34,11 +34,10 @@ export async function GET(request: NextRequest) {
     try {
         let q = supabase.from("pricing_recurring_prices").select(`
             id,
-            pricing_service_id,
-            pricing_frequency_id,
-            pricing_square_footage_tier_id,
-            dimension_value_id,
             vertical_id,
+            service_id,
+            frequency_id,
+            sqft_tier_id,
             amount_cents,
             is_active,
             created_at,
@@ -52,16 +51,14 @@ export async function GET(request: NextRequest) {
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
         const list = rows ?? [];
-        const serviceIds = [...new Set(list.map((r: Record<string, unknown>) => (r.pricing_service_id as string) ?? (r.service_id as string)).filter(Boolean))] as string[];
-        const freqIds = [...new Set(list.map((r: Record<string, unknown>) => (r.pricing_frequency_id as string) ?? (r.frequency_id as string)).filter(Boolean))] as string[];
-        const tierIds = [...new Set(list.map((r: Record<string, unknown>) => (r.pricing_square_footage_tier_id as string) ?? (r.sqft_tier_id as string)).filter(Boolean))] as string[];
-        const dimValIds = [...new Set(list.map((r: Record<string, unknown>) => r.dimension_value_id as string).filter(Boolean))] as string[];
+        const serviceIds = [...new Set(list.map((r: Record<string, unknown>) => r.service_id as string).filter(Boolean))] as string[];
+        const freqIds = [...new Set(list.map((r: Record<string, unknown>) => r.frequency_id as string).filter(Boolean))] as string[];
+        const tierIds = [...new Set(list.map((r: Record<string, unknown>) => r.sqft_tier_id as string).filter(Boolean))] as string[];
 
-        const [servicesRes, freqsRes, tiersRes, dimValsRes] = await Promise.all([
+        const [servicesRes, freqsRes, tiersRes] = await Promise.all([
             serviceIds.length ? supabase.from("pricing_services").select("id, service_offering_id").in("id", serviceIds) : { data: [] },
             freqIds.length ? supabase.from("pricing_frequencies").select("id, service_plan_template_id, frequency_label").in("id", freqIds) : { data: [] },
             tierIds.length ? supabase.from("pricing_square_footage_tiers").select("id, dimension_value_id, sqft_label").in("id", tierIds) : { data: [] },
-            dimValIds.length ? supabase.from("pricing_dimension_values").select("id, value_label").in("id", dimValIds) : { data: [] },
         ]);
 
         const serviceOfferingIds = (servicesRes.data ?? []).map((s: Record<string, unknown>) => s.service_offering_id).filter(Boolean) as string[];
@@ -80,14 +77,16 @@ export async function GET(request: NextRequest) {
         freqToPlan.forEach((planId, freqId) => { const name = planMap.get(planId) ?? freqLabelMap.get(freqId); if (name) planNameByFreqId.set(freqId, name); });
 
         const tierMap = new Map((tiersRes.data ?? []).map((t: Record<string, unknown>) => [t.id as string, { dimension_value_id: t.dimension_value_id as string | null, sqft_label: (t.sqft_label as string) ?? null }]));
-        const dimValMap = new Map((dimValsRes.data ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.value_label as string) ?? null]));
+        const dimValIdsFromTiers = [...new Set((tiersRes.data ?? []).map((t: Record<string, unknown>) => t.dimension_value_id as string).filter(Boolean))] as string[];
+        const { data: dimValsData } = dimValIdsFromTiers.length ? await supabase.from("pricing_dimension_values").select("id, value_label").in("id", dimValIdsFromTiers) : { data: [] };
+        const dimValMap = new Map((dimValsData ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.value_label as string) ?? null]));
 
         const out: RecurringPriceRow[] = list.map((r: Record<string, unknown>) => {
-            const svcId = (r.pricing_service_id as string) ?? (r.service_id as string);
-            const freqId = (r.pricing_frequency_id as string) ?? (r.frequency_id as string);
-            const tierId = (r.pricing_square_footage_tier_id as string) ?? (r.sqft_tier_id as string);
-            const dimValId = (r.dimension_value_id as string) ?? tierMap.get(tierId)?.dimension_value_id;
+            const svcId = r.service_id as string | null;
+            const freqId = r.frequency_id as string | null;
+            const tierId = r.sqft_tier_id as string | null;
             const tier = tierId ? tierMap.get(tierId) : null;
+            const dimValId = tier?.dimension_value_id ?? null;
             const dimLabel = dimValId ? (dimValMap.get(dimValId) ?? null) : null;
             const sqftLabel = tier?.sqft_label ?? null;
             return {
@@ -95,7 +94,7 @@ export async function GET(request: NextRequest) {
                 service_id: svcId ?? null,
                 frequency_id: freqId ?? null,
                 plan_template_id: freqId ? (freqToPlan.get(freqId) ?? null) : null,
-                dimension_value_id: (r.dimension_value_id as string) ?? dimValId ?? null,
+                dimension_value_id: dimValId ?? null,
                 sqft_tier_id: tierId ?? null,
                 vertical_id: (r.vertical_id as string) ?? null,
                 amount_cents: r.amount_cents != null ? Number(r.amount_cents) : null,
@@ -118,12 +117,12 @@ export async function GET(request: NextRequest) {
     }
 }
 
-/** POST: create recurring price. Body: vertical_id, pricing_service_id, pricing_frequency_id, pricing_square_footage_tier_id, amount or amount_cents, is_active. */
+/** POST: create recurring price. Body: vertical_id, service_id, frequency_id, sqft_tier_id, amount or amount_cents, is_active. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
-    let body: { vertical_id?: string; pricing_service_id?: string; pricing_frequency_id?: string; pricing_square_footage_tier_id?: string; amount?: number; amount_cents?: number; is_active?: boolean };
+    let body: { vertical_id?: string; service_id?: string; frequency_id?: string; sqft_tier_id?: string; amount?: number; amount_cents?: number; is_active?: boolean };
     try {
         body = await request.json();
     } catch {
@@ -131,11 +130,11 @@ export async function POST(request: NextRequest) {
     }
 
     const vertical_id = typeof body.vertical_id === "string" && body.vertical_id.trim() ? body.vertical_id.trim() : null;
-    const pricing_service_id = typeof body.pricing_service_id === "string" && body.pricing_service_id.trim() ? body.pricing_service_id.trim() : null;
-    const pricing_frequency_id = typeof body.pricing_frequency_id === "string" && body.pricing_frequency_id.trim() ? body.pricing_frequency_id.trim() : null;
-    const pricing_square_footage_tier_id = typeof body.pricing_square_footage_tier_id === "string" && body.pricing_square_footage_tier_id.trim() ? body.pricing_square_footage_tier_id.trim() : null;
-    if (!vertical_id || !pricing_service_id || !pricing_frequency_id || !pricing_square_footage_tier_id) {
-        return NextResponse.json({ error: "vertical_id, pricing_service_id, pricing_frequency_id, and pricing_square_footage_tier_id are required" }, { status: 400 });
+    const service_id = typeof body.service_id === "string" && body.service_id.trim() ? body.service_id.trim() : null;
+    const frequency_id = typeof body.frequency_id === "string" && body.frequency_id.trim() ? body.frequency_id.trim() : null;
+    const sqft_tier_id = typeof body.sqft_tier_id === "string" && body.sqft_tier_id.trim() ? body.sqft_tier_id.trim() : null;
+    if (!vertical_id || !service_id || !frequency_id || !sqft_tier_id) {
+        return NextResponse.json({ error: "vertical_id, service_id, frequency_id, and sqft_tier_id are required" }, { status: 400 });
     }
 
     let amount_cents: number;
@@ -147,13 +146,13 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     const insert = {
         vertical_id,
-        pricing_service_id,
-        pricing_frequency_id,
-        pricing_square_footage_tier_id,
+        service_id,
+        frequency_id,
+        sqft_tier_id,
         amount_cents,
         is_active: body.is_active !== false,
     };
-    const { data, error } = await supabase.from("pricing_recurring_prices").insert(insert).select("id, vertical_id, pricing_service_id, pricing_frequency_id, pricing_square_footage_tier_id, amount_cents, is_active, created_at, updated_at").single();
+    const { data, error } = await supabase.from("pricing_recurring_prices").insert(insert).select("id, vertical_id, service_id, frequency_id, sqft_tier_id, amount_cents, is_active, created_at, updated_at").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data ?? {});
 }

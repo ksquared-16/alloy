@@ -8,8 +8,10 @@ import type { RecurringPriceRow } from "@/app/api/admin/pricing/recurring-prices
 type VerticalOption = { id: string; name: string | null; slug: string | null };
 type ServiceOfferingOption = { id: string; offering_name: string | null; offering_key: string | null };
 
+type PricingModeOption = { id: string; key: string; label: string };
 type PricingOptions = {
     verticals: { id: string; name: string | null; slug: string | null }[];
+    pricing_modes?: PricingModeOption[];
     pricing_services: { id: string; label: string }[];
     dimension_value_options: { id: string; label: string }[];
     pricing_frequencies: { id: string; label: string }[];
@@ -37,16 +39,16 @@ export default function PricingClient() {
 
     const [firstForm, setFirstForm] = useState({
         vertical_id: "",
-        pricing_service_id: "",
-        pricing_square_footage_tier_id: "",
+        service_id: "",
+        sqft_tier_id: "",
         amount: "",
         is_active: true,
     });
     const [recurringForm, setRecurringForm] = useState({
         vertical_id: "",
-        pricing_service_id: "",
-        pricing_frequency_id: "",
-        pricing_square_footage_tier_id: "",
+        service_id: "",
+        frequency_id: "",
+        sqft_tier_id: "",
         amount: "",
         is_active: true,
     });
@@ -99,32 +101,42 @@ export default function PricingClient() {
     useEffect(() => { fetchRecurring(); }, [fetchRecurring]);
 
     const fetchOptions = useCallback(async (verticalIdFilter: string) => {
+        const params = new URLSearchParams();
+        if (verticalIdFilter) params.set("vertical_id", verticalIdFilter);
+        const res = await fetch(`/api/admin/pricing/options?${params}`);
+        const json = await res.json().catch(() => ({}));
+        return res.ok ? (json as PricingOptions) : null;
+    }, []);
+
+    const fetchOptionsForModals = useCallback(async (verticalIdFilter: string) => {
         setOptionsLoading(true);
         try {
-            const params = new URLSearchParams();
-            if (verticalIdFilter) params.set("vertical_id", verticalIdFilter);
-            const res = await fetch(`/api/admin/pricing/options?${params}`);
-            const json = await res.json().catch(() => ({}));
-            if (res.ok) setOptions(json as PricingOptions);
-            else setOptions(null);
+            const data = await fetchOptions(verticalIdFilter);
+            setOptions(data);
         } finally {
             setOptionsLoading(false);
         }
-    }, []);
+    }, [fetchOptions]);
 
     useEffect(() => {
-        if (addFirstOpen) fetchOptions(firstForm.vertical_id || verticalId);
-    }, [addFirstOpen, firstForm.vertical_id, verticalId, fetchOptions]);
+        fetchOptions(verticalId).then((data) => {
+            if (data) setOptions(data);
+        });
+    }, [verticalId, fetchOptions]);
 
     useEffect(() => {
-        if (addRecurringOpen) fetchOptions(recurringForm.vertical_id || verticalId);
-    }, [addRecurringOpen, recurringForm.vertical_id, verticalId, fetchOptions]);
+        if (addFirstOpen) fetchOptionsForModals(firstForm.vertical_id || verticalId);
+    }, [addFirstOpen, firstForm.vertical_id, verticalId, fetchOptionsForModals]);
+
+    useEffect(() => {
+        if (addRecurringOpen) fetchOptionsForModals(recurringForm.vertical_id || verticalId);
+    }, [addRecurringOpen, recurringForm.vertical_id, verticalId, fetchOptionsForModals]);
 
     const openAddFirst = () => {
         setFirstForm({
             vertical_id: verticalId,
-            pricing_service_id: "",
-            pricing_square_footage_tier_id: "",
+            service_id: "",
+            sqft_tier_id: "",
             amount: "",
             is_active: true,
         });
@@ -135,9 +147,9 @@ export default function PricingClient() {
     const openAddRecurring = () => {
         setRecurringForm({
             vertical_id: verticalId,
-            pricing_service_id: "",
-            pricing_frequency_id: "",
-            pricing_square_footage_tier_id: "",
+            service_id: "",
+            frequency_id: "",
+            sqft_tier_id: "",
             amount: "",
             is_active: true,
         });
@@ -150,11 +162,11 @@ export default function PricingClient() {
             setAddFirstError("Vertical is required");
             return;
         }
-        if (!firstForm.pricing_service_id.trim()) {
+        if (!firstForm.service_id.trim()) {
             setAddFirstError("Service is required");
             return;
         }
-        if (!firstForm.pricing_square_footage_tier_id.trim()) {
+        if (!firstForm.sqft_tier_id.trim()) {
             setAddFirstError("Dimension value is required");
             return;
         }
@@ -172,8 +184,8 @@ export default function PricingClient() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     vertical_id: firstForm.vertical_id.trim(),
-                    pricing_service_id: firstForm.pricing_service_id.trim(),
-                    pricing_square_footage_tier_id: firstForm.pricing_square_footage_tier_id.trim(),
+                    service_id: firstForm.service_id.trim(),
+                    sqft_tier_id: firstForm.sqft_tier_id.trim(),
                     amount,
                     is_active: firstForm.is_active,
                 }),
@@ -195,15 +207,15 @@ export default function PricingClient() {
             setAddRecurringError("Vertical is required");
             return;
         }
-        if (!recurringForm.pricing_service_id.trim()) {
+        if (!recurringForm.service_id.trim()) {
             setAddRecurringError("Service is required");
             return;
         }
-        if (!recurringForm.pricing_frequency_id.trim()) {
+        if (!recurringForm.frequency_id.trim()) {
             setAddRecurringError("Plan / frequency is required");
             return;
         }
-        if (!recurringForm.pricing_square_footage_tier_id.trim()) {
+        if (!recurringForm.sqft_tier_id.trim()) {
             setAddRecurringError("Dimension value is required");
             return;
         }
@@ -221,9 +233,9 @@ export default function PricingClient() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     vertical_id: recurringForm.vertical_id.trim(),
-                    pricing_service_id: recurringForm.pricing_service_id.trim(),
-                    pricing_frequency_id: recurringForm.pricing_frequency_id.trim(),
-                    pricing_square_footage_tier_id: recurringForm.pricing_square_footage_tier_id.trim(),
+                    service_id: recurringForm.service_id.trim(),
+                    frequency_id: recurringForm.frequency_id.trim(),
+                    sqft_tier_id: recurringForm.sqft_tier_id.trim(),
                     amount,
                     is_active: recurringForm.is_active,
                 }),
@@ -270,10 +282,14 @@ export default function PricingClient() {
 
     const opts = options ?? {
         verticals: [],
+        pricing_modes: [],
         pricing_services: [],
         dimension_value_options: [],
         pricing_frequencies: [],
     };
+    const modeByKey = (key: string) => (opts.pricing_modes ?? []).find((m) => m.key === key);
+    const initialLabel = modeByKey("initial")?.label ?? "Initial Service Pricing";
+    const recurringLabel = modeByKey("recurring")?.label ?? "Recurring Service Pricing";
 
     return (
         <div className="space-y-6">
@@ -320,23 +336,23 @@ export default function PricingClient() {
                     onClick={() => setActiveSection("first-clean")}
                     className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}
                 >
-                    First Clean Prices
+                    {initialLabel}
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveSection("recurring")}
                     className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}
                 >
-                    Recurring Prices
+                    {recurringLabel}
                 </button>
             </div>
 
             {activeSection === "first-clean" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-alloy-forge">First Clean Prices</h2>
+                        <h2 className="text-lg font-semibold text-alloy-forge">{initialLabel}</h2>
                         <button type="button" onClick={openAddFirst} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">
-                            + Add First Clean Price
+                            + Add {initialLabel.replace(/ Pricing$/, " Price")}
                         </button>
                     </div>
                     <div className="rounded-lg border border-admin-border bg-white overflow-hidden">
@@ -399,9 +415,9 @@ export default function PricingClient() {
             {activeSection === "recurring" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-alloy-forge">Recurring Prices</h2>
+                        <h2 className="text-lg font-semibold text-alloy-forge">{recurringLabel}</h2>
                         <button type="button" onClick={openAddRecurring} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">
-                            + Add Recurring Price
+                            + Add {recurringLabel.replace(/ Pricing$/, " Price")}
                         </button>
                     </div>
                     <div className="rounded-lg border border-admin-border bg-white overflow-hidden">
@@ -466,7 +482,7 @@ export default function PricingClient() {
             {addFirstOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !addFirstSaving && setAddFirstOpen(false)}>
                     <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add First Clean Price</h3>
+                        <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add {initialLabel.replace(/ Pricing$/, " Price")}</h3>
                         {addFirstError && <p className="text-sm text-red-600 mb-2">{addFirstError}</p>}
                         <div className="space-y-3">
                             <label className="block">
@@ -485,8 +501,8 @@ export default function PricingClient() {
                             <label className="block">
                                 <span className="text-sm text-alloy-midnight/80">Service</span>
                                 <select
-                                    value={firstForm.pricing_service_id}
-                                    onChange={(e) => setFirstForm((f) => ({ ...f, pricing_service_id: e.target.value }))}
+                                    value={firstForm.service_id}
+                                    onChange={(e) => setFirstForm((f) => ({ ...f, service_id: e.target.value }))}
                                     className="mt-1 w-full rounded border border-admin-border px-2 py-1.5 text-sm"
                                 >
                                     <option value="">Select service</option>
@@ -498,8 +514,8 @@ export default function PricingClient() {
                             <label className="block">
                                 <span className="text-sm text-alloy-midnight/80">Dimension Value</span>
                                 <select
-                                    value={firstForm.pricing_square_footage_tier_id}
-                                    onChange={(e) => setFirstForm((f) => ({ ...f, pricing_square_footage_tier_id: e.target.value }))}
+                                    value={firstForm.sqft_tier_id}
+                                    onChange={(e) => setFirstForm((f) => ({ ...f, sqft_tier_id: e.target.value }))}
                                     className="mt-1 w-full rounded border border-admin-border px-2 py-1.5 text-sm"
                                 >
                                     <option value="">Select dimension value</option>
@@ -541,7 +557,7 @@ export default function PricingClient() {
             {addRecurringOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !addRecurringSaving && setAddRecurringOpen(false)}>
                     <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add Recurring Price</h3>
+                        <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add {recurringLabel.replace(/ Pricing$/, " Price")}</h3>
                         {addRecurringError && <p className="text-sm text-red-600 mb-2">{addRecurringError}</p>}
                         <div className="space-y-3">
                             <label className="block">
@@ -560,8 +576,8 @@ export default function PricingClient() {
                             <label className="block">
                                 <span className="text-sm text-alloy-midnight/80">Service</span>
                                 <select
-                                    value={recurringForm.pricing_service_id}
-                                    onChange={(e) => setRecurringForm((f) => ({ ...f, pricing_service_id: e.target.value }))}
+                                    value={recurringForm.service_id}
+                                    onChange={(e) => setRecurringForm((f) => ({ ...f, service_id: e.target.value }))}
                                     className="mt-1 w-full rounded border border-admin-border px-2 py-1.5 text-sm"
                                 >
                                     <option value="">Select service</option>
@@ -573,8 +589,8 @@ export default function PricingClient() {
                             <label className="block">
                                 <span className="text-sm text-alloy-midnight/80">Plan Template / Frequency</span>
                                 <select
-                                    value={recurringForm.pricing_frequency_id}
-                                    onChange={(e) => setRecurringForm((f) => ({ ...f, pricing_frequency_id: e.target.value }))}
+                                    value={recurringForm.frequency_id}
+                                    onChange={(e) => setRecurringForm((f) => ({ ...f, frequency_id: e.target.value }))}
                                     className="mt-1 w-full rounded border border-admin-border px-2 py-1.5 text-sm"
                                 >
                                     <option value="">Select frequency</option>
@@ -586,8 +602,8 @@ export default function PricingClient() {
                             <label className="block">
                                 <span className="text-sm text-alloy-midnight/80">Dimension Value</span>
                                 <select
-                                    value={recurringForm.pricing_square_footage_tier_id}
-                                    onChange={(e) => setRecurringForm((f) => ({ ...f, pricing_square_footage_tier_id: e.target.value }))}
+                                    value={recurringForm.sqft_tier_id}
+                                    onChange={(e) => setRecurringForm((f) => ({ ...f, sqft_tier_id: e.target.value }))}
                                     className="mt-1 w-full rounded border border-admin-border px-2 py-1.5 text-sm"
                                 >
                                     <option value="">Select dimension value</option>

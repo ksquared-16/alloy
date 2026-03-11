@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const [verticalsRes, servicesRes, tiersRes, freqsRes] = await Promise.all([
+    const [verticalsRes, modesRes, servicesRes, tiersRes, freqsRes] = await Promise.all([
         supabase.from("verticals").select("id, name, slug").order("name", { ascending: true }),
+        supabase.from("pricing_modes").select("id, mode_key, mode_label").order("mode_key", { ascending: true }),
         verticalId
             ? (async () => {
                 const { data: offerings } = await supabase.from("service_offerings").select("id").eq("vertical_id", verticalId);
@@ -57,8 +58,16 @@ export async function GET(request: NextRequest) {
         label: f.frequency_label ?? f.frequency_key ?? f.id,
     }));
 
+    const pricing_modes = (modesRes.data ?? []) as { id: string; mode_key?: string | null; mode_label?: string | null }[];
+    const modes = pricing_modes.map((m) => ({
+        id: m.id,
+        key: m.mode_key ?? m.id,
+        label: m.mode_label ?? m.mode_key ?? m.id,
+    }));
+
     return NextResponse.json({
         verticals,
+        pricing_modes: modes,
         pricing_services,
         dimension_value_options,
         pricing_frequencies,

@@ -105,10 +105,8 @@ export default function AddOnsClient() {
                 setAddError((json.error as string) ?? "Create failed");
                 return;
             }
-            const id = (json as { id?: string }).id;
             setAddOpen(false);
             fetchList();
-            if (id) openDrawer({ type: "addons", id });
         } finally {
             setAddSaving(false);
         }
