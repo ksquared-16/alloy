@@ -375,6 +375,28 @@ export async function GET(
             });
         }
 
+        if (entity === "service_offering") {
+            const { data: pricingServices, error } = await supabase
+                .from("pricing_services")
+                .select("*")
+                .eq("service_offering_id", id)
+                .order("created_at", { ascending: false })
+                .limit(LIMIT);
+            if (error) return NextResponse.json({ pricing_services: [] });
+            return NextResponse.json({ pricing_services: pricingServices ?? [] });
+        }
+
+        if (entity === "service_plan_template") {
+            const { data: pricingFrequencies, error } = await supabase
+                .from("pricing_frequencies")
+                .select("*")
+                .eq("service_plan_template_id", id)
+                .order("created_at", { ascending: false })
+                .limit(LIMIT);
+            if (error) return NextResponse.json({ pricing_frequencies: [] });
+            return NextResponse.json({ pricing_frequencies: pricingFrequencies ?? [] });
+        }
+
         return NextResponse.json({ error: "Invalid entity" }, { status: 400 });
     } catch (e: unknown) {
         console.error("[ADMIN_RELATED]", e);

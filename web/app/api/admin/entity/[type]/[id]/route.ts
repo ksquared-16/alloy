@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates"] as const;
 
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
 
@@ -625,6 +625,41 @@ export async function GET(
                     is_active: l.is_active ?? true,
                 };
             });
+            return NextResponse.json(out);
+        }
+
+        if (type === "service_offerings") {
+            const { data, error } = await supabase.from("service_offerings").select("*").eq("id", id).single();
+            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            const row = data as Record<string, unknown> & { vertical_id?: string | null };
+            const out: Record<string, unknown> = { ...row };
+            out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
+            if (row.vertical_id) {
+                const { data: vert } = await supabase.from("verticals").select("id, name, slug").eq("id", row.vertical_id).maybeSingle();
+                out._vertical_name = (vert as { name?: string | null; slug?: string | null } | null)?.name ?? (vert as { slug?: string | null } | null)?.slug ?? null;
+            } else {
+                out._vertical_name = null;
+            }
+            return NextResponse.json(out);
+        }
+
+        if (type === "service_plan_templates") {
+            const { data, error } = await supabase.from("service_plan_templates").select("*").eq("id", id).single();
+            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            const row = data as Record<string, unknown> & { recurrence_unit?: string | null; recurrence_interval?: number | null };
+            const out: Record<string, unknown> = { ...row };
+            out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
+            const unit = (row.recurrence_unit as string) ?? "";
+            const interval = Math.max(1, Number(row.recurrence_interval) || 1);
+            if (unit && interval >= 1) {
+                if (unit === "week" && interval === 1) out._recurrence_label = "Weekly";
+                else if (unit === "week") out._recurrence_label = `Every ${interval} weeks`;
+                else if (unit === "month" && interval === 1) out._recurrence_label = "Monthly";
+                else if (unit === "month") out._recurrence_label = `Every ${interval} months`;
+                else out._recurrence_label = `${interval} ${unit}(s)`;
+            } else {
+                out._recurrence_label = null;
+            }
             return NextResponse.json(out);
         }
 

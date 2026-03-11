@@ -16,6 +16,7 @@ import {
     Mail,
     MessageSquare,
     Receipt,
+    Repeat,
     Settings,
     Shield,
     Tag,
@@ -70,21 +71,28 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         ],
     },
     {
+        label: "Operations Settings",
+        icon: Repeat,
+        items: [
+            { href: "/admin/operations/recurrence", label: "Recurrence" },
+        ],
+    },
+    {
         label: "Financials",
         icon: DollarSign,
         items: [
+            { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
-            { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
-            { href: "/admin/subscriptions", label: "Plans", entityType: "subscriptions" },
-            { href: "/admin/financials/pricing", label: "Pricing" },
             { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
             {
-                label: "Settings",
+                label: "Financial Settings",
                 subItems: [
-                    { href: "/admin/discounts", label: "Discounts" },
-                    { href: "/admin/financials/accounts", label: "GL Account Setup" },
-                    { href: "/admin/financials/settings/subscription", label: "Subscription Setup" },
+                    { href: "/admin/financials/service-offerings", label: "Service Offerings", entityType: "service_offerings" },
+                    { href: "/admin/financials/plan-templates", label: "Plan Templates", entityType: "service_plan_templates" },
+                    { href: "/admin/financials/pricing", label: "Pricing" },
+                    { href: "/admin/financials/add-ons", label: "Add-ons" },
+                    { href: "/admin/discounts", label: "Discount Codes" },
                 ],
             },
         ],
@@ -115,7 +123,11 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/financials/payments": DollarSign,
         "/admin/subscriptions": Receipt,
         "/admin/financials/pricing": Tag,
+        "/admin/financials/service-offerings": Tag,
+        "/admin/financials/plan-templates": Tag,
+        "/admin/financials/add-ons": Tag,
         "/admin/discount-redemptions": Tag,
+        "/admin/operations/recurrence": Repeat,
         "/admin/system/access-control": Shield,
         "/admin/system/verticals-industries": LayoutGrid,
         "/admin/system/entity-labels": Tag,
@@ -126,12 +138,12 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
     if (map[href]) return map[href];
     if (nestedLabel === "People") return Users;
     if (nestedLabel === "Workflows") return GitBranch;
-    if (nestedLabel === "Settings") return Settings;
+    if (nestedLabel === "Financial Settings") return Tag;
     return null;
 }
 
 function getInitialCollapsed(): Record<string, boolean> {
-    const defaults = { People: false, Operations: false, Financials: true, System: true };
+    const defaults = { People: false, Operations: false, "Operations Settings": true, Financials: true, System: true };
     if (typeof window === "undefined") {
         return defaults;
     }
@@ -170,7 +182,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ People: true, Workflows: true, Settings: true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ People: true, Workflows: true, "Financial Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -185,12 +197,12 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
-        const financialsSettingsPaths = ["/admin/financials/pricing", "/admin/discounts", "/admin/financials/accounts", "/admin/financials/settings/subscription"];
+        const financialSettingsPaths = ["/admin/financials/pricing", "/admin/financials/service-offerings", "/admin/financials/plan-templates", "/admin/financials/add-ons", "/admin/discounts"];
         if (workflowPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev.Workflows === false ? prev : { ...prev, Workflows: false }));
         }
-        if (financialsSettingsPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev.Settings === false ? prev : { ...prev, Settings: false }));
+        if (financialSettingsPaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev["Financial Settings"] === false ? prev : { ...prev, "Financial Settings": false }));
         }
     }, [pathname]);
 

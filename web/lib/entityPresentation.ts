@@ -27,7 +27,9 @@ export type EntityPresentationType =
   | "contacts"
   | "customer_members"
   | "workflows"
-  | "discount_redemptions";
+  | "discount_redemptions"
+  | "service_offerings"
+  | "service_plan_templates";
 
 /** Table column definition. renderHint maps to shared renderers (status, date, link, money, etc.). */
 export interface EntityTableColumnConfig {
@@ -685,6 +687,110 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       relatedModules: [],
     },
   },
+  service_offerings: {
+    entityType: "service_offerings",
+    table: {
+      columns: [
+        { key: "offering_name", label: "Name", sortable: true, renderHint: "text" },
+        { key: "offering_key", label: "Key", sortable: true, renderHint: "text" },
+        { key: "_vertical_name", label: "Vertical", sortable: false, renderHint: "text" },
+        { key: "_active_yes_no", label: "Active", sortable: true, renderHint: "primary_yes_no" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "_updated", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        {
+          key: "offering_details",
+          title: "Offering Details",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "offering_name", label: "Name", span: 1, renderHint: "text", editable: true },
+            { key: "offering_key", label: "Key", span: 1, renderHint: "text", editable: true },
+            { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text" },
+            { key: "is_active", label: "Active", span: 1, renderHint: "primary_yes_no", editable: true },
+            { key: "description", label: "Description", span: 2, renderHint: "text", editable: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text" },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "org_id", label: "Org", span: 1, renderHint: "text" },
+            { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text" },
+          ],
+          locked: true,
+        },
+      ],
+      relatedModules: [],
+    },
+  },
+  service_plan_templates: {
+    entityType: "service_plan_templates",
+    table: {
+      columns: [
+        { key: "plan_name", label: "Name", sortable: true, renderHint: "text" },
+        { key: "plan_key", label: "Key", sortable: true, renderHint: "text" },
+        { key: "_recurring_yes_no", label: "Recurring", sortable: true, renderHint: "primary_yes_no" },
+        { key: "_recurrence_label", label: "Recurrence", sortable: false, renderHint: "text" },
+        { key: "_active_yes_no", label: "Active", sortable: true, renderHint: "primary_yes_no" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "_updated", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        {
+          key: "plan_details",
+          title: "Plan Template Details",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "plan_name", label: "Name", span: 1, renderHint: "text", editable: true },
+            { key: "plan_key", label: "Key", span: 1, renderHint: "text", editable: true },
+            { key: "is_recurring", label: "Recurring", span: 1, renderHint: "primary_yes_no", editable: true },
+            { key: "recurrence_unit", label: "Recurrence unit", span: 1, renderHint: "text", editable: true },
+            { key: "recurrence_interval", label: "Recurrence interval", span: 1, renderHint: "text", editable: true },
+            { key: "is_active", label: "Active", span: 1, renderHint: "primary_yes_no", editable: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text" },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "org_id", label: "Org", span: 1, renderHint: "text" },
+            { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text" },
+          ],
+          locked: true,
+        },
+      ],
+      relatedModules: [],
+    },
+  },
   documents: {
     entityType: "documents",
     table: {
@@ -1112,6 +1218,110 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "id", label: "ID", span: 1, renderHint: "text" },
             { key: "discount_code_id", label: "Discount code ID", span: 1, renderHint: "text" },
             { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+          ],
+          locked: true,
+        },
+      ],
+      relatedModules: [],
+    },
+  },
+  service_offerings: {
+    entityType: "service_offerings",
+    table: {
+      columns: [
+        { key: "offering_name", label: "Name", sortable: true, renderHint: "text" },
+        { key: "offering_key", label: "Key", sortable: true, renderHint: "text" },
+        { key: "_vertical_name", label: "Vertical", sortable: false, renderHint: "text" },
+        { key: "_active_yes_no", label: "Active", sortable: false, renderHint: "primary_yes_no" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "_updated", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        {
+          key: "offering_details",
+          title: "Offering Details",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "offering_name", label: "Name", span: 1, renderHint: "text", editable: true },
+            { key: "offering_key", label: "Key", span: 1, renderHint: "text", editable: true },
+            { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text" },
+            { key: "is_active", label: "Active", span: 1, renderHint: "primary_yes_no", editable: true },
+            { key: "description", label: "Description", span: 2, renderHint: "text", editable: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text" },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "org_id", label: "Org", span: 1, renderHint: "text" },
+            { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text" },
+          ],
+          locked: true,
+        },
+      ],
+      relatedModules: [],
+    },
+  },
+  service_plan_templates: {
+    entityType: "service_plan_templates",
+    table: {
+      columns: [
+        { key: "plan_name", label: "Name", sortable: true, renderHint: "text" },
+        { key: "plan_key", label: "Key", sortable: true, renderHint: "text" },
+        { key: "_recurring_yes_no", label: "Recurring", sortable: false, renderHint: "primary_yes_no" },
+        { key: "_recurrence_label", label: "Recurrence", sortable: false, renderHint: "text" },
+        { key: "_active_yes_no", label: "Active", sortable: false, renderHint: "primary_yes_no" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "_updated", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        {
+          key: "plan_details",
+          title: "Plan Template Details",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "plan_name", label: "Name", span: 1, renderHint: "text", editable: true },
+            { key: "plan_key", label: "Key", span: 1, renderHint: "text", editable: true },
+            { key: "is_recurring", label: "Recurring", span: 1, renderHint: "primary_yes_no", editable: true },
+            { key: "recurrence_unit", label: "Recurrence unit", span: 1, renderHint: "text", editable: true },
+            { key: "recurrence_interval", label: "Recurrence interval", span: 1, renderHint: "text", editable: true },
+            { key: "is_active", label: "Active", span: 1, renderHint: "primary_yes_no", editable: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text" },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "org_id", label: "Org", span: 1, renderHint: "text" },
+            { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text" },
           ],
           locked: true,
         },
