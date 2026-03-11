@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     let q = supabase
         .from("ledger_transactions")
-        .select("id, occurred_at, type, direction, amount_cents, currency, provider, provider_ref, job_id, schedule_id, customer_id, vendor_id, journal_entry_id", { count: "exact" })
+        .select("id, occurred_at, status, type, direction, amount_cents, currency, provider, provider_ref, job_id, schedule_id, customer_id, vendor_id, journal_entry_id", { count: "exact" })
         .eq("org_id", orgId)
         .order("occurred_at", { ascending: false })
         .range(offset, offset + limit - 1);
@@ -63,8 +63,41 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const list = (rows ?? []) as { id: string; customer_id?: string | null; vendor_id?: string | null; job_id?: string | null; schedule_id?: string | null }[];
+    const customerIds = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
+    const vendorIds = [...new Set(list.map((r) => r.vendor_id).filter(Boolean))] as string[];
+    const jobIds = [...new Set(list.map((r) => r.job_id).filter(Boolean))] as string[];
+    const scheduleIds = [...new Set(list.map((r) => r.schedule_id).filter(Boolean))] as string[];
+
+    const [customersRes, vendorsRes, jobsRes, schedulesRes] = await Promise.all([
+        customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] as { id: string; name?: string | null }[] },
+        vendorIds.length ? supabase.from("vendors").select("id, name").in("id", vendorIds) : { data: [] as { id: string; name?: string | null }[] },
+        jobIds.length ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer").in("id", jobIds) : { data: [] as { id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null }[] },
+        scheduleIds.length ? supabase.from("schedules").select("id, start_at, end_at").in("id", scheduleIds) : { data: [] as { id: string; start_at?: string | null; end_at?: string | null }[] },
+    ]);
+
+    const customerMap = new Map((customersRes.data ?? []).map((c) => [c.id, c.name ?? null]));
+    const vendorMap = new Map((vendorsRes.data ?? []).map((v) => [v.id, v.name ?? null]));
+    const jobMap = new Map(
+        (jobsRes.data ?? []).map((j) => [
+            j.id,
+            (j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${j.id.slice(-6)}`,
+        ])
+    );
+    const scheduleMap = new Map(
+        (schedulesRes.data ?? []).map((s) => [s.id, s.start_at || s.end_at ? `${s.start_at ?? ""} – ${s.end_at ?? ""}`.trim() || s.id.slice(-8) : s.id.slice(-8)])
+    );
+
+    const data = list.map((r) => ({
+        ...r,
+        _customer_name: r.customer_id ? customerMap.get(r.customer_id) ?? null : null,
+        _vendor_name: r.vendor_id ? vendorMap.get(r.vendor_id) ?? null : null,
+        _job_label: r.job_id ? jobMap.get(r.job_id) ?? null : null,
+        _schedule_label: r.schedule_id ? scheduleMap.get(r.schedule_id) ?? null : null,
+    }));
+
     return NextResponse.json({
-        data: rows ?? [],
+        data,
         total: count ?? 0,
         limit,
         offset,

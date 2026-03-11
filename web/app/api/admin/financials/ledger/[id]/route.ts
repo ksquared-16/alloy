@@ -36,7 +36,33 @@ export async function GET(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const journalEntryId = (txn as { journal_entry_id?: string | null }).journal_entry_id;
+    const t = txn as {
+        customer_id?: string | null;
+        vendor_id?: string | null;
+        job_id?: string | null;
+        schedule_id?: string | null;
+        journal_entry_id?: string | null;
+    };
+    const [customerRes, vendorRes, jobRes, scheduleRes] = await Promise.all([
+        t.customer_id ? supabase.from("customers").select("id, name").eq("id", t.customer_id).maybeSingle() : { data: null },
+        t.vendor_id ? supabase.from("vendors").select("id, name").eq("id", t.vendor_id).maybeSingle() : { data: null },
+        t.job_id ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer").eq("id", t.job_id).maybeSingle() : { data: null },
+        t.schedule_id ? supabase.from("schedules").select("id, start_at, end_at").eq("id", t.schedule_id).maybeSingle() : { data: null },
+    ]);
+    const job = jobRes.data as { id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
+    const _job_label = job
+        ? (job.title && String(job.title).trim()) || (job.service_key && String(job.service_key).trim()) || (job.job_number_for_customer && String(job.job_number_for_customer).trim()) || `Job #${job.id.slice(-6)}`
+        : null;
+    const schedule = scheduleRes.data as { id: string; start_at?: string | null; end_at?: string | null } | null;
+    const _schedule_label = schedule && (schedule.start_at || schedule.end_at) ? `${schedule.start_at ?? ""} – ${schedule.end_at ?? ""}`.trim() : schedule?.id?.slice(-8) ?? null;
+    const linked = {
+        _customer_name: customerRes.data ? (customerRes.data as { name?: string | null }).name ?? null : null,
+        _vendor_name: vendorRes.data ? (vendorRes.data as { name?: string | null }).name ?? null : null,
+        _job_label,
+        _schedule_label,
+    };
+
+    const journalEntryId = t.journal_entry_id;
     let entry: Record<string, unknown> | null = null;
     let lines: Record<string, unknown>[] = [];
 
@@ -69,7 +95,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-        transaction: txn,
+        transaction: { ...txn, ...linked },
         journalEntry: entry,
         journalLines: lines,
     });
