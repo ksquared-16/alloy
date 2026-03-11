@@ -5,6 +5,10 @@ import { formatMoneyFromCents, formatDateTime } from "@/lib/adminFormatters";
 import type { FirstCleanPriceRow } from "@/app/api/admin/pricing/first-clean-prices/route";
 import type { RecurringPriceRow } from "@/app/api/admin/pricing/recurring-prices/route";
 import type { PricingMatrixRow } from "@/app/api/admin/pricing/matrix/route";
+import ServiceOfferingsClient from "@/app/admin/financials/service-offerings/ServiceOfferingsClient";
+import PlanTemplatesClient from "@/app/admin/financials/plan-templates/PlanTemplatesClient";
+import AddOnsClient from "@/app/admin/financials/add-ons/AddOnsClient";
+import DiscountsClient from "@/app/admin/discounts/DiscountsClient";
 
 type VerticalOption = { id: string; name: string | null; slug: string | null };
 type ServiceOfferingOption = { id: string; offering_name: string | null; offering_key: string | null };
@@ -21,7 +25,10 @@ type PricingOptions = {
     matrix_dimension_values?: { id: string; label: string; dimension_label?: string | null }[];
 };
 
+type MainPricingTab = "matrix" | "service-offerings" | "plan-templates" | "pricing-modes" | "pricing-dimensions" | "dimension-values" | "add-ons" | "discount-codes" | "legacy";
+
 export default function PricingClient() {
+    const [mainTab, setMainTab] = useState<MainPricingTab>("matrix");
     const [activeSection, setActiveSection] = useState<"first-clean" | "recurring" | "matrix">("matrix");
     const [verticalId, setVerticalId] = useState("");
     const [serviceOfferingId, setServiceOfferingId] = useState("");
@@ -141,6 +148,10 @@ export default function PricingClient() {
     }, [verticalId, serviceOfferingId, pricingModeId, planTemplateId, isActiveFilter]);
     useEffect(() => { if (activeSection === "matrix") fetchMatrix(); }, [activeSection, fetchMatrix]);
 
+    useEffect(() => {
+        if (mainTab === "legacy" && activeSection === "matrix") setActiveSection("first-clean");
+    }, [mainTab]);
+
     const patchMatrix = useCallback(async (id: string, payload: { amount_cents?: number; is_active?: boolean }) => {
         setPatchingMatrixId(id);
         try {
@@ -149,11 +160,25 @@ export default function PricingClient() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            if (res.ok) await fetchMatrix();
+            if (res.ok) {
+                const now = new Date().toISOString();
+                setMatrixRows((prev) =>
+                    prev.map((r) =>
+                        r.id === id
+                            ? {
+                                  ...r,
+                                  ...payload,
+                                  _amount_display: payload.amount_cents != null ? `$${(payload.amount_cents / 100).toFixed(2)}` : r._amount_display,
+                                  _updated: now,
+                              }
+                            : r
+                    )
+                );
+            }
         } finally {
             setPatchingMatrixId(null);
         }
-    }, [fetchMatrix]);
+    }, []);
 
     const openAddRule = () => {
         setRuleForm({
@@ -405,72 +430,138 @@ export default function PricingClient() {
                 <p className="mt-1 text-sm text-alloy-midnight/70">Configure pricing by service offering, plan template, pricing mode, and dimension value.</p>
             </header>
 
-            <div className="flex flex-wrap items-center gap-4 rounded-lg border border-admin-border bg-white px-4 py-3">
-                <span className="text-xs font-semibold uppercase text-alloy-midnight/60">Filters</span>
-                <div className="flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2">
-                        <span className="text-sm text-alloy-forge/80">Vertical</span>
-                        <select value={verticalId} onChange={(e) => setVerticalId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                            <option value="">All</option>
-                            {verticals.map((v) => (<option key={v.id} value={v.id}>{v.name ?? v.slug ?? v.id}</option>))}
-                        </select>
-                    </label>
-                    <label className="flex items-center gap-2">
-                        <span className="text-sm text-alloy-forge/80">Service Offering</span>
-                        <select value={serviceOfferingId} onChange={(e) => setServiceOfferingId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                            <option value="">All</option>
-                            {serviceOfferings.map((s) => (<option key={s.id} value={s.id}>{s.offering_name ?? s.offering_key ?? s.id}</option>))}
-                        </select>
-                    </label>
-                    <label className="flex items-center gap-2">
-                        <span className="text-sm text-alloy-forge/80">Pricing Mode</span>
-                        <select value={pricingModeId} onChange={(e) => setPricingModeId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                            <option value="">All</option>
-                            {(opts.pricing_modes ?? []).map((m) => (<option key={m.id} value={m.id}>{m.label}</option>))}
-                        </select>
-                    </label>
-                    <label className="flex items-center gap-2">
-                        <span className="text-sm text-alloy-forge/80">Plan Template</span>
-                        <select value={planTemplateId} onChange={(e) => setPlanTemplateId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                            <option value="">All</option>
-                            {(opts.matrix_plan_templates ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
-                        </select>
-                    </label>
-                    <label className="flex items-center gap-2">
-                        <span className="text-sm text-alloy-forge/80">Active</span>
-                        <select value={isActiveFilter} onChange={(e) => setIsActiveFilter((e.target.value as "" | "true" | "false") || "")} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                            <option value="">All</option>
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </label>
-                    {activeSection === "matrix" && (
+            {/* Main workspace tabs */}
+            <div className="flex flex-wrap gap-1 border-b border-admin-border">
+                {([
+                    ["matrix", "Pricing Matrix"],
+                    ["service-offerings", "Service Offerings"],
+                    ["plan-templates", "Plan Templates"],
+                    ["pricing-modes", "Pricing Modes"],
+                    ["pricing-dimensions", "Pricing Dimensions"],
+                    ["dimension-values", "Dimension Values"],
+                    ["add-ons", "Add-Ons"],
+                    ["discount-codes", "Discount Codes"],
+                    ["legacy", "Legacy"],
+                ] as const).map(([tab, label]) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setMainTab(tab)}
+                        className={`px-3 py-2 text-sm font-medium rounded-t-md ${mainTab === tab ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"} ${tab === "legacy" ? "text-alloy-midnight/70" : ""}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {(mainTab === "matrix" || mainTab === "legacy") && (
+                <div className="flex flex-wrap items-center gap-4 rounded-lg border border-admin-border bg-white px-4 py-3">
+                    <span className="text-xs font-semibold uppercase text-alloy-midnight/60">Filters</span>
+                    <div className="flex flex-wrap items-center gap-3">
                         <label className="flex items-center gap-2">
-                            <span className="text-sm text-alloy-forge/80">Group by</span>
-                            <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as typeof groupBy)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
-                                <option value="none">None</option>
-                                <option value="pricing_mode">Pricing Mode</option>
-                                <option value="service_offering">Service Offering</option>
-                                <option value="plan_template">Plan Template</option>
+                            <span className="text-sm text-alloy-forge/80">Vertical</span>
+                            <select value={verticalId} onChange={(e) => setVerticalId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
+                                <option value="">All</option>
+                                {verticals.map((v) => (<option key={v.id} value={v.id}>{v.name ?? v.slug ?? v.id}</option>))}
                             </select>
                         </label>
-                    )}
+                        <label className="flex items-center gap-2">
+                            <span className="text-sm text-alloy-forge/80">Service Offering</span>
+                            <select value={serviceOfferingId} onChange={(e) => setServiceOfferingId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
+                                <option value="">All</option>
+                                {serviceOfferings.map((s) => (<option key={s.id} value={s.id}>{s.offering_name ?? s.offering_key ?? s.id}</option>))}
+                            </select>
+                        </label>
+                        {mainTab === "matrix" && (
+                            <>
+                                <label className="flex items-center gap-2">
+                                    <span className="text-sm text-alloy-forge/80">Pricing Mode</span>
+                                    <select value={pricingModeId} onChange={(e) => setPricingModeId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
+                                        <option value="">All</option>
+                                        {(opts.pricing_modes ?? []).map((m) => (<option key={m.id} value={m.id}>{m.label}</option>))}
+                                    </select>
+                                </label>
+                                <label className="flex items-center gap-2">
+                                    <span className="text-sm text-alloy-forge/80">Plan Template</span>
+                                    <select value={planTemplateId} onChange={(e) => setPlanTemplateId(e.target.value)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
+                                        <option value="">All</option>
+                                        {(opts.matrix_plan_templates ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
+                                    </select>
+                                </label>
+                                <label className="flex items-center gap-2">
+                                    <span className="text-sm text-alloy-forge/80">Group by</span>
+                                    <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as typeof groupBy)} className="rounded border border-admin-border px-2 py-1.5 text-sm">
+                                        <option value="none">None</option>
+                                        <option value="pricing_mode">Pricing Mode</option>
+                                        <option value="service_offering">Service Offering</option>
+                                        <option value="plan_template">Plan Template</option>
+                                    </select>
+                                </label>
+                            </>
+                        )}
+                        <label className="flex items-center gap-2">
+                            <span className="text-sm text-alloy-forge/80">Active</span>
+                            <select value={isActiveFilter} onChange={(e) => setIsActiveFilter((e.target.value as "" | "true" | "false") || "")} className="rounded border border-admin-border px-2 py-1.5 text-sm">
+                                <option value="">All</option>
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                        </label>
+                    </div>
                 </div>
-            </div>
+            )}
 
-            <div className="flex gap-2 border-b border-admin-border">
-                <button type="button" onClick={() => setActiveSection("matrix")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "matrix" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
-                    Pricing Matrix
-                </button>
-                <button type="button" onClick={() => setActiveSection("first-clean")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
-                    Legacy: {initialLabel}
-                </button>
-                <button type="button" onClick={() => setActiveSection("recurring")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
-                    Legacy: {recurringLabel}
-                </button>
-            </div>
+            {mainTab === "legacy" && (
+                <div className="flex gap-2 border-b border-admin-border">
+                    <button type="button" onClick={() => setActiveSection("first-clean")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
+                        Legacy: {initialLabel}
+                    </button>
+                    <button type="button" onClick={() => setActiveSection("recurring")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
+                        Legacy: {recurringLabel}
+                    </button>
+                </div>
+            )}
 
-            {activeSection === "first-clean" && (
+            {mainTab === "service-offerings" && (
+                <section className="mt-4">
+                    <ServiceOfferingsClient />
+                </section>
+            )}
+            {mainTab === "plan-templates" && (
+                <section className="mt-4">
+                    <PlanTemplatesClient />
+                </section>
+            )}
+            {mainTab === "pricing-modes" && (
+                <section className="mt-4 rounded-lg border border-admin-border bg-white p-6">
+                    <p className="text-sm text-alloy-midnight/80">Pricing modes are used by the Pricing Matrix. Configure in database (table <code className="bg-alloy-stone/20 px-1 rounded">pricing_modes</code>) if needed.</p>
+                    <p className="mt-2 text-sm text-alloy-midnight/60">Go to the <button type="button" onClick={() => setMainTab("matrix")} className="text-alloy-blue underline">Pricing Matrix</button> tab to add rules by mode.</p>
+                </section>
+            )}
+            {mainTab === "pricing-dimensions" && (
+                <section className="mt-4 rounded-lg border border-admin-border bg-white p-6">
+                    <p className="text-sm text-alloy-midnight/80">Pricing dimensions are used by the Pricing Matrix. Configure in database (table <code className="bg-alloy-stone/20 px-1 rounded">pricing_dimensions</code>) if needed.</p>
+                    <p className="mt-2 text-sm text-alloy-midnight/60">Go to the <button type="button" onClick={() => setMainTab("matrix")} className="text-alloy-blue underline">Pricing Matrix</button> tab to add rules by dimension value.</p>
+                </section>
+            )}
+            {mainTab === "dimension-values" && (
+                <section className="mt-4 rounded-lg border border-admin-border bg-white p-6">
+                    <p className="text-sm text-alloy-midnight/80">Dimension values are used by the Pricing Matrix. Configure in database (table <code className="bg-alloy-stone/20 px-1 rounded">pricing_dimension_values</code>) if needed.</p>
+                    <p className="mt-2 text-sm text-alloy-midnight/60">Go to the <button type="button" onClick={() => setMainTab("matrix")} className="text-alloy-blue underline">Pricing Matrix</button> tab to add rules by dimension value.</p>
+                </section>
+            )}
+            {mainTab === "add-ons" && (
+                <section className="mt-4">
+                    <AddOnsClient />
+                </section>
+            )}
+            {mainTab === "discount-codes" && (
+                <section className="mt-4">
+                    <DiscountsClient />
+                </section>
+            )}
+
+            {mainTab === "legacy" && activeSection === "first-clean" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-lg font-semibold text-alloy-forge">{initialLabel}</h2>
@@ -535,7 +626,7 @@ export default function PricingClient() {
                 </section>
             )}
 
-            {activeSection === "recurring" && (
+            {mainTab === "legacy" && activeSection === "recurring" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-lg font-semibold text-alloy-forge">{recurringLabel}</h2>
@@ -602,7 +693,7 @@ export default function PricingClient() {
                 </section>
             )}
 
-            {activeSection === "matrix" && (
+            {mainTab === "matrix" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <div>
@@ -858,6 +949,7 @@ export default function PricingClient() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !addRuleSaving && setAddRuleOpen(false)}>
                     <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add Pricing Rule</h3>
+                        {optionsLoading && <p className="text-sm text-alloy-midnight/70 mb-2">Loading options…</p>}
                         {addRuleError && <p className="text-sm text-red-600 mb-2">{addRuleError}</p>}
                         <div className="space-y-3">
                             <label className="block">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import Drawer from "@/components/admin/Drawer";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -22,15 +22,18 @@ interface Discount {
 }
 
 interface DiscountsClientProps {
-  initialData: Discount[];
+  initialData?: Discount[];
   error?: string;
 }
 
 export default function DiscountsClient({
-  initialData,
-  error,
+  initialData: initialDataProp,
+  error: errorProp,
 }: DiscountsClientProps) {
   const { canMutate } = useAdminAuth();
+  const [clientData, setClientData] = useState<Discount[] | null>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(typeof initialDataProp === "undefined");
   const [selectedRow, setSelectedRow] = useState<Discount | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -38,6 +41,26 @@ export default function DiscountsClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const readOnly = !canMutate;
+
+  const fetchDiscounts = useCallback(async () => {
+    setLoading(true);
+    setClientError(null);
+    try {
+      const res = await fetch("/api/admin/discounts");
+      const data = await res.json();
+      if (res.ok) setClientData(Array.isArray(data) ? data : []);
+      else setClientError((data as { error?: string }).error ?? "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof initialDataProp === "undefined") fetchDiscounts();
+  }, [initialDataProp, fetchDiscounts]);
+
+  const initialData = initialDataProp ?? clientData ?? [];
+  const error = errorProp ?? clientError;
 
   const columns = [
     {
@@ -154,8 +177,8 @@ export default function DiscountsClient({
         throw new Error(error.error || "Failed to save discount");
       }
 
-      // Refresh page to show updated data
-      window.location.reload();
+      if (typeof initialDataProp === "undefined") fetchDiscounts();
+      else window.location.reload();
     } catch (err: any) {
       setSubmitError(err.message || "Failed to save discount");
       setIsSubmitting(false);
@@ -174,6 +197,12 @@ export default function DiscountsClient({
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
           Error: {error}
+        </div>
+      )}
+
+      {loading && typeof initialDataProp === "undefined" && (
+        <div className="mb-4 p-4 bg-alloy-stone/10 rounded-md text-sm text-alloy-midnight/80">
+          Loading discounts…
         </div>
       )}
 

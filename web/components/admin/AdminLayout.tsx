@@ -82,16 +82,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
             { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
-            {
-                label: "Settings",
-                subItems: [
-                    { href: "/admin/financials/service-offerings", label: "Service Offerings", entityType: "service_offerings" },
-                    { href: "/admin/financials/plan-templates", label: "Plan Templates", entityType: "service_plan_templates" },
-                    { href: "/admin/financials/pricing", label: "Pricing" },
-                    { href: "/admin/financials/add-ons", label: "Add-ons" },
-                    { href: "/admin/discounts", label: "Discount Codes" },
-                ],
-            },
+            { href: "/admin/financials/pricing", label: "Pricing" },
         ],
     },
     {
@@ -194,15 +185,11 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
-        const financialSettingsPaths = ["/admin/financials/pricing", "/admin/financials/service-offerings", "/admin/financials/plan-templates", "/admin/financials/add-ons", "/admin/discounts"];
         if (workflowPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev["Operations::Workflows"] === false ? prev : { ...prev, "Operations::Workflows": false }));
         }
         if (pathname === "/admin/operations/recurrence") {
             setNestedCollapsed((prev) => (prev["Operations::Settings"] === false ? prev : { ...prev, "Operations::Settings": false }));
-        }
-        if (financialSettingsPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev["Financials::Settings"] === false ? prev : { ...prev, "Financials::Settings": false }));
         }
     }, [pathname]);
 
