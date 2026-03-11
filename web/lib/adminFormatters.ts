@@ -101,3 +101,33 @@ export function formatDateTime(value: string | number | Date | null | undefined)
         timeZone: "UTC",
     }).format(d as Date);
 }
+
+/** Recurrence unit values for dropdowns (stored lowercase). */
+export const RECURRENCE_UNIT_OPTIONS = [
+    { value: "day", label: "Day" },
+    { value: "week", label: "Week" },
+    { value: "month", label: "Month" },
+    { value: "quarter", label: "Quarter" },
+    { value: "year", label: "Year" },
+] as const;
+
+/**
+ * Format (recurrence_unit, recurrence_interval) for display.
+ * e.g. week/1 → "Weekly", month/1 → "Monthly", quarter/1 → "Quarterly", year/1 → "Annually".
+ */
+export function formatRecurrenceLabel(unit: string | null, interval: number | null): string | null {
+    if (!unit || interval == null || interval < 1) return null;
+    const i = Math.max(1, Number(interval) || 1);
+    const u = unit.toLowerCase();
+    if (u === "day" && i === 1) return "Daily";
+    if (u === "day") return `Every ${i} days`;
+    if (u === "week" && i === 1) return "Weekly";
+    if (u === "week") return `Every ${i} weeks`;
+    if (u === "month" && i === 1) return "Monthly";
+    if (u === "month") return `Every ${i} months`;
+    if (u === "quarter" && i === 1) return "Quarterly";
+    if (u === "quarter") return `Every ${i} quarters`;
+    if (u === "year" && i === 1) return "Annually";
+    if (u === "year") return `Every ${i} years`;
+    return `${i} ${u}(s)`;
+}

@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
-import { formatDate, formatDateTime, formatMoney, formatPhoneUS, formatPayoutPercent } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoney, formatPhoneUS, formatPayoutPercent, RECURRENCE_UNIT_OPTIONS } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
@@ -180,6 +180,24 @@ function renderFieldEditNode(
         />
         <span className="text-sm text-alloy-forge/90">{value ? "Yes" : "No"}</span>
       </label>
+    );
+  }
+
+  if (key === "recurrence_unit") {
+    return (
+      <select
+        value={String(value ?? "")}
+        onChange={(e) => onFieldChange(key, e.target.value || null)}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
+        className={INLINE_EDIT_SELECT}
+      >
+        <option value="">— None —</option>
+        {RECURRENCE_UNIT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
     );
   }
 

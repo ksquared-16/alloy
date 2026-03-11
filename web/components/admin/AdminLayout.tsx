@@ -68,13 +68,10 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                 ],
             },
             { href: "/admin/messaging", label: "Messages", entityType: "messages" },
-        ],
-    },
-    {
-        label: "Operations Settings",
-        icon: Repeat,
-        items: [
-            { href: "/admin/operations/recurrence", label: "Recurrence" },
+            {
+                label: "Settings",
+                subItems: [{ href: "/admin/operations/recurrence", label: "Recurrence" }],
+            },
         ],
     },
     {
@@ -86,7 +83,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/financials/statements", label: "Statements" },
             { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
             {
-                label: "Financial Settings",
+                label: "Settings",
                 subItems: [
                     { href: "/admin/financials/service-offerings", label: "Service Offerings", entityType: "service_offerings" },
                     { href: "/admin/financials/plan-templates", label: "Plan Templates", entityType: "service_plan_templates" },
@@ -138,12 +135,12 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
     if (map[href]) return map[href];
     if (nestedLabel === "People") return Users;
     if (nestedLabel === "Workflows") return GitBranch;
-    if (nestedLabel === "Financial Settings") return Tag;
+    if (nestedLabel === "Settings") return Settings;
     return null;
 }
 
 function getInitialCollapsed(): Record<string, boolean> {
-    const defaults = { People: false, Operations: false, "Operations Settings": true, Financials: true, System: true };
+    const defaults = { People: false, Operations: false, Financials: true, System: true };
     if (typeof window === "undefined") {
         return defaults;
     }
@@ -182,7 +179,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ People: true, Workflows: true, "Financial Settings": true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -199,10 +196,13 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
         const financialSettingsPaths = ["/admin/financials/pricing", "/admin/financials/service-offerings", "/admin/financials/plan-templates", "/admin/financials/add-ons", "/admin/discounts"];
         if (workflowPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev.Workflows === false ? prev : { ...prev, Workflows: false }));
+            setNestedCollapsed((prev) => (prev["Operations::Workflows"] === false ? prev : { ...prev, "Operations::Workflows": false }));
+        }
+        if (pathname === "/admin/operations/recurrence") {
+            setNestedCollapsed((prev) => (prev["Operations::Settings"] === false ? prev : { ...prev, "Operations::Settings": false }));
         }
         if (financialSettingsPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev["Financial Settings"] === false ? prev : { ...prev, "Financial Settings": false }));
+            setNestedCollapsed((prev) => (prev["Financials::Settings"] === false ? prev : { ...prev, "Financials::Settings": false }));
         }
     }, [pathname]);
 
@@ -339,18 +339,19 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                         {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-alloy-midnight/50" /> : <ChevronDown className="h-3.5 w-3.5 text-alloy-midnight/50" />}
                                     </button>
                                     {!isCollapsed && (
-                                        <ul className="mt-1.5 space-y-0.5">
+                                        <ul className="mt-1.5 space-y-0.5 pl-3">
                                             {group.items.map((item) => {
                                                 if (isNestedNavItem(item)) {
-                                                    const isNestedOpen = !(nestedCollapsed[item.label] ?? true);
+                                                    const nestedKey = `${group.label}::${item.label}`;
+                                                    const isNestedOpen = !(nestedCollapsed[nestedKey] ?? true);
                                                     const hasActiveChild = item.subItems.some((s) => s.href === pathname);
                                                     const NestedIcon = getLinkIcon("", item.label, item.label);
                                                     return (
-                                                        <li key={item.label}>
+                                                        <li key={nestedKey}>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => toggleNested(item.label)}
-                                                                className={`flex items-center justify-between w-full px-4 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                                onClick={() => toggleNested(nestedKey)}
+                                                                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
                                                             >
                                                                 <span className="flex items-center gap-2 min-w-0">
                                                                     {NestedIcon && <NestedIcon className={iconClassSidebar} />}
@@ -387,7 +388,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                     <li key={link.href}>
                                                         <Link
                                                             href={link.href}
-                                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
                                                         >
                                                             {LinkIcon && <LinkIcon className={iconClassSidebar} />}
                                                             <span className="truncate">{displayLabel}</span>

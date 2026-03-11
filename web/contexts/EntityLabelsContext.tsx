@@ -22,6 +22,9 @@ const DEFAULT_ENTITY_LABELS: Record<string, { singular: string; plural: string }
     subscriptions: { singular: "Subscription", plural: "Subscriptions" },
     payments: { singular: "Payment", plural: "Payments" },
     messages: { singular: "Message", plural: "Messages" },
+    service_offerings: { singular: "Service Offering", plural: "Service Offerings" },
+    service_plan_templates: { singular: "Plan Template", plural: "Plan Templates" },
+    discount_redemptions: { singular: "Discount Redemption", plural: "Discount Redemptions" },
 };
 
 /**

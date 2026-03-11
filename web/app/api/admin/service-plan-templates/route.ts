@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 
 export type ServicePlanTemplateListItem = {
     id: string;
@@ -19,16 +20,6 @@ export type ServicePlanTemplateListItem = {
     _active_yes_no: boolean;
     _updated: string | null;
 };
-
-function recurrenceLabel(unit: string | null, interval: number | null): string | null {
-    if (!unit || interval == null || interval < 1) return null;
-    const i = Math.max(1, Number(interval) || 1);
-    if (unit === "week" && i === 1) return "Weekly";
-    if (unit === "week") return `Every ${i} weeks`;
-    if (unit === "month" && i === 1) return "Monthly";
-    if (unit === "month") return `Every ${i} months`;
-    return `${i} ${unit}(s)`;
-}
 
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();
@@ -64,7 +55,7 @@ export async function GET(request: NextRequest) {
             is_active?: boolean;
         };
         const _updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
-        const _recurrence_label = recurrenceLabel(
+        const _recurrence_label = formatRecurrenceLabel(
             (row.recurrence_unit as string) ?? null,
             row.recurrence_interval != null ? Number(row.recurrence_interval) : null
         );
@@ -88,4 +79,44 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ service_plan_templates: items, total: count ?? items.length });
+}
+
+const RECURRENCE_UNITS = ["day", "week", "month", "quarter", "year"] as const;
+
+/** POST: create a plan template. Body: plan_name, plan_key, is_recurring?, recurrence_unit?, recurrence_interval?, is_active? */
+export async function POST(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+    let body: { plan_name?: string; plan_key?: string; is_recurring?: boolean; recurrence_unit?: string | null; recurrence_interval?: number | null; is_active?: boolean };
+    try {
+        body = await request.json();
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const plan_name = typeof body.plan_name === "string" ? body.plan_name.trim() || null : null;
+    const plan_key = typeof body.plan_key === "string" ? body.plan_key.trim() || null : null;
+    if (!plan_name && !plan_key) return NextResponse.json({ error: "plan_name or plan_key required" }, { status: 400 });
+
+    const unit = typeof body.recurrence_unit === "string" && body.recurrence_unit.trim()
+        ? (body.recurrence_unit.trim().toLowerCase() as string)
+        : null;
+    const validUnit = unit && RECURRENCE_UNITS.includes(unit as (typeof RECURRENCE_UNITS)[number]) ? unit : null;
+    const interval = body.recurrence_interval != null ? Math.max(1, Number(body.recurrence_interval) || 1) : 1;
+
+    const supabase = createAdminClient();
+    const insert: Record<string, unknown> = {
+        plan_name: plan_name ?? undefined,
+        plan_key: plan_key ?? undefined,
+        is_recurring: !!body.is_recurring,
+        recurrence_unit: validUnit,
+        recurrence_interval: validUnit ? interval : null,
+        is_active: body.is_active !== false,
+    };
+    if (ctx.orgId) insert.org_id = ctx.orgId;
+
+    const { data, error } = await supabase.from("service_plan_templates").insert(insert).select("id, plan_name, plan_key, is_recurring, recurrence_unit, recurrence_interval, is_active, created_at, updated_at, org_id, vertical_id").single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data ?? {});
 }

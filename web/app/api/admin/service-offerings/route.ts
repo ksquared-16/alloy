@@ -68,3 +68,34 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ service_offerings: items, total: count ?? items.length });
 }
+
+/** POST: create a service offering. Body: offering_name, offering_key, vertical_id, description?, is_active? */
+export async function POST(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+    let body: { offering_name?: string; offering_key?: string; vertical_id?: string | null; description?: string | null; is_active?: boolean };
+    try {
+        body = await request.json();
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const offering_name = typeof body.offering_name === "string" ? body.offering_name.trim() || null : null;
+    const offering_key = typeof body.offering_key === "string" ? body.offering_key.trim() || null : null;
+    if (!offering_name && !offering_key) return NextResponse.json({ error: "offering_name or offering_key required" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const insert: Record<string, unknown> = {
+        offering_name: offering_name ?? undefined,
+        offering_key: offering_key ?? undefined,
+        vertical_id: typeof body.vertical_id === "string" && body.vertical_id.trim() ? body.vertical_id.trim() : null,
+        description: typeof body.description === "string" ? body.description.trim() || null : null,
+        is_active: body.is_active !== false,
+    };
+    if (ctx.orgId) insert.org_id = ctx.orgId;
+
+    const { data, error } = await supabase.from("service_offerings").insert(insert).select("id, offering_name, offering_key, vertical_id, is_active, description, created_at, updated_at, org_id").single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data ?? {});
+}
