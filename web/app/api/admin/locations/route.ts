@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("locations")
-        .select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active")
+        .select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active, location_type, updated_at")
         .eq("org_id", ctx.orgId)
         .order("is_primary", { ascending: false })
         .order("label", { ascending: true });
@@ -32,16 +32,26 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const locations = (rows ?? []).map((r) => ({
-        id: (r as { id: string }).id,
-        label: (r as { label?: string | null }).label ?? null,
-        address1: (r as { address1?: string | null }).address1 ?? null,
-        city: (r as { city?: string | null }).city ?? null,
-        state: (r as { state?: string | null }).state ?? null,
-        postal_code: (r as { postal_code?: string | null }).postal_code ?? null,
-        customer_id: (r as { customer_id: string }).customer_id,
-        is_primary: (r as { is_primary: boolean }).is_primary,
-        is_active: (r as { is_active: boolean }).is_active,
+    const list = (rows ?? []) as { id: string; label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; customer_id?: string | null; is_primary?: boolean; is_active?: boolean; location_type?: string | null; updated_at?: string | null }[];
+    const customerIds = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
+    const { data: customersData } = customerIds.length
+        ? await supabase.from("customers").select("id, name").in("id", customerIds)
+        : { data: [] };
+    const customerMap = new Map((customersData ?? []).map((c: { id: string; name?: string | null }) => [c.id, c.name ?? null]));
+
+    const locations = list.map((r) => ({
+        id: r.id,
+        label: r.label ?? null,
+        address1: r.address1 ?? null,
+        city: r.city ?? null,
+        state: r.state ?? null,
+        postal_code: r.postal_code ?? null,
+        customer_id: r.customer_id ?? null,
+        is_primary: r.is_primary ?? false,
+        is_active: r.is_active !== false,
+        location_type: r.location_type ?? null,
+        updated_at: r.updated_at ?? null,
+        _customer_name: r.customer_id ? (customerMap.get(r.customer_id) ?? null) : null,
     }));
 
     return NextResponse.json({ locations });

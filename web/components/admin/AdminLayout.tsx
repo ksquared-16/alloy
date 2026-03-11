@@ -14,6 +14,7 @@ import {
     GitBranch,
     LayoutGrid,
     Mail,
+    MapPin,
     MessageSquare,
     Receipt,
     Repeat,
@@ -59,6 +60,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/opportunities", label: "Opportunities", entityType: "opportunities" },
             { href: "/admin/jobs", label: "Jobs", entityType: "jobs" },
             { href: "/admin/schedules", label: "Schedules", entityType: "schedules" },
+            { href: "/admin/locations", label: "Locations", entityType: "locations" },
             {
                 label: "Workflows",
                 subItems: [
@@ -104,6 +106,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/opportunities": LayoutGrid,
         "/admin/jobs": Briefcase,
         "/admin/schedules": Calendar,
+        "/admin/locations": MapPin,
         "/admin/messaging": MessageSquare,
         "/admin/messages-outbox": Mail,
         "/admin/financials/ledger": FileText,
