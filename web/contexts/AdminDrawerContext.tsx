@@ -12,15 +12,26 @@ export type SchedulePrefill = {
     status_key?: string | null;
 };
 
+/** When opening jobs with id "new", prefill opportunity_id, customer_id, primary_contact_id. */
+export type JobPrefill = {
+    opportunity_id?: string | null;
+    customer_id?: string | null;
+    primary_contact_id?: string | null;
+};
+
 interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
     id: string | null;
     /** When opening workflows with id "new", default the entity_type field to this (e.g. "opportunity"). */
     defaultWorkflowEntityType?: string;
-    /** When opening customer_members with id "new", prefill customer_id. */
+    /** When opening customer_members or contacts or locations with id "new", prefill customer_id. */
     defaultCustomerId?: string;
+    /** When opening contacts with id "new", prefill vendor_id. */
+    defaultVendorId?: string;
     /** When opening schedules with id "new", prefill job_id, customer_id, location_id, assigned_vendor_id, status_key. */
     defaultSchedulePrefill?: SchedulePrefill;
+    /** When opening jobs with id "new", prefill opportunity_id, customer_id, primary_contact_id. */
+    defaultJobPrefill?: JobPrefill;
 }
 
 export type DrawerStackItem = { type: AdminDrawerEntityType; id: string };
@@ -32,7 +43,7 @@ interface AdminDrawerContextValue {
     canGoBack: boolean;
     /** Top of stack (the drawer we would return to on Back). */
     previousDrawer: DrawerStackItem | null;
-    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => void;
+    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultVendorId?: string; defaultSchedulePrefill?: SchedulePrefill; defaultJobPrefill?: JobPrefill }) => void;
     goBack: () => void;
     closeDrawer: () => void;
 }
@@ -49,7 +60,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
     const [stack, setStack] = useState<DrawerStackItem[]>([]);
 
-    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => {
+    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultVendorId?: string; defaultSchedulePrefill?: SchedulePrefill; defaultJobPrefill?: JobPrefill }) => {
         setDrawer((prev) => {
             const prevType = prev.type;
             const prevId = prev.id;
@@ -61,7 +72,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 id: params.id,
                 defaultWorkflowEntityType: params.defaultWorkflowEntityType,
                 defaultCustomerId: params.defaultCustomerId,
+                defaultVendorId: params.defaultVendorId,
                 defaultSchedulePrefill: params.defaultSchedulePrefill,
+                defaultJobPrefill: params.defaultJobPrefill,
             };
         });
     }, []);

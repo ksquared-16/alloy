@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
-import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill } from "@/contexts/AdminDrawerContext";
+import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill, type JobPrefill } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
@@ -283,7 +283,7 @@ function JobDrawerRelationshipsSection(props: {
     contactSingular: string;
     opportunitySingular: string;
     vendorSingular: string;
-    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultSchedulePrefill?: SchedulePrefill }) => void;
+    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultVendorId?: string; defaultSchedulePrefill?: SchedulePrefill; defaultJobPrefill?: JobPrefill }) => void;
     openJobLocationChange: () => void;
     saveJobAssignedVendor: () => void;
 }) {
@@ -648,7 +648,7 @@ export default function AdminEntityDrawer() {
         setLoading(true);
         setError(null);
         setIsEditing(false);
-        if (drawer.type === "locations" && drawer.id === "new") {
+        if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs") && drawer.id === "new") {
             setData({ _create: true });
             setLoading(false);
             setIsEditing(true);
@@ -1098,11 +1098,11 @@ export default function AdminEntityDrawer() {
             company_name: "",
             notes: "",
             status: "active",
-            customer_id: "",
-            vendor_id: "",
+            customer_id: drawer.defaultCustomerId ?? "",
+            vendor_id: drawer.defaultVendorId ?? "",
             vendor_contact_role: "",
         });
-    }, [drawer.type, data]);
+    }, [drawer.type, data, drawer.defaultCustomerId, drawer.defaultVendorId]);
 
     useEffect(() => {
         if (drawer.type !== "schedules" || !drawer.id) {
@@ -1368,6 +1368,11 @@ export default function AdminEntityDrawer() {
     }, [data, drawer.type, memberRelationshipOptions]);
 
     useEffect(() => {
+        if (drawer.type !== "locations" || !(data as { _create?: boolean })?._create || !drawer.defaultCustomerId) return;
+        setFormData((prev) => ({ ...prev, customer_id: drawer.defaultCustomerId ?? "" }));
+    }, [drawer.type, (data as { _create?: boolean })?._create, drawer.defaultCustomerId]);
+
+    useEffect(() => {
         if (!drawer.type || !STATUS_ENTITY_TYPES.includes(drawer.type) || !(data as { _create?: boolean })?._create) return;
         if (statusDefsForDrawer.length === 0) return;
         const def = defaultStatusKeyForCreate;
@@ -1377,13 +1382,15 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !data || !(data as { _create?: boolean })._create) return;
+        const prefill = drawer.defaultJobPrefill;
         setFormData((prev) => ({
             ...prev,
-            customer_id: "",
-            primary_contact_id: "",
+            customer_id: prefill?.customer_id ?? "",
+            primary_contact_id: prefill?.primary_contact_id ?? "",
+            opportunity_id: prefill?.opportunity_id ?? "",
             discount_code_id: "",
         }));
-    }, [drawer.type, data?.id, (data as { _create?: boolean })?._create]);
+    }, [drawer.type, data?.id, (data as { _create?: boolean })?._create, drawer.defaultJobPrefill?.opportunity_id, drawer.defaultJobPrefill?.customer_id, drawer.defaultJobPrefill?.primary_contact_id]);
 
     useEffect(() => {
         if (drawer.type !== "jobs") {
@@ -1762,6 +1769,10 @@ export default function AdminEntityDrawer() {
 
     const saveEdit = useCallback(async () => {
         if (!drawer.type || !drawer.id) return;
+        if (drawer.id === "new" && (drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors")) {
+            setSaveError("Create from this drawer is not yet available. Use the main list or another flow.");
+            return;
+        }
         setSaving(true);
         setSaveError(null);
         try {
@@ -2506,14 +2517,15 @@ export default function AdminEntityDrawer() {
                                 const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
                                 const quoteItems = (d?.quotes ?? []).map((q) => ({ id: q.id, label: "Quote", meta: q.created_at ? formatDate(q.created_at) : undefined }));
                                 const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined }));
-                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
+                                type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
+                                const sections: Sec[] = [
                                     { key: "customer", title: customerSingular, defaultExpanded: true, items: customerItem },
                                     { key: "contact", title: contactSingular, defaultExpanded: true, items: contactItem },
-                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems },
+                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems, addAction: { label: "Add Job", onClick: () => openDrawer({ type: "jobs", id: "new", defaultJobPrefill: { opportunity_id: drawer.id ?? undefined, customer_id: opp?.customer_id ?? undefined, primary_contact_id: opp?.primary_contact_id ?? undefined } }) } },
                                     { key: "quotes", title: "Quotes", defaultExpanded: false, items: quoteItems },
                                     { key: "discount_redemptions", title: "Discounts / Promotions", defaultExpanded: false, items: discountItems },
                                 ];
-                                const visible = sections.filter((s) => s.items.length > 0);
+                                const visible = sections.filter((s) => s.items.length > 0 || s.addAction);
                                 if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
                                 return (
                                     <>
@@ -2523,23 +2535,55 @@ export default function AdminEntityDrawer() {
                                                 config={{ key: sec.key, title: sec.title, defaultExpanded: sec.defaultExpanded, collapsible: true, gridCols: 1, fields: [] }}
                                                 defaultExpanded={sec.defaultExpanded}
                                             >
-                                                <ul className="space-y-0 list-none p-0 m-0">
-                                                    {sec.items.map((item) => (
-                                                        <li key={item.id}>
-                                                            {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
-                                                                <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
-                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                </button>
-                                                            ) : (
-                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
-                                                                    <div className="font-medium">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                </div>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                {sec.items.length > 0 ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {sec.addAction && (
+                                                            <div className="flex justify-end">
+                                                                <button type="button" onClick={sec.addAction.onClick} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">{sec.addAction.label}</button>
+                                                            </div>
+                                                        )}
+                                                        <ul className="space-y-0 list-none p-0 m-0">
+                                                            {sec.items.map((item) => (
+                                                                <li key={item.id}>
+                                                                    {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
+                                                                        <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                            <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                            <div className="font-medium">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </div>
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                ) : sec.addAction ? (
+                                                    <div className="py-3 flex flex-col gap-2">
+                                                        <p className="text-sm text-alloy-midnight/60">No jobs yet.</p>
+                                                        <button type="button" onClick={sec.addAction.onClick} className="self-start px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{sec.addAction.label}</button>
+                                                    </div>
+                                                ) : (
+                                                    <ul className="space-y-0 list-none p-0 m-0">
+                                                        {sec.items.map((item) => (
+                                                            <li key={item.id}>
+                                                                {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
+                                                                    <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                        <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                        {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                        <div className="font-medium">{item.label}</div>
+                                                                        {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                    </div>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
                                             </EntityDrawerSection>
                                         ))}
                                     </>
@@ -2610,16 +2654,19 @@ export default function AdminEntityDrawer() {
                                 const hasContacts = linkedContacts.length > 0;
                                 const hasCustomer = !!customer;
                                 const hasDocuments = documents.length > 0;
-                                if (!hasContacts && !hasCustomer && !hasDocuments) {
+                                const customerId = data && (data.customer_id as string) ? String(data.customer_id) : null;
+                                const showLinkedSection = hasContacts || (canMutate && customerId && drawer.id && drawer.id !== "new");
+                                if (!showLinkedSection && !hasCustomer && !hasDocuments) {
                                     return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
                                 }
                                 return (
                                     <div className="space-y-0">
-                                        {hasContacts && (
+                                        {showLinkedSection && (
                                             <EntityDrawerSection config={{ key: "linked_contacts", title: "Linked Contacts", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }}>
                                                 <div className="flex flex-col gap-2">
-                                                    {canMutate && data && (data.customer_id as string) && drawer.id && drawer.id !== "new" && (
-                                                        <div className="flex justify-end">
+                                                    {canMutate && customerId && drawer.id && drawer.id !== "new" && (
+                                                        <div className="flex flex-wrap gap-2 justify-end">
+                                                            <button type="button" onClick={() => openDrawer({ type: "contacts", id: "new", defaultCustomerId: customerId })} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">Add contact</button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
@@ -2627,8 +2674,7 @@ export default function AdminEntityDrawer() {
                                                                     setMemberLinkRoleKey(memberRelatedRoles[0]?.role_key ?? "");
                                                                     setMemberLinkContactId("");
                                                                     setMemberLinkError(null);
-                                                                    const cid = data.customer_id as string;
-                                                                    fetch(`/api/admin/related/customer/${cid}`)
+                                                                    fetch(`/api/admin/related/customer/${customerId}`)
                                                                         .then((r) => (r.ok ? r.json() : { contacts: [] }))
                                                                         .then((json: { contacts?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] }) => {
                                                                             const opts = (json.contacts ?? []).map((c) => ({
@@ -2648,6 +2694,7 @@ export default function AdminEntityDrawer() {
                                                             </button>
                                                         </div>
                                                     )}
+                                                    {hasContacts ? (
                                                     <ul className="space-y-2">
                                                         {linkedContacts.map((c) => (
                                                             <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -2680,6 +2727,9 @@ export default function AdminEntityDrawer() {
                                                             </li>
                                                         ))}
                                                     </ul>
+                                                    ) : (
+                                                        <p className="text-sm text-alloy-midnight/60">No linked contacts yet. Add or link a contact above.</p>
+                                                    )}
                                                 </div>
                                             </EntityDrawerSection>
                                         )}
@@ -2827,13 +2877,19 @@ export default function AdminEntityDrawer() {
                                             </ul>
                                         </section>
                                     )}
-                                    {(contactRelatedData.opportunities.length > 0 || contactRelatedData.jobs.length > 0 || contactRelatedData.customer_subscriptions.length > 0) && (
+                                    {(contactRelatedData.opportunities.length > 0 || contactRelatedData.jobs.length > 0 || contactRelatedData.customer_subscriptions.length > 0 || (contactRelatedData.linkedCustomer && (contactRelatedData.opportunities.length === 0 || contactRelatedData.jobs.length === 0))) && (
                                         <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Operational Relationships</h3>
                                             <div className="space-y-3 text-sm">
-                                                {contactRelatedData.opportunities.length > 0 && (
+                                                {(contactRelatedData.opportunities.length > 0 || (contactRelatedData.linkedCustomer && contactRelatedData.opportunities.length === 0)) && (
                                                     <div>
-                                                        <p className="text-alloy-muted text-xs font-medium mb-1">Opportunities (primary contact)</p>
+                                                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                            <p className="text-alloy-muted text-xs font-medium">Opportunities (primary contact)</p>
+                                                            {contactRelatedData.linkedCustomer && (
+                                                                <button type="button" onClick={() => openDrawer({ type: "opportunities", id: "new", defaultCustomerId: contactRelatedData!.linkedCustomer!.id })} className="text-xs px-2 py-0.5 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">Add opportunity</button>
+                                                            )}
+                                                        </div>
+                                                        {contactRelatedData.opportunities.length > 0 ? (
                                                         <ul className="space-y-1">
                                                             {contactRelatedData.opportunities.map((o) => (
                                                                 <li key={o.id} className="flex flex-col gap-0.5 py-1">
@@ -2842,6 +2898,9 @@ export default function AdminEntityDrawer() {
                                                                 </li>
                                                             ))}
                                                         </ul>
+                                                        ) : (
+                                                            <p className="text-sm text-alloy-midnight/60">No opportunities yet.</p>
+                                                        )}
                                                     </div>
                                                 )}
                                                 {contactRelatedData.jobs.length > 0 && (
@@ -2928,30 +2987,32 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
-                    {drawerTab === "related" && drawer.type === "customers" && drawer.id && (
+                    {drawerTab === "related" && drawer.type === "customers" && drawer.id && drawer.id !== "new" && (
                         <div className="space-y-0 pt-5" data-entity-drawer-related>
                             {customerRelatedLoading ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
                             ) : customerRelatedData ? (() => {
                                 const d = customerRelatedData;
                                 const primaryId = d._primary_contact_id ?? null;
-                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
-                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || undefined })) },
-                                    { key: "members", title: memberPlural, defaultExpanded: false, items: (d.customer_members ?? []).map((m) => ({ id: m.id, entityType: "customer_members" as const, label: (m.display_name as string) || [m.first_name, m.last_name].filter(Boolean).join(" ") || "Member", meta: (m.relationship as string) || undefined })) },
-                                    { key: "opportunities", title: "Opportunities", defaultExpanded: false, items: (d.opportunities ?? []).map((o) => ({ id: o.id, entityType: "opportunities" as const, label: (o.name as string) || "Opportunity", meta: [o.status, o.quote_total != null ? formatMoneyFromDollars(Number(o.quote_total)) : null].filter(Boolean).join(" · ") || undefined })) },
+                                const customerId = drawer.id;
+                                type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
+                                const sections: Sec[] = [
+                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || undefined })), addAction: { label: "Add Contact", onClick: () => openDrawer({ type: "contacts", id: "new", defaultCustomerId: customerId }) } },
+                                    { key: "members", title: memberPlural, defaultExpanded: false, items: (d.customer_members ?? []).map((m) => ({ id: m.id, entityType: "customer_members" as const, label: (m.display_name as string) || [m.first_name, m.last_name].filter(Boolean).join(" ") || "Member", meta: (m.relationship as string) || undefined })), addAction: { label: "Add " + memberSingular, onClick: () => openDrawer({ type: "customer_members", id: "new", defaultCustomerId: customerId }) } },
+                                    { key: "opportunities", title: "Opportunities", defaultExpanded: false, items: (d.opportunities ?? []).map((o) => ({ id: o.id, entityType: "opportunities" as const, label: (o.name as string) || "Opportunity", meta: [o.status, o.quote_total != null ? formatMoneyFromDollars(Number(o.quote_total)) : null].filter(Boolean).join(" · ") || undefined })), addAction: { label: "New Opportunity", onClick: () => openDrawer({ type: "opportunities", id: "new", defaultCustomerId: customerId }) } },
                                     { key: "jobs", title: jobPlural, defaultExpanded: false, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
                                     { key: "schedules", title: scheduleSingular + "s", defaultExpanded: false, items: (d.schedules ?? []).map((s) => ({ id: s.id, entityType: "schedules" as const, label: s.start_at ? formatDateTime(s.start_at) : "Schedule", meta: s.end_at ? `to ${formatDateTime(s.end_at)}` : undefined })) },
-                                    { key: "locations", title: "Locations", defaultExpanded: false, items: (d.locations ?? []).map((l) => ({ id: l.id, entityType: "locations" as const, label: (l.label as string) || [l.address1, l.city, l.state].filter(Boolean).join(", ") || "Location", meta: [l.location_type, l.city, l.state].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "locations", title: "Locations", defaultExpanded: false, items: (d.locations ?? []).map((l) => ({ id: l.id, entityType: "locations" as const, label: (l.label as string) || [l.address1, l.city, l.state].filter(Boolean).join(", ") || "Location", meta: [l.location_type, l.city, l.state].filter(Boolean).join(" · ") || undefined })), addAction: { label: "Add Location", onClick: () => openDrawer({ type: "locations", id: "new", defaultCustomerId: customerId }) } },
                                     { key: "subscriptions", title: "Subscriptions", defaultExpanded: false, items: (d.customer_subscriptions ?? []).map((s) => ({ id: s.id, entityType: "subscriptions" as const, label: (s.status as string) || "Subscription", meta: s.start_date ? formatDate(s.start_date as string) : undefined })) },
                                     { key: "discounts", title: "Discounts / Promotions", defaultExpanded: false, items: (d.discount_redemptions ?? []).map((r) => ({ id: r.id, entityType: "discount_redemptions" as const, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined })) },
                                     { key: "messages", title: "Messages", defaultExpanded: false, items: (d.messages ?? []).map((m) => ({ id: m.id, label: (m.body as string)?.slice(0, 50) || (m.to_phone as string) || "Message", meta: m.created_at ? formatDateTime(m.created_at as string) : undefined })) },
                                     { key: "tags", title: "Tags", defaultExpanded: false, items: (d.customer_tags ?? []).map((t) => ({ id: t.id, label: (t.name as string) || "Tag" })) },
                                 ];
-                                const visible = sections.filter((s) => s.items.length > 0);
-                                if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
+                                const withAdd = sections.filter((s) => s.items.length > 0 || s.addAction);
+                                if (withAdd.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
                                 return (
                                     <>
-                                        {visible.map((sec) => (
+                                        {withAdd.map((sec) => (
                                             <EntityDrawerSection
                                                 key={sec.key}
                                                 config={{
@@ -2964,24 +3025,40 @@ export default function AdminEntityDrawer() {
                                                 }}
                                                 defaultExpanded={sec.defaultExpanded}
                                             >
-                                                <ul className="space-y-0 list-none p-0 m-0">
-                                                    {sec.items.map((item) => (
-                                                        <li key={item.id}>
-                                                            {item.entityType ? (
-                                                                <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
-                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                    {sec.key === "contacts" && primaryId === item.id && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
-                                                                </button>
-                                                            ) : (
-                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
-                                                                    <div className="font-medium">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                </div>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                {sec.items.length > 0 ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {sec.addAction && (
+                                                            <div className="flex justify-end">
+                                                                <button type="button" onClick={sec.addAction.onClick} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">{sec.addAction.label}</button>
+                                                            </div>
+                                                        )}
+                                                        <ul className="space-y-0 list-none p-0 m-0">
+                                                            {sec.items.map((item) => (
+                                                                <li key={item.id}>
+                                                                    {item.entityType ? (
+                                                                        <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                            <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                            {sec.key === "contacts" && primaryId === item.id && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                            <div className="font-medium">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </div>
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                ) : sec.addAction ? (
+                                                    <div className="py-3 flex flex-col gap-2">
+                                                        <p className="text-sm text-alloy-midnight/60">No {sec.key === "contacts" ? "contacts" : sec.key === "members" ? memberPlural.toLowerCase() : sec.key === "opportunities" ? "opportunities" : "locations"} yet.</p>
+                                                        <button type="button" onClick={sec.addAction.onClick} className="self-start px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{sec.addAction.label}</button>
+                                                    </div>
+                                                ) : (
+                                                    <ul className="space-y-0 list-none p-0 m-0" />
+                                                )}
                                             </EntityDrawerSection>
                                         ))}
                                     </>
@@ -2989,18 +3066,20 @@ export default function AdminEntityDrawer() {
                             })() : <p className="text-sm text-alloy-midnight/60">No related data.</p>}
                         </div>
                     )}
-                    {drawerTab === "related" && drawer.type === "vendors" && drawer.id && (
+                    {drawerTab === "related" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
                         <div className="space-y-0 pt-5" data-entity-drawer-related>
                             {vendorRelatedLoading ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
                             ) : vendorRelatedData ? (() => {
                                 const d = vendorRelatedData;
-                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string; isPrimary?: boolean }[] }[] = [
-                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || (c.status_key as string) || undefined, isPrimary: !!(c as { _is_primary?: boolean })._is_primary })) },
+                                const vendorId = drawer.id;
+                                type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string; isPrimary?: boolean }[]; addAction?: { label: string; onClick: () => void } };
+                                const sections: Sec[] = [
+                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || (c.status_key as string) || undefined, isPrimary: !!(c as { _is_primary?: boolean })._is_primary })), addAction: { label: "Add Contact", onClick: () => openDrawer({ type: "contacts", id: "new", defaultVendorId: vendorId }) } },
                                     { key: "jobs", title: "Jobs", defaultExpanded: true, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.job_status_id ? "Job" : null, j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
                                     { key: "assignments", title: "Assignments", defaultExpanded: false, items: (d.assignments ?? []).map((a) => ({ id: a.id, label: `Assignment`, meta: a.created_at ? formatDateTime(a.created_at as string) : undefined })) },
                                 ];
-                                const visible = sections.filter((s) => s.items.length > 0);
+                                const visible = sections.filter((s) => s.items.length > 0 || s.addAction);
                                 if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
                                 return (
                                     <>
@@ -3017,24 +3096,40 @@ export default function AdminEntityDrawer() {
                                                 }}
                                                 defaultExpanded={sec.defaultExpanded}
                                             >
-                                                <ul className="space-y-0 list-none p-0 m-0">
-                                                    {sec.items.map((item) => (
-                                                        <li key={item.id}>
-                                                            {item.entityType ? (
-                                                                <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
-                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                    {(item as { isPrimary?: boolean }).isPrimary && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
-                                                                </button>
-                                                            ) : (
-                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
-                                                                    <div className="font-medium">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                </div>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                {sec.items.length > 0 ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {sec.addAction && (
+                                                            <div className="flex justify-end">
+                                                                <button type="button" onClick={sec.addAction.onClick} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">{sec.addAction.label}</button>
+                                                            </div>
+                                                        )}
+                                                        <ul className="space-y-0 list-none p-0 m-0">
+                                                            {sec.items.map((item) => (
+                                                                <li key={item.id}>
+                                                                    {item.entityType ? (
+                                                                        <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                            <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                            {(item as { isPrimary?: boolean }).isPrimary && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                            <div className="font-medium">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </div>
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                ) : sec.addAction ? (
+                                                    <div className="py-3 flex flex-col gap-2">
+                                                        <p className="text-sm text-alloy-midnight/60">No contacts yet.</p>
+                                                        <button type="button" onClick={sec.addAction.onClick} className="self-start px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{sec.addAction.label}</button>
+                                                    </div>
+                                                ) : (
+                                                    <ul className="space-y-0 list-none p-0 m-0" />
+                                                )}
                                             </EntityDrawerSection>
                                         ))}
                                     </>
@@ -3065,13 +3160,16 @@ export default function AdminEntityDrawer() {
                                     return { id: x.id, label: "Message", meta: x.created_at ? formatDateTime(x.created_at) : undefined };
                                 });
                                 const discountItems = (d.discounts ?? []).map((r) => ({ id: r.id, label: (r as { _code?: string | null })._code ?? "Discount", meta: r.created_at ? formatDate(r.created_at) : undefined }));
-                                const sections: { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[] }[] = [
-                                    { key: "schedules", title: "Schedules", defaultExpanded: true, items: scheduleItems },
+                                const jobId = drawer.id;
+                                const dataForPrefill = data as { customer_id?: string | null; location_id?: string | null; assigned_vendor_id?: string | null } | null | undefined;
+                                type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
+                                const sections: Sec[] = [
+                                    { key: "schedules", title: "Schedules", defaultExpanded: true, items: scheduleItems, addAction: { label: "Add Schedule", onClick: async () => { let sk: string | null = null; try { const r = await fetch("/api/admin/status-definitions?entity_type=schedules"); const j = await r.json().catch(() => ({})); const statuses = (j.statuses ?? j) as { status_key: string; is_active: boolean; sort_order: number }[]; const active = Array.isArray(statuses) ? statuses.filter((s: { is_active: boolean }) => s.is_active).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order) : []; sk = active[0]?.status_key ?? null; } catch { } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId, customer_id: dataForPrefill?.customer_id ?? null, location_id: dataForPrefill?.location_id ?? null, assigned_vendor_id: jobAssignedVendorId ?? dataForPrefill?.assigned_vendor_id ?? null, status_key: sk } }); } } },
                                     { key: "opportunity", title: "Opportunity", defaultExpanded: !!opp, items: opp ? [{ id: opp.id, entityType: "opportunities" as const, label: (opp.name as string) || "Opportunity", meta: opp.created_at ? formatDate(opp.created_at as string) : undefined }] : [] },
                                     { key: "messages", title: "Messages", defaultExpanded: false, items: messageItems },
                                     { key: "discounts", title: "Discounts", defaultExpanded: false, items: discountItems },
                                 ];
-                                const visible = sections.filter((s) => s.items.length > 0);
+                                const visible = sections.filter((s) => s.items.length > 0 || s.addAction);
                                 if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
                                 return (
                                     <>
@@ -3081,23 +3179,39 @@ export default function AdminEntityDrawer() {
                                                 config={{ key: sec.key, title: sec.title, defaultExpanded: sec.defaultExpanded, collapsible: true, gridCols: 1, fields: [] }}
                                                 defaultExpanded={sec.defaultExpanded}
                                             >
-                                                <ul className="space-y-0 list-none p-0 m-0">
-                                                    {sec.items.map((item) => (
-                                                        <li key={item.id}>
-                                                            {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
-                                                                <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
-                                                                    <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                </button>
-                                                            ) : (
-                                                                <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
-                                                                    <div className="font-medium">{item.label}</div>
-                                                                    {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                </div>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                {sec.items.length > 0 ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        {sec.addAction && (
+                                                            <div className="flex justify-end">
+                                                                <button type="button" onClick={sec.addAction.onClick} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">{sec.addAction.label}</button>
+                                                            </div>
+                                                        )}
+                                                        <ul className="space-y-0 list-none p-0 m-0">
+                                                            {sec.items.map((item) => (
+                                                                <li key={item.id}>
+                                                                    {(item as { entityType?: AdminDrawerEntityType }).entityType ? (
+                                                                        <button type="button" onClick={() => openDrawer({ type: (item as { entityType: AdminDrawerEntityType }).entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
+                                                                            <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                            <div className="font-medium">{item.label}</div>
+                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        </div>
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                ) : sec.addAction ? (
+                                                    <div className="py-3 flex flex-col gap-2">
+                                                        <p className="text-sm text-alloy-midnight/60">No schedules yet.</p>
+                                                        <button type="button" onClick={sec.addAction.onClick} className="self-start px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{sec.addAction.label}</button>
+                                                    </div>
+                                                ) : (
+                                                    <ul className="space-y-0 list-none p-0 m-0" />
+                                                )}
                                             </EntityDrawerSection>
                                         ))}
                                     </>
@@ -3923,6 +4037,10 @@ export default function AdminEntityDrawer() {
                             )}
                     {drawer.type === "customers" && (
                         <>
+                            {(data as { _create?: boolean })?._create ? (
+                                <p className="text-sm text-alloy-midnight/70">Create from this drawer is not yet available. Close and use another flow to add a customer.</p>
+                            ) : (
+                            <>
                             <div className="space-y-4">
                                 <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "customers" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                 {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
@@ -3960,8 +4078,10 @@ export default function AdminEntityDrawer() {
                                                     {" · "}Locations {(data._counts as { locations?: number }).locations ?? 0}
                                                 </div>
                                             )}
-                                        </>
+                            </>
                             )}
+                                        </>
+                                    )}
                             {drawer.type === "vendors" && (
                                 <>
                                     <div className="space-y-0">
@@ -4381,7 +4501,7 @@ export default function AdminEntityDrawer() {
                                                     {(() => { const gross = Number(formData.gross_price_cents ?? 0); const codeId = typeof formData.discount_code_id === "string" ? formData.discount_code_id : ""; const selectedCode = codeId ? jobDiscountCodeOptions.find((c) => c.id === codeId) ?? null : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(gross * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(gross, Math.max(0, Math.round(dollars * 100))); } } const netCents = Math.max(0, gross - discountCents); return (<><p className="text-sm text-alloy-midnight/80"><strong>Discount amount:</strong> {discountCents > 0 ? `-${formatMoneyFromCents(discountCents)}` : formatMoneyFromCents(0)}</p><p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents(netCents)}</p></>); })()}
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
                                                     <div className="flex gap-2 pt-1">
-                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.status_key as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const grossCents = Number(formData.gross_price_cents ?? 0); const discountCodeId = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null; const selectedCode = discountCodeId ? jobDiscountCodeOptions.find((c) => c.id === discountCodeId) : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(grossCents * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(grossCents, Math.max(0, Math.round(dollars * 100))); } } const body: Record<string, unknown> = { customer_id: (formData.customer_id as string)?.trim(), status_key: (formData.status_key as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: grossCents || null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null, discount_code_id: discountCodeId || null, discount_code: selectedCode ? selectedCode.code : null, discount_amount: discountCents, discounted: !!selectedCode }; const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
+                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.status_key as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const grossCents = Number(formData.gross_price_cents ?? 0); const discountCodeId = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null; const selectedCode = discountCodeId ? jobDiscountCodeOptions.find((c) => c.id === discountCodeId) : null; let discountCents = 0; if (selectedCode) { const type = String(selectedCode.discount_type ?? "").trim().toLowerCase(); const val = selectedCode.discount_value; if (type === "percent") { const percent = Math.min(100, Math.max(0, Number(val) ?? 0)); discountCents = Math.round(grossCents * percent / 100); } else if (type === "fixed") { const dollars = Number(val) ?? 0; discountCents = Math.min(grossCents, Math.max(0, Math.round(dollars * 100))); } } const body: Record<string, unknown> = { customer_id: (formData.customer_id as string)?.trim(), status_key: (formData.status_key as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: grossCents || null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, opportunity_id: (formData.opportunity_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null, discount_code_id: discountCodeId || null, discount_code: selectedCode ? selectedCode.code : null, discount_amount: discountCents, discounted: !!selectedCode }; const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
                                                     </div>
                                                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                                                 </>

@@ -190,9 +190,22 @@ export default function CustomersClient() {
     </div>
   );
 
+  const singular = labels?.customers?.singular ?? "Customer";
   return (
     <div>
-      <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
+      <AdminListPageHeader
+        title={title}
+        toolbarLeft={filterTrigger}
+        toolbarRight={
+          <button
+            type="button"
+            onClick={() => openDrawer({ type: "customers", id: "new" })}
+            className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30"
+          >
+            New {singular}
+          </button>
+        }
+      />
       <div className="pt-4">
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">

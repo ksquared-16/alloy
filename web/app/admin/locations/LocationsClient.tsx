@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import DataTable from "@/components/admin/DataTable";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
+import { Filter } from "lucide-react";
 
 export type LocationRow = {
     id: string;
@@ -30,6 +31,16 @@ export default function LocationsClient() {
     const [locations, setLocations] = useState<LocationRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [includeInactive, setIncludeInactive] = useState(false);
+    const [filterOpen, setFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const fetchLocations = useCallback(async () => {
         setLoading(true);
@@ -82,10 +93,48 @@ export default function LocationsClient() {
         return base;
     }, [openDrawer]);
 
+    const filterTrigger = (
+        <div className="relative" ref={filterRef}>
+            <button
+                type="button"
+                onClick={() => setFilterOpen((o) => !o)}
+                className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+                aria-expanded={filterOpen}
+                aria-haspopup="true"
+            >
+                <Filter className="h-4 w-4 text-alloy-muted" />
+                Filter
+                {includeInactive && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+            </button>
+            {filterOpen && (
+                <div className="absolute right-0 top-full z-20 mt-1.5 w-64 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                    <div className="space-y-3">
+                        <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={includeInactive}
+                                onChange={(e) => setIncludeInactive(e.target.checked)}
+                                className="rounded border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/20"
+                            />
+                            <span className="text-sm text-alloy-forge/80">Include inactive</span>
+                        </label>
+                        <div className="flex gap-2 pt-1">
+                            <button type="button" onClick={() => setFilterOpen(false)} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90">Apply</button>
+                            {includeInactive && (
+                                <button type="button" onClick={() => { setIncludeInactive(false); setFilterOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <>
             <AdminListPageHeader
                 title={plural}
+                toolbarLeft={filterTrigger}
                 toolbarRight={
                     <button
                         type="button"
@@ -97,17 +146,6 @@ export default function LocationsClient() {
                 }
             />
             <div className="pt-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <label className="flex cursor-pointer items-center gap-2">
-                        <input
-                            type="checkbox"
-                            checked={includeInactive}
-                            onChange={(e) => setIncludeInactive(e.target.checked)}
-                            className="rounded border-admin-border text-alloy-blue focus:ring-alloy-blue/20"
-                        />
-                        <span className="text-sm text-alloy-midnight/80">Include inactive</span>
-                    </label>
-                </div>
                 <DataTable
                     data={locations}
                     columns={columns}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
+import { Filter } from "lucide-react";
 
 export type DiscountRedemptionRow = {
     id: string;
@@ -37,12 +38,23 @@ export default function DiscountRedemptionsClient() {
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [limit, setLimit] = useState(100);
+    const [filterOpen, setFilterOpen] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const fetchList = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch("/api/admin/discount-redemptions?limit=200&offset=0");
+            const res = await fetch(`/api/admin/discount-redemptions?limit=${limit}&offset=0`);
             const json = await res.json();
             if (res.ok) {
                 setRedemptions(json.redemptions ?? []);
@@ -53,7 +65,7 @@ export default function DiscountRedemptionsClient() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [limit]);
 
     useEffect(() => {
         fetchList();
@@ -132,9 +144,47 @@ export default function DiscountRedemptionsClient() {
         });
     }, [openDrawer]);
 
+    const hasActiveFilters = limit !== 100;
+    const filterTrigger = (
+        <div className="relative" ref={filterRef}>
+            <button
+                type="button"
+                onClick={() => setFilterOpen((o) => !o)}
+                className={`flex items-center gap-2 rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm font-medium text-alloy-midnight/80 hover:bg-alloy-stone/50 focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 ${filterOpen ? "border-alloy-blue/50 ring-2 ring-alloy-blue/20" : ""}`}
+                aria-expanded={filterOpen}
+                aria-haspopup="true"
+            >
+                <Filter className="h-4 w-4 text-alloy-muted" />
+                Filter
+                {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />}
+            </button>
+            {filterOpen && (
+                <div className="absolute right-0 top-full z-20 mt-1.5 w-56 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
+                    <div className="space-y-3">
+                        <div>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Show</label>
+                            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-full rounded-lg border border-alloy-stone/40 px-3 py-2 text-sm">
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                                <option value={200}>200</option>
+                                <option value={500}>500</option>
+                            </select>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                            <button type="button" onClick={() => setFilterOpen(false)} className="rounded-lg bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white hover:opacity-90">Apply</button>
+                            {hasActiveFilters && (
+                                <button type="button" onClick={() => { setLimit(100); setFilterOpen(false); }} className="rounded-lg px-3 py-1.5 text-sm font-medium text-alloy-muted hover:text-alloy-midnight hover:underline">Clear</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <>
-            <AdminListPageHeader title={title} />
+            <AdminListPageHeader title={title} toolbarLeft={filterTrigger} />
             {error && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                     {error}
