@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatMoneyFromCents, formatDateTime } from "@/lib/adminFormatters";
 import type { FirstCleanPriceRow } from "@/app/api/admin/pricing/first-clean-prices/route";
 import type { RecurringPriceRow } from "@/app/api/admin/pricing/recurring-prices/route";
+import type { PricingMatrixRow } from "@/app/api/admin/pricing/matrix/route";
 
 type VerticalOption = { id: string; name: string | null; slug: string | null };
 type ServiceOfferingOption = { id: string; offering_name: string | null; offering_key: string | null };
@@ -18,7 +19,7 @@ type PricingOptions = {
 };
 
 export default function PricingClient() {
-    const [activeSection, setActiveSection] = useState<"first-clean" | "recurring">("first-clean");
+    const [activeSection, setActiveSection] = useState<"first-clean" | "recurring" | "matrix">("first-clean");
     const [verticalId, setVerticalId] = useState("");
     const [serviceOfferingId, setServiceOfferingId] = useState("");
     const [verticals, setVerticals] = useState<VerticalOption[]>([]);
@@ -27,6 +28,8 @@ export default function PricingClient() {
     const [recurringRows, setRecurringRows] = useState<RecurringPriceRow[]>([]);
     const [loadingFirst, setLoadingFirst] = useState(false);
     const [loadingRecurring, setLoadingRecurring] = useState(false);
+    const [matrixRows, setMatrixRows] = useState<PricingMatrixRow[]>([]);
+    const [loadingMatrix, setLoadingMatrix] = useState(false);
 
     const [addFirstOpen, setAddFirstOpen] = useState(false);
     const [addRecurringOpen, setAddRecurringOpen] = useState(false);
@@ -99,6 +102,21 @@ export default function PricingClient() {
 
     useEffect(() => { fetchFirstClean(); }, [fetchFirstClean]);
     useEffect(() => { fetchRecurring(); }, [fetchRecurring]);
+
+    const fetchMatrix = useCallback(async () => {
+        setLoadingMatrix(true);
+        try {
+            const params = new URLSearchParams();
+            if (verticalId) params.set("vertical_id", verticalId);
+            if (serviceOfferingId) params.set("service_offering_id", serviceOfferingId);
+            const res = await fetch(`/api/admin/pricing/matrix?${params}`);
+            const json = await res.json().catch(() => ({}));
+            setMatrixRows(res.ok ? (json.rows ?? []) : []);
+        } finally {
+            setLoadingMatrix(false);
+        }
+    }, [verticalId, serviceOfferingId]);
+    useEffect(() => { if (activeSection === "matrix") fetchMatrix(); }, [activeSection, fetchMatrix]);
 
     const fetchOptions = useCallback(async (verticalIdFilter: string) => {
         const params = new URLSearchParams();
@@ -345,6 +363,13 @@ export default function PricingClient() {
                 >
                     {recurringLabel}
                 </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveSection("matrix")}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "matrix" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}
+                >
+                    Matrix View
+                </button>
             </div>
 
             {activeSection === "first-clean" && (
@@ -474,6 +499,57 @@ export default function PricingClient() {
                                     ))}
                                 </tbody>
                             </table>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            {activeSection === "matrix" && (
+                <section>
+                    <div className="mb-3">
+                        <h2 className="text-lg font-semibold text-alloy-forge">Matrix View</h2>
+                        <p className="mt-1 text-sm text-alloy-midnight/70">
+                            Matrix View shows the generalized pricing model that will support broader industry pricing structures. Use the tabs above to edit prices; this view is read-only.
+                        </p>
+                    </div>
+                    <div className="rounded-lg border border-admin-border bg-white overflow-hidden">
+                        {loadingMatrix ? (
+                            <div className="p-8 text-center text-alloy-midnight/60">Loading…</div>
+                        ) : matrixRows.length === 0 ? (
+                            <div className="p-8 text-center text-alloy-midnight/60">No matrix pricing rows. Adjust filters or ensure the matrix has been seeded from legacy pricing.</div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-admin-border bg-alloy-stone/10">
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Service Offering</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Plan Template</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Mode</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Dimension</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Dimension Value</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Amount</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Active</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Source</th>
+                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Updated</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {matrixRows.map((r) => (
+                                            <tr key={r.id} className="border-b border-admin-border/50 hover:bg-alloy-stone/5">
+                                                <td className="px-4 py-2">{r._service_offering_name ?? "—"}</td>
+                                                <td className="px-4 py-2">{r._plan_template_name ?? "—"}</td>
+                                                <td className="px-4 py-2">{r._pricing_mode_name ?? "—"}</td>
+                                                <td className="px-4 py-2">{r._dimension_name ?? "—"}</td>
+                                                <td className="px-4 py-2">{r._dimension_value_label ?? "—"}</td>
+                                                <td className="px-4 py-2">{r._amount_display ?? (r.amount_cents != null ? formatMoneyFromCents(r.amount_cents) : "—")}</td>
+                                                <td className="px-4 py-2">{r.is_active ? "Yes" : "No"}</td>
+                                                <td className="px-4 py-2 text-alloy-midnight/70">{r._source_label ?? "—"}</td>
+                                                <td className="px-4 py-2">{r._updated ? formatDateTime(r._updated) : "—"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 </section>
