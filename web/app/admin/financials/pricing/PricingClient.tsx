@@ -9,6 +9,9 @@ import ServiceOfferingsClient from "@/app/admin/financials/service-offerings/Ser
 import PlanTemplatesClient from "@/app/admin/financials/plan-templates/PlanTemplatesClient";
 import AddOnsClient from "@/app/admin/financials/add-ons/AddOnsClient";
 import DiscountsClient from "@/app/admin/discounts/DiscountsClient";
+import PricingModesConfig from "@/app/admin/financials/pricing/PricingModesConfig";
+import PricingDimensionsConfig from "@/app/admin/financials/pricing/PricingDimensionsConfig";
+import DimensionValuesConfig from "@/app/admin/financials/pricing/DimensionValuesConfig";
 
 type VerticalOption = { id: string; name: string | null; slug: string | null };
 type ServiceOfferingOption = { id: string; offering_name: string | null; offering_key: string | null };
@@ -425,13 +428,13 @@ export default function PricingClient() {
 
     return (
         <div className="space-y-6">
-            <header className="rounded-xl border border-admin-border border-l-4 border-l-alloy-blue bg-admin-surface-card px-6 py-4 shadow-sm">
-                <h1 className="text-2xl font-bold tracking-tight text-alloy-forge">Pricing</h1>
+            <header className="rounded-xl border border-admin-border border-l-4 border-l-alloy-pine bg-admin-surface-card px-6 py-4 shadow-sm">
+                <h1 className="text-2xl font-bold tracking-tight text-alloy-pine">Pricing</h1>
                 <p className="mt-1 text-sm text-alloy-midnight/70">Configure pricing by service offering, plan template, pricing mode, and dimension value.</p>
             </header>
 
-            {/* Main workspace tabs */}
-            <div className="flex flex-wrap gap-1 border-b border-admin-border">
+            {/* Main workspace tabs — Bend Pine active state */}
+            <div className="flex flex-wrap gap-1 border-b-2 border-alloy-pine/20">
                 {([
                     ["matrix", "Pricing Matrix"],
                     ["service-offerings", "Service Offerings"],
@@ -447,7 +450,7 @@ export default function PricingClient() {
                         key={tab}
                         type="button"
                         onClick={() => setMainTab(tab)}
-                        className={`px-3 py-2 text-sm font-medium rounded-t-md ${mainTab === tab ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"} ${tab === "legacy" ? "text-alloy-midnight/70" : ""}`}
+                        className={`px-3 py-2 text-sm font-medium rounded-t-md border-b-2 -mb-0.5 transition-colors ${mainTab === tab ? "bg-alloy-pine text-white border-alloy-pine" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10 border-transparent"} ${tab === "legacy" ? "text-alloy-midnight/70" : ""}`}
                     >
                         {label}
                     </button>
@@ -455,8 +458,8 @@ export default function PricingClient() {
             </div>
 
             {(mainTab === "matrix" || mainTab === "legacy") && (
-                <div className="flex flex-wrap items-center gap-4 rounded-lg border border-admin-border bg-white px-4 py-3">
-                    <span className="text-xs font-semibold uppercase text-alloy-midnight/60">Filters</span>
+                <div className="flex flex-wrap items-center gap-4 rounded-lg border border-admin-border border-l-4 border-l-alloy-pine bg-alloy-pine/5 px-4 py-3">
+                    <span className="text-xs font-semibold uppercase text-alloy-pine">Filters</span>
                     <div className="flex flex-wrap items-center gap-3">
                         <label className="flex items-center gap-2">
                             <span className="text-sm text-alloy-forge/80">Vertical</span>
@@ -513,10 +516,10 @@ export default function PricingClient() {
 
             {mainTab === "legacy" && (
                 <div className="flex gap-2 border-b border-admin-border">
-                    <button type="button" onClick={() => setActiveSection("first-clean")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
+                    <button type="button" onClick={() => setActiveSection("first-clean")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-pine text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10"}`}>
                         Legacy: {initialLabel}
                     </button>
-                    <button type="button" onClick={() => setActiveSection("recurring")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-blue text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-stone/30"}`}>
+                    <button type="button" onClick={() => setActiveSection("recurring")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-pine text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10"}`}>
                         Legacy: {recurringLabel}
                     </button>
                 </div>
@@ -532,24 +535,9 @@ export default function PricingClient() {
                     <PlanTemplatesClient />
                 </section>
             )}
-            {mainTab === "pricing-modes" && (
-                <section className="mt-4 rounded-lg border border-admin-border bg-white p-6">
-                    <p className="text-sm text-alloy-midnight/80">Pricing modes are used by the Pricing Matrix. Configure in database (table <code className="bg-alloy-stone/20 px-1 rounded">pricing_modes</code>) if needed.</p>
-                    <p className="mt-2 text-sm text-alloy-midnight/60">Go to the <button type="button" onClick={() => setMainTab("matrix")} className="text-alloy-blue underline">Pricing Matrix</button> tab to add rules by mode.</p>
-                </section>
-            )}
-            {mainTab === "pricing-dimensions" && (
-                <section className="mt-4 rounded-lg border border-admin-border bg-white p-6">
-                    <p className="text-sm text-alloy-midnight/80">Pricing dimensions are used by the Pricing Matrix. Configure in database (table <code className="bg-alloy-stone/20 px-1 rounded">pricing_dimensions</code>) if needed.</p>
-                    <p className="mt-2 text-sm text-alloy-midnight/60">Go to the <button type="button" onClick={() => setMainTab("matrix")} className="text-alloy-blue underline">Pricing Matrix</button> tab to add rules by dimension value.</p>
-                </section>
-            )}
-            {mainTab === "dimension-values" && (
-                <section className="mt-4 rounded-lg border border-admin-border bg-white p-6">
-                    <p className="text-sm text-alloy-midnight/80">Dimension values are used by the Pricing Matrix. Configure in database (table <code className="bg-alloy-stone/20 px-1 rounded">pricing_dimension_values</code>) if needed.</p>
-                    <p className="mt-2 text-sm text-alloy-midnight/60">Go to the <button type="button" onClick={() => setMainTab("matrix")} className="text-alloy-blue underline">Pricing Matrix</button> tab to add rules by dimension value.</p>
-                </section>
-            )}
+            {mainTab === "pricing-modes" && <PricingModesConfig />}
+            {mainTab === "pricing-dimensions" && <PricingDimensionsConfig />}
+            {mainTab === "dimension-values" && <DimensionValuesConfig />}
             {mainTab === "add-ons" && (
                 <section className="mt-4">
                     <AddOnsClient />
@@ -564,8 +552,8 @@ export default function PricingClient() {
             {mainTab === "legacy" && activeSection === "first-clean" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-alloy-forge">{initialLabel}</h2>
-                        <button type="button" onClick={openAddFirst} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">
+                        <h2 className="text-lg font-semibold text-alloy-pine">{initialLabel}</h2>
+                        <button type="button" onClick={openAddFirst} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">
                             + Add {initialLabel.replace(/ Pricing$/, " Price")}
                         </button>
                     </div>
@@ -577,13 +565,13 @@ export default function PricingClient() {
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-admin-border bg-alloy-stone/10">
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Service</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Dimension</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Dimension Value</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Price</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Active</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Updated</th>
+                                    <tr className="border-b border-admin-border bg-alloy-pine/10">
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Service</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Pricing Dimension</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Dimension Value</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Price</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Active</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Updated</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -629,8 +617,8 @@ export default function PricingClient() {
             {mainTab === "legacy" && activeSection === "recurring" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-alloy-forge">{recurringLabel}</h2>
-                        <button type="button" onClick={openAddRecurring} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">
+                        <h2 className="text-lg font-semibold text-alloy-pine">{recurringLabel}</h2>
+                        <button type="button" onClick={openAddRecurring} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">
                             + Add {recurringLabel.replace(/ Pricing$/, " Price")}
                         </button>
                     </div>
@@ -642,14 +630,14 @@ export default function PricingClient() {
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-admin-border bg-alloy-stone/10">
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Service</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Plan Template</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Dimension</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Dimension Value</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Price</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Active</th>
-                                        <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Updated</th>
+                                    <tr className="border-b border-admin-border bg-alloy-pine/10">
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Service</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Plan Template</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Pricing Dimension</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Dimension Value</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Price</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Active</th>
+                                        <th className="text-left px-4 py-2 font-medium text-alloy-pine">Updated</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -697,10 +685,10 @@ export default function PricingClient() {
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <div>
-                            <h2 className="text-lg font-semibold text-alloy-forge">Pricing Matrix</h2>
+                            <h2 className="text-lg font-semibold text-alloy-pine">Pricing Matrix</h2>
                             <p className="mt-1 text-sm text-alloy-midnight/70">Service offering, plan template, pricing mode, and dimension value. Edit amount and active inline.</p>
                         </div>
-                        <button type="button" onClick={openAddRule} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">+ Add Pricing Rule</button>
+                        <button type="button" onClick={openAddRule} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">+ Add Pricing Rule</button>
                     </div>
                     <div className="rounded-lg border border-admin-border bg-white overflow-hidden">
                         {loadingMatrix ? (
@@ -732,16 +720,16 @@ export default function PricingClient() {
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm">
                                             <thead>
-                                                <tr className="border-b border-admin-border bg-alloy-stone/10">
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Service Offering</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Plan Template</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Mode</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Dimension</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Dimension Value</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Amount</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Active</th>
-                                                    <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Updated</th>
-                                                </tr>
+<tr className="border-b border-admin-border bg-alloy-pine/10">
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Service Offering</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Plan Template</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Pricing Mode</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Pricing Dimension</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Dimension Value</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Amount</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Active</th>
+                                                <th className="text-left px-4 py-2 font-medium text-alloy-pine">Updated</th>
+                                            </tr>
                                             </thead>
                                             <tbody>{tableBody(rows)}</tbody>
                                         </table>
@@ -755,19 +743,19 @@ export default function PricingClient() {
                                 <div className="divide-y divide-admin-border">
                                     {Array.from(groups.entries()).map(([label, list]) => (
                                         <div key={label}>
-                                            <h3 className="px-4 py-2 text-sm font-semibold text-alloy-midnight/80 bg-alloy-stone/10">{label}</h3>
+                                            <h3 className="px-4 py-2 text-sm font-semibold text-alloy-pine bg-alloy-pine/10">{label}</h3>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm">
                                                     <thead>
-                                                        <tr className="border-b border-admin-border bg-alloy-stone/5">
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Service Offering</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Plan Template</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Mode</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Pricing Dimension</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Dimension Value</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Amount</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Active</th>
-                                                            <th className="text-left px-4 py-2 font-medium text-alloy-midnight/80">Updated</th>
+                                                        <tr className="border-b border-admin-border bg-alloy-pine/5">
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Service Offering</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Plan Template</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Pricing Mode</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Pricing Dimension</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Dimension Value</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Amount</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Active</th>
+                                                            <th className="text-left px-4 py-2 font-medium text-alloy-pine">Updated</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>{tableBody(list)}</tbody>
@@ -849,7 +837,7 @@ export default function PricingClient() {
                         </div>
                         <div className="mt-4 flex justify-end gap-2">
                             <button type="button" onClick={() => !addFirstSaving && setAddFirstOpen(false)} className="px-3 py-1.5 text-sm border border-admin-border rounded-md">Cancel</button>
-                            <button type="button" onClick={submitAddFirst} disabled={addFirstSaving || optionsLoading} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">
+                            <button type="button" onClick={submitAddFirst} disabled={addFirstSaving || optionsLoading} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md disabled:opacity-50">
                                 {addFirstSaving ? "Saving…" : "Add"}
                             </button>
                         </div>
@@ -937,7 +925,7 @@ export default function PricingClient() {
                         </div>
                         <div className="mt-4 flex justify-end gap-2">
                             <button type="button" onClick={() => !addRecurringSaving && setAddRecurringOpen(false)} className="px-3 py-1.5 text-sm border border-admin-border rounded-md">Cancel</button>
-                            <button type="button" onClick={submitAddRecurring} disabled={addRecurringSaving || optionsLoading} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">
+                            <button type="button" onClick={submitAddRecurring} disabled={addRecurringSaving || optionsLoading} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md disabled:opacity-50">
                                 {addRecurringSaving ? "Saving…" : "Add"}
                             </button>
                         </div>
@@ -998,7 +986,7 @@ export default function PricingClient() {
                         </div>
                         <div className="mt-4 flex justify-end gap-2">
                             <button type="button" onClick={() => !addRuleSaving && setAddRuleOpen(false)} className="px-3 py-1.5 text-sm border border-admin-border rounded-md">Cancel</button>
-                            <button type="button" onClick={submitAddRule} disabled={addRuleSaving || optionsLoading} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">{addRuleSaving ? "Saving…" : "Add"}</button>
+                            <button type="button" onClick={submitAddRule} disabled={addRuleSaving || optionsLoading} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md disabled:opacity-50">{addRuleSaving ? "Saving…" : "Add"}</button>
                         </div>
                     </div>
                 </div>
