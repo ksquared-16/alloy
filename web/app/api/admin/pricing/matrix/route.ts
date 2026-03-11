@@ -128,3 +128,65 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }
 }
+
+/** POST: create a pricing_matrix row. Body: vertical_id, service_offering_id, pricing_mode_id, service_plan_template_id (optional), pricing_dimension_value_id (optional), amount or amount_cents, is_active. */
+export async function POST(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+    let body: {
+        vertical_id?: string;
+        service_offering_id?: string;
+        pricing_mode_id?: string;
+        service_plan_template_id?: string | null;
+        pricing_dimension_value_id?: string | null;
+        amount?: number;
+        amount_cents?: number;
+        is_active?: boolean;
+    };
+    try {
+        body = await request.json();
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const vertical_id = typeof body.vertical_id === "string" && body.vertical_id.trim() ? body.vertical_id.trim() : null;
+    const service_offering_id = typeof body.service_offering_id === "string" && body.service_offering_id.trim() ? body.service_offering_id.trim() : null;
+    const pricing_mode_id = typeof body.pricing_mode_id === "string" && body.pricing_mode_id.trim() ? body.pricing_mode_id.trim() : null;
+    const service_plan_template_id =
+        body.service_plan_template_id !== undefined && body.service_plan_template_id !== null && typeof body.service_plan_template_id === "string" && body.service_plan_template_id.trim()
+            ? body.service_plan_template_id.trim()
+            : null;
+    const pricing_dimension_value_id =
+        body.pricing_dimension_value_id !== undefined && body.pricing_dimension_value_id !== null && typeof body.pricing_dimension_value_id === "string" && body.pricing_dimension_value_id.trim()
+            ? body.pricing_dimension_value_id.trim()
+            : null;
+
+    if (!vertical_id || !service_offering_id || !pricing_mode_id) {
+        return NextResponse.json({ error: "vertical_id, service_offering_id, and pricing_mode_id are required" }, { status: 400 });
+    }
+
+    let amount_cents: number;
+    if (body.amount_cents != null && typeof body.amount_cents === "number") amount_cents = Math.round(body.amount_cents);
+    else if (body.amount != null && typeof body.amount === "number") amount_cents = Math.round(body.amount * 100);
+    else amount_cents = 0;
+    amount_cents = Math.max(0, amount_cents);
+
+    const supabase = createAdminClient();
+    const insert = {
+        vertical_id,
+        service_offering_id,
+        service_plan_template_id: service_plan_template_id || null,
+        pricing_mode_id,
+        pricing_dimension_value_id: pricing_dimension_value_id || null,
+        amount_cents,
+        is_active: body.is_active !== false,
+    };
+    const { data, error } = await supabase
+        .from("pricing_matrix")
+        .insert(insert)
+        .select("id, vertical_id, service_offering_id, service_plan_template_id, pricing_mode_id, pricing_dimension_value_id, amount_cents, is_active, created_at, updated_at")
+        .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data ?? {});
+}
