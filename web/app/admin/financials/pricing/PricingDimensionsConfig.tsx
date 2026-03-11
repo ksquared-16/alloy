@@ -14,7 +14,7 @@ export default function PricingDimensionsConfig() {
     const [addOpen, setAddOpen] = useState(false);
     const [addSaving, setAddSaving] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
-    const [form, setForm] = useState({ dimension_label: "", dimension_key: "", name: "", vertical_id: "", is_active: true });
+    const [form, setForm] = useState({ dimension_name: "", dimension_key: "", vertical_id: "", is_active: true });
     const [patchingId, setPatchingId] = useState<string | null>(null);
 
     const fetchList = useCallback(async () => {
@@ -35,14 +35,14 @@ export default function PricingDimensionsConfig() {
     useEffect(() => { fetchList(); }, [fetchList]);
 
     const openAdd = () => {
-        setForm({ dimension_label: "", dimension_key: "", name: "", vertical_id: "", is_active: true });
+        setForm({ dimension_name: "", dimension_key: "", vertical_id: "", is_active: true });
         setAddError(null);
         setAddOpen(true);
     };
 
     const submitAdd = async () => {
-        if (!form.dimension_label.trim() && !form.dimension_key.trim() && !form.name.trim()) {
-            setAddError("Name, Key, or Label is required");
+        if (!form.dimension_name.trim() && !form.dimension_key.trim()) {
+            setAddError("Name or Key is required");
             return;
         }
         setAddSaving(true);
@@ -52,9 +52,8 @@ export default function PricingDimensionsConfig() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    dimension_label: form.dimension_label.trim() || null,
+                    dimension_name: form.dimension_name.trim() || null,
                     dimension_key: form.dimension_key.trim() || null,
-                    name: form.name.trim() || null,
                     vertical_id: form.vertical_id.trim() || null,
                     is_active: form.is_active,
                 }),
@@ -109,7 +108,7 @@ export default function PricingDimensionsConfig() {
                             {items.map((r) => (
                                 <tr key={r.id} className="border-b border-admin-border/50 hover:bg-alloy-pine/5">
                                     <td className="px-4 py-2">
-                                        <input type="text" className="w-full max-w-xs rounded border border-admin-border px-2 py-1 text-sm" defaultValue={r.dimension_label ?? r.name ?? ""} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.dimension_label ?? r.name ?? "")) patch(r.id, { dimension_label: v || undefined }); }} disabled={patchingId === r.id} />
+                                        <input type="text" className="w-full max-w-xs rounded border border-admin-border px-2 py-1 text-sm" defaultValue={r.dimension_name ?? ""} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.dimension_name ?? "")) patch(r.id, { dimension_name: v || undefined }); }} disabled={patchingId === r.id} />
                                     </td>
                                     <td className="px-4 py-2">
                                         <input type="text" className="w-full max-w-[120px] rounded border border-admin-border px-2 py-1 text-sm font-mono" defaultValue={r.dimension_key ?? ""} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.dimension_key ?? "")) patch(r.id, { dimension_key: v || undefined }); }} disabled={patchingId === r.id} />
@@ -133,8 +132,8 @@ export default function PricingDimensionsConfig() {
                         {addError && <p className="mb-3 text-sm text-red-600">{addError}</p>}
                         <div className="space-y-3">
                             <label className="block">
-                                <span className="block text-xs font-medium text-alloy-midnight/70 mb-1">Label / Name</span>
-                                <input value={form.dimension_label} onChange={(e) => setForm((f) => ({ ...f, dimension_label: e.target.value }))} className="w-full rounded border border-admin-border px-2 py-1.5 text-sm" placeholder="e.g. Square Footage" />
+                                <span className="block text-xs font-medium text-alloy-midnight/70 mb-1">Name</span>
+                                <input value={form.dimension_name} onChange={(e) => setForm((f) => ({ ...f, dimension_name: e.target.value }))} className="w-full rounded border border-admin-border px-2 py-1.5 text-sm" placeholder="e.g. Square Footage" />
                             </label>
                             <label className="block">
                                 <span className="block text-xs font-medium text-alloy-midnight/70 mb-1">Key</span>

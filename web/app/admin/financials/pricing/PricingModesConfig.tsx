@@ -11,7 +11,7 @@ export default function PricingModesConfig() {
     const [addOpen, setAddOpen] = useState(false);
     const [addSaving, setAddSaving] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
-    const [form, setForm] = useState({ mode_label: "", mode_key: "", is_active: true });
+    const [form, setForm] = useState({ mode_name: "", mode_key: "", is_active: true });
     const [patchingId, setPatchingId] = useState<string | null>(null);
 
     const fetchList = useCallback(async () => {
@@ -30,13 +30,13 @@ export default function PricingModesConfig() {
     useEffect(() => { fetchList(); }, [fetchList]);
 
     const openAdd = () => {
-        setForm({ mode_label: "", mode_key: "", is_active: true });
+        setForm({ mode_name: "", mode_key: "", is_active: true });
         setAddError(null);
         setAddOpen(true);
     };
 
     const submitAdd = async () => {
-        if (!form.mode_key.trim() && !form.mode_label.trim()) {
+        if (!form.mode_key.trim() && !form.mode_name.trim()) {
             setAddError("Name or Key is required");
             return;
         }
@@ -46,7 +46,7 @@ export default function PricingModesConfig() {
             const res = await fetch("/api/admin/pricing-modes", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ mode_key: form.mode_key.trim() || null, mode_label: form.mode_label.trim() || null, is_active: form.is_active }),
+                body: JSON.stringify({ mode_key: form.mode_key.trim() || null, mode_name: form.mode_name.trim() || null, is_active: form.is_active }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) { setAddError((json as { error?: string }).error ?? "Create failed"); return; }
@@ -57,7 +57,7 @@ export default function PricingModesConfig() {
         }
     };
 
-    const patch = useCallback(async (id: string, payload: { mode_label?: string; mode_key?: string; is_active?: boolean }) => {
+    const patch = useCallback(async (id: string, payload: { mode_name?: string; mode_key?: string; is_active?: boolean }) => {
         setPatchingId(id);
         try {
             const res = await fetch(`/api/admin/pricing-modes/${id}`, {
@@ -102,8 +102,8 @@ export default function PricingModesConfig() {
                                         <input
                                             type="text"
                                             className="w-full max-w-xs rounded border border-admin-border px-2 py-1 text-sm"
-                                            defaultValue={r.mode_label ?? ""}
-                                            onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.mode_label ?? "")) patch(r.id, { mode_label: v || undefined }); }}
+                                            defaultValue={r.mode_name ?? ""}
+                                            onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.mode_name ?? "")) patch(r.id, { mode_name: v || undefined }); }}
                                             disabled={patchingId === r.id}
                                         />
                                     </td>
@@ -140,7 +140,7 @@ export default function PricingModesConfig() {
                         <div className="space-y-3">
                             <label className="block">
                                 <span className="block text-xs font-medium text-alloy-midnight/70 mb-1">Name</span>
-                                <input value={form.mode_label} onChange={(e) => setForm((f) => ({ ...f, mode_label: e.target.value }))} className="w-full rounded border border-admin-border px-2 py-1.5 text-sm" placeholder="e.g. Initial" />
+                                <input value={form.mode_name} onChange={(e) => setForm((f) => ({ ...f, mode_name: e.target.value }))} className="w-full rounded border border-admin-border px-2 py-1.5 text-sm" placeholder="e.g. Initial" />
                             </label>
                             <label className="block">
                                 <span className="block text-xs font-medium text-alloy-midnight/70 mb-1">Key</span>

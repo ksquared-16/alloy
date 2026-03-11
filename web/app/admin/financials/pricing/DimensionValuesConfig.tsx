@@ -13,7 +13,7 @@ export default function DimensionValuesConfig() {
     const [addOpen, setAddOpen] = useState(false);
     const [addSaving, setAddSaving] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
-    const [form, setForm] = useState({ value_label: "", value_key: "", pricing_dimension_id: "", sort_order: "", is_active: true });
+    const [form, setForm] = useState({ value_label: "", value_key: "", dimension_id: "", sort_order: "", is_active: true });
     const [patchingId, setPatchingId] = useState<string | null>(null);
 
     const fetchList = useCallback(async () => {
@@ -37,7 +37,7 @@ export default function DimensionValuesConfig() {
     useEffect(() => { fetchList(); }, [fetchList]);
 
     const openAdd = () => {
-        setForm({ value_label: "", value_key: "", pricing_dimension_id: dimensions[0]?.id ?? "", sort_order: "", is_active: true });
+        setForm({ value_label: "", value_key: "", dimension_id: dimensions[0]?.id ?? "", sort_order: "", is_active: true });
         setAddError(null);
         setAddOpen(true);
     };
@@ -47,7 +47,7 @@ export default function DimensionValuesConfig() {
             setAddError("Value label or key is required");
             return;
         }
-        if (!form.pricing_dimension_id.trim()) {
+        if (!form.dimension_id.trim()) {
             setAddError("Dimension is required");
             return;
         }
@@ -60,8 +60,7 @@ export default function DimensionValuesConfig() {
                 body: JSON.stringify({
                     value_label: form.value_label.trim() || null,
                     value_key: form.value_key.trim() || null,
-                    pricing_dimension_id: form.pricing_dimension_id.trim() || null,
-                    dimension_id: form.pricing_dimension_id.trim() || null,
+                    dimension_id: form.dimension_id.trim() || null,
                     sort_order: form.sort_order.trim() ? Number(form.sort_order) : null,
                     is_active: form.is_active,
                 }),
@@ -171,9 +170,9 @@ export default function DimensionValuesConfig() {
                         <div className="space-y-3">
                             <label className="block">
                                 <span className="block text-xs font-medium text-alloy-midnight/70 mb-1">Dimension</span>
-                                <select value={form.pricing_dimension_id} onChange={(e) => setForm((f) => ({ ...f, pricing_dimension_id: e.target.value }))} className="w-full rounded border border-admin-border px-2 py-1.5 text-sm" required>
+                                <select value={form.dimension_id} onChange={(e) => setForm((f) => ({ ...f, dimension_id: e.target.value }))} className="w-full rounded border border-admin-border px-2 py-1.5 text-sm" required>
                                     <option value="">Select dimension</option>
-                                    {dimensions.map((d) => <option key={d.id} value={d.id}>{d.dimension_label ?? d.name ?? d.dimension_key ?? d.id}</option>)}
+                                    {dimensions.map((d) => <option key={d.id} value={d.id}>{d.dimension_name ?? d.dimension_key ?? d.id}</option>)}
                                 </select>
                             </label>
                             <label className="block">

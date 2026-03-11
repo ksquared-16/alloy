@@ -70,22 +70,22 @@ export async function GET(request: NextRequest) {
             verticalIds.length ? supabase.from("verticals").select("id, name, slug").in("id", verticalIds) : { data: [] },
             offeringIds.length ? supabase.from("service_offerings").select("id, offering_name, offering_key").in("id", offeringIds) : { data: [] },
             planIds.length ? supabase.from("service_plan_templates").select("id, plan_name, plan_key").in("id", planIds) : { data: [] },
-            modeIds.length ? supabase.from("pricing_modes").select("id, mode_label, mode_key").in("id", modeIds) : { data: [] },
-            dimValIds.length ? supabase.from("pricing_dimension_values").select("id, value_label, dimension_id, pricing_dimension_id").in("id", dimValIds) : { data: [] },
+            modeIds.length ? supabase.from("pricing_modes").select("id, mode_name, mode_key").in("id", modeIds) : { data: [] },
+            dimValIds.length ? supabase.from("pricing_dimension_values").select("id, value_label, dimension_id").in("id", dimValIds) : { data: [] },
         ]);
 
         const verticalMap = new Map((verticalsRes.data ?? []).map((v: Record<string, unknown>) => [v.id as string, (v.name as string) ?? (v.slug as string) ?? null]));
         const offeringMap = new Map((offeringsRes.data ?? []).map((o: Record<string, unknown>) => [o.id as string, (o.offering_name as string) ?? (o.offering_key as string) ?? null]));
         const planMap = new Map((plansRes.data ?? []).map((p: Record<string, unknown>) => [p.id as string, (p.plan_name as string) ?? (p.plan_key as string) ?? null]));
-        const modeMap = new Map((modesRes.data ?? []).map((m: Record<string, unknown>) => [m.id as string, (m.mode_label as string) ?? (m.mode_key as string) ?? null]));
-        const dimValData = (dimValsRes.data ?? []) as { id: string; value_label?: string | null; dimension_id?: string | null; pricing_dimension_id?: string | null }[];
+        const modeMap = new Map((modesRes.data ?? []).map((m: Record<string, unknown>) => [m.id as string, (m.mode_name as string) ?? (m.mode_key as string) ?? null]));
+        const dimValData = (dimValsRes.data ?? []) as { id: string; value_label?: string | null; dimension_id?: string | null }[];
         const dimValMap = new Map(dimValData.map((d) => [d.id, d.value_label ?? null]));
-        const dimensionIdFromVal = (d: (typeof dimValData)[0]) => d.dimension_id ?? d.pricing_dimension_id ?? null;
+        const dimensionIdFromVal = (d: (typeof dimValData)[0]) => d.dimension_id ?? null;
         const dimensionIds = [...new Set(dimValData.map(dimensionIdFromVal).filter(Boolean))] as string[];
         const { data: dimensionsData } = dimensionIds.length
-            ? await supabase.from("pricing_dimensions").select("id, dimension_label, dimension_key, name").in("id", dimensionIds)
+            ? await supabase.from("pricing_dimensions").select("id, dimension_name, dimension_key").in("id", dimensionIds)
             : { data: [] };
-        const dimensionMap = new Map((dimensionsData ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.dimension_label as string) ?? (d.dimension_key as string) ?? (d.name as string) ?? null]));
+        const dimensionMap = new Map((dimensionsData ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.dimension_name as string) ?? (d.dimension_key as string) ?? null]));
         const dimValToDimensionId = new Map(dimValData.map((d) => [d.id, dimensionIdFromVal(d)]));
 
         const out: PricingMatrixRow[] = list.map((r) => {

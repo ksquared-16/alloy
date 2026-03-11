@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const [verticalsRes, modesRes, servicesRes, tiersRes, freqsRes] = await Promise.all([
         supabase.from("verticals").select("id, name, slug").order("name", { ascending: true }),
-        supabase.from("pricing_modes").select("id, mode_key, mode_label").order("mode_key", { ascending: true }),
+        supabase.from("pricing_modes").select("id, mode_key, mode_name").order("mode_key", { ascending: true }),
         verticalId
             ? (async () => {
                 const { data: offerings } = await supabase.from("service_offerings").select("id").eq("vertical_id", verticalId);
@@ -58,11 +58,11 @@ export async function GET(request: NextRequest) {
         label: f.frequency_label ?? f.frequency_key ?? f.id,
     }));
 
-    const pricing_modes = (modesRes.data ?? []) as { id: string; mode_key?: string | null; mode_label?: string | null }[];
+    const pricing_modes = (modesRes.data ?? []) as { id: string; mode_key?: string | null; mode_name?: string | null }[];
     const modes = pricing_modes.map((m) => ({
         id: m.id,
         key: m.mode_key ?? m.id,
-        label: m.mode_label ?? m.mode_key ?? m.id,
+        label: m.mode_name ?? m.mode_key ?? m.id,
     }));
 
     // Matrix create form: service_offerings (by vertical), plan templates, dimension values with dimension label
@@ -85,13 +85,13 @@ export async function GET(request: NextRequest) {
         id: p.id,
         label: p.plan_name ?? p.plan_key ?? p.id,
     }));
-    const { data: dimValuesData } = await supabase.from("pricing_dimension_values").select("id, value_label, dimension_id, pricing_dimension_id");
-    const dimValues = (dimValuesData ?? []) as { id: string; value_label?: string | null; dimension_id?: string | null; pricing_dimension_id?: string | null }[];
-    const dimIdsForMatrix = [...new Set(dimValues.map((d) => d.dimension_id ?? d.pricing_dimension_id).filter(Boolean))] as string[];
-    const { data: dimsData } = dimIdsForMatrix.length ? await supabase.from("pricing_dimensions").select("id, dimension_label, dimension_key, name").in("id", dimIdsForMatrix) : { data: [] };
-    const dimLabelMap = new Map((dimsData ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.dimension_label as string) ?? (d.dimension_key as string) ?? (d.name as string) ?? null]));
+    const { data: dimValuesData } = await supabase.from("pricing_dimension_values").select("id, value_label, dimension_id");
+    const dimValues = (dimValuesData ?? []) as { id: string; value_label?: string | null; dimension_id?: string | null }[];
+    const dimIdsForMatrix = [...new Set(dimValues.map((d) => d.dimension_id).filter(Boolean))] as string[];
+    const { data: dimsData } = dimIdsForMatrix.length ? await supabase.from("pricing_dimensions").select("id, dimension_name, dimension_key").in("id", dimIdsForMatrix) : { data: [] };
+    const dimLabelMap = new Map((dimsData ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.dimension_name as string) ?? (d.dimension_key as string) ?? null]));
     const matrix_dimension_values = dimValues.map((d) => {
-        const dimId = d.dimension_id ?? d.pricing_dimension_id ?? null;
+        const dimId = d.dimension_id ?? null;
         const dimLabel = dimId ? dimLabelMap.get(dimId) ?? null : null;
         const valueLabel = d.value_label ?? d.id;
         return { id: d.id, label: valueLabel, dimension_label: dimLabel };
