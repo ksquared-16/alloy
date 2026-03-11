@@ -1,8 +1,9 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { NextRequest, NextResponse } from "next/server";
+import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
 
-/** DELETE: hard delete discount code (admin only). Fails if code is in use. */
+/** DELETE: hard delete discount code (admin only). Enforces lifecycle eligibility. */
 export async function DELETE(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
@@ -11,6 +12,15 @@ export async function DELETE(
     if (forbidden) return forbidden;
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const eligibility = await evaluateDeletionEligibility("discounts", id, {});
+    if (!eligibility.allowed) {
+        return NextResponse.json(
+            { error: eligibility.reason, recommended_action: eligibility.recommended_action },
+            { status: 409 }
+        );
+    }
+
     const supabase = createAdminClient();
     const { error } = await supabase.from("discount_codes").delete().eq("id", id);
     if (error) {

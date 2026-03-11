@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
 
-/** DELETE: hard delete (admin only). */
+/** DELETE: hard delete (admin only). Enforces lifecycle eligibility. */
 export async function DELETE(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -13,6 +14,14 @@ export async function DELETE(
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const eligibility = await evaluateDeletionEligibility("pricing_dimensions", id, { orgId: ctx.orgId });
+    if (!eligibility.allowed) {
+        return NextResponse.json(
+            { error: eligibility.reason, recommended_action: eligibility.recommended_action },
+            { status: 409 }
+        );
+    }
 
     const supabase = createAdminClient();
     const { error } = await supabase.from("pricing_dimensions").delete().eq("id", id);

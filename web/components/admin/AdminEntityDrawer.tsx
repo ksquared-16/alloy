@@ -500,6 +500,9 @@ export default function AdminEntityDrawer() {
     const [memberLinkModalOpen, setMemberLinkModalOpen] = useState(false);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteSaving, setDeleteSaving] = useState(false);
+    type DeletionEligibility = { allowed: boolean; reason: string; recommended_action: string };
+    const [deletionEligibility, setDeletionEligibility] = useState<DeletionEligibility | null>(null);
+    const [deletionEligibilityLoading, setDeletionEligibilityLoading] = useState(false);
     const [memberLinkRoleKey, setMemberLinkRoleKey] = useState("");
     const [memberLinkContactId, setMemberLinkContactId] = useState("");
     const [memberLinkSaving, setMemberLinkSaving] = useState(false);
@@ -630,6 +633,7 @@ export default function AdminEntityDrawer() {
             setMemberLinkContactId("");
             setMemberLinkError(null);
             setDeleteConfirmOpen(false);
+            setDeletionEligibility(null);
             setMemberLinkContactOptions([]);
             setMemberUnlinkingId(null);
             setMemberRelationshipOptions([]);
@@ -667,6 +671,23 @@ export default function AdminEntityDrawer() {
             .then(setData)
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
+            setDeletionEligibility(null);
+            setDeletionEligibilityLoading(false);
+            return;
+        }
+        setDeletionEligibilityLoading(true);
+        const params = new URLSearchParams({ entity_type: drawer.type, id: drawer.id });
+        fetch(`/api/admin/deletion-eligibility?${params.toString()}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: DeletionEligibility | null) => {
+                setDeletionEligibility(json ?? null);
+            })
+            .catch(() => setDeletionEligibility(null))
+            .finally(() => setDeletionEligibilityLoading(false));
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -2471,7 +2492,13 @@ export default function AdminEntityDrawer() {
                 )
             )}
             {canMutate && !(data as { _create?: boolean })?._create && drawer.id && drawer.id !== "new" && canHardDeleteEntityType(drawer.type) && (
-                <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10">Delete</button>
+                deletionEligibilityLoading ? (
+                    <span className="text-xs text-alloy-midnight/50">Checking…</span>
+                ) : deletionEligibility && !deletionEligibility.allowed ? (
+                    <span className="text-xs text-alloy-midnight/70 max-w-[200px]" title={deletionEligibility.reason}>{deletionEligibility.reason}</span>
+                ) : deletionEligibility?.allowed === true ? (
+                    <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10">Delete</button>
+                ) : null
             )}
                 </>
             )}
@@ -5440,7 +5467,9 @@ export default function AdminEntityDrawer() {
                         const res = await fetch(url, { method: "DELETE" });
                         const json = await res.json().catch(() => ({}));
                         if (!res.ok) {
-                            setSaveError((json.error as string) || "Delete failed");
+                            const msg = (json.error as string) || "Delete failed";
+                            const action = json.recommended_action as string | undefined;
+                            setSaveError(action ? `${msg} (Recommended: ${action})` : msg);
                             return;
                         }
                         setDeleteConfirmOpen(false);

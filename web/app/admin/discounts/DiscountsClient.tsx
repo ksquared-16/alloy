@@ -43,7 +43,24 @@ export default function DiscountsClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSaving, setDeleteSaving] = useState(false);
+  type DeletionEligibility = { allowed: boolean; reason: string; recommended_action: string };
+  const [deletionEligibility, setDeletionEligibility] = useState<DeletionEligibility | null>(null);
+  const [deletionEligibilityLoading, setDeletionEligibilityLoading] = useState(false);
   const readOnly = !canMutate;
+
+  useEffect(() => {
+    if (!isEditing || !selectedRow?.id) {
+      setDeletionEligibility(null);
+      setDeletionEligibilityLoading(false);
+      return;
+    }
+    setDeletionEligibilityLoading(true);
+    fetch(`/api/admin/deletion-eligibility?entity_type=discounts&id=${encodeURIComponent(selectedRow.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: DeletionEligibility | null) => setDeletionEligibility(json ?? null))
+      .catch(() => setDeletionEligibility(null))
+      .finally(() => setDeletionEligibilityLoading(false));
+  }, [isEditing, selectedRow?.id]);
 
   const fetchDiscounts = useCallback(async () => {
     setLoading(true);
@@ -228,15 +245,27 @@ export default function DiscountsClient({
         }}
         title={readOnly ? `View Discount: ${selectedRow?.code}` : isCreating ? "Create Discount" : `Edit Discount: ${selectedRow?.code}`}
         headerActions={
-          canMutate && isEditing && selectedRow ? (
-            <button
-              type="button"
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10"
-            >
-              Delete
-            </button>
-          ) : undefined
+          canMutate && isEditing && selectedRow
+            ? deletionEligibilityLoading
+              ? <span className="text-xs text-alloy-midnight/50">Checking…</span>
+              : deletionEligibility && !deletionEligibility.allowed
+                ? (
+                    <span className="text-xs text-alloy-midnight/70 max-w-[220px]" title={deletionEligibility.reason}>
+                      {deletionEligibility.reason}
+                    </span>
+                  )
+                : deletionEligibility?.allowed === true
+                  ? (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmOpen(true)}
+                        className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10"
+                      >
+                        Delete
+                      </button>
+                    )
+                  : undefined
+            : undefined
         }
       >
         <div className="space-y-4">
@@ -460,7 +489,9 @@ export default function DiscountsClient({
             const res = await fetch(`/api/admin/discounts/${selectedRow.id}`, { method: "DELETE" });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-              setSubmitError((json.error as string) || "Delete failed");
+              const msg = (json.error as string) || "Delete failed";
+              const action = json.recommended_action as string | undefined;
+              setSubmitError(action ? `${msg} (Recommended: ${action})` : msg);
               return;
             }
             setDeleteConfirmOpen(false);
