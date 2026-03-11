@@ -2,6 +2,24 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { NextRequest, NextResponse } from "next/server";
 
+/** DELETE: hard delete discount code (admin only). Fails if code is in use. */
+export async function DELETE(
+    _request: NextRequest,
+    context: { params: Promise<{ id: string }> }
+) {
+    const forbidden = await requireAdmin();
+    if (forbidden) return forbidden;
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const supabase = createAdminClient();
+    const { error } = await supabase.from("discount_codes").delete().eq("id", id);
+    if (error) {
+        const msg = error.code === "23503" ? "Cannot delete: discount code is in use." : error.message;
+        return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true });
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }

@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
+/** DELETE: hard delete (admin only). Fails if addon is in use. */
+export async function DELETE(
+    _request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    if (ctx.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const { id } = await params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { error } = await supabase.from("pricing_addons").delete().eq("id", id);
+    if (error) {
+        const msg = error.code === "23503" ? "Cannot delete: add-on is in use." : error.message;
+        return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true });
+}
+
 /** PATCH: update addon_name, addon_key, amount_cents, sort_order, is_active. */
 export async function PATCH(
     request: NextRequest,

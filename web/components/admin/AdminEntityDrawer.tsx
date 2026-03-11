@@ -18,6 +18,8 @@ import {
 import { getEntityPresentation, toPresentationType, type DrawerTabKey } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
+import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
+import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
@@ -496,6 +498,8 @@ export default function AdminEntityDrawer() {
     const [memberRelatedLinksLoading, setMemberRelatedLinksLoading] = useState(false);
     const [memberRelatedRoles, setMemberRelatedRoles] = useState<{ id: string; role_key: string; role_label: string; sort_order: number }[]>([]);
     const [memberLinkModalOpen, setMemberLinkModalOpen] = useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteSaving, setDeleteSaving] = useState(false);
     const [memberLinkRoleKey, setMemberLinkRoleKey] = useState("");
     const [memberLinkContactId, setMemberLinkContactId] = useState("");
     const [memberLinkSaving, setMemberLinkSaving] = useState(false);
@@ -625,6 +629,7 @@ export default function AdminEntityDrawer() {
             setMemberLinkRoleKey("");
             setMemberLinkContactId("");
             setMemberLinkError(null);
+            setDeleteConfirmOpen(false);
             setMemberLinkContactOptions([]);
             setMemberUnlinkingId(null);
             setMemberRelationshipOptions([]);
@@ -2464,6 +2469,9 @@ export default function AdminEntityDrawer() {
                         <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                     </>
                 )
+            )}
+            {canMutate && !(data as { _create?: boolean })?._create && drawer.id && drawer.id !== "new" && canHardDeleteEntityType(drawer.type) && (
+                <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10">Delete</button>
             )}
                 </>
             )}
@@ -5419,6 +5427,33 @@ export default function AdminEntityDrawer() {
                     </div>
                 </div>
             )}
+            <AdminDeleteConfirmModal
+                isOpen={deleteConfirmOpen}
+                onClose={() => { setDeleteConfirmOpen(false); setSaveError(null); }}
+                onConfirm={async () => {
+                    if (!drawer.type || !drawer.id) return;
+                    const url = getDeleteApiPath(drawer.type, drawer.id);
+                    if (!url) return;
+                    setDeleteSaving(true);
+                    setSaveError(null);
+                    try {
+                        const res = await fetch(url, { method: "DELETE" });
+                        const json = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                            setSaveError((json.error as string) || "Delete failed");
+                            return;
+                        }
+                        setDeleteConfirmOpen(false);
+                        closeDrawer();
+                        router.refresh();
+                    } finally {
+                        setDeleteSaving(false);
+                    }
+                }}
+                recordLabel={drawerTitle}
+                entityTypeLabel={getEntityLabel(labels, drawer.type, "singular") ?? drawer.type}
+                isLoading={deleteSaving}
+            />
         </Drawer>
     );
 }

@@ -6,6 +6,7 @@ import Drawer from "@/components/admin/Drawer";
 import PrimaryButton from "@/components/PrimaryButton";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 
 interface Discount {
   id: string;
@@ -40,6 +41,8 @@ export default function DiscountsClient({
   const [formData, setFormData] = useState<Partial<Discount>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
   const readOnly = !canMutate;
 
   const fetchDiscounts = useCallback(async () => {
@@ -221,8 +224,20 @@ export default function DiscountsClient({
           setSelectedRow(null);
           setFormData({});
           setSubmitError(null);
+          setDeleteConfirmOpen(false);
         }}
         title={readOnly ? `View Discount: ${selectedRow?.code}` : isCreating ? "Create Discount" : `Edit Discount: ${selectedRow?.code}`}
+        headerActions={
+          canMutate && isEditing && selectedRow ? (
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10"
+            >
+              Delete
+            </button>
+          ) : undefined
+        }
       >
         <div className="space-y-4">
           {submitError && !readOnly && (
@@ -434,6 +449,35 @@ export default function DiscountsClient({
           </div>
         </div>
       </Drawer>
+      <AdminDeleteConfirmModal
+        isOpen={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setSubmitError(null); }}
+        onConfirm={async () => {
+          if (!selectedRow?.id) return;
+          setDeleteSaving(true);
+          setSubmitError(null);
+          try {
+            const res = await fetch(`/api/admin/discounts/${selectedRow.id}`, { method: "DELETE" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              setSubmitError((json.error as string) || "Delete failed");
+              return;
+            }
+            setDeleteConfirmOpen(false);
+            setIsEditing(false);
+            setIsCreating(false);
+            setSelectedRow(null);
+            setFormData({});
+            if (typeof initialDataProp === "undefined") fetchDiscounts();
+            else window.location.reload();
+          } finally {
+            setDeleteSaving(false);
+          }
+        }}
+        recordLabel={selectedRow?.code ?? "this discount code"}
+        entityTypeLabel="discount code"
+        isLoading={deleteSaving}
+      />
     </div>
   );
 }
