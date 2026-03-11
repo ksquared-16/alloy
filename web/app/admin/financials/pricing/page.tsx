@@ -1,10 +1,5 @@
-import ComingSoonPlaceholder from "@/components/admin/ComingSoonPlaceholder";
+import PricingClient from "./PricingClient";
 
 export default function AdminFinancialsPricingPage() {
-    return (
-        <ComingSoonPlaceholder
-            title="Pricing & Frequencies"
-            description="Configure pricing and recurrence frequencies for services and subscriptions."
-        />
-    );
+    return <PricingClient />;
 }

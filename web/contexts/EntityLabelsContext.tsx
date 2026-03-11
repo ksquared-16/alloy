@@ -25,6 +25,7 @@ const DEFAULT_ENTITY_LABELS: Record<string, { singular: string; plural: string }
     service_offerings: { singular: "Service Offering", plural: "Service Offerings" },
     service_plan_templates: { singular: "Plan Template", plural: "Plan Templates" },
     discount_redemptions: { singular: "Discount Redemption", plural: "Discount Redemptions" },
+    addons: { singular: "Add-on", plural: "Add-ons" },
 };
 
 /**

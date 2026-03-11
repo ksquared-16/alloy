@@ -21,7 +21,7 @@ import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -69,7 +69,7 @@ const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wi
 const DRAWER_ROW_SPACING = "space-y-4";
 
 /** Entity types that use inline-edit (no Edit toggle); always show inputs, save on blur or Save. */
-const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates"] as const;
+const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
 /** Subtle input styling: looks like text until hover/focus. */
 const INLINE_EDIT_INPUT_CLASS = "w-full px-1.5 py-1 text-sm border border-transparent rounded bg-transparent hover:border-alloy-stone/30 hover:bg-alloy-stone/5 focus:border-alloy-blue focus:bg-white focus:outline-none disabled:opacity-60";
@@ -588,6 +588,9 @@ export default function AdminEntityDrawer() {
     type ServicePlanTemplateRelatedPayload = { pricing_frequencies: Record<string, unknown>[] };
     const [planTemplateRelatedData, setPlanTemplateRelatedData] = useState<ServicePlanTemplateRelatedPayload | null>(null);
     const [planTemplateRelatedLoading, setPlanTemplateRelatedLoading] = useState(false);
+    type AddonRelatedPayload = { jobs: unknown[]; quotes: unknown[] };
+    const [addonRelatedData, setAddonRelatedData] = useState<AddonRelatedPayload | null>(null);
+    const [addonRelatedLoading, setAddonRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules", "payments"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -773,6 +776,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setPlanTemplateRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, planTemplateRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "addons" || !drawer.id) {
+            setAddonRelatedData(null);
+            return;
+        }
+        if (drawerTab === "related" && !addonRelatedData) {
+            setAddonRelatedLoading(true);
+            fetch(`/api/admin/related/addon/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: AddonRelatedPayload | null) => setAddonRelatedData(json ?? null))
+                .catch(() => setAddonRelatedData(null))
+                .finally(() => setAddonRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, addonRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
@@ -1692,6 +1710,14 @@ export default function AdminEntityDrawer() {
                 recurrence_interval: data.recurrence_interval != null ? Number(data.recurrence_interval) : 1,
                 is_active: !!data.is_active,
             };
+        } else if (drawer.type === "addons") {
+            initial = {
+                addon_name: (data.addon_name as string) ?? "",
+                addon_key: (data.addon_key as string) ?? "",
+                amount_cents: data.amount_cents != null ? Number(data.amount_cents) : 0,
+                sort_order: data.sort_order != null ? Number(data.sort_order) : 0,
+                is_active: !!data.is_active,
+            };
         } else {
             return;
         }
@@ -1819,6 +1845,25 @@ export default function AdminEntityDrawer() {
                 setSaveSuccess(true);
                 setTimeout(() => setSaveSuccess(false), 2000);
                 window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "service_plan_templates", id: drawer.id } }));
+                return;
+            }
+            if (drawer.type === "addons") {
+                const amountCents = formData.amount_cents != null ? Math.max(0, Math.round(Number(formData.amount_cents))) : undefined;
+                const payload = {
+                    addon_name: typeof formData.addon_name === "string" ? (formData.addon_name.trim() || null) : null,
+                    addon_key: typeof formData.addon_key === "string" ? (formData.addon_key.trim() || null) : null,
+                    amount_cents: amountCents,
+                    sort_order: formData.sort_order != null ? Math.max(0, Math.round(Number(formData.sort_order) || 0)) : undefined,
+                    is_active: !!formData.is_active,
+                };
+                const res = await fetch(`/api/admin/addons/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 2000);
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "addons", id: drawer.id } }));
                 return;
             }
             if (drawer.type === "contacts") {
@@ -2083,7 +2128,9 @@ export default function AdminEntityDrawer() {
                                                         ? `Offering: ${(data.offering_name as string) || (data.offering_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                         : drawer.type === "service_plan_templates"
                                                             ? `Plan: ${(data.plan_name as string) || (data.plan_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
-                                                            : drawer.type === "subscriptions"
+                                                            : drawer.type === "addons"
+                                                                ? `Add-on: ${(data.addon_name as string) || (data.addon_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                                : drawer.type === "subscriptions"
                                                                 ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
                                                                 : "Details"
         : loading
@@ -2369,7 +2416,7 @@ export default function AdminEntityDrawer() {
         </div>
     );
 
-    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
@@ -3224,6 +3271,15 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
+                    {drawerTab === "related" && drawer.type === "addons" && drawer.id && (
+                        <div className="space-y-0 pt-5" data-entity-drawer-related>
+                            {addonRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No related records.</p>
+                            )}
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -3593,6 +3649,19 @@ export default function AdminEntityDrawer() {
                                     </section>
                                 </div>
                             ) : drawer.type === "service_plan_templates" && drawer.id ? (
+                                <div className="space-y-4">
+                                    <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                        </ul>
+                                        {!data?.created_at && !data?.updated_at && (
+                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                        )}
+                                    </section>
+                                </div>
+                            ) : drawer.type === "addons" && drawer.id ? (
                                 <div className="space-y-4">
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>

@@ -29,7 +29,8 @@ export type EntityPresentationType =
   | "workflows"
   | "discount_redemptions"
   | "service_offerings"
-  | "service_plan_templates";
+  | "service_plan_templates"
+  | "addons";
 
 /** Table column definition. renderHint maps to shared renderers (status, date, link, money, etc.). */
 export interface EntityTableColumnConfig {
@@ -1218,6 +1219,59 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "id", label: "ID", span: 1, renderHint: "text" },
             { key: "discount_code_id", label: "Discount code ID", span: 1, renderHint: "text" },
             { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+          ],
+          locked: true,
+        },
+      ],
+      relatedModules: [],
+    },
+  },
+  addons: {
+    entityType: "addons",
+    table: {
+      columns: [
+        { key: "addon_name", label: "Add-on", sortable: true, renderHint: "text" },
+        { key: "addon_key", label: "Key", sortable: true, renderHint: "text" },
+        { key: "_vertical_name", label: "Vertical", sortable: false, renderHint: "text" },
+        { key: "amount_cents", label: "Amount", sortable: true, renderHint: "money" },
+        { key: "sort_order", label: "Sort Order", sortable: true, renderHint: "text" },
+        { key: "_active_yes_no", label: "Active", sortable: false, renderHint: "primary_yes_no" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime" },
+      ],
+      defaultSort: { key: "_updated", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related", "activity"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        {
+          key: "addon_details",
+          title: "Add-on Details",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "addon_name", label: "Add-on", span: 1, renderHint: "text", editable: true },
+            { key: "addon_key", label: "Key", span: 1, renderHint: "text", editable: true },
+            { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text" },
+            { key: "amount_cents", label: "Amount", span: 1, renderHint: "money", editable: true },
+            { key: "sort_order", label: "Sort Order", span: 1, renderHint: "text", editable: true },
+            { key: "is_active", label: "Active", span: 1, renderHint: "primary_yes_no", editable: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text" },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
+            { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text" },
           ],
           locked: true,
         },

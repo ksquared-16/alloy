@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
 
@@ -654,6 +654,21 @@ export async function GET(
                 (row.recurrence_unit as string) ?? null,
                 row.recurrence_interval != null ? Math.max(1, Number(row.recurrence_interval) || 1) : null
             );
+            return NextResponse.json(out);
+        }
+
+        if (type === "addons") {
+            const { data, error } = await supabase.from("pricing_addons").select("*").eq("id", id).single();
+            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
+            const row = data as Record<string, unknown> & { vertical_id?: string | null };
+            const out: Record<string, unknown> = { ...row };
+            out._updated = (row.updated_at as string) ?? (row.created_at as string) ?? null;
+            if (row.vertical_id) {
+                const { data: vert } = await supabase.from("verticals").select("id, name, slug").eq("id", row.vertical_id).maybeSingle();
+                out._vertical_name = (vert as { name?: string | null; slug?: string | null } | null)?.name ?? (vert as { slug?: string | null } | null)?.slug ?? null;
+            } else {
+                out._vertical_name = null;
+            }
             return NextResponse.json(out);
         }
 

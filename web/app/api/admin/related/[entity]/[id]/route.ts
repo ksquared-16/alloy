@@ -397,6 +397,10 @@ export async function GET(
             return NextResponse.json({ pricing_frequencies: pricingFrequencies ?? [] });
         }
 
+        if (entity === "addon") {
+            return NextResponse.json({ jobs: [], quotes: [] });
+        }
+
         return NextResponse.json({ error: "Invalid entity" }, { status: 400 });
     } catch (e: unknown) {
         console.error("[ADMIN_RELATED]", e);
