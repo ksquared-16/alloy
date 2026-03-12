@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import type { CustomerPersonRoleType } from "@/app/api/admin/customer-person-role-types/route";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 export default function CustomerPersonRolesClient() {
     const { canMutate } = useAdminAuth();
+    const { verticals } = useAdminVertical();
     const [items, setItems] = useState<CustomerPersonRoleType[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -163,6 +165,7 @@ export default function CustomerPersonRolesClient() {
                                     <th className="pb-2 pr-4 font-semibold">Label</th>
                                     <th className="pb-2 pr-4 font-semibold">Description</th>
                                     <th className="pb-2 pr-4 font-semibold">Sort</th>
+                                    <th className="pb-2 pr-4 font-semibold">Vertical</th>
                                     <th className="pb-2 pr-4 font-semibold">Active</th>
                                     <th className="pb-2 pr-4 font-semibold">System</th>
                                     {canMutate && <th className="pb-2 font-semibold">Actions</th>}
@@ -171,7 +174,7 @@ export default function CustomerPersonRolesClient() {
                             <tbody>
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={canMutate ? 7 : 6} className="py-4 text-[#59678b]">
+                                        <td colSpan={canMutate ? 8 : 7} className="py-4 text-[#59678b]">
                                             No role types. Add one to get started.
                                         </td>
                                     </tr>
@@ -185,6 +188,9 @@ export default function CustomerPersonRolesClient() {
                                                 {row.description ?? "—"}
                                             </td>
                                             <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
+                                            <td className="py-2 pr-4 text-[#59678b]">
+                                                {row.vertical_id ? (verticals.find((v) => v.id === row.vertical_id)?.name ?? row.vertical_id.slice(0, 8)) : "Universal"}
+                                            </td>
                                             <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
                                             <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
                                             {canMutate && (

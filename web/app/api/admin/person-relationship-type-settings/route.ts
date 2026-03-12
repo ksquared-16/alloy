@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { resolveOptionsByVertical } from "@/lib/admin/personTypeSettings";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -14,11 +15,12 @@ export type PersonRelationshipTypeSetting = {
     is_system: boolean;
     is_active: boolean;
     metadata: Record<string, unknown> | null;
+    vertical_id: string | null;
     created_at: string;
     updated_at: string | null;
 };
 
-/** GET: list person_relationship_type_settings for current org. Optional ?active_only=true. */
+/** GET: list person_relationship_type_settings for current org. Optional ?active_only=true, ?vertical_id= for resolved options. */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -30,14 +32,18 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("active_only") === "true";
+    const verticalId = searchParams.get("vertical_id")?.trim() || null;
 
     const supabase = createAdminClient();
+    const selectCols = "id, org_id, key, label, description, sort_order, is_system, is_active, metadata, vertical_id, created_at, updated_at";
     let q = supabase
         .from("person_relationship_type_settings")
-        .select("id, org_id, key, label, description, sort_order, is_system, is_active, metadata, created_at, updated_at")
+        .select(selectCols)
         .eq("org_id", ctx.orgId);
 
-    if (activeOnly) {
+    if (verticalId) {
+        q = q.eq("is_active", true).or(`vertical_id.eq.${verticalId},vertical_id.is.null`);
+    } else if (activeOnly) {
         q = q.eq("is_active", true);
     }
 
@@ -47,7 +53,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const items: PersonRelationshipTypeSetting[] = (rows ?? []).map((r: Record<string, unknown>) => ({
+    let items: PersonRelationshipTypeSetting[] = (rows ?? []).map((r: Record<string, unknown>) => ({
         id: r.id as string,
         org_id: r.org_id as string,
         key: r.key as string,
@@ -57,9 +63,14 @@ export async function GET(request: NextRequest) {
         is_system: Boolean(r.is_system),
         is_active: Boolean(r.is_active),
         metadata: (r.metadata as Record<string, unknown>) ?? null,
+        vertical_id: (r.vertical_id as string) ?? null,
         created_at: r.created_at as string,
         updated_at: (r.updated_at as string) ?? null,
     }));
+
+    if (verticalId) {
+        items = resolveOptionsByVertical(items, verticalId);
+    }
 
     return NextResponse.json({ items });
 }
