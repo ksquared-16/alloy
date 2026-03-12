@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         sort_order,
         is_system: false,
         is_active,
-        metadata: null,
+        metadata: {},
     };
 
     const { data: created, error } = await supabase
