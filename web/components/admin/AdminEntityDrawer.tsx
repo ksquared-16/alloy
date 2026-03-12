@@ -538,6 +538,7 @@ export default function AdminEntityDrawer() {
     const [contactRelatedData, setContactRelatedData] = useState<ContactRelatedPayload | null>(null);
     const [contactRelatedLoading, setContactRelatedLoading] = useState(false);
     type CustomerRelatedPayload = {
+        people?: { person_id: string; _person_name?: string | null; role_label?: string | null; _person_email?: string | null; _person_phone?: string | null; created_at?: string }[];
         contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null }[];
         opportunities: { id: string; name?: string | null; status?: string | null; job_date?: string | null; quote_total?: number | null }[];
         jobs: { id: string; title?: string | null; scheduled_at?: string | null; opportunity_id?: string | null }[];
