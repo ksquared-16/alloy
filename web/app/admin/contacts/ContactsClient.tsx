@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -163,6 +164,10 @@ export default function ContactsClient() {
                     <button type="button" onClick={() => openDrawer({ type: "contacts", id: "new" })} className="rounded-lg bg-alloy-blue px-3 py-2 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-alloy-blue/30">New {singular}</button>
                 ) : undefined}
             />
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-2.5 text-sm text-amber-900">
+                <strong>Legacy view.</strong> For the canonical human record, use{" "}
+                <Link href="/admin/people" className="font-medium text-alloy-blue hover:underline">People</Link>.
+            </div>
             <div className="pt-4">
                 <DataTable
                 data={contacts}

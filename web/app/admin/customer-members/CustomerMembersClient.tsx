@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import DataTable from "@/components/admin/DataTable";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -164,6 +165,10 @@ export default function CustomerMembersClient() {
                     </button>
                 }
             />
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-2.5 text-sm text-amber-900">
+                <strong>Legacy view.</strong> For the canonical human record, use{" "}
+                <Link href="/admin/people" className="font-medium text-alloy-blue hover:underline">People</Link>.
+            </div>
             <div className="pt-4">
                 {error && (
                     <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>

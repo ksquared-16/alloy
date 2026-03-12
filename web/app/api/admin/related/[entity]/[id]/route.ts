@@ -57,7 +57,7 @@ export async function GET(
 
         if (entity === "customer") {
             const primaryContactId = await supabase.from("customers").select("primary_contact_id").eq("id", id).single().then((r) => (r.data as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null);
-            const [contactsRes, oppRes, jobsRes, locationsRes, membersRes, paymentsRes, subsRes, redemptionsRes, documentsRes] = await Promise.all([
+            const [contactsRes, oppRes, jobsRes, locationsRes, membersRes, paymentsRes, subsRes, redemptionsRes, documentsRes, cpRes] = await Promise.all([
                 supabase.from("contacts").select("id, created_at, first_name, last_name, email, phone, status_key").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total, pipeline_stage_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id, job_status_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT),
@@ -67,7 +67,34 @@ export async function GET(
                 supabase.from("customer_subscriptions").select("id, created_at, status, start_date, primary_contact_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("discount_redemptions").select("id, created_at, discount_code_id, customer_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("documents").select("id, name, document_type, uploaded_at, status").eq("entity_type", "customer").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase.from("customer_persons").select("id, customer_id, person_id, role, created_at").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
+            const cpRows = cpRes.data ?? [];
+            const personIds = [...new Set(cpRows.map((r: { person_id: string }) => r.person_id))];
+            const { data: personRows } = personIds.length > 0
+                ? await supabase.from("persons").select("id, first_name, last_name, email, phone").in("id", personIds)
+                : { data: [] as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] };
+            const personMap = new Map((personRows ?? []).map((p) => [p.id, p]));
+            const roleKeys = [...new Set(cpRows.map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const { data: roleTypeRows } = roleKeys.length > 0
+                ? await supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys)
+                : { data: [] as { key: string; label: string | null }[] };
+            const roleLabelMap = new Map((roleTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
+            const people = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => {
+                const person = personMap.get(r.person_id);
+                const name = person ? [person.first_name, person.last_name].filter(Boolean).join(" ").trim() || null : null;
+                return {
+                    id: r.id,
+                    person_id: r.person_id,
+                    customer_id: r.customer_id,
+                    role: r.role ?? null,
+                    role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
+                    _person_name: name,
+                    _person_email: person?.email ?? null,
+                    _person_phone: person?.phone ?? null,
+                    created_at: r.created_at,
+                };
+            });
             const jobIds = (jobsRes.data ?? []).map((j) => j.id);
             const schedulesRes = jobIds.length > 0
                 ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false }).limit(LIMIT)
@@ -77,6 +104,7 @@ export async function GET(
                 ? await supabase.from("messages_outbox").select("id, created_at, to_phone, status, body").in("to_contact_id", contactIds).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r))
                 : { data: [] as { id: string; created_at: string; to_phone?: string; status?: string; body?: string }[] };
             return NextResponse.json({
+                people,
                 contacts: contactsRes.data ?? [],
                 opportunities: oppRes.data ?? [],
                 jobs: jobsRes.data ?? [],
@@ -415,15 +443,24 @@ export async function GET(
             ]);
             const cpRows = customerPersonsRes.data ?? [];
             const customerIds = [...new Set(cpRows.map((r: { customer_id: string }) => r.customer_id))];
-            const { data: customerRows } = customerIds.length > 0
-                ? await supabase.from("customers").select("id, name").in("id", customerIds)
-                : { data: [] as { id: string; name: string | null }[] };
-            const customerMap = new Map((customerRows ?? []).map((c) => [c.id, c.name ?? null]));
+            const roleKeys = [...new Set(cpRows.map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const [customerRowsRes, roleTypesRes] = await Promise.all([
+                customerIds.length > 0 ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] as { id: string; name: string | null }[] },
+                roleKeys.length > 0 ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys) : { data: [] as { key: string; label: string | null }[] },
+            ]);
+            const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
+            const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
             const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
                 ...r,
                 _customer_name: customerMap.get(r.customer_id) ?? null,
+                _role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
             }));
             const relRows = relationshipsRes.data ?? [];
+            const relTypeKeys = [...new Set(relRows.map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
+            const { data: relTypeRows } = relTypeKeys.length > 0
+                ? await supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", ctx.orgId).in("key", relTypeKeys)
+                : { data: [] as { key: string; label: string | null }[] };
+            const relTypeLabelMap = new Map((relTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
             const otherIds = [...new Set(relRows.flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
             const { data: otherPersons } = otherIds.length > 0
                 ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherIds)
@@ -433,6 +470,7 @@ export async function GET(
                 ...r,
                 _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
                 _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
+                _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
             }));
             return NextResponse.json({
                 customer_persons,

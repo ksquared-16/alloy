@@ -2729,10 +2729,11 @@ export default function AdminEntityDrawer() {
                                         <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Customers</h3>
                                             <ul className="space-y-1.5 text-sm">
-                                                {personRelatedData.customer_persons.map((cp: { id: string; customer_id: string; _customer_name?: string | null }) => (
+                                                {personRelatedData.customer_persons.map((cp: { id: string; customer_id: string; _customer_name?: string | null; role?: string | null; _role_label?: string | null }) => (
                                                     <li key={cp.id}>
                                                         <button type="button" onClick={() => openDrawer({ type: "customers", id: cp.customer_id })} className="text-alloy-blue hover:underline">
                                                             {cp._customer_name ?? cp.customer_id.slice(0, 8) + "…"}
+                                                            {(cp._role_label ?? cp.role) ? ` · ${cp._role_label ?? cp.role}` : ""}
                                                         </button>
                                                     </li>
                                                 ))}
@@ -2743,11 +2744,11 @@ export default function AdminEntityDrawer() {
                                         <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Relationships</h3>
                                             <ul className="space-y-1.5 text-sm">
-                                                {personRelatedData.person_relationships.map((pr: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null }) => (
+                                                {personRelatedData.person_relationships.map((pr: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null; _relationship_type_label?: string | null }) => (
                                                     <li key={pr.id}>
                                                         <button type="button" onClick={() => openDrawer({ type: "persons", id: pr._other_person_id })} className="text-alloy-blue hover:underline">
                                                             {pr._other_person_name ?? pr._other_person_id.slice(0, 8) + "…"}
-                                                            {pr.relationship_type ? ` (${pr.relationship_type})` : ""}
+                                                            {(pr._relationship_type_label ?? pr.relationship_type) ? ` (${pr._relationship_type_label ?? pr.relationship_type})` : ""}
                                                         </button>
                                                     </li>
                                                 ))}
@@ -2756,8 +2757,8 @@ export default function AdminEntityDrawer() {
                                     )}
                                     {((personRelatedData.compatibility_contacts?.length) ?? 0) > 0 && (
                                         <section>
-                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Contact records</h3>
-                                            <p className="text-xs text-alloy-midnight/60 mb-1">Compatibility layer</p>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Contact records (legacy)</h3>
+                                            <p className="text-xs text-alloy-midnight/60 mb-1">Compatibility layer; prefer People for canonical view.</p>
                                             <ul className="space-y-1 text-sm">
                                                 {(personRelatedData.compatibility_contacts as { id: string; first_name?: string | null; last_name?: string | null }[]).map((c) => (
                                                     <li key={c.id}>
@@ -2771,8 +2772,8 @@ export default function AdminEntityDrawer() {
                                     )}
                                     {((personRelatedData.compatibility_members?.length) ?? 0) > 0 && (
                                         <section>
-                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Member records</h3>
-                                            <p className="text-xs text-alloy-midnight/60 mb-1">Compatibility layer</p>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Member records (legacy)</h3>
+                                            <p className="text-xs text-alloy-midnight/60 mb-1">Compatibility layer; prefer People for canonical view.</p>
                                             <ul className="space-y-1 text-sm">
                                                 {(personRelatedData.compatibility_members as { id: string; display_name?: string | null }[]).map((m) => (
                                                     <li key={m.id}>
@@ -3144,9 +3145,16 @@ export default function AdminEntityDrawer() {
                                 const primaryId = d._primary_contact_id ?? null;
                                 const customerId = drawer.id;
                                 type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
+                                const peopleItems = (d.people ?? []).map((p: { person_id: string; _person_name?: string | null; role_label?: string | null; _person_email?: string | null; _person_phone?: string | null }) => ({
+                                    id: p.person_id,
+                                    entityType: "persons" as const,
+                                    label: (p._person_name as string) || "Person",
+                                    meta: [p.role_label, p._person_email, p._person_phone].filter(Boolean).join(" · ") || undefined,
+                                }));
                                 const sections: Sec[] = [
-                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || undefined })), addAction: { label: "Add Contact", onClick: () => openDrawer({ type: "contacts", id: "new", defaultCustomerId: customerId }) } },
-                                    { key: "members", title: memberPlural, defaultExpanded: false, items: (d.customer_members ?? []).map((m) => ({ id: m.id, entityType: "customer_members" as const, label: (m.display_name as string) || [m.first_name, m.last_name].filter(Boolean).join(" ") || "Member", meta: (m.relationship as string) || undefined })), addAction: { label: "Add " + memberSingular, onClick: () => openDrawer({ type: "customer_members", id: "new", defaultCustomerId: customerId }) } },
+                                    { key: "people", title: "People", defaultExpanded: true, items: peopleItems },
+                                    { key: "contacts", title: "Contacts (legacy)", defaultExpanded: false, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || undefined })), addAction: { label: "Add Contact", onClick: () => openDrawer({ type: "contacts", id: "new", defaultCustomerId: customerId }) } },
+                                    { key: "members", title: memberPlural + " (legacy)", defaultExpanded: false, items: (d.customer_members ?? []).map((m) => ({ id: m.id, entityType: "customer_members" as const, label: (m.display_name as string) || [m.first_name, m.last_name].filter(Boolean).join(" ") || "Member", meta: (m.relationship as string) || undefined })), addAction: { label: "Add " + memberSingular, onClick: () => openDrawer({ type: "customer_members", id: "new", defaultCustomerId: customerId }) } },
                                     { key: "opportunities", title: "Opportunities", defaultExpanded: false, items: (d.opportunities ?? []).map((o) => ({ id: o.id, entityType: "opportunities" as const, label: (o.name as string) || "Opportunity", meta: [o.status, o.quote_total != null ? formatMoneyFromDollars(Number(o.quote_total)) : null].filter(Boolean).join(" · ") || undefined })), addAction: { label: "New Opportunity", onClick: () => openDrawer({ type: "opportunities", id: "new", defaultCustomerId: customerId }) } },
                                     { key: "jobs", title: jobPlural, defaultExpanded: false, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
                                     { key: "schedules", title: scheduleSingular + "s", defaultExpanded: false, items: (d.schedules ?? []).map((s) => ({ id: s.id, entityType: "schedules" as const, label: s.start_at ? formatDateTime(s.start_at) : "Schedule", meta: s.end_at ? `to ${formatDateTime(s.end_at)}` : undefined })) },

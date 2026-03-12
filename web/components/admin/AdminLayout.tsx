@@ -44,13 +44,19 @@ const iconClassSidebar = "h-4 w-4 shrink-0 text-alloy-midnight/70";
 
 const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
     {
-        label: "People",
+        label: "Directory",
         icon: Users,
         items: [
+            { href: "/admin/people", label: "People", entityType: "persons" },
             { href: "/admin/customers", label: "Customers", entityType: "customers" },
-            { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
-            { href: "/admin/customer-members", label: "Members", entityType: "customer_members" },
             { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
+            {
+                label: "Legacy",
+                subItems: [
+                    { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
+                    { href: "/admin/customer-members", label: "Members", entityType: "customer_members" },
+                ],
+            },
         ],
     },
     {
@@ -129,16 +135,21 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/system/person-relationship-types": Tag,
         "/admin/system/payouts": DollarSign,
         "/admin/system/db-relationships": GitBranch,
+        "/admin/people": Users,
+        "/admin/contacts": Users,
+        "/admin/customer-members": Users,
+        "/admin/customers": Users,
+        "/admin/vendors": Users,
     };
     if (map[href]) return map[href];
-    if (nestedLabel === "People") return Users;
+    if (nestedLabel === "Directory") return Users;
     if (nestedLabel === "Workflows") return GitBranch;
     if (nestedLabel === "Settings") return Settings;
     return null;
 }
 
 function getInitialCollapsed(): Record<string, boolean> {
-    const defaults = { People: false, Operations: false, Financials: true, System: true };
+    const defaults = { Directory: false, Operations: false, Financials: true, System: true };
     if (typeof window === "undefined") {
         return defaults;
     }
@@ -177,7 +188,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true, "Directory::Legacy": true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -197,6 +208,9 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         }
         if (pathname === "/admin/operations/recurrence") {
             setNestedCollapsed((prev) => (prev["Operations::Settings"] === false ? prev : { ...prev, "Operations::Settings": false }));
+        }
+        if (pathname === "/admin/contacts" || pathname === "/admin/customer-members") {
+            setNestedCollapsed((prev) => (prev["Directory::Legacy"] === false ? prev : { ...prev, "Directory::Legacy": false }));
         }
     }, [pathname]);
 

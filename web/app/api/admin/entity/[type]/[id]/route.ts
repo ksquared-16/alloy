@@ -760,19 +760,28 @@ export async function GET(
                 .eq("person_id", id)
                 .eq("org_id", ctx.orgId);
             const customerIds = [...new Set((cpRows ?? []).map((r: { customer_id: string }) => r.customer_id))];
-            const { data: customerRows } = customerIds.length > 0
-                ? await supabase.from("customers").select("id, name").in("id", customerIds)
-                : { data: [] as { id: string; name: string | null }[] };
-            const customerMap = new Map((customerRows ?? []).map((c) => [c.id, c.name ?? null]));
+            const roleKeys = [...new Set((cpRows ?? []).map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const [customerRowsRes, roleTypesRes] = await Promise.all([
+                customerIds.length > 0 ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] as { id: string; name: string | null }[] },
+                roleKeys.length > 0 ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys) : { data: [] as { key: string; label: string | null }[] },
+            ]);
+            const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
+            const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
             out._customer_persons = (cpRows ?? []).map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
                 ...r,
                 _customer_name: customerMap.get(r.customer_id) ?? null,
+                _role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
             }));
 
             const { data: relRows } = await supabase
                 .from("person_relationships")
                 .select("id, from_person_id, to_person_id, relationship_type, created_at")
                 .or(`from_person_id.eq.${id},to_person_id.eq.${id}`);
+            const relTypeKeys = [...new Set((relRows ?? []).map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
+            const { data: relTypeRows } = relTypeKeys.length > 0
+                ? await supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", ctx.orgId).in("key", relTypeKeys)
+                : { data: [] as { key: string; label: string | null }[] };
+            const relTypeLabelMap = new Map((relTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
             const otherPersonIds = [...new Set((relRows ?? []).flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
             const { data: otherPersons } = otherPersonIds.length > 0
                 ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds)
@@ -782,6 +791,7 @@ export async function GET(
                 ...r,
                 _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
                 _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
+                _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
             }));
 
             const PERSON_LIMIT = 25;

@@ -1149,6 +1149,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         { key: "_person_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "email", label: "Email", sortable: true, renderHint: "text" },
         { key: "phone", label: "Phone", sortable: true, renderHint: "phone" },
+        { key: "_customer_count", label: "Customers", sortable: false, renderHint: "text" },
         { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime", locked: true },
       ],
       defaultSort: { key: "_updated", direction: "desc" },
