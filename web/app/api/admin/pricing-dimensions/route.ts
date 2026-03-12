@@ -44,10 +44,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ pricing_dimensions: items });
 }
 
-/** POST: create pricing_dimension. Body: dimension_name?, dimension_key?, vertical_id?, is_active? */
+/** POST: create pricing_dimension. Body: dimension_name?, dimension_key?, vertical_id?, is_active?. org_id set from admin context. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    if (!ctx.orgId) return NextResponse.json({ error: "Organization context required" }, { status: 403 });
 
     let body: { dimension_name?: string; dimension_key?: string; vertical_id?: string | null; is_active?: boolean };
     try {
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
     const insert: Record<string, unknown> = {
+        org_id: ctx.orgId,
         dimension_name: dimension_name ?? dimension_key,
         dimension_key: dimension_key ?? dimension_name,
         vertical_id: body.vertical_id && body.vertical_id.trim() ? body.vertical_id.trim() : null,

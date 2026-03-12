@@ -35,10 +35,11 @@ export async function GET() {
     return NextResponse.json({ pricing_modes: items });
 }
 
-/** POST: create pricing_mode. Body: mode_key, mode_name, is_active? */
+/** POST: create pricing_mode. Body: mode_key, mode_name, is_active?. org_id set from admin context. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    if (!ctx.orgId) return NextResponse.json({ error: "Organization context required" }, { status: 403 });
 
     let body: { mode_key?: string; mode_name?: string; is_active?: boolean };
     try {
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
     const insert: Record<string, unknown> = {
+        org_id: ctx.orgId,
         mode_key: mode_key ?? mode_name,
         mode_name: mode_name ?? mode_key,
     };
