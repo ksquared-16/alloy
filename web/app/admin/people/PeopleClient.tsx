@@ -59,10 +59,7 @@ export default function PeopleClient() {
 
     return (
         <div>
-            <AdminListPageHeader
-                title="People"
-                subtitle="Canonical human records. Use Contacts or Members for legacy compatibility."
-            />
+            <AdminListPageHeader title="People" />
             <div className="pt-4">
                 {error && (
                     <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
