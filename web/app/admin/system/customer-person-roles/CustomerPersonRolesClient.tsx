@@ -9,9 +9,12 @@ import type { CustomerPersonRoleType } from "@/app/api/admin/customer-person-rol
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
+type IndustryOption = { id: string; key: string; label: string };
+
 export default function CustomerPersonRolesClient() {
     const { canMutate } = useAdminAuth();
     const { verticals } = useAdminVertical();
+    const [industries, setIndustries] = useState<IndustryOption[]>([]);
     const [items, setItems] = useState<CustomerPersonRoleType[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -42,9 +45,23 @@ export default function CustomerPersonRolesClient() {
         }
     }, []);
 
+    const fetchIndustries = useCallback(async () => {
+        try {
+            const res = await fetch("/api/admin/industries");
+            const json = await res.json().catch(() => ({}));
+            if (res.ok) setIndustries((json as { industries?: IndustryOption[] }).industries ?? []);
+        } catch {
+            setIndustries([]);
+        }
+    }, []);
+
     useEffect(() => {
         fetchItems();
     }, [fetchItems]);
+
+    useEffect(() => {
+        fetchIndustries();
+    }, [fetchIndustries]);
 
     const openCreate = () => {
         setModalId(null);
@@ -134,8 +151,8 @@ export default function CustomerPersonRolesClient() {
         <>
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <AdminPageHeader
-                    title="Customer Person Roles"
-                    subtitle="Role types when linking a person to a customer (e.g. primary contact, billing). Used for customer_persons.role."
+                    title="Person Roles"
+                    subtitle="Role types when linking a person to a customer. Defaults are driven by your org industry (Entity Labels). Used for customer_persons.role."
                 />
                 {canMutate && (
                     <button
@@ -165,6 +182,7 @@ export default function CustomerPersonRolesClient() {
                                     <th className="pb-2 pr-4 font-semibold">Label</th>
                                     <th className="pb-2 pr-4 font-semibold">Description</th>
                                     <th className="pb-2 pr-4 font-semibold">Sort</th>
+                                    <th className="pb-2 pr-4 font-semibold">Industry</th>
                                     <th className="pb-2 pr-4 font-semibold">Vertical</th>
                                     <th className="pb-2 pr-4 font-semibold">Active</th>
                                     <th className="pb-2 pr-4 font-semibold">System</th>
@@ -174,8 +192,8 @@ export default function CustomerPersonRolesClient() {
                             <tbody>
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={canMutate ? 8 : 7} className="py-4 text-[#59678b]">
-                                            No role types. Add one to get started.
+                                        <td colSpan={canMutate ? 9 : 8} className="py-4 text-[#59678b]">
+                                            No role types. Add one to get started. Options shown in forms follow your org industry (Entity Labels).
                                         </td>
                                     </tr>
                                 ) : (
@@ -189,7 +207,10 @@ export default function CustomerPersonRolesClient() {
                                             </td>
                                             <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
                                             <td className="py-2 pr-4 text-[#59678b]">
-                                                {row.vertical_id ? (verticals.find((v) => v.id === row.vertical_id)?.name ?? row.vertical_id.slice(0, 8)) : "Universal"}
+                                                {row.industry_id ? (industries.find((i) => i.id === row.industry_id)?.label ?? row.industry_id.slice(0, 8)) : "Universal"}
+                                            </td>
+                                            <td className="py-2 pr-4 text-[#59678b]">
+                                                {row.vertical_id ? (verticals.find((v) => v.id === row.vertical_id)?.name ?? row.vertical_id.slice(0, 8)) : "—"}
                                             </td>
                                             <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
                                             <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>

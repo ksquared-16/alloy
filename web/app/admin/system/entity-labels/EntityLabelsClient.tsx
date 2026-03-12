@@ -215,7 +215,7 @@ export default function EntityLabelsClient() {
     if (loading) {
         return (
             <>
-                <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. Opportunities, Jobs) for your vertical or branding." />
+                <AdminPageHeader title="Entity Labels" subtitle="Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below." />
                 <p className="text-sm text-[#59678b]">Loading…</p>
             </>
         );
@@ -224,7 +224,7 @@ export default function EntityLabelsClient() {
     if (error || !data) {
         return (
             <>
-                <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. Opportunities, Jobs) for your vertical or branding." />
+                <AdminPageHeader title="Entity Labels" subtitle="Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below." />
                 <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error ?? "Failed to load"}</div>
             </>
         );
@@ -235,7 +235,7 @@ export default function EntityLabelsClient() {
 
     return (
         <>
-            <AdminPageHeader title="Entity Labels" subtitle="Rename entity types (e.g. customer_members displays as Children when industry is childcare)." />
+            <AdminPageHeader title="Entity Labels" subtitle="Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below." />
             {locked && <ConfigLockBanner />}
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>

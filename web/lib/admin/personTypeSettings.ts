@@ -3,15 +3,17 @@
  * Use these APIs for dropdowns in forms; store the key in customer_persons.role or
  * person_relationships.relationship_type. Current text values remain compatible.
  *
+ * Industry is the PRIMARY driver for default options (orgs.industry_id).
+ * Optional vertical_id remains for future/secondary refinement.
+ *
  * API paths:
- * - GET/POST /api/admin/customer-person-role-types (?active_only=true&vertical_id= for dropdowns)
+ * - GET/POST /api/admin/customer-person-role-types (?active_only=true for industry-resolved options; ?industry_id= override; ?vertical_id= for secondary)
  * - PATCH /api/admin/customer-person-role-types/[id]
- * - GET/POST /api/admin/person-relationship-type-settings (?active_only=true&vertical_id= for dropdowns)
+ * - GET/POST /api/admin/person-relationship-type-settings (same)
  * - PATCH /api/admin/person-relationship-type-settings/[id]
  *
- * Vertical resolution: when loading options for a given org + vertical, pass ?vertical_id=.
- * The API returns active rows for that vertical + universal (vertical_id null), de-duped by key
- * (vertical-specific wins), sorted by sort_order then label.
+ * Resolution (industry-first): active rows for org + (industry_id = org.industry_id OR industry_id IS NULL);
+ * de-dupe by key (industry-specific wins); sort by sort_order then label.
  */
 
 export const CUSTOMER_PERSON_ROLE_TYPES_API = "/api/admin/customer-person-role-types";
@@ -20,13 +22,46 @@ export const PERSON_RELATIONSHIP_TYPE_SETTINGS_API = "/api/admin/person-relation
 /** Options list shape for dropdowns: value = key stored in DB, label = display. */
 export type DropdownOption = { value: string; label: string };
 
-/** Row shape used for vertical resolution (key, label, sort_order, vertical_id). */
+/** Row shape used for industry resolution (key, label, sort_order, industry_id). */
+export type IndustryOptionRow = { key: string; label: string | null; sort_order?: number; industry_id?: string | null };
+
+/**
+ * Resolve options by industry: keep rows where industry_id = industryId or industry_id is null;
+ * de-duplicate by key (prefer industry-specific over universal); sort by sort_order then label.
+ * If industryId is null/empty, returns items as-is (only sorted).
+ */
+export function resolveOptionsByIndustry<T extends IndustryOptionRow>(items: T[], industryId: string | null): T[] {
+    if (!industryId || !items.length) {
+        const sorted = [...items].sort((a, b) => {
+            const soA = a.sort_order ?? 100;
+            const soB = b.sort_order ?? 100;
+            if (soA !== soB) return soA - soB;
+            return (a.label ?? a.key).localeCompare(b.label ?? b.key);
+        });
+        return sorted;
+    }
+    const filtered = items.filter((r) => r.industry_id === industryId || r.industry_id == null);
+    const byKey = new Map<string, T>();
+    for (const r of filtered) {
+        const existing = byKey.get(r.key);
+        if (!existing || (r.industry_id === industryId && existing.industry_id !== industryId)) byKey.set(r.key, r);
+    }
+    const resolved = [...byKey.values()].sort((a, b) => {
+        const soA = a.sort_order ?? 100;
+        const soB = b.sort_order ?? 100;
+        if (soA !== soB) return soA - soB;
+        return (a.label ?? a.key).localeCompare(b.label ?? b.key);
+    });
+    return resolved;
+}
+
+/** Row shape used for vertical resolution (key, label, sort_order, vertical_id). Kept for secondary/legacy. */
 export type VerticalOptionRow = { key: string; label: string | null; sort_order?: number; vertical_id?: string | null };
 
 /**
  * Resolve options by vertical: keep rows where vertical_id = verticalId or vertical_id is null;
  * de-duplicate by key (prefer vertical-specific over universal); sort by sort_order then label.
- * If verticalId is null/empty, returns items as-is (only sorted).
+ * If verticalId is null/empty, returns items as-is (only sorted). Secondary to industry.
  */
 export function resolveOptionsByVertical<T extends VerticalOptionRow>(items: T[], verticalId: string | null): T[] {
     if (!verticalId || !items.length) {

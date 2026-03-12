@@ -31,7 +31,7 @@ export default function VerticalsIndustriesClient() {
         <>
             <AdminPageHeader
                 title="Verticals & Industries"
-                subtitle="Configure verticals (business domains) and industries (used for entity label defaults per org)."
+                subtitle="Industries drive default vocabulary (Entity Labels, Person Roles, Relationship Types). Verticals are optional for business domains."
             />
             <div className="grid gap-6 md:grid-cols-2">
                 <SectionCard title="Industries">
