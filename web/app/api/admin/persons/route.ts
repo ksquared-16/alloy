@@ -69,3 +69,50 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ persons });
 }
+
+/** POST: create a canonical person. Admin only. Body: first_name?, last_name?, email?, phone? (at least one recommended). */
+export async function POST(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    let body: { first_name?: string; last_name?: string; email?: string; phone?: string } = {};
+    try {
+        body = (await request.json()) as typeof body;
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const first_name = typeof body.first_name === "string" ? body.first_name.trim() || null : null;
+    const last_name = typeof body.last_name === "string" ? body.last_name.trim() || null : null;
+    const email = typeof body.email === "string" ? body.email.trim() || null : null;
+    const phone = typeof body.phone === "string" ? body.phone.trim() || null : null;
+
+    const supabase = createAdminClient();
+    const insert = {
+        org_id: ctx.orgId,
+        first_name,
+        last_name,
+        email,
+        phone,
+    };
+
+    const { data: created, error } = await supabase
+        .from("persons")
+        .insert(insert)
+        .select("id, org_id, first_name, last_name, email, phone, created_at, updated_at")
+        .single();
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json(created, { status: 201 });
+}

@@ -519,6 +519,9 @@ export default function AdminEntityDrawer() {
     const [memberRelatedDataLoading, setMemberRelatedDataLoading] = useState(false);
     const [contactCreateSaving, setContactCreateSaving] = useState(false);
     const [contactCreateError, setContactCreateError] = useState<string | null>(null);
+    const [personCreateSaving, setPersonCreateSaving] = useState(false);
+    const [personCreateError, setPersonCreateError] = useState<string | null>(null);
+    const [personCreateForm, setPersonCreateForm] = useState<{ first_name?: string; last_name?: string; email?: string; phone?: string }>({});
     type StatusDefOption = { status_key: string; status_label: string | null; sort_order: number; is_active: boolean };
     const [statusDefsForDrawer, setStatusDefsForDrawer] = useState<StatusDefOption[]>([]);
     const [statusDefsLoading, setStatusDefsLoading] = useState(false);
@@ -645,6 +648,9 @@ export default function AdminEntityDrawer() {
             setMemberRelatedDataLoading(false);
             setContactCreateSaving(false);
             setContactCreateError(null);
+            setPersonCreateSaving(false);
+            setPersonCreateError(null);
+            setPersonCreateForm({});
             setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
@@ -2571,6 +2577,13 @@ export default function AdminEntityDrawer() {
             {data && !loading && (
                 <div className="space-y-6">
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
+                    {((drawer.type === "contacts" || drawer.type === "customer_members") && (data as { _person_id?: string | null })?._person_id) && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-900">
+                            <p className="font-medium">Legacy record.</p>
+                            <p className="mt-1 text-amber-800/90">Open the canonical Person to view and manage this human record.</p>
+                            <button type="button" onClick={() => openDrawer({ type: "persons", id: (data as { _person_id: string })._person_id })} className="mt-2 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90">Open canonical Person</button>
+                        </div>
+                    )}
                     {drawer.type === "schedules" && (data as { _create?: boolean })?._create && (
                         <div className="space-y-4">
                             <p className="text-sm text-alloy-midnight/70">Create a new schedule. {drawer.defaultSchedulePrefill?.job_id ? `${jobSingular} is prefilled.` : "Enter start and end times."}</p>
@@ -3154,8 +3167,6 @@ export default function AdminEntityDrawer() {
                                 }));
                                 const sections: Sec[] = [
                                     { key: "people", title: "People", defaultExpanded: true, items: peopleItems },
-                                    { key: "contacts", title: "Contacts (legacy)", defaultExpanded: false, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || undefined })), addAction: { label: "Add Contact", onClick: () => openDrawer({ type: "contacts", id: "new", defaultCustomerId: customerId }) } },
-                                    { key: "members", title: memberPlural + " (legacy)", defaultExpanded: false, items: (d.customer_members ?? []).map((m) => ({ id: m.id, entityType: "customer_members" as const, label: (m.display_name as string) || [m.first_name, m.last_name].filter(Boolean).join(" ") || "Member", meta: (m.relationship as string) || undefined })), addAction: { label: "Add " + memberSingular, onClick: () => openDrawer({ type: "customer_members", id: "new", defaultCustomerId: customerId }) } },
                                     { key: "opportunities", title: "Opportunities", defaultExpanded: false, items: (d.opportunities ?? []).map((o) => ({ id: o.id, entityType: "opportunities" as const, label: (o.name as string) || "Opportunity", meta: [o.status, o.quote_total != null ? formatMoneyFromDollars(Number(o.quote_total)) : null].filter(Boolean).join(" · ") || undefined })), addAction: { label: "New Opportunity", onClick: () => openDrawer({ type: "opportunities", id: "new", defaultCustomerId: customerId }) } },
                                     { key: "jobs", title: jobPlural, defaultExpanded: false, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
                                     { key: "schedules", title: scheduleSingular + "s", defaultExpanded: false, items: (d.schedules ?? []).map((s) => ({ id: s.id, entityType: "schedules" as const, label: s.start_at ? formatDateTime(s.start_at) : "Schedule", meta: s.end_at ? `to ${formatDateTime(s.end_at)}` : undefined })) },
@@ -3210,7 +3221,7 @@ export default function AdminEntityDrawer() {
                                                     </div>
                                                 ) : sec.addAction ? (
                                                     <div className="py-3 flex flex-col gap-2">
-                                                        <p className="text-sm text-alloy-midnight/60">No {sec.key === "contacts" ? "contacts" : sec.key === "members" ? memberPlural.toLowerCase() : sec.key === "opportunities" ? "opportunities" : "locations"} yet.</p>
+                                                        <p className="text-sm text-alloy-midnight/60">No {sec.key === "opportunities" ? "opportunities" : sec.key === "locations" ? "locations" : sec.key} yet.</p>
                                                         <button type="button" onClick={sec.addAction.onClick} className="self-start px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{sec.addAction.label}</button>
                                                     </div>
                                                 ) : (
@@ -4018,7 +4029,28 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "overview" && !useConfigDrivenOverview && (
                         <>
                             {drawer.type === "persons" && (data as { _create?: boolean })?._create ? (
-                                <p className="text-sm text-alloy-midnight/70">Person creation is not available here. Create a contact or customer member first; they will link to a canonical person.</p>
+                                <div className="space-y-4">
+                                    {personCreateError && <p className="text-sm text-red-600">{personCreateError}</p>}
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(personCreateForm.first_name ?? "")} onChange={(e) => setPersonCreateForm((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="Optional" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(personCreateForm.last_name ?? "")} onChange={(e) => setPersonCreateForm((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="Optional" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Email</label><input type="email" value={String(personCreateForm.email ?? "")} onChange={(e) => setPersonCreateForm((f) => ({ ...f, email: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="Optional" /></div>
+                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Phone</label><input value={String(personCreateForm.phone ?? "")} onChange={(e) => setPersonCreateForm((f) => ({ ...f, phone: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" placeholder="Optional" /></div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" disabled={personCreateSaving || !canMutate} onClick={async () => {
+                                            setPersonCreateSaving(true); setPersonCreateError(null);
+                                            try {
+                                                const res = await fetch("/api/admin/persons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first_name: personCreateForm.first_name?.trim() || null, last_name: personCreateForm.last_name?.trim() || null, email: personCreateForm.email?.trim() || null, phone: personCreateForm.phone?.trim() || null }) });
+                                                const json = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+                                                const newId = (json as { id?: string }).id;
+                                                if (newId) { openDrawer({ type: "persons", id: newId }); refetch(); }
+                                                else setPersonCreateError("No id returned");
+                                            } catch (e: unknown) { setPersonCreateError((e as Error).message); }
+                                            setPersonCreateSaving(false);
+                                        }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50">{personCreateSaving ? "Creating…" : "Create person"}</button>
+                                        <button type="button" onClick={closeDrawer} className="px-3 py-1.5 text-sm border rounded-md">Cancel</button>
+                                    </div>
+                                </div>
                             ) : drawer.type === "contacts" && (data as { _create?: boolean })?._create ? (
                                 <div className="space-y-4">
                                     {contactCreateError && <p className="text-sm text-red-600">{contactCreateError}</p>}
