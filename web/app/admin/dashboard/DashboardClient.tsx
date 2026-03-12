@@ -44,13 +44,13 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                 <KpiCard value={jobs.total} label={jobPlural} href="/admin/jobs" accent="navy" />
                 <KpiCard value={jobs.withDefaultVendor} label={`${jobPlural} with default ${vendorSingular.toLowerCase()}`} href="/admin/jobs" accent="gold" />
                 <KpiCard value={opportunities.total} label={opportunityPlural} href="/admin/opportunities" accent="slate" />
-                <KpiCard value={opportunities.booked} label={`${opportunityPlural} booked`} href="/admin/opportunities" accent="juniper" />
+                <KpiCard value={opportunities.booked} label={`${opportunityPlural} booked`} href="/admin/opportunities" accent="pine" />
             </section>
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <KpiCard value={schedules.upcoming} label="Upcoming schedules" href="/admin/schedules" accent="navy" />
                 <KpiCard value={schedules.unassigned} label="Unassigned" href="/admin/schedules" accent="gold" />
                 <KpiCard value={schedules.offered} label="Offered" href="/admin/schedules" accent="gold" />
-                <KpiCard value={schedules.accepted} label="Accepted" href="/admin/schedules" accent="juniper" />
+                <KpiCard value={schedules.accepted} label="Accepted" href="/admin/schedules" accent="pine" />
                 <KpiCard value={schedules.canceled} label="Canceled" href="/admin/schedules" accent="ember" />
             </section>
 

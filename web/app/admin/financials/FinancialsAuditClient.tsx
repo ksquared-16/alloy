@@ -189,18 +189,18 @@ export default function FinancialsAuditClient() {
                 subtitle="Audit ledger transactions and journal entries."
             />
 
-            <div className="flex gap-2 border-b border-[#e6e8ec]">
+            <div className="flex gap-2 border-b border-admin-border">
                 <button
                     type="button"
                     onClick={() => setTab("ledger")}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-md ${tab === "ledger" ? "bg-white border border-b-0 border-[#e6e8ec] text-[#31394d]" : "text-[#59678b] hover:bg-[#F4F6F9]"}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 -mb-px transition-colors ${tab === "ledger" ? "border-alloy-pine text-alloy-pine" : "border-transparent text-alloy-muted hover:bg-alloy-pine/5"}`}
                 >
                     Ledger transactions
                 </button>
                 <button
                     type="button"
                     onClick={() => setTab("journal")}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-md ${tab === "journal" ? "bg-white border border-b-0 border-[#e6e8ec] text-[#31394d]" : "text-[#59678b] hover:bg-[#F4F6F9]"}`}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 -mb-px transition-colors ${tab === "journal" ? "border-alloy-pine text-alloy-pine" : "border-transparent text-alloy-muted hover:bg-alloy-pine/5"}`}
                 >
                     Journal entries
                 </button>

@@ -164,14 +164,14 @@ export default function DataTable<T extends Record<string, any>>({
                             <button
                                 type="button"
                                 onClick={() => setFilterOpen((o) => !o)}
-                                className={`flex items-center gap-2 ${BTN_SECONDARY} ${filterOpen ? "border-alloy-blue bg-alloy-blue/10 ring-2 ring-alloy-blue/25 text-alloy-blue" : ""}`}
+                                className={`flex items-center gap-2 ${BTN_SECONDARY} ${filterOpen ? "border-alloy-pine bg-alloy-pine/10 ring-2 ring-alloy-pine/25 text-alloy-pine" : ""}`}
                                 aria-expanded={filterOpen}
                                 aria-haspopup="true"
                             >
                                 <Filter className="h-4 w-4 text-alloy-muted" />
                                 Filter
                                 {hasActiveFilters && (
-                                    <span className="h-1.5 w-1.5 rounded-full bg-alloy-blue" aria-hidden />
+                                    <span className="h-1.5 w-1.5 rounded-full bg-alloy-pine" aria-hidden />
                                 )}
                             </button>
                             {filterOpen && (
@@ -238,15 +238,15 @@ export default function DataTable<T extends Record<string, any>>({
                                         key={String(column.key)}
                                         className={`
                                             px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-forge
-                                            ${isSorted ? "text-alloy-blue" : ""}
-                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-stone/50" : ""}
+                                            ${isSorted ? "text-alloy-pine" : ""}
+                                            ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-pine/5" : ""}
                                         `}
                                         onClick={() => column.sortable && handleSort(column.key)}
                                     >
                                         <div className="flex items-center gap-1.5">
                                             {column.label}
                                             {column.sortable && (
-                                                <span className={`inline-flex ${isSorted ? "text-alloy-blue" : "text-alloy-forge/60"}`} aria-hidden>
+                                                <span className={`inline-flex ${isSorted ? "text-alloy-pine" : "text-alloy-forge/60"}`} aria-hidden>
                                                     {isSorted ? (
                                                         sortDirection === "asc" ? (
                                                             <ChevronUp className="h-4 w-4" />
@@ -283,7 +283,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     key={idx}
                                     className={`
                                         transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-stone/50" : ""}
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-pine/5" : ""}
                                     `}
                                     onClick={() => onRowClick?.(row)}
                                 >

@@ -356,7 +356,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => toggleNested(nestedKey)}
-                                                                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm font-medium transition-colors text-left gap-2 ${hasActiveChild ? "bg-alloy-pine/8 text-alloy-pine border-l-2 border-alloy-pine" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
                                                             >
                                                                 <span className="flex items-center gap-2 min-w-0">
                                                                     {NestedIcon && <NestedIcon className={iconClassSidebar} />}
@@ -373,7 +373,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                                             <li key={sub.href}>
                                                                                 <Link
                                                                                     href={sub.href}
-                                                                                    className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                                                    className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-pine/8 text-alloy-pine border-l-2 border-alloy-pine" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
                                                                                 >
                                                                                     {displayLabel}
                                                                                 </Link>
@@ -393,9 +393,9 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                     <li key={link.href}>
                                                         <Link
                                                             href={link.href}
-                                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-blue/10 text-alloy-blue border-l-2 border-alloy-blue" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
+                                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-alloy-pine/8 text-alloy-pine border-l-2 border-alloy-pine" : "text-alloy-midnight hover:bg-alloy-pine/5"}`}
                                                         >
-                                                            {LinkIcon && <LinkIcon className={iconClassSidebar} />}
+                                                            {LinkIcon && <LinkIcon className={isActive ? "h-4 w-4 shrink-0 text-alloy-pine" : iconClassSidebar} />}
                                                             <span className="truncate">{displayLabel}</span>
                                                         </Link>
                                                     </li>

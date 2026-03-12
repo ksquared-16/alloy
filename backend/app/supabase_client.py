@@ -185,7 +185,7 @@ def resolve_or_create_contact_and_customer(
         logger.warning("resolve_or_create_contact_and_customer: Supabase not configured")
         return None, None, "missing"
 
-    # Quote-ID shortcut: use existing contact when contact_id provided
+    # Quote-ID shortcut: use existing contact when contact_id provided. If contact has no customer, create one (Pass 1 lifecycle).
     if contact_id and contact_id.strip():
         existing = find_contact_by_id(contact_id.strip())
         if existing:
@@ -199,7 +199,52 @@ def resolve_or_create_contact_and_customer(
                     (cust_id[:8] + "***") if cust_id and len(cust_id) > 8 else cust_id,
                 )
                 return cid, cust_id, "quote_id"
-            logger.warning("resolve_or_create_contact_and_customer: contact_id provided but contact has no linked customer contact_id=%s", cid[:8] + "***" if cid and len(cid) > 8 else cid)
+            # Contact has no customer: create and link (payment/confirm path; customer not created at quote-start).
+            _email = existing.get("email") or (email.strip().lower() if (email and isinstance(email, str)) else None)
+            _phone = existing.get("phone") or (normalize_phone(phone) if phone else None)
+            _name = name or (
+                ((existing.get("first_name") or "") + " " + (existing.get("last_name") or "")).strip()
+                or existing.get("email")
+                or existing.get("phone")
+                or "New Customer"
+            )
+            # Use ensure_customer_for_contact logic inline so we have correct name/email/phone from contact
+            customer_name = _name if _name else (_email or _phone or "New Customer")
+            customer_payload = {
+                "name": customer_name,
+                "primary_contact_id": cid,
+                "status": "active",
+            }
+            org_id = os.getenv("ALLOY_PUBLIC_ORG_ID") or None
+            if org_id:
+                customer_payload["org_id"] = org_id
+            customer_payload = _normalize_uuid_fields(customer_payload)
+            try:
+                create_resp = requests.post(f"{_get_base_url()}/customers", headers=_get_headers(), json=customer_payload, timeout=30)
+                if create_resp.ok:
+                    customer_data = create_resp.json()
+                    new_cust_id = None
+                    if isinstance(customer_data, list) and len(customer_data) > 0:
+                        new_cust_id = customer_data[0].get("id")
+                    elif isinstance(customer_data, dict):
+                        new_cust_id = customer_data.get("id")
+                    if new_cust_id:
+                        patch_resp = requests.patch(
+                            f"{_get_base_url()}/contacts?id=eq.{cid}",
+                            headers=_get_headers(),
+                            json={"customer_id": new_cust_id},
+                            timeout=30,
+                        )
+                        if patch_resp.ok:
+                            logger.info(
+                                "resolve_or_create_contact_and_customer: created customer for quote contact supa_customer_id=%s supa_contact_id=%s",
+                                (new_cust_id[:8] + "***") if len(new_cust_id) > 8 else new_cust_id,
+                                (cid[:8] + "***") if cid and len(cid) > 8 else cid,
+                            )
+                            return cid, new_cust_id, "quote_id_created_customer"
+                # Fallback: return missing so caller can retry with email/phone
+            except Exception as e:
+                logger.warning("resolve_or_create_contact_and_customer: exception creating customer for quote contact: %s", e)
             return None, None, "contact_no_customer"
 
     normalized_email = email.strip().lower() if (email and isinstance(email, str)) else None

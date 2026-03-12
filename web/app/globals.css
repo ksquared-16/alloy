@@ -4,7 +4,7 @@
   /* Alloy Brand Colors — structural and semantic roles */
   /* Alloy Blue: sidebar, primary actions, focus, info states */
   --color-alloy-blue: #00458C;
-  /* Bend Pine: top bar, success/active tint in surfaces */
+  /* Bend Pine: accent for active/success/emphasis/selected (not generic green) */
   --color-alloy-pine: #273F52;
   /* Ember: destructive, warning, archive, cancelled */
   --color-alloy-ember: #BC4300;
@@ -50,9 +50,9 @@ body {
   @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-ember text-white hover:bg-alloy-ember/90 focus:outline-none focus:ring-2 focus:ring-alloy-ember focus:ring-offset-1;
 }
 
-/* Admin success action: Bend Pine / Juniper */
+/* Admin success/confirmation action: Bend Pine */
 .admin-btn-success {
-  @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-juniper text-white hover:bg-alloy-juniper/90 focus:outline-none focus:ring-2 focus:ring-alloy-juniper focus:ring-offset-1;
+  @apply rounded-lg px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white hover:bg-alloy-pine/90 focus:outline-none focus:ring-2 focus:ring-alloy-pine focus:ring-offset-1;
 }
 
 /* Destructive/archive link or text: Ember */

@@ -206,7 +206,7 @@ export default function RelatedRecordsTabs({
                                 key={t.key}
                                 type="button"
                                 onClick={() => setActiveTab(t.key)}
-                                className={`px-3 py-1.5 text-sm font-medium rounded-t ${activeTab === t.key ? "bg-alloy-stone text-alloy-midnight" : "text-alloy-midnight/60 hover:bg-alloy-stone/50"}`}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-t border-b-2 -mb-px transition-colors ${activeTab === t.key ? "bg-alloy-pine/8 text-alloy-pine border-alloy-pine" : "border-transparent text-alloy-midnight/60 hover:bg-alloy-pine/5"}`}
                             >
                                 {t.label}
                             </button>
@@ -267,7 +267,7 @@ export default function RelatedRecordsTabs({
                                     {rows.map((row, i) => (
                                         <tr
                                             key={(row.id as string) ?? i}
-                                            className="border-t border-alloy-stone/20 hover:bg-alloy-blue/5 cursor-pointer"
+                                            className="border-t border-alloy-stone/20 hover:bg-alloy-pine/5 cursor-pointer"
                                             onClick={() => openDrawer({ type: active.entityType, id: row.id as string })}
                                         >
                                             {active.columns.map((col) => (

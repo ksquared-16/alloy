@@ -5,6 +5,73 @@ import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
+type Supabase = ReturnType<typeof createServiceRoleClient>;
+
+/**
+ * Ensure contact has a customer; create and link if missing. When contact has person_id, create customer_persons link.
+ * Used at confirm when quote path has no customer yet (Pass 1 lifecycle).
+ */
+async function ensureCustomerForContactInConfirm(
+    supabase: Supabase,
+    contactId: string,
+    params: { vertical_id: string; org_id: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }
+): Promise<string> {
+    const { data: contact } = await supabase
+        .from("contacts")
+        .select("id, customer_id, person_id, first_name, last_name, email, phone")
+        .eq("id", contactId)
+        .single();
+    if (!contact) throw new Error("Contact not found");
+    const c = contact as { customer_id?: string | null; person_id?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
+    if (c.customer_id) return c.customer_id;
+
+    const name = [params.first_name ?? c.first_name, params.last_name ?? c.last_name].filter(Boolean).join(" ").trim()
+        || (params.email ?? c.email) || (params.phone ?? c.phone) || "New Customer";
+    const payload: Record<string, unknown> = {
+        name,
+        primary_contact_id: contactId,
+        status: "active",
+        vertical_id: params.vertical_id,
+        metadata: { source: "book-v2-confirm", email: params.email ?? c.email ?? undefined, phone: params.phone ?? c.phone ?? undefined },
+    };
+    if (params.org_id) payload.org_id = params.org_id;
+
+    const { data: newCustomer, error: insErr } = await supabase
+        .from("customers")
+        .insert(payload)
+        .select("id")
+        .single();
+    if (insErr || !newCustomer) {
+        if (insErr?.code === "23505") {
+            const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
+            if (existing?.id) {
+                await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
+                return existing.id;
+            }
+        }
+        throw new Error(insErr?.message ?? "Failed to create customer");
+    }
+    const customerId = (newCustomer as { id: string }).id;
+    await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+
+    if (c.person_id && params.org_id) {
+        const { data: existingCp } = await supabase
+            .from("customer_persons")
+            .select("id")
+            .eq("customer_id", customerId)
+            .eq("person_id", c.person_id)
+            .maybeSingle();
+        if (!existingCp) {
+            await supabase.from("customer_persons").insert({
+                customer_id: customerId,
+                person_id: c.person_id,
+                org_id: params.org_id,
+            });
+        }
+    }
+    return customerId;
+}
+
 /** Get or create pipeline stage by name (for Booked). */
 async function getOrCreateBookedStage(
     supabase: ReturnType<typeof createServiceRoleClient>,
@@ -200,11 +267,7 @@ export async function POST(request: NextRequest) {
         const supabase = createServiceRoleClient();
 
         const useQuoteIds =
-            !!(
-                opportunity_id_from_quote &&
-                contact_id_from_quote &&
-                customer_id_from_quote
-            );
+            !!(opportunity_id_from_quote && contact_id_from_quote);
 
         let contactId!: string;
         let customerId!: string;
@@ -216,15 +279,15 @@ export async function POST(request: NextRequest) {
         if (useQuoteIds) {
             const { data: opp, error: oppVerifyErr } = await supabase
                 .from("opportunities")
-                .select("id, primary_contact_id, customer_id, vertical_id")
+                .select("id, primary_contact_id, customer_id, vertical_id, org_id")
                 .eq("id", opportunity_id_from_quote)
                 .single();
-            if (oppVerifyErr || !opp || opp.primary_contact_id !== contact_id_from_quote || opp.customer_id !== customer_id_from_quote) {
+            if (oppVerifyErr || !opp || opp.primary_contact_id !== contact_id_from_quote) {
                 return NextResponse.json(
                     {
                         ok: false,
                         error: "QUOTE_ID_MISMATCH",
-                        message: "Invalid or mismatched opportunity/contact/customer from quote. Please refresh your quote and try again.",
+                        message: "Invalid or mismatched opportunity/contact from quote. Please refresh your quote and try again.",
                         action: "CLEAR_QUOTE_AND_RESTART",
                         booking_attempt_id: booking_attempt_id ?? null,
                     },
@@ -232,7 +295,6 @@ export async function POST(request: NextRequest) {
                 );
             }
             contactId = contact_id_from_quote;
-            customerId = customer_id_from_quote;
             opportunityId = opportunity_id_from_quote;
             verticalId = opp.vertical_id ?? "";
             if (!verticalId) {
@@ -250,6 +312,30 @@ export async function POST(request: NextRequest) {
                     { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
+            }
+
+            const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
+            const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+            if (oppCustomerId) {
+                customerId = oppCustomerId;
+            } else {
+                try {
+                    customerId = await ensureCustomerForContactInConfirm(supabase, contactId, {
+                        vertical_id: verticalId,
+                        org_id: oppOrgId,
+                        first_name: contact_first_name ?? undefined,
+                        last_name: contact_last_name ?? undefined,
+                        email: contact_email ?? undefined,
+                        phone: contact_phone ?? undefined,
+                    });
+                    await supabase.from("opportunities").update({ customer_id: customerId }).eq("id", opportunityId);
+                } catch (err) {
+                    console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed", err);
+                    return NextResponse.json(
+                        { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                        { status: 500 }
+                    );
+                }
             }
 
             // Backfill customer.vertical_id when reusing quote (customer may have been created before we set vertical_id)
@@ -404,11 +490,27 @@ export async function POST(request: NextRequest) {
                         `[BOOK_V2_CONFIRM] Using contact_id from quote booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId}`
                     );
                 } else {
-                    console.warn("[BOOK_V2_CONFIRM] contact_id provided but contact has no linked customer", { contact_id: contact_id_from_quote });
-                    return NextResponse.json(
-                        { ok: false, message: "Contact has no linked customer; please refresh your quote and try again.", booking_attempt_id: booking_attempt_id ?? null },
-                        { status: 400 }
-                    );
+                    contactId = contact_id_from_quote;
+                    try {
+                        customerId = await ensureCustomerForContactInConfirm(supabase, contactId, {
+                            vertical_id: verticalIdElse,
+                            org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
+                            first_name: contact_first_name ?? undefined,
+                            last_name: contact_last_name ?? undefined,
+                            email: contact_email ?? undefined,
+                            phone: contact_phone ?? undefined,
+                        });
+                        contactResolved = true;
+                        console.log(
+                            `[BOOK_V2_CONFIRM] Created customer for quote contact booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId}`
+                        );
+                    } catch (err) {
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed (else branch)", err);
+                        return NextResponse.json(
+                            { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                            { status: 500 }
+                        );
+                    }
                 }
             }
         }

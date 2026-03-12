@@ -220,7 +220,6 @@ async function maybeCreateLeadFromPrefill(params: {
         if (res.ok && data.ok && data.opportunity_id) {
             try {
                 if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
-                if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
             } catch (e) {
                 console.warn("[QUOTE_START_PREFILL] localStorage set failed", e);
@@ -956,7 +955,6 @@ export default function BookV2Client() {
             }
             try {
                 if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
-                if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
             } catch (e) {
                 console.warn("localStorage set failed:", e);
@@ -1080,7 +1078,6 @@ export default function BookV2Client() {
                 if (res.ok && data.ok) {
                     try {
                         if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
-                        if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
                         if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
                     } catch {
                         // ignore

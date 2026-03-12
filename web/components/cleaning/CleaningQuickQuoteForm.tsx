@@ -82,7 +82,6 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
       }
       try {
         if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
-        if (data.customer_id) localStorage.setItem("alloy_customer_id", data.customer_id);
         if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
       } catch (e) {
         console.warn("localStorage set failed:", e);

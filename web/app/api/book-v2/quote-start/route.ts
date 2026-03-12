@@ -172,142 +172,6 @@ async function computeQuote(
   };
 }
 
-type ContactForEnsure = {
-  id: string;
-  customer_id?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-};
-
-type EnsureCustomerResult =
-  | { ok: true; customerId: string }
-  | { ok: false; step: "lookupExisting" | "create" | "update" | "reselect"; code?: string; message?: string; details?: string; hint?: string };
-
-/**
- * Deterministic ensure: return contact's customer_id, or find/create customer and link.
- * Never returns ok:true with null customerId.
- */
-async function ensureCustomerForContact(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  contact: ContactForEnsure,
-  vertical_id: string,
-  org_id: string | null,
-  nameForCreate: string
-): Promise<EnsureCustomerResult> {
-  if (contact.customer_id) {
-    return { ok: true, customerId: contact.customer_id };
-  }
-
-  // Lookup existing customer: (a) primary_contact_id, (b) metadata->email, (c) metadata->phone
-  console.log("[QUOTE_START] ensure_customer:lookup_existing contact_id=%s", contact.id);
-  let existingCustomerId: string | null = null;
-
-  const { data: byPrimary } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("primary_contact_id", contact.id)
-    .limit(1)
-    .maybeSingle();
-  if (byPrimary?.id) {
-    existingCustomerId = byPrimary.id;
-  }
-  if (!existingCustomerId && contact.email) {
-    const { data: byEmail } = await supabase
-      .from("customers")
-      .select("id")
-      .contains("metadata", { email: contact.email })
-      .limit(1)
-      .maybeSingle();
-    if (byEmail?.id) existingCustomerId = byEmail.id;
-  }
-  if (!existingCustomerId && contact.phone) {
-    const { data: byPhone } = await supabase
-      .from("customers")
-      .select("id")
-      .contains("metadata", { phone: contact.phone })
-      .limit(1)
-      .maybeSingle();
-    if (byPhone?.id) existingCustomerId = byPhone.id;
-  }
-
-  if (existingCustomerId) {
-    const { data: updated, error: updateErr } = await supabase
-      .from("contacts")
-      .update({ customer_id: existingCustomerId })
-      .eq("id", contact.id)
-      .select("customer_id")
-      .single();
-    if (updateErr) {
-      const e = updateErr as { code?: string; message?: string; details?: string; hint?: string };
-      console.error("[QUOTE_START] ensure_customer:contact_update failed code=%s message=%s", e.code ?? "unknown", e.message ?? "");
-      return { ok: false, step: "update", code: e.code, message: e.message, details: e.details, hint: e.hint };
-    }
-    console.log("[QUOTE_START] ensure_customer:contact_update contact_id=%s customer_id=%s", contact.id, existingCustomerId);
-    const { data: reselect } = await supabase.from("contacts").select("customer_id").eq("id", contact.id).single();
-    const finalId = (reselect as { customer_id?: string | null } | null)?.customer_id ?? existingCustomerId;
-    console.log("[QUOTE_START] ensure_customer:contact_reselect contact_id=%s customer_id=%s", contact.id, finalId ?? "null");
-    return { ok: true, customerId: finalId };
-  }
-
-  // Create customer and link
-  const payload: Record<string, unknown> = {
-    name: nameForCreate,
-    vertical_id,
-    primary_contact_id: contact.id,
-    status: "active",
-    metadata: { source: "quote-start", email: contact.email ?? undefined, phone: contact.phone ?? undefined },
-  };
-  if (org_id) payload.org_id = org_id;
-
-  const { data: newCustomer, error: insertErr } = await supabase
-    .from("customers")
-    .insert(payload)
-    .select("id")
-    .single();
-
-  const insertedId = newCustomer?.id ?? null;
-  console.log("[QUOTE_START] ensure_customer:customer_insert contact_id=%s returned_id=%s error=%s", contact.id, insertedId ?? "null", insertErr?.message ?? "none");
-
-  if (insertErr || !insertedId) {
-    const e = (insertErr ?? {}) as { code?: string; message?: string; details?: string; hint?: string };
-    return { ok: false, step: "create", code: e.code, message: e.message, details: e.details, hint: e.hint };
-  }
-
-  const { data: updatedContact, error: linkErr } = await supabase
-    .from("contacts")
-    .update({ customer_id: insertedId })
-    .eq("id", contact.id)
-    .select("customer_id")
-    .single();
-
-  if (linkErr) {
-    const e = linkErr as { code?: string; message?: string; details?: string; hint?: string };
-    console.error("[QUOTE_START] ensure_customer:contact_update failed code=%s message=%s", e.code ?? "unknown", e.message ?? "");
-    return { ok: false, step: "update", code: e.code, message: e.message, details: e.details, hint: e.hint };
-  }
-  console.log("[QUOTE_START] ensure_customer:contact_update contact_id=%s customer_id=%s", contact.id, insertedId);
-
-  const { data: reselectRow, error: reselectErr } = await supabase
-    .from("contacts")
-    .select("customer_id")
-    .eq("id", contact.id)
-    .single();
-
-  console.log("[QUOTE_START] ensure_customer:contact_reselect contact_id=%s customer_id=%s error=%s", contact.id, (reselectRow as { customer_id?: string | null } | null)?.customer_id ?? "null", reselectErr?.message ?? "none");
-
-  if (reselectErr) {
-    const e = reselectErr as { code?: string; message?: string; details?: string; hint?: string };
-    return { ok: false, step: "reselect", code: e.code, message: e.message, details: e.details, hint: e.hint };
-  }
-  const finalCustomerId = (reselectRow as { customer_id?: string | null } | null)?.customer_id ?? insertedId;
-  if (!finalCustomerId) {
-    return { ok: false, step: "reselect", message: "contact.customer_id still null after update" };
-  }
-  return { ok: true, customerId: finalCustomerId };
-}
-
 export interface QuoteStartBody {
   first_name?: string;
   last_name?: string;
@@ -357,7 +221,6 @@ export async function POST(request: NextRequest) {
 
     // 1) Upsert contact: find by email if email, else by phone
     let contactId: string;
-    let customerId: string | null = null;
     let created_new_contact = false;
 
     const emailForLookup = email || "";
@@ -396,9 +259,6 @@ export async function POST(request: NextRequest) {
       if (Object.keys(updates).length > 0) {
         await supabase.from("contacts").update(updates).eq("id", contactId);
       }
-      if (existingContact.customer_id) {
-        customerId = existingContact.customer_id;
-      }
     } else {
       const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
       const contactInsert: Record<string, unknown> = {
@@ -434,10 +294,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      "[QUOTE_START] resolved_contact contact_id=%s org_id=%s customer_id=%s email=%s phone=%s",
+      "[QUOTE_START] resolved_contact contact_id=%s org_id=%s email=%s phone=%s",
       contactId,
       contactOrgId ?? "null",
-      customerId ?? "null",
       emailForLookup || "null",
       phoneForLookup ? `${phoneForLookup.slice(0, 4)}***` : "null"
     );
@@ -463,48 +322,7 @@ export async function POST(request: NextRequest) {
 
     const orgIdForWrites = contactOrgId ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
-    // Ensure we ALWAYS have a non-null customerId before creating/updating any opportunity
-    const contactForEnsure: ContactForEnsure = {
-      id: contactId,
-      customer_id: customerId ?? null,
-      first_name: first_name ?? null,
-      last_name: last_name ?? null,
-      email: emailForLookup || null,
-      phone: phoneForLookup || null,
-    };
-    const nameForCreate =
-      [first_name, last_name].filter(Boolean).join(" ") ||
-      emailForLookup ||
-      phoneForLookup ||
-      "Quote Lead";
-
-    const ensureResult = await ensureCustomerForContact(supabase, contactForEnsure, verticalId, orgIdForWrites, nameForCreate);
-
-    if (!ensureResult.ok) {
-      console.error(
-        "[QUOTE_START] ensure_customer failed step=%s contact_id=%s code=%s message=%s",
-        ensureResult.step,
-        contactId,
-        ensureResult.code ?? "unknown",
-        ensureResult.message ?? ""
-      );
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Customer required for opportunity",
-          step_failed: ensureResult.step,
-          error: {
-            code: ensureResult.code,
-            message: ensureResult.message,
-            details: ensureResult.details,
-            hint: ensureResult.hint,
-          },
-        },
-        { status: 500 }
-      );
-    }
-
-    customerId = ensureResult.customerId;
+    // Pass 1: do not create Customer at quote stage. Customer is created at payment/confirm.
 
     // 2) Pipeline + stage
 
@@ -560,8 +378,6 @@ export async function POST(request: NextRequest) {
 
     if (shouldReuse && existingOpp) {
       opportunityId = existingOpp.id;
-      const { data: oppRow } = await supabase.from("opportunities").select("customer_id").eq("id", opportunityId).single();
-      const existingCustomerId = (oppRow as { customer_id: string | null } | null)?.customer_id ?? null;
       const updatePayload: Record<string, unknown> = {
         metadata: {
           quote_input,
@@ -574,12 +390,8 @@ export async function POST(request: NextRequest) {
           monetary_value_cents: quote_output_estimated_cents(quoteOutput),
         }),
       };
-      if (customerId && !existingCustomerId) {
-        (updatePayload as Record<string, unknown>).customer_id = customerId;
-      }
       await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
     } else {
-      // customerId is guaranteed non-null by ensure step above
       const estimatedPriceCents = quoteOutput.estimated_price != null ? Math.round(quoteOutput.estimated_price * 100) : null;
       const opportunityName =
         [first_name, last_name].filter(Boolean).join(" ").trim()
@@ -588,7 +400,7 @@ export async function POST(request: NextRequest) {
       const oppInsertPayload: Record<string, unknown> = {
         vertical_id: verticalId,
         primary_contact_id: contactId,
-        customer_id: customerId,
+        customer_id: null,
         name: opportunityName,
         status: "open",
         source: "website",
@@ -664,7 +476,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       contact_id: contactId,
-      customer_id: customerId,
       opportunity_id: opportunityId,
       quote_output: quoteOutput,
     });

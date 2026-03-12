@@ -8,7 +8,7 @@ interface KpiCardProps {
     label: string;
     href?: string;
     delta?: string | null;
-    accent?: "gold" | "navy" | "slate" | "juniper" | "ember" | "neutral";
+    accent?: "gold" | "navy" | "slate" | "juniper" | "pine" | "ember" | "neutral";
     icon?: ReactNode;
 }
 
@@ -17,6 +17,7 @@ const accentBorder: Record<NonNullable<KpiCardProps["accent"]>, string> = {
     navy: "border-l-alloy-navy",
     slate: "border-l-alloy-slate",
     juniper: "border-l-alloy-juniper",
+    pine: "border-l-alloy-pine",
     ember: "border-l-alloy-ember",
     neutral: "border-l-alloy-muted",
 };
