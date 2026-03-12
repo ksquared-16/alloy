@@ -172,6 +172,71 @@ async function computeQuote(
   };
 }
 
+/**
+ * Find or create a person for quote/inquiry. Match by email first, then phone (within org).
+ * Returns person id or null if org_id missing (cannot create) or insert fails.
+ */
+async function findOrCreatePerson(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  params: {
+    email: string | null;
+    phone: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    org_id: string | null;
+  }
+): Promise<string | null> {
+  const { email, phone, first_name, last_name, org_id } = params;
+  const emailNorm = email?.trim() ? email.trim().toLowerCase() : null;
+  const phoneNorm = phone?.trim() || null;
+
+  if (!emailNorm && !phoneNorm) return null;
+
+  // Find: email first, then phone. Scope by org when we have one so we don't cross-org match.
+  if (emailNorm) {
+    let q = supabase.from("persons").select("id").ilike("email", emailNorm).limit(1);
+    if (org_id) q = q.eq("org_id", org_id);
+    const { data: byEmail } = await q.maybeSingle();
+    if (byEmail?.id) return byEmail.id;
+  }
+  if (phoneNorm) {
+    let q = supabase.from("persons").select("id").eq("phone", phoneNorm).limit(1);
+    if (org_id) q = q.eq("org_id", org_id);
+    const { data: byPhone } = await q.maybeSingle();
+    if (byPhone?.id) return byPhone.id;
+  }
+
+  if (!org_id) return null;
+
+  const { data: created, error } = await supabase
+    .from("persons")
+    .insert({
+      org_id,
+      first_name: first_name ?? null,
+      last_name: last_name ?? null,
+      email: emailNorm ?? null,
+      phone: phoneNorm ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) {
+    if (error?.code === "23505") {
+      if (emailNorm) {
+        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).ilike("email", emailNorm).limit(1).maybeSingle();
+        if (again?.id) return again.id;
+      }
+      if (phoneNorm) {
+        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).eq("phone", phoneNorm).limit(1).maybeSingle();
+        if (again?.id) return again.id;
+      }
+    }
+    console.warn("[QUOTE_START] findOrCreatePerson failed", error?.message);
+    return null;
+  }
+  return (created as { id: string }).id;
+}
+
 export interface QuoteStartBody {
   first_name?: string;
   last_name?: string;
@@ -189,7 +254,8 @@ export interface QuoteStartBody {
 
 /**
  * POST /api/book-v2/quote-start
- * Creates/updates contact and opportunity at "Quote Started", stores quote in metadata.
+ * Person-first (Pass A): create/find Person and Opportunity only. No Contact, no Customer.
+ * Returns person_id and opportunity_id for confirm handoff.
  * Requires at least one of email or phone.
  */
 export async function POST(request: NextRequest) {
@@ -218,90 +284,28 @@ export async function POST(request: NextRequest) {
     const squareFootageOption = normalizeSquareFootageInput(square_footage_raw);
 
     const supabase = createServiceRoleClient();
+    const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
-    // 1) Upsert contact: find by email if email, else by phone
-    let contactId: string;
-    let created_new_contact = false;
+    // 1) Find or create Person only (no Contact, no Customer).
+    const personId = await findOrCreatePerson(supabase, {
+      email: email || null,
+      phone: phone || null,
+      first_name,
+      last_name,
+      org_id: publicOrgId,
+    });
 
-    const emailForLookup = email || "";
-    const phoneForLookup = phone || "";
-
-    type ContactRow = { id: string; customer_id: string | null; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; org_id?: string | null };
-    let existingContact: ContactRow | null = null;
-    const contactSelectCols = "id, customer_id, first_name, last_name, email, phone, org_id";
-
-    if (emailForLookup) {
-      let res = await supabase.from("contacts").select(contactSelectCols).ilike("email", emailForLookup).limit(1).maybeSingle();
-      if (res.error && res.error.message?.includes("org_id")) {
-        res = await supabase.from("contacts").select("id, customer_id, first_name, last_name, email, phone").ilike("email", emailForLookup).limit(1).maybeSingle();
-      }
-      existingContact = (res.data as ContactRow | null) ?? null;
-    }
-    if (!existingContact && phoneForLookup) {
-      let res = await supabase.from("contacts").select(contactSelectCols).eq("phone", phoneForLookup).limit(1).maybeSingle();
-      if (res.error && res.error.message?.includes("org_id")) {
-        res = await supabase.from("contacts").select("id, customer_id, first_name, last_name, email, phone").eq("phone", phoneForLookup).limit(1).maybeSingle();
-      }
-      existingContact = (res.data as ContactRow | null) ?? null;
+    if (!personId) {
+      return NextResponse.json(
+        { ok: false, message: "Unable to create or find lead record. Please try again." },
+        { status: 400 }
+      );
     }
 
-    let contactOrgId: string | null = null;
+    const emailForDisplay = email || "";
+    const orgIdForWrites = publicOrgId;
 
-    if (existingContact) {
-      contactId = existingContact.id;
-      contactOrgId = existingContact.org_id ?? null;
-      const updates: Record<string, unknown> = {};
-      if (first_name && !existingContact.first_name) updates.first_name = first_name;
-      if (last_name && !existingContact.last_name) updates.last_name = last_name;
-      if (emailForLookup && existingContact.email !== emailForLookup) updates.email = emailForLookup;
-      if (phoneForLookup && (!existingContact.phone || existingContact.phone.trim() === "")) updates.phone = phoneForLookup;
-      if (zip) updates.postal_code = zip;
-      if (Object.keys(updates).length > 0) {
-        await supabase.from("contacts").update(updates).eq("id", contactId);
-      }
-    } else {
-      const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-      const contactInsert: Record<string, unknown> = {
-        email: emailForLookup || null,
-        phone: phoneForLookup || null,
-        first_name: first_name,
-        last_name: last_name,
-        postal_code: zip,
-        contact_type: "lead",
-      };
-      if (publicOrgId) contactInsert.org_id = publicOrgId;
-
-      const { data: newContact, error: contactError } = await supabase
-        .from("contacts")
-        .insert(contactInsert)
-        .select("id, org_id")
-        .single();
-
-      if (contactError || !newContact) {
-        console.error(
-          "[QUOTE_START] Contact insert failed code=%s message=%s",
-          (contactError as { code?: string })?.code ?? "unknown",
-          contactError?.message ?? "no data"
-        );
-        return NextResponse.json(
-          { ok: false, message: "Failed to create contact" },
-          { status: 500 }
-        );
-      }
-      contactId = (newContact as { id: string }).id;
-      contactOrgId = (newContact as { org_id?: string | null }).org_id ?? null;
-      created_new_contact = true;
-    }
-
-    console.log(
-      "[QUOTE_START] resolved_contact contact_id=%s org_id=%s email=%s phone=%s",
-      contactId,
-      contactOrgId ?? "null",
-      emailForLookup || "null",
-      phoneForLookup ? `${phoneForLookup.slice(0, 4)}***` : "null"
-    );
-
-    // Resolve vertical first so we can set it on new customers
+    // 2) Resolve vertical
     let verticalId = body.vertical_id ?? null;
     if (!verticalId) {
       const { data: vert } = await supabase
@@ -320,11 +324,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const orgIdForWrites = contactOrgId ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-
-    // Pass 1: do not create Customer at quote stage. Customer is created at payment/confirm.
-
-    // 2) Pipeline + stage
+    // 3) Pipeline + stage
 
     const { data: pipelines } = await supabase
       .from("pipelines")
@@ -350,7 +350,7 @@ export async function POST(request: NextRequest) {
     };
     const quote_started_at = new Date().toISOString();
 
-    // 4) Dedupe: reuse open "Quote Started" opportunity for this contact within 10 min
+    // 4) Dedupe: reuse open "Quote Started" opportunity for this person within 10 min
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     let opportunityId: string;
     let created_new_opportunity = false;
@@ -358,7 +358,7 @@ export async function POST(request: NextRequest) {
     const existingOppQuery = supabase
       .from("opportunities")
       .select("id, pipeline_stage_id")
-      .eq("primary_contact_id", contactId)
+      .eq("primary_person_id", personId)
       .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1);
@@ -396,10 +396,11 @@ export async function POST(request: NextRequest) {
       const opportunityName =
         [first_name, last_name].filter(Boolean).join(" ").trim()
           ? `${[first_name, last_name].filter(Boolean).join(" ")} — Quote`
-          : (emailForLookup ? `${emailForLookup} — Quote` : "Quote");
+          : (emailForDisplay ? `${emailForDisplay} — Quote` : "Quote");
       const oppInsertPayload: Record<string, unknown> = {
         vertical_id: verticalId,
-        primary_contact_id: contactId,
+        primary_person_id: personId,
+        primary_contact_id: null,
         customer_id: null,
         name: opportunityName,
         status: "open",
@@ -467,15 +468,15 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      "[QUOTE_START] created_new_contact=%s created_new_opportunity=%s opportunity_id=%s",
-      created_new_contact,
+      "[QUOTE_START] person_id=%s created_new_opportunity=%s opportunity_id=%s",
+      personId,
       created_new_opportunity,
       opportunityId
     );
 
     return NextResponse.json({
       ok: true,
-      contact_id: contactId,
+      person_id: personId,
       opportunity_id: opportunityId,
       quote_output: quoteOutput,
     });

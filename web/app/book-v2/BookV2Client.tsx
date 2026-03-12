@@ -48,6 +48,7 @@ const QUOTE_STORAGE_KEYS = [
     "alloy_quote_v1",
     "alloy_quote_refined_v1",
     "alloy_contact_id",
+    "alloy_person_id",
     "alloy_customer_id",
     "alloy_opportunity_id",
 ] as const;
@@ -186,7 +187,7 @@ async function maybeCreateLeadFromPrefill(params: {
 
     if (typeof window === "undefined") return;
     try {
-        if (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id")) {
+        if (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id")) {
             return;
         }
         if (sessionStorage.getItem(PREFILL_ATTEMPTED_KEY)) {
@@ -220,11 +221,12 @@ async function maybeCreateLeadFromPrefill(params: {
         if (res.ok && data.ok && data.opportunity_id) {
             try {
                 if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
+                if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
             } catch (e) {
                 console.warn("[QUOTE_START_PREFILL] localStorage set failed", e);
             }
-            console.log("[QUOTE_START_PREFILL] success opportunity_id=" + data.opportunity_id);
+            console.log("[QUOTE_START_PREFILL] success opportunity_id=" + data.opportunity_id + (data.person_id ? " person_id=" + data.person_id : ""));
         } else {
             console.log("[QUOTE_START_PREFILL] failed error=" + (data?.message || res.status));
         }
@@ -955,6 +957,7 @@ export default function BookV2Client() {
             }
             try {
                 if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
+                if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
             } catch (e) {
                 console.warn("localStorage set failed:", e);
@@ -1059,7 +1062,7 @@ export default function BookV2Client() {
                 }
             }
             const hasIds = typeof window !== "undefined" &&
-                (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
+                (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
             if (!hasIds) {
                 const res = await fetch("/api/book-v2/quote-start", {
                     method: "POST",
@@ -1078,6 +1081,7 @@ export default function BookV2Client() {
                 if (res.ok && data.ok) {
                     try {
                         if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
+                        if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                         if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
                     } catch {
                         // ignore
@@ -1271,10 +1275,35 @@ export default function BookV2Client() {
                 }
             }
 
+            // Step 0 (person-first): If we have person_id but no contact_id/customer_id, ensure customer + compat contact for payment/Stripe
+            let setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
+            let setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
+            const setupPersonId = typeof window !== "undefined" ? localStorage.getItem("alloy_person_id") : null;
+            if (setupPersonId && (!setupContactId || !setupCustomerId)) {
+                try {
+                    const ensureRes = await fetch("/api/book-v2/ensure-customer", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ person_id: setupPersonId }),
+                    });
+                    const ensureData = await ensureRes.json();
+                    if (ensureRes.ok && ensureData.ok && ensureData.contact_id && ensureData.customer_id) {
+                        setupContactId = ensureData.contact_id;
+                        setupCustomerId = ensureData.customer_id;
+                        try {
+                            localStorage.setItem("alloy_contact_id", ensureData.contact_id);
+                            localStorage.setItem("alloy_customer_id", ensureData.customer_id);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                } catch (e) {
+                    console.warn("[BOOK_V2_FLOW] ensure-customer failed", e);
+                }
+            }
+
             // Step 1: Create SetupIntent (pass quote contact_id/customer_id so backend can reuse existing lead)
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-            const setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
-            const setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
 
             const createSetupIntentOnce = async (): Promise<string> => {
                 const setupIntentResponse = await fetch(`${apiBaseUrl}/stripe/setup-intent`, {
@@ -1332,6 +1361,7 @@ export default function BookV2Client() {
                 console.log("[BOOK_V2_FLOW] about_to_call_confirm booking_attempt_id=", attemptId);
             }
             const storedContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
+            const storedPersonId = typeof window !== "undefined" ? localStorage.getItem("alloy_person_id") : null;
             const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
             const storedOpportunityId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
 
@@ -1378,6 +1408,7 @@ export default function BookV2Client() {
                 booking_attempt_id: attemptId,
             };
             if (storedOpportunityId) confirmPayload.opportunity_id = storedOpportunityId;
+            if (storedPersonId) confirmPayload.person_id = storedPersonId;
             if (storedContactId) confirmPayload.contact_id = storedContactId;
             if (storedCustomerId) confirmPayload.customer_id = storedCustomerId;
 

@@ -8,8 +8,108 @@ import { executeWorkflowRun } from "@/lib/workflowRun";
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
 /**
+ * Ensure person has a customer and customer_persons link. Optionally create a compatibility Contact for downstream (discount_redemptions, workflows).
+ * Returns { customerId, contactId }. contactId is set when a compatibility contact is created or when person is already linked to a contact-backed customer.
+ */
+async function ensureCustomerForPersonInConfirm(
+    supabase: Supabase,
+    personId: string,
+    params: { vertical_id: string; org_id: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null },
+    createCompatibilityContact: boolean
+): Promise<{ customerId: string; contactId: string | null }> {
+    const { data: person } = await supabase
+        .from("persons")
+        .select("id, first_name, last_name, email, phone")
+        .eq("id", personId)
+        .single();
+    if (!person) throw new Error("Person not found");
+    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
+
+    // Existing customer via customer_persons?
+    const { data: cp } = await supabase
+        .from("customer_persons")
+        .select("customer_id")
+        .eq("person_id", personId)
+        .limit(1)
+        .maybeSingle();
+    if (cp?.customer_id) {
+        const customerId = (cp as { customer_id: string }).customer_id;
+        const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
+        const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
+        return { customerId, contactId: primaryContactId };
+    }
+
+    const name = [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
+        || (params.email ?? p.email) || (params.phone ?? p.phone) || "New Customer";
+
+    let contactId: string | null = null;
+    if (createCompatibilityContact) {
+        const contactInsert: Record<string, unknown> = {
+            first_name: params.first_name ?? p.first_name,
+            last_name: params.last_name ?? p.last_name,
+            email: params.email ?? p.email ?? null,
+            phone: params.phone ?? p.phone ?? null,
+            person_id: personId,
+            contact_type: "lead",
+        };
+        if (params.org_id) contactInsert.org_id = params.org_id;
+        const { data: newContact, error: contactErr } = await supabase
+            .from("contacts")
+            .insert(contactInsert)
+            .select("id")
+            .single();
+        if (!contactErr && newContact) {
+            contactId = (newContact as { id: string }).id;
+        }
+    }
+
+    const payload: Record<string, unknown> = {
+        name,
+        status: "active",
+        vertical_id: params.vertical_id,
+        metadata: { source: "book-v2-confirm", email: params.email ?? p.email ?? undefined, phone: params.phone ?? p.phone ?? undefined },
+    };
+    if (params.org_id) payload.org_id = params.org_id;
+    if (contactId) payload.primary_contact_id = contactId;
+
+    const { data: newCustomer, error: insErr } = await supabase
+        .from("customers")
+        .insert(payload)
+        .select("id")
+        .single();
+    if (insErr || !newCustomer) {
+        if (insErr?.code === "23505" && contactId) {
+            const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
+            if (existing?.id) {
+                await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
+                const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
+                if (!existingCp) {
+                    await supabase.from("customer_persons").insert({
+                        customer_id: existing.id,
+                        person_id: personId,
+                        org_id: params.org_id,
+                    });
+                }
+                return { customerId: (existing as { id: string }).id, contactId };
+            }
+        }
+        throw new Error(insErr?.message ?? "Failed to create customer");
+    }
+    const customerId = (newCustomer as { id: string }).id;
+    if (contactId) {
+        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+    }
+    await supabase.from("customer_persons").insert({
+        customer_id: customerId,
+        person_id: personId,
+        org_id: params.org_id,
+    });
+    return { customerId, contactId };
+}
+
+/**
  * Ensure contact has a customer; create and link if missing. When contact has person_id, create customer_persons link.
- * Used at confirm when quote path has no customer yet (Pass 1 lifecycle).
+ * Used at confirm when quote path has no customer yet (Pass 1 lifecycle) and we have a contact (legacy path).
  */
 async function ensureCustomerForContactInConfirm(
     supabase: Supabase,
@@ -209,6 +309,7 @@ export async function POST(request: NextRequest) {
             booking_attempt_id = bookingAttemptId,
             opportunity_id: opportunity_id_from_quote,
             contact_id: contact_id_from_quote,
+            person_id: person_id_from_quote,
             customer_id: customer_id_from_quote,
         } = body;
 
@@ -248,10 +349,11 @@ export async function POST(request: NextRequest) {
             );
         }
         const hasContactId = !!contact_id_from_quote;
+        const hasPersonId = !!person_id_from_quote;
         const hasEmailAndPhone = !!(contact_email?.trim() && contact_phone?.trim());
-        if (!hasContactId && !hasEmailAndPhone) {
+        if (!hasContactId && !hasPersonId && !hasEmailAndPhone) {
             return NextResponse.json(
-                { ok: false, message: "Provide either contact_id (from quote) or both contact_email and contact_phone", booking_attempt_id: booking_attempt_id ?? null },
+                { ok: false, message: "Provide person_id or contact_id (from quote) or both contact_email and contact_phone", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 400 }
             );
         }
@@ -267,74 +369,176 @@ export async function POST(request: NextRequest) {
         const supabase = createServiceRoleClient();
 
         const useQuoteIds =
-            !!(opportunity_id_from_quote && contact_id_from_quote);
+            !!(opportunity_id_from_quote && (person_id_from_quote || contact_id_from_quote));
 
-        let contactId!: string;
+        let contactId: string | null = null;
         let customerId!: string;
         let opportunityId!: string;
         let verticalId!: string;
         let jobDate!: string;
         let jobTimeWindow!: string;
+        let personIdFromQuote: string | null = person_id_from_quote ?? null;
 
         if (useQuoteIds) {
             const { data: opp, error: oppVerifyErr } = await supabase
                 .from("opportunities")
-                .select("id, primary_contact_id, customer_id, vertical_id, org_id")
+                .select("id, primary_person_id, primary_contact_id, customer_id, vertical_id, org_id")
                 .eq("id", opportunity_id_from_quote)
                 .single();
-            if (oppVerifyErr || !opp || opp.primary_contact_id !== contact_id_from_quote) {
+            if (oppVerifyErr || !opp) {
                 return NextResponse.json(
                     {
                         ok: false,
                         error: "QUOTE_ID_MISMATCH",
-                        message: "Invalid or mismatched opportunity/contact from quote. Please refresh your quote and try again.",
+                        message: "Invalid or mismatched opportunity from quote. Please refresh your quote and try again.",
                         action: "CLEAR_QUOTE_AND_RESTART",
                         booking_attempt_id: booking_attempt_id ?? null,
                     },
                     { status: 409 }
                 );
             }
-            contactId = contact_id_from_quote;
-            opportunityId = opportunity_id_from_quote;
-            verticalId = opp.vertical_id ?? "";
-            if (!verticalId) {
-                const { data: vert } = await supabase
-                    .from("verticals")
-                    .select("id")
-                    .eq("slug", "cleaning")
-                    .eq("is_active", true)
-                    .limit(1)
-                    .maybeSingle();
-                verticalId = vert?.id ?? "";
-            }
-            if (!verticalId) {
-                return NextResponse.json(
-                    { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
-                    { status: 500 }
-                );
-            }
+            const oppPrimaryPersonId = (opp as { primary_person_id?: string | null }).primary_person_id ?? null;
+            const oppPrimaryContactId = (opp as { primary_contact_id?: string | null }).primary_contact_id ?? null;
 
-            const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
-            const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-            if (oppCustomerId) {
-                customerId = oppCustomerId;
-            } else {
-                try {
-                    customerId = await ensureCustomerForContactInConfirm(supabase, contactId, {
-                        vertical_id: verticalId,
-                        org_id: oppOrgId,
-                        first_name: contact_first_name ?? undefined,
-                        last_name: contact_last_name ?? undefined,
-                        email: contact_email ?? undefined,
-                        phone: contact_phone ?? undefined,
-                    });
-                    await supabase.from("opportunities").update({ customer_id: customerId }).eq("id", opportunityId);
-                } catch (err) {
-                    console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed", err);
+            // Person-first path: validate by primary_person_id
+            if (person_id_from_quote) {
+                if (oppPrimaryPersonId !== person_id_from_quote) {
                     return NextResponse.json(
-                        { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                        {
+                            ok: false,
+                            error: "QUOTE_ID_MISMATCH",
+                            message: "Invalid or mismatched opportunity/person from quote. Please refresh your quote and try again.",
+                            action: "CLEAR_QUOTE_AND_RESTART",
+                            booking_attempt_id: booking_attempt_id ?? null,
+                        },
+                        { status: 409 }
+                    );
+                }
+                opportunityId = opportunity_id_from_quote;
+                verticalId = opp.vertical_id ?? "";
+                if (!verticalId) {
+                    const { data: vert } = await supabase
+                        .from("verticals")
+                        .select("id")
+                        .eq("slug", "cleaning")
+                        .eq("is_active", true)
+                        .limit(1)
+                        .maybeSingle();
+                    verticalId = vert?.id ?? "";
+                }
+                if (!verticalId) {
+                    return NextResponse.json(
+                        { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
                         { status: 500 }
                     );
+                }
+                const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
+                const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+                if (oppCustomerId) {
+                    customerId = oppCustomerId;
+                    const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
+                    contactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
+                } else {
+                    try {
+                        const result = await ensureCustomerForPersonInConfirm(supabase, person_id_from_quote, {
+                            vertical_id: verticalId,
+                            org_id: oppOrgId,
+                            first_name: contact_first_name ?? undefined,
+                            last_name: contact_last_name ?? undefined,
+                            email: contact_email ?? undefined,
+                            phone: contact_phone ?? undefined,
+                        }, true);
+                        customerId = result.customerId;
+                        contactId = result.contactId;
+                        await supabase.from("opportunities").update({ customer_id: customerId, ...(contactId && { primary_contact_id: contactId }) }).eq("id", opportunityId);
+                    } catch (err) {
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm failed", err);
+                        return NextResponse.json(
+                            { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                            { status: 500 }
+                        );
+                    }
+                }
+            } else {
+                // Legacy contact path: validate by primary_contact_id
+                if (oppPrimaryContactId !== contact_id_from_quote) {
+                    return NextResponse.json(
+                        {
+                            ok: false,
+                            error: "QUOTE_ID_MISMATCH",
+                            message: "Invalid or mismatched opportunity/contact from quote. Please refresh your quote and try again.",
+                            action: "CLEAR_QUOTE_AND_RESTART",
+                            booking_attempt_id: booking_attempt_id ?? null,
+                        },
+                        { status: 409 }
+                    );
+                }
+                contactId = contact_id_from_quote;
+                opportunityId = opportunity_id_from_quote;
+                verticalId = opp.vertical_id ?? "";
+                if (!verticalId) {
+                    const { data: vert } = await supabase
+                        .from("verticals")
+                        .select("id")
+                        .eq("slug", "cleaning")
+                        .eq("is_active", true)
+                        .limit(1)
+                        .maybeSingle();
+                    verticalId = vert?.id ?? "";
+                }
+                if (!verticalId) {
+                    return NextResponse.json(
+                        { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
+                        { status: 500 }
+                    );
+                }
+                const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
+                const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+                if (oppCustomerId) {
+                    customerId = oppCustomerId;
+                } else {
+                    try {
+                        customerId = await ensureCustomerForContactInConfirm(supabase, contactId, {
+                            vertical_id: verticalId,
+                            org_id: oppOrgId,
+                            first_name: contact_first_name ?? undefined,
+                            last_name: contact_last_name ?? undefined,
+                            email: contact_email ?? undefined,
+                            phone: contact_phone ?? undefined,
+                        });
+                        await supabase.from("opportunities").update({ customer_id: customerId }).eq("id", opportunityId);
+                    } catch (err) {
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed", err);
+                        return NextResponse.json(
+                            { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                            { status: 500 }
+                        );
+                    }
+                }
+            }
+
+            // Person path: ensure we have a compatibility contact for downstream (discount_redemptions, job.primary_contact_id, etc.)
+            if (personIdFromQuote && !contactId) {
+                const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).single();
+                if (person) {
+                    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
+                    const contactInsert: Record<string, unknown> = {
+                        first_name: contact_first_name ?? p.first_name,
+                        last_name: contact_last_name ?? p.last_name,
+                        email: contact_email ?? p.email ?? null,
+                        phone: contact_phone ?? p.phone ?? null,
+                        person_id: personIdFromQuote,
+                        contact_type: "lead",
+                    };
+                    const oppOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+                    if (oppOrgId) contactInsert.org_id = oppOrgId;
+                    const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
+                    if (!contactErr && newContact) {
+                        contactId = (newContact as { id: string }).id;
+                        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+                        await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+                        await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                    }
                 }
             }
 
@@ -692,7 +896,8 @@ export async function POST(request: NextRequest) {
                 estimated_price_cents: estimatedPriceCentsElse,
                 monetary_value_cents: estimatedPriceCentsElse ?? undefined,
                 customer_id: customerId,
-                primary_contact_id: contactId,
+                ...(contactId != null && { primary_contact_id: contactId }),
+                ...(personIdFromQuote != null && { primary_person_id: personIdFromQuote }),
                 metadata: mergedMetaElse,
             };
             if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
@@ -744,7 +949,8 @@ export async function POST(request: NextRequest) {
             const insertPayload: Record<string, unknown> = {
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 vertical_id: verticalId,
-                primary_contact_id: contactId,
+                ...(contactId != null && { primary_contact_id: contactId }),
+                ...(personIdFromQuote != null && { primary_person_id: personIdFromQuote }),
                 customer_id: customerId,
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 status: "open",
@@ -869,7 +1075,8 @@ export async function POST(request: NextRequest) {
             const jobUpdatePayload: Record<string, any> = {
                 scheduled_at: slot_start,
                 customer_id: customerId,
-                primary_contact_id: contactId,
+                ...(personIdFromQuote && { primary_person_id: personIdFromQuote }),
+                ...(contactId != null && { primary_contact_id: contactId }),
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
@@ -929,7 +1136,8 @@ export async function POST(request: NextRequest) {
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 opportunity_id: opportunityId,
                 customer_id: customerId,
-                primary_contact_id: contactId,
+                ...(personIdFromQuote && { primary_person_id: personIdFromQuote }),
+                ...(contactId != null && { primary_contact_id: contactId }),
                 vertical_id: verticalId,
                 ...(locationId != null && { location_id: locationId }),
                 title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
@@ -996,6 +1204,13 @@ export async function POST(request: NextRequest) {
 
         // Step 5b: Persist discount redemption immediately after job creation (unique uniq_redemption_per_customer_code)
         if (discount_code_id) {
+            if (contactId == null) {
+                console.error("[BOOK_V2_CONFIRM] discount_code_id provided but contactId is null (discount_redemptions.contact_id required)");
+                return NextResponse.json(
+                    { ok: false, message: "Unable to record discount redemption.", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
+            }
             console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_BEFORE] booking_attempt_id=%s discount_code_id=%s customer_id=%s contact_id=%s opportunity_id=%s job_id=%s", booking_attempt_id ?? "None", discount_code_id, customerId, contactId, opportunityId, jobId);
             const { data: redemptionRow, error: redemptionInsertError } = await supabase
                 .from("discount_redemptions")
@@ -1064,7 +1279,7 @@ export async function POST(request: NextRequest) {
                         .insert({
                             org_id: orgId,
                             customer_id: customerId,
-                            primary_contact_id: contactId,
+                            ...(contactId != null && { primary_contact_id: contactId }),
                             vertical_id: verticalId,
                             cadence,
                             interval,
@@ -1218,12 +1433,14 @@ export async function POST(request: NextRequest) {
                     id,
                     customer_id,
                     primary_contact_id,
+                    primary_person_id,
                     opportunity_id,
                     vertical_id,
                     opportunities!inner(
                         id,
                         customer_id,
                         primary_contact_id,
+                        primary_person_id,
                         vertical_id
                     )
                 )
@@ -1244,22 +1461,31 @@ export async function POST(request: NextRequest) {
         const job = integrityCheck.jobs as any;
         const opportunity = job?.opportunities as any;
 
-        // Verify linkages
+        // Verify linkages (primary_contact_id when contactId set; primary_person_id when person path)
         const integrityIssues: string[] = [];
         if (job?.customer_id !== customerId) {
             integrityIssues.push(`job.customer_id mismatch: expected=${customerId} actual=${job?.customer_id}`);
         }
-        if (job?.primary_contact_id !== contactId) {
-            integrityIssues.push(`job.primary_contact_id mismatch: expected=${contactId} actual=${job?.primary_contact_id}`);
+        if (contactId != null) {
+            if (job?.primary_contact_id !== contactId) {
+                integrityIssues.push(`job.primary_contact_id mismatch: expected=${contactId} actual=${job?.primary_contact_id}`);
+            }
+            if (opportunity?.primary_contact_id !== contactId) {
+                integrityIssues.push(`opportunity.primary_contact_id mismatch: expected=${contactId} actual=${opportunity?.primary_contact_id}`);
+            }
+        } else if (personIdFromQuote) {
+            if ((job as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
+                integrityIssues.push(`job.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(job as { primary_person_id?: string | null })?.primary_person_id}`);
+            }
+            if ((opportunity as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
+                integrityIssues.push(`opportunity.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(opportunity as { primary_person_id?: string | null })?.primary_person_id}`);
+            }
         }
         if (job?.opportunity_id !== opportunityId) {
             integrityIssues.push(`job.opportunity_id mismatch: expected=${opportunityId} actual=${job?.opportunity_id}`);
         }
         if (opportunity?.customer_id !== customerId) {
             integrityIssues.push(`opportunity.customer_id mismatch: expected=${customerId} actual=${opportunity?.customer_id}`);
-        }
-        if (opportunity?.primary_contact_id !== contactId) {
-            integrityIssues.push(`opportunity.primary_contact_id mismatch: expected=${contactId} actual=${opportunity?.primary_contact_id}`);
         }
         if (job?.id !== jobId) {
             integrityIssues.push(`schedule.job_id mismatch: expected=${jobId} actual=${job?.id}`);
@@ -1303,11 +1529,17 @@ export async function POST(request: NextRequest) {
 
             const { data: jobRow } = await supabase.from("jobs").select("*").eq("id", jobId).single();
             const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
-            const { data: contactRow } = await supabase.from("contacts").select("*").eq("id", contactId).single();
-            const contactWithPerson = contactRow as { person_id?: string | null } | null;
+            let contactRow: Record<string, unknown> | null = null;
+            if (contactId) {
+                const { data: c } = await supabase.from("contacts").select("*").eq("id", contactId).maybeSingle();
+                contactRow = c as Record<string, unknown> | null;
+            }
             let personRow: Record<string, unknown> | null = null;
-            if (contactWithPerson?.person_id) {
-                const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", contactWithPerson.person_id).maybeSingle();
+            if (personIdFromQuote) {
+                const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle();
+                personRow = p as Record<string, unknown> | null;
+            } else if (contactRow && (contactRow as { person_id?: string | null }).person_id) {
+                const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", (contactRow as { person_id: string }).person_id).maybeSingle();
                 personRow = p as Record<string, unknown> | null;
             }
             const { data: customerRow } = await supabase.from("customers").select("*").eq("id", customerId).single();
@@ -1368,7 +1600,8 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             ok: true,
-            contact_id: contactId,
+            ...(contactId != null && { contact_id: contactId }),
+            ...(personIdFromQuote != null && { person_id: personIdFromQuote }),
             customer_id: customerId,
             opportunity_id: opportunityId,
             job_id: jobId,

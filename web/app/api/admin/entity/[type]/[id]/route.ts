@@ -32,8 +32,16 @@ export async function GET(
             } else {
                 out._opportunity_name = null;
             }
-            if ((data as { primary_contact_id?: string }).primary_contact_id) {
-                const contact = await supabase.from("contacts").select("first_name, last_name, person_id").eq("id", (data as { primary_contact_id: string }).primary_contact_id).single();
+            const jobPrimaryPersonId = (data as { primary_person_id?: string | null }).primary_person_id;
+            const jobPrimaryContactId = (data as { primary_contact_id?: string }).primary_contact_id;
+            if (jobPrimaryPersonId) {
+                const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", jobPrimaryPersonId).maybeSingle();
+                const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
+                out._primary_person_id = p?.id ?? null;
+                out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
+                out._contact_name = out._primary_person_name;
+            } else if (jobPrimaryContactId) {
+                const contact = await supabase.from("contacts").select("first_name, last_name, person_id").eq("id", jobPrimaryContactId).single();
                 const c = contact.data as { first_name?: string | null; last_name?: string | null; person_id?: string | null } | null;
                 out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
                 if (c?.person_id) {
@@ -119,7 +127,7 @@ export async function GET(
         if (type === "opportunities") {
             const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
+            const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
             out._status_display = opp.status_key ?? opp.status ?? null;
             if (opp.customer_id) {
@@ -128,7 +136,15 @@ export async function GET(
             } else {
                 out._customer_name = null;
             }
-            if (opp.primary_contact_id) {
+            // Prefer primary_person_id for display; fallback to contact
+            if (opp.primary_person_id) {
+                const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", opp.primary_person_id).maybeSingle();
+                const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
+                out._primary_person_id = p?.id ?? null;
+                out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
+                out._contact_name = out._primary_person_name;
+                out._primary_contact_name = out._primary_person_name;
+            } else if (opp.primary_contact_id) {
                 const contact = await supabase.from("contacts").select("first_name, last_name, person_id").eq("id", opp.primary_contact_id).single();
                 const c = contact.data;
                 const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
@@ -321,15 +337,23 @@ export async function GET(
             const scheduleLocationId = (schedule as { location_id?: string | null }).location_id;
             const jobId = (schedule as { job_id?: string }).job_id;
             if (jobId) {
-                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id").eq("id", jobId).single();
+                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id").eq("id", jobId).single();
                 out._job = job ?? null;
                 if (job) {
                     if ((job as { customer_id?: string }).customer_id) {
                         const { data: cust } = await supabase.from("customers").select("id, name").eq("id", (job as { customer_id: string }).customer_id).single();
                         out._customer = cust ?? null;
                     } else out._customer = null;
-                    if ((job as { primary_contact_id?: string }).primary_contact_id) {
-                        const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, person_id").eq("id", (job as { primary_contact_id: string }).primary_contact_id).single();
+                    const jobPrimaryPersonId = (job as { primary_person_id?: string | null }).primary_person_id;
+                    const jobPrimaryContactId = (job as { primary_contact_id?: string }).primary_contact_id;
+                    if (jobPrimaryPersonId) {
+                        const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", jobPrimaryPersonId).maybeSingle();
+                        const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
+                        out._primary_person_id = p?.id ?? null;
+                        out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
+                        out._contact = p ? { id: p.id, first_name: p.first_name, last_name: p.last_name, email: (person as { email?: string | null }).email, phone: (person as { phone?: string | null }).phone, person_id: p.id } : null;
+                    } else if (jobPrimaryContactId) {
+                        const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, person_id").eq("id", jobPrimaryContactId).single();
                         out._contact = contact ?? null;
                         const contactWithPerson = contact as { person_id?: string | null } | null;
                         if (contactWithPerson?.person_id) {
