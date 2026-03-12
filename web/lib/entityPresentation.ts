@@ -26,6 +26,7 @@ export type EntityPresentationType =
   | "vendors"
   | "contacts"
   | "customer_members"
+  | "persons"
   | "workflows"
   | "discount_redemptions"
   | "service_offerings"
@@ -1139,6 +1140,57 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         },
       ],
       relatedModules: [],
+    },
+  },
+  persons: {
+    entityType: "persons",
+    table: {
+      columns: [
+        { key: "_person_name", label: "Name", sortable: true, renderHint: "text", locked: true },
+        { key: "email", label: "Email", sortable: true, renderHint: "text" },
+        { key: "phone", label: "Phone", sortable: true, renderHint: "phone" },
+        { key: "_updated", label: "Updated", sortable: true, renderHint: "datetime", locked: true },
+      ],
+      defaultSort: { key: "_updated", direction: "desc" },
+    },
+    drawer: {
+      tabs: ["overview", "related"],
+      headerFields: [],
+      layoutMode: 2,
+      overviewSections: [
+        {
+          key: "basic_info",
+          title: "Basic Info",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "first_name", label: "First name", span: 1, renderHint: "text", locked: true },
+            { key: "last_name", label: "Last name", span: 1, renderHint: "text", locked: true },
+            { key: "email", label: "Email", span: 1, renderHint: "text", locked: true },
+            { key: "phone", label: "Phone", span: 1, renderHint: "phone", locked: true },
+            { key: "created_at", label: "Created", span: 1, renderHint: "datetime", locked: true },
+            { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime", locked: true },
+          ],
+          locked: true,
+        },
+        {
+          key: "record_info",
+          title: "Record Info",
+          defaultExpanded: false,
+          collapsible: true,
+          gridCols: 2,
+          fields: [
+            { key: "id", label: "ID", span: 1, renderHint: "text", locked: true },
+            { key: "org_id", label: "Org ID", span: 1, renderHint: "text", locked: true },
+          ],
+          locked: true,
+        },
+      ],
+      relatedModules: [
+        { key: "customer_persons", label: "Customers", entityType: "customers", locked: true },
+        { key: "person_relationships", label: "Relationships", entityType: "persons", locked: true },
+      ],
     },
   },
   workflows: {

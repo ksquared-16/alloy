@@ -375,6 +375,73 @@ export async function GET(
             });
         }
 
+        if (entity === "person") {
+            const { data: personRow } = await supabase
+                .from("persons")
+                .select("id, org_id")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (!personRow) {
+                return NextResponse.json({ error: "Person not found" }, { status: 404 });
+            }
+            const [customerPersonsRes, relationshipsRes, contactsRes, membersRes] = await Promise.all([
+                supabase
+                    .from("customer_persons")
+                    .select("id, customer_id, person_id, role, created_at")
+                    .eq("person_id", id)
+                    .eq("org_id", ctx.orgId)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT),
+                supabase
+                    .from("person_relationships")
+                    .select("id, from_person_id, to_person_id, relationship_type, created_at")
+                    .or(`from_person_id.eq.${id},to_person_id.eq.${id}`)
+                    .limit(LIMIT),
+                supabase
+                    .from("contacts")
+                    .select("id, first_name, last_name, email, phone, customer_id, created_at")
+                    .eq("person_id", id)
+                    .eq("org_id", ctx.orgId)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT),
+                supabase
+                    .from("customer_members")
+                    .select("id, display_name, relationship, customer_id, created_at")
+                    .eq("person_id", id)
+                    .eq("org_id", ctx.orgId)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT),
+            ]);
+            const cpRows = customerPersonsRes.data ?? [];
+            const customerIds = [...new Set(cpRows.map((r: { customer_id: string }) => r.customer_id))];
+            const { data: customerRows } = customerIds.length > 0
+                ? await supabase.from("customers").select("id, name").in("id", customerIds)
+                : { data: [] as { id: string; name: string | null }[] };
+            const customerMap = new Map((customerRows ?? []).map((c) => [c.id, c.name ?? null]));
+            const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
+                ...r,
+                _customer_name: customerMap.get(r.customer_id) ?? null,
+            }));
+            const relRows = relationshipsRes.data ?? [];
+            const otherIds = [...new Set(relRows.flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
+            const { data: otherPersons } = otherIds.length > 0
+                ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherIds)
+                : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] };
+            const personNameMap = new Map((otherPersons ?? []).map((p) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null]));
+            const person_relationships = relRows.map((r: { id: string; from_person_id: string; to_person_id: string; relationship_type?: string | null; created_at?: string }) => ({
+                ...r,
+                _other_person_id: r.from_person_id === id ? r.to_person_id : r.from_person_id,
+                _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
+            }));
+            return NextResponse.json({
+                customer_persons,
+                person_relationships,
+                compatibility_contacts: contactsRes.data ?? [],
+                compatibility_members: membersRes.data ?? [],
+            });
+        }
+
         if (entity === "service_offering") {
             const { data: pricingServices, error } = await supabase
                 .from("pricing_services")

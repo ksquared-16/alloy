@@ -599,6 +599,9 @@ export default function AdminEntityDrawer() {
     type AddonRelatedPayload = { jobs: unknown[]; quotes: unknown[] };
     const [addonRelatedData, setAddonRelatedData] = useState<AddonRelatedPayload | null>(null);
     const [addonRelatedLoading, setAddonRelatedLoading] = useState(false);
+    type PersonRelatedPayload = { customer_persons: { id: string; customer_id: string; _customer_name?: string | null }[]; person_relationships: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null }[]; compatibility_contacts: unknown[]; compatibility_members: unknown[] };
+    const [personRelatedData, setPersonRelatedData] = useState<PersonRelatedPayload | null>(null);
+    const [personRelatedLoading, setPersonRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules", "payments"];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -641,12 +644,13 @@ export default function AdminEntityDrawer() {
             setMemberRelatedDataLoading(false);
             setContactCreateSaving(false);
             setContactCreateError(null);
-        setContactRelatedData(null);
+            setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
         setOpportunityRelatedData(null);
         setPaymentRelatedData(null);
         setRedemptionRelatedData(null);
+        setPersonRelatedData(null);
         return;
     }
     setDrawerTab("overview");
@@ -657,7 +661,7 @@ export default function AdminEntityDrawer() {
         setLoading(true);
         setError(null);
         setIsEditing(false);
-        if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs") && drawer.id === "new") {
+        if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs" || drawer.type === "persons") && drawer.id === "new") {
             setData({ _create: true });
             setLoading(false);
             setIsEditing(true);
@@ -704,6 +708,21 @@ export default function AdminEntityDrawer() {
                 .finally(() => setContactRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, contactRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") {
+            setPersonRelatedData(null);
+            return;
+        }
+        if (drawerTab === "related" && !personRelatedData) {
+            setPersonRelatedLoading(true);
+            fetch(`/api/admin/related/person/${drawer.id}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((json: PersonRelatedPayload | null) => setPersonRelatedData(json ?? null))
+                .catch(() => setPersonRelatedData(null))
+                .finally(() => setPersonRelatedLoading(false));
+        }
+    }, [drawer.type, drawer.id, drawerTab, personRelatedData]);
 
     useEffect(() => {
         if (drawer.type !== "customers" || !drawer.id) {
@@ -2210,6 +2229,10 @@ export default function AdminEntityDrawer() {
                                                             ? `Plan: ${(data.plan_name as string) || (data.plan_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                             : drawer.type === "addons"
                                                                 ? `Add-on: ${(data.addon_name as string) || (data.addon_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                                : drawer.type === "persons"
+                                                                ? (data as { _create?: boolean })._create
+                                                                    ? "New Person"
+                                                                    : `Person: ${(data._person_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                                 : drawer.type === "subscriptions"
                                                                 ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
                                                                 : "Details"
@@ -2265,6 +2288,14 @@ export default function AdminEntityDrawer() {
                             <div className="py-1.5 sm:col-span-2">
                                 <span className="text-alloy-slate text-sm font-medium">Primary Contact for: </span>
                                 <span className="text-[#31394d] ml-1">{primaryFor}</span>
+                            </div>
+                        )}
+                        {(d._person_id as string) && (
+                            <div className="py-1.5 sm:col-span-2">
+                                <span className="text-alloy-slate text-sm font-medium">Canonical Person: </span>
+                                <button type="button" onClick={() => openDrawer({ type: "persons", id: d._person_id as string })} className="text-alloy-blue hover:underline text-sm ml-1">
+                                    {(d._person_name as string) || "View person"}
+                                </button>
                             </div>
                         )}
                         {((d.source as string) ?? (d.external_source as string) ?? (d.external_id as string)) && (
@@ -2382,6 +2413,14 @@ export default function AdminEntityDrawer() {
                                 <span className="text-alloy-midnight/60">—</span>
                             )}
                         </div>
+                        {(d._person_id as string) && (
+                            <div className="md:col-span-2">
+                                <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Canonical Person</label>
+                                <button type="button" onClick={() => openDrawer({ type: "persons", id: d._person_id as string })} className="text-alloy-blue hover:underline text-sm">
+                                    {(d._person_name as string) || "View person"}
+                                </button>
+                            </div>
+                        )}
                         <div>
                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">First name</label>
                             <input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} />
@@ -2678,6 +2717,80 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && drawer.type === "locations" && data && (
                         <div className="pt-2 space-y-3 mb-4">
                             <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
+                        </div>
+                    )}
+                    {drawerTab === "related" && drawer.type === "persons" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 mb-4">
+                            {personRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading related…</p>
+                            ) : personRelatedData ? (
+                                <div className="space-y-6">
+                                    {((personRelatedData.customer_persons?.length) ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Customers</h3>
+                                            <ul className="space-y-1.5 text-sm">
+                                                {personRelatedData.customer_persons.map((cp: { id: string; customer_id: string; _customer_name?: string | null }) => (
+                                                    <li key={cp.id}>
+                                                        <button type="button" onClick={() => openDrawer({ type: "customers", id: cp.customer_id })} className="text-alloy-blue hover:underline">
+                                                            {cp._customer_name ?? cp.customer_id.slice(0, 8) + "…"}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {((personRelatedData.person_relationships?.length) ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Relationships</h3>
+                                            <ul className="space-y-1.5 text-sm">
+                                                {personRelatedData.person_relationships.map((pr: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null }) => (
+                                                    <li key={pr.id}>
+                                                        <button type="button" onClick={() => openDrawer({ type: "persons", id: pr._other_person_id })} className="text-alloy-blue hover:underline">
+                                                            {pr._other_person_name ?? pr._other_person_id.slice(0, 8) + "…"}
+                                                            {pr.relationship_type ? ` (${pr.relationship_type})` : ""}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {((personRelatedData.compatibility_contacts?.length) ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Contact records</h3>
+                                            <p className="text-xs text-alloy-midnight/60 mb-1">Compatibility layer</p>
+                                            <ul className="space-y-1 text-sm">
+                                                {(personRelatedData.compatibility_contacts as { id: string; first_name?: string | null; last_name?: string | null }[]).map((c) => (
+                                                    <li key={c.id}>
+                                                        <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline">
+                                                            {[c.first_name, c.last_name].filter(Boolean).join(" ") || c.id.slice(0, 8) + "…"}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {((personRelatedData.compatibility_members?.length) ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Member records</h3>
+                                            <p className="text-xs text-alloy-midnight/60 mb-1">Compatibility layer</p>
+                                            <ul className="space-y-1 text-sm">
+                                                {(personRelatedData.compatibility_members as { id: string; display_name?: string | null }[]).map((m) => (
+                                                    <li key={m.id}>
+                                                        <button type="button" onClick={() => openDrawer({ type: "customer_members", id: m.id })} className="text-alloy-blue hover:underline">
+                                                            {m.display_name ?? m.id.slice(0, 8) + "…"}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {(!personRelatedData.customer_persons?.length && !personRelatedData.person_relationships?.length && !personRelatedData.compatibility_contacts?.length && !personRelatedData.compatibility_members?.length) && (
+                                        <p className="text-sm text-alloy-midnight/60">No related records.</p>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No related data.</p>
+                            )}
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "customer_members" && (
@@ -3895,7 +4008,9 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "overview" && !useConfigDrivenOverview && (
                         <>
-                            {drawer.type === "contacts" && (data as { _create?: boolean })?._create ? (
+                            {drawer.type === "persons" && (data as { _create?: boolean })?._create ? (
+                                <p className="text-sm text-alloy-midnight/70">Person creation is not available here. Create a contact or customer member first; they will link to a canonical person.</p>
+                            ) : drawer.type === "contacts" && (data as { _create?: boolean })?._create ? (
                                 <div className="space-y-4">
                                     {contactCreateError && <p className="text-sm text-red-600">{contactCreateError}</p>}
                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>

@@ -1202,6 +1202,12 @@ export async function POST(request: NextRequest) {
             const { data: jobRow } = await supabase.from("jobs").select("*").eq("id", jobId).single();
             const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
             const { data: contactRow } = await supabase.from("contacts").select("*").eq("id", contactId).single();
+            const contactWithPerson = contactRow as { person_id?: string | null } | null;
+            let personRow: Record<string, unknown> | null = null;
+            if (contactWithPerson?.person_id) {
+                const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", contactWithPerson.person_id).maybeSingle();
+                personRow = p as Record<string, unknown> | null;
+            }
             const { data: customerRow } = await supabase.from("customers").select("*").eq("id", customerId).single();
             const { data: scheduleRow } = await supabase.from("schedules").select("*").eq("id", scheduleId).single();
             const normalizedSchedule =
@@ -1220,6 +1226,7 @@ export async function POST(request: NextRequest) {
                 booked_stage_id: bookedStageIdForPayload,
                 job: jobRow ?? null,
                 contact: contactRow ?? null,
+                person: personRow ?? null,
                 customer: customerRow ?? null,
                 opportunity: oppRow ?? null,
                 schedule: normalizedSchedule,
