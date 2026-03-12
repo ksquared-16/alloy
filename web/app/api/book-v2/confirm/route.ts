@@ -696,7 +696,7 @@ export async function POST(request: NextRequest) {
                 } else {
                     contactId = contact_id_from_quote;
                     try {
-                        customerId = await ensureCustomerForContactInConfirm(supabase, contactId, {
+                        customerId = await ensureCustomerForContactInConfirm(supabase, contact_id_from_quote, {
                             vertical_id: verticalIdElse,
                             org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                             first_name: contact_first_name ?? undefined,
