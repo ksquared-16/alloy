@@ -767,7 +767,12 @@ export async function executeWorkflowRun(
                     const channel = pl.channel != null ? String(pl.channel) : "email";
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
                     const bodyRaw = pl.body != null ? String(pl.body) : "";
-                    const toValue = renderTemplate(toValueRaw, payload);
+                    let toValue = renderTemplate(toValueRaw, payload);
+                    if (!toValue.trim() && (toValueRaw.includes("person.phone") || toValueRaw.includes("person.email"))) {
+                        const fallbackPayload = { ...payload, person: (payload.person ?? payload.contact) ?? null };
+                        const fallback = renderTemplate(toValueRaw, fallbackPayload);
+                        if (fallback != null && String(fallback).trim()) toValue = String(fallback).trim();
+                    }
                     const bodyText = renderTemplate(bodyRaw, payload);
                     const contactId = resolveId(pl.contact_id, payload);
                     const customerId = resolveId(pl.customer_id, payload);
