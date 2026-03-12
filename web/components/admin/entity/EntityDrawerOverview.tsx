@@ -252,7 +252,8 @@ export default function EntityDrawerOverview({
         const hasFields = section.fields && section.fields.length > 0;
         const customContent = customSectionContent[section.key];
 
-        const children: ReactNode = hasFields
+        // Prefer custom section content when provided (e.g. contact Canonical Person link); otherwise use config-driven fields.
+        const children: ReactNode = customContent ?? (hasFields
           ? section.fields!.map((field: EntityDrawerFieldConfig) => {
               const rawValue = editFormData[field.key] !== undefined ? editFormData[field.key] : (field.key === "status_key" && record._status_display != null ? record._status_display : record[field.key]);
               const displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
@@ -271,7 +272,7 @@ export default function EntityDrawerOverview({
                 />
               );
             })
-          : customContent ?? null;
+          : null);
 
         if (!hasFields && !customContent) return null;
 
