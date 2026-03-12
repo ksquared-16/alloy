@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("active_only") === "true";
+    const showAll = searchParams.get("all") === "true" || searchParams.get("all") === "1";
     const industryIdParam = searchParams.get("industry_id")?.trim() || null;
     const verticalId = searchParams.get("vertical_id")?.trim() || null;
 
@@ -44,17 +45,19 @@ export async function GET(request: NextRequest) {
         .eq("org_id", ctx.orgId);
 
     let orgIndustryId: string | null = null;
-    if (activeOnly || industryIdParam) {
+    if (!showAll) {
         const { data: orgRow } = await supabase.from("orgs").select("industry_id").eq("id", ctx.orgId).maybeSingle();
         orgIndustryId = (orgRow as { industry_id?: string } | null)?.industry_id ?? null;
     }
     const industryId = industryIdParam ?? orgIndustryId;
 
-    if (verticalId) {
+    if (showAll) {
+        // no industry/active filter; return all configured rows
+    } else if (verticalId) {
         q = q.eq("is_active", true).or(`vertical_id.eq.${verticalId},vertical_id.is.null`);
     } else if (industryId) {
         q = q.eq("is_active", true).or(`industry_id.eq.${industryId},industry_id.is.null`);
-    } else if (activeOnly) {
+    } else {
         q = q.eq("is_active", true);
     }
 
@@ -80,9 +83,9 @@ export async function GET(request: NextRequest) {
         updated_at: (r.updated_at as string) ?? null,
     }));
 
-    if (industryId) {
+    if (!showAll && industryId) {
         items = resolveOptionsByIndustry(items, industryId);
-    } else if (verticalId) {
+    } else if (!showAll && verticalId) {
         items = resolveOptionsByVertical(items, verticalId);
     }
 

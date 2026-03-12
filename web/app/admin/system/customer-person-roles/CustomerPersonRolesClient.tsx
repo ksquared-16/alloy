@@ -19,6 +19,7 @@ export default function CustomerPersonRolesClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const [showAll, setShowAll] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalId, setModalId] = useState<string | null>(null);
     const [modalKey, setModalKey] = useState("");
@@ -33,7 +34,8 @@ export default function CustomerPersonRolesClient() {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch("/api/admin/customer-person-role-types");
+            const url = showAll ? "/api/admin/customer-person-role-types?all=true" : "/api/admin/customer-person-role-types";
+            const res = await fetch(url);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load");
             setItems((json as { items?: CustomerPersonRoleType[] }).items ?? []);
@@ -43,7 +45,7 @@ export default function CustomerPersonRolesClient() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [showAll]);
 
     const fetchIndustries = useCallback(async () => {
         try {
@@ -174,6 +176,20 @@ export default function CustomerPersonRolesClient() {
 
             {!loading && !error && (
                 <SectionCard title="Role types">
+                    <div className="mb-3 flex items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm text-[#59678b]">
+                            <input
+                                type="checkbox"
+                                checked={showAll}
+                                onChange={(e) => setShowAll(e.target.checked)}
+                                className="rounded border-[#c4c8cc]"
+                            />
+                            Show all configured rows
+                        </label>
+                        <span className="text-xs text-[#8a8f98]">
+                            {showAll ? "Showing every role type in this org." : "Showing only options effective for your org industry (and universal)."}
+                        </span>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[600px] text-left text-sm">
                             <thead>

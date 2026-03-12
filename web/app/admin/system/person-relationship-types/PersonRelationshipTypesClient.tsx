@@ -19,6 +19,7 @@ export default function PersonRelationshipTypesClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const [showAll, setShowAll] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalId, setModalId] = useState<string | null>(null);
     const [modalKey, setModalKey] = useState("");
@@ -33,7 +34,8 @@ export default function PersonRelationshipTypesClient() {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch("/api/admin/person-relationship-type-settings");
+            const url = showAll ? "/api/admin/person-relationship-type-settings?all=true" : "/api/admin/person-relationship-type-settings";
+            const res = await fetch(url);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load");
             setItems((json as { items?: PersonRelationshipTypeSetting[] }).items ?? []);
@@ -43,7 +45,7 @@ export default function PersonRelationshipTypesClient() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [showAll]);
 
     const fetchIndustries = useCallback(async () => {
         try {
@@ -174,6 +176,20 @@ export default function PersonRelationshipTypesClient() {
 
             {!loading && !error && (
                 <SectionCard title="Relationship types">
+                    <div className="mb-3 flex items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm text-[#59678b]">
+                            <input
+                                type="checkbox"
+                                checked={showAll}
+                                onChange={(e) => setShowAll(e.target.checked)}
+                                className="rounded border-[#c4c8cc]"
+                            />
+                            Show all configured rows
+                        </label>
+                        <span className="text-xs text-[#8a8f98]">
+                            {showAll ? "Showing every relationship type in this org." : "Showing only options effective for your org industry (and universal)."}
+                        </span>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[600px] text-left text-sm">
                             <thead>

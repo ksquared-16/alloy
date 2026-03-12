@@ -50,13 +50,6 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/people", label: "People", entityType: "persons" },
             { href: "/admin/customers", label: "Customers", entityType: "customers" },
             { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
-            {
-                label: "Legacy",
-                subItems: [
-                    { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
-                    { href: "/admin/customer-members", label: "Members", entityType: "customer_members" },
-                ],
-            },
         ],
     },
     {
@@ -191,7 +184,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true, "Directory::Legacy": true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -211,9 +204,6 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         }
         if (pathname === "/admin/operations/recurrence") {
             setNestedCollapsed((prev) => (prev["Operations::Settings"] === false ? prev : { ...prev, "Operations::Settings": false }));
-        }
-        if (pathname === "/admin/contacts" || pathname === "/admin/customer-members") {
-            setNestedCollapsed((prev) => (prev["Directory::Legacy"] === false ? prev : { ...prev, "Directory::Legacy": false }));
         }
         const directorySettingsPaths = ["/admin/system/customer-person-roles", "/admin/system/person-relationship-types", "/admin/system/db-relationships"];
         if (directorySettingsPaths.includes(pathname)) {

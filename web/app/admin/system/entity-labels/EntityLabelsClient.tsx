@@ -29,6 +29,9 @@ type ApiResponse = {
 
 const GENERIC_VALUE = "__generic__";
 
+/** Legacy entity types hidden from primary Entity Labels UI (contacts, customer_members). */
+const LEGACY_ENTITY_TYPES = new Set(["contacts", "customer_members"]);
+
 export default function EntityLabelsClient() {
     const { canMutate } = useAdminAuth();
     const { refreshEntityLabels } = useEntityLabels();
@@ -231,6 +234,7 @@ export default function EntityLabelsClient() {
     }
 
     const defaultsByType = new Map(data.defaults.map((d) => [d.entity_type, d]));
+    const displayEffective = data.effective.filter((e) => !LEGACY_ENTITY_TYPES.has(e.entity_type));
     const locked = configLocked;
 
     return (
@@ -308,14 +312,14 @@ export default function EntityLabelsClient() {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.effective.length === 0 ? (
+                            {displayEffective.length === 0 ? (
                                 <tr>
                                     <td colSpan={canMutate ? 8 : 7} className="py-4 text-[#59678b]">
-                                        No entity types for this industry. Select an industry (e.g. childcare) to see defaults including customer_members.
+                                        No entity types for this industry. Select an industry (e.g. childcare) to see defaults for People, Customers, Vendors, and other primary entities.
                                     </td>
                                 </tr>
                             ) : (
-                                data.effective.map((eff) => {
+                                displayEffective.map((eff) => {
                                     const def = defaultsByType.get(eff.entity_type);
                                     const { singular: ovSingular, plural: ovPlural } = getOverrideFor(eff.entity_type);
                                     const hasOverride = data.overrides.some((o) => o.entity_type === eff.entity_type);
