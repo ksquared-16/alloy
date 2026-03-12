@@ -95,6 +95,8 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/system/verticals-industries", label: "Verticals / Industries" },
             { href: "/admin/system/entity-labels", label: "Entity Labels" },
             { href: "/admin/system/statuses", label: "Statuses" },
+            { href: "/admin/system/customer-person-roles", label: "Customer Person Roles" },
+            { href: "/admin/system/person-relationship-types", label: "Person Relationship Types" },
             { href: "/admin/system/payouts", label: "Payouts" },
             { href: "/admin/system/db-relationships", label: "DB Relationships" },
         ],
@@ -123,6 +125,8 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/system/verticals-industries": LayoutGrid,
         "/admin/system/entity-labels": Tag,
         "/admin/system/statuses": Tag,
+        "/admin/system/customer-person-roles": Tag,
+        "/admin/system/person-relationship-types": Tag,
         "/admin/system/payouts": DollarSign,
         "/admin/system/db-relationships": GitBranch,
     };

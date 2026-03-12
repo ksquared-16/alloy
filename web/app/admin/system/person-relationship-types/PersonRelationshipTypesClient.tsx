@@ -1,0 +1,299 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import SectionCard from "@/components/admin/SectionCard";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import type { PersonRelationshipTypeSetting } from "@/app/api/admin/person-relationship-type-settings/route";
+
+const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
+
+export default function PersonRelationshipTypesClient() {
+    const { canMutate } = useAdminAuth();
+    const [items, setItems] = useState<PersonRelationshipTypeSetting[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalId, setModalId] = useState<string | null>(null);
+    const [modalKey, setModalKey] = useState("");
+    const [modalLabel, setModalLabel] = useState("");
+    const [modalDescription, setModalDescription] = useState("");
+    const [modalSortOrder, setModalSortOrder] = useState(100);
+    const [modalActive, setModalActive] = useState(true);
+    const [modalSaving, setModalSaving] = useState(false);
+    const [modalError, setModalError] = useState<string | null>(null);
+
+    const fetchItems = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/admin/person-relationship-type-settings");
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load");
+            setItems((json as { items?: PersonRelationshipTypeSetting[] }).items ?? []);
+        } catch (e) {
+            setError((e as Error).message);
+            setItems([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchItems();
+    }, [fetchItems]);
+
+    const openCreate = () => {
+        setModalId(null);
+        setModalKey("");
+        setModalLabel("");
+        setModalDescription("");
+        setModalSortOrder(100);
+        setModalActive(true);
+        setModalError(null);
+        setModalOpen(true);
+    };
+
+    const openEdit = (row: PersonRelationshipTypeSetting) => {
+        setModalId(row.id);
+        setModalKey(row.key);
+        setModalLabel(row.label ?? "");
+        setModalDescription(row.description ?? "");
+        setModalSortOrder(row.sort_order);
+        setModalActive(row.is_active);
+        setModalError(null);
+        setModalOpen(true);
+    };
+
+    const saveModal = async () => {
+        if (!canMutate) return;
+        const key = modalKey.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+        if (!key) {
+            setModalError("Key is required.");
+            return;
+        }
+        if (!KEY_REGEX.test(key)) {
+            setModalError("Key must be 2–64 characters: lowercase letters, numbers, underscores only.");
+            return;
+        }
+        if (!modalLabel.trim()) {
+            setModalError("Label is required.");
+            return;
+        }
+
+        setModalSaving(true);
+        setModalError(null);
+        try {
+            if (modalId) {
+                const res = await fetch(`/api/admin/person-relationship-type-settings/${modalId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        label: modalLabel.trim() || null,
+                        description: modalDescription.trim() || null,
+                        sort_order: modalSortOrder,
+                        is_active: modalActive,
+                    }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            } else {
+                const res = await fetch("/api/admin/person-relationship-type-settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        key,
+                        label: modalLabel.trim() || null,
+                        description: modalDescription.trim() || null,
+                        sort_order: modalSortOrder,
+                        is_active: modalActive,
+                    }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (res.status === 409) {
+                    setModalError((json as { error?: string }).error ?? "Key already exists.");
+                    return;
+                }
+                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+            }
+            setModalOpen(false);
+            await fetchItems();
+        } catch (e) {
+            setModalError((e as Error).message);
+        } finally {
+            setModalSaving(false);
+        }
+    };
+
+    const isEdit = !!modalId;
+
+    return (
+        <>
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <AdminPageHeader
+                    title="Person Relationship Types"
+                    subtitle="Types for person-to-person relationships (e.g. spouse, parent). Used for person_relationships.relationship_type."
+                />
+                {canMutate && (
+                    <button
+                        type="button"
+                        onClick={openCreate}
+                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
+                    >
+                        Add Relationship Type
+                    </button>
+                )}
+            </div>
+
+            {loading && <p className="text-sm text-[#59678b]">Loading…</p>}
+            {error && (
+                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                    {error}
+                </div>
+            )}
+
+            {!loading && !error && (
+                <SectionCard title="Relationship types">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[600px] text-left text-sm">
+                            <thead>
+                                <tr className="border-b border-[#e6e8ec] text-[#59678b]">
+                                    <th className="pb-2 pr-4 font-semibold">Key</th>
+                                    <th className="pb-2 pr-4 font-semibold">Label</th>
+                                    <th className="pb-2 pr-4 font-semibold">Description</th>
+                                    <th className="pb-2 pr-4 font-semibold">Sort</th>
+                                    <th className="pb-2 pr-4 font-semibold">Active</th>
+                                    <th className="pb-2 pr-4 font-semibold">System</th>
+                                    {canMutate && <th className="pb-2 font-semibold">Actions</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={canMutate ? 7 : 6} className="py-4 text-[#59678b]">
+                                            No relationship types. Add one to get started.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    items.map((row) => (
+                                        <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
+                                            <td className="py-2 pr-4 font-mono text-[#59678b]">{row.key}</td>
+                                            <td className="py-2 pr-4 font-medium text-[#31394d]">{row.label ?? "—"}</td>
+                                            <td className="py-2 pr-4 text-[#59678b] max-w-[200px] truncate"
+                                                title={row.description ?? undefined}>
+                                                {row.description ?? "—"}
+                                            </td>
+                                            <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
+                                            <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
+                                            <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
+                                            {canMutate && (
+                                                <td className="py-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openEdit(row)}
+                                                        className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </SectionCard>
+            )}
+
+            {modalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                    onClick={() => !modalSaving && setModalOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-lg border border-[#e6e8ec] bg-white p-4 shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="mb-4 text-lg font-semibold text-[#31394d]">
+                            {modalId ? "Edit Relationship Type" : "Add Relationship Type"}
+                        </h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Key</label>
+                                <input
+                                    type="text"
+                                    value={modalKey}
+                                    onChange={(e) => setModalKey(e.target.value)}
+                                    placeholder="e.g. spouse"
+                                    disabled={isEdit}
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:opacity-60"
+                                />
+                                {isEdit && <p className="mt-0.5 text-xs text-[#59678b]">Key cannot be changed after create.</p>}
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Label</label>
+                                <input
+                                    type="text"
+                                    value={modalLabel}
+                                    onChange={(e) => setModalLabel(e.target.value)}
+                                    placeholder="Display name"
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Description (optional)</label>
+                                <input
+                                    type="text"
+                                    value={modalDescription}
+                                    onChange={(e) => setModalDescription(e.target.value)}
+                                    placeholder="Optional description"
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Sort order</label>
+                                <input
+                                    type="number"
+                                    value={modalSortOrder}
+                                    onChange={(e) => setModalSortOrder(Number(e.target.value) || 0)}
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                />
+                            </div>
+                            {modalId && (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="modal-active"
+                                        checked={modalActive}
+                                        onChange={(e) => setModalActive(e.target.checked)}
+                                    />
+                                    <label htmlFor="modal-active" className="text-sm text-[#31394d]">Active</label>
+                                </div>
+                            )}
+                        </div>
+                        {modalError && <p className="mt-2 text-sm text-red-600">{modalError}</p>}
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => !modalSaving && setModalOpen(false)}
+                                className="rounded border border-[#e6e8ec] px-3 py-1.5 text-sm font-medium hover:bg-[#eef0f4]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={saveModal}
+                                disabled={modalSaving}
+                                className="rounded bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                                {modalSaving ? "Saving…" : modalId ? "Save" : "Create"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
