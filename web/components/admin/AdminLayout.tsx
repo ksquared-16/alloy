@@ -101,10 +101,15 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/system/verticals-industries", label: "Verticals / Industries" },
             { href: "/admin/system/entity-labels", label: "Entity Labels" },
             { href: "/admin/system/statuses", label: "Statuses" },
-            { href: "/admin/system/customer-person-roles", label: "Customer Person Roles" },
-            { href: "/admin/system/person-relationship-types", label: "Person Relationship Types" },
+            {
+                label: "Directory Settings",
+                subItems: [
+                    { href: "/admin/system/customer-person-roles", label: "Person Roles" },
+                    { href: "/admin/system/person-relationship-types", label: "Relationships" },
+                    { href: "/admin/system/db-relationships", label: "DB Relationships" },
+                ],
+            },
             { href: "/admin/system/payouts", label: "Payouts" },
-            { href: "/admin/system/db-relationships", label: "DB Relationships" },
         ],
     },
 ];
@@ -131,10 +136,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/system/verticals-industries": LayoutGrid,
         "/admin/system/entity-labels": Tag,
         "/admin/system/statuses": Tag,
-        "/admin/system/customer-person-roles": Tag,
-        "/admin/system/person-relationship-types": Tag,
         "/admin/system/payouts": DollarSign,
-        "/admin/system/db-relationships": GitBranch,
         "/admin/people": Users,
         "/admin/contacts": Users,
         "/admin/customer-members": Users,
@@ -145,6 +147,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
     if (nestedLabel === "Directory") return Users;
     if (nestedLabel === "Workflows") return GitBranch;
     if (nestedLabel === "Settings") return Settings;
+    if (nestedLabel === "Directory Settings") return Tag;
     return null;
 }
 
@@ -211,6 +214,10 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
         }
         if (pathname === "/admin/contacts" || pathname === "/admin/customer-members") {
             setNestedCollapsed((prev) => (prev["Directory::Legacy"] === false ? prev : { ...prev, "Directory::Legacy": false }));
+        }
+        const directorySettingsPaths = ["/admin/system/customer-person-roles", "/admin/system/person-relationship-types", "/admin/system/db-relationships"];
+        if (directorySettingsPaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev["System::Directory Settings"] === false ? prev : { ...prev, "System::Directory Settings": false }));
         }
     }, [pathname]);
 

@@ -1,10 +1,5 @@
-import ComingSoonPlaceholder from "@/components/admin/ComingSoonPlaceholder";
+import DbRelationshipsClient from "./DbRelationshipsClient";
 
 export default function AdminSystemDbRelationshipsPage() {
-    return (
-        <ComingSoonPlaceholder
-            title="DB Relationships"
-            description="View and manage entity relationships. Placeholder for future configuration."
-        />
-    );
+    return <DbRelationshipsClient />;
 }
