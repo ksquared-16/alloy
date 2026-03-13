@@ -536,12 +536,38 @@ export async function POST(request: NextRequest) {
                             status: "active",
                         };
                         const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
-                        if (!contactErr && newContact) {
-                            contactId = (newContact as { id: string }).id;
-                            await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-                            await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-                            await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                        if (contactErr || !newContact) {
+                            const e = contactErr as { message?: string; code?: string; details?: string; hint?: string } | null;
+                            const errMsg = e?.message ?? "unknown";
+                            const errCode = e?.code ?? "unknown";
+                            console.error("[BOOK_V2_CONFIRM] Compatibility contact insert failed", {
+                                error_message: e?.message,
+                                error_code: e?.code,
+                                error_details: e?.details,
+                                error_hint: e?.hint,
+                                payload: {
+                                    org_id: contactOrgId,
+                                    person_id: personIdFromQuote,
+                                    first_name: contact_first_name ?? p.first_name,
+                                    last_name: contact_last_name ?? p.last_name,
+                                    email: contact_email ?? p.email ?? null,
+                                    phone: contact_phone ?? p.phone ?? null,
+                                    status: "active",
+                                },
+                            });
+                            return NextResponse.json(
+                                {
+                                    ok: false,
+                                    message: `Compatibility contact insert failed: ${errMsg} (code: ${errCode})`,
+                                    booking_attempt_id: booking_attempt_id ?? null,
+                                },
+                                { status: 500 }
+                            );
                         }
+                        contactId = (newContact as { id: string }).id;
+                        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+                        await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+                        await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
                     }
                 }
             }

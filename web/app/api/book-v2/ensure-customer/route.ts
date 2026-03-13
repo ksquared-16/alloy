@@ -3,6 +3,23 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
+function compatContactInsertError(
+    contactErr: unknown,
+    payload: { org_id?: unknown; person_id?: unknown; customer_id?: unknown; first_name?: unknown; last_name?: unknown; email?: unknown; phone?: unknown; status?: unknown }
+): Error {
+    const e = contactErr as { message?: string; code?: string; details?: string; hint?: string } | null;
+    const msg = e?.message ?? "unknown";
+    const code = e?.code ?? "unknown";
+    console.error("[BOOK_V2_ENSURE_CUSTOMER] Compatibility contact insert failed", {
+        error_message: e?.message,
+        error_code: e?.code,
+        error_details: e?.details,
+        error_hint: e?.hint,
+        payload,
+    });
+    return new Error(`Compatibility contact insert failed: ${msg} (code: ${code})`);
+}
+
 /**
  * Ensure person has a customer and a compatibility contact (for payment/Stripe).
  * Returns contact_id and customer_id so the payment flow can use them for SetupIntent.
@@ -50,7 +67,18 @@ async function ensureCustomerForPerson(
             .insert(contactInsert)
             .select("id")
             .single();
-        if (contactErr || !newContact) throw new Error("Failed to create compatibility contact");
+        if (contactErr || !newContact) {
+            throw compatContactInsertError(contactErr ?? null, {
+                org_id: contactOrgId,
+                person_id: personId,
+                customer_id: customerId,
+                first_name: p.first_name,
+                last_name: p.last_name,
+                email: p.email ?? null,
+                phone: p.phone ?? null,
+                status: "active",
+            });
+        }
         const contactId = (newContact as { id: string }).id;
         await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
         await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
@@ -73,7 +101,17 @@ async function ensureCustomerForPerson(
         .insert(contactInsert)
         .select("id")
         .single();
-    if (contactErr || !newContact) throw new Error("Failed to create compatibility contact");
+    if (contactErr || !newContact) {
+        throw compatContactInsertError(contactErr ?? null, {
+            org_id: contactOrgId,
+            person_id: personId,
+            first_name: p.first_name,
+            last_name: p.last_name,
+            email: p.email ?? null,
+            phone: p.phone ?? null,
+            status: "active",
+        });
+    }
     const contactId = (newContact as { id: string }).id;
 
     const payload: Record<string, unknown> = {
