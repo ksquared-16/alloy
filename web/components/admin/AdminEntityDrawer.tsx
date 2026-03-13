@@ -658,9 +658,9 @@ export default function AdminEntityDrawer() {
         setPaymentRelatedData(null);
         setRedemptionRelatedData(null);
         setPersonRelatedData(null);
-        return;
-    }
-    setDrawerTab("overview");
+            return;
+        }
+        setDrawerTab("overview");
         setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
@@ -2240,9 +2240,9 @@ export default function AdminEntityDrawer() {
                                                                 ? (data as { _create?: boolean })._create
                                                                     ? "New Person"
                                                                     : `Person: ${(data._person_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "").slice(0, 8) + "…"}`
-                                                                : drawer.type === "subscriptions"
+                                                : drawer.type === "subscriptions"
                                                                 ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
-                                                                : "Details"
+                                                    : "Details"
         : loading
             ? "Loading…"
             : "Details";
@@ -2280,7 +2280,7 @@ export default function AdminEntityDrawer() {
                             ) : (
                                 <span className="text-[#31394d] ml-1">—</span>
                             )}
-                        </div>
+                    </div>
                         <div className="py-1.5">
                             <span className="text-alloy-slate text-sm font-medium">Linked Vendor: </span>
                             {vendorId ? (
@@ -2505,12 +2505,12 @@ export default function AdminEntityDrawer() {
             {data && !loading && canEditInDrawer(drawer.type) && (
                 <>
             {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
-            {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
-                <>
-                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                    <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                </>
-            )}
+                        {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
+                            <>
+                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                <button type="button" onClick={() => { if (initialJobFormData) setFormData((prev) => ({ ...prev, ...initialJobFormData })); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                            </>
+                        )}
             {INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) && !(data as { _create?: boolean })?._create && canMutate && (nonJobFormDirty || saving || saveSuccess) && (
                 <>
                     {saveSuccess && <span className="text-sm text-alloy-juniper font-medium">Saved</span>}
@@ -2530,13 +2530,13 @@ export default function AdminEntityDrawer() {
             {drawer.type === "locations" && (
                 !isEditing ? (
                     canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                ) : (
-                    <>
-                        <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                        <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                    </>
-                )
-            )}
+                        ) : (
+                            <>
+                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                                <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                            </>
+                        )
+                    )}
             {canMutate && !(data as { _create?: boolean })?._create && drawer.id && drawer.id !== "new" && canHardDeleteEntityType(drawer.type) && (
                 deletionEligibilityLoading ? (
                     <span className="text-xs text-alloy-midnight/50">Checking…</span>
@@ -2548,7 +2548,7 @@ export default function AdminEntityDrawer() {
             )}
                 </>
             )}
-        </div>
+                </div>
     );
 
     const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
@@ -2556,8 +2556,8 @@ export default function AdminEntityDrawer() {
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
             ))}
-        </div>
-    ) : undefined;
+            </div>
+        ) : undefined;
 
     const drawerTitle = typeof title === "string" ? title : title != null ? String(title) : "—";
     return (
@@ -2740,7 +2740,7 @@ export default function AdminEntityDrawer() {
                             ) : personRelatedData ? (
                                 <div className="space-y-6">
                                     {((personRelatedData.customer_persons?.length) ?? 0) > 0 && (
-                                        <section>
+                            <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Customers</h3>
                                             <ul className="space-y-1.5 text-sm">
                                                 {personRelatedData.customer_persons.map((cp: { id: string; customer_id: string; _customer_name?: string | null; role?: string | null; _role_label?: string | null }) => (
@@ -2767,7 +2767,7 @@ export default function AdminEntityDrawer() {
                                                     </li>
                                                 ))}
                                             </ul>
-                                        </section>
+                            </section>
                                     )}
                                     {((personRelatedData.compatibility_contacts?.length) ?? 0) > 0 && (
                                         <section>
@@ -3724,8 +3724,8 @@ export default function AdminEntityDrawer() {
                             ) : (
                                 <p className="text-sm text-alloy-midnight/60">No payments available.</p>
                             )}
-                        </div>
-                    )}
+                                        </div>
+                                    )}
                     {drawerTab === "documents" && drawer.type === "customer_members" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -4003,9 +4003,9 @@ export default function AdminEntityDrawer() {
                                 <>
                                     <h3 className={DRAWER_SECTION_HEADER_CLASS}>IDs &amp; raw fields</h3>
                                     {["id", "created_at", "updated_at", "external_id", "stripe_customer_id", "default_payment_method_id", "customer_id", "primary_contact_id", "opportunity_id", "job_id", "schedule_id", "vertical_id", "pipeline_stage_id", "job_status_id", "vendor_id", "assigned_vendor_id"].map((key) => {
-                                        const val = data[key];
-                                        if (val === undefined) return null;
-                                        return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
+                                    const val = data[key];
+                                    if (val === undefined) return null;
+                                    return <div key={key} className="text-sm"><span className="text-alloy-midnight/60">{key}:</span> <span className="font-mono text-alloy-midnight/90">{typeof val === "string" && val.length > 24 ? val.slice(0, 8) + "…" : String(val)}</span></div>;
                                     })}
                                 </>
                             )}
@@ -4087,12 +4087,12 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                            {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
                                             <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                         )}
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} onBlur={() => { if (drawer.type === "contacts" && nonJobFormDirty) saveEdit(); }} rows={2} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                    </div>
-                                    <Field label="Archived" value={data.archived_at ? "Yes" : "No"} />
+                                            </div>
+                                            <Field label="Archived" value={data.archived_at ? "Yes" : "No"} />
                                     <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     <div className="pt-2 border-t border-[#e6e8ec]">
                                         <strong className="text-alloy-midnight/70">Vendor:</strong>{" "}
@@ -4177,27 +4177,27 @@ export default function AdminEntityDrawer() {
                                         <>
                                             <div className="space-y-4">
                                                 <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Display name *</label><input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                                <div>
+                                            <div>
                                                     <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Relationship</label>
                                                     <select value={String(formData.relationship ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
-                                                        <option value="">— Select —</option>
-                                                        {memberRelationshipOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                                                    </select>
-                                                    {(formData.relationship as string) === "other" && (
+                                                    <option value="">— Select —</option>
+                                                    {memberRelationshipOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                                </select>
+                                                {(formData.relationship as string) === "other" && (
                                                         <input value={String(formData.relationship_custom ?? "")} onChange={(e) => setFormData((f) => ({ ...f, relationship_custom: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} placeholder="Specify relationship" disabled={!canMutate} className={`mt-1 ${INLINE_EDIT_INPUT_CLASS}`} />
-                                                    )}
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-2">
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">First name</label><input value={String(formData.first_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, first_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                                </div>
+                                            </div>
                                                 <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                                {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                                 )}
                                                 <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
-                                            </div>
-                                            <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
+                                    </div>
+                                    <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                             {canMutate && (
                                                 <div className="pt-2 border-t border-[#e6e8ec] flex gap-2">
                                                     {!memberDeleteConfirm ? (
@@ -4231,13 +4231,13 @@ export default function AdminEntityDrawer() {
                             {(data as { _create?: boolean })?._create ? (
                                 <p className="text-sm text-alloy-midnight/70">Create from this drawer is not yet available. Close and use another flow to add a customer.</p>
                             ) : (
-                            <>
+                                <>
                             <div className="space-y-4">
                                 <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "customers" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customers" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                 )}
-                            </div>
+                                    </div>
                                             {(data._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null) && (
                                                 <div className="py-1.5">
                                                     <strong className="text-[#45506c] text-sm">Primary Contact:</strong>{" "}
@@ -4269,10 +4269,10 @@ export default function AdminEntityDrawer() {
                                                     {" · "}Locations {(data._counts as { locations?: number }).locations ?? 0}
                                                 </div>
                                             )}
-                            </>
-                            )}
                                         </>
                                     )}
+                                </>
+                            )}
                             {drawer.type === "vendors" && (
                                 <>
                                     <div className="space-y-0">
@@ -4284,13 +4284,13 @@ export default function AdminEntityDrawer() {
                                                 <div className="space-y-4">
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} placeholder="Optional" /></div>
-                                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
+                                                        {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
                                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                                     )}
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                 </div>
-                                                <DrawerLinkWithName label="Primary contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
+                                                        <DrawerLinkWithName label="Primary contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4" open>
@@ -4527,25 +4527,25 @@ export default function AdminEntityDrawer() {
                                     <div className="space-y-4">
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        <div>
+                                            <div>
                                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Stage</label>
                                             <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
-                                                <option value="">— None —</option>
-                                                {pipelines.map((p) => {
-                                                    const pipelineStages = stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position);
-                                                    return pipelineStages.map((s) => (
-                                                        <option key={s.id} value={s.id}>{p.name}: {s.name}</option>
-                                                    ));
-                                                })}
-                                            </select>
-                                        </div>
+                                                    <option value="">— None —</option>
+                                                    {pipelines.map((p) => {
+                                                        const pipelineStages = stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position);
+                                                        return pipelineStages.map((s) => (
+                                                            <option key={s.id} value={s.id}>{p.name}: {s.name}</option>
+                                                        ));
+                                                    })}
+                                                </select>
+                                            </div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical ID</label><input value={String(formData.vertical_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        {statusDefsLoading ? null : (
+                                            {statusDefsLoading ? null : (
                                             <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                         )}
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} rows={2} /></div>
-                                    </div>
+                                            </div>
                                     <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     <DrawerLinkWithName label="Primary Contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
                                 </>
@@ -4855,10 +4855,10 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        {statusDefsLoading ? null : (
+                                            {statusDefsLoading ? null : (
                                             <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                         )}
-                                    </div>
+                                            </div>
                                     {(data.canceled_at as string) && (
                                         <div className="text-alloy-ember text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
                                     )}

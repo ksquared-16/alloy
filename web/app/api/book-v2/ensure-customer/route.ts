@@ -15,11 +15,13 @@ async function ensureCustomerForPerson(
 ): Promise<{ customerId: string; contactId: string | null }> {
     const { data: person } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, email, phone")
+        .select("id, first_name, last_name, email, phone, org_id")
         .eq("id", personId)
         .single();
     if (!person) throw new Error("Person not found");
-    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
+    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; org_id?: string | null };
+    const contactOrgId = p.org_id ?? params.org_id;
+    if (!contactOrgId) throw new Error("Missing org_id for contact (person and env)");
 
     const { data: cp } = await supabase
         .from("customer_persons")
@@ -34,14 +36,15 @@ async function ensureCustomerForPerson(
         if (primaryContactId) return { customerId, contactId: primaryContactId };
         // Customer exists but no contact: create compat contact and set as primary for payment/Stripe
         const contactInsert: Record<string, unknown> = {
+            org_id: contactOrgId,
             first_name: p.first_name,
             last_name: p.last_name,
             email: p.email ?? null,
             phone: p.phone ?? null,
             person_id: personId,
             contact_type: "lead",
+            status: "active",
         };
-        if (params.org_id) contactInsert.org_id = params.org_id;
         const { data: newContact, error: contactErr } = await supabase
             .from("contacts")
             .insert(contactInsert)
@@ -56,14 +59,15 @@ async function ensureCustomerForPerson(
 
     const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.email || p.phone || "New Customer";
     const contactInsert: Record<string, unknown> = {
+        org_id: contactOrgId,
         first_name: p.first_name,
         last_name: p.last_name,
         email: p.email ?? null,
         phone: p.phone ?? null,
         person_id: personId,
         contact_type: "lead",
+        status: "active",
     };
-    if (params.org_id) contactInsert.org_id = params.org_id;
     const { data: newContact, error: contactErr } = await supabase
         .from("contacts")
         .insert(contactInsert)
@@ -79,7 +83,7 @@ async function ensureCustomerForPerson(
         primary_contact_id: contactId,
         metadata: { source: "book-v2-ensure-customer" },
     };
-    if (params.org_id) payload.org_id = params.org_id;
+    payload.org_id = contactOrgId;
 
     const { data: newCustomer, error: insErr } = await supabase
         .from("customers")
@@ -96,7 +100,7 @@ async function ensureCustomerForPerson(
                     await supabase.from("customer_persons").insert({
                         customer_id: existing.id,
                         person_id: personId,
-                        org_id: params.org_id,
+                        org_id: contactOrgId,
                     });
                 }
                 return { customerId: (existing as { id: string }).id, contactId };
@@ -109,7 +113,7 @@ async function ensureCustomerForPerson(
     await supabase.from("customer_persons").insert({
         customer_id: customerId,
         person_id: personId,
-        org_id: params.org_id,
+        org_id: contactOrgId,
     });
     return { customerId, contactId };
 }

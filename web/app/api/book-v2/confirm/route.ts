@@ -519,25 +519,29 @@ export async function POST(request: NextRequest) {
 
             // Person path: ensure we have a compatibility contact for downstream (discount_redemptions, job.primary_contact_id, etc.)
             if (personIdFromQuote && !contactId) {
-                const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).single();
+                const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone, org_id").eq("id", personIdFromQuote).single();
                 if (person) {
-                    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
-                    const contactInsert: Record<string, unknown> = {
-                        first_name: contact_first_name ?? p.first_name,
-                        last_name: contact_last_name ?? p.last_name,
-                        email: contact_email ?? p.email ?? null,
-                        phone: contact_phone ?? p.phone ?? null,
-                        person_id: personIdFromQuote,
-                        contact_type: "lead",
-                    };
+                    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; org_id?: string | null };
                     const oppOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-                    if (oppOrgId) contactInsert.org_id = oppOrgId;
-                    const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
-                    if (!contactErr && newContact) {
-                        contactId = (newContact as { id: string }).id;
-                        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-                        await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-                        await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                    const contactOrgId = p.org_id ?? oppOrgId;
+                    if (contactOrgId) {
+                        const contactInsert: Record<string, unknown> = {
+                            org_id: contactOrgId,
+                            first_name: contact_first_name ?? p.first_name,
+                            last_name: contact_last_name ?? p.last_name,
+                            email: contact_email ?? p.email ?? null,
+                            phone: contact_phone ?? p.phone ?? null,
+                            person_id: personIdFromQuote,
+                            contact_type: "lead",
+                            status: "active",
+                        };
+                        const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
+                        if (!contactErr && newContact) {
+                            contactId = (newContact as { id: string }).id;
+                            await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+                            await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+                            await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                        }
                     }
                 }
             }
