@@ -101,7 +101,7 @@ async function ensureCustomerForPersonInConfirm(
             if (customerId) {
                 const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", customerId).eq("person_id", personId).maybeSingle();
                 if (!existingCp) {
-                    const cpInsert = { customer_id: customerId, person_id: personId, org_id: contactOrgId };
+                    const cpInsert = { customer_id: customerId, person_id: personId, org_id: contactOrgId, role_type: "primary_contact", is_primary: true };
                     const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
                     if (cpErr) {
                         console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (reuse existing customer)", {
@@ -175,7 +175,7 @@ async function ensureCustomerForPersonInConfirm(
                 await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
                 const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
                 if (!existingCp) {
-                    const cpInsert = { customer_id: existing.id, person_id: personId, org_id: params.org_id };
+                    const cpInsert = { customer_id: existing.id, person_id: personId, org_id: params.org_id, role_type: "primary_contact", is_primary: true };
                     const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
                     if (cpErr) {
                         console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (23505 reuse)", {
@@ -197,7 +197,7 @@ async function ensureCustomerForPersonInConfirm(
     if (contactId) {
         await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
     }
-    const cpInsert = { customer_id: customerId, person_id: personId, org_id: params.org_id };
+    const cpInsert = { customer_id: customerId, person_id: personId, org_id: params.org_id, role_type: "primary_contact", is_primary: true };
     const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
     if (cpErr) {
         console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (ensureCustomerForPersonInConfirm)", {
@@ -269,7 +269,7 @@ async function ensureCustomerForContactInConfirm(
             .eq("person_id", c.person_id)
             .maybeSingle();
         if (!existingCp) {
-            const cpInsert = { customer_id: customerId, person_id: c.person_id, org_id: params.org_id };
+            const cpInsert = { customer_id: customerId, person_id: c.person_id, org_id: params.org_id, role_type: "primary_contact", is_primary: true };
             const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
             if (cpErr) {
                 console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (ensureCustomerForContactInConfirm)", {
@@ -695,6 +695,8 @@ export async function POST(request: NextRequest) {
                                     customer_id: customerId,
                                     person_id: personIdFromQuote,
                                     org_id: contactOrgId,
+                                    role_type: "primary_contact",
+                                    is_primary: true,
                                 });
                                 if (cpErr) {
                                     console.error("[BOOK_V2_CONFIRM] customer_persons insert failed", cpErr);
@@ -750,6 +752,8 @@ export async function POST(request: NextRequest) {
                                     customer_id: customerId,
                                     person_id: personIdFromQuote,
                                     org_id: contactOrgId,
+                                    role_type: "primary_contact",
+                                    is_primary: true,
                                 });
                                 if (cpErr2) console.error("[BOOK_V2_CONFIRM] customer_persons insert failed", cpErr2);
                             }

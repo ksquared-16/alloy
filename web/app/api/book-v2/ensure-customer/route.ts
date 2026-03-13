@@ -24,6 +24,35 @@ async function findExistingContact(
     return null;
 }
 
+const SAFE_PAYLOAD_KEYS = ["org_id", "person_id", "customer_id", "first_name", "last_name", "email", "phone", "status", "name", "vertical_id", "primary_contact_id", "metadata"] as const;
+
+function safePayload(obj: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const k of SAFE_PAYLOAD_KEYS) {
+        if (obj[k] !== undefined) out[k] = obj[k];
+    }
+    return out;
+}
+
+function logAndThrowCustomerError(
+    context: string,
+    err: unknown,
+    payload: Record<string, unknown>
+): never {
+    const e = err as { message?: string; code?: string; details?: string; hint?: string } | null;
+    const msg = e?.message ?? "unknown";
+    const code = e?.code ?? "unknown";
+    const detail = {
+        error_message: e?.message,
+        error_code: e?.code,
+        error_details: e?.details,
+        error_hint: e?.hint,
+        payload: safePayload(payload),
+    };
+    console.error(`[BOOK_V2_ENSURE_CUSTOMER] ${context}`, detail);
+    throw new Error(`Ensure customer: ${context}: ${msg} (code: ${code})`);
+}
+
 function compatContactInsertError(
     contactErr: unknown,
     payload: { org_id?: unknown; person_id?: unknown; customer_id?: unknown; first_name?: unknown; last_name?: unknown; email?: unknown; phone?: unknown; status?: unknown }
@@ -67,6 +96,7 @@ async function ensureCustomerForPerson(
         .eq("person_id", personId)
         .limit(1)
         .maybeSingle();
+    console.log("[BOOK_V2_ENSURE_CUSTOMER] Path: person_id=%s contactOrgId=%s customer_persons=%s", personId, contactOrgId ?? null, cp?.customer_id ?? "none");
     if (cp?.customer_id) {
         const customerId = (cp as { customer_id: string }).customer_id;
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
@@ -134,6 +164,7 @@ async function ensureCustomerForPerson(
     if (existingContact) {
         contactId = existingContact.id;
         const existingCustomerId = existingContact.customer_id ?? null;
+        console.log("[BOOK_V2_ENSURE_CUSTOMER] Existing contact found contact_id=%s contact.customer_id=%s", contactId, existingCustomerId ?? "null");
         if (existingCustomerId) {
             const updatePayload: Record<string, unknown> = {
                 person_id: personId,
@@ -143,12 +174,18 @@ async function ensureCustomerForPerson(
             await supabase.from("contacts").update(updatePayload).eq("id", contactId);
             const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existingCustomerId).eq("person_id", personId).maybeSingle();
             if (!existingCp) {
-                const { error: cpErr } = await supabase.from("customer_persons").insert({
-                    customer_id: existingCustomerId,
-                    person_id: personId,
-                    org_id: contactOrgId,
-                });
-                if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+                const cpInsert = { customer_id: existingCustomerId, person_id: personId, org_id: contactOrgId, role_type: "primary_contact", is_primary: true };
+                const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+                if (cpErr) {
+                    console.error("[BOOK_V2_ENSURE_CUSTOMER] customer_persons insert failed (reuse existing customer)", {
+                        error_message: (cpErr as { message?: string }).message,
+                        error_code: (cpErr as { code?: string }).code,
+                        error_details: (cpErr as { details?: string }).details,
+                        error_hint: (cpErr as { hint?: string }).hint,
+                        payload: cpInsert,
+                    });
+                    throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+                }
             }
             const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", existingCustomerId).single();
             const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
@@ -169,6 +206,7 @@ async function ensureCustomerForPerson(
             metadata: { source: "book-v2-ensure-customer" },
         };
         payload.org_id = contactOrgId;
+        console.log("[BOOK_V2_ENSURE_CUSTOMER] Customer insert (existing contact, no customer)", safePayload({ ...payload, person_id: personId }));
         const { data: newCustomer, error: insErr } = await supabase
             .from("customers")
             .insert(payload)
@@ -178,29 +216,42 @@ async function ensureCustomerForPerson(
             if (insErr?.code === "23505") {
                 const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
                 if (existing?.id) {
+                    console.log("[BOOK_V2_ENSURE_CUSTOMER] Reusing customer after 23505", { existing_customer_id: existing.id, contact_id: contactId });
                     await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
                     const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
                     if (!existingCp) {
-                        const { error: cpErr } = await supabase.from("customer_persons").insert({
-                            customer_id: existing.id,
-                            person_id: personId,
-                            org_id: contactOrgId,
-                        });
-                        if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+                        const cpInsert = { customer_id: existing.id, person_id: personId, org_id: contactOrgId, role_type: "primary_contact", is_primary: true };
+                        const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+                        if (cpErr) {
+                            console.error("[BOOK_V2_ENSURE_CUSTOMER] customer_persons insert failed (after 23505 reuse)", {
+                                error_message: (cpErr as { message?: string }).message,
+                                error_code: (cpErr as { code?: string }).code,
+                                error_details: (cpErr as { details?: string }).details,
+                                error_hint: (cpErr as { hint?: string }).hint,
+                                payload: cpInsert,
+                            });
+                            throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+                        }
                     }
                     return { customerId: (existing as { id: string }).id, contactId };
                 }
             }
-            throw new Error((insErr as { message?: string })?.message ?? "Failed to create customer");
+            logAndThrowCustomerError("customer insert (existing contact path)", insErr, payload as Record<string, unknown>);
         }
         const customerId = (newCustomer as { id: string }).id;
         await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-        const { error: cpErr } = await supabase.from("customer_persons").insert({
-            customer_id: customerId,
-            person_id: personId,
-            org_id: contactOrgId,
-        });
-        if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+        const cpInsert = { customer_id: customerId, person_id: personId, org_id: contactOrgId, role_type: "primary_contact", is_primary: true };
+        const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+        if (cpErr) {
+            console.error("[BOOK_V2_ENSURE_CUSTOMER] customer_persons insert failed (new customer, existing contact)", {
+                error_message: (cpErr as { message?: string }).message,
+                error_code: (cpErr as { code?: string }).code,
+                error_details: (cpErr as { details?: string }).details,
+                error_hint: (cpErr as { hint?: string }).hint,
+                payload: cpInsert,
+            });
+            throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+        }
         return { customerId, contactId };
     }
     const contactInsert: Record<string, unknown> = {
@@ -240,6 +291,7 @@ async function ensureCustomerForPerson(
     };
     payload.org_id = contactOrgId;
 
+    console.log("[BOOK_V2_ENSURE_CUSTOMER] Customer insert (new contact path)", safePayload({ ...payload, person_id: personId }));
     const { data: newCustomer, error: insErr } = await supabase
         .from("customers")
         .insert(payload)
@@ -249,29 +301,42 @@ async function ensureCustomerForPerson(
         if (insErr?.code === "23505") {
             const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
             if (existing?.id) {
+                console.log("[BOOK_V2_ENSURE_CUSTOMER] Reusing customer after 23505 (new contact path)", { existing_customer_id: existing.id, contact_id: contactId });
                 await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
                 const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
                 if (!existingCp) {
-                    const { error: cpErr } = await supabase.from("customer_persons").insert({
-                        customer_id: existing.id,
-                        person_id: personId,
-                        org_id: contactOrgId,
-                    });
-                    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+                    const cpInsert = { customer_id: existing.id, person_id: personId, org_id: contactOrgId, role_type: "primary_contact", is_primary: true };
+                    const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+                    if (cpErr) {
+                        console.error("[BOOK_V2_ENSURE_CUSTOMER] customer_persons insert failed (23505 reuse, new contact path)", {
+                            error_message: (cpErr as { message?: string }).message,
+                            error_code: (cpErr as { code?: string }).code,
+                            error_details: (cpErr as { details?: string }).details,
+                            error_hint: (cpErr as { hint?: string }).hint,
+                            payload: cpInsert,
+                        });
+                        throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+                    }
                 }
                 return { customerId: (existing as { id: string }).id, contactId };
             }
         }
-        throw new Error(insErr?.message ?? "Failed to create customer");
+        logAndThrowCustomerError("customer insert (new contact path)", insErr, payload as Record<string, unknown>);
     }
     const customerId = (newCustomer as { id: string }).id;
     await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-    const { error: cpErr } = await supabase.from("customer_persons").insert({
-        customer_id: customerId,
-        person_id: personId,
-        org_id: contactOrgId,
-    });
-    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+    const cpInsert = { customer_id: customerId, person_id: personId, org_id: contactOrgId, role_type: "primary_contact", is_primary: true };
+    const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+    if (cpErr) {
+        console.error("[BOOK_V2_ENSURE_CUSTOMER] customer_persons insert failed (new contact path)", {
+            error_message: (cpErr as { message?: string }).message,
+            error_code: (cpErr as { code?: string }).code,
+            error_details: (cpErr as { details?: string }).details,
+            error_hint: (cpErr as { hint?: string }).hint,
+            payload: cpInsert,
+        });
+        throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+    }
     return { customerId, contactId };
 }
 
@@ -301,9 +366,15 @@ export async function POST(request: NextRequest) {
             customer_id: customerId,
         });
     } catch (err) {
-        console.error("[BOOK_V2_ENSURE_CUSTOMER]", err);
+        const msg = err instanceof Error ? err.message : "Ensure customer failed";
+        console.error("[BOOK_V2_ENSURE_CUSTOMER]", msg, err);
+        const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
         return NextResponse.json(
-            { ok: false, message: err instanceof Error ? err.message : "Ensure customer failed" },
+            {
+                ok: false,
+                message: msg,
+                ...(codeMatch && { error_code: codeMatch[1] }),
+            },
             { status: 500 }
         );
     }
