@@ -31,7 +31,27 @@ async function ensureCustomerForPerson(
         const customerId = (cp as { customer_id: string }).customer_id;
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
         const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
-        return { customerId, contactId: primaryContactId };
+        if (primaryContactId) return { customerId, contactId: primaryContactId };
+        // Customer exists but no contact: create compat contact and set as primary for payment/Stripe
+        const contactInsert: Record<string, unknown> = {
+            first_name: p.first_name,
+            last_name: p.last_name,
+            email: p.email ?? null,
+            phone: p.phone ?? null,
+            person_id: personId,
+            contact_type: "lead",
+        };
+        if (params.org_id) contactInsert.org_id = params.org_id;
+        const { data: newContact, error: contactErr } = await supabase
+            .from("contacts")
+            .insert(contactInsert)
+            .select("id")
+            .single();
+        if (contactErr || !newContact) throw new Error("Failed to create compatibility contact");
+        const contactId = (newContact as { id: string }).id;
+        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+        await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+        return { customerId, contactId };
     }
 
     const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.email || p.phone || "New Customer";

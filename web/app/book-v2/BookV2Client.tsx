@@ -1296,9 +1296,16 @@ export default function BookV2Client() {
                         } catch {
                             // ignore
                         }
+                    } else {
+                        // Person-first path requires contact + customer; do not proceed with null ids
+                        const msg = ensureData?.message ?? (ensureRes.ok ? "Missing contact or customer" : "Could not set up payment profile");
+                        setPaymentError(msg);
+                        return;
                     }
                 } catch (e) {
                     console.warn("[BOOK_V2_FLOW] ensure-customer failed", e);
+                    setPaymentError("Could not set up payment profile. Please refresh and try again.");
+                    return;
                 }
             }
 
