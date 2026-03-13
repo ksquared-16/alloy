@@ -202,7 +202,7 @@ function DrawerLinkWithName({
 }: {
     label: string;
     id: string | null;
-    type: "contacts" | "customers" | "customer_members" | "opportunities" | "jobs" | "vendors" | "locations";
+    type: "contacts" | "customers" | "customer_members" | "opportunities" | "jobs" | "vendors" | "locations" | "persons";
     displayName: string | null | undefined;
 }) {
     const { openDrawer } = useAdminDrawer();
