@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
 const ALLOWED_KEYS = [
     "name", "job_date", "job_time_window", "status", "status_key", "vertical_id", "quote_total", "notes", "pipeline_stage_id",
@@ -68,6 +69,9 @@ export async function PATCH(
             .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (orgId) {
+            await upsertFieldValuesFromBody(supabase, orgId, "opportunity", id, body, ALLOWED_KEYS);
+        }
         if (updates.status_key !== undefined && orgId) {
             const newStatusKey = (updates.status_key as string) ?? null;
             const metadata: Record<string, unknown> = {};

@@ -4,6 +4,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/admin/postScheduleCompletion";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
@@ -134,6 +135,8 @@ export async function PATCH(
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        await upsertFieldValuesFromBody(supabase, ctx.orgId, "schedule", id, body, ALLOWED_KEYS);
 
         const newStatusKey = updates.status_key !== undefined ? (updates.status_key as string | null) : previousStatusKey;
         const transitionedToCompleted =

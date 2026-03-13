@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
 const ALLOWED_KEYS = [
     "vendor_status_id",
@@ -94,6 +95,9 @@ export async function PATCH(
             .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (orgId) {
+            await upsertFieldValuesFromBody(supabase, orgId, "vendor", id, body, ALLOWED_KEYS);
+        }
         if (updates.status_key !== undefined && orgId) {
             const newStatusKey = (updates.status_key as string) ?? null;
             await emitStatusChangedEvent({

@@ -1651,20 +1651,24 @@ export default function AdminEntityDrawer() {
             discount_code_id: (data.discount_code_id as string) ?? "",
             assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
         };
+        const jobDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+        for (const d of jobDefs) { if (!d.is_system) (snapshot as Record<string, unknown>)[d.field_key] = (data as Record<string, unknown>)[d.field_key] ?? ""; }
         setFormData((prev) => ({ ...prev, ...snapshot }));
         setInitialJobFormData(snapshot);
     }, [drawer.type, drawer.id, data?.id]);
 
     const jobFormDirty = useMemo(() => {
         if (drawer.type !== "jobs" || !initialJobFormData) return false;
-        return JOB_FORM_KEYS.some((k) => {
+        if (JOB_FORM_KEYS.some((k) => {
             const a = formData[k];
             const b = initialJobFormData[k];
             if (a === b) return false;
             if (typeof a === "number" && typeof b === "number") return a !== b;
             return String(a ?? "") !== String(b ?? "");
-        });
-    }, [drawer.type, initialJobFormData, formData.title, formData.service_key, formData.job_type, formData.description, formData.scheduled_at, formData.completed_at, formData.service_frequency_key, formData.is_recurring, formData.status_key, formData.internal_notes, formData.gross_price_cents, formData.discount_amount, formData.primary_contact_id, formData.customer_id, formData.opportunity_id, formData.location_id, formData.discount_code_id, formData.assigned_vendor_id]);
+        })) return true;
+        const jobDefs = (data?._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+        return jobDefs.some((d) => !d.is_system && String((formData as Record<string, unknown>)[d.field_key] ?? "") !== String((data as Record<string, unknown>)?.[d.field_key] ?? ""));
+    }, [drawer.type, initialJobFormData, data, formData]);
 
     useEffect(() => {
         if (!data || !drawer.type || !INLINE_EDIT_ENTITY_TYPES.includes(drawer.type as (typeof INLINE_EDIT_ENTITY_TYPES)[number]) || (data as { _create?: boolean })?._create) {
@@ -1694,6 +1698,8 @@ export default function AdminEntityDrawer() {
                 external_source: (data.external_source as string) ?? "",
                 external_id: (data.external_id as string) ?? "",
             };
+            const custDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of custDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "vendors") {
             const v = data as { name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null; external_source?: string | null; external_id?: string | null; w9_received?: boolean | null; ach_verified?: boolean | null; consent_contractor_agreement?: boolean | null; consent_legal?: boolean | null; consent_marketing?: boolean | null; payout_override_type?: string | null; payout_override_value?: number | null };
             initial = {
@@ -1723,6 +1729,8 @@ export default function AdminEntityDrawer() {
                 payout_override_type: v.payout_override_type ?? "",
                 payout_override_value: typeof v.payout_override_value === "number" ? v.payout_override_value : "",
             };
+            const vendorDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of vendorDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
             initial = {
@@ -1745,6 +1753,8 @@ export default function AdminEntityDrawer() {
                 notes: (meta.notes as string) ?? "",
                 customer_notes: (meta.notes as string) ?? "",
             };
+            const oppDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of oppDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "schedules") {
             initial = {
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
@@ -1752,6 +1762,8 @@ export default function AdminEntityDrawer() {
                 timezone: data.timezone ?? "",
                 status_key: (data.status_key as string) ?? "",
             };
+            const schedDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of schedDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "customer_members") {
             const rel = (data.relationship as string) ?? "";
             const meta = (data.metadata as Record<string, unknown>) || {};
@@ -2292,11 +2304,17 @@ export default function AdminEntityDrawer() {
     const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
     const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", payments: "Payments", documents: "Documents", ledger: "Ledger" };
 
+    const hasFieldDefsForOverview = useMemo(() => {
+        if (!data || (data as { _create?: boolean })._create) return false;
+        const defs = (data._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
+        return defs.some((d) => d.is_visible_in_drawer !== false);
+    }, [data]);
     const useConfigDrivenOverview =
         !!presentationType &&
-        !!presentationConfig?.drawer?.overviewSections?.length &&
-        presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0) &&
-        !(data as { _create?: boolean })?._create;
+        !(data as { _create?: boolean })?._create &&
+        (hasFieldDefsForOverview ||
+            (!!presentationConfig?.drawer?.overviewSections?.length &&
+                presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
 
     const overviewCustomContent = useMemo(() => {
         if (!data || !drawer.type) return {};
@@ -2532,8 +2550,8 @@ export default function AdminEntityDrawer() {
         return {};
     }, [drawer.type, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer]);
 
-    const personOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
-        if (drawer.type !== "persons" || !data || (data as { _create?: boolean })._create) return [];
+    const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
+        if (!data || (data as { _create?: boolean })._create) return [];
         const defs = (data._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
         const visible = defs.filter((d) => d.is_visible_in_drawer !== false);
         if (visible.length === 0) return [];
@@ -4109,7 +4127,7 @@ export default function AdminEntityDrawer() {
                             entityType={presentationType}
                             data={data as Record<string, unknown>}
                             customSectionContent={overviewCustomContent}
-                            overviewSectionsOverride={drawer.type === "persons" && personOverviewSections.length > 0 ? personOverviewSections : undefined}
+                            overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
                             isEditing={isEditing}
                             formData={formData}
                             onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}

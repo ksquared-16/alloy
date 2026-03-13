@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ENTITY_TYPE_PERSON = "person";
+const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule"] as const;
 
 export type FieldDef = {
     id: string;
@@ -42,9 +42,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || null;
 
-    if (!entityType || entityType !== ENTITY_TYPE_PERSON) {
+    if (!entityType || !ALLOWED_ENTITY_TYPES.includes(entityType as (typeof ALLOWED_ENTITY_TYPES)[number])) {
         return NextResponse.json(
-            { error: "entity_type is required and must be 'person'" },
+            { error: `entity_type is required and must be one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }
         );
     }
@@ -65,10 +65,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ field_definitions: rows ?? [] });
 }
 
-const PERSON_FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
+const ALLOWED_FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
 const FIELD_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
-/** POST: create a custom field definition. Only entity_type=person, is_system=false. Admin only. */
+/** POST: create a custom field definition. entity_type must be one of allowed types, is_system=false. Admin only. */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -89,9 +89,9 @@ export async function POST(request: NextRequest) {
     }
 
     const entity_type = typeof body.entity_type === "string" ? body.entity_type.trim() : "";
-    if (entity_type !== ENTITY_TYPE_PERSON) {
+    if (!ALLOWED_ENTITY_TYPES.includes(entity_type as (typeof ALLOWED_ENTITY_TYPES)[number])) {
         return NextResponse.json(
-            { error: "Only entity_type 'person' is supported for custom fields" },
+            { error: `entity_type must be one of: ${ALLOWED_ENTITY_TYPES.join(", ")}` },
             { status: 400 }
         );
     }
@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
     }
 
     const field_type = typeof body.field_type === "string" ? body.field_type.trim().toLowerCase() : "text";
-    if (!PERSON_FIELD_TYPES.includes(field_type as (typeof PERSON_FIELD_TYPES)[number])) {
+    if (!ALLOWED_FIELD_TYPES.includes(field_type as (typeof ALLOWED_FIELD_TYPES)[number])) {
         return NextResponse.json(
-            { error: `field_type must be one of: ${PERSON_FIELD_TYPES.join(", ")}` },
+            { error: `field_type must be one of: ${ALLOWED_FIELD_TYPES.join(", ")}` },
             { status: 400 }
         );
     }

@@ -5,7 +5,53 @@ import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
+const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
+    customers: "customer",
+    jobs: "job",
+    opportunities: "opportunity",
+    vendors: "vendor",
+    schedules: "schedule",
+    persons: "person",
+};
+
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
+
+async function attachFieldDefinitionsAndValues(
+    supabase: ReturnType<typeof createAdminClient>,
+    out: Record<string, unknown>,
+    drawerType: string,
+    entityId: string
+): Promise<void> {
+    const entityType = DRAWER_TYPE_TO_FIELD_ENTITY_TYPE[drawerType];
+    if (!entityType) return;
+    let orgId: string | null = (out.org_id as string) ?? null;
+    if (!orgId && drawerType === "schedules" && out._job) {
+        orgId = (out._job as { org_id?: string }).org_id ?? null;
+    }
+    if (!orgId) return;
+    const { data: defRows } = await supabase
+        .from("field_definitions")
+        .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
+        .eq("org_id", orgId)
+        .eq("entity_type", entityType)
+        .eq("is_active", true)
+        .order("section_key", { ascending: true })
+        .order("sort_order", { ascending: true });
+    const fieldDefs = (defRows ?? []) as { id: string; field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_system: boolean; is_visible_in_drawer: boolean }[];
+    out._field_definitions = fieldDefs;
+    if (fieldDefs.length === 0) return;
+    const defIds = fieldDefs.map((d) => d.id);
+    const { data: fvRows } = await supabase
+        .from("field_values")
+        .select("field_definition_id, value")
+        .eq("entity_type", entityType)
+        .eq("entity_id", entityId)
+        .in("field_definition_id", defIds);
+    const valueByDefId = new Map((fvRows ?? []).map((r: { field_definition_id: string; value: string | null }) => [r.field_definition_id, r.value ?? ""]));
+    for (const d of fieldDefs) {
+        if (!d.is_system) (out as Record<string, unknown>)[d.field_key] = valueByDefId.get(d.id) ?? "";
+    }
+}
 
 export async function GET(
     request: NextRequest,
@@ -122,6 +168,7 @@ export async function GET(
                 .limit(1)
                 .maybeSingle();
             out._next_schedule = (nextSched as { start_at?: string } | null)?.start_at ?? null;
+            await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
             return NextResponse.json(out);
         }
         if (type === "opportunities") {
@@ -185,6 +232,7 @@ export async function GET(
                 : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
                 : null;
             out._quote_total_display = qt;
+            await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
             return NextResponse.json(out);
         }
         if (type === "contacts") {
@@ -331,6 +379,7 @@ export async function GET(
             } else {
                 out._counts = { contacts: 0, opportunities: 0, jobs: 0, schedules: 0, locations: 0 };
             }
+            await attachFieldDefinitionsAndValues(supabase, out, "customers", id);
             return NextResponse.json(out);
         }
         if (type === "schedules") {
@@ -429,6 +478,7 @@ export async function GET(
                 out._location_label = null;
                 out._location = null;
             }
+            await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             return NextResponse.json(out);
         }
         if (type === "locations") {
@@ -612,6 +662,7 @@ export async function GET(
             });
             out._vendor_contacts = contactsWithRole;
 
+            await attachFieldDefinitionsAndValues(supabase, out, "vendors", id);
             return NextResponse.json(out);
         }
         if (type === "subscriptions") {
@@ -830,31 +881,7 @@ export async function GET(
             out._compatibility_contacts = contactRows ?? [];
             out._compatibility_members = memberRows ?? [];
 
-            const { data: defRows } = await supabase
-                .from("field_definitions")
-                .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
-                .eq("org_id", ctx.orgId)
-                .eq("entity_type", "person")
-                .eq("is_active", true)
-                .order("section_key", { ascending: true })
-                .order("sort_order", { ascending: true });
-            const fieldDefs = (defRows ?? []) as { id: string; field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_system: boolean; is_visible_in_drawer: boolean }[];
-            out._field_definitions = fieldDefs;
-
-            if (fieldDefs.length > 0) {
-                const defIds = fieldDefs.map((d) => d.id);
-                const { data: fvRows } = await supabase
-                    .from("field_values")
-                    .select("field_definition_id, value")
-                    .eq("entity_type", "person")
-                    .eq("entity_id", id)
-                    .in("field_definition_id", defIds);
-                const valueByDefId = new Map((fvRows ?? []).map((r: { field_definition_id: string; value: string | null }) => [r.field_definition_id, r.value ?? ""]));
-                for (const d of fieldDefs) {
-                    if (!d.is_system) (out as Record<string, unknown>)[d.field_key] = valueByDefId.get(d.id) ?? "";
-                }
-            }
-
+            await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
             return NextResponse.json(out);
         }
 

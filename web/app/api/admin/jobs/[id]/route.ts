@@ -5,6 +5,7 @@ import { logAdminAudit } from "@/lib/adminAuth";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { validateDiscountCodeForJob } from "@/lib/admin/validateDiscountCode";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
 const ALLOWED_KEYS = [
     "title",
@@ -233,6 +234,8 @@ export async function PATCH(
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        await upsertFieldValuesFromBody(supabase, ctx.orgId, "job", id, body, ALLOWED_KEYS);
 
         const newStatusKey = updates.status_key !== undefined ? (updates.status_key as string | null) : oldStatusKey;
         if (updates.status_key !== undefined) {
