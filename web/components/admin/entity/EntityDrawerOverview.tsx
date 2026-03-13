@@ -72,7 +72,7 @@ function formatFieldValue(
       }
       return String(value);
     case "primary_yes_no":
-      return value === true ? "Yes" : "No";
+      return (value === true || value === "true") ? "Yes" : (value === false || value === "false") ? "No" : "—";
     case "text":
     case "custom":
     default:
@@ -170,18 +170,23 @@ function renderFieldEditNode(
   }
 
   if (hint === "primary_yes_no") {
+    const boolVal = value === true || value === "true";
     return (
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={!!value}
-          onChange={(e) => onFieldChange(key, e.target.checked)}
-          onBlur={onBlur}
-          disabled={disabled}
-          className="rounded border-admin-border"
-        />
-        <span className="text-sm text-alloy-forge/90">{value ? "Yes" : "No"}</span>
-      </label>
+      <select
+        value={boolVal ? "true" : (value === false || value === "false") ? "false" : ""}
+        onChange={(e) => {
+          const v = e.target.value;
+          onFieldChange(key, v === "" ? "" : v === "true");
+        }}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
+        className={INLINE_EDIT_SELECT}
+      >
+        <option value="">— None —</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
     );
   }
 

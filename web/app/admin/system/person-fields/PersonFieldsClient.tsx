@@ -1,12 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
+
+const PERSON_SECTION_OPTIONS = [
+    { value: "basic", label: "Basic" },
+    { value: "contact", label: "Contact" },
+    { value: "profile", label: "Profile" },
+    { value: "system", label: "System" },
+    { value: "custom", label: "Custom" },
+] as const;
+
+function slugifyLabel(label: string): string {
+    return label
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "")
+        .slice(0, 64) || "";
+}
 
 function toFieldDef(r: Record<string, unknown>): FieldDef {
     return {
@@ -76,6 +95,7 @@ export default function PersonFieldsClient() {
     const [createHelpText, setCreateHelpText] = useState("");
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const createKeyManuallyEditedRef = useRef(false);
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -169,8 +189,15 @@ export default function PersonFieldsClient() {
         setCreatePlaceholder("");
         setCreateHelpText("");
         setCreateError(null);
+        createKeyManuallyEditedRef.current = false;
         setCreateOpen(true);
     };
+
+    useEffect(() => {
+        if (!createOpen || createKeyManuallyEditedRef.current) return;
+        const slug = slugifyLabel(createLabel);
+        if (slug.length >= 2) setCreateKey(slug);
+    }, [createOpen, createLabel]);
 
     const saveCreate = async () => {
         if (!canMutate) return;
@@ -371,13 +398,16 @@ export default function PersonFieldsClient() {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section key</label>
-                                    <input
-                                        type="text"
-                                        value={editSectionKey}
+                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
+                                    <select
+                                        value={PERSON_SECTION_OPTIONS.some((o) => o.value === editSectionKey) ? editSectionKey : "custom"}
                                         onChange={(e) => setEditSectionKey(e.target.value)}
                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                    />
+                                    >
+                                        {PERSON_SECTION_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-[#59678b] mb-0.5">Sort order</label>
@@ -442,25 +472,29 @@ export default function PersonFieldsClient() {
                         <h3 className="mb-4 text-lg font-semibold text-[#31394d]">Add custom person field</h3>
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Field key</label>
-                                <input
-                                    type="text"
-                                    value={createKey}
-                                    onChange={(e) => setCreateKey(e.target.value)}
-                                    placeholder="e.g. employee_id"
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm font-mono"
-                                />
-                                <p className="mt-0.5 text-xs text-[#59678b]">Lowercase letters, numbers, underscores only. 2–64 chars.</p>
-                            </div>
-                            <div>
                                 <label className="block text-xs font-medium text-[#59678b] mb-0.5">Label</label>
                                 <input
                                     type="text"
                                     value={createLabel}
                                     onChange={(e) => setCreateLabel(e.target.value)}
-                                    placeholder="Display name"
+                                    placeholder="e.g. Dog Owners"
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
+                                <p className="mt-0.5 text-xs text-[#59678b]">Display name. Field key is generated below and can be edited.</p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-[#59678b] mb-0.5">Field key</label>
+                                <input
+                                    type="text"
+                                    value={createKey}
+                                    onChange={(e) => {
+                                        createKeyManuallyEditedRef.current = true;
+                                        setCreateKey(e.target.value);
+                                    }}
+                                    placeholder="e.g. dog_owners"
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm font-mono"
+                                />
+                                <p className="mt-0.5 text-xs text-[#59678b]">Lowercase letters, numbers, underscores only. 2–64 chars. Auto-generated from label unless edited.</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-[#59678b] mb-0.5">Description</label>
@@ -485,13 +519,16 @@ export default function PersonFieldsClient() {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section key</label>
-                                    <input
-                                        type="text"
-                                        value={createSectionKey}
+                                    <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
+                                    <select
+                                        value={PERSON_SECTION_OPTIONS.some((o) => o.value === createSectionKey) ? createSectionKey : "custom"}
                                         onChange={(e) => setCreateSectionKey(e.target.value)}
                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                                    />
+                                    >
+                                        {PERSON_SECTION_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-[#59678b] mb-0.5">Sort order</label>
