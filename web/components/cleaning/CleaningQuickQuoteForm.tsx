@@ -81,6 +81,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         return;
       }
       try {
+        if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
         if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
         if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
       } catch (e) {
