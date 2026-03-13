@@ -62,6 +62,15 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
     setError(null);
     setConsentError(null);
     try {
+      const identityKeys = ["alloy_person_id", "alloy_contact_id", "alloy_customer_id", "alloy_opportunity_id"];
+      try {
+        identityKeys.forEach((k) => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        });
+      } catch {
+        // ignore
+      }
       const res = await fetch("/api/book-v2/quote-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

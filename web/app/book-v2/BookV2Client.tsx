@@ -53,6 +53,26 @@ const QUOTE_STORAGE_KEYS = [
     "alloy_opportunity_id",
 ] as const;
 
+const BOOKING_IDENTITY_KEYS = [
+    "alloy_person_id",
+    "alloy_contact_id",
+    "alloy_customer_id",
+    "alloy_opportunity_id",
+] as const;
+
+/** Clear only booking identity keys so a new quote-start cannot reuse stale person/contact/customer/opportunity ids. */
+function clearBookingIdentityKeys(): void {
+    if (typeof window === "undefined") return;
+    for (const key of BOOKING_IDENTITY_KEYS) {
+        try {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        } catch {
+            // ignore
+        }
+    }
+}
+
 /** Clear quote-related keys from localStorage and sessionStorage (e.g. after QUOTE_ID_MISMATCH) */
 function clearQuoteStorage(): void {
     if (typeof window === "undefined") return;
@@ -212,6 +232,7 @@ async function maybeCreateLeadFromPrefill(params: {
 
     console.log("[QUOTE_START_PREFILL] attempting...");
     try {
+        clearBookingIdentityKeys();
         const res = await fetch("/api/book-v2/quote-start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -936,6 +957,7 @@ export default function BookV2Client() {
         setQuoteStartSubmitting(true);
         setQuoteStartError(null);
         try {
+            clearBookingIdentityKeys();
             // Send bucket key (e.g. "Under 1500 sq ft") — API accepts string or number
             const res = await fetch("/api/book-v2/quote-start", {
                 method: "POST",
@@ -1064,6 +1086,7 @@ export default function BookV2Client() {
             const hasIds = typeof window !== "undefined" &&
                 (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
             if (!hasIds) {
+                clearBookingIdentityKeys();
                 const res = await fetch("/api/book-v2/quote-start", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
