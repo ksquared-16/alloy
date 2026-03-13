@@ -7,6 +7,31 @@ import { executeWorkflowRun } from "@/lib/workflowRun";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
+const CONFIRM_SAFE_PAYLOAD_KEYS = ["org_id", "person_id", "customer_id", "first_name", "last_name", "email", "phone", "status", "name", "vertical_id", "primary_contact_id", "metadata", "contact_id"] as const;
+
+function confirmSafePayload(obj: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const k of CONFIRM_SAFE_PAYLOAD_KEYS) {
+        if (obj[k] !== undefined) out[k] = obj[k];
+    }
+    return out;
+}
+
+function logAndThrowConfirmError(context: string, err: unknown, payload: Record<string, unknown>): never {
+    const e = err as { message?: string; code?: string; details?: string; hint?: string } | null;
+    const msg = e?.message ?? "unknown";
+    const code = e?.code ?? "unknown";
+    const detail = {
+        error_message: e?.message,
+        error_code: e?.code,
+        error_details: e?.details,
+        error_hint: e?.hint,
+        payload: confirmSafePayload(payload),
+    };
+    console.error(`[BOOK_V2_CONFIRM] ${context}`, detail);
+    throw new Error(`Confirm ${context}: ${msg} (code: ${code})`);
+}
+
 /**
  * Ensure person has a customer and customer_persons link. Optionally create a compatibility Contact for downstream (discount_redemptions, workflows).
  * Returns { customerId, contactId }. contactId is set when a compatibility contact is created or when person is already linked to a contact-backed customer.
@@ -33,6 +58,7 @@ async function ensureCustomerForPersonInConfirm(
         .eq("person_id", personId)
         .limit(1)
         .maybeSingle();
+    console.log("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm path: person_id=%s contactOrgId=%s customer_persons=%s", personId, contactOrgId ?? null, cp?.customer_id ?? "none");
     if (cp?.customer_id) {
         const customerId = (cp as { customer_id: string }).customer_id;
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
@@ -71,15 +97,22 @@ async function ensureCustomerForPersonInConfirm(
                 const { data: custByContact } = await supabase.from("customers").select("id").eq("primary_contact_id", existingContact.id).limit(1).maybeSingle();
                 customerId = (custByContact as { id: string } | null)?.id ?? null;
             }
+            console.log("[BOOK_V2_CONFIRM] Existing contact reuse: contact_id=%s contact.customer_id=%s resolved_customerId=%s", existingContact.id, existingContact.customer_id ?? "null", customerId ?? "null");
             if (customerId) {
                 const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", customerId).eq("person_id", personId).maybeSingle();
                 if (!existingCp) {
-                    const { error: cpErr } = await supabase.from("customer_persons").insert({
-                        customer_id: customerId,
-                        person_id: personId,
-                        org_id: contactOrgId,
-                    });
-                    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+                    const cpInsert = { customer_id: customerId, person_id: personId, org_id: contactOrgId };
+                    const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+                    if (cpErr) {
+                        console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (reuse existing customer)", {
+                            error_message: (cpErr as { message?: string }).message,
+                            error_code: (cpErr as { code?: string }).code,
+                            error_details: (cpErr as { details?: string }).details,
+                            error_hint: (cpErr as { hint?: string }).hint,
+                            payload: cpInsert,
+                        });
+                        throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+                    }
                 }
                 return { customerId, contactId: existingContact.id };
             }
@@ -100,14 +133,23 @@ async function ensureCustomerForPersonInConfirm(
             contact_type: "lead",
         };
         if (params.org_id) contactInsert.org_id = params.org_id;
+        console.log("[BOOK_V2_CONFIRM] Compatibility contact insert attempt", confirmSafePayload(contactInsert as Record<string, unknown>));
         const { data: newContact, error: contactErr } = await supabase
             .from("contacts")
             .insert(contactInsert)
             .select("id")
             .single();
-        if (!contactErr && newContact) {
-            contactId = (newContact as { id: string }).id;
+        if (contactErr) {
+            console.error("[BOOK_V2_CONFIRM] compatibility contact insert failed", {
+                error_message: (contactErr as { message?: string }).message,
+                error_code: (contactErr as { code?: string }).code,
+                error_details: (contactErr as { details?: string }).details,
+                error_hint: (contactErr as { hint?: string }).hint,
+                payload: confirmSafePayload(contactInsert as Record<string, unknown>),
+            });
+            throw new Error(`Compatibility contact insert failed: ${(contactErr as { message?: string }).message ?? contactErr} (code: ${(contactErr as { code?: string }).code ?? "unknown"})`);
         }
+        if (newContact) contactId = (newContact as { id: string }).id;
     }
 
     const payload: Record<string, unknown> = {
@@ -119,6 +161,7 @@ async function ensureCustomerForPersonInConfirm(
     if (params.org_id) payload.org_id = params.org_id;
     if (contactId) payload.primary_contact_id = contactId;
 
+    console.log("[BOOK_V2_CONFIRM] customer insert (ensureCustomerForPersonInConfirm)", confirmSafePayload({ ...payload, person_id: personId }));
     const { data: newCustomer, error: insErr } = await supabase
         .from("customers")
         .insert(payload)
@@ -128,31 +171,44 @@ async function ensureCustomerForPersonInConfirm(
         if (insErr?.code === "23505" && contactId) {
             const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
             if (existing?.id) {
+                console.log("[BOOK_V2_CONFIRM] Reusing customer after 23505", { existing_customer_id: existing.id, contact_id: contactId });
                 await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
                 const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
                 if (!existingCp) {
-                    const { error: cpErr } = await supabase.from("customer_persons").insert({
-                        customer_id: existing.id,
-                        person_id: personId,
-                        org_id: params.org_id,
-                    });
-                    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+                    const cpInsert = { customer_id: existing.id, person_id: personId, org_id: params.org_id };
+                    const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+                    if (cpErr) {
+                        console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (23505 reuse)", {
+                            error_message: (cpErr as { message?: string }).message,
+                            error_code: (cpErr as { code?: string }).code,
+                            error_details: (cpErr as { details?: string }).details,
+                            error_hint: (cpErr as { hint?: string }).hint,
+                            payload: cpInsert,
+                        });
+                        throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+                    }
                 }
                 return { customerId: (existing as { id: string }).id, contactId };
             }
         }
-        throw new Error(insErr?.message ?? "Failed to create customer");
+        logAndThrowConfirmError("customer insert (ensureCustomerForPersonInConfirm)", insErr, payload as Record<string, unknown>);
     }
     const customerId = (newCustomer as { id: string }).id;
     if (contactId) {
         await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
     }
-    const { error: cpErr } = await supabase.from("customer_persons").insert({
-        customer_id: customerId,
-        person_id: personId,
-        org_id: params.org_id,
-    });
-    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+    const cpInsert = { customer_id: customerId, person_id: personId, org_id: params.org_id };
+    const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+    if (cpErr) {
+        console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (ensureCustomerForPersonInConfirm)", {
+            error_message: (cpErr as { message?: string }).message,
+            error_code: (cpErr as { code?: string }).code,
+            error_details: (cpErr as { details?: string }).details,
+            error_hint: (cpErr as { hint?: string }).hint,
+            payload: cpInsert,
+        });
+        throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+    }
     return { customerId, contactId };
 }
 
@@ -185,6 +241,7 @@ async function ensureCustomerForContactInConfirm(
     };
     if (params.org_id) payload.org_id = params.org_id;
 
+    console.log("[BOOK_V2_CONFIRM] customer insert (ensureCustomerForContactInConfirm)", confirmSafePayload({ ...payload, contact_id: contactId }));
     const { data: newCustomer, error: insErr } = await supabase
         .from("customers")
         .insert(payload)
@@ -194,11 +251,12 @@ async function ensureCustomerForContactInConfirm(
         if (insErr?.code === "23505") {
             const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
             if (existing?.id) {
+                console.log("[BOOK_V2_CONFIRM] Reusing customer after 23505 (contact path)", { existing_customer_id: existing.id, contact_id: contactId });
                 await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
                 return existing.id;
             }
         }
-        throw new Error(insErr?.message ?? "Failed to create customer");
+        logAndThrowConfirmError("customer insert (ensureCustomerForContactInConfirm)", insErr, payload as Record<string, unknown>);
     }
     const customerId = (newCustomer as { id: string }).id;
     await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
@@ -211,11 +269,18 @@ async function ensureCustomerForContactInConfirm(
             .eq("person_id", c.person_id)
             .maybeSingle();
         if (!existingCp) {
-            await supabase.from("customer_persons").insert({
-                customer_id: customerId,
-                person_id: c.person_id,
-                org_id: params.org_id,
-            });
+            const cpInsert = { customer_id: customerId, person_id: c.person_id, org_id: params.org_id };
+            const { error: cpErr } = await supabase.from("customer_persons").insert(cpInsert);
+            if (cpErr) {
+                console.error("[BOOK_V2_CONFIRM] customer_persons insert failed (ensureCustomerForContactInConfirm)", {
+                    error_message: (cpErr as { message?: string }).message,
+                    error_code: (cpErr as { code?: string }).code,
+                    error_details: (cpErr as { details?: string }).details,
+                    error_hint: (cpErr as { hint?: string }).hint,
+                    payload: cpInsert,
+                });
+                throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr} (code: ${(cpErr as { code?: string }).code ?? "unknown"})`);
+            }
         }
     }
     return customerId;
@@ -501,9 +566,16 @@ export async function POST(request: NextRequest) {
                         contactId = result.contactId;
                         await supabase.from("opportunities").update({ customer_id: customerId, ...(contactId && { primary_contact_id: contactId }) }).eq("id", opportunityId);
                     } catch (err) {
-                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm failed", err);
+                        const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm failed", msg, err);
+                        const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
                         return NextResponse.json(
-                            { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                            {
+                                ok: false,
+                                message: msg,
+                                booking_attempt_id: booking_attempt_id ?? null,
+                                ...(codeMatch && { error_code: codeMatch[1] }),
+                            },
                             { status: 500 }
                         );
                     }
@@ -557,9 +629,16 @@ export async function POST(request: NextRequest) {
                         });
                         await supabase.from("opportunities").update({ customer_id: customerId }).eq("id", opportunityId);
                     } catch (err) {
-                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed", err);
+                        const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed", msg, err);
+                        const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
                         return NextResponse.json(
-                            { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                            {
+                                ok: false,
+                                message: msg,
+                                booking_attempt_id: booking_attempt_id ?? null,
+                                ...(codeMatch && { error_code: codeMatch[1] }),
+                            },
                             { status: 500 }
                         );
                     }
@@ -846,9 +925,16 @@ export async function POST(request: NextRequest) {
                             `[BOOK_V2_CONFIRM] Created customer for quote contact booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId}`
                         );
                     } catch (err) {
-                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed (else branch)", err);
+                        const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed (else branch)", msg, err);
+                        const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
                         return NextResponse.json(
-                            { ok: false, message: "Could not create customer for booking.", booking_attempt_id: booking_attempt_id ?? null },
+                            {
+                                ok: false,
+                                message: msg,
+                                booking_attempt_id: booking_attempt_id ?? null,
+                                ...(codeMatch && { error_code: codeMatch[1] }),
+                            },
                             { status: 500 }
                         );
                     }
