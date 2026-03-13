@@ -94,12 +94,14 @@ export async function POST(request: NextRequest) {
     const last_name = typeof body.last_name === "string" ? body.last_name.trim() || null : null;
     const email = typeof body.email === "string" ? body.email.trim() || null : null;
     const phone = typeof body.phone === "string" ? body.phone.trim() || null : null;
+    const full_name = [first_name, last_name].filter(Boolean).join(" ").trim() || null;
 
     const supabase = createAdminClient();
     const insert = {
         org_id: ctx.orgId,
         first_name,
         last_name,
+        full_name,
         email,
         phone,
     };
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
     const { data: created, error } = await supabase
         .from("persons")
         .insert(insert)
-        .select("id, org_id, first_name, last_name, email, phone, created_at, updated_at")
+        .select("id, org_id, first_name, last_name, full_name, email, phone, created_at, updated_at")
         .single();
 
     if (error) {

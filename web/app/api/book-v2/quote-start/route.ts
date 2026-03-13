@@ -208,12 +208,14 @@ async function findOrCreatePerson(
 
   if (!org_id) return null;
 
+  const full_name = [first_name ?? null, last_name ?? null].filter(Boolean).join(" ").trim() || null;
   const { data: created, error } = await supabase
     .from("persons")
     .insert({
       org_id,
       first_name: first_name ?? null,
       last_name: last_name ?? null,
+      full_name,
       email: emailNorm ?? null,
       phone: phoneNorm ?? null,
     })
