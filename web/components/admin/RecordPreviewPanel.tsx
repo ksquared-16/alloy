@@ -146,9 +146,9 @@ function PreviewContent({
             break;
         }
         default: {
-            const email = d.email as string | undefined;
-            const phone = d.phone as string | undefined;
-            if (email) summaryLines.push({ line: String(email) });
+            const email = typeof d.email === "string" ? d.email : undefined;
+            const phone = typeof d.phone === "string" ? d.phone : undefined;
+            if (email) summaryLines.push({ line: email });
             if (phone) summaryLines.push({ line: formatPhoneUS(phone) });
         }
     }
