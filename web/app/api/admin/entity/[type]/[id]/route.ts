@@ -260,13 +260,17 @@ export async function GET(
                 out._primary_contact_email = c?.email ?? null;
                 out._primary_contact_phone = c?.phone ?? null;
                 if (c?.person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", c.person_id).maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
+                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", c.person_id).maybeSingle();
+                    const p = person as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null } | null;
                     out._primary_person_id = p?.id ?? null;
                     out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
+                    out._primary_person_email = p?.email ?? null;
+                    out._primary_person_phone = p?.phone ?? null;
                 } else {
                     out._primary_person_id = null;
                     out._primary_person_name = null;
+                    out._primary_person_email = null;
+                    out._primary_person_phone = null;
                 }
             } else {
                 out._primary_contact = null;
@@ -275,6 +279,8 @@ export async function GET(
                 out._primary_contact_phone = null;
                 out._primary_person_id = null;
                 out._primary_person_name = null;
+                out._primary_person_email = null;
+                out._primary_person_phone = null;
             }
             const meta = metadata && typeof metadata === "object" ? metadata : {};
             out._metadata_email = (meta.email as string) ?? null;

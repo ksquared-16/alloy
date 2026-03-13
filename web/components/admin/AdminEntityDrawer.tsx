@@ -2342,7 +2342,7 @@ export default function AdminEntityDrawer() {
                     <div className="space-y-2">
                         {primaryPersonId && (
                             <div className="py-1.5">
-                                <span className="text-alloy-slate text-sm font-medium">Person: </span>
+                                <span className="text-alloy-slate text-sm font-medium">Primary Person: </span>
                                 <button type="button" onClick={() => openDrawer({ type: "persons", id: primaryPersonId })} className="text-alloy-blue hover:underline text-sm ml-1">
                                     {(primaryPersonName || "View person").trim() || "View person"}
                                 </button>
@@ -4255,7 +4255,7 @@ export default function AdminEntityDrawer() {
                                     </div>
                                             {(data._primary_person_id as string | null) && (
                                                 <div className="py-1.5">
-                                                    <strong className="text-[#45506c] text-sm">Person:</strong>{" "}
+                                                    <strong className="text-[#45506c] text-sm">Primary Person:</strong>{" "}
                                                     <button type="button" onClick={() => openDrawer({ type: "persons", id: data._primary_person_id as string })} className="text-alloy-blue hover:underline">
                                                         {(data._primary_person_name as string)?.trim() || "View person"}
                                                     </button>
