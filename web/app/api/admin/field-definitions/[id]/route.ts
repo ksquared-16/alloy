@@ -105,7 +105,7 @@ export async function PATCH(
             continue;
         }
         if (key === "config") {
-            updates[key] = body[key] != null && typeof body[key] === "object" ? (body[key] as Record<string, unknown>) : null;
+            updates[key] = body[key] != null && typeof body[key] === "object" ? (body[key] as Record<string, unknown>) : {};
             continue;
         }
     }

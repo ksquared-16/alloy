@@ -125,7 +125,8 @@ export async function POST(request: NextRequest) {
     const is_sortable = !!body.is_sortable;
     const placeholder = typeof body.placeholder === "string" ? body.placeholder.trim() || null : null;
     const help_text = typeof body.help_text === "string" ? body.help_text.trim() || null : null;
-    const config = body.config != null && typeof body.config === "object" ? (body.config as Record<string, unknown>) : null;
+    const config: Record<string, unknown> =
+        body.config != null && typeof body.config === "object" ? (body.config as Record<string, unknown>) : {};
 
     const supabase = createAdminClient();
 
