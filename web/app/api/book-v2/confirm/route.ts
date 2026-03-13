@@ -19,11 +19,12 @@ async function ensureCustomerForPersonInConfirm(
 ): Promise<{ customerId: string; contactId: string | null }> {
     const { data: person } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, email, phone")
+        .select("id, first_name, last_name, email, phone, org_id")
         .eq("id", personId)
         .single();
     if (!person) throw new Error("Person not found");
-    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
+    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; org_id?: string | null };
+    const contactOrgId = p.org_id ?? params.org_id;
 
     // Existing customer via customer_persons?
     const { data: cp } = await supabase
@@ -37,6 +38,52 @@ async function ensureCustomerForPersonInConfirm(
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
         const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
         return { customerId, contactId: primaryContactId };
+    }
+
+    // Reuse existing contact/customer when contact already linked (e.g. from ensure-customer at payment)
+    if (contactOrgId) {
+        const email = params.email ?? p.email ?? null;
+        const phone = params.phone ?? p.phone ?? null;
+        let existingContact: { id: string; customer_id?: string | null } | null = null;
+        if (email && String(email).trim()) {
+            const { data: byEmail } = await supabase
+                .from("contacts")
+                .select("id, customer_id")
+                .eq("org_id", contactOrgId)
+                .ilike("email", String(email).trim())
+                .limit(1)
+                .maybeSingle();
+            if (byEmail?.id) existingContact = byEmail as { id: string; customer_id?: string | null };
+        }
+        if (!existingContact && phone && String(phone).trim()) {
+            const { data: byPhone } = await supabase
+                .from("contacts")
+                .select("id, customer_id")
+                .eq("org_id", contactOrgId)
+                .eq("phone", String(phone).trim())
+                .limit(1)
+                .maybeSingle();
+            if (byPhone?.id) existingContact = byPhone as { id: string; customer_id?: string | null };
+        }
+        if (existingContact?.id) {
+            let customerId: string | null = existingContact.customer_id ?? null;
+            if (!customerId) {
+                const { data: custByContact } = await supabase.from("customers").select("id").eq("primary_contact_id", existingContact.id).limit(1).maybeSingle();
+                customerId = (custByContact as { id: string } | null)?.id ?? null;
+            }
+            if (customerId) {
+                const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", customerId).eq("person_id", personId).maybeSingle();
+                if (!existingCp) {
+                    const { error: cpErr } = await supabase.from("customer_persons").insert({
+                        customer_id: customerId,
+                        person_id: personId,
+                        org_id: contactOrgId,
+                    });
+                    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
+                }
+                return { customerId, contactId: existingContact.id };
+            }
+        }
     }
 
     const name = [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
@@ -84,11 +131,12 @@ async function ensureCustomerForPersonInConfirm(
                 await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
                 const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
                 if (!existingCp) {
-                    await supabase.from("customer_persons").insert({
+                    const { error: cpErr } = await supabase.from("customer_persons").insert({
                         customer_id: existing.id,
                         person_id: personId,
                         org_id: params.org_id,
                     });
+                    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
                 }
                 return { customerId: (existing as { id: string }).id, contactId };
             }
@@ -99,11 +147,12 @@ async function ensureCustomerForPersonInConfirm(
     if (contactId) {
         await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
     }
-    await supabase.from("customer_persons").insert({
+    const { error: cpErr } = await supabase.from("customer_persons").insert({
         customer_id: customerId,
         person_id: personId,
         org_id: params.org_id,
     });
+    if (cpErr) throw new Error(`Failed to link person to customer: ${(cpErr as { message?: string }).message ?? cpErr}`);
     return { customerId, contactId };
 }
 
@@ -561,6 +610,17 @@ export async function POST(request: NextRequest) {
                             const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
                             if (!primaryContactId) await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
                             await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                            const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", customerId).eq("person_id", personIdFromQuote).maybeSingle();
+                            if (!existingCp) {
+                                const { error: cpErr } = await supabase.from("customer_persons").insert({
+                                    customer_id: customerId,
+                                    person_id: personIdFromQuote,
+                                    org_id: contactOrgId,
+                                });
+                                if (cpErr) {
+                                    console.error("[BOOK_V2_CONFIRM] customer_persons insert failed", cpErr);
+                                }
+                            }
                         } else {
                             const contactInsert: Record<string, unknown> = {
                                 org_id: contactOrgId,
@@ -605,6 +665,15 @@ export async function POST(request: NextRequest) {
                             await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
                             await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
                             await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                            const { data: existingCp2 } = await supabase.from("customer_persons").select("id").eq("customer_id", customerId).eq("person_id", personIdFromQuote).maybeSingle();
+                            if (!existingCp2) {
+                                const { error: cpErr2 } = await supabase.from("customer_persons").insert({
+                                    customer_id: customerId,
+                                    person_id: personIdFromQuote,
+                                    org_id: contactOrgId,
+                                });
+                                if (cpErr2) console.error("[BOOK_V2_CONFIRM] customer_persons insert failed", cpErr2);
+                            }
                         }
                     }
                 }
