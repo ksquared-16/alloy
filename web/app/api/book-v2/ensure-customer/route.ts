@@ -3,6 +3,27 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
+/** Find existing contact by email (case-insensitive) then phone, scoped to org when provided. */
+async function findExistingContact(
+    supabase: Supabase,
+    params: { email: string | null; phone: string | null; org_id: string | null }
+): Promise<{ id: string } | null> {
+    const { email, phone, org_id } = params;
+    if (email && String(email).trim()) {
+        let q = supabase.from("contacts").select("id").ilike("email", String(email).trim());
+        if (org_id) q = q.eq("org_id", org_id);
+        const { data: byEmail } = await q.limit(1).maybeSingle();
+        if (byEmail?.id) return { id: (byEmail as { id: string }).id };
+    }
+    if (phone && String(phone).trim()) {
+        let q = supabase.from("contacts").select("id").eq("phone", String(phone).trim());
+        if (org_id) q = q.eq("org_id", org_id);
+        const { data: byPhone } = await q.limit(1).maybeSingle();
+        if (byPhone?.id) return { id: (byPhone as { id: string }).id };
+    }
+    return null;
+}
+
 function compatContactInsertError(
     contactErr: unknown,
     payload: { org_id?: unknown; person_id?: unknown; customer_id?: unknown; first_name?: unknown; last_name?: unknown; email?: unknown; phone?: unknown; status?: unknown }
@@ -51,7 +72,25 @@ async function ensureCustomerForPerson(
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
         const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
         if (primaryContactId) return { customerId, contactId: primaryContactId };
-        // Customer exists but no contact: create compat contact and set as primary for payment/Stripe
+        // Customer exists but no contact: reuse existing contact by email/phone or create
+        const existingContact = await findExistingContact(supabase, {
+            email: p.email ?? null,
+            phone: p.phone ?? null,
+            org_id: contactOrgId,
+        });
+        let contactId: string;
+        if (existingContact) {
+            contactId = existingContact.id;
+            const updatePayload: Record<string, unknown> = {
+                person_id: personId,
+                customer_id: customerId,
+                org_id: contactOrgId,
+                status: "active",
+            };
+            await supabase.from("contacts").update(updatePayload).eq("id", contactId);
+            await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+            return { customerId, contactId };
+        }
         const contactInsert: Record<string, unknown> = {
             org_id: contactOrgId,
             first_name: p.first_name,
@@ -79,13 +118,67 @@ async function ensureCustomerForPerson(
                 status: "active",
             });
         }
-        const contactId = (newContact as { id: string }).id;
+        contactId = (newContact as { id: string }).id;
         await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
         await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
         return { customerId, contactId };
     }
 
     const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.email || p.phone || "New Customer";
+    const existingContact = await findExistingContact(supabase, {
+        email: p.email ?? null,
+        phone: p.phone ?? null,
+        org_id: contactOrgId,
+    });
+    let contactId: string;
+    if (existingContact) {
+        contactId = existingContact.id;
+        const updatePayload: Record<string, unknown> = {
+            person_id: personId,
+            org_id: contactOrgId,
+            status: "active",
+        };
+        await supabase.from("contacts").update(updatePayload).eq("id", contactId);
+        const payload: Record<string, unknown> = {
+            name,
+            status: "active",
+            vertical_id: params.vertical_id,
+            primary_contact_id: contactId,
+            metadata: { source: "book-v2-ensure-customer" },
+        };
+        payload.org_id = contactOrgId;
+        const { data: newCustomer, error: insErr } = await supabase
+            .from("customers")
+            .insert(payload)
+            .select("id")
+            .single();
+        if (insErr || !newCustomer) {
+            if (insErr?.code === "23505") {
+                const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
+                if (existing?.id) {
+                    await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
+                    const { data: existingCp } = await supabase.from("customer_persons").select("id").eq("customer_id", existing.id).eq("person_id", personId).maybeSingle();
+                    if (!existingCp) {
+                        await supabase.from("customer_persons").insert({
+                            customer_id: existing.id,
+                            person_id: personId,
+                            org_id: contactOrgId,
+                        });
+                    }
+                    return { customerId: (existing as { id: string }).id, contactId };
+                }
+            }
+            throw new Error((insErr as { message?: string })?.message ?? "Failed to create customer");
+        }
+        const customerId = (newCustomer as { id: string }).id;
+        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+        await supabase.from("customer_persons").insert({
+            customer_id: customerId,
+            person_id: personId,
+            org_id: contactOrgId,
+        });
+        return { customerId, contactId };
+    }
     const contactInsert: Record<string, unknown> = {
         org_id: contactOrgId,
         first_name: p.first_name,
@@ -112,7 +205,7 @@ async function ensureCustomerForPerson(
             status: "active",
         });
     }
-    const contactId = (newContact as { id: string }).id;
+    contactId = (newContact as { id: string }).id;
 
     const payload: Record<string, unknown> = {
         name,

@@ -525,49 +525,87 @@ export async function POST(request: NextRequest) {
                     const oppOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
                     const contactOrgId = p.org_id ?? oppOrgId;
                     if (contactOrgId) {
-                        const contactInsert: Record<string, unknown> = {
-                            org_id: contactOrgId,
-                            first_name: contact_first_name ?? p.first_name,
-                            last_name: contact_last_name ?? p.last_name,
-                            email: contact_email ?? p.email ?? null,
-                            phone: contact_phone ?? p.phone ?? null,
-                            person_id: personIdFromQuote,
-                            contact_type: "lead",
-                            status: "active",
-                        };
-                        const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
-                        if (contactErr || !newContact) {
-                            const e = contactErr as { message?: string; code?: string; details?: string; hint?: string } | null;
-                            const errMsg = e?.message ?? "unknown";
-                            const errCode = e?.code ?? "unknown";
-                            console.error("[BOOK_V2_CONFIRM] Compatibility contact insert failed", {
-                                error_message: e?.message,
-                                error_code: e?.code,
-                                error_details: e?.details,
-                                error_hint: e?.hint,
-                                payload: {
-                                    org_id: contactOrgId,
-                                    person_id: personIdFromQuote,
-                                    first_name: contact_first_name ?? p.first_name,
-                                    last_name: contact_last_name ?? p.last_name,
-                                    email: contact_email ?? p.email ?? null,
-                                    phone: contact_phone ?? p.phone ?? null,
-                                    status: "active",
-                                },
-                            });
-                            return NextResponse.json(
-                                {
-                                    ok: false,
-                                    message: `Compatibility contact insert failed: ${errMsg} (code: ${errCode})`,
-                                    booking_attempt_id: booking_attempt_id ?? null,
-                                },
-                                { status: 500 }
-                            );
+                        const personEmail = contact_email ?? p.email ?? null;
+                        const personPhone = contact_phone ?? p.phone ?? null;
+                        let existingContactId: string | null = null;
+                        if (personEmail && String(personEmail).trim()) {
+                            const { data: byEmail } = await supabase
+                                .from("contacts")
+                                .select("id")
+                                .eq("org_id", contactOrgId)
+                                .ilike("email", String(personEmail).trim())
+                                .limit(1)
+                                .maybeSingle();
+                            if (byEmail?.id) existingContactId = (byEmail as { id: string }).id;
                         }
-                        contactId = (newContact as { id: string }).id;
-                        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-                        await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-                        await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                        if (!existingContactId && personPhone && String(personPhone).trim()) {
+                            const { data: byPhone } = await supabase
+                                .from("contacts")
+                                .select("id")
+                                .eq("org_id", contactOrgId)
+                                .eq("phone", String(personPhone).trim())
+                                .limit(1)
+                                .maybeSingle();
+                            if (byPhone?.id) existingContactId = (byPhone as { id: string }).id;
+                        }
+                        if (existingContactId) {
+                            contactId = existingContactId;
+                            const contactUpdate: Record<string, unknown> = {
+                                person_id: personIdFromQuote,
+                                customer_id: customerId,
+                                org_id: contactOrgId,
+                                status: "active",
+                            };
+                            await supabase.from("contacts").update(contactUpdate).eq("id", contactId);
+                            const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
+                            const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
+                            if (!primaryContactId) await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+                            await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                        } else {
+                            const contactInsert: Record<string, unknown> = {
+                                org_id: contactOrgId,
+                                first_name: contact_first_name ?? p.first_name,
+                                last_name: contact_last_name ?? p.last_name,
+                                email: contact_email ?? p.email ?? null,
+                                phone: contact_phone ?? p.phone ?? null,
+                                person_id: personIdFromQuote,
+                                contact_type: "lead",
+                                status: "active",
+                            };
+                            const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
+                            if (contactErr || !newContact) {
+                                const e = contactErr as { message?: string; code?: string; details?: string; hint?: string } | null;
+                                const errMsg = e?.message ?? "unknown";
+                                const errCode = e?.code ?? "unknown";
+                                console.error("[BOOK_V2_CONFIRM] Compatibility contact insert failed", {
+                                    error_message: e?.message,
+                                    error_code: e?.code,
+                                    error_details: e?.details,
+                                    error_hint: e?.hint,
+                                    payload: {
+                                        org_id: contactOrgId,
+                                        person_id: personIdFromQuote,
+                                        first_name: contact_first_name ?? p.first_name,
+                                        last_name: contact_last_name ?? p.last_name,
+                                        email: contact_email ?? p.email ?? null,
+                                        phone: contact_phone ?? p.phone ?? null,
+                                        status: "active",
+                                    },
+                                });
+                                return NextResponse.json(
+                                    {
+                                        ok: false,
+                                        message: `Compatibility contact insert failed: ${errMsg} (code: ${errCode})`,
+                                        booking_attempt_id: booking_attempt_id ?? null,
+                                    },
+                                    { status: 500 }
+                                );
+                            }
+                            contactId = (newContact as { id: string }).id;
+                            await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
+                            await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
+                            await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
+                        }
                     }
                 }
             }
