@@ -98,6 +98,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                 label: "Directory Settings",
                 subItems: [
                     { href: "/admin/system/customer-person-roles", label: "Person Roles" },
+                    { href: "/admin/system/person-fields", label: "Person Fields" },
                     { href: "/admin/system/person-relationship-types", label: "Relationships" },
                     { href: "/admin/system/db-relationships", label: "DB Relationships" },
                 ],

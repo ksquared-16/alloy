@@ -1,0 +1,180 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
+
+const ENTITY_TYPE_PERSON = "person";
+
+export type FieldDef = {
+    id: string;
+    org_id: string;
+    entity_type: string;
+    field_key: string;
+    field_type: string;
+    label: string | null;
+    description: string | null;
+    is_system: boolean;
+    is_required: boolean;
+    is_active: boolean;
+    is_visible_in_form: boolean;
+    is_visible_in_drawer: boolean;
+    is_visible_in_table: boolean;
+    is_filterable: boolean;
+    is_sortable: boolean;
+    section_key: string | null;
+    sort_order: number;
+    placeholder: string | null;
+    help_text: string | null;
+    config: Record<string, unknown> | null;
+    created_at: string;
+    updated_at: string;
+};
+
+/** GET: list field_definitions for current org and entity_type. Ordered by section_key, sort_order. */
+export async function GET(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const entityType = searchParams.get("entity_type")?.trim() || null;
+
+    if (!entityType || entityType !== ENTITY_TYPE_PERSON) {
+        return NextResponse.json(
+            { error: "entity_type is required and must be 'person'" },
+            { status: 400 }
+        );
+    }
+
+    const supabase = createAdminClient();
+    const { data: rows, error } = await supabase
+        .from("field_definitions")
+        .select("*")
+        .eq("org_id", ctx.orgId)
+        .eq("entity_type", entityType)
+        .order("section_key", { ascending: true })
+        .order("sort_order", { ascending: true });
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ field_definitions: rows ?? [] });
+}
+
+const PERSON_FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
+const FIELD_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
+
+/** POST: create a custom field definition. Only entity_type=person, is_system=false. Admin only. */
+export async function POST(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+        body = (await request.json()) as Record<string, unknown>;
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const entity_type = typeof body.entity_type === "string" ? body.entity_type.trim() : "";
+    if (entity_type !== ENTITY_TYPE_PERSON) {
+        return NextResponse.json(
+            { error: "Only entity_type 'person' is supported for custom fields" },
+            { status: 400 }
+        );
+    }
+
+    let field_key = typeof body.field_key === "string" ? body.field_key.trim().toLowerCase().replace(/\s+/g, "_") : "";
+    if (!FIELD_KEY_REGEX.test(field_key)) {
+        return NextResponse.json(
+            { error: "field_key must be 2–64 characters, lowercase letters, numbers, and underscores only" },
+            { status: 400 }
+        );
+    }
+
+    const field_type = typeof body.field_type === "string" ? body.field_type.trim().toLowerCase() : "text";
+    if (!PERSON_FIELD_TYPES.includes(field_type as (typeof PERSON_FIELD_TYPES)[number])) {
+        return NextResponse.json(
+            { error: `field_type must be one of: ${PERSON_FIELD_TYPES.join(", ")}` },
+            { status: 400 }
+        );
+    }
+
+    const label = typeof body.label === "string" ? body.label.trim() || field_key : field_key;
+    const description = typeof body.description === "string" ? body.description.trim() || null : null;
+    const section_key = typeof body.section_key === "string" ? body.section_key.trim() || "custom" : "custom";
+    const sort_order = typeof body.sort_order === "number" && !Number.isNaN(body.sort_order) ? body.sort_order : 100;
+    const is_required = !!body.is_required;
+    const is_active = body.is_active !== false;
+    const is_visible_in_form = body.is_visible_in_form !== false;
+    const is_visible_in_drawer = body.is_visible_in_drawer !== false;
+    const is_visible_in_table = body.is_visible_in_table !== false;
+    const is_filterable = !!body.is_filterable;
+    const is_sortable = !!body.is_sortable;
+    const placeholder = typeof body.placeholder === "string" ? body.placeholder.trim() || null : null;
+    const help_text = typeof body.help_text === "string" ? body.help_text.trim() || null : null;
+    const config = body.config != null && typeof body.config === "object" ? (body.config as Record<string, unknown>) : null;
+
+    const supabase = createAdminClient();
+
+    const { data: existing } = await supabase
+        .from("field_definitions")
+        .select("id")
+        .eq("org_id", ctx.orgId)
+        .eq("entity_type", entity_type)
+        .eq("field_key", field_key)
+        .limit(1)
+        .maybeSingle();
+
+    if (existing) {
+        return NextResponse.json(
+            { error: `field_key '${field_key}' already exists for this org and entity type` },
+            { status: 409 }
+        );
+    }
+
+    const insert: Record<string, unknown> = {
+        org_id: ctx.orgId,
+        entity_type,
+        field_key,
+        field_type,
+        label,
+        description,
+        section_key,
+        sort_order,
+        is_system: false,
+        is_required,
+        is_active,
+        is_visible_in_form,
+        is_visible_in_drawer,
+        is_visible_in_table,
+        is_filterable,
+        is_sortable,
+        placeholder,
+        help_text,
+        config,
+    };
+
+    const { data: created, error } = await supabase
+        .from("field_definitions")
+        .insert(insert)
+        .select()
+        .single();
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json(created, { status: 201 });
+}
