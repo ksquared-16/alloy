@@ -830,6 +830,31 @@ export async function GET(
             out._compatibility_contacts = contactRows ?? [];
             out._compatibility_members = memberRows ?? [];
 
+            const { data: defRows } = await supabase
+                .from("field_definitions")
+                .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
+                .eq("org_id", ctx.orgId)
+                .eq("entity_type", "person")
+                .eq("is_active", true)
+                .order("section_key", { ascending: true })
+                .order("sort_order", { ascending: true });
+            const fieldDefs = (defRows ?? []) as { id: string; field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_system: boolean; is_visible_in_drawer: boolean }[];
+            out._field_definitions = fieldDefs;
+
+            if (fieldDefs.length > 0) {
+                const defIds = fieldDefs.map((d) => d.id);
+                const { data: fvRows } = await supabase
+                    .from("field_values")
+                    .select("field_definition_id, value")
+                    .eq("entity_type", "person")
+                    .eq("entity_id", id)
+                    .in("field_definition_id", defIds);
+                const valueByDefId = new Map((fvRows ?? []).map((r: { field_definition_id: string; value: string | null }) => [r.field_definition_id, r.value ?? ""]));
+                for (const d of fieldDefs) {
+                    if (!d.is_system) (out as Record<string, unknown>)[d.field_key] = valueByDefId.get(d.id) ?? "";
+                }
+            }
+
             return NextResponse.json(out);
         }
 

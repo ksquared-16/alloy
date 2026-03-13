@@ -17,6 +17,8 @@ interface EntityDrawerOverviewProps {
   data: Record<string, unknown> | null;
   /** Custom content for sections that have no fields (e.g. relationship links, lists). Key = section.key */
   customSectionContent?: Record<string, ReactNode>;
+  /** When set (e.g. for person field_definitions), use these sections instead of entity presentation config. */
+  overviewSectionsOverride?: EntityDrawerSectionConfig[];
   isEditing?: boolean;
   formData?: Record<string, unknown>;
   onFieldChange?: (key: string, value: unknown) => void;
@@ -223,6 +225,7 @@ export default function EntityDrawerOverview({
   entityType,
   data,
   customSectionContent = {},
+  overviewSectionsOverride,
   isEditing = false,
   formData,
   onFieldChange,
@@ -233,7 +236,7 @@ export default function EntityDrawerOverview({
   onOpenDrawer,
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
-  const sections = config.drawer?.overviewSections ?? [];
+  const sections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
   if (!sections.length) return null;
 
   const record = data ?? {};

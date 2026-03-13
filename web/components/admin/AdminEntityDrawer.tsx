@@ -15,7 +15,7 @@ import {
     WORKFLOW_EVENT_TYPES,
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
-import { getEntityPresentation, toPresentationType, type DrawerTabKey } from "@/lib/entityPresentation";
+import { getEntityPresentation, toPresentationType, type DrawerTabKey, type EntityDrawerSectionConfig, type EntityDrawerFieldConfig } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
@@ -23,7 +23,7 @@ import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteCon
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -71,7 +71,7 @@ const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wi
 const DRAWER_ROW_SPACING = "space-y-4";
 
 /** Entity types that use inline-edit (no Edit toggle); always show inputs, save on blur or Save. */
-const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
+const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
 
 /** Subtle input styling: looks like text until hover/focus. */
 const INLINE_EDIT_INPUT_CLASS = "w-full px-1.5 py-1 text-sm border border-transparent rounded bg-transparent hover:border-alloy-stone/30 hover:bg-alloy-stone/5 focus:border-alloy-blue focus:bg-white focus:outline-none disabled:opacity-60";
@@ -1799,6 +1799,19 @@ export default function AdminEntityDrawer() {
                 sort_order: data.sort_order != null ? Number(data.sort_order) : 0,
                 is_active: !!data.is_active,
             };
+        } else if (drawer.type === "persons") {
+            initial = {
+                first_name: (data.first_name as string) ?? "",
+                last_name: (data.last_name as string) ?? "",
+                email: (data.email as string) ?? "",
+                phone: (data.phone as string) ?? "",
+                created_at: (data.created_at as string) ?? "",
+                updated_at: (data.updated_at as string) ?? "",
+            };
+            const defs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of defs) {
+                if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? "";
+            }
         } else {
             return;
         }
@@ -1949,6 +1962,32 @@ export default function AdminEntityDrawer() {
                 setSaveSuccess(true);
                 setTimeout(() => setSaveSuccess(false), 2000);
                 window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "addons", id: drawer.id } }));
+                return;
+            }
+            if (drawer.type === "persons") {
+                const personPayload: Record<string, unknown> = {
+                    first_name: typeof formData.first_name === "string" ? formData.first_name.trim() || null : null,
+                    last_name: typeof formData.last_name === "string" ? formData.last_name.trim() || null : null,
+                    email: typeof formData.email === "string" ? formData.email.trim() || null : null,
+                    phone: typeof formData.phone === "string" ? formData.phone.trim() || null : null,
+                };
+                const defs = (data?._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+                for (const d of defs) {
+                    if (!d.is_system && formData[d.field_key] !== undefined) {
+                        personPayload[d.field_key] = formData[d.field_key] == null ? "" : String(formData[d.field_key]);
+                    }
+                }
+                const res = await fetch(`/api/admin/persons/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(personPayload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json, _field_definitions: prev._field_definitions } : prev));
+                setFormData((prev) => ({ ...prev, ...json }));
+                setInitialInlineFormSnapshot(JSON.stringify({ ...json, ...personPayload }));
+                setSaveError(null);
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 2500);
+                refetch();
+                router.refresh();
                 return;
             }
             if (drawer.type === "contacts") {
@@ -2492,6 +2531,45 @@ export default function AdminEntityDrawer() {
         }
         return {};
     }, [drawer.type, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer]);
+
+    const personOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
+        if (drawer.type !== "persons" || !data || (data as { _create?: boolean })._create) return [];
+        const defs = (data._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
+        const visible = defs.filter((d) => d.is_visible_in_drawer !== false);
+        if (visible.length === 0) return [];
+        const bySection = new Map<string, typeof visible>();
+        for (const d of visible) {
+            const sk = d.section_key ?? "details";
+            if (!bySection.has(sk)) bySection.set(sk, []);
+            bySection.get(sk)!.push(d);
+        }
+        const sectionOrder = [...bySection.entries()].sort((a, b) => {
+            const aMin = Math.min(...a[1].map((f) => f.sort_order));
+            const bMin = Math.min(...b[1].map((f) => f.sort_order));
+            return aMin - bMin;
+        });
+        const hintFromType = (t: string): EntityDrawerFieldConfig["renderHint"] => {
+            if (t === "phone") return "phone";
+            if (t === "date") return "date";
+            if (t === "datetime") return "datetime";
+            if (t === "boolean") return "primary_yes_no";
+            return "text";
+        };
+        return sectionOrder.map(([sectionKey, fields]) => ({
+            key: sectionKey,
+            title: sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1).replace(/_/g, " "),
+            defaultExpanded: true,
+            collapsible: true,
+            gridCols: 2,
+            fields: fields.sort((a, b) => a.sort_order - b.sort_order).map((f) => ({
+                key: f.field_key,
+                label: f.label ?? f.field_key,
+                span: 1 as const,
+                renderHint: hintFromType(f.field_type),
+                editable: true,
+            })),
+        }));
+    }, [drawer.type, data]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -4031,6 +4109,7 @@ export default function AdminEntityDrawer() {
                             entityType={presentationType}
                             data={data as Record<string, unknown>}
                             customSectionContent={overviewCustomContent}
+                            overviewSectionsOverride={drawer.type === "persons" && personOverviewSections.length > 0 ? personOverviewSections : undefined}
                             isEditing={isEditing}
                             formData={formData}
                             onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
