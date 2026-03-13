@@ -63,11 +63,13 @@ export async function POST(
             .maybeSingle();
         if (oldAssignment) {
             const now = new Date().toISOString();
+            if (!orgId) return NextResponse.json({ error: "Could not resolve org_id for assignment" }, { status: 400 });
             await supabase.from("assignments").insert({
                 schedule_id: newId,
                 job_id: jobId,
                 vendor_id: (oldAssignment as { vendor_id: string }).vendor_id,
                 assignment_status_id: (oldAssignment as { assignment_status_id?: string }).assignment_status_id ?? null,
+                org_id: orgId,
                 updated_at: now,
             });
         }

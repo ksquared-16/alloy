@@ -956,6 +956,17 @@ export async function executeWorkflowRun(
                         skipReason = `assignment_status key "${statusKey}" not found`;
                         break;
                     }
+                    let orgId: string | null = null;
+                    const { data: jobRow } = await supabase.from("jobs").select("org_id").eq("id", jobId).maybeSingle();
+                    orgId = (jobRow as { org_id?: string | null } | null)?.org_id ?? null;
+                    if (!orgId && scheduleId) {
+                        const { data: scheduleRow } = await supabase.from("schedules").select("org_id").eq("id", scheduleId).maybeSingle();
+                        orgId = (scheduleRow as { org_id?: string | null } | null)?.org_id ?? null;
+                    }
+                    if (!orgId && payload.org_id != null) orgId = String(payload.org_id);
+                    if (!orgId) {
+                        throw new Error("create_assignment: could not resolve org_id (job, schedule, or payload)");
+                    }
                     const { data: existing } = await supabase.from("assignments").select("id").eq("schedule_id", scheduleId).maybeSingle();
                     const now = new Date().toISOString();
                     if (existing?.id) {
@@ -964,9 +975,10 @@ export async function executeWorkflowRun(
                         logs.push(`create_assignment: updated assignment for schedule ${scheduleId}`);
                     } else {
                         const { error: iErr } = await supabase.from("assignments").insert({
-                            schedule_id: scheduleId,
                             job_id: jobId,
                             vendor_id: vendorId,
+                            schedule_id: scheduleId,
+                            org_id: orgId,
                             assignment_status_id: statusId,
                             updated_at: now,
                         });
@@ -985,8 +997,9 @@ export async function executeWorkflowRun(
                         skipReason = "missing job_id";
                         break;
                     }
-                    const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).single();
+                    const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id, org_id").eq("id", jobId).single();
                     const vendorId = (jobRow as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id ?? null;
+                    const jobOrgId = (jobRow as { org_id?: string | null } | null)?.org_id ?? null;
                     if (!vendorId) {
                         logs.push(`apply_job_vendor_to_upcoming: job has no assigned_vendor_id; skipping`);
                         actionSkipped = true;
@@ -1002,8 +1015,9 @@ export async function executeWorkflowRun(
                         skipReason = "assignment status 'offered' not found";
                         break;
                     }
-                    const { data: upcomingSchedules } = await supabase.from("schedules").select("id").eq("job_id", jobId).is("canceled_at", null).gte("start_at", now);
-                    const scheduleIds = (upcomingSchedules ?? []).map((s) => (s as { id: string }).id);
+                    const { data: upcomingSchedules } = await supabase.from("schedules").select("id, org_id").eq("job_id", jobId).is("canceled_at", null).gte("start_at", now);
+                    const scheduleList = (upcomingSchedules ?? []) as { id: string; org_id?: string | null }[];
+                    const scheduleIds = scheduleList.map((s) => s.id);
                     if (scheduleIds.length === 0) {
                         logs.push(`apply_job_vendor_to_upcoming: no upcoming schedules; skipping`);
                         actionSkipped = true;
@@ -1014,12 +1028,26 @@ export async function executeWorkflowRun(
                     const assignmentBySchedule = new Map((existingAssignments ?? []).map((a) => [(a as { schedule_id: string }).schedule_id, a as { id: string; assignment_status_id?: string | null }]));
                     const { data: statusRows } = await supabase.from("assignment_statuses").select("id, key").in("id", [...new Set((existingAssignments ?? []).map((a) => (a as { assignment_status_id?: string }).assignment_status_id).filter(Boolean))]);
                     const statusKeyById = new Map((statusRows ?? []).map((s) => [(s as { id: string }).id, (s as { key: string }).key]));
+                    const payloadOrgId = payload.org_id != null ? String(payload.org_id) : null;
                     let created = 0;
                     let updated = 0;
-                    for (const sid of scheduleIds) {
+                    for (const s of scheduleList) {
+                        const sid = s.id;
                         const existing = assignmentBySchedule.get(sid);
                         if (!existing) {
-                            const { error: iErr } = await supabase.from("assignments").insert({ schedule_id: sid, job_id: jobId, vendor_id: vendorId, assignment_status_id: offeredStatusId, updated_at: now });
+                            const orgId = s.org_id ?? jobOrgId ?? payloadOrgId;
+                            if (!orgId) {
+                                logs.push(`apply_job_vendor_to_upcoming: could not resolve org_id for schedule ${sid}; skipping insert`);
+                                continue;
+                            }
+                            const { error: iErr } = await supabase.from("assignments").insert({
+                                schedule_id: sid,
+                                job_id: jobId,
+                                vendor_id: vendorId,
+                                org_id: orgId,
+                                assignment_status_id: offeredStatusId,
+                                updated_at: now,
+                            });
                             if (!iErr) created++;
                         } else if (existing.assignment_status_id && statusKeyById.get(existing.assignment_status_id) === "offered") {
                             const { error: uErr } = await supabase.from("assignments").update({ vendor_id: vendorId, updated_at: now }).eq("id", existing.id);
