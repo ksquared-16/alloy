@@ -8,7 +8,7 @@ import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill, type 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
-import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS, formatPayoutPercent } from "@/lib/adminFormatters";
+import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS, formatPayoutPercent, personDisplayName } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -2291,18 +2291,18 @@ export default function AdminEntityDrawer() {
                                 <span className="text-[#31394d] ml-1">—</span>
                             )}
                         </div>
-                        {primaryFor && primaryFor !== "—" && (
-                            <div className="py-1.5 sm:col-span-2">
-                                <span className="text-alloy-slate text-sm font-medium">Primary Contact for: </span>
-                                <span className="text-[#31394d] ml-1">{primaryFor}</span>
-                            </div>
-                        )}
                         {(d._person_id as string) && (
                             <div className="py-1.5 sm:col-span-2">
-                                <span className="text-alloy-slate text-sm font-medium">Canonical Person: </span>
+                                <span className="text-alloy-slate text-sm font-medium">Person: </span>
                                 <button type="button" onClick={() => openDrawer({ type: "persons", id: d._person_id as string })} className="text-alloy-blue hover:underline text-sm ml-1">
                                     {(d._person_name as string) || "View person"}
                                 </button>
+                            </div>
+                        )}
+                        {primaryFor && primaryFor !== "—" && (
+                            <div className="py-1.5 sm:col-span-2">
+                                <span className="text-alloy-slate text-sm font-medium">Primary for (customer/vendor): </span>
+                                <span className="text-[#31394d] ml-1">{primaryFor}</span>
                             </div>
                         )}
                         {((d.source as string) ?? (d.external_source as string) ?? (d.external_id as string)) && (
@@ -2332,17 +2332,27 @@ export default function AdminEntityDrawer() {
             };
         }
         if (drawer.type === "customers") {
+            const primaryPersonId = d._primary_person_id as string | null | undefined;
+            const primaryPersonName = d._primary_person_name as string | null | undefined;
             const primaryContact = d._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null | undefined;
             const primaryLocation = d._primary_location as { id?: string; label?: string; address1?: string } | null | undefined;
             const counts = d._counts as { contacts?: number; opportunities?: number; jobs?: number; schedules?: number; locations?: number } | undefined;
             return {
                 details: (
                     <div className="space-y-2">
+                        {primaryPersonId && (
+                            <div className="py-1.5">
+                                <span className="text-alloy-slate text-sm font-medium">Person: </span>
+                                <button type="button" onClick={() => openDrawer({ type: "persons", id: primaryPersonId })} className="text-alloy-blue hover:underline text-sm ml-1">
+                                    {(primaryPersonName || "View person").trim() || "View person"}
+                                </button>
+                            </div>
+                        )}
                         {primaryContact && (
                             <div className="py-1.5">
-                                <span className="text-alloy-slate text-sm font-medium">Primary Contact: </span>
+                                <span className="text-alloy-slate text-sm font-medium">Contact (compatibility): </span>
                                 <button type="button" onClick={() => primaryContact.id && openDrawer({ type: "contacts", id: primaryContact.id })} className="text-alloy-blue hover:underline text-sm ml-1">
-                                    {[primaryContact.first_name, primaryContact.last_name].filter(Boolean).join(" ") || String(primaryContact.id).slice(0, 8) + "…"}
+                                    {personDisplayName(primaryContact) === "—" ? String(primaryContact.id).slice(0, 8) + "…" : personDisplayName(primaryContact)}
                                 </button>
                                 {(primaryContact.email || primaryContact.phone) && (
                                     <span className="text-alloy-forge/80 text-sm ml-1">({[primaryContact.email, primaryContact.phone].filter(Boolean).join(" · ")})</span>
@@ -2599,7 +2609,8 @@ export default function AdminEntityDrawer() {
                                 <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
                             ) : (() => {
                                 const d = opportunityRelatedData;
-                                const opp = data as { customer_id?: string | null; _customer_name?: string | null; primary_contact_id?: string | null; _primary_contact_name?: string | null; _contact_name?: string | null } | null | undefined;
+                                const opp = data as { customer_id?: string | null; _customer_name?: string | null; primary_person_id?: string | null; primary_contact_id?: string | null; _primary_person_name?: string | null; _primary_contact_name?: string | null; _contact_name?: string | null } | null | undefined;
+                                const personItem = opp?.primary_person_id ? [{ id: opp.primary_person_id, entityType: "persons" as const, label: (opp._primary_person_name as string)?.trim() || "Person", meta: undefined }] : [];
                                 const customerItem = opp?.customer_id ? [{ id: opp.customer_id, entityType: "customers" as const, label: (opp._customer_name as string)?.trim() || customerSingular, meta: undefined }] : [];
                                 const contactItem = opp?.primary_contact_id ? [{ id: opp.primary_contact_id, entityType: "contacts" as const, label: (opp._primary_contact_name ?? opp._contact_name as string)?.trim() || contactSingular, meta: undefined }] : [];
                                 const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
@@ -2607,8 +2618,9 @@ export default function AdminEntityDrawer() {
                                 const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined }));
                                 type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
                                 const sections: Sec[] = [
+                                    { key: "person", title: "Person", defaultExpanded: true, items: personItem },
                                     { key: "customer", title: customerSingular, defaultExpanded: true, items: customerItem },
-                                    { key: "contact", title: contactSingular, defaultExpanded: true, items: contactItem },
+                                    { key: "contact", title: "Contact (compatibility)", defaultExpanded: false, items: contactItem },
                                     { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems, addAction: { label: "Add Job", onClick: () => openDrawer({ type: "jobs", id: "new", defaultJobPrefill: { opportunity_id: drawer.id ?? undefined, customer_id: opp?.customer_id ?? undefined, primary_contact_id: opp?.primary_contact_id ?? undefined } }) } },
                                     { key: "quotes", title: "Quotes", defaultExpanded: false, items: quoteItems },
                                     { key: "discount_redemptions", title: "Discounts / Promotions", defaultExpanded: false, items: discountItems },
@@ -2686,6 +2698,9 @@ export default function AdminEntityDrawer() {
                             )}
                             {(data._customer as { id?: string; name?: string }) && (
                                 <DrawerLinkWithName label="Customer" id={(data._customer as { id: string }).id} type="customers" displayName={(data._customer as { name?: string }).name ?? null} />
+                            )}
+                            {(data._primary_person_id as string) && (
+                                <DrawerLinkWithName label="Person" id={String(data._primary_person_id)} type="persons" displayName={(data._primary_person_name as string)?.trim() || null} />
                             )}
                             <div className="py-1.5">
                                 <strong className="text-[#45506c] text-sm">Assigned {vendorSingular}:</strong>{" "}
@@ -4238,9 +4253,17 @@ export default function AdminEntityDrawer() {
                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customers" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                 )}
                                     </div>
+                                            {(data._primary_person_id as string | null) && (
+                                                <div className="py-1.5">
+                                                    <strong className="text-[#45506c] text-sm">Person:</strong>{" "}
+                                                    <button type="button" onClick={() => openDrawer({ type: "persons", id: data._primary_person_id as string })} className="text-alloy-blue hover:underline">
+                                                        {(data._primary_person_name as string)?.trim() || "View person"}
+                                                    </button>
+                                                </div>
+                                            )}
                                             {(data._primary_contact as { id?: string; first_name?: string; last_name?: string; email?: string; phone?: string } | null) && (
                                                 <div className="py-1.5">
-                                                    <strong className="text-[#45506c] text-sm">Primary Contact:</strong>{" "}
+                                                    <strong className="text-[#45506c] text-sm">Contact (compatibility):</strong>{" "}
                                                     <button type="button" onClick={() => openDrawer({ type: "contacts", id: (data._primary_contact as { id: string }).id })} className="text-alloy-blue hover:underline">
                                                         {[(data._primary_contact as { first_name?: string }).first_name, (data._primary_contact as { last_name?: string }).last_name].filter(Boolean).join(" ") || (data._primary_contact as { id: string }).id.slice(0, 8) + "…"}
                                                     </button>
@@ -4290,7 +4313,8 @@ export default function AdminEntityDrawer() {
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                 </div>
-                                                        <DrawerLinkWithName label="Primary contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
+                                                        <DrawerLinkWithName label="Person" id={data?._primary_person_id != null ? String(data._primary_person_id) : null} type="persons" displayName={String(data?._primary_person_name ?? "")} />
+                                                        <DrawerLinkWithName label="Contact (compatibility)" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4" open>
@@ -4547,7 +4571,8 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} rows={2} /></div>
                                             </div>
                                     <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
-                                    <DrawerLinkWithName label="Primary Contact" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
+                                    <DrawerLinkWithName label="Person" id={data?._primary_person_id != null ? String(data._primary_person_id) : null} type="persons" displayName={String(data?._primary_person_name ?? data?._contact_name ?? "")} />
+                                    <DrawerLinkWithName label="Contact (compatibility)" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
                                 </>
                             )}
                             {drawer.type === "jobs" && (
@@ -4735,7 +4760,8 @@ export default function AdminEntityDrawer() {
                                     <Field label="Gross Price" value={formatMoneyFromCents(Number(data?.gross_price_cents ?? 0))} />
                                     <Field label="Payout" value={formatMoneyFromCents(Number(data?.contractor_payout_cents ?? 0))} />
                                     <DrawerLinkWithName label={opportunitySingular} id={data?.opportunity_id != null ? String(data.opportunity_id) : null} type="opportunities" displayName={String(data?._opportunity_name ?? "")} />
-                                    <DrawerLinkWithName label={`Primary ${contactSingular}`} id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
+                                    <DrawerLinkWithName label="Person" id={data?._primary_person_id != null ? String(data._primary_person_id) : null} type="persons" displayName={String(data?._primary_person_name ?? data?._contact_name ?? "")} />
+                                    <DrawerLinkWithName label="Contact (compatibility)" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
                                     <DrawerLinkWithName label={customerSingular} id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     </>
                                     )}

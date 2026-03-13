@@ -18,7 +18,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     const supabase = createAdminClient();
     const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
 
-    const cols = "id, created_at, updated_at, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, external_id, vertical_id, pipeline_stage_id, source, estimated_price_cents, monetary_value_cents";
+    const cols = "id, created_at, updated_at, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, primary_person_id, external_id, vertical_id, pipeline_stage_id, source, estimated_price_cents, monetary_value_cents";
     let q = supabase
         .from("opportunities")
         .select(cols)
@@ -27,7 +27,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     if (statusKey) q = q.eq("status_key", statusKey);
     const { data: opportunities, error } = await q;
 
-    const [stagesRes, customersRes, contactsRes] = await Promise.all([
+    const [stagesRes, customersRes, contactsRes, personsRes] = await Promise.all([
         supabase.from("pipeline_stages").select("id, name, pipeline_id").order("position", { ascending: true }),
         (opportunities ?? []).length
             ? supabase.from("customers").select("id, name").in("id", [...new Set((opportunities ?? []).map((o) => o.customer_id).filter(Boolean))] as string[])
@@ -35,17 +35,26 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         (opportunities ?? []).length
             ? supabase.from("contacts").select("id, first_name, last_name, email, phone").in("id", [...new Set((opportunities ?? []).map((o) => o.primary_contact_id).filter(Boolean))] as string[])
             : { data: [] },
+        (opportunities ?? []).length
+            ? supabase.from("persons").select("id, first_name, last_name").in("id", [...new Set((opportunities ?? []).map((o) => (o as { primary_person_id?: string | null }).primary_person_id).filter(Boolean))] as string[])
+            : { data: [] },
     ]);
 
     const stages = stagesRes.data ?? [];
     const customerMap = new Map((customersRes.data ?? []).map((c) => [c.id, c]));
     const contactMap = new Map((contactsRes.data ?? []).map((c) => [c.id, c]));
+    const personMap = new Map((personsRes.data ?? []).map((p) => [p.id, p]));
 
     const rows = (opportunities ?? []).map((o) => {
         const customer = o.customer_id ? customerMap.get(o.customer_id) : undefined;
         const contact = o.primary_contact_id ? contactMap.get(o.primary_contact_id) : undefined;
         const contactName = contact
             ? [(contact as { first_name?: string }).first_name, (contact as { last_name?: string }).last_name].filter(Boolean).join(" ") || null
+            : null;
+        const primaryPersonId = (o as { primary_person_id?: string | null }).primary_person_id;
+        const person = primaryPersonId ? personMap.get(primaryPersonId) : undefined;
+        const _primary_person_name = person
+            ? [(person as { first_name?: string }).first_name, (person as { last_name?: string }).last_name].filter(Boolean).join(" ").trim() || null
             : null;
         const _status_display = o.status_key ?? o.status ?? null;
         const _updated = (o as { updated_at?: string | null }).updated_at ?? o.created_at ?? null;
@@ -54,6 +63,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
             ...o,
             _customer_name: (customer as { name?: string } | undefined)?.name ?? null,
             _contact_name: contactName,
+            _primary_person_name: _primary_person_name ?? contactName,
             _primary_contact_name: contactName,
             _contact_email: (contact as { email?: string } | undefined)?.email ?? null,
             _contact_phone: (contact as { phone?: string } | undefined)?.phone ?? null,

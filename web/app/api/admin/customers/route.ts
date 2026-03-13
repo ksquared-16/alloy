@@ -55,15 +55,23 @@ export async function GET(request: NextRequest) {
     const verticalIds = [...new Set(list.map((r) => r.vertical_id).filter(Boolean))] as string[];
     const customerIds = list.map((r) => r.id);
 
-    let contactMap: Record<string, { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }> = {};
+    let contactMap: Record<string, { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null }> = {};
+    let personMap: Record<string, { first_name?: string | null; last_name?: string | null }> = {};
     if (primaryContactIds.length > 0) {
         const { data: contacts } = await supabase
             .from("contacts")
-            .select("id, first_name, last_name, email, phone")
+            .select("id, first_name, last_name, email, phone, person_id")
             .in("id", primaryContactIds);
-        (contacts ?? []).forEach((c: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }) => {
-            contactMap[c.id] = { first_name: c.first_name, last_name: c.last_name, email: c.email, phone: c.phone };
+        (contacts ?? []).forEach((c: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null }) => {
+            contactMap[c.id] = { first_name: c.first_name, last_name: c.last_name, email: c.email, phone: c.phone, person_id: c.person_id };
         });
+        const personIds = [...new Set((contacts ?? []).map((c: { person_id?: string | null }) => c.person_id).filter(Boolean))] as string[];
+        if (personIds.length > 0) {
+            const { data: persons } = await supabase.from("persons").select("id, first_name, last_name").in("id", personIds);
+            (persons ?? []).forEach((p: { id: string; first_name?: string | null; last_name?: string | null }) => {
+                personMap[p.id] = { first_name: p.first_name, last_name: p.last_name };
+            });
+        }
     }
 
     let verticalMap: Record<string, string> = {};
@@ -92,6 +100,12 @@ export async function GET(request: NextRequest) {
         const _primary_contact_name = contact
             ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "—"
             : "—";
+        const personId = contact?.person_id ?? null;
+        const person = personId ? personMap[personId] : null;
+        const _primary_person_name = person
+            ? [person.first_name, person.last_name].filter(Boolean).join(" ").trim() || "—"
+            : (personId ? "—" : null);
+        const _primary_person_id = personId ?? null;
         const _primary_contact_email = contact?.email ?? null;
         const _primary_contact_phone = contact?.phone ?? null;
         const meta = (r.metadata && typeof r.metadata === "object") ? (r.metadata as Record<string, unknown>) : {};
@@ -105,6 +119,8 @@ export async function GET(request: NextRequest) {
         const _updated = r.updated_at ?? r.created_at ?? null;
         return {
             ...r,
+            _primary_person_name: _primary_person_name ?? undefined,
+            _primary_person_id: _primary_person_id ?? undefined,
             _primary_contact_name,
             _primary_contact_email,
             _primary_contact_phone,

@@ -131,3 +131,19 @@ export function formatRecurrenceLabel(unit: string | null, interval: number | nu
     if (u === "year") return `Every ${i} years`;
     return `${i} ${u}(s)`;
 }
+
+/**
+ * Display name for a person/contact: full_name if set, otherwise first_name + last_name, otherwise "—".
+ * Use wherever full_name may be null but first_name/last_name exist to avoid blank names.
+ */
+export function personDisplayName(o: {
+    full_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+} | null | undefined): string {
+    if (!o) return "—";
+    const full = (o.full_name as string | null | undefined)?.trim();
+    if (full) return full;
+    const parts = [o.first_name, o.last_name].filter(Boolean).map((s) => String(s).trim());
+    return parts.length ? parts.join(" ") : "—";
+}

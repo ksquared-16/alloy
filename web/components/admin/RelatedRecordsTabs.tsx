@@ -17,9 +17,11 @@ interface TabConfig {
     entityType: AdminDrawerEntityType;
     columns: { key: string; label: string; render?: (val: unknown, row?: Record<string, unknown>) => React.ReactNode }[];
     dataKey: string;
+    /** When set, use this row key for opening the drawer (e.g. "person_id" for people tab). */
+    rowIdKey?: string;
 }
 
-const EMPTY: Record<string, unknown[]> = { opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [] };
+const EMPTY: Record<string, unknown[]> = { people: [], opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [] };
 
 export default function RelatedRecordsTabs({
     entityType,
@@ -105,6 +107,12 @@ export default function RelatedRecordsTabs({
         );
     } else if (entityType === "customer") {
         tabs.push(
+            { key: "people", label: "People", entityType: "persons", dataKey: "people", rowIdKey: "person_id", columns: [
+                { key: "_person_name", label: "Name", render: (v) => (v as string) || "—" },
+                { key: "role_label", label: "Role", render: (v) => (v as string) || "—" },
+                { key: "_person_email", label: "Email", render: (v) => (v as string) || "—" },
+                { key: "_person_phone", label: "Phone", render: (v) => (v as string) || "—" },
+            ]},
             { key: "contacts", label: "Contacts", entityType: "contacts", dataKey: "contacts", columns: [
                 { key: "_primary", label: " ", render: (_v, row) => (row?.id && primaryContactId && row.id === primaryContactId ? "Primary" : "") },
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
@@ -266,9 +274,9 @@ export default function RelatedRecordsTabs({
                                 <tbody>
                                     {rows.map((row, i) => (
                                         <tr
-                                            key={(row.id as string) ?? i}
+                                            key={((active.rowIdKey ? row[active.rowIdKey] : row.id) as string) ?? String(i)}
                                             className="border-t border-alloy-stone/20 hover:bg-alloy-pine/5 cursor-pointer"
-                                            onClick={() => openDrawer({ type: active.entityType, id: row.id as string })}
+                                            onClick={() => openDrawer({ type: active.entityType, id: (active.rowIdKey ? row[active.rowIdKey] : row.id) as string })}
                                         >
                                             {active.columns.map((col) => (
                                                 <td key={col.key} className="px-3 py-2">

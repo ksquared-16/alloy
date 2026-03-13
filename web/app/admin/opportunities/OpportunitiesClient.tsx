@@ -30,6 +30,7 @@ export interface Opportunity {
     monetary_value_cents?: number | null;
     _customer_name?: string | null;
     _contact_name?: string | null;
+    _primary_person_name?: string | null;
     _primary_contact_name?: string | null;
     _contact_email?: string | null;
     _contact_phone?: string | null;

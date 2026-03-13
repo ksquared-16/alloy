@@ -338,10 +338,10 @@ export default function JobDetailClient({
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Customer</h3>
                             <p className="text-sm text-alloy-midnight">{customerName}</p>
                         </div>
-                        {(job._primary_contact_name as string) && (
+                        {((job as { _primary_person_name?: string | null })._primary_person_name ?? (job._primary_contact_name as string)) && (
                             <div>
-                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Contact</h3>
-                                <p className="text-sm text-alloy-midnight">{job._primary_contact_name as string}</p>
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Person</h3>
+                                <p className="text-sm text-alloy-midnight">{(job as { _primary_person_name?: string | null })._primary_person_name ?? (job._primary_contact_name as string)}</p>
                             </div>
                         )}
                         <div>
