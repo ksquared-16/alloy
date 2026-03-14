@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
@@ -45,6 +46,7 @@ type StatusOption = { status_key: string; status_label: string | null };
 
 export default function CustomersClient() {
   const { openDrawer } = useAdminDrawer();
+  const { openPreview } = useAdminPreview();
   const { selectedVerticalId } = useAdminVertical();
   const { labels } = useEntityLabels();
   const searchParams = useSearchParams();
@@ -219,7 +221,10 @@ export default function CustomersClient() {
             data={data}
             columns={columns}
             filters={[]}
-            onRowClick={(row) => openDrawer({ type: "customers", id: row.id })}
+            onRowClick={(row, e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              openPreview({ type: "customers", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } });
+            }}
           />
         )}
       </div>

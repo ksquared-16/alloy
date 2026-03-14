@@ -22,7 +22,7 @@ interface DataTableProps<T> {
     columns: Column<T>[];
     filters?: Filter[];
     searchable?: boolean;
-    onRowClick?: (row: T) => void;
+    onRowClick?: (row: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
     loading?: boolean;
     /** When true, do not render the search/filters bar (use with custom toolbar e.g. filter icon). */
     hideToolbar?: boolean;
@@ -282,10 +282,10 @@ export default function DataTable<T extends Record<string, any>>({
                                 <tr
                                     key={idx}
                                     className={`
-                                        transition-colors duration-100
-                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-pine/5" : ""}
+                                        transition-colors duration-150
+                                        ${onRowClick ? "cursor-pointer hover:bg-alloy-pine/15 active:bg-alloy-pine/20" : ""}
                                     `}
-                                    onClick={() => onRowClick?.(row)}
+                                    onClick={(e) => onRowClick?.(row, e)}
                                 >
                                     {columns.map((column) => (
                                         <td

@@ -25,7 +25,9 @@ import {
 } from "lucide-react";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
+import { AdminPreviewProvider } from "@/contexts/AdminPreviewContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
+import RecordPreviewPanel from "@/components/admin/RecordPreviewPanel";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import AlloyLogo from "@/components/admin/AlloyLogo";
@@ -417,8 +419,11 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                 <main className="flex-1 overflow-auto flex flex-col bg-admin-page">
                     <div className="p-8 flex-1">
                         <AdminDrawerProvider>
-                            {children}
-                            <AdminEntityDrawer />
+                            <AdminPreviewProvider>
+                                {children}
+                                <RecordPreviewPanel />
+                                <AdminEntityDrawer />
+                            </AdminPreviewProvider>
                         </AdminDrawerProvider>
                     </div>
                 </main>

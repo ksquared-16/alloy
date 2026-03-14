@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import Drawer from "@/components/admin/Drawer";
@@ -35,6 +36,7 @@ const EMPTY_FORM = {
 
 export default function SchedulesClient() {
   const { openDrawer } = useAdminDrawer();
+  const { openPreview } = useAdminPreview();
   const { labels } = useEntityLabels();
   const plural = getEntityLabel(labels, "schedules", "plural");
   const singular = getEntityLabel(labels, "schedules", "singular");
@@ -266,8 +268,11 @@ export default function SchedulesClient() {
                   schedules.map((s) => (
                     <tr
                       key={s.id}
-                      className="transition-colors duration-100 cursor-pointer hover:bg-alloy-juniper/[0.08]"
-                      onClick={() => openDrawer({ type: "schedules", id: s.id })}
+                      className="transition-colors duration-150 cursor-pointer hover:bg-alloy-pine/15 active:bg-alloy-pine/20"
+                      onClick={(e) => {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        openPreview({ type: "schedules", id: s.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } });
+                      }}
                     >
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.start_at)}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.end_at)}</td>
