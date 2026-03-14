@@ -16,28 +16,57 @@ import {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { neutral, derived } from "@/styles/tokens/colors";
-import SystemMapNode from "./SystemMapNode";
+import DepartmentNode from "./DepartmentNode";
+import { MOCK_DEPARTMENTS } from "./mockDepartments";
+import type { DepartmentNodeData } from "./DepartmentNode";
 
-const nodeTypes = { systemMap: SystemMapNode };
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 160;
+const GAP_X = 80;
+const GAP_Y = 60;
+const OFFSET_X = 60;
+const OFFSET_Y = 40;
 
-const initialNodes: Node[] = [
-  {
-    id: "1",
-    type: "systemMap",
-    position: { x: 100, y: 100 },
-    data: { label: "Customer", nodeType: "customer" },
-    draggable: true,
-  },
-  {
-    id: "2",
-    type: "systemMap",
-    position: { x: 280, y: 100 },
-    data: { label: "Job", nodeType: "job" },
-    draggable: true,
-  },
-];
+/** Grid: row 0 = Operations, Sales; row 1 = Finance, Customer Success; row 2 = AI Systems (centered) */
+function getDepartmentPosition(index: number): { x: number; y: number } {
+  switch (index) {
+    case 0:
+      return { x: OFFSET_X, y: OFFSET_Y };
+    case 1:
+      return { x: OFFSET_X + NODE_WIDTH + GAP_X, y: OFFSET_Y };
+    case 2:
+      return { x: OFFSET_X, y: OFFSET_Y + NODE_HEIGHT + GAP_Y };
+    case 3:
+      return { x: OFFSET_X + NODE_WIDTH + GAP_X, y: OFFSET_Y + NODE_HEIGHT + GAP_Y };
+    case 4: {
+      const centerX = (OFFSET_X * 2 + NODE_WIDTH * 2 + GAP_X) / 2 - NODE_WIDTH / 2;
+      return { x: centerX, y: OFFSET_Y + (NODE_HEIGHT + GAP_Y) * 2 };
+    }
+    default:
+      return { x: OFFSET_X + (index % 2) * (NODE_WIDTH + GAP_X), y: OFFSET_Y + Math.floor(index / 2) * (NODE_HEIGHT + GAP_Y) };
+  }
+}
+
+const initialNodes: Node<DepartmentNodeData>[] = MOCK_DEPARTMENTS.map((d, i) => ({
+  id: d.id,
+  type: "department",
+  position: getDepartmentPosition(i),
+  data: {
+    name: d.name,
+    departmentKey: d.key,
+    primaryKpi: d.primaryKpi,
+    primaryValue: d.primaryValue,
+    secondaryKpi: d.secondaryKpi,
+    secondaryValue: d.secondaryValue,
+    health: d.health,
+    alertCount: d.alertCount,
+  } satisfies DepartmentNodeData,
+  draggable: true,
+}));
 
 const initialEdges: Edge[] = [];
+
+const nodeTypes = { department: DepartmentNode };
 
 export default function SystemCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);

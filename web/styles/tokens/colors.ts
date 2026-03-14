@@ -35,6 +35,8 @@ export const derived = {
   maskOverlay: "rgba(39, 63, 82, 0.06)",
   /** Subtle panel shadow (e.g. bottom command bar) */
   panelShadow: "0 -1px 4px rgba(39, 63, 82, 0.08)",
+  /** Card / node shadow */
+  cardShadow: "0 2px 8px rgba(39, 63, 82, 0.08)",
 } as const;
 
 /** Brand tokens */
