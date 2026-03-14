@@ -153,7 +153,7 @@ export default function PeopleClient() {
                         filters={[]}
                         onRowClick={(row, e) => {
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                          openPreview({ type: "persons", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } });
+                          openPreview({ type: "persons", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
                         }}
                     />
                 )}

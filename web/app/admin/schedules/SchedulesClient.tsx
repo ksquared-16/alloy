@@ -271,7 +271,7 @@ export default function SchedulesClient() {
                       className="transition-colors duration-150 cursor-pointer hover:bg-alloy-pine/15 active:bg-alloy-pine/20"
                       onClick={(e) => {
                         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                        openPreview({ type: "schedules", id: s.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height } });
+                        openPreview({ type: "schedules", id: s.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
                       }}
                     >
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.start_at)}</td>

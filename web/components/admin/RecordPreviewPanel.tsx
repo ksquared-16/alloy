@@ -9,7 +9,9 @@ import { formatDate, formatDateTime, formatPhoneUS } from "@/lib/adminFormatters
 import { ExternalLink } from "lucide-react";
 
 const PANEL_WIDTH = 340;
-const GAP = 8;
+const GAP = 12;
+const VIEWPORT_MARGIN = 16;
+const PANEL_HEIGHT_ESTIMATE = 320;
 
 function useEntityPreview(type: AdminDrawerEntityType | null, id: string | null) {
     const [data, setData] = useState<Record<string, unknown> | null>(null);
@@ -156,7 +158,7 @@ function PreviewContent({
     const title = type === "persons" ? personName : (name ?? personName ?? "—");
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             <div>
                 <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-semibold text-alloy-forge truncate pr-2">{title}</h3>
@@ -165,7 +167,7 @@ function PreviewContent({
                     )}
                 </div>
                 {summaryLines.length > 0 && (
-                    <ul className="mt-2 space-y-1 text-sm text-alloy-midnight/85">
+                    <ul className="mt-1.5 space-y-0.5 text-sm text-alloy-midnight/85">
                         {summaryLines.map((s, i) => (
                             <li key={i} className="leading-snug">{s.line}</li>
                         ))}
@@ -220,15 +222,22 @@ export default function RecordPreviewPanel() {
 
     if (!preview) return null;
 
-    const { anchor } = preview;
-    const rightSpace = typeof window !== "undefined" ? window.innerWidth - anchor.right : 400;
-    const left = rightSpace >= PANEL_WIDTH + GAP ? anchor.right + GAP : anchor.left - PANEL_WIDTH - GAP;
-    let top = anchor.top;
-    if (typeof window !== "undefined") {
-        const maxBottom = window.innerHeight - 24;
-        if (top + 320 > maxBottom) top = Math.max(24, maxBottom - 320);
-        if (top < 24) top = 24;
-    }
+    const { anchor, clickPosition } = preview;
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+    const rowCenterX = anchor.left + anchor.width / 2;
+    const refX = clickPosition?.x ?? rowCenterX;
+    const refY = clickPosition?.y ?? anchor.top;
+
+    // Horizontal: left half of viewport → panel to the right; right half → panel to the left
+    const placeRight = refX < vw / 2;
+    let left = placeRight ? anchor.right + GAP : anchor.left - PANEL_WIDTH - GAP;
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - PANEL_WIDTH - VIEWPORT_MARGIN));
+
+    // Vertical: align with click/row, then clamp so panel stays fully visible
+    let top = clickPosition ? refY - 6 : anchor.top;
+    const maxTop = vh - VIEWPORT_MARGIN - PANEL_HEIGHT_ESTIMATE;
+    top = Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop));
 
     const panel = (
         <div
@@ -240,10 +249,10 @@ export default function RecordPreviewPanel() {
                 left,
                 top,
                 width: PANEL_WIDTH,
-                maxHeight: "calc(100vh - 48px)",
+                maxHeight: `min(${PANEL_HEIGHT_ESTIMATE + 100}px, calc(100vh - ${VIEWPORT_MARGIN * 2}px))`,
             }}
         >
-            <div className="p-4 overflow-y-auto max-h-[min(420px,calc(100vh-56px))]">
+            <div className="p-3.5 overflow-y-auto max-h-[min(380px,calc(100vh-7rem))]">
                 <PreviewContent
                     type={preview.type}
                     data={data}

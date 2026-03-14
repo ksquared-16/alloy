@@ -5,15 +5,20 @@ import type { AdminDrawerEntityType } from "./AdminDrawerContext";
 
 export type PreviewAnchor = { top: number; left: number; right: number; bottom: number; width: number; height: number };
 
+/** Optional: actual click position for contextual panel placement. */
+export type PreviewClickPosition = { x: number; y: number };
+
 export interface PreviewState {
     type: AdminDrawerEntityType;
     id: string;
     anchor: PreviewAnchor;
+    /** When provided, used for viewport-aware placement (left/right half, vertical alignment). */
+    clickPosition?: PreviewClickPosition;
 }
 
 interface AdminPreviewContextValue {
     preview: PreviewState | null;
-    openPreview: (params: { type: AdminDrawerEntityType; id: string; anchor: PreviewAnchor }) => void;
+    openPreview: (params: { type: AdminDrawerEntityType; id: string; anchor: PreviewAnchor; clickPosition?: PreviewClickPosition }) => void;
     closePreview: () => void;
 }
 
@@ -28,8 +33,8 @@ export function useAdminPreview() {
 export function AdminPreviewProvider({ children }: { children: ReactNode }) {
     const [preview, setPreview] = useState<PreviewState | null>(null);
 
-    const openPreview = useCallback((params: { type: AdminDrawerEntityType; id: string; anchor: PreviewAnchor }) => {
-        setPreview({ type: params.type, id: params.id, anchor: params.anchor });
+    const openPreview = useCallback((params: { type: AdminDrawerEntityType; id: string; anchor: PreviewAnchor; clickPosition?: PreviewClickPosition }) => {
+        setPreview({ type: params.type, id: params.id, anchor: params.anchor, clickPosition: params.clickPosition });
     }, []);
 
     const closePreview = useCallback(() => {
