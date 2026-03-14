@@ -36,7 +36,7 @@ const EMPTY_FORM = {
 
 export default function SchedulesClient() {
   const { openDrawer } = useAdminDrawer();
-  const { openPreview } = useAdminPreview();
+  const { openPreview, preview } = useAdminPreview();
   const { labels } = useEntityLabels();
   const plural = getEntityLabel(labels, "schedules", "plural");
   const singular = getEntityLabel(labels, "schedules", "singular");
@@ -268,7 +268,7 @@ export default function SchedulesClient() {
                   schedules.map((s) => (
                     <tr
                       key={s.id}
-                      className="transition-colors duration-150 cursor-pointer hover:bg-alloy-pine/15 active:bg-alloy-pine/20"
+                      className={`transition-colors duration-150 cursor-pointer hover:bg-alloy-pine/15 active:bg-alloy-pine/20 ${preview?.type === "schedules" && preview?.id === s.id ? "bg-alloy-pine/10 ring-inset ring-2 ring-alloy-pine/40" : ""}`}
                       onClick={(e) => {
                         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                         openPreview({ type: "schedules", id: s.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });

@@ -46,7 +46,7 @@ type StatusOption = { status_key: string; status_label: string | null };
 
 export default function CustomersClient() {
   const { openDrawer } = useAdminDrawer();
-  const { openPreview } = useAdminPreview();
+  const { openPreview, preview } = useAdminPreview();
   const { selectedVerticalId } = useAdminVertical();
   const { labels } = useEntityLabels();
   const searchParams = useSearchParams();
@@ -225,6 +225,7 @@ export default function CustomersClient() {
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
               openPreview({ type: "customers", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
             }}
+            highlightedRowId={preview?.type === "customers" ? preview.id : null}
           />
         )}
       </div>

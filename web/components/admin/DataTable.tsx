@@ -26,6 +26,8 @@ interface DataTableProps<T> {
     loading?: boolean;
     /** When true, do not render the search/filters bar (use with custom toolbar e.g. filter icon). */
     hideToolbar?: boolean;
+    /** When set, the row with this id gets a highlighted style (e.g. when its preview is open). */
+    highlightedRowId?: string | null;
 }
 
 const TABLE_BORDER = "border-admin-border";
@@ -41,6 +43,7 @@ export default function DataTable<T extends Record<string, any>>({
     onRowClick,
     loading = false,
     hideToolbar = false,
+    highlightedRowId = null,
 }: DataTableProps<T>) {
     const [search, setSearch] = useState("");
     const [sortColumn, setSortColumn] = useState<keyof T | string | null>(null);
@@ -278,12 +281,16 @@ export default function DataTable<T extends Record<string, any>>({
                                 </td>
                             </tr>
                         ) : (
-                            paginatedData.map((row, idx) => (
+                            paginatedData.map((row, idx) => {
+                                const rowId = (row as { id?: string }).id;
+                                const isHighlighted = highlightedRowId != null && rowId === highlightedRowId;
+                                return (
                                 <tr
                                     key={idx}
                                     className={`
                                         transition-colors duration-150
                                         ${onRowClick ? "cursor-pointer hover:bg-alloy-pine/15 active:bg-alloy-pine/20" : ""}
+                                        ${isHighlighted ? "bg-alloy-pine/10 ring-inset ring-2 ring-alloy-pine/40" : ""}
                                     `}
                                     onClick={(e) => onRowClick?.(row, e)}
                                 >
@@ -299,7 +306,8 @@ export default function DataTable<T extends Record<string, any>>({
                                         </td>
                                     ))}
                                 </tr>
-                            ))
+                            );
+                            })
                         )}
                     </tbody>
                 </table>

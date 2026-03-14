@@ -41,7 +41,7 @@ export type JobRow = {
 
 export default function JobsClient() {
   const { openDrawer } = useAdminDrawer();
-  const { openPreview } = useAdminPreview();
+  const { openPreview, preview } = useAdminPreview();
   const { labels } = useEntityLabels();
   const plural = labels?.jobs?.plural ?? "Jobs";
   const singular = labels?.jobs?.singular ?? "Job";
@@ -263,7 +263,8 @@ export default function JobsClient() {
           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
           openPreview({ type: "jobs", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
         }}
-        />
+        highlightedRowId={preview?.type === "jobs" ? preview.id : null}
+      />
       </div>
     </>
   );

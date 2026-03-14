@@ -51,7 +51,7 @@ export default function VendorsClient({
     error,
 }: VendorsClientProps) {
     const { openDrawer } = useAdminDrawer();
-    const { openPreview } = useAdminPreview();
+    const { openPreview, preview } = useAdminPreview();
     const { labels } = useEntityLabels();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -211,7 +211,8 @@ export default function VendorsClient({
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       openPreview({ type: "vendors", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
                     }}
-                />
+                    highlightedRowId={preview?.type === "vendors" ? preview.id : null}
+                  />
             </div>
         </div>
     );

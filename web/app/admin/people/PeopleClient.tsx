@@ -27,7 +27,7 @@ type PersonRow = {
 
 export default function PeopleClient() {
     const { openDrawer } = useAdminDrawer();
-    const { openPreview } = useAdminPreview();
+    const { openPreview, preview } = useAdminPreview();
     const { canMutate } = useAdminAuth();
     const [persons, setPersons] = useState<PersonRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -155,7 +155,8 @@ export default function PeopleClient() {
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                           openPreview({ type: "persons", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
                         }}
-                    />
+                        highlightedRowId={preview?.type === "persons" ? preview.id : null}
+                      />
                 )}
             </div>
         </div>

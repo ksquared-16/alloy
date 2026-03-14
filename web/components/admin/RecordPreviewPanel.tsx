@@ -9,7 +9,8 @@ import { formatDate, formatDateTime, formatPhoneUS } from "@/lib/adminFormatters
 import { ExternalLink } from "lucide-react";
 
 const PANEL_WIDTH = 340;
-const GAP = 12;
+const CLICK_OFFSET_X = 16;
+const CLICK_OFFSET_Y = -40;
 const VIEWPORT_MARGIN = 16;
 const PANEL_HEIGHT_ESTIMATE = 320;
 
@@ -192,7 +193,14 @@ export default function RecordPreviewPanel() {
     const { preview, closePreview } = useAdminPreview();
     const { openDrawer } = useAdminDrawer();
     const panelRef = useRef<HTMLDivElement>(null);
+    const [visible, setVisible] = useState(false);
     const { data, loading, error } = useEntityPreview(preview?.type ?? null, preview?.id ?? null);
+
+    useEffect(() => {
+        setVisible(false);
+        const frame = requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
+        return () => cancelAnimationFrame(frame);
+    }, [preview?.id, preview?.type]);
 
     const openFull = useCallback(() => {
         if (preview) {
@@ -222,21 +230,32 @@ export default function RecordPreviewPanel() {
 
     if (!preview) return null;
 
-    const { anchor, clickPosition } = preview;
+    const clickPosition = preview.clickPosition;
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
-    const rowCenterX = anchor.left + anchor.width / 2;
-    const refX = clickPosition?.x ?? rowCenterX;
-    const refY = clickPosition?.y ?? anchor.top;
+    const clickX = clickPosition?.x ?? vw / 2 - PANEL_WIDTH / 2;
+    const clickY = clickPosition?.y ?? vh / 2 - 100;
 
-    // Horizontal: left half of viewport → panel to the right; right half → panel to the left
-    const placeRight = refX < vw / 2;
-    let left = placeRight ? anchor.right + GAP : anchor.left - PANEL_WIDTH - GAP;
-    left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - PANEL_WIDTH - VIEWPORT_MARGIN));
+    // Default: card emerges from click (slightly right and above)
+    let left = clickX + CLICK_OFFSET_X;
+    let top = clickY + CLICK_OFFSET_Y;
 
-    // Vertical: align with click/row, then clamp so panel stays fully visible
-    let top = clickPosition ? refY - 6 : anchor.top;
+    // If overflow right, shift left of click
+    if (left + PANEL_WIDTH + VIEWPORT_MARGIN > vw) {
+        left = clickX - PANEL_WIDTH - CLICK_OFFSET_X;
+    }
+    // If overflow left, clamp to margin
+    left = Math.max(VIEWPORT_MARGIN, left);
+    // If still overflow right after clamp (narrow viewport), keep right-aligned
+    if (left + PANEL_WIDTH + VIEWPORT_MARGIN > vw) {
+        left = vw - PANEL_WIDTH - VIEWPORT_MARGIN;
+    }
+
+    // If overflow bottom, shift upward
     const maxTop = vh - VIEWPORT_MARGIN - PANEL_HEIGHT_ESTIMATE;
+    if (top + PANEL_HEIGHT_ESTIMATE > vh - VIEWPORT_MARGIN) {
+        top = maxTop;
+    }
     top = Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop));
 
     const panel = (
@@ -244,7 +263,7 @@ export default function RecordPreviewPanel() {
             ref={panelRef}
             role="dialog"
             aria-label="Record preview"
-            className="fixed z-[100] rounded-xl border border-admin-border border-l-4 border-l-alloy-pine bg-admin-surface-card shadow-xl overflow-hidden transition-shadow duration-150"
+            className={`fixed z-[100] rounded-xl border border-admin-border border-l-4 border-l-alloy-pine bg-admin-surface-card shadow-2xl overflow-hidden transition-all duration-150 ease-out ${visible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-1 scale-[0.98]"}`}
             style={{
                 left,
                 top,
