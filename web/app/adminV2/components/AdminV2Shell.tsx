@@ -10,6 +10,7 @@ import BreadcrumbBar from "./navigation/BreadcrumbBar";
 import AIKPIStrip from "./dashboard/AIKPIStrip";
 import BusinessKPIStrip from "./dashboard/BusinessKPIStrip";
 import SystemCanvas from "./canvas/SystemCanvas";
+import RecordsPanel from "./records/RecordsPanel";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 
@@ -63,20 +64,26 @@ export default function AdminV2Shell({
         <div className="flex flex-1 min-h-0 flex-col">
           <AIKPIStrip scope={kpiScope} />
           <BusinessKPIStrip scope={kpiScope} />
-          <div className="flex flex-1 min-h-0">
-            <main className="flex-1 min-w-0 overflow-hidden">
-              <SystemCanvas
-                zoomLevel={zoomLevel}
-                selectedDepartmentKey={selectedDepartmentKey}
+          <div className="flex flex-1 min-h-0 flex-col">
+            <div className="flex flex-1 min-h-0">
+              <main className="flex-1 min-w-0 overflow-hidden">
+                <SystemCanvas
+                  zoomLevel={zoomLevel}
+                  selectedDepartmentKey={selectedDepartmentKey}
+                  selectedNodeId={selectedNodeId}
+                  onDepartmentClick={handleDepartmentClick}
+                  onNodeSelect={setSelectedNodeId}
+                />
+              </main>
+              <InspectorPanel
                 selectedNodeId={selectedNodeId}
-                onDepartmentClick={handleDepartmentClick}
-                onNodeSelect={setSelectedNodeId}
+                selectedDepartmentKey={selectedDepartmentKey}
+                zoomLevel={zoomLevel}
               />
-            </main>
-            <InspectorPanel
-              selectedNodeId={selectedNodeId}
-              selectedDepartmentKey={selectedDepartmentKey}
-              zoomLevel={zoomLevel}
+            </div>
+            <RecordsPanel
+              scope={kpiScope}
+              title={selectedDepartmentKey ? `${getDepartmentName(selectedDepartmentKey)} records` : undefined}
             />
           </div>
         </div>

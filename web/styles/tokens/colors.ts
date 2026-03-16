@@ -37,6 +37,8 @@ export const derived = {
   panelShadow: "0 -1px 4px rgba(39, 63, 82, 0.08)",
   /** Card / node shadow */
   cardShadow: "0 2px 8px rgba(39, 63, 82, 0.08)",
+  /** Node elevation (slightly stronger for focus) */
+  nodeElevation: "0 4px 12px rgba(39, 63, 82, 0.1)",
 } as const;
 
 /** Brand tokens */

@@ -14,6 +14,7 @@ export type DepartmentNodeData = {
   secondaryValue: string;
   health: "good" | "attention" | "critical";
   alertCount: number;
+  zoomingOut?: boolean;
 };
 
 const HEALTH_LABELS: Record<DepartmentNodeData["health"], string> = {
@@ -30,6 +31,7 @@ const HEALTH_COLOR: Record<DepartmentNodeData["health"], string> = {
 
 function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeData>) {
   const fill = getDepartmentColor(data.departmentKey);
+  const zoomingOut = data.zoomingOut ?? false;
 
   return (
     <>
@@ -37,74 +39,81 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
       <div
         style={{
           width: 200,
-          minHeight: 160,
-          padding: 16,
+          minHeight: 168,
+          padding: 20,
           borderRadius: 12,
           backgroundColor: neutral.surface,
           border: `2px solid ${selected ? neutral.textPrimary : derived.border}`,
           boxSizing: "border-box",
-          boxShadow: derived.cardShadow,
+          boxShadow: selected ? derived.nodeElevation : derived.cardShadow,
+          opacity: zoomingOut ? 0.5 : 1,
+          transform: zoomingOut ? "scale(0.96)" : "scale(1)",
+          transition: "opacity 280ms ease-out, transform 280ms ease-out, box-shadow 180ms ease-out",
         }}
       >
         <div
           style={{
             height: 4,
             borderRadius: 2,
-            marginBottom: 12,
+            marginBottom: 14,
             backgroundColor: fill,
           }}
         />
         <div
           style={{
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: 600,
             color: neutral.textPrimary,
-            marginBottom: 12,
+            marginBottom: 14,
+            letterSpacing: "-0.01em",
           }}
         >
           {data.name}
         </div>
         <div
           style={{
-            fontSize: 12,
+            fontSize: 13,
             color: derived.textSecondary,
-            marginBottom: 2,
+            marginBottom: 4,
           }}
         >
           {data.primaryKpi}: <strong style={{ color: neutral.textPrimary }}>{data.primaryValue}</strong>
         </div>
         <div
           style={{
-            fontSize: 12,
+            fontSize: 11,
             color: derived.textSecondary,
-            marginBottom: 10,
+            marginBottom: 12,
           }}
         >
           {data.secondaryKpi}: <strong style={{ color: neutral.textPrimary }}>{data.secondaryValue}</strong>
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span
             style={{
               fontSize: 11,
-              fontWeight: 500,
+              fontWeight: 600,
               color: HEALTH_COLOR[data.health],
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
             }}
           >
-            Health: {HEALTH_LABELS[data.health]}
+            {HEALTH_LABELS[data.health]}
           </span>
           {data.alertCount > 0 && (
             <span
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                minWidth: 20,
-                height: 20,
-                borderRadius: 10,
+                minWidth: 22,
+                height: 22,
+                borderRadius: 11,
                 backgroundColor: semantic.warning,
                 color: neutral.surface,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
+                boxShadow: derived.cardShadow,
               }}
             >
               {data.alertCount}

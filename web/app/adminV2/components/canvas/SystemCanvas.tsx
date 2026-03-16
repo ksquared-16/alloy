@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useEffect } from "react";
+import { useCallback, useMemo, useEffect, useState, useRef } from "react";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Node,
   type Edge,
   BackgroundVariant,
@@ -21,6 +23,8 @@ import { getManagersForDepartment } from "./mockManagers";
 import type { DepartmentNodeData } from "./DepartmentNode";
 import type { ManagerNodeData } from "./ManagerNode";
 import type { DepartmentKey } from "@/lib/departmentColors";
+
+const ZOOM_DURATION_MS = 380;
 
 const DEPT_NODE_WIDTH = 200;
 const DEPT_NODE_HEIGHT = 160;
@@ -53,18 +57,47 @@ function getDepartmentPosition(index: number): { x: number; y: number } {
 
 const MANAGER_NODE_WIDTH = 160;
 const MANAGER_GAP = 60;
-const MANAGER_OFFSET_X = 80;
-const MANAGER_OFFSET_Y = 80;
 
-function getManagerPositions(count: number): { x: number; y: number }[] {
+function getManagerPositions(
+  count: number,
+  centerAt: { x: number; y: number } | null
+): { x: number; y: number }[] {
+  const totalWidth = count * MANAGER_NODE_WIDTH + (count - 1) * MANAGER_GAP;
+  const startX = centerAt
+    ? centerAt.x - totalWidth / 2 + MANAGER_NODE_WIDTH / 2
+    : 80;
+  const y = centerAt ? centerAt.y - 40 : 80;
   const positions: { x: number; y: number }[] = [];
   for (let i = 0; i < count; i++) {
     positions.push({
-      x: MANAGER_OFFSET_X + i * (MANAGER_NODE_WIDTH + MANAGER_GAP),
-      y: MANAGER_OFFSET_Y,
+      x: startX + i * (MANAGER_NODE_WIDTH + MANAGER_GAP),
+      y,
     });
   }
   return positions;
+}
+
+function ZoomRunner({
+  zoomingInto,
+  onComplete,
+}: {
+  zoomingInto: { nodeId: string; key: DepartmentKey; position: { x: number; y: number } } | null;
+  onComplete: (key: DepartmentKey, nodeId: string, position: { x: number; y: number }) => void;
+}) {
+  const { setCenter } = useReactFlow();
+
+  useEffect(() => {
+    if (!zoomingInto) return;
+    const cx = zoomingInto.position.x + DEPT_NODE_WIDTH / 2;
+    const cy = zoomingInto.position.y + DEPT_NODE_HEIGHT / 2;
+    setCenter(cx, cy, { duration: ZOOM_DURATION_MS });
+    const t = setTimeout(() => {
+      onComplete(zoomingInto.key, zoomingInto.nodeId, zoomingInto.position);
+    }, ZOOM_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [zoomingInto, setCenter, onComplete]);
+
+  return null;
 }
 
 const nodeTypes = { department: DepartmentNode, manager: ManagerNode };
@@ -84,7 +117,24 @@ export default function SystemCanvas({
   onDepartmentClick,
   onNodeSelect,
 }: SystemCanvasProps) {
-  const departmentNodes: Node<DepartmentNodeData>[] = useMemo(
+  const [zoomingInto, setZoomingInto] = useState<{
+    nodeId: string;
+    key: DepartmentKey;
+    position: { x: number; y: number };
+  } | null>(null);
+  const lastZoomedPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleZoomComplete = useCallback(
+    (key: DepartmentKey, nodeId: string, position: { x: number; y: number }) => {
+      lastZoomedPositionRef.current = position;
+      setZoomingInto(null);
+      onDepartmentClick(key);
+      onNodeSelect(nodeId);
+    },
+    [onDepartmentClick, onNodeSelect]
+  );
+
+  const departmentNodes: Node<DepartmentNodeData & { zoomingOut?: boolean }>[] = useMemo(
     () =>
       MOCK_DEPARTMENTS.map((d, i) => ({
         id: d.id,
@@ -99,17 +149,19 @@ export default function SystemCanvas({
           secondaryValue: d.secondaryValue,
           health: d.health,
           alertCount: d.alertCount,
-        } satisfies DepartmentNodeData,
-        draggable: true,
+          zoomingOut: zoomingInto != null && zoomingInto.nodeId !== d.id,
+        },
+        draggable: !zoomingInto,
         selected: selectedNodeId === d.id,
       })),
-    [selectedNodeId]
+    [selectedNodeId, zoomingInto]
   );
 
   const managerNodes: Node<ManagerNodeData>[] = useMemo(() => {
     if (!selectedDepartmentKey) return [];
     const managers = getManagersForDepartment(selectedDepartmentKey);
-    const positions = getManagerPositions(managers.length);
+    const centerAt = lastZoomedPositionRef.current;
+    const positions = getManagerPositions(managers.length, centerAt);
     return managers.map((m, i) => ({
       id: m.id,
       type: "manager",
@@ -130,22 +182,27 @@ export default function SystemCanvas({
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      if (zoomingInto) return;
       if (node.type === "department" && zoomLevel === "company") {
-        onDepartmentClick((node.data as DepartmentNodeData).departmentKey);
-        onNodeSelect(node.id);
+        setZoomingInto({
+          nodeId: node.id,
+          key: (node.data as DepartmentNodeData).departmentKey,
+          position: node.position,
+        });
       } else {
         onNodeSelect(node.id);
       }
     },
-    [zoomLevel, onDepartmentClick, onNodeSelect]
+    [zoomLevel, onNodeSelect, zoomingInto]
   );
 
   const onPaneClick = useCallback(() => {
-    onNodeSelect(null);
-  }, [onNodeSelect]);
+    if (!zoomingInto) onNodeSelect(null);
+  }, [onNodeSelect, zoomingInto]);
 
   return (
     <div className="w-full h-full" style={{ backgroundColor: neutral.background }}>
+      <ReactFlowProvider>
       <ReactFlow
         nodes={nodesState}
         edges={edges}
@@ -154,13 +211,15 @@ export default function SystemCanvas({
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
-        fitView
         minZoom={0.1}
         maxZoom={2}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         proOptions={{ hideAttribution: true }}
+        fitView={!zoomingInto}
+        fitViewOptions={{ padding: 0.2, duration: 0 }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={neutral.border} />
+        <ZoomRunner zoomingInto={zoomingInto} onComplete={handleZoomComplete} />
         <Controls />
         <MiniMap
           nodeColor={neutral.border}
@@ -168,6 +227,7 @@ export default function SystemCanvas({
           style={{ backgroundColor: neutral.surface }}
         />
       </ReactFlow>
+      </ReactFlowProvider>
     </div>
   );
 }
