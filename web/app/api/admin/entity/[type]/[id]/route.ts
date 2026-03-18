@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
+import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
@@ -12,6 +13,7 @@ const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
     vendors: "vendor",
     schedules: "schedule",
     persons: "person",
+    locations: "location",
 };
 
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
@@ -43,13 +45,29 @@ async function attachFieldDefinitionsAndValues(
     const defIds = fieldDefs.map((d) => d.id);
     const { data: fvRows } = await supabase
         .from("field_values")
-        .select("field_definition_id, value")
+        .select(
+            "field_definition_id, value, value_text, value_number, value_boolean, value_date, value_json"
+        )
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)
         .in("field_definition_id", defIds);
-    const valueByDefId = new Map((fvRows ?? []).map((r: { field_definition_id: string; value: string | null }) => [r.field_definition_id, r.value ?? ""]));
+    type FvRow = {
+        field_definition_id: string;
+        value?: string | null;
+        value_text?: string | null;
+        value_number?: number | null;
+        value_boolean?: boolean | null;
+        value_date?: string | null;
+        value_json?: unknown;
+    };
+    const rowByDefId = new Map(
+        ((fvRows ?? []) as FvRow[]).map((r) => [r.field_definition_id, r] as const)
+    );
     for (const d of fieldDefs) {
-        if (!d.is_system) (out as Record<string, unknown>)[d.field_key] = valueByDefId.get(d.id) ?? "";
+        if (!d.is_system) {
+            const row = rowByDefId.get(d.id);
+            (out as Record<string, unknown>)[d.field_key] = displayFromFieldValueRow(d.field_type, row ?? null);
+        }
     }
 }
 
@@ -518,6 +536,7 @@ export async function GET(
                 out._customer = null;
                 out._customer_name = null;
             }
+            await attachFieldDefinitionsAndValues(supabase, out, "locations", id);
             return NextResponse.json(out);
         }
         if (type === "discount_redemptions") {

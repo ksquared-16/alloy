@@ -1385,7 +1385,7 @@ export default function AdminEntityDrawer() {
                 entity_type: data.entity_type ?? "",
             });
         } else if (drawer.type === "locations") {
-            setFormData({
+            const locBase: Record<string, unknown> = {
                 label: data.label ?? "",
                 customer_id: (data.customer_id as string) ?? "",
                 location_type_id: (data.location_type_id as string) ?? "",
@@ -1399,7 +1399,12 @@ export default function AdminEntityDrawer() {
                 postal_code: data.postal_code ?? "",
                 country: data.country ?? "",
                 access_notes: data.access_notes ?? "",
-            });
+            };
+            const locFd = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of locFd) {
+                if (!d.is_system) locBase[d.field_key] = (data as Record<string, unknown>)[d.field_key] ?? "";
+            }
+            setFormData(locBase);
         } else if (drawer.type === "customer_members") {
             const rel = (data.relationship as string) ?? "";
             const meta = (data.metadata as Record<string, unknown>) || {};
@@ -1816,6 +1821,29 @@ export default function AdminEntityDrawer() {
                 sort_order: data.sort_order != null ? Number(data.sort_order) : 0,
                 is_active: !!data.is_active,
             };
+        } else if (drawer.type === "locations") {
+            initial = {
+                label: (data.label as string) ?? "",
+                customer_id: (data.customer_id as string) ?? "",
+                location_type_id: (data.location_type_id as string) ?? "",
+                location_type: (data.location_type as string) ?? "",
+                is_active: data.is_active ?? true,
+                is_primary: data.is_primary ?? false,
+                address1: (data.address1 as string) ?? "",
+                address2: (data.address2 as string) ?? "",
+                city: (data.city as string) ?? "",
+                state: (data.state as string) ?? "",
+                postal_code: (data.postal_code as string) ?? "",
+                country: (data.country as string) ?? "",
+                access_notes: (data.access_notes as string) ?? "",
+            };
+            const locDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+            for (const d of locDefs) {
+                if (!d.is_system) {
+                    (initial as Record<string, unknown>)[d.field_key] =
+                        (data as Record<string, unknown>)[d.field_key] ?? "";
+                }
+            }
         } else if (drawer.type === "persons") {
             initial = {
                 first_name: (data.first_name as string) ?? "",
@@ -2138,6 +2166,12 @@ export default function AdminEntityDrawer() {
                     return;
                 }
                 delete locPayload.customer_id;
+                const locDefs = (data?._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+                for (const d of locDefs) {
+                    if (!d.is_system && formData[d.field_key] !== undefined) {
+                        (locPayload as Record<string, unknown>)[d.field_key] = formData[d.field_key];
+                    }
+                }
                 const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json.error as string) || "Save failed");
@@ -2552,8 +2586,116 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
+            const locDefs = (
+                (data._field_definitions as {
+                    field_key: string;
+                    field_type: string;
+                    label: string | null;
+                    is_system: boolean;
+                    is_visible_in_drawer?: boolean;
+                    sort_order: number;
+                }[]) ?? []
+            )
+                .filter((d) => !d.is_system && d.is_visible_in_drawer !== false)
+                .sort((a, b) => a.sort_order - b.sort_order);
+            return {
+                custom_property_fields: (
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                        {locDefs.length === 0 ? (
+                            <p className="text-sm text-alloy-midnight/60 md:col-span-2">
+                                No custom location fields. Add them under System → Directory Settings → Location Fields.
+                            </p>
+                        ) : (
+                            locDefs.map((f) => {
+                                const raw =
+                                    (isEditing && canMutate ? formData[f.field_key] : (data as Record<string, unknown>)[f.field_key]) ??
+                                    "";
+                                const str = raw === true || raw === false ? (raw ? "Yes" : "No") : String(raw ?? "");
+                                const edit = isEditing && canMutate;
+                                return (
+                                    <div key={f.field_key}>
+                                        <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">
+                                            {f.label ?? f.field_key}
+                                        </label>
+                                        {edit ? (
+                                            f.field_type === "boolean" ? (
+                                                <select
+                                                    value={String(formData[f.field_key] ?? "")}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({ ...prev, [f.field_key]: e.target.value }))
+                                                    }
+                                                    onBlur={() => {
+                                                        if (nonJobFormDirty) saveEdit();
+                                                    }}
+                                                    className={INLINE_EDIT_INPUT_CLASS}
+                                                >
+                                                    <option value="">—</option>
+                                                    <option value="true">Yes</option>
+                                                    <option value="false">No</option>
+                                                </select>
+                                            ) : f.field_type === "number" ? (
+                                                <input
+                                                    type="number"
+                                                    value={
+                                                        formData[f.field_key] != null && formData[f.field_key] !== ""
+                                                            ? String(formData[f.field_key])
+                                                            : ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            [f.field_key]: e.target.value,
+                                                        }))
+                                                    }
+                                                    onBlur={() => {
+                                                        if (nonJobFormDirty) saveEdit();
+                                                    }}
+                                                    className={INLINE_EDIT_INPUT_CLASS}
+                                                />
+                                            ) : f.field_type === "date" || f.field_type === "datetime" ? (
+                                                <input
+                                                    type={f.field_type === "date" ? "date" : "datetime-local"}
+                                                    value={String(formData[f.field_key] ?? "").slice(0, 16)}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            [f.field_key]: e.target.value,
+                                                        }))
+                                                    }
+                                                    onBlur={() => {
+                                                        if (nonJobFormDirty) saveEdit();
+                                                    }}
+                                                    className={INLINE_EDIT_INPUT_CLASS}
+                                                />
+                                            ) : (
+                                                <input
+                                                    value={String(formData[f.field_key] ?? "")}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            [f.field_key]: e.target.value,
+                                                        }))
+                                                    }
+                                                    onBlur={() => {
+                                                        if (nonJobFormDirty) saveEdit();
+                                                    }}
+                                                    className={INLINE_EDIT_INPUT_CLASS}
+                                                />
+                                            )
+                                        ) : (
+                                            <span className="text-sm text-alloy-midnight/90">{str || "—"}</span>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                ),
+            };
+        }
         return {};
-    }, [drawer.type, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer]);
+    }, [drawer.type, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!data || (data as { _create?: boolean })._create) return [];

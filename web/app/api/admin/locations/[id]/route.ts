@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
 const ALLOWED_KEYS = [
     "label",
@@ -123,43 +124,54 @@ export async function PATCH(
         updates[key] = body[key];
     }
 
-    if (Object.keys(updates).length === 0) {
+    const systemKeys = [...ALLOWED_KEYS, "customer_id", "org_id", "vendor_id"] as const;
+    const allowedSet = new Set(systemKeys as readonly string[]);
+    const hasCustomFieldKeys = Object.keys(body).some(
+        (k) => !allowedSet.has(k) && !k.startsWith("_")
+    );
+
+    if (Object.keys(updates).length === 0 && !hasCustomFieldKeys) {
         return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
     }
 
-    const customerId = (existing as { customer_id?: string | null }).customer_id ?? null;
-    const settingPrimary = updates.is_primary === true;
+    if (Object.keys(updates).length > 0) {
+        const customerId = (existing as { customer_id?: string | null }).customer_id ?? null;
+        const settingPrimary = updates.is_primary === true;
 
-    if (customerId && settingPrimary) {
-        const { error: unsetErr } = await supabase
-            .from("locations")
-            .update({ is_primary: false })
-            .eq("customer_id", customerId)
-            .eq("org_id", ctx.orgId)
-            .neq("id", id);
-        if (unsetErr) {
-            console.error("[ADMIN_PATCH_LOCATION] unset other primary", unsetErr);
+        if (customerId && settingPrimary) {
+            const { error: unsetErr } = await supabase
+                .from("locations")
+                .update({ is_primary: false })
+                .eq("customer_id", customerId)
+                .eq("org_id", ctx.orgId)
+                .neq("id", id);
+            if (unsetErr) {
+                console.error("[ADMIN_PATCH_LOCATION] unset other primary", unsetErr);
+            }
         }
+
+        const { data: updated, error: updateErr } = await supabase
+            .from("locations")
+            .update(updates)
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .select()
+            .single();
+
+        if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 400 });
+        if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        logAdminAudit({
+            entity: "locations",
+            id,
+            changed_fields: Object.keys(updates),
+            actor_user_id: ctx.userId,
+            role: ctx.role,
+        });
     }
 
-    const { data: updated, error: updateErr } = await supabase
-        .from("locations")
-        .update(updates)
-        .eq("id", id)
-        .eq("org_id", ctx.orgId)
-        .select()
-        .single();
+    await upsertFieldValuesFromBody(supabase, ctx.orgId, "location", id, body, systemKeys);
 
-    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 400 });
-    if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    logAdminAudit({
-        entity: "locations",
-        id,
-        changed_fields: Object.keys(updates),
-        actor_user_id: ctx.userId,
-        role: ctx.role,
-    });
-
-    return NextResponse.json(updated);
+    const { data: out } = await supabase.from("locations").select("*").eq("id", id).eq("org_id", ctx.orgId).single();
+    return NextResponse.json(out);
 }

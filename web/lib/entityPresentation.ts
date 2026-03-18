@@ -306,6 +306,15 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           ],
           locked: true,
         },
+        {
+          key: "custom_property_fields",
+          title: "Property & custom fields",
+          defaultExpanded: true,
+          collapsible: true,
+          gridCols: 2,
+          fields: [],
+          locked: true,
+        },
         { key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [], locked: true },
       ],
       relatedModules: [

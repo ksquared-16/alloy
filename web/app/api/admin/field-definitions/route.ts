@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule"] as const;
+const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
 
 export type FieldDef = {
     id: string;

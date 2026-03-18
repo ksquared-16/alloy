@@ -6,6 +6,7 @@ import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing
 import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
+import { payloadFromFieldType } from "@/lib/admin/typedFieldValues";
 /** Opportunity Statuses pipeline — Quote Started stage (website quote submission). */
 const QUOTE_STARTED_PIPELINE_STAGE_ID = "0cd4bcc7-2dc0-4706-89a7-5cf8307c8b62";
 
@@ -208,15 +209,17 @@ function serializeSquareFootageForFieldValue(raw: unknown): string {
   return String(raw).trim();
 }
 
-async function getFieldDefinitionId(
+type FieldDefMeta = { id: string; field_type: string };
+
+async function getFieldDefinitionMeta(
   supabase: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
   entityType: string,
   fieldKey: string
-): Promise<string | null> {
+): Promise<FieldDefMeta | null> {
   const { data, error } = await supabase
     .from("field_definitions")
-    .select("id")
+    .select("id, field_type")
     .eq("org_id", orgId)
     .eq("entity_type", entityType)
     .eq("field_key", fieldKey)
@@ -226,40 +229,82 @@ async function getFieldDefinitionId(
     console.error("[QUOTE_START] field_definitions lookup failed:", fieldKey, entityType, error.message);
     return null;
   }
-  const row = (data as { id: string }[] | null)?.[0];
-  return row?.id ?? null;
+  const row = (data as FieldDefMeta[] | null)?.[0];
+  return row ?? null;
 }
 
-async function upsertFieldValue(
+async function upsertTypedFieldValue(
   supabase: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
   entityType: string,
   entityId: string,
-  fieldDefinitionId: string,
-  /** Stored in field_values.value (text). */
-  value: string
+  def: FieldDefMeta,
+  rawDisplay: string
 ): Promise<void> {
+  const typed = payloadFromFieldType(def.field_type, rawDisplay);
   const now = new Date().toISOString();
   const { data: existing } = await supabase
     .from("field_values")
     .select("id")
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
-    .eq("field_definition_id", fieldDefinitionId)
+    .eq("field_definition_id", def.id)
     .maybeSingle();
   if (existing?.id) {
     await supabase
       .from("field_values")
-      .update({ value, updated_at: now })
+      .update({ ...typed, updated_at: now })
       .eq("id", (existing as { id: string }).id);
   } else {
     await supabase.from("field_values").insert({
       org_id: orgId,
       entity_type: entityType,
       entity_id: entityId,
-      field_definition_id: fieldDefinitionId,
-      value,
+      field_definition_id: def.id,
+      ...typed,
     });
+  }
+}
+
+async function upsertPersonLocationForQuote(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orgId: string,
+  personId: string,
+  locationId: string
+): Promise<void> {
+  await supabase
+    .from("person_locations")
+    .update({ is_primary: false, updated_at: new Date().toISOString() })
+    .eq("person_id", personId)
+    .eq("org_id", orgId);
+  const { data: existing } = await supabase
+    .from("person_locations")
+    .select("id")
+    .eq("person_id", personId)
+    .eq("location_id", locationId)
+    .maybeSingle();
+  const now = new Date().toISOString();
+  if (existing?.id) {
+    await supabase
+      .from("person_locations")
+      .update({
+        is_primary: true,
+        relationship_type: "associated",
+        updated_at: now,
+      })
+      .eq("id", (existing as { id: string }).id);
+  } else {
+    const { error } = await supabase.from("person_locations").insert({
+      org_id: orgId,
+      person_id: personId,
+      location_id: locationId,
+      relationship_type: "associated",
+      is_primary: true,
+      metadata: {},
+    });
+    if (error) {
+      console.error("[QUOTE_START] person_locations insert failed:", error.message);
+    }
   }
 }
 
@@ -307,6 +352,13 @@ export interface QuoteStartBody {
   quote_context?: Record<string, unknown>;
   /** Optional campaign id/slug for opportunity field_values.promo_campaign */
   promo_campaign?: string;
+  home_type?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  pets?: string | boolean;
+  gate_code?: string;
+  parking_notes?: string;
+  alarm_notes?: string;
 }
 
 /**
@@ -388,10 +440,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const locationSqftDefId = await getFieldDefinitionId(supabase, orgIdForWrites, "location", "square_footage");
-    if (!locationSqftDefId) {
+    const locationSqftDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "square_footage");
+    if (!locationSqftDef) {
       console.error(
-        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=location + field_key=square_footage. Cannot persist square_footage to field_values. Add this field definition in Supabase."
+        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=location + field_key=square_footage. Cannot persist square_footage to field_values."
       );
       return NextResponse.json(
         {
@@ -402,15 +454,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const opportunityFreqDefId = await getFieldDefinitionId(
+    const opportunityFreqDef = await getFieldDefinitionMeta(
       supabase,
       orgIdForWrites,
       "opportunity",
       "cleaning_frequency"
     );
-    if (!opportunityFreqDefId) {
+    if (!opportunityFreqDef) {
       console.error(
-        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=opportunity + field_key=cleaning_frequency. Cannot persist cleaning_frequency to field_values."
+        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=opportunity + field_key=cleaning_frequency."
       );
       return NextResponse.json(
         {
@@ -423,10 +475,15 @@ export async function POST(request: NextRequest) {
 
     const promoRaw =
       typeof body.promo_campaign === "string" ? body.promo_campaign.trim() : "";
-    let opportunityPromoDefId: string | null = null;
+    let opportunityPromoDef: FieldDefMeta | null = null;
     if (promoRaw) {
-      opportunityPromoDefId = await getFieldDefinitionId(supabase, orgIdForWrites, "opportunity", "promo_campaign");
-      if (!opportunityPromoDefId) {
+      opportunityPromoDef = await getFieldDefinitionMeta(
+        supabase,
+        orgIdForWrites,
+        "opportunity",
+        "promo_campaign"
+      );
+      if (!opportunityPromoDef) {
         console.error(
           "[QUOTE_START] CRITICAL: Request included promo_campaign but no active field_definition for entity_type=opportunity + field_key=promo_campaign."
         );
@@ -618,32 +675,58 @@ export async function POST(request: NextRequest) {
       body.square_footage ?? square_footage_raw
     );
 
-    await upsertFieldValue(
+    await upsertTypedFieldValue(
       supabase,
       orgIdForWrites,
       "location",
       locationId,
-      locationSqftDefId,
+      locationSqftDef,
       squareFootageFieldValue
     );
-    await upsertFieldValue(
+
+    const optionalLocationWrites: { key: keyof QuoteStartBody; value: unknown }[] = [
+      { key: "home_type", value: body.home_type },
+      { key: "bedrooms", value: body.bedrooms ?? body.beds },
+      { key: "bathrooms", value: body.bathrooms ?? body.baths },
+      { key: "pets", value: body.pets },
+      { key: "gate_code", value: body.gate_code },
+      { key: "parking_notes", value: body.parking_notes },
+      { key: "alarm_notes", value: body.alarm_notes },
+    ];
+    for (const { key, value } of optionalLocationWrites) {
+      if (value === undefined || value === null || value === "") continue;
+      const def = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", key as string);
+      if (!def) continue;
+      await upsertTypedFieldValue(
+        supabase,
+        orgIdForWrites,
+        "location",
+        locationId,
+        def,
+        typeof value === "boolean" ? (value ? "true" : "false") : String(value).trim()
+      );
+    }
+
+    await upsertTypedFieldValue(
       supabase,
       orgIdForWrites,
       "opportunity",
       opportunityId,
-      opportunityFreqDefId,
+      opportunityFreqDef,
       String(cleaningFrequencyValue)
     );
-    if (opportunityPromoDefId && promoRaw) {
-      await upsertFieldValue(
+    if (opportunityPromoDef && promoRaw) {
+      await upsertTypedFieldValue(
         supabase,
         orgIdForWrites,
         "opportunity",
         opportunityId,
-        opportunityPromoDefId,
+        opportunityPromoDef,
         promoRaw
       );
     }
+
+    await upsertPersonLocationForQuote(supabase, orgIdForWrites, personId, locationId);
 
     console.log(
       "[QUOTE_START] person_id=%s created_new_opportunity=%s opportunity_id=%s",
