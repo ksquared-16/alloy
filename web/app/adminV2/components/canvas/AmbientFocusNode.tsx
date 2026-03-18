@@ -117,20 +117,67 @@ const FOCUS_MICRO: { l: number; t: number }[] = [
 
 const FOCUS_DRIFT_CLASS = ["adminv2-focus-drift-sm", "adminv2-focus-drift-md", "adminv2-focus-drift-lg"] as const;
 
+/** Top/bottom edges + left/right — chamber perimeter life (not center-clustered) */
+const COMPANY_HUB_PERIMETER: { l: number; t: number }[] = (() => {
+  const pts: { l: number; t: number }[] = [];
+  for (let l = 0; l <= 100; l += 5) {
+    pts.push({ l, t: 0.6 }, { l, t: 99.4 });
+  }
+  for (let t = 4; t <= 96; t += 4.2) {
+    pts.push({ l: 0.6, t }, { l: 99.4, t });
+  }
+  return pts;
+})();
+
+const COMPANY_HUB_CORRIDOR: { l: number; t: number }[] = [
+  ...Array.from({ length: 22 }, (_, i) => ({ l: 4 + (i * 92) / 21, t: 11 + (i % 5) * 0.4 })),
+  ...Array.from({ length: 22 }, (_, i) => ({ l: 4 + (i * 92) / 21, t: 86 + (i % 5) * 0.4 })),
+  ...Array.from({ length: 16 }, (_, i) => ({ l: 2.5 + (i % 8) * 0.3, t: 18 + i * 4.2 })),
+  ...Array.from({ length: 16 }, (_, i) => ({ l: 97.2 + (i % 8) * 0.3, t: 18 + i * 4.2 })),
+];
+
 const COMPANY_HUB_DRIFT = [
   ...COMPANY_DRIFT,
   ...COMPANY_DRIFT_EDGE,
   ...COMPANY_DRIFT_EDGE2,
+  ...COMPANY_HUB_PERIMETER,
+  ...COMPANY_HUB_CORRIDOR,
   ...COMPANY_DRIFT.map((p, i) => ({ l: (p.l + 13 + (i % 6)) % 100, t: (p.t + 17 + i) % 100 })),
   ...COMPANY_DRIFT_EDGE.map((p, i) => ({ l: (p.l + 8 + i) % 100, t: (p.t + 21) % 100 })),
   ...COMPANY_DRIFT.map((p, i) => ({ l: Math.min(100, p.l + (i % 3) * 2), t: Math.max(0, p.t - (i % 5)) })),
+];
+
+const HUB_AMBIENT_PERIM_START =
+  COMPANY_DRIFT.length + COMPANY_DRIFT_EDGE.length + COMPANY_DRIFT_EDGE2.length;
+const HUB_AMBIENT_PERIM_END =
+  HUB_AMBIENT_PERIM_START + COMPANY_HUB_PERIMETER.length + COMPANY_HUB_CORRIDOR.length;
+
+const COMPANY_FIELD_EDGE: { l: number; t: number }[] = [
+  ...Array.from({ length: 14 }, (_, i) => ({ l: (i * 100) / 13, t: 1.2 })),
+  ...Array.from({ length: 14 }, (_, i) => ({ l: (i * 100) / 13, t: 98.8 })),
+  ...Array.from({ length: 12 }, (_, i) => ({ l: 1.2, t: 8 + (i * 84) / 11 })),
+  ...Array.from({ length: 12 }, (_, i) => ({ l: 98.8, t: 8 + (i * 84) / 11 })),
 ];
 
 const COMPANY_FIELD_DRIFT_FULL = [
   ...COMPANY_FIELD_DRIFT,
   ...COMPANY_FIELD_DRIFT.map((p, i) => ({ l: (p.l + 19) % 100, t: (p.t + 23 + i) % 100 })),
   ...COMPANY_FIELD_DRIFT.map((p, i) => ({ l: (p.l * 0.7 + 15) % 100, t: (p.t * 0.8 + 10) % 100 })),
+  ...COMPANY_FIELD_EDGE,
 ];
+
+const FOCUS_PERIMETER_MICRO: { l: number; t: number }[] = (() => {
+  const o: { l: number; t: number }[] = [];
+  for (let i = 0; i < 28; i++) {
+    o.push({ l: 1.2 + (i % 7) * 0.25, t: 5 + i * 3.2 });
+    o.push({ l: 98.5 - (i % 7) * 0.25, t: 8 + i * 3.1 });
+  }
+  for (let i = 0; i < 20; i++) {
+    o.push({ l: 6 + i * 4.4, t: 2.5 + (i % 3) * 0.2 });
+    o.push({ l: 5 + i * 4.5, t: 97.2 + (i % 3) * 0.2 });
+  }
+  return o;
+})();
 
 function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
   const variant = data.variant ?? "focus";
@@ -153,12 +200,16 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
         {COMPANY_FIELD_DRIFT_FULL.map((p, idx) => (
           <span
             key={`cf-${idx}`}
-            className="adminv2-company-field-drift"
+            className={
+              idx >= COMPANY_FIELD_DRIFT_FULL.length - COMPANY_FIELD_EDGE.length
+                ? "adminv2-company-field-drift adminv2-company-field-drift-perimeter"
+                : "adminv2-company-field-drift"
+            }
             style={{
               left: `${p.l}%`,
               top: `${p.t}%`,
               backgroundColor: idx % 2 === 0 ? derived.ambientCompanySpecMid : derived.ambientCompanyParticleCore,
-              animationDelay: `${idx * 0.31}s`,
+              animationDelay: `${idx * 0.22}s`,
             }}
           />
         ))}
@@ -235,7 +286,11 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
         {COMPANY_HUB_DRIFT.map((p, idx) => (
           <span
             key={`d-${idx}`}
-            className={`adminv2-company-drift-dot adminv2-company-drift-vivid adminv2-ambient-proof ${idx % 3 === 0 ? "adminv2-company-drift-jumbo" : ""}`}
+            className={`adminv2-company-drift-dot adminv2-company-drift-vivid adminv2-ambient-proof ${
+              idx >= HUB_AMBIENT_PERIM_START && idx < HUB_AMBIENT_PERIM_END
+                ? "adminv2-company-drift-perimeter-slow"
+                : ""
+            } ${idx % 3 === 0 ? "adminv2-company-drift-jumbo" : ""}`}
             style={{
               left: `${p.l}%`,
               top: `${p.t}%`,
@@ -364,6 +419,15 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
             />
           ))}
         </div>
+        <div className="adminv2-ambient-ring adminv2-ambient-ring-company-horizon" aria-hidden>
+          {R16.map((deg) => (
+            <span
+              key={`hz-${deg}`}
+              className="adminv2-ambient-spec-company-horizon"
+              style={{ transform: `rotate(${deg}deg) translateY(-812px)` }}
+            />
+          ))}
+        </div>
       </div>
     );
   }
@@ -412,6 +476,17 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
             left: `${p.l}%`,
             top: `${p.t}%`,
             animationDelay: `${idx * 0.09 + 0.4}s`,
+          }}
+        />
+      ))}
+      {FOCUS_PERIMETER_MICRO.map((p, idx) => (
+        <span
+          key={`fpm-${idx}`}
+          className="adminv2-focus-micro-spec adminv2-focus-micro-proof adminv2-focus-micro-edge"
+          style={{
+            left: `${p.l}%`,
+            top: `${p.t}%`,
+            animationDelay: `${idx * 0.05}s`,
           }}
         />
       ))}

@@ -46,7 +46,7 @@ const PROOF_MANAGER_LIMIT = 2;
 const AMBIENT_FOCUS_SIZE = 1120;
 const AMBIENT_FOCUS_HALF = AMBIENT_FOCUS_SIZE / 2;
 /** Company hub ambient (grid-centered); field satellites use AMBIENT_FIELD_HALF */
-const AMBIENT_HUB_HALF = 750;
+const AMBIENT_HUB_HALF = 835;
 const DEPT_W = COMPANY_DEPT_NODE_WIDTH;
 const DEPT_H = COMPANY_DEPT_NODE_HEIGHT;
 
@@ -168,10 +168,10 @@ function FitCompanyView({ zoomLevel }: { zoomLevel: "company" | "department" }) 
     if (zoomLevel !== "company") return;
     const id = window.setTimeout(() => {
       fitView({
-        padding: 0.008,
-        duration: 420,
-        maxZoom: 1.92,
-        minZoom: 0.35,
+        padding: 0.003,
+        duration: 440,
+        maxZoom: 2.08,
+        minZoom: 0.32,
       });
     }, 0);
     return () => clearTimeout(id);

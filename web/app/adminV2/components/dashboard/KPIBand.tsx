@@ -22,7 +22,7 @@ export default function KPIBand({ scope }: Props) {
         borderBottom: `1px solid ${derived.border}`,
         backgroundColor: neutral.surface,
         backgroundImage: `linear-gradient(180deg, ${neutral.surface} 0%, ${derived.kpiRailWash} 100%)`,
-        boxShadow: derived.kpiBandShadow,
+        boxShadow: `${derived.kpiBandShadow}, inset 0 0 0 1px ${derived.adminV2BoundaryAmber}`,
         zIndex: 3,
       }}
     >

@@ -150,6 +150,13 @@ export const derived = {
   kpiRailWash: "rgba(244, 246, 249, 0.65)",
   kpiBandBusinessLight: "rgba(0, 162, 131, 0.04)",
   kpiBandAiLight: "rgba(0, 69, 140, 0.032)",
+  /** adminV2 — subtle Juniper Ember system boundaries (not alert tone) */
+  adminV2BoundaryAmber: "rgba(188, 67, 0, 0.24)",
+  adminV2BoundaryAmberInset: "rgba(188, 67, 0, 0.2)",
+  /** AI command bar — Bend Pine tints */
+  adminV2AiBarPineWash: "rgba(0, 162, 131, 0.09)",
+  adminV2AiBarPineBorder: "rgba(0, 162, 131, 0.38)",
+  adminV2AiInputPineRing: "rgba(0, 162, 131, 0.32)",
 } as const;
 
 /** Brand tokens */

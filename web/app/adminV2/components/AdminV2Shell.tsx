@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { neutral, derived } from "@/styles/tokens/colors";
+
+const CHAMBER_FRAME = `inset 0 0 0 1px ${derived.adminV2BoundaryAmberInset}`;
 import TopNavBar from "./TopNavBar";
 import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
@@ -76,7 +78,7 @@ export default function AdminV2Shell({
               className="flex flex-1 min-h-0 flex-col min-w-0"
               style={{
                 backgroundColor: derived.canvasChamberDeep,
-                boxShadow: `inset 0 2px 0 ${neutral.surface}`,
+                boxShadow: `inset 0 2px 0 ${neutral.surface}, ${CHAMBER_FRAME}`,
                 borderTop: `1px solid ${derived.border}`,
               }}
             >

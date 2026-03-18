@@ -176,7 +176,7 @@
   0%,
   100% {
     transform: translate(0, 0);
-    opacity: 0.72;
+    opacity: 0.78;
   }
   50% {
     transform: translate(18px, -24px);
@@ -347,9 +347,50 @@
 
 .adminv2-ambient-root-company-hub {
   pointer-events: none;
-  width: 1500px;
-  height: 1500px;
+  width: 1670px;
+  height: 1670px;
   position: relative;
+}
+
+.adminv2-ambient-ring-company-horizon {
+  animation: adminv2-ambient-orbit-reverse 118s linear infinite;
+}
+
+.adminv2-ambient-spec-company-horizon {
+  position: absolute;
+  width: 5.5px;
+  height: 5.5px;
+  margin-left: -2.75px;
+  margin-top: -2.75px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.52;
+  background-color: rgba(0, 220, 200, 0.42);
+  box-shadow:
+    0 0 14px rgba(0, 220, 185, 0.35),
+    0 0 6px rgba(255, 255, 255, 0.15);
+}
+
+.adminv2-company-drift-perimeter-slow {
+  animation-duration: 6.2s !important;
+  width: 6.25px !important;
+  height: 6.25px !important;
+  margin-left: -3.125px !important;
+  margin-top: -3.125px !important;
+}
+
+.adminv2-company-field-drift-perimeter {
+  width: 4.5px !important;
+  height: 4.5px !important;
+  margin-left: -2.25px !important;
+  margin-top: -2.25px !important;
+  animation-duration: 7.5s !important;
+  opacity: 0.95 !important;
+}
+
+.adminv2-focus-micro-edge {
+  opacity: 0.95 !important;
 }
 
 .adminv2-ambient-root-company-field {
@@ -747,11 +788,11 @@
   0%,
   100% {
     transform: translate(0, 0);
-    opacity: 0.48;
+    opacity: 0.55;
   }
   50% {
     transform: translate(6px, -10px);
-    opacity: 0.88;
+    opacity: 0.94;
   }
 }
 
