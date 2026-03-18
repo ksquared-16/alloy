@@ -396,6 +396,7 @@ export default function AdminEntityDrawer() {
     const [rescheduleError, setRescheduleError] = useState<string | null>(null);
     const [pipelines, setPipelines] = useState<{ id: string; name: string }[]>([]);
     const [stages, setStages] = useState<{ id: string; pipeline_id: string; name: string; position: number }[]>([]);
+    const [oppVerticalOptions, setOppVerticalOptions] = useState<{ id: string; name: string }[]>([]);
     const [workflowConditions, setWorkflowConditions] = useState<{ target_entity?: string; field_path: string; operator: string; value: string }[]>([]);
     const [workflowActions, setWorkflowActions] = useState<{ action_type: string; target_entity?: string; payload?: Record<string, unknown> }[]>([]);
     const [runModalOpen, setRunModalOpen] = useState(false);
@@ -922,15 +923,19 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "opportunities") {
             setPipelines([]);
             setStages([]);
+            setOppVerticalOptions([]);
             return;
         }
         Promise.all([
             fetch("/api/admin/pipelines").then((r) => r.ok ? r.json() : []),
             fetch("/api/admin/pipeline-stages").then((r) => r.ok ? r.json() : []),
-        ]).then(([pl, st]) => {
+            fetch("/api/admin/verticals").then((r) => (r.ok ? r.json() : [])),
+        ]).then(([pl, st, verts]) => {
             setPipelines(Array.isArray(pl) ? pl : []);
             setStages(Array.isArray(st) ? st : []);
-        }).catch(() => { setPipelines([]); setStages([]); });
+            const vlist = Array.isArray(verts) ? verts as { id: string; name?: string | null }[] : [];
+            setOppVerticalOptions(vlist.map((v) => ({ id: v.id, name: (v.name ?? v.id).trim() || v.id })));
+        }).catch(() => { setPipelines([]); setStages([]); setOppVerticalOptions([]); });
     }, [drawer.type]);
 
     useEffect(() => {
@@ -4660,7 +4665,29 @@ export default function AdminEntityDrawer() {
                                                     })}
                                                 </select>
                                             </div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical ID</label><input value={String(formData.vertical_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical</label>
+                                            <select
+                                                value={String(formData.vertical_id ?? "")}
+                                                onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))}
+                                                onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }}
+                                                disabled={!canMutate}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            >
+                                                <option value="">— None —</option>
+                                                {(() => {
+                                                    const vid = String(formData.vertical_id ?? "");
+                                                    const opts = [...oppVerticalOptions];
+                                                    if (vid && !opts.some((o) => o.id === vid)) {
+                                                        const nm = String((data as { _vertical_name?: string | null })?._vertical_name ?? "").trim();
+                                                        opts.push({ id: vid, name: nm || `${vid.slice(0, 8)}…` });
+                                                    }
+                                                    return opts.map((v) => (
+                                                        <option key={v.id} value={v.id}>{v.name}</option>
+                                                    ));
+                                                })()}
+                                            </select>
+                                        </div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                             {statusDefsLoading ? null : (
                                             <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>

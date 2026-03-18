@@ -220,6 +220,12 @@ export async function GET(
                 out._stage_name = null;
                 out._pipeline_stage_name = null;
             }
+            if (opp.vertical_id) {
+                const { data: vert } = await supabase.from("verticals").select("name").eq("id", opp.vertical_id).maybeSingle();
+                out._vertical_name = (vert as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._vertical_name = null;
+            }
             if (opp.location_id) {
                 const loc = await supabase.from("locations").select("id, label, address1, city, state").eq("id", opp.location_id).maybeSingle();
                 const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null } | null;

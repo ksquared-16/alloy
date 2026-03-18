@@ -5,8 +5,8 @@ import { Handle, Position, type NodeProps } from "reactflow";
 import { neutral, derived, semantic, brand } from "@/styles/tokens/colors";
 import { getDepartmentColor, type DepartmentKey } from "@/lib/departmentColors";
 import {
-  COMPANY_DEPT_NODE_WIDTH,
-  COMPANY_DEPT_NODE_HEIGHT,
+  COMPANY_GRID_DEPT_WIDTH,
+  COMPANY_GRID_DEPT_HEIGHT,
 } from "./canvasLayout";
 
 export type DepartmentNodeData = {
@@ -38,8 +38,9 @@ const HEALTH_COLOR: Record<DepartmentNodeData["health"], string> = {
   critical: semantic.warning,
 };
 
-const W = COMPANY_DEPT_NODE_WIDTH;
-const H = COMPANY_DEPT_NODE_HEIGHT;
+const W = COMPANY_GRID_DEPT_WIDTH;
+const H = COMPANY_GRID_DEPT_HEIGHT;
+const CARD_PAD = 32;
 
 function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeData>) {
   const fill = getDepartmentColor(data.departmentKey);
@@ -63,7 +64,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           width: W,
           height: H,
           boxSizing: "border-box",
-          padding: 34,
+          padding: CARD_PAD,
           borderRadius: 24,
           background: `linear-gradient(178deg, ${neutral.surface} 0%, ${neutral.surface} 42%, ${neutral.background} 100%)`,
           border: `1px solid ${selected || activating ? semantic.info : derived.border}`,

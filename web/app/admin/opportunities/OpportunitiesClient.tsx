@@ -25,6 +25,7 @@ export interface Opportunity {
     primary_contact_id: string | null;
     external_id: string | null;
     vertical_id: string | null;
+    _vertical_name?: string | null;
     pipeline_stage_id?: string | null;
     source?: string | null;
     estimated_price_cents?: number | null;

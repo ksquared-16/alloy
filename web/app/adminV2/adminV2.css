@@ -40,6 +40,20 @@
   width: 1120px;
   height: 1120px;
   position: relative;
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 90% at 50% 50%,
+    #000 22%,
+    #000 55%,
+    rgba(0, 0, 0, 0.35) 78%,
+    transparent 94%
+  );
+  mask-image: radial-gradient(
+    ellipse 90% 90% at 50% 50%,
+    #000 22%,
+    #000 55%,
+    rgba(0, 0, 0, 0.35) 78%,
+    transparent 94%
+  );
 }
 
 .adminv2-ambient-bloom-focus-veil {
@@ -996,6 +1010,193 @@
 /* Ambient behind tiles; foreground nodes above */
 .react-flow__node.adminv2-rf-ambient {
   z-index: 0 !important;
+}
+
+.react-flow__node.adminv2-rf-chamber-ambient {
+  overflow: visible !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.adminv2-chamber-ambient-anchor {
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Full-chamber company ambient: soft radial mask = no hard square edge */
+.adminv2-chamber-ambient-root {
+  pointer-events: none;
+  position: absolute;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.adminv2-chamber-ambient-masked {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 0;
+  -webkit-mask-image: radial-gradient(
+    ellipse 94% 92% at 50% 48%,
+    #000 8%,
+    #000 58%,
+    rgba(0, 0, 0, 0.72) 74%,
+    rgba(0, 0, 0, 0.32) 86%,
+    transparent 99%
+  );
+  mask-image: radial-gradient(
+    ellipse 94% 92% at 50% 48%,
+    #000 8%,
+    #000 58%,
+    rgba(0, 0, 0, 0.72) 74%,
+    rgba(0, 0, 0, 0.32) 86%,
+    transparent 99%
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.adminv2-chamber-bloom {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: adminv2-ambient-bloom-breathe-company 14s ease-in-out infinite;
+}
+
+.adminv2-chamber-bloom-1 {
+  inset: -10% -8% 30% -8%;
+  opacity: 1;
+}
+
+.adminv2-chamber-bloom-2 {
+  inset: 26% -14% -12% -14%;
+  opacity: 0.9;
+  animation-delay: -4s;
+}
+
+.adminv2-chamber-bloom-3 {
+  inset: -20% 16% 56% 16%;
+  opacity: 0.78;
+  animation-delay: -7s;
+}
+
+.adminv2-chamber-bloom-4 {
+  inset: 50% 6% -24% 6%;
+  opacity: 0.72;
+  animation-delay: -2s;
+}
+
+.adminv2-chamber-drift {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: rgba(0, 162, 131, 0.62);
+  box-shadow: 0 0 12px rgba(0, 162, 131, 0.45);
+  animation: adminv2-chamber-drift 18s ease-in-out infinite;
+}
+
+@keyframes adminv2-chamber-drift {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: translate(0, 0) scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(3px, -4px) scale(1.08);
+  }
+}
+
+.adminv2-chamber-ring {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 0;
+  height: 0;
+}
+
+.adminv2-chamber-ring-rev {
+  animation-direction: reverse;
+}
+
+.adminv2-chamber-ring-slow {
+  animation: adminv2-ambient-orbit 56s linear infinite;
+}
+
+.adminv2-chamber-ring-mid {
+  animation: adminv2-ambient-orbit-reverse 40s linear infinite;
+}
+
+.adminv2-chamber-ring-fast {
+  animation: adminv2-ambient-orbit 28s linear infinite;
+}
+
+.adminv2-chamber-ring-outer {
+  animation: adminv2-ambient-orbit-reverse 72s linear infinite;
+}
+
+.adminv2-chamber-ring-horizon {
+  animation: adminv2-ambient-orbit 96s linear infinite;
+}
+
+.adminv2-chamber-spec-a,
+.adminv2-chamber-spec-b,
+.adminv2-chamber-spec-c,
+.adminv2-chamber-spec-d,
+.adminv2-chamber-spec-e,
+.adminv2-chamber-spec-f,
+.adminv2-chamber-spec-g {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.adminv2-chamber-spec-a {
+  box-shadow: 0 0 14px rgba(0, 162, 131, 0.62);
+  background: rgba(0, 162, 131, 0.78);
+}
+
+.adminv2-chamber-spec-b {
+  box-shadow: 0 0 16px rgba(0, 162, 131, 0.55);
+  background: rgba(0, 162, 131, 0.68);
+}
+
+.adminv2-chamber-spec-c {
+  box-shadow: 0 0 12px rgba(0, 162, 131, 0.48);
+  background: rgba(0, 162, 131, 0.58);
+}
+
+.adminv2-chamber-spec-d {
+  box-shadow: 0 0 18px rgba(0, 162, 131, 0.42);
+  background: rgba(0, 162, 131, 0.52);
+}
+
+.adminv2-chamber-spec-e {
+  box-shadow: 0 0 13px rgba(0, 162, 131, 0.4);
+  background: rgba(0, 162, 131, 0.48);
+}
+
+.adminv2-chamber-spec-f {
+  box-shadow: 0 0 14px rgba(0, 100, 160, 0.32);
+  background: rgba(0, 110, 150, 0.38);
+}
+
+.adminv2-chamber-spec-g {
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  margin-top: -2.5px;
+  box-shadow: 0 0 14px rgba(0, 162, 131, 0.38);
+  background: rgba(0, 162, 131, 0.4);
 }
 
 .react-flow__node.adminv2-rf-foreground {

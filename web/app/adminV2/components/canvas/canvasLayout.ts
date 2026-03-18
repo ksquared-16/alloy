@@ -2,8 +2,12 @@
  * Company view: 3-over-2 grid — sized for clean gaps (no overlap when content fills min height).
  */
 /** ~10% larger than prior 576×544; gaps nudged to keep clear separation */
+/** Canonical grid / department–manager math (focus anchor, camera, activation). */
 export const COMPANY_DEPT_NODE_WIDTH = 632;
 export const COMPANY_DEPT_NODE_HEIGHT = 598;
+/** Company overview only — ~7% smaller, centered in canonical cells. */
+export const COMPANY_GRID_DEPT_WIDTH = 588;
+export const COMPANY_GRID_DEPT_HEIGHT = 556;
 export const COMPANY_GAP_X = 128;
 export const COMPANY_GAP_Y = 100;
 export const COMPANY_OFFSET_X = 52;
@@ -47,6 +51,14 @@ export function getDepartmentPosition(index: number): { x: number; y: number } {
   }
 }
 
+/** Top-left for smaller company tiles, centered in each canonical slot. */
+export function getCompanyDepartmentDisplayPosition(index: number): { x: number; y: number } {
+  const p = getDepartmentPosition(index);
+  const dx = (COMPANY_DEPT_NODE_WIDTH - COMPANY_GRID_DEPT_WIDTH) / 2;
+  const dy = (COMPANY_DEPT_NODE_HEIGHT - COMPANY_GRID_DEPT_HEIGHT) / 2;
+  return { x: p.x + dx, y: p.y + dy };
+}
+
 export function getCompanyGridCenter(): { x: number; y: number } {
   const W = COMPANY_DEPT_NODE_WIDTH;
   const H = COMPANY_DEPT_NODE_HEIGHT;
@@ -58,6 +70,37 @@ export function getCompanyGridCenter(): { x: number; y: number } {
     sy += p.y + H / 2;
   }
   return { x: sx / 5, y: sy / 5 };
+}
+
+/** One large flow-space rect for full-field company ambient (excluded from fitView). */
+const CHAMBER_AMBIENT_PAD = 3000;
+
+export function getCompanyChamberAmbientRect(): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const Gw = COMPANY_GRID_DEPT_WIDTH;
+  const Gh = COMPANY_GRID_DEPT_HEIGHT;
+  for (let i = 0; i < 5; i++) {
+    const p = getCompanyDepartmentDisplayPosition(i);
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + Gw);
+    maxY = Math.max(maxY, p.y + Gh);
+  }
+  const P = CHAMBER_AMBIENT_PAD;
+  return {
+    x: minX - P,
+    y: minY - P,
+    width: maxX - minX + 2 * P,
+    height: maxY - minY + 2 * P,
+  };
 }
 
 /** Second company ambient anchor — lower field / between row-2 cards */

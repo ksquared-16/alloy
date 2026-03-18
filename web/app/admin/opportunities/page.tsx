@@ -27,7 +27,8 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     if (statusKey) q = q.eq("status_key", statusKey);
     const { data: opportunities, error } = await q;
 
-    const [stagesRes, customersRes, contactsRes, personsRes] = await Promise.all([
+    const verticalIds = [...new Set((opportunities ?? []).map((o) => o.vertical_id).filter(Boolean))] as string[];
+    const [stagesRes, customersRes, contactsRes, personsRes, verticalsRes] = await Promise.all([
         supabase.from("pipeline_stages").select("id, name, pipeline_id").order("position", { ascending: true }),
         (opportunities ?? []).length
             ? supabase.from("customers").select("id, name").in("id", [...new Set((opportunities ?? []).map((o) => o.customer_id).filter(Boolean))] as string[])
@@ -38,12 +39,14 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         (opportunities ?? []).length
             ? supabase.from("persons").select("id, first_name, last_name").in("id", [...new Set((opportunities ?? []).map((o) => (o as { primary_person_id?: string | null }).primary_person_id).filter(Boolean))] as string[])
             : { data: [] },
+        verticalIds.length ? supabase.from("verticals").select("id, name").in("id", verticalIds) : { data: [] },
     ]);
 
     const stages = stagesRes.data ?? [];
     const customerMap = new Map((customersRes.data ?? []).map((c) => [c.id, c]));
     const contactMap = new Map((contactsRes.data ?? []).map((c) => [c.id, c]));
     const personMap = new Map((personsRes.data ?? []).map((p) => [p.id, p]));
+    const verticalMap = new Map((verticalsRes.data ?? []).map((v: { id: string; name?: string | null }) => [v.id, v.name ?? null]));
 
     const rows = (opportunities ?? []).map((o) => {
         const customer = o.customer_id ? customerMap.get(o.customer_id) : undefined;
@@ -61,6 +64,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         const _quote_total_display = quoteTotalDisplay(o as { quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null });
         return {
             ...o,
+            _vertical_name: o.vertical_id ? (verticalMap.get(o.vertical_id) ?? null) : null,
             _customer_name: (customer as { name?: string } | undefined)?.name ?? null,
             _contact_name: contactName,
             _primary_person_name: _primary_person_name ?? contactName,

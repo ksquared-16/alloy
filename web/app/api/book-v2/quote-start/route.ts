@@ -6,6 +6,8 @@ import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing
 import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
+/** Opportunity Statuses pipeline — Quote Started stage (website quote submission). */
+const QUOTE_STARTED_PIPELINE_STAGE_ID = "0cd4bcc7-2dc0-4706-89a7-5cf8307c8b62";
 
 const SERVICE_TYPE = "Standard Cleaning";
 const SQUARE_FOOTAGE_OPTIONS: { max: number; key: SquareFootageOption }[] = [
@@ -69,44 +71,6 @@ function optionToApiKey(option: CleaningFrequencyOption): "one_time" | "weekly" 
   if (option === "Bi-Weekly (20% Off)") return "biweekly";
   if (option === "Monthly (10% Off)") return "monthly";
   return "one_time";
-}
-
-/**
- * Get or create pipeline stage by name for a pipeline.
- */
-async function getOrCreateStage(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  pipelineId: string,
-  stageName: string,
-  position: number
-): Promise<string | null> {
-  const { data: existing } = await supabase
-    .from("pipeline_stages")
-    .select("id")
-    .eq("pipeline_id", pipelineId)
-    .ilike("name", stageName)
-    .limit(1)
-    .maybeSingle();
-
-  if (existing?.id) return existing.id;
-
-  const { data: created, error } = await supabase
-    .from("pipeline_stages")
-    .insert({
-      pipeline_id: pipelineId,
-      name: stageName,
-      position,
-      show_in_funnel: true,
-      show_in_pie_chart: true,
-    })
-    .select("id")
-    .single();
-
-  if (error || !created) {
-    console.warn("[QUOTE_START] Could not create pipeline stage:", stageName, error?.message);
-    return null;
-  }
-  return created.id;
 }
 
 /**
@@ -208,14 +172,12 @@ async function findOrCreatePerson(
 
   if (!org_id) return null;
 
-  const full_name = [first_name ?? null, last_name ?? null].filter(Boolean).join(" ").trim() || null;
   const { data: created, error } = await supabase
     .from("persons")
     .insert({
       org_id,
       first_name: first_name ?? null,
       last_name: last_name ?? null,
-      full_name,
       email: emailNorm ?? null,
       phone: phoneNorm ?? null,
     })
@@ -239,6 +201,97 @@ async function findOrCreatePerson(
   return (created as { id: string }).id;
 }
 
+/** Serialize raw square_footage from the request for field_values (source of truth). */
+function serializeSquareFootageForFieldValue(raw: unknown): string {
+  if (raw == null) return "";
+  if (typeof raw === "number" && !Number.isNaN(raw)) return String(raw);
+  return String(raw).trim();
+}
+
+async function getFieldDefinitionId(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orgId: string,
+  entityType: string,
+  fieldKey: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("field_definitions")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("entity_type", entityType)
+    .eq("field_key", fieldKey)
+    .eq("is_active", true)
+    .limit(1);
+  if (error) {
+    console.error("[QUOTE_START] field_definitions lookup failed:", fieldKey, entityType, error.message);
+    return null;
+  }
+  const row = (data as { id: string }[] | null)?.[0];
+  return row?.id ?? null;
+}
+
+async function upsertFieldValue(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orgId: string,
+  entityType: string,
+  entityId: string,
+  fieldDefinitionId: string,
+  /** Stored in field_values.value (text). */
+  value: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase
+    .from("field_values")
+    .select("id")
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .eq("field_definition_id", fieldDefinitionId)
+    .maybeSingle();
+  if (existing?.id) {
+    await supabase
+      .from("field_values")
+      .update({ value, updated_at: now })
+      .eq("id", (existing as { id: string }).id);
+  } else {
+    await supabase.from("field_values").insert({
+      org_id: orgId,
+      entity_type: entityType,
+      entity_id: entityId,
+      field_definition_id: fieldDefinitionId,
+      value,
+    });
+  }
+}
+
+/** Lightweight quote-stage location (customer_id null until booking). */
+async function createQuoteLocation(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orgId: string,
+  postalCode: string | null
+): Promise<string | null> {
+  const label = postalCode?.trim() ? `Quote — ${postalCode.trim()}` : "Quote location";
+  const { data: created, error } = await supabase
+    .from("locations")
+    .insert({
+      org_id: orgId,
+      customer_id: null,
+      vendor_id: null,
+      label,
+      location_type: "address",
+      is_primary: false,
+      is_active: true,
+      postal_code: postalCode?.trim() || null,
+      metadata: {},
+    })
+    .select("id")
+    .single();
+  if (error || !created) {
+    console.warn("[QUOTE_START] Location insert failed:", error?.message);
+    return null;
+  }
+  return (created as { id: string }).id;
+}
+
 export interface QuoteStartBody {
   first_name?: string;
   last_name?: string;
@@ -252,6 +305,8 @@ export interface QuoteStartBody {
   vertical_id?: string;
   add_ons?: string[];
   quote_context?: Record<string, unknown>;
+  /** Optional campaign id/slug for opportunity field_values.promo_campaign */
+  promo_campaign?: string;
 }
 
 /**
@@ -326,20 +381,66 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3) Pipeline + stage
-
-    const { data: pipelines } = await supabase
-      .from("pipelines")
-      .select("id")
-      .order("name", { ascending: true })
-      .limit(1);
-    const pipelineId = pipelines?.[0]?.id ?? null;
-    let quoteStartedStageId: string | null = null;
-    if (pipelineId) {
-      quoteStartedStageId = await getOrCreateStage(supabase, pipelineId, "Quote Started", 0);
+    if (!orgIdForWrites) {
+      return NextResponse.json(
+        { ok: false, message: "Server configuration error (org)" },
+        { status: 500 }
+      );
     }
 
-    // 3) Compute quote
+    const locationSqftDefId = await getFieldDefinitionId(supabase, orgIdForWrites, "location", "square_footage");
+    if (!locationSqftDefId) {
+      console.error(
+        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=location + field_key=square_footage. Cannot persist square_footage to field_values. Add this field definition in Supabase."
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Server misconfiguration: location field square_footage is not defined for this org",
+        },
+        { status: 500 }
+      );
+    }
+
+    const opportunityFreqDefId = await getFieldDefinitionId(
+      supabase,
+      orgIdForWrites,
+      "opportunity",
+      "cleaning_frequency"
+    );
+    if (!opportunityFreqDefId) {
+      console.error(
+        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=opportunity + field_key=cleaning_frequency. Cannot persist cleaning_frequency to field_values."
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Server misconfiguration: opportunity field cleaning_frequency is not defined for this org",
+        },
+        { status: 500 }
+      );
+    }
+
+    const promoRaw =
+      typeof body.promo_campaign === "string" ? body.promo_campaign.trim() : "";
+    let opportunityPromoDefId: string | null = null;
+    if (promoRaw) {
+      opportunityPromoDefId = await getFieldDefinitionId(supabase, orgIdForWrites, "opportunity", "promo_campaign");
+      if (!opportunityPromoDefId) {
+        console.error(
+          "[QUOTE_START] CRITICAL: Request included promo_campaign but no active field_definition for entity_type=opportunity + field_key=promo_campaign."
+        );
+        return NextResponse.json(
+          {
+            ok: false,
+            message: "Server misconfiguration: opportunity field promo_campaign is not defined for this org",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // 3) Compute quote (before location/dedupe so inputs are stable)
     const quoteOutput = await computeQuote(supabase, squareFootageOption, cleaning_frequency, []);
     const quote_input = {
       zip,
@@ -378,9 +479,49 @@ export async function POST(request: NextRequest) {
     };
     const shouldReuse = existingOpp && (await metaSourceMatches());
 
+    /** Create or refresh lightweight Location; reuse existing row when deduping same opportunity. */
+    let locationId: string;
+    if (shouldReuse && existingOpp) {
+      const { data: oppLoc } = await supabase
+        .from("opportunities")
+        .select("location_id")
+        .eq("id", existingOpp.id)
+        .single();
+      const existingLocId = (oppLoc as { location_id?: string | null } | null)?.location_id ?? null;
+      if (existingLocId) {
+        const label = zip?.trim() ? `Quote — ${zip.trim()}` : "Quote location";
+        await supabase
+          .from("locations")
+          .update({
+            postal_code: zip?.trim() || null,
+            label,
+          })
+          .eq("id", existingLocId)
+          .eq("org_id", orgIdForWrites);
+        locationId = existingLocId;
+      } else {
+        const created = await createQuoteLocation(supabase, orgIdForWrites, zip);
+        if (!created) {
+          return NextResponse.json({ ok: false, message: "Failed to create quote location" }, { status: 500 });
+        }
+        locationId = created;
+      }
+    } else {
+      const created = await createQuoteLocation(supabase, orgIdForWrites, zip);
+      if (!created) {
+        return NextResponse.json({ ok: false, message: "Failed to create quote location" }, { status: 500 });
+      }
+      locationId = created;
+    }
+
     if (shouldReuse && existingOpp) {
       opportunityId = existingOpp.id;
       const updatePayload: Record<string, unknown> = {
+        location_id: locationId,
+        pipeline_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,
+        status_key: "quote_started",
+        status: "open",
+        vertical_id: verticalId,
         metadata: {
           quote_input,
           quote_output: quoteOutput,
@@ -404,6 +545,9 @@ export async function POST(request: NextRequest) {
         primary_person_id: personId,
         primary_contact_id: null,
         customer_id: null,
+        location_id: locationId,
+        pipeline_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,
+        status_key: "quote_started",
         name: opportunityName,
         status: "open",
         source: "website",
@@ -416,7 +560,7 @@ export async function POST(request: NextRequest) {
           quote_started_at,
         },
       };
-      if (orgIdForWrites) oppInsertPayload.org_id = orgIdForWrites;
+      oppInsertPayload.org_id = orgIdForWrites;
       const { data: newOpp, error: oppError } = await supabase
         .from("opportunities")
         .insert(oppInsertPayload)
@@ -442,7 +586,7 @@ export async function POST(request: NextRequest) {
         event_type: "quote_started",
         occurred_at: new Date().toISOString(),
         org_id: orgIdForWrites ?? null,
-        quote_started_stage_id: quoteStartedStageId,
+        quote_started_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,
         opportunity: oppRow ?? null,
       };
       let eventId: string | null = null;
@@ -467,6 +611,38 @@ export async function POST(request: NextRequest) {
           });
         } catch (_) {}
       }
+    }
+
+    const cleaningFrequencyValue = body.cleaning_frequency ?? optionToApiKey(cleaning_frequency);
+    const squareFootageFieldValue = serializeSquareFootageForFieldValue(
+      body.square_footage ?? square_footage_raw
+    );
+
+    await upsertFieldValue(
+      supabase,
+      orgIdForWrites,
+      "location",
+      locationId,
+      locationSqftDefId,
+      squareFootageFieldValue
+    );
+    await upsertFieldValue(
+      supabase,
+      orgIdForWrites,
+      "opportunity",
+      opportunityId,
+      opportunityFreqDefId,
+      String(cleaningFrequencyValue)
+    );
+    if (opportunityPromoDefId && promoRaw) {
+      await upsertFieldValue(
+        supabase,
+        orgIdForWrites,
+        "opportunity",
+        opportunityId,
+        opportunityPromoDefId,
+        promoRaw
+      );
     }
 
     console.log(

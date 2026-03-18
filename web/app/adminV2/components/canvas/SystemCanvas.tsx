@@ -19,14 +19,12 @@ import { neutral, derived, brand } from "@/styles/tokens/colors";
 import DepartmentNode from "./DepartmentNode";
 import ManagerNode, { MANAGER_CARD_WIDTH } from "./ManagerNode";
 import AmbientFocusNode from "./AmbientFocusNode";
+import ChamberAmbientNode from "./ChamberAmbientNode";
 import {
   getDepartmentPosition,
+  getCompanyDepartmentDisplayPosition,
   getCompanyGridCenter,
-  getCompanyFieldAmbientB,
-  getCompanyFieldAmbientWest,
-  getCompanyFieldAmbientEast,
-  getCompanyFieldAmbientTop,
-  getCompanyFieldAmbientSouth,
+  getCompanyChamberAmbientRect,
   COMPANY_DEPT_NODE_WIDTH,
   COMPANY_DEPT_NODE_HEIGHT,
 } from "./canvasLayout";
@@ -35,7 +33,6 @@ import { getManagersForDepartment } from "./mockManagers";
 import { getManagerCardStats } from "./mockManagerStats";
 import type { DepartmentNodeData } from "./DepartmentNode";
 import type { ManagerNodeData } from "./ManagerNode";
-import type { AmbientFocusData } from "./AmbientFocusNode";
 import type { DepartmentKey } from "@/lib/departmentColors";
 
 const ACTIVATION_MS = 160;
@@ -45,8 +42,6 @@ const AMBIENT_FADE_DELAY_MS = 2200;
 const PROOF_MANAGER_LIMIT = 2;
 const AMBIENT_FOCUS_SIZE = 1120;
 const AMBIENT_FOCUS_HALF = AMBIENT_FOCUS_SIZE / 2;
-/** Company hub ambient (grid-centered); field satellites use AMBIENT_FIELD_HALF */
-const AMBIENT_HUB_HALF = 835;
 const DEPT_W = COMPANY_DEPT_NODE_WIDTH;
 const DEPT_H = COMPANY_DEPT_NODE_HEIGHT;
 
@@ -168,10 +163,11 @@ function FitCompanyView({ zoomLevel }: { zoomLevel: "company" | "department" }) 
     if (zoomLevel !== "company") return;
     const id = window.setTimeout(() => {
       fitView({
-        padding: 0.003,
-        duration: 440,
-        maxZoom: 2.08,
-        minZoom: 0.32,
+        padding: 0.00085,
+        duration: 420,
+        maxZoom: 2.28,
+        minZoom: 0.26,
+        nodes: MOCK_DEPARTMENTS.map((d) => ({ id: d.id })),
       });
     }, 0);
     return () => clearTimeout(id);
@@ -183,27 +179,14 @@ const nodeTypes = {
   department: DepartmentNode,
   manager: ManagerNode,
   ambientFocus: AmbientFocusNode,
+  chamberAmbient: ChamberAmbientNode,
 };
 
 const AMBIENT_ID = "__ambient_focus__";
-const AMBIENT_COMPANY_B = "__ambient_company_b__";
-const AMBIENT_COMPANY_W = "__ambient_company_w__";
-const AMBIENT_COMPANY_E = "__ambient_company_e__";
-const AMBIENT_COMPANY_T = "__ambient_company_t__";
-const AMBIENT_COMPANY_S = "__ambient_company_s__";
-const AMBIENT_FIELD_HALF = 410;
-
-const AMBIENT_COMPANY_IDS = new Set([
-  AMBIENT_ID,
-  AMBIENT_COMPANY_B,
-  AMBIENT_COMPANY_W,
-  AMBIENT_COMPANY_E,
-  AMBIENT_COMPANY_T,
-  AMBIENT_COMPANY_S,
-]);
+const AMBIENT_CHAMBER = "__ambient_chamber__";
 
 function isAmbientNodeId(id: string): boolean {
-  return AMBIENT_COMPANY_IDS.has(id);
+  return id === AMBIENT_ID || id === AMBIENT_CHAMBER;
 }
 
 export type SystemCanvasProps = {
@@ -296,12 +279,39 @@ export default function SystemCanvas({
     return null;
   }, [zoomLevel, selectedDepartmentKey, activatingDepartmentId]);
 
-  const ambientHalf =
-    ambientVariant === "company" ? AMBIENT_HUB_HALF : AMBIENT_FOCUS_HALF;
-  const ambientIntensityForNode =
-    ambientVariant === "company" ? 0.58 : ambientIntensity;
+  const ambientHalf = AMBIENT_FOCUS_HALF;
+  const ambientIntensityForNode = ambientIntensity;
 
-  const ambientNodes: Node<AmbientFocusData>[] = useMemo(() => {
+  const ambientNodes: Node[] = useMemo(() => {
+    const companyIdle =
+      zoomLevel === "company" && activatingDepartmentId == null;
+
+    if (companyIdle) {
+      const rect = getCompanyChamberAmbientRect();
+      const cx = rect.x + rect.width / 2;
+      const cy = rect.y + rect.height / 2;
+      /* 1×1 flow bounds so fitView / controls don’t zoom to the full ambient rect */
+      return [
+        {
+          id: AMBIENT_CHAMBER,
+          type: "chamberAmbient" as const,
+          position: { x: cx - 0.5, y: cy - 0.5 },
+          width: 1,
+          height: 1,
+          draggable: false,
+          selectable: false,
+          className: "adminv2-rf-ambient adminv2-rf-chamber-ambient",
+          zIndex: 0,
+          style: { width: 1, height: 1 },
+          data: {
+            intensity: 0.98,
+            width: rect.width,
+            height: rect.height,
+          },
+        },
+      ];
+    }
+
     if (!ambientCenter) return [];
     const base = {
       type: "ambientFocus" as const,
@@ -310,75 +320,6 @@ export default function SystemCanvas({
       className: "adminv2-rf-ambient",
       zIndex: 0,
     };
-    const companyIdle =
-      zoomLevel === "company" && activatingDepartmentId == null;
-
-    if (companyIdle) {
-      const b = getCompanyFieldAmbientB();
-      const w = getCompanyFieldAmbientWest();
-      const e = getCompanyFieldAmbientEast();
-      const t = getCompanyFieldAmbientTop();
-      const s = getCompanyFieldAmbientSouth();
-      const field = { variant: "company" as const, companyLayout: "field" as const };
-      const hub = { variant: "company" as const, companyLayout: "hub" as const };
-      return [
-        {
-          id: AMBIENT_ID,
-          ...base,
-          position: {
-            x: ambientCenter.x - AMBIENT_HUB_HALF,
-            y: ambientCenter.y - AMBIENT_HUB_HALF,
-          },
-          data: { intensity: 0.86, ...hub },
-        },
-        {
-          id: AMBIENT_COMPANY_B,
-          ...base,
-          position: {
-            x: b.x - AMBIENT_FIELD_HALF,
-            y: b.y - AMBIENT_FIELD_HALF,
-          },
-          data: { intensity: 0.64, ...field },
-        },
-        {
-          id: AMBIENT_COMPANY_W,
-          ...base,
-          position: {
-            x: w.x - AMBIENT_FIELD_HALF,
-            y: w.y - AMBIENT_FIELD_HALF,
-          },
-          data: { intensity: 0.6, ...field },
-        },
-        {
-          id: AMBIENT_COMPANY_E,
-          ...base,
-          position: {
-            x: e.x - AMBIENT_FIELD_HALF,
-            y: e.y - AMBIENT_FIELD_HALF,
-          },
-          data: { intensity: 0.6, ...field },
-        },
-        {
-          id: AMBIENT_COMPANY_T,
-          ...base,
-          position: {
-            x: t.x - AMBIENT_FIELD_HALF,
-            y: t.y - AMBIENT_FIELD_HALF,
-          },
-          data: { intensity: 0.58, ...field },
-        },
-        {
-          id: AMBIENT_COMPANY_S,
-          ...base,
-          position: {
-            x: s.x - AMBIENT_FIELD_HALF,
-            y: s.y - AMBIENT_FIELD_HALF,
-          },
-          data: { intensity: 0.58, ...field },
-        },
-      ];
-    }
-
     return [
       {
         id: AMBIENT_ID,
@@ -408,7 +349,7 @@ export default function SystemCanvas({
         MOCK_DEPARTMENTS.map((d, i) => ({
           id: d.id,
           type: "department",
-          position: getDepartmentPosition(i),
+          position: getCompanyDepartmentDisplayPosition(i),
           data: {
             name: d.name,
             departmentKey: d.key,
@@ -479,10 +420,11 @@ export default function SystemCanvas({
       if (isAmbientNodeId(node.id)) return;
       if (activatingDepartmentId) return;
       if (node.type === "department" && zoomLevel === "company") {
+        const idx = MOCK_DEPARTMENTS.findIndex((d) => d.id === node.id);
         pendingZoomRef.current = {
           nodeId: node.id,
           key: (node.data as DepartmentNodeData).departmentKey,
-          position: node.position,
+          position: idx >= 0 ? getDepartmentPosition(idx) : node.position,
         };
         setActivatingDepartmentId(node.id);
       } else {
@@ -520,7 +462,7 @@ export default function SystemCanvas({
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           minZoom={0.1}
-          maxZoom={2}
+          maxZoom={2.35}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           proOptions={{ hideAttribution: true }}
           fitView={false}
