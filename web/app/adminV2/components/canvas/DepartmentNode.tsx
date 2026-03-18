@@ -90,24 +90,24 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
         <div
           className="adminv2-dept-title-clamp"
           style={{
-            fontSize: 54,
+            fontSize: 56,
             fontWeight: 700,
             color: neutral.textPrimary,
-            marginBottom: 14,
+            marginBottom: 12,
             letterSpacing: "-0.036em",
             lineHeight: 1.08,
             flexShrink: 0,
-            maxHeight: 118,
+            maxHeight: 120,
           }}
         >
           {data.name}
         </div>
         <div
           style={{
-            fontSize: 62,
+            fontSize: 64,
             fontWeight: 600,
             color: neutral.textPrimary,
-            marginBottom: 8,
+            marginBottom: 6,
             letterSpacing: "-0.03em",
             lineHeight: 1.05,
             flexShrink: 0,
@@ -117,9 +117,9 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
         </div>
         <div
           style={{
-            fontSize: 13,
+            fontSize: 14,
             color: derived.textSecondary,
-            marginBottom: 16,
+            marginBottom: 14,
             textTransform: "uppercase",
             letterSpacing: "0.08em",
             flexShrink: 0,
@@ -129,11 +129,12 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
         </div>
         <div
           style={{
-            fontSize: 38,
+            fontSize: 44,
             fontWeight: 600,
             color: neutral.textPrimary,
-            marginBottom: 6,
+            marginBottom: 5,
             letterSpacing: "-0.024em",
+            lineHeight: 1.06,
             flexShrink: 0,
           }}
         >
@@ -141,9 +142,9 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
         </div>
         <div
           style={{
-            fontSize: 13,
+            fontSize: 14,
             color: derived.textSecondary,
-            marginBottom: 14,
+            marginBottom: 12,
             textTransform: "uppercase",
             letterSpacing: "0.06em",
             flexShrink: 0,
@@ -155,22 +156,22 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 14,
-            padding: "14px 0",
+            gap: 12,
+            padding: "12px 0",
             borderTop: `1px solid ${derived.border}`,
             borderBottom: `1px solid ${derived.border}`,
-            marginBottom: 12,
+            marginBottom: 10,
             flexShrink: 0,
           }}
         >
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontSize: 12,
+                fontSize: 14,
                 color: derived.textSecondary,
                 textTransform: "uppercase",
                 letterSpacing: "0.07em",
-                marginBottom: 4,
+                marginBottom: 5,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -180,9 +181,11 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
             </div>
             <div
               style={{
-                fontSize: 24,
+                fontSize: 36,
                 fontWeight: 600,
                 color: brand.secondary,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -194,11 +197,11 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           <div style={{ minWidth: 0 }}>
             <div
               style={{
-                fontSize: 12,
+                fontSize: 14,
                 color: derived.textSecondary,
                 textTransform: "uppercase",
                 letterSpacing: "0.07em",
-                marginBottom: 4,
+                marginBottom: 5,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -208,9 +211,11 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
             </div>
             <div
               style={{
-                fontSize: 24,
+                fontSize: 36,
                 fontWeight: 600,
                 color: neutral.textPrimary,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -225,19 +230,25 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
+            gap: 10,
             marginTop: "auto",
             flexShrink: 0,
-            minHeight: 28,
+            minHeight: 42,
+            paddingTop: 4,
           }}
         >
           <span
             style={{
-              fontSize: 10,
-              fontWeight: 700,
+              fontSize: 36,
+              fontWeight: 600,
               color: HEALTH_COLOR[data.health],
+              letterSpacing: "-0.02em",
+              lineHeight: 1.05,
               textTransform: "uppercase",
-              letterSpacing: "0.06em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
             }}
           >
             {HEALTH_LABELS[data.health]}
@@ -245,11 +256,12 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           {data.alertCount > 0 ? (
             <span
               style={{
-                fontSize: 10,
-                fontWeight: 700,
-                minWidth: 26,
-                height: 26,
-                borderRadius: 13,
+                fontSize: 20,
+                fontWeight: 600,
+                minWidth: 44,
+                height: 44,
+                borderRadius: 22,
+                flexShrink: 0,
                 backgroundColor: semantic.warning,
                 color: neutral.surface,
                 display: "inline-flex",
@@ -257,12 +269,24 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
                 justifyContent: "center",
                 border: `2px solid ${neutral.surface}`,
                 boxShadow: derived.nodeOnCanvasShadow,
+                letterSpacing: "-0.02em",
               }}
             >
               {data.alertCount}
             </span>
           ) : (
-            <span style={{ fontSize: 9, color: derived.textSecondary }}>No alerts</span>
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: derived.textSecondary,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                flexShrink: 0,
+              }}
+            >
+              No alerts
+            </span>
           )}
         </div>
       </div>

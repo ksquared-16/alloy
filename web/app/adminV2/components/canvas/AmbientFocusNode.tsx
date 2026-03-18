@@ -3,12 +3,18 @@
 import { memo } from "react";
 import { type NodeProps } from "reactflow";
 import { derived } from "@/styles/tokens/colors";
+import {
+  AMBIENT_FOCUS_MAX_DEPARTMENT,
+  AMBIENT_FOCUS_MAX_MANAGER,
+} from "./ambientTiers";
 
 export type AmbientFocusData = {
   intensity: number;
   variant?: "company" | "focus";
   /** Company: hub = grid center large field; field = satellite for lateral/vertical spread */
   companyLayout?: "hub" | "field";
+  /** Department vs manager focus — manager is strongest tier when wired. */
+  focusTier?: "department" | "manager";
 };
 
 const R5 = [0, 72, 144, 216, 288];
@@ -183,9 +189,12 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
   const variant = data.variant ?? "focus";
   const isCompany = variant === "company";
   const companyLayout = data.companyLayout ?? "hub";
+  const focusTier = data.focusTier ?? "department";
+  const focusCap =
+    focusTier === "manager" ? AMBIENT_FOCUS_MAX_MANAGER : AMBIENT_FOCUS_MAX_DEPARTMENT;
   const i = isCompany
     ? Math.max(0.5, Math.min(0.92, data.intensity ?? 0.8))
-    : Math.max(0.5, Math.min(1, data.intensity ?? 0.78));
+    : Math.max(0.52, Math.min(focusCap, data.intensity ?? 0.78));
 
   if (isCompany && companyLayout === "field") {
     const fi = Math.min(0.78, i);
@@ -443,8 +452,37 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
     t: (p.t + 13 + (i % 7)) % 100,
   }));
 
+  const FOCUS_DEPT_DENSITY = Array.from({ length: 36 }, (_, k) => ({
+    l: (k * 17 + 9) % 100,
+    t: (k * 23 + 11) % 100,
+  }));
+
+  const FOCUS_MANAGER_EXTRA = Array.from({ length: 44 }, (_, k) => ({
+    l: (k * 19 + 5 + (k % 7)) % 100,
+    t: (k * 29 + 3 + (k % 5)) % 100,
+  }));
+
+  const tierClass =
+    focusTier === "manager"
+      ? "adminv2-ambient-tier-manager"
+      : "adminv2-ambient-tier-department";
+
+  const innerFilter =
+    i > 1.008
+      ? `brightness(${1 + (i - 1) * 0.62}) saturate(${1 + (i - 1) * 0.22})`
+      : undefined;
+
   return (
-    <div className="adminv2-ambient-root-focus adminv2-ambient-proof-focus" style={{ opacity: i }}>
+    <div className={`adminv2-ambient-root-focus adminv2-ambient-proof-focus ${tierClass}`}>
+      <div
+        className="adminv2-ambient-focus-inner"
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: Math.min(1, i),
+          filter: innerFilter,
+        }}
+      >
       <div
         className="adminv2-ambient-bloom"
         style={{
@@ -520,6 +558,30 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
           />
         );
       })}
+      {FOCUS_DEPT_DENSITY.map((p, idx) => (
+        <span
+          key={`fdd-${idx}`}
+          className="adminv2-focus-micro-spec adminv2-focus-micro-proof adminv2-focus-dept-density"
+          style={{
+            left: `${p.l}%`,
+            top: `${p.t}%`,
+            animationDelay: `${idx * 0.05 + 0.15}s`,
+          }}
+        />
+      ))}
+      {focusTier === "manager" &&
+        FOCUS_MANAGER_EXTRA.map((p, idx) => (
+          <span
+            key={`fme-${idx}`}
+            className="adminv2-focus-drift-dot adminv2-focus-drift-perimeter adminv2-focus-drift-proof adminv2-focus-drift-md adminv2-focus-manager-extra"
+            style={{
+              left: `${p.l}%`,
+              top: `${p.t}%`,
+              backgroundColor: idx % 2 === 0 ? derived.ambientFocusDriftBright : derived.ambientFocusLifeSpecAlt,
+              animationDelay: `${idx * 0.04}s`,
+            }}
+          />
+        ))}
       <div className="adminv2-ambient-ring adminv2-ambient-ring-focus-early" aria-hidden>
         {R8.map((deg) => (
           <span
@@ -629,6 +691,7 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
             style={{ transform: `rotate(${deg}deg) translateY(-520px)` }}
           />
         ))}
+      </div>
       </div>
     </div>
   );

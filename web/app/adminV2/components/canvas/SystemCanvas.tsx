@@ -34,6 +34,15 @@ import { getManagerCardStats } from "./mockManagerStats";
 import type { DepartmentNodeData } from "./DepartmentNode";
 import type { ManagerNodeData } from "./ManagerNode";
 import type { DepartmentKey } from "@/lib/departmentColors";
+import {
+  AMBIENT_CHAMBER_INTENSITY,
+  AMBIENT_FOCUS_ACTIVATING,
+  AMBIENT_FOCUS_DEPARTMENT_ENTER,
+  AMBIENT_FOCUS_DEPARTMENT_STEADY,
+  AMBIENT_FOCUS_INITIAL,
+  AMBIENT_FOCUS_MANAGER_STEADY,
+  isManagerAmbientNodeId,
+} from "./ambientTiers";
 
 const ACTIVATION_MS = 160;
 /** Single coherent camera move into department (no prior recenter) */
@@ -163,9 +172,10 @@ function FitCompanyView({ zoomLevel }: { zoomLevel: "company" | "department" }) 
     if (zoomLevel !== "company") return;
     const id = window.setTimeout(() => {
       fitView({
-        padding: 0.00085,
+        /* ~10% zoom-out vs prior tight fit + visible gutter from viewport edges */
+        padding: 0.072,
         duration: 420,
-        maxZoom: 2.28,
+        maxZoom: 2.05,
         minZoom: 0.26,
         nodes: MOCK_DEPARTMENTS.map((d) => ({ id: d.id })),
       });
@@ -205,7 +215,10 @@ export default function SystemCanvas({
   onNodeSelect,
 }: SystemCanvasProps) {
   const [activatingDepartmentId, setActivatingDepartmentId] = useState<string | null>(null);
-  const [ambientIntensity, setAmbientIntensity] = useState(0.55);
+  const [ambientIntensity, setAmbientIntensity] = useState(AMBIENT_FOCUS_INITIAL);
+  const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
+  const ambientFadeTimerRef = useRef<number | null>(null);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
   const pendingZoomRef = useRef<{
     nodeId: string;
@@ -219,6 +232,11 @@ export default function SystemCanvas({
   useEffect(() => {
     if (zoomLevel === "company") {
       setFocusAnchor(null);
+      if (ambientFadeTimerRef.current != null) {
+        window.clearTimeout(ambientFadeTimerRef.current);
+        ambientFadeTimerRef.current = null;
+      }
+      setAmbientIntensity(AMBIENT_FOCUS_INITIAL);
     }
   }, [zoomLevel]);
 
@@ -229,7 +247,18 @@ export default function SystemCanvas({
       lastZoomedPositionRef.current = pending.position;
       setFocusAnchor(pending.position);
       setActivatingDepartmentId(null);
-      setAmbientIntensity(0.78);
+      setAmbientIntensity(AMBIENT_FOCUS_DEPARTMENT_ENTER);
+      if (ambientFadeTimerRef.current != null) {
+        window.clearTimeout(ambientFadeTimerRef.current);
+      }
+      ambientFadeTimerRef.current = window.setTimeout(() => {
+        ambientFadeTimerRef.current = null;
+        setAmbientIntensity(
+          isManagerAmbientNodeId(selectedNodeIdRef.current)
+            ? AMBIENT_FOCUS_MANAGER_STEADY
+            : AMBIENT_FOCUS_DEPARTMENT_STEADY
+        );
+      }, AMBIENT_FADE_DELAY_MS);
       setMapToolsOpen(false);
       onDepartmentClick(pending.key);
       onNodeSelect(pending.nodeId);
@@ -240,12 +269,15 @@ export default function SystemCanvas({
 
   useEffect(() => {
     if (zoomLevel !== "department" || !selectedDepartmentKey) return;
-    const t = window.setTimeout(() => setAmbientIntensity(0.74), AMBIENT_FADE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [zoomLevel, selectedDepartmentKey]);
+    if (isManagerAmbientNodeId(selectedNodeId)) {
+      setAmbientIntensity(AMBIENT_FOCUS_MANAGER_STEADY);
+    } else if (selectedNodeId === null) {
+      setAmbientIntensity(AMBIENT_FOCUS_DEPARTMENT_STEADY);
+    }
+  }, [selectedNodeId, zoomLevel, selectedDepartmentKey]);
 
   useEffect(() => {
-    if (activatingDepartmentId) setAmbientIntensity(0.92);
+    if (activatingDepartmentId) setAmbientIntensity(AMBIENT_FOCUS_ACTIVATING);
   }, [activatingDepartmentId]);
 
   useEffect(() => {
@@ -281,6 +313,8 @@ export default function SystemCanvas({
 
   const ambientHalf = AMBIENT_FOCUS_HALF;
   const ambientIntensityForNode = ambientIntensity;
+  const focusAmbientTier: "department" | "manager" =
+    zoomLevel === "department" && isManagerAmbientNodeId(selectedNodeId) ? "manager" : "department";
 
   const ambientNodes: Node[] = useMemo(() => {
     const companyIdle =
@@ -304,7 +338,7 @@ export default function SystemCanvas({
           zIndex: 0,
           style: { width: 1, height: 1 },
           data: {
-            intensity: 0.98,
+            intensity: AMBIENT_CHAMBER_INTENSITY,
             width: rect.width,
             height: rect.height,
           },
@@ -331,6 +365,7 @@ export default function SystemCanvas({
         data: {
           intensity: ambientIntensityForNode,
           variant: ambientVariant,
+          focusTier: focusAmbientTier,
         },
       },
     ];
@@ -339,6 +374,7 @@ export default function SystemCanvas({
     ambientHalf,
     ambientIntensityForNode,
     ambientVariant,
+    focusAmbientTier,
     zoomLevel,
     activatingDepartmentId,
   ]);

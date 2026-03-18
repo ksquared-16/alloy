@@ -56,6 +56,53 @@
   );
 }
 
+.adminv2-ambient-tier-department {
+  filter: brightness(1.08) saturate(1.09);
+}
+
+.adminv2-ambient-tier-manager {
+  filter: brightness(1.16) saturate(1.15);
+}
+
+.adminv2-ambient-focus-inner {
+  pointer-events: none;
+}
+
+.adminv2-focus-dept-density.adminv2-focus-micro-proof {
+  box-shadow: 0 0 11px rgba(0, 162, 131, 0.52);
+  opacity: 0.95;
+}
+
+.adminv2-focus-manager-extra {
+  transform: scale(1.06);
+}
+
+.adminv2-chamber-drift-phase2 {
+  animation-duration: 26s !important;
+  opacity: 0.88;
+}
+
+.adminv2-chamber-drift-phase3 {
+  animation-duration: 21s !important;
+  opacity: 0.82;
+  animation-direction: reverse;
+}
+
+.adminv2-chamber-drift-micro {
+  width: 3.5px !important;
+  height: 3.5px !important;
+  margin: -1.75px 0 0 -1.75px !important;
+  animation-duration: 14s !important;
+  opacity: 0.78;
+  box-shadow: 0 0 10px rgba(0, 162, 131, 0.55) !important;
+}
+
+.adminv2-chamber-vivid .adminv2-chamber-ring-slow,
+.adminv2-chamber-vivid .adminv2-chamber-ring-mid,
+.adminv2-chamber-vivid .adminv2-chamber-ring-fast {
+  animation-duration: 48s !important;
+}
+
 .adminv2-ambient-bloom-focus-veil {
   opacity: 0.85;
   animation: adminv2-ambient-bloom-breathe 5s ease-in-out infinite;
@@ -1055,6 +1102,60 @@
   );
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
+}
+
+/* Company org chart: ~+50% ambient presence (blooms ×1.5 in TS + layer boost) */
+.adminv2-chamber-org-amp {
+  filter: brightness(1.12) saturate(1.14);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-bloom-2,
+.adminv2-chamber-org-amp .adminv2-chamber-bloom-3,
+.adminv2-chamber-org-amp .adminv2-chamber-bloom-4 {
+  opacity: 1;
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-drift {
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  background: rgba(0, 162, 131, 0.88);
+  box-shadow: 0 0 17px rgba(0, 162, 131, 0.62);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-a {
+  box-shadow: 0 0 20px rgba(0, 162, 131, 0.78);
+  background: rgba(0, 162, 131, 0.92);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-b {
+  box-shadow: 0 0 22px rgba(0, 162, 131, 0.72);
+  background: rgba(0, 162, 131, 0.85);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-c {
+  box-shadow: 0 0 16px rgba(0, 162, 131, 0.65);
+  background: rgba(0, 162, 131, 0.72);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-d {
+  box-shadow: 0 0 24px rgba(0, 162, 131, 0.58);
+  background: rgba(0, 162, 131, 0.68);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-e {
+  box-shadow: 0 0 18px rgba(0, 162, 131, 0.52);
+  background: rgba(0, 162, 131, 0.62);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-f {
+  box-shadow: 0 0 19px rgba(0, 100, 160, 0.42);
+  background: rgba(0, 110, 150, 0.52);
+}
+
+.adminv2-chamber-org-amp .adminv2-chamber-spec-g {
+  box-shadow: 0 0 18px rgba(0, 162, 131, 0.48);
+  background: rgba(0, 162, 131, 0.52);
 }
 
 .adminv2-chamber-bloom {
