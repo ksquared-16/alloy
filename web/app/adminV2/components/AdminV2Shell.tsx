@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { neutral } from "@/styles/tokens/colors";
+import { neutral, derived } from "@/styles/tokens/colors";
 import TopNavBar from "./TopNavBar";
 import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
-import AIKPIStrip from "./dashboard/AIKPIStrip";
-import BusinessKPIStrip from "./dashboard/BusinessKPIStrip";
+import KPIBand from "./dashboard/KPIBand";
 import SystemCanvas from "./canvas/SystemCanvas";
-import RecordsPanel from "./records/RecordsPanel";
+import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 
@@ -45,6 +44,8 @@ export default function AdminV2Shell({
       ? { level: "company" as const }
       : { level: "department" as const, key: selectedDepartmentKey };
 
+  const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
+
   return (
     <div
       className="flex h-screen w-full overflow-hidden"
@@ -61,12 +62,25 @@ export default function AdminV2Shell({
           departmentName={selectedDepartmentKey ? getDepartmentName(selectedDepartmentKey) : null}
           onGoToCompany={handleGoToCompany}
         />
-        <div className="flex flex-1 min-h-0 flex-col">
-          <AIKPIStrip scope={kpiScope} />
-          <BusinessKPIStrip scope={kpiScope} />
-          <div className="flex flex-1 min-h-0 flex-col">
-            <div className="flex flex-1 min-h-0">
-              <main className="flex-1 min-w-0 overflow-hidden">
+        <div
+          className="flex flex-1 min-h-0 flex-row min-w-0"
+          style={{
+            backgroundColor: neutral.surface,
+            boxShadow: `0 1px 0 ${derived.border}`,
+          }}
+        >
+          {/* Left: KPI + org field (+ records) — command center does not share this width */}
+          <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+            <KPIBand scope={kpiScope} />
+            <div
+              className="flex flex-1 min-h-0 flex-col min-w-0"
+              style={{
+                backgroundColor: derived.canvasChamberDeep,
+                boxShadow: `inset 0 2px 0 ${neutral.surface}`,
+                borderTop: `1px solid ${derived.border}`,
+              }}
+            >
+              <main className="flex-1 min-h-0 min-w-0 overflow-hidden">
                 <SystemCanvas
                   zoomLevel={zoomLevel}
                   selectedDepartmentKey={selectedDepartmentKey}
@@ -75,17 +89,21 @@ export default function AdminV2Shell({
                   onNodeSelect={setSelectedNodeId}
                 />
               </main>
-              <InspectorPanel
-                selectedNodeId={selectedNodeId}
-                selectedDepartmentKey={selectedDepartmentKey}
-                zoomLevel={zoomLevel}
-              />
+              {showRecordsExpandable && selectedDepartmentKey && (
+                <RecordsExpandable
+                  key={selectedDepartmentKey}
+                  departmentName={getDepartmentName(selectedDepartmentKey)}
+                  scope={{ level: "department", key: selectedDepartmentKey }}
+                />
+              )}
             </div>
-            <RecordsPanel
-              scope={kpiScope}
-              title={selectedDepartmentKey ? `${getDepartmentName(selectedDepartmentKey)} records` : undefined}
-            />
           </div>
+          {/* Right: full-height command center / inspector rail (KPI band height + org field) */}
+          <InspectorPanel
+            selectedNodeId={selectedNodeId}
+            selectedDepartmentKey={selectedDepartmentKey}
+            zoomLevel={zoomLevel}
+          />
         </div>
         <AICommandBar />
       </div>

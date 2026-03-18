@@ -6,18 +6,20 @@ import { getRecordsForScope, type RecordsScope } from "./mockRecordsData";
 type Props = {
   scope: RecordsScope;
   title?: string;
+  /** When true, no outer border-top (used inside expandable) */
+  embedded?: boolean;
 };
 
-export default function RecordsPanel({ scope, title }: Props) {
+export default function RecordsPanel({ scope, title, embedded }: Props) {
   const { columns, rows } = getRecordsForScope(scope);
-  const displayTitle = title ?? (scope.level === "company" ? "Recent activity" : "Records");
+  const displayTitle = title ?? "Records";
 
   return (
     <div
       style={{
         flexShrink: 0,
-        height: 220,
-        borderTop: `1px solid ${derived.border}`,
+        height: 200,
+        borderTop: embedded ? `1px solid ${derived.border}` : undefined,
         backgroundColor: neutral.surface,
         overflow: "hidden",
         display: "flex",

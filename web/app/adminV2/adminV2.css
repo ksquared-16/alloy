@@ -1,1 +1,974 @@
-/* adminV2 scoped styles — design tokens applied via component imports from @/styles/tokens/colors */
+/* adminV2 — proof-pass ambient (obvious in screenshots; tone down later) */
+
+@keyframes adminv2-ambient-orbit {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes adminv2-ambient-orbit-reverse {
+  from {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+}
+
+@keyframes adminv2-ambient-bloom-breathe {
+  0%,
+  100% {
+    opacity: 0.92;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.adminv2-ambient-root-proof {
+  pointer-events: none;
+  width: 880px;
+  height: 880px;
+  position: relative;
+}
+
+.adminv2-ambient-root-focus {
+  pointer-events: none;
+  width: 1120px;
+  height: 1120px;
+  position: relative;
+}
+
+.adminv2-ambient-bloom-focus-veil {
+  opacity: 0.85;
+  animation: adminv2-ambient-bloom-breathe 5s ease-in-out infinite;
+}
+
+.adminv2-ambient-ring-focus-micro {
+  animation: adminv2-ambient-orbit-reverse 38s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-mid {
+  animation: adminv2-ambient-orbit 20s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-outer {
+  animation: adminv2-ambient-orbit-reverse 52s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-structure {
+  animation: adminv2-ambient-orbit 68s linear infinite;
+}
+
+.adminv2-ambient-spec-focus-micro {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow: 0 0 8px rgba(0, 162, 131, 0.35);
+}
+
+.adminv2-ambient-spec-focus-mid {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow: 0 0 12px rgba(0, 162, 131, 0.42);
+}
+
+.adminv2-ambient-spec-focus-outer {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.88;
+  box-shadow: 0 0 10px rgba(0, 162, 131, 0.25);
+}
+
+.adminv2-ambient-spec-focus-blue {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.55;
+}
+
+@keyframes adminv2-focus-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.55;
+  }
+  33% {
+    transform: translate(11px, -16px);
+    opacity: 0.92;
+  }
+  66% {
+    transform: translate(-9px, 12px);
+    opacity: 0.68;
+  }
+}
+
+.adminv2-focus-drift-dot {
+  position: absolute;
+  border-radius: 50%;
+  animation: adminv2-focus-drift 5.5s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(0, 220, 185, 0.48);
+}
+
+.adminv2-focus-drift-sm {
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  animation-duration: 5.8s !important;
+}
+
+.adminv2-focus-drift-md {
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  animation-duration: 4.8s !important;
+}
+
+.adminv2-focus-drift-lg {
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  margin-top: -2.5px;
+  animation-duration: 4s !important;
+  box-shadow: 0 0 14px rgba(0, 220, 185, 0.55) !important;
+}
+
+@keyframes adminv2-company-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.52;
+  }
+  50% {
+    transform: translate(12px, -16px);
+    opacity: 0.92;
+  }
+}
+
+@keyframes adminv2-company-drift-proof {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.72;
+  }
+  50% {
+    transform: translate(18px, -24px);
+    opacity: 1;
+  }
+}
+
+.adminv2-company-drift-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  animation: adminv2-company-drift 9.5s ease-in-out infinite;
+  box-shadow:
+    0 0 10px rgba(0, 220, 185, 0.45),
+    0 0 4px rgba(255, 255, 255, 0.25);
+}
+
+.adminv2-company-drift-dot.adminv2-ambient-proof {
+  width: 5.5px;
+  height: 5.5px;
+  margin-left: -2.75px;
+  margin-top: -2.75px;
+  animation: adminv2-company-drift-proof 3.8s ease-in-out infinite;
+  box-shadow:
+    0 0 16px rgba(0, 255, 220, 0.65),
+    0 0 8px rgba(255, 255, 255, 0.45);
+}
+
+.adminv2-company-drift-jumbo {
+  width: 5.5px !important;
+  height: 5.5px !important;
+  margin-left: -2.75px !important;
+  margin-top: -2.75px !important;
+  box-shadow:
+    0 0 14px rgba(0, 220, 185, 0.55),
+    0 0 6px rgba(255, 255, 255, 0.3) !important;
+}
+
+.adminv2-company-drift-dot.adminv2-ambient-proof.adminv2-company-drift-jumbo {
+  width: 7.5px !important;
+  height: 7.5px !important;
+  margin-left: -3.75px !important;
+  margin-top: -3.75px !important;
+  box-shadow:
+    0 0 22px rgba(0, 255, 220, 0.75),
+    0 0 10px rgba(255, 255, 255, 0.5) !important;
+}
+
+.adminv2-ambient-bloom-company-soft {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  opacity: 0.75;
+  animation: adminv2-ambient-bloom-breathe-company 11s ease-in-out infinite;
+}
+
+.adminv2-ambient-bloom {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: adminv2-ambient-bloom-breathe 4s ease-in-out infinite;
+}
+
+.adminv2-ambient-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  animation: adminv2-ambient-orbit 18s linear infinite;
+}
+
+.adminv2-ambient-ring-reverse {
+  animation: adminv2-ambient-orbit-reverse 24s linear infinite;
+}
+
+.adminv2-ambient-spec-proof {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  transform: translateY(-228px);
+}
+
+.adminv2-ambient-spec-focus-life {
+  box-shadow: 0 0 14px rgba(0, 162, 131, 0.5);
+}
+
+.adminv2-ambient-spec-focus-life-alt {
+  box-shadow: 0 0 10px rgba(0, 162, 131, 0.28);
+}
+
+.adminv2-ambient-ring-slow .adminv2-ambient-spec-proof {
+  transform: translateY(-312px);
+}
+
+.adminv2-dept-node-fixed {
+  box-sizing: border-box;
+}
+
+.adminv2-dept-title-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.adminv2-dept-focus-ring {
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.adminv2-dept-activating-soft {
+  animation: adminv2-dept-soft 160ms ease-out forwards;
+}
+
+@keyframes adminv2-dept-soft {
+  0% {
+    box-shadow: 0 6px 16px rgba(39, 63, 82, 0.12);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(0, 69, 140, 0.2),
+      0 8px 20px rgba(39, 63, 82, 0.13);
+  }
+}
+
+@keyframes adminv2-manager-enter-hero {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.adminv2-manager-node-shell-hero {
+  animation: adminv2-manager-enter-hero 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Company-level ambient — calmer, slower */
+@keyframes adminv2-ambient-bloom-breathe-company {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.adminv2-ambient-root-company-hub {
+  pointer-events: none;
+  width: 1500px;
+  height: 1500px;
+  position: relative;
+}
+
+.adminv2-ambient-root-company-field {
+  pointer-events: none;
+  width: 820px;
+  height: 820px;
+  position: relative;
+}
+
+.adminv2-ambient-bloom-company-hub {
+  animation: adminv2-ambient-bloom-breathe-company 11s ease-in-out infinite;
+}
+
+.adminv2-ambient-bloom-company-hub-mid {
+  opacity: 0.55;
+  animation: adminv2-ambient-bloom-breathe-company 13s ease-in-out infinite;
+}
+
+.adminv2-ambient-bloom-company-hub-soft {
+  opacity: 0.68;
+  animation: adminv2-ambient-bloom-breathe-company 15s ease-in-out infinite;
+}
+
+.adminv2-ambient-bloom-company-field {
+  animation: adminv2-ambient-bloom-breathe-company 13s ease-in-out infinite;
+  opacity: 0.85;
+}
+
+@keyframes adminv2-company-field-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(10px, -14px);
+    opacity: 0.95;
+  }
+}
+
+.adminv2-company-field-drift {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  animation: adminv2-company-field-drift 5.5s ease-in-out infinite;
+  box-shadow:
+    0 0 12px rgba(0, 220, 185, 0.45),
+    0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.adminv2-ambient-ring-company-field-a {
+  animation: adminv2-ambient-orbit-reverse 18s linear infinite;
+}
+
+.adminv2-ambient-ring-company-field-b {
+  animation: adminv2-ambient-orbit 22s linear infinite;
+}
+
+.adminv2-ambient-ring-company-field-c {
+  animation: adminv2-ambient-orbit-reverse 28s linear infinite;
+}
+
+.adminv2-ambient-ring-company-field-d {
+  animation: adminv2-ambient-orbit 32s linear infinite;
+}
+
+.adminv2-ambient-ring-company-field-e {
+  animation: adminv2-ambient-orbit-reverse 26s linear infinite;
+}
+
+.adminv2-ambient-spec-company-field-proof {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 240, 200, 0.55);
+  box-shadow: 0 0 10px rgba(0, 220, 185, 0.4);
+}
+
+.adminv2-ambient-spec-company-field-dim {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  margin-top: -1px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.55;
+  background-color: rgba(0, 162, 131, 0.28);
+}
+
+.adminv2-ambient-spec-company-field {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 162, 131, 0.42);
+  box-shadow: 0 0 6px rgba(0, 162, 131, 0.2);
+}
+
+.adminv2-ambient-spec-company-field-soft {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.75;
+  background-color: rgba(0, 69, 140, 0.22);
+}
+
+.adminv2-ambient-spec-company-field-outer {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.68;
+  background-color: rgba(0, 162, 131, 0.32);
+}
+
+.adminv2-ambient-ring-company-hub-inner {
+  animation: adminv2-ambient-orbit-reverse 14s linear infinite;
+}
+
+.adminv2-ambient-ring-company-hub-a {
+  animation: adminv2-ambient-orbit 13s linear infinite;
+}
+
+.adminv2-ambient-ring-company-fast {
+  animation: adminv2-ambient-orbit-reverse 9s linear infinite;
+}
+
+.adminv2-ambient-ring-company-mid {
+  animation: adminv2-ambient-orbit 14s linear infinite;
+}
+
+.adminv2-ambient-spec-company-tiny {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.85;
+}
+
+.adminv2-ambient-bloom-company {
+  animation: adminv2-ambient-bloom-breathe-company 9s ease-in-out infinite;
+}
+
+.adminv2-ambient-ring-company {
+  animation: adminv2-ambient-orbit 18s linear infinite;
+}
+
+.adminv2-ambient-ring-company-slow {
+  animation: adminv2-ambient-orbit-reverse 22s linear infinite;
+}
+
+.adminv2-ambient-ring-company-outer2 {
+  animation: adminv2-ambient-orbit 28s linear infinite;
+}
+
+.adminv2-ambient-ring-company-hub-outer {
+  animation: adminv2-ambient-orbit-reverse 32s linear infinite;
+}
+
+.adminv2-ambient-ring-company-hub-rim {
+  animation: adminv2-ambient-orbit 36s linear infinite;
+}
+
+.adminv2-ambient-ring-company-hub-mega {
+  animation: adminv2-ambient-orbit-reverse 16s linear infinite;
+}
+
+.adminv2-ambient-spec-company-mega {
+  position: absolute;
+  width: 4.5px;
+  height: 4.5px;
+  margin-left: -2.25px;
+  margin-top: -2.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow:
+    0 0 14px rgba(0, 255, 220, 0.55),
+    0 0 6px rgba(255, 255, 255, 0.35);
+}
+
+.adminv2-ambient-spec-company-rim {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.42;
+  box-shadow: 0 0 6px rgba(0, 220, 185, 0.2);
+}
+
+.adminv2-ambient-spec-company-outer-wide {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.55;
+  background-color: rgba(0, 162, 131, 0.38);
+  box-shadow: 0 0 8px rgba(0, 162, 131, 0.15);
+}
+
+.adminv2-ambient-spec-company-bold {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  margin-top: -3px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow:
+    0 0 16px rgba(0, 220, 185, 0.5),
+    0 0 8px rgba(0, 162, 131, 0.55);
+}
+
+.adminv2-ambient-spec-company-hero {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow:
+    0 0 18px rgba(0, 162, 131, 0.55),
+    0 0 6px rgba(255, 255, 255, 0.2);
+}
+
+.adminv2-ambient-spec-company-ring-outer {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow: 0 0 14px rgba(0, 162, 131, 0.5);
+}
+
+.adminv2-ambient-spec-company-outer-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.95;
+  box-shadow: 0 0 11px rgba(0, 220, 185, 0.35);
+}
+
+.adminv2-company-drift-vivid {
+  animation-duration: 3.2s !important;
+}
+
+.adminv2-ambient-ring-focus-early {
+  animation: adminv2-ambient-orbit 22s linear infinite;
+}
+
+.adminv2-ambient-spec-focus-early {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  margin-top: -1px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 162, 131, 0.32);
+  opacity: 0.75;
+}
+
+.adminv2-ambient-ring-focus-inner {
+  animation: adminv2-ambient-orbit-reverse 28s linear infinite;
+}
+
+.adminv2-ambient-spec-focus-micro-orbit {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  margin-top: -1px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 162, 131, 0.4);
+  box-shadow: 0 0 5px rgba(0, 162, 131, 0.2);
+}
+
+.adminv2-ambient-ring-focus-mid2 {
+  animation: adminv2-ambient-orbit 30s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-fill {
+  animation: adminv2-ambient-orbit-reverse 34s linear infinite;
+}
+
+.adminv2-ambient-spec-focus-fill {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  margin-top: -1px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.48;
+  background-color: rgba(0, 69, 140, 0.2);
+}
+
+.adminv2-ambient-spec-focus-mid2 {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.72;
+  box-shadow: 0 0 6px rgba(0, 162, 131, 0.18);
+}
+
+.adminv2-ambient-ring-focus-perimeter-a {
+  animation: adminv2-ambient-orbit 36s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-perimeter-b {
+  animation: adminv2-ambient-orbit-reverse 40s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-perimeter-c {
+  animation: adminv2-ambient-orbit 48s linear infinite;
+}
+
+.adminv2-ambient-ring-focus-outer {
+  animation: adminv2-ambient-orbit-reverse 56s linear infinite;
+}
+
+.adminv2-ambient-spec-focus-outer-fine {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  margin-top: -1px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.5;
+  background-color: rgba(0, 162, 131, 0.28);
+}
+
+.adminv2-ambient-ring-focus-mid {
+  animation: adminv2-ambient-orbit-reverse 24s linear infinite;
+}
+
+@keyframes adminv2-focus-micro {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.48;
+  }
+  50% {
+    transform: translate(6px, -10px);
+    opacity: 0.88;
+  }
+}
+
+.adminv2-focus-micro-spec {
+  position: absolute;
+  width: 1.75px;
+  height: 1.75px;
+  margin-left: -0.875px;
+  margin-top: -0.875px;
+  border-radius: 50%;
+  background-color: rgba(0, 162, 131, 0.42);
+  animation: adminv2-focus-micro 5.8s ease-in-out infinite;
+  box-shadow: 0 0 4px rgba(0, 162, 131, 0.22);
+}
+
+.adminv2-focus-micro-proof {
+  width: 2.75px !important;
+  height: 2.75px !important;
+  margin-left: -1.375px !important;
+  margin-top: -1.375px !important;
+  background-color: rgba(0, 230, 195, 0.58) !important;
+  animation: adminv2-focus-micro 3.2s ease-in-out infinite !important;
+  box-shadow: 0 0 8px rgba(0, 220, 185, 0.45) !important;
+}
+
+.adminv2-ambient-spec-focus-mega {
+  position: absolute;
+  width: 2.75px;
+  height: 2.75px;
+  margin-left: -1.375px;
+  margin-top: -1.375px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 220, 185, 0.5);
+  box-shadow: 0 0 8px rgba(0, 220, 185, 0.35);
+}
+
+.adminv2-ambient-ring-focus-mega {
+  animation: adminv2-ambient-orbit 14s linear infinite;
+}
+
+.adminv2-focus-spec-proof {
+  opacity: 0.72 !important;
+  width: 2.25px !important;
+  height: 2.25px !important;
+  margin-left: -1.125px !important;
+  margin-top: -1.125px !important;
+  box-shadow: 0 0 7px rgba(0, 220, 185, 0.35) !important;
+}
+
+.adminv2-ambient-spec-focus-mid {
+  position: absolute;
+  width: 3.5px;
+  height: 3.5px;
+  margin-left: -1.75px;
+  margin-top: -1.75px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.88;
+  box-shadow: 0 0 10px rgba(0, 162, 131, 0.35);
+}
+
+.adminv2-ambient-spec-focus-mid-soft {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.72;
+  box-shadow: 0 0 8px rgba(0, 220, 185, 0.28);
+}
+
+.adminv2-ambient-spec-focus-perimeter {
+  position: absolute;
+  width: 3.5px;
+  height: 3.5px;
+  margin-left: -1.75px;
+  margin-top: -1.75px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow: 0 0 5px rgba(0, 162, 131, 0.15);
+}
+
+.adminv2-ambient-spec-focus-perimeter-soft {
+  position: absolute;
+  width: 2.5px;
+  height: 2.5px;
+  margin-left: -1.25px;
+  margin-top: -1.25px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.65;
+}
+
+.adminv2-ambient-spec-focus-perimeter-pine {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0.75;
+  box-shadow: 0 0 4px rgba(0, 162, 131, 0.12);
+}
+
+.adminv2-focus-drift-perimeter {
+  opacity: 0.92;
+}
+
+.adminv2-ambient-spec-company {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  margin-top: -1.5px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+}
+
+.adminv2-ambient-spec-life {
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  box-shadow: 0 0 10px rgba(0, 162, 131, 0.35);
+}
+
+.adminv2-ambient-spec-life-alt {
+  width: 3px;
+  height: 3px;
+  opacity: 0.9;
+  box-shadow: 0 0 8px rgba(0, 162, 131, 0.22);
+}
+
+.adminv2-ambient-spec-company-alt {
+  opacity: 0.85;
+}
+
+.adminv2-ambient-ring-company-slow .adminv2-ambient-spec-company {
+  transform: translateY(-168px);
+}
+
+.adminv2-canvas-tools-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  cursor: pointer;
+  opacity: 0.68;
+  transition:
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.adminv2-canvas-tools-fab:hover {
+  opacity: 1;
+  box-shadow: 0 4px 14px rgba(39, 63, 82, 0.15);
+}
+
+.adminv2-canvas-tools-tray {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: 0 6px 20px rgba(39, 63, 82, 0.2);
+  margin-bottom: 6px;
+  opacity: 0.94;
+}
+
+.adminv2-canvas-tools-tray .react-flow__minimap {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.adminv2-canvas-tools-tray .react-flow__controls {
+  position: relative;
+  box-shadow: none;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Ambient behind tiles; foreground nodes above */
+.react-flow__node.adminv2-rf-ambient {
+  z-index: 0 !important;
+}
+
+.react-flow__node.adminv2-rf-foreground {
+  z-index: 100 !important;
+  isolation: isolate;
+}
+
+.react-flow__node.adminv2-rf-manager {
+  z-index: 600 !important;
+}
+
+.adminv2-manager-card-surface {
+  position: relative;
+  z-index: 1;
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
