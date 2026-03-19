@@ -4,6 +4,11 @@ import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing
 import { mapServiceTypeToKey, mapFrequencyToKey, ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
+import {
+  getFieldDefinitionMeta,
+  upsertTypedFieldValue,
+  serializeSquareFootageForFieldValue,
+} from "@/lib/bookV2/fieldValueUpsert";
 
 const SERVICE_TYPE = "Standard Cleaning";
 const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
@@ -346,33 +351,91 @@ export async function POST(request: NextRequest) {
     if (opportunityId) {
       const { data: existing } = await supabase
         .from("opportunities")
-        .select("id, metadata")
+        .select("id, metadata, org_id, location_id")
         .eq("id", opportunityId)
         .single();
       if (existing) {
-        const meta = (existing.metadata as Record<string, unknown>) ?? {};
+        const row = existing as {
+          metadata?: Record<string, unknown> | null;
+          org_id?: string | null;
+          location_id?: string | null;
+        };
+        const meta = (row.metadata as Record<string, unknown>) ?? {};
         const apiKeyFromFreq = dbFreq?.frequency_key ?? body.cleaning_frequency ?? "one_time";
+        const cleaningFreqApiKey =
+          typeof body.cleaning_frequency === "string" ? body.cleaning_frequency : "one_time";
         const quote_input = {
           zip: body.zip ?? (meta.quote_input as Record<string, unknown>)?.zip,
           square_footage: square_footage,
           cleaning_frequency: typeof apiKeyFromFreq === "string" ? apiKeyFromFreq : "one_time",
           add_ons: selectedKeys,
         };
-        await supabase
-          .from("opportunities")
-          .update({
-            metadata: {
-              ...meta,
-              quote_input,
-              quote_output: quoteOutput,
-              source: "web_quote",
-            },
-            ...(quoteOutput.estimated_price != null && {
-              estimated_price_cents: Math.round(quoteOutput.estimated_price * 100),
-              monetary_value_cents: Math.round(quoteOutput.estimated_price * 100),
-            }),
-          })
-          .eq("id", opportunityId);
+        const est = quoteOutput.estimated_price;
+        const recurringCents =
+          quoteOutput.recurring_price != null && !Number.isNaN(Number(quoteOutput.recurring_price))
+            ? Math.round(Number(quoteOutput.recurring_price) * 100)
+            : null;
+
+        const oppUpdate: Record<string, unknown> = {
+          metadata: {
+            ...meta,
+            quote_input,
+            quote_output: quoteOutput,
+            source: "web_quote",
+          },
+          // Re-pricing invalidates prior discount selection — user must re-apply code.
+          discount_amount: null,
+          discount_code_id: null,
+          discount_program_id: null,
+          discount_code: null,
+        };
+        if (est != null) {
+          const cents = Math.round(est * 100);
+          oppUpdate.estimated_price_cents = cents;
+          oppUpdate.monetary_value_cents = cents;
+          oppUpdate.quote_subtotal = est;
+          oppUpdate.quote_total = est;
+        }
+        if (recurringCents != null) {
+          oppUpdate.recurring_price_cents = recurringCents;
+        } else {
+          oppUpdate.recurring_price_cents = null;
+        }
+
+        await supabase.from("opportunities").update(oppUpdate).eq("id", opportunityId);
+
+        const orgId = row.org_id ?? null;
+        const locationId = row.location_id ?? null;
+        if (orgId) {
+          const freqDef = await getFieldDefinitionMeta(supabase, orgId, "opportunity", "cleaning_frequency");
+          if (freqDef) {
+            await upsertTypedFieldValue(
+              supabase,
+              orgId,
+              "opportunity",
+              opportunityId,
+              freqDef,
+              String(cleaningFreqApiKey)
+            );
+          }
+          const svcDef = await getFieldDefinitionMeta(supabase, orgId, "opportunity", "requested_service_type");
+          if (svcDef) {
+            await upsertTypedFieldValue(supabase, orgId, "opportunity", opportunityId, svcDef, SERVICE_TYPE);
+          }
+        }
+        if (orgId && locationId) {
+          const sqDef = await getFieldDefinitionMeta(supabase, orgId, "location", "square_footage");
+          if (sqDef) {
+            await upsertTypedFieldValue(
+              supabase,
+              orgId,
+              "location",
+              locationId,
+              sqDef,
+              serializeSquareFootageForFieldValue(square_footage)
+            );
+          }
+        }
       }
     }
 

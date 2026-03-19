@@ -12,17 +12,31 @@ const SQUARE_FOOTAGE_OPTIONS: { value: string; label: string }[] = [
   { value: "Over 5,500 sq ft", label: "Over 5,500 sq ft" },
 ];
 
+export type QuickQuoteCampaignMode = {
+  id: "firstfree4x60";
+};
+
 interface CleaningQuickQuoteFormProps {
   onSuccess: () => void;
+  /** Recurring-only frequencies; standard cleaning implied (quote-start path). */
+  campaignQuoteMode?: QuickQuoteCampaignMode;
 }
 
-export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuoteFormProps) {
+export default function CleaningQuickQuoteForm({
+  onSuccess,
+  campaignQuoteMode,
+}: CleaningQuickQuoteFormProps) {
+  const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x60";
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
     zip: "",
     square_footage: "",
-    cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
+    cleaning_frequency: (isCampaignFirstFree ? "weekly" : "one_time") as
+      | "one_time"
+      | "weekly"
+      | "biweekly"
+      | "monthly",
     email: "",
     phone: "",
   });
@@ -79,7 +93,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
           last_name: last_name.trim(),
           zip: zip.trim(),
           square_footage: square_footage.trim(),
-          cleaning_frequency: cleaning_frequency || "one_time",
+          cleaning_frequency: isCampaignFirstFree ? cleaning_frequency || "weekly" : cleaning_frequency || "one_time",
           email: email?.trim() || undefined,
           phone: phone.trim(),
           sms_consent: smsConsent,
@@ -108,7 +122,11 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         service: "Standard Cleaning",
         price_breakdown: undefined,
         addons: qo?.addons ?? [],
-        quote_input: { zip: zip.trim(), square_footage: square_footage.trim(), cleaning_frequency: cleaning_frequency || "one_time" },
+        quote_input: {
+          zip: zip.trim(),
+          square_footage: square_footage.trim(),
+          cleaning_frequency: isCampaignFirstFree ? cleaning_frequency || "weekly" : cleaning_frequency || "one_time",
+        },
         email: email?.trim() || undefined,
         phone: phone?.trim() || undefined,
         first_name: first_name?.trim() || undefined,
@@ -127,6 +145,11 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         zip: zip?.trim() || undefined,
         postal_code: zip?.trim() || undefined,
       };
+      if (isCampaignFirstFree) {
+        prefillData.campaign = "firstfree4x60";
+        prefillData.discount_program_code = "FIRSTFREE4X60";
+        prefillData.campaign_source = "quote_modal_firstfree4x60";
+      }
       const prefillJson = JSON.stringify(prefillData);
       try {
         sessionStorage.setItem("alloy_booking_prefill", prefillJson);
@@ -225,7 +248,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
             }
             className="public-form-input"
           >
-            <option value="one_time">One-time</option>
+            {!isCampaignFirstFree && <option value="one_time">One-time</option>}
             <option value="weekly">Weekly</option>
             <option value="biweekly">Every 2 weeks</option>
             <option value="monthly">Monthly</option>
@@ -295,7 +318,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
         disabled={submitting}
         className="public-form-cta public-btn-primary mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {submitting ? "Saving…" : "Get my quote"}
+        {submitting ? "Saving…" : isCampaignFirstFree ? "Get my recurring quote" : "Get my quote"}
       </button>
     </form>
   );

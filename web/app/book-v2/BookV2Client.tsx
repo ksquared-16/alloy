@@ -10,6 +10,7 @@ import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing";
+import { isFirstFree4x60CampaignQuery } from "@/lib/campaigns/firstFree4x60";
 
 interface QuoteInputStored {
     zip?: string;
@@ -40,6 +41,8 @@ interface DiscountData {
     discount_code_id: string;
     discount_amount: number;
     quote_total: number;
+    /** When validate API returns a program id (discount programs migration). */
+    discount_program_id?: string | null;
 }
 
 type BookingStep = "quote_start" | "refine_quote" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
@@ -267,6 +270,7 @@ export default function BookV2Client() {
     const [serviceDetailsValid, setServiceDetailsValid] = useState(false);
     const [serviceDetailsConfirmed, setServiceDetailsConfirmed] = useState(false);
     const [serviceDetailsSnapshot, setServiceDetailsSnapshot] = useState<ServiceDetails | null>(null);
+    const [serviceDetailsSaving, setServiceDetailsSaving] = useState(false);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [bookingResult, setBookingResult] = useState<{
         schedule_id: string;
@@ -325,6 +329,8 @@ export default function BookV2Client() {
     const [availableFrequencies, setAvailableFrequencies] = useState<Array<{ frequency_key: string; frequency_label: string; discount_label: string | null; is_recurring: boolean }> | null>(null);
     const refineDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refineRequestIdRef = useRef(0);
+    /** If a one-time quote lands in campaign mode, bump to weekly once via quote-refine. */
+    const firstFreeCampaignRecurringBootstrapRef = useRef(false);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -346,6 +352,15 @@ export default function BookV2Client() {
     const cardCvcRef = useRef<HTMLDivElement>(null);
 
     const debug = searchParams?.get("debug") === "1";
+    const campaignFirstFree4x60 = !debug && isFirstFree4x60CampaignQuery(searchParams?.get("campaign"));
+
+    // Campaign /book-v2: default quote-start frequency to recurring (not one-time).
+    useEffect(() => {
+        if (!campaignFirstFree4x60) return;
+        setQuoteStartForm((f) =>
+            f.cleaning_frequency === "one_time" ? { ...f, cleaning_frequency: "weekly" } : f
+        );
+    }, [campaignFirstFree4x60]);
 
     // Reschedule-via-action-link: token from URL, resolve result, and confirm result
     const [rescheduleResolve, setRescheduleResolve] = useState<{
@@ -632,12 +647,13 @@ export default function BookV2Client() {
             if (prefill) {
                 try {
                     const prefillData = JSON.parse(prefill);
-                    if (prefillData.discount_code && prefillData.discount_code_id && prefillData.discount_amount) {
+                    if (prefillData.discount_code && prefillData.discount_code_id && prefillData.discount_amount != null) {
                         setDiscountData({
                             code: prefillData.discount_code,
                             discount_code_id: prefillData.discount_code_id,
                             discount_amount: prefillData.discount_amount,
                             quote_total: prefillData.quote_total || 0,
+                            discount_program_id: prefillData.discount_program_id ?? null,
                         });
                         setDiscountCode(prefillData.discount_code);
                     }
@@ -752,11 +768,14 @@ export default function BookV2Client() {
     useEffect(() => {
         if (!quote || currentStep !== "refine_quote") return;
         const freqLabel = (quote.frequency_label || "").toLowerCase();
-        const nextFreq: "one_time" | "weekly" | "biweekly" | "monthly" =
+        let nextFreq: "one_time" | "weekly" | "biweekly" | "monthly" =
             freqLabel.includes("weekly") && !freqLabel.includes("bi") ? "weekly"
                 : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
                 : freqLabel.includes("monthly") ? "monthly"
                 : "one_time";
+        if (campaignFirstFree4x60 && nextFreq === "one_time") {
+            nextFreq = "weekly";
+        }
         setRefineFrequency(nextFreq);
         const addonsList = quote.addons ?? [];
         const keys: string[] = addonsList
@@ -769,7 +788,7 @@ export default function BookV2Client() {
             })
             .filter((x): x is string => x != null && x.length > 0);
         setSelectedAddonKeys(keys);
-    }, [quote, currentStep]);
+    }, [quote, currentStep, campaignFirstFree4x60]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
@@ -866,6 +885,31 @@ export default function BookV2Client() {
         [quote]
     );
 
+    // FIRSTFREE4X60: ensure stored quote is recurring (quote-refine) if it was one-time.
+    useEffect(() => {
+        if (!campaignFirstFree4x60 || debug || !quote || !hasQuote || currentStep !== "refine_quote") return;
+        if (firstFreeCampaignRecurringBootstrapRef.current) return;
+        const qi = quote.quote_input?.cleaning_frequency;
+        const label = (quote.frequency_label || "").toLowerCase();
+        const looksOneTime =
+            qi === "one_time" ||
+            label.includes("one-time") ||
+            label.includes("one time");
+        if (!looksOneTime) return;
+        firstFreeCampaignRecurringBootstrapRef.current = true;
+        const addonsList = quote.addons ?? [];
+        const keysFromQuote: string[] = addonsList
+            .map((a) => {
+                const withId = a as { id?: string; name?: string };
+                if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
+                    return ADDON_ID_TO_KEY[withId.name as AddOnId];
+                return null;
+            })
+            .filter((x): x is string => x != null && x.length > 0);
+        void applyRefineAndPersist("weekly", keysFromQuote);
+    }, [campaignFirstFree4x60, debug, quote, hasQuote, currentStep, applyRefineAndPersist]);
+
     // Fetch available_addons once when entering refine step (so prices show before user toggles)
     useEffect(() => {
         if (currentStep !== "refine_quote" || !quote || availableAddons !== null) return;
@@ -890,6 +934,7 @@ export default function BookV2Client() {
     }, [currentStep, quote, availableAddons, applyRefineAndPersist]);
 
     const handleRefineFrequencyChange = (freq: "one_time" | "weekly" | "biweekly" | "monthly") => {
+        if (campaignFirstFree4x60 && freq === "one_time") return;
         setRefineFrequency(freq);
         setRefineError(null);
         applyRefineAndPersist(freq, selectedAddonKeys);
@@ -1046,12 +1091,63 @@ export default function BookV2Client() {
         setServiceDetailsValid(isValid);
     };
 
-    const handleConfirmServiceDetails = () => {
-        if (serviceDetails && serviceDetailsValid) {
-            setServiceDetailsConfirmed(true);
-            setServiceDetailsSnapshot({ ...serviceDetails });
-            setCurrentStep("payment");
+    const handleConfirmServiceDetails = async () => {
+        if (!serviceDetails || !serviceDetailsValid) return;
+
+        const oppId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
+        let prefillData: Record<string, unknown> = {};
+        try {
+            const raw = sessionStorage.getItem("alloy_booking_prefill") || localStorage.getItem("alloy_booking_prefill");
+            if (raw) prefillData = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+            // ignore
         }
+        const postalFromQuote = (quote?.quote_input?.zip as string | undefined)?.trim() || "";
+        const postal =
+            postalFromQuote ||
+            (typeof prefillData.postal_code === "string" ? prefillData.postal_code.trim() : "") ||
+            (typeof prefillData.zip === "string" ? prefillData.zip.trim() : "") ||
+            null;
+        const stateVal = typeof prefillData.state === "string" ? prefillData.state.trim() || null : null;
+
+        if (oppId) {
+            setServiceDetailsSaving(true);
+            setBookingError(null);
+            try {
+                const res = await fetch("/api/book-v2/service-details", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        opportunity_id: oppId,
+                        address: serviceDetails.address.trim(),
+                        city: serviceDetails.city.trim(),
+                        state: stateVal,
+                        postal_code: postal,
+                        home_type: serviceDetails.home_type?.trim() || null,
+                        bedrooms: serviceDetails.bedrooms || null,
+                        bathrooms: serviceDetails.bathrooms || null,
+                        access_method: serviceDetails.access_method,
+                        access_note: serviceDetails.access_note?.trim() || null,
+                        additional_notes: serviceDetails.additional_notes?.trim() || null,
+                    }),
+                });
+                const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+                if (!res.ok || !json.ok) {
+                    setBookingError(typeof json.message === "string" ? json.message : "Could not save service details.");
+                    setServiceDetailsSaving(false);
+                    return;
+                }
+            } catch {
+                setBookingError("Could not save service details. Please try again.");
+                setServiceDetailsSaving(false);
+                return;
+            }
+            setServiceDetailsSaving(false);
+        }
+
+        setServiceDetailsConfirmed(true);
+        setServiceDetailsSnapshot({ ...serviceDetails });
+        setCurrentStep("payment");
     };
 
     const handleEditServiceDetails = () => {
@@ -1096,8 +1192,12 @@ export default function BookV2Client() {
                         first_name: (resolvedFirstName ?? (prefillData.first_name as string))?.trim() || undefined,
                         last_name: (resolvedLastName ?? (prefillData.last_name as string))?.trim() || undefined,
                         zip: (prefillData.zip as string)?.trim() || (prefillData.postal_code as string)?.trim() || undefined,
-                        cleaning_frequency: "one_time",
-                        quote_context: { source: "book_v2_payment_identity", url: typeof window !== "undefined" ? window.location.href : "" },
+                        cleaning_frequency: campaignFirstFree4x60 ? "weekly" : "one_time",
+                        quote_context: {
+                            source: "book_v2_payment_identity",
+                            url: typeof window !== "undefined" ? window.location.href : "",
+                            ...(campaignFirstFree4x60 ? { campaign: "firstfree4x60" } : {}),
+                        },
                     }),
                 });
                 const data = await res.json();
@@ -1215,21 +1315,26 @@ export default function BookV2Client() {
             }
 
             if (data.valid === true) {
+                const programId =
+                    typeof data.discount_program_id === "string" && data.discount_program_id.trim()
+                        ? data.discount_program_id.trim()
+                        : null;
                 setDiscountData({
                     code: discountCode.trim().toUpperCase(),
                     discount_code_id: data.discount_code_id,
                     discount_amount: data.discount_amount,
                     quote_total: data.quote_total,
+                    discount_program_id: programId,
                 });
                 setDiscountError(null);
 
                 // Store in prefill
                 const existingPrefill = sessionStorage.getItem("alloy_booking_prefill") ||
                     localStorage.getItem("alloy_booking_prefill");
-                let prefillData: any = {};
+                let prefillData: Record<string, unknown> = {};
                 if (existingPrefill) {
                     try {
-                        prefillData = JSON.parse(existingPrefill);
+                        prefillData = JSON.parse(existingPrefill) as Record<string, unknown>;
                     } catch (e) {
                         console.warn("Failed to parse prefill:", e);
                     }
@@ -1238,9 +1343,36 @@ export default function BookV2Client() {
                 prefillData.discount_code_id = data.discount_code_id;
                 prefillData.discount_amount = data.discount_amount;
                 prefillData.quote_total = data.quote_total;
+                if (programId) prefillData.discount_program_id = programId;
+                else delete prefillData.discount_program_id;
                 const jsonData = JSON.stringify(prefillData);
                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                 localStorage.setItem("alloy_booking_prefill", jsonData);
+
+                const oppId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
+                if (oppId && data.discount_code_id) {
+                    try {
+                        const persistRes = await fetch("/api/book-v2/opportunity-discount", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                opportunity_id: oppId,
+                                quote_subtotal: quoteSubtotal,
+                                quote_total: data.quote_total,
+                                discount_amount: data.discount_amount,
+                                discount_code_id: data.discount_code_id,
+                                discount_program_id: programId,
+                                discount_code: discountCode.trim().toUpperCase(),
+                            }),
+                        });
+                        const persistJson = (await persistRes.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+                        if (!persistRes.ok || !persistJson.ok) {
+                            console.warn("[BOOK_V2] opportunity-discount persist failed", persistJson?.message);
+                        }
+                    } catch (e) {
+                        console.warn("[BOOK_V2] opportunity-discount persist error", e);
+                    }
+                }
             } else {
                 const message = data.message ?? (data.reason === "discount_already_used" ? "That promo code has already been used for this customer." : "Invalid discount code");
                 setDiscountError(message);
@@ -1694,7 +1826,7 @@ export default function BookV2Client() {
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly" }))}
                                     className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
-                                    <option value="one_time">One-time</option>
+                                    {!campaignFirstFree4x60 && <option value="one_time">One-time</option>}
                                     <option value="weekly">Weekly</option>
                                     <option value="biweekly">Every 2 weeks</option>
                                     <option value="monthly">Monthly</option>
@@ -1798,7 +1930,10 @@ export default function BookV2Client() {
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Cleaning frequency</p>
                             <div className="flex flex-wrap gap-2">
-                                {(["one_time", "weekly", "biweekly", "monthly"] as const).map((freq) => (
+                                {(campaignFirstFree4x60
+                                    ? (["weekly", "biweekly", "monthly"] as const)
+                                    : (["one_time", "weekly", "biweekly", "monthly"] as const)
+                                ).map((freq) => (
                                     <button
                                         key={freq}
                                         type="button"
@@ -1944,10 +2079,47 @@ export default function BookV2Client() {
                                                     Discount Applied: {discountData.code}
                                                 </span>
                                                 <button
-                                                    onClick={() => {
+                                                    type="button"
+                                                    onClick={async () => {
                                                         setDiscountData(null);
                                                         setDiscountCode("");
                                                         setDiscountError(null);
+                                                        const oppId =
+                                                            typeof window !== "undefined"
+                                                                ? localStorage.getItem("alloy_opportunity_id")
+                                                                : null;
+                                                        if (oppId) {
+                                                            try {
+                                                                await fetch("/api/book-v2/opportunity-discount", {
+                                                                    method: "POST",
+                                                                    headers: { "Content-Type": "application/json" },
+                                                                    body: JSON.stringify({
+                                                                        opportunity_id: oppId,
+                                                                        clear: true,
+                                                                    }),
+                                                                });
+                                                            } catch {
+                                                                // ignore
+                                                            }
+                                                        }
+                                                        try {
+                                                            const prefillRaw =
+                                                                sessionStorage.getItem("alloy_booking_prefill") ||
+                                                                localStorage.getItem("alloy_booking_prefill");
+                                                            if (prefillRaw) {
+                                                                const p = JSON.parse(prefillRaw) as Record<string, unknown>;
+                                                                delete p.discount_code;
+                                                                delete p.discount_code_id;
+                                                                delete p.discount_amount;
+                                                                delete p.quote_total;
+                                                                delete p.discount_program_id;
+                                                                const out = JSON.stringify(p);
+                                                                sessionStorage.setItem("alloy_booking_prefill", out);
+                                                                localStorage.setItem("alloy_booking_prefill", out);
+                                                            }
+                                                        } catch {
+                                                            // ignore
+                                                        }
                                                     }}
                                                     className="text-xs text-alloy-midnight/60 hover:text-alloy-midnight underline"
                                                 >
@@ -2164,11 +2336,16 @@ export default function BookV2Client() {
                                         />
                                         {serviceDetailsValid && (
                                             <div className="mt-6 pt-6 border-t border-alloy-stone/20">
+                                                {bookingError && (currentStep === "service_details" || currentStep === "payment") && (
+                                                    <p className="text-sm text-red-600 mb-3">{bookingError}</p>
+                                                )}
                                                 <button
-                                                    onClick={handleConfirmServiceDetails}
-                                                    className="w-full sm:w-auto sm:px-6 px-4 py-2.5 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold rounded-lg text-sm"
+                                                    type="button"
+                                                    onClick={() => void handleConfirmServiceDetails()}
+                                                    disabled={serviceDetailsSaving}
+                                                    className="w-full sm:w-auto sm:px-6 px-4 py-2.5 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold rounded-lg text-sm disabled:opacity-50"
                                                 >
-                                                    Confirm Details
+                                                    {serviceDetailsSaving ? "Saving…" : "Confirm Details"}
                                                 </button>
                                             </div>
                                         )}

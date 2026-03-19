@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import CleaningQuickQuoteForm from "@/components/cleaning/CleaningQuickQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
+import type { CampaignQuoteFlowId } from "@/lib/quoteModal";
 
 type SelectedVertical = "cleaning" | "gutters" | null;
 type ModalStep = "picker" | "form" | "submitted";
@@ -14,9 +15,17 @@ interface QuoteModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultService?: "cleaning" | "gutters" | null;
+  campaignQuoteFlow?: CampaignQuoteFlowId | null;
+  invokeCampaignQuoteComplete?: () => void;
 }
 
-export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteModalProps) {
+export default function QuoteModal({
+  isOpen,
+  onClose,
+  defaultService,
+  campaignQuoteFlow = null,
+  invokeCampaignQuoteComplete,
+}: QuoteModalProps) {
   const router = useRouter();
   const [selectedVertical, setSelectedVertical] = useState<SelectedVertical>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("picker");
@@ -126,7 +135,9 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
               : selectedVertical === null
                 ? "What service do you need?"
                 : selectedVertical === "cleaning"
-                  ? "Get a cleaning quote"
+                  ? campaignQuoteFlow === "firstfree4x60"
+                    ? "Get your recurring quote"
+                    : "Get a cleaning quote"
                   : "Get early access"}
           </h2>
           <button
@@ -294,12 +305,21 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                 {selectedVertical === "cleaning" ? (
                   <div className="space-y-4">
                     <p className="text-sm text-alloy-midnight/80">
-                      We&apos;ll calculate your price and save it so you can book when you&apos;re ready.
+                      {campaignQuoteFlow === "firstfree4x60"
+                        ? "Recurring standard cleaning only. We’ll save your quote for the next step."
+                        : "We'll calculate your price and save it so you can book when you're ready."}
                     </p>
                     <CleaningQuickQuoteForm
+                      campaignQuoteMode={campaignQuoteFlow === "firstfree4x60" ? { id: "firstfree4x60" } : undefined}
                       onSuccess={() => {
+                        const isCampaign = campaignQuoteFlow === "firstfree4x60";
+                        if (isCampaign && invokeCampaignQuoteComplete) {
+                          invokeCampaignQuoteComplete();
+                        }
                         onClose();
-                        router.push("/book-v2");
+                        if (!isCampaign) {
+                          router.push("/book-v2");
+                        }
                       }}
                     />
                   </div>

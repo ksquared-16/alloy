@@ -14,6 +14,7 @@ import {
     type AddOnFrequencyOption,
     type ServiceHomeType,
 } from "@/lib/pricing/cleaningPricing";
+import { cleaningFrequencyOptionToApi } from "@/lib/campaigns/cleaningFrequencyApi";
 import {
     getQuotePricingFromSupabase,
     convertSupabaseResultToQuoteResult,
@@ -123,11 +124,38 @@ function validate(form: FormState): ValidationErrors {
     return errors;
 }
 
+/** Recurring-only frequencies (excludes one-time) for constrained campaign flows. */
+const RECURRING_CLEANING_FREQUENCIES: CleaningFrequencyOption[] = [
+    "Weekly (30% Off)",
+    "Bi-Weekly (20% Off)",
+    "Monthly (10% Off)",
+];
+
+export type CampaignQuoteModeConfig = {
+    /** Currently: First Service Free / 4-in-60 campaign landing */
+    id: "firstfree4x60";
+    /** After quote is stored locally; skips redirect to booking. */
+    onCampaignFlowQuoteReady?: (payload: { result: CleaningQuoteResult; input: CleaningQuoteInput }) => void;
+};
+
+function buildInitialFormState(campaign?: CampaignQuoteModeConfig | undefined): FormState {
+    if (campaign?.id === "firstfree4x60") {
+        return {
+            ...INITIAL_FORM,
+            serviceType: "Standard Cleaning",
+            cleaningFrequency: "Weekly (30% Off)",
+        };
+    }
+    return { ...INITIAL_FORM };
+}
+
 interface CleaningQuoteFormProps {
     onQuoteCalculated?: (quote: CleaningQuoteResult, input: CleaningQuoteInput) => void;
     variant?: "light" | "dark";
     onSuccess?: (bookingUrl?: string) => void;
     mode?: "page" | "modal";
+    /** When set: standard + recurring-only; optional handoff without navigating away. */
+    campaignQuoteMode?: CampaignQuoteModeConfig;
 }
 
 export default function CleaningQuoteForm({
@@ -135,9 +163,10 @@ export default function CleaningQuoteForm({
     variant = "light",
     onSuccess,
     mode = "page",
+    campaignQuoteMode,
 }: CleaningQuoteFormProps) {
     const router = useRouter();
-    const [form, setForm] = useState<FormState>(INITIAL_FORM);
+    const [form, setForm] = useState<FormState>(() => buildInitialFormState(campaignQuoteMode));
     const [consent, setConsent] = useState(false);
     const [errors, setErrors] = useState<ValidationErrors>({});
     const [quote, setQuote] = useState<CleaningQuoteResult | null>(null);
@@ -146,7 +175,8 @@ export default function CleaningQuoteForm({
     const [isCalculatingQuote, setIsCalculatingQuote] = useState(false);
 
     const isDark = variant === "dark";
-    const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
+    const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x60";
+    const isMoveOut = !isCampaignFirstFree && form.serviceType === "Move-Out / Heavy Clean";
 
     // Calculate quote when relevant form fields change (for Standard Cleaning only)
     useEffect(() => {
@@ -446,6 +476,11 @@ export default function CleaningQuoteForm({
                             phone: cleanInput.phone || undefined,
                             first_name: cleanInput.firstName || undefined,
                             last_name: cleanInput.lastName || undefined,
+                            quote_input: {
+                                zip: cleanInput.postalCode,
+                                square_footage: cleanInput.squareFootage,
+                                cleaning_frequency: cleaningFrequencyOptionToApi(cleaningFrequency),
+                            },
                         };
                         const enhancedQuoteJson = JSON.stringify(enhancedQuote);
                         localStorage.setItem("alloy_quote_v1", enhancedQuoteJson);
@@ -482,6 +517,12 @@ export default function CleaningQuoteForm({
                         }
                     } catch (e) {
                         console.warn("Failed to store form data in sessionStorage:", e);
+                    }
+
+                    if (campaignQuoteMode?.onCampaignFlowQuoteReady) {
+                        campaignQuoteMode.onCampaignFlowQuoteReady({ result, input: cleanInput });
+                        setIsSubmitting(false);
+                        return;
                     }
 
                     // If in modal mode, build booking URL and call onSuccess to close modal and navigate
@@ -855,25 +896,27 @@ export default function CleaningQuoteForm({
 
                 {/* Service Type & Square Footage */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className={labelClass}>
-                            Service Type<span className="text-alloy-ember ml-0.5">*</span>
-                        </label>
-                        <select
-                            value={form.serviceType}
-                            onChange={(e) => handleChange("serviceType", e.target.value as ServiceType)}
-                            className={selectClass}
-                        >
-                            <option value="">Select a service</option>
-                            <option value="Standard Cleaning">Standard Cleaning</option>
-                            <option value="Move-Out / Heavy Clean">Move-Out / Heavy Clean</option>
-                        </select>
-                        {errors.serviceType && (
-                            <p className="mt-1 text-xs text-alloy-ember">{errors.serviceType}</p>
-                        )}
-                    </div>
+                    {!isCampaignFirstFree && (
+                        <div>
+                            <label className={labelClass}>
+                                Service Type<span className="text-alloy-ember ml-0.5">*</span>
+                            </label>
+                            <select
+                                value={form.serviceType}
+                                onChange={(e) => handleChange("serviceType", e.target.value as ServiceType)}
+                                className={selectClass}
+                            >
+                                <option value="">Select a service</option>
+                                <option value="Standard Cleaning">Standard Cleaning</option>
+                                <option value="Move-Out / Heavy Clean">Move-Out / Heavy Clean</option>
+                            </select>
+                            {errors.serviceType && (
+                                <p className="mt-1 text-xs text-alloy-ember">{errors.serviceType}</p>
+                            )}
+                        </div>
+                    )}
 
-                    <div>
+                    <div className={isCampaignFirstFree ? "md:col-span-2" : ""}>
                         <label className={labelClass}>
                             Approximate Square Footage<span className="text-alloy-ember ml-0.5">*</span>
                         </label>
@@ -912,11 +955,21 @@ export default function CleaningQuoteForm({
                             }
                             className={selectClass}
                         >
-                            <option value="">Select a frequency</option>
-                            <option value="One-time">One-time</option>
-                            <option value="Weekly (30% Off)">Weekly (30% Off)</option>
-                            <option value="Bi-Weekly (20% Off)">Bi-Weekly (20% Off)</option>
-                            <option value="Monthly (10% Off)">Monthly (10% Off)</option>
+                            {isCampaignFirstFree ? (
+                                RECURRING_CLEANING_FREQUENCIES.map((freq) => (
+                                    <option key={freq} value={freq}>
+                                        {freq}
+                                    </option>
+                                ))
+                            ) : (
+                                <>
+                                    <option value="">Select a frequency</option>
+                                    <option value="One-time">One-time</option>
+                                    <option value="Weekly (30% Off)">Weekly (30% Off)</option>
+                                    <option value="Bi-Weekly (20% Off)">Bi-Weekly (20% Off)</option>
+                                    <option value="Monthly (10% Off)">Monthly (10% Off)</option>
+                                </>
+                            )}
                         </select>
                         {errors.cleaningFrequency && (
                             <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequency}</p>

@@ -6,7 +6,12 @@ import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing
 import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
-import { payloadFromFieldType } from "@/lib/admin/typedFieldValues";
+import {
+  type FieldDefMeta,
+  getFieldDefinitionMeta,
+  upsertTypedFieldValue,
+  serializeSquareFootageForFieldValue,
+} from "@/lib/bookV2/fieldValueUpsert";
 /** Opportunity Statuses pipeline — Quote Started stage (website quote submission). */
 const QUOTE_STARTED_PIPELINE_STAGE_ID = "0cd4bcc7-2dc0-4706-89a7-5cf8307c8b62";
 
@@ -227,114 +232,6 @@ async function findOrCreatePerson(
     return null;
   }
   return (created as { id: string }).id;
-}
-
-/** Serialize raw square_footage from the request for field_values (source of truth). */
-function serializeSquareFootageForFieldValue(raw: unknown): string {
-  if (raw == null) return "";
-  if (typeof raw === "number" && !Number.isNaN(raw)) return String(raw);
-  return String(raw).trim();
-}
-
-type FieldDefMeta = { id: string; field_type: string };
-
-async function getFieldDefinitionMeta(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  orgId: string,
-  entityType: string,
-  fieldKey: string
-): Promise<FieldDefMeta | null> {
-  const { data, error } = await supabase
-    .from("field_definitions")
-    .select("id, field_type")
-    .eq("org_id", orgId)
-    .eq("entity_type", entityType)
-    .eq("field_key", fieldKey)
-    .eq("is_active", true)
-    .limit(1);
-  if (error) {
-    console.error("[QUOTE_START_FIELD_VALUES] field_definitions lookup failed", {
-      org_id: orgId,
-      entity_type: entityType,
-      field_key: fieldKey,
-      error: error.message,
-    });
-    return null;
-  }
-  const row = (data as FieldDefMeta[] | null)?.[0];
-  if (row) {
-    console.log("[QUOTE_START_FIELD_VALUES] field definition resolved", {
-      org_id: orgId,
-      entity_type: entityType,
-      field_key: fieldKey,
-      field_definition_id: row.id,
-      field_type: row.field_type,
-    });
-  }
-  return row ?? null;
-}
-
-async function upsertTypedFieldValue(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  orgId: string,
-  entityType: string,
-  entityId: string,
-  def: FieldDefMeta,
-  rawDisplay: string
-): Promise<void> {
-  const typed = payloadFromFieldType(def.field_type, rawDisplay);
-  const now = new Date().toISOString();
-  console.log("[QUOTE_START_FIELD_VALUES] typed payload", {
-    entity_type: entityType,
-    entity_id: entityId,
-    field_definition_id: def.id,
-    field_type: def.field_type,
-    rawDisplay: rawDisplay?.slice(0, 80),
-    typed,
-  });
-  const { data: existing } = await supabase
-    .from("field_values")
-    .select("id")
-    .eq("entity_type", entityType)
-    .eq("entity_id", entityId)
-    .eq("field_definition_id", def.id)
-    .maybeSingle();
-  if (existing?.id) {
-    const { error: updateErr } = await supabase
-      .from("field_values")
-      .update({ ...typed, updated_at: now })
-      .eq("id", (existing as { id: string }).id);
-    if (updateErr) {
-      console.error("[QUOTE_START_FIELD_VALUES] update failed", {
-        entity_type: entityType,
-        entity_id: entityId,
-        field_definition_id: def.id,
-        error: updateErr.message,
-        code: updateErr.code,
-      });
-    } else {
-      console.log("[QUOTE_START_FIELD_VALUES] update ok", { entity_type: entityType, entity_id: entityId, field_definition_id: def.id });
-    }
-  } else {
-    const { error: insertErr } = await supabase.from("field_values").insert({
-      org_id: orgId,
-      entity_type: entityType,
-      entity_id: entityId,
-      field_definition_id: def.id,
-      ...typed,
-    });
-    if (insertErr) {
-      console.error("[QUOTE_START_FIELD_VALUES] insert failed", {
-        entity_type: entityType,
-        entity_id: entityId,
-        field_definition_id: def.id,
-        error: insertErr.message,
-        code: insertErr.code,
-      });
-    } else {
-      console.log("[QUOTE_START_FIELD_VALUES] insert ok", { entity_type: entityType, entity_id: entityId, field_definition_id: def.id });
-    }
-  }
 }
 
 async function upsertPersonLocationForQuote(
