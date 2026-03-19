@@ -1,4 +1,5 @@
 import Section from "@/components/Section";
+import PublicPageShell from "@/components/PublicPageShell";
 
 export default function AboutPage() {
   const values = [
@@ -30,9 +31,9 @@ export default function AboutPage() {
   ];
 
   return (
-    <div className="min-h-screen">
-      {/* Hero */}
-      <Section className="py-12 md:py-20">
+    <PublicPageShell>
+      {/* Hero — atmosphere shows through */}
+      <Section className="py-12 md:py-20 home-section-transition public-hero-section">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-bold text-alloy-midnight mb-4">
             About Alloy
@@ -47,7 +48,7 @@ export default function AboutPage() {
       </Section>
 
       {/* Mission */}
-      <Section className="py-16 bg-white">
+      <Section className="py-16 home-section-stone">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-alloy-midnight mb-6 text-center">
             Our Mission
@@ -59,7 +60,7 @@ export default function AboutPage() {
       </Section>
 
       {/* Values */}
-      <Section className="py-16">
+      <Section className="py-16 home-section-transition home-section-light">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-12 text-center">
           Our Values
         </h2>
@@ -79,7 +80,7 @@ export default function AboutPage() {
       </Section>
 
       {/* Local Focus */}
-      <Section className="py-16 bg-white">
+      <Section className="py-16 home-section-stone">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-alloy-midnight mb-6">
             Local Focus, Bend Roots
@@ -92,7 +93,7 @@ export default function AboutPage() {
           </p>
         </div>
       </Section>
-    </div>
+    </PublicPageShell>
   );
 }
 

@@ -402,20 +402,17 @@
   transition: box-shadow 220ms ease, border-color 220ms ease;
 }
 
-/* Hover: subtle elevation and border emphasis */
+/* System node: clean rounded rect; no decorative edge or inset */
+/* Hover: thin ring only */
 .adminv2-dept-node-fixed:hover .adminv2-dept-focus-ring {
-  box-shadow:
-    0 10px 28px rgba(39, 63, 82, 0.14),
-    0 0 0 1px rgba(0, 69, 140, 0.18),
-    0 1px 0 var(--tw-shadow-color, rgba(0, 162, 131, 0.12));
+  box-shadow: 0 0 0 1px rgba(0, 69, 140, 0.16);
 }
 
-/* Selected: stronger operational focus */
+/* Selected: ring + minimal shadow */
 .adminv2-dept-node-fixed.adminv2-dept-selected .adminv2-dept-focus-ring {
   box-shadow:
-    0 12px 32px rgba(39, 63, 82, 0.16),
-    0 0 0 2px rgba(0, 69, 140, 0.35),
-    0 0 0 1px rgba(0, 162, 131, 0.15);
+    0 0 0 2px rgba(0, 69, 140, 0.24),
+    0 2px 8px rgba(39, 63, 82, 0.05);
 }
 
 /* Priority: subtle left accent so "what to click first" is clear */
@@ -441,12 +438,17 @@
 }
 
 /* Quick actions: always visible; hover enhances */
+/* System tile: View details link (all departments) */
+.adminv2-dept-view-details:hover {
+  text-decoration: underline;
+}
+
 .adminv2-dept-actions-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   padding: 0;
-  margin-top: 14px;
+  margin-top: 10px;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
 }

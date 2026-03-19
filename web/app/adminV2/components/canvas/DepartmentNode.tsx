@@ -37,6 +37,10 @@ export type DepartmentNodeData = {
   tileWidth?: number;
   tileHeight?: number;
   cardPad?: number;
+  /** System-driven tile (Sales): primary signal, secondary context, agent summary */
+  primarySignal?: string;
+  secondaryContext?: string;
+  agentSummary?: string[];
 };
 
 const HEALTH_LABELS: Record<DepartmentNodeData["health"], string> = {
@@ -53,7 +57,7 @@ const HEALTH_COLOR: Record<DepartmentNodeData["health"], string> = {
 
 const DEFAULT_W = COMPANY_GRID_DEPT_WIDTH;
 const DEFAULT_H = COMPANY_GRID_DEPT_HEIGHT;
-const DEFAULT_CARD_PAD = 32;
+const DEFAULT_CARD_PAD = 18;
 
 const ICON_SIZE = 14;
 const ICON_GAP = 6;
@@ -107,6 +111,253 @@ function QuickActionIconSvg({ icon, size = ICON_SIZE }: { icon: QuickActionIcon;
   }
 }
 
+function SystemTileContent({
+  data,
+  quickActions,
+  id,
+  onQuickActionClick,
+  fill,
+}: {
+  data: DepartmentNodeData;
+  quickActions: QuickAction[];
+  id: string;
+  onQuickActionClick: DepartmentNodeData["onQuickActionClick"];
+  fill: string;
+}) {
+  const primarySignal = data.primarySignal ?? data.primaryValue ?? "—";
+  const secondaryContext = data.secondaryContext ?? "No urgent actions";
+  const agentSummary = data.agentSummary ?? [];
+  const primaryAction = quickActions[0];
+  const secondaryAction = quickActions[1];
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+      }}
+    >
+      {/* Band 1: Header — name + status */}
+      <div
+        style={{
+          flexShrink: 0,
+          marginBottom: 8,
+        }}
+      >
+        <div
+          style={{
+            height: 3,
+            borderRadius: 2,
+            marginBottom: 6,
+            background: `linear-gradient(90deg, ${fill} 0%, ${brand.secondary} 100%)`,
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: neutral.textPrimary,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.2,
+            }}
+          >
+            {data.name}
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              color: HEALTH_COLOR[data.health],
+            }}
+          >
+            {HEALTH_LABELS[data.health]}
+          </span>
+        </div>
+      </div>
+
+      {/* Band 2: Signal — primary + secondary context */}
+      <div
+        style={{
+          flexShrink: 0,
+          marginBottom: 8,
+          paddingBottom: 8,
+          borderBottom: `1px solid ${derived.border}`,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 24,
+              fontWeight: 600,
+              color: neutral.textPrimary,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.25,
+              minWidth: 0,
+              flex: "1 1 auto",
+            }}
+          >
+            {primarySignal}
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: derived.textSecondary,
+              lineHeight: 1.35,
+              flexShrink: 0,
+              maxWidth: "55%",
+              textAlign: "right",
+            }}
+          >
+            {secondaryContext}
+          </span>
+        </div>
+      </div>
+
+      {/* Band 3: Action — agents, actions, details (anchored to bottom) */}
+      <div
+        style={{
+          marginTop: "auto",
+          flexShrink: 0,
+          paddingTop: 8,
+        }}
+      >
+        {/* Agent row: structural pills */}
+        {agentSummary.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              marginBottom: 8,
+              alignItems: "center",
+            }}
+          >
+            {agentSummary.slice(0, 3).map((line, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: neutral.textPrimary,
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  border: `1px solid ${derived.border}`,
+                  background: "rgba(0,0,0,0.03)",
+                  lineHeight: 1.3,
+                }}
+              >
+                {line}
+              </span>
+            ))}
+          </div>
+        )}
+        {/* Actions row */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 6,
+          }}
+        >
+          {primaryAction && (
+            <button
+              type="button"
+              className="adminv2-dept-quick-action adminv2-dept-system-primary-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickActionClick?.(id, primaryAction.id, e);
+              }}
+              style={{
+                minHeight: 30,
+                padding: "5px 11px",
+                borderRadius: 8,
+                border: `1px solid ${derived.border}`,
+                color: neutral.surface,
+                backgroundColor: brand.primary,
+                fontSize: 12,
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: ICON_GAP,
+              }}
+            >
+              <QuickActionIconSvg icon={primaryAction.icon} size={12} />
+              <span>{primaryAction.label}</span>
+            </button>
+          )}
+          {secondaryAction && (
+            <button
+              type="button"
+              className="adminv2-dept-quick-action adminv2-dept-system-secondary-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickActionClick?.(id, secondaryAction.id, e);
+              }}
+              style={{
+                minHeight: 30,
+                padding: "5px 11px",
+                borderRadius: 8,
+                border: `1px solid ${derived.border}`,
+                color: brand.primary,
+                backgroundColor: "transparent",
+                fontSize: 12,
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: ICON_GAP,
+              }}
+            >
+              <QuickActionIconSvg icon={secondaryAction.icon} size={11} />
+              <span>{secondaryAction.label}</span>
+            </button>
+          )}
+        </div>
+        {/* Details: completes bottom edge of node */}
+        <span
+          className="adminv2-dept-view-details"
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: brand.primary,
+            cursor: "pointer",
+            display: "inline-block",
+          }}
+          onClick={(e) => e.stopPropagation()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && e.stopPropagation()}
+        >
+          View details →
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function DepartmentNodeComponent({ id, data, selected }: NodeProps<DepartmentNodeData>) {
   const fill = getDepartmentColor(data.departmentKey);
   const zoomingOut = data.zoomingOut ?? false;
@@ -117,10 +368,31 @@ function DepartmentNodeComponent({ id, data, selected }: NodeProps<DepartmentNod
   const W = data.tileWidth ?? DEFAULT_W;
   const H = data.tileHeight ?? DEFAULT_H;
   const CARD_PAD = data.cardPad ?? DEFAULT_CARD_PAD;
+  /* Clean node primitive: rounded rect, thin border, no edge gimmicks */
+  const shellRadius = 12;
+  const focusRingStyle = {
+    width: W,
+    height: H,
+    boxSizing: "border-box" as const,
+    padding: CARD_PAD,
+    borderRadius: shellRadius,
+    background: `linear-gradient(180deg, ${neutral.surface} 0%, ${neutral.background} 100%)`,
+    border: `1px solid ${selected || activating ? semantic.info : derived.border}`,
+    boxShadow: activating || selected
+      ? `0 0 0 2px rgba(0,69,140,0.24), 0 2px 8px rgba(39,63,82,0.05)`
+      : `0 0 0 1px ${derived.border}`,
+    opacity: zoomingOut ? 0.52 : 1,
+    transform: zoomingOut ? "scale(0.96)" : "scale(1)",
+    transition:
+      "opacity 420ms cubic-bezier(0.42, 0, 0.58, 1), transform 420ms cubic-bezier(0.42, 0, 0.58, 1), box-shadow 200ms ease, border-color 200ms ease",
+    display: "flex",
+    flexDirection: "column" as const,
+    overflow: "hidden" as const,
+  };
 
   return (
     <div
-      className={`adminv2-dept-node-fixed ${selected ? "adminv2-dept-selected" : ""} ${isPriority ? "adminv2-dept-priority" : ""}`}
+      className={`adminv2-dept-node-fixed adminv2-dept-system-tile ${selected ? "adminv2-dept-selected" : ""} ${isPriority ? "adminv2-dept-priority" : ""}`}
       style={{
         position: "relative",
         width: W,
@@ -132,286 +404,15 @@ function DepartmentNodeComponent({ id, data, selected }: NodeProps<DepartmentNod
       <Handle type="target" position={Position.Top} />
       <div
         className={`adminv2-dept-focus-ring ${activating ? "adminv2-dept-activating-soft" : ""}`}
-        style={{
-          width: W,
-          height: H,
-          boxSizing: "border-box",
-          padding: CARD_PAD,
-          borderRadius: 24,
-          background: `linear-gradient(178deg, ${neutral.surface} 0%, ${neutral.surface} 42%, ${neutral.background} 100%)`,
-          border: `1px solid ${selected || activating ? semantic.info : derived.border}`,
-          boxShadow: `${activating || selected ? derived.nodeOnChamberShadowActive : derived.nodeOnChamberShadow}, 0 1px 0 ${derived.ambientLifeGlow}`,
-          opacity: zoomingOut ? 0.52 : 1,
-          transform: zoomingOut ? "scale(0.96)" : "scale(1)",
-          transition:
-            "opacity 420ms cubic-bezier(0.42, 0, 0.58, 1), transform 420ms cubic-bezier(0.42, 0, 0.58, 1), box-shadow 200ms ease, border-color 200ms ease",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
+        style={focusRingStyle}
       >
-        <div
-          style={{
-            height: 8,
-            borderRadius: 4,
-            marginBottom: 18,
-            flexShrink: 0,
-            background: `linear-gradient(90deg, ${fill} 0%, ${brand.secondary} 100%)`,
-          }}
-        />
-        <div
-          className="adminv2-dept-title-clamp adminv2-dept-title"
-          style={{
-            fontSize: 56,
-            fontWeight: 700,
-            color: neutral.textPrimary,
-            marginBottom: 12,
-            letterSpacing: "-0.036em",
-            lineHeight: 1.08,
-            flexShrink: 0,
-            maxHeight: 120,
-          }}
-        >
-          {data.name}
-        </div>
-        <div
-          className="adminv2-dept-primary-value"
-          style={{
-            fontSize: 64,
-            fontWeight: 600,
-            color: neutral.textPrimary,
-            marginBottom: 6,
-            letterSpacing: "-0.03em",
-            lineHeight: 1.05,
-            flexShrink: 0,
-          }}
-        >
-          {data.primaryValue}
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            color: derived.textSecondary,
-            marginBottom: 14,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            flexShrink: 0,
-          }}
-        >
-          {data.primaryKpi}
-        </div>
-        <div
-          className="adminv2-dept-secondary-value"
-          style={{
-            fontSize: 44,
-            fontWeight: 600,
-            color: neutral.textPrimary,
-            marginBottom: 5,
-            letterSpacing: "-0.024em",
-            lineHeight: 1.06,
-            flexShrink: 0,
-          }}
-        >
-          {data.secondaryValue}
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            color: derived.textSecondary,
-            marginBottom: 12,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            flexShrink: 0,
-          }}
-        >
-          {data.secondaryKpi}
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-            padding: "12px 0",
-            borderTop: `1px solid ${derived.border}`,
-            borderBottom: `1px solid ${derived.border}`,
-            marginBottom: 10,
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 14,
-                color: derived.textSecondary,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                marginBottom: 5,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {data.compact1Label}
-            </div>
-            <div
-              className="adminv2-dept-compact-value"
-              style={{
-                fontSize: 36,
-                fontWeight: 600,
-                color: brand.secondary,
-                letterSpacing: "-0.02em",
-                lineHeight: 1.05,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {data.compact1Value}
-            </div>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 14,
-                color: derived.textSecondary,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                marginBottom: 5,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {data.compact2Label}
-            </div>
-            <div
-              className="adminv2-dept-compact-value"
-              style={{
-                fontSize: 36,
-                fontWeight: 600,
-                color: neutral.textPrimary,
-                letterSpacing: "-0.02em",
-                lineHeight: 1.05,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {data.compact2Value}
-            </div>
-          </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            marginTop: "auto",
-            flexShrink: 0,
-            minHeight: 42,
-            paddingTop: 4,
-          }}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-            <span
-              className="adminv2-dept-health"
-              style={{
-                fontSize: 36,
-                fontWeight: 600,
-                color: HEALTH_COLOR[data.health],
-                letterSpacing: "-0.02em",
-                lineHeight: 1.05,
-                textTransform: "uppercase",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                minWidth: 0,
-              }}
-            >
-              {HEALTH_LABELS[data.health]}
-            </span>
-            {data.health !== "good" && (
-              <span
-                className="adminv2-dept-status-chip"
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  backgroundColor: data.health === "critical" ? semantic.warning : "rgba(245, 158, 11, 0.18)",
-                  color: data.health === "critical" ? neutral.surface : semantic.warning,
-                  flexShrink: 0,
-                }}
-              >
-                Action needed
-              </span>
-            )}
-          </span>
-          {data.alertCount > 0 ? (
-            <span
-              style={{
-                fontSize: 20,
-                fontWeight: 600,
-                minWidth: 44,
-                height: 44,
-                borderRadius: 22,
-                flexShrink: 0,
-                backgroundColor: semantic.warning,
-                color: neutral.surface,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: `2px solid ${neutral.surface}`,
-                boxShadow: derived.nodeOnCanvasShadow,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              {data.alertCount}
-            </span>
-          ) : (
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: derived.textSecondary,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                flexShrink: 0,
-              }}
-            >
-              No alerts
-            </span>
-          )}
-        </div>
-        {quickActions.length > 0 && (
-          <div className="adminv2-dept-actions-row" aria-hidden>
-            {quickActions.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                className="adminv2-dept-quick-action"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickActionClick?.(id, a.id, e);
-                }}
-                style={{
-                  border: `1px solid ${derived.border}`,
-                  color: brand.primary,
-                  backgroundColor: neutral.background,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: ICON_GAP,
-                }}
-              >
-                <QuickActionIconSvg icon={a.icon} />
-                <span>{a.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <SystemTileContent
+            data={data}
+            quickActions={quickActions}
+            id={id}
+            onQuickActionClick={onQuickActionClick}
+            fill={fill}
+          />
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>

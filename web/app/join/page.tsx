@@ -4,7 +4,7 @@ import Section from "@/components/Section";
 import Image from "next/image";
 import { useState } from "react";
 import VendorApplicationModal from "@/components/join/VendorApplicationModal";
-import PrimaryButton from "@/components/PrimaryButton";
+import PublicPageShell from "@/components/PublicPageShell";
 
 export default function JoinPage() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -23,10 +23,10 @@ export default function JoinPage() {
   ];
 
   return (
-    <div className="min-h-screen">
-      {/* Hero */}
-      <section className="bg-alloy-stone">
-        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
+    <PublicPageShell>
+      {/* Hero — atmosphere shows through */}
+      <section className="public-hero-section">
+        <div className="mx-auto max-w-6xl px-4 md:px-8">
           <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
             {/* Background Image */}
             <Image
@@ -51,9 +51,13 @@ export default function JoinPage() {
                   We help you get quality jobs. We handle the busywork, so you can focus on what you're best at.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <PrimaryButton onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(true)}
+                    className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white w-full sm:w-auto px-6 py-3 rounded-lg font-semibold text-base"
+                  >
                     Apply to Join
-                  </PrimaryButton>
+                  </button>
                 </div>
               </div>
             </div>
@@ -62,7 +66,7 @@ export default function JoinPage() {
       </section>
 
       {/* How It Works */}
-      <Section className="py-16 bg-white">
+      <Section className="py-16 home-section-stone">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
           How it works
         </h2>
@@ -101,7 +105,7 @@ export default function JoinPage() {
       </Section>
 
       {/* Benefits */}
-      <Section className="py-16">
+      <Section className="py-16 home-section-transition home-section-light">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-4xl mx-auto">
           <div>
             <h2 className="text-2xl font-bold text-alloy-midnight mb-6">
@@ -134,7 +138,7 @@ export default function JoinPage() {
       </Section>
 
       {/* Application Form */}
-      <Section className="py-16 bg-white">
+      <Section className="py-16 home-section-stone">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-alloy-midnight mb-4">
             Apply to work with Alloy
@@ -142,9 +146,13 @@ export default function JoinPage() {
           <p className="text-alloy-midnight/80 mb-8">
             We&apos;ll review your application and be in touch soon.
           </p>
-          <PrimaryButton onClick={() => setModalOpen(true)}>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white px-8 py-3.5 rounded-lg font-semibold text-base"
+          >
             Apply to Join
-          </PrimaryButton>
+          </button>
         </div>
       </Section>
 
@@ -155,7 +163,7 @@ export default function JoinPage() {
           setModalOpen(false);
         }}
       />
-    </div>
+    </PublicPageShell>
   );
 }
 

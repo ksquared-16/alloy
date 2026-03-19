@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import PrimaryButton from "@/components/PrimaryButton";
 import CleaningQuickQuoteForm from "@/components/cleaning/CleaningQuickQuoteForm";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
@@ -22,10 +21,22 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
   const [selectedVertical, setSelectedVertical] = useState<SelectedVertical>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("picker");
   const [mounted, setMounted] = useState(false);
+  const [transitionState, setTransitionState] = useState<"entering" | "entered">("entering");
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTransitionState("entering");
+      return;
+    }
+    const t = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setTransitionState("entered"));
+    });
+    return () => cancelAnimationFrame(t);
+  }, [isOpen]);
 
   // When modal opens with defaultService, show that service's form (no redirect)
   useEffect(() => {
@@ -91,6 +102,7 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
   const modalContent = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 public-modal-overlay"
+      data-state={transitionState}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -101,6 +113,7 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
       <div
         className="public-modal-shell public-modal-shell-premium max-w-4xl w-full flex flex-col overflow-hidden"
         style={{ maxHeight: "90dvh" }}
+        data-state={transitionState}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sticky Header */}
@@ -180,8 +193,8 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                 </div>
               </div>
             ) : selectedVertical === null ? (
-              // Service Selection
-              <div className="space-y-6">
+              // Service Selection (re-enters with slide when coming back)
+              <div className="public-picker-step space-y-6">
                 <p className="text-alloy-midnight/80 text-center text-sm md:text-base">
                   Select a service to get started.
                 </p>
@@ -194,8 +207,9 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                       setModalStep("form");
                     }}
                     className="public-modal-service-card group"
+                    data-stagger="0"
                   >
-                    <div className="flex items-center justify-center rounded-2xl bg-alloy-blue/8 p-5 w-20 h-20 mx-auto mb-4 ring-1 ring-alloy-blue/10 group-hover:bg-alloy-blue/12 group-hover:ring-alloy-juniper/20 transition-all duration-200">
+                    <div className="public-modal-service-icon flex items-center justify-center rounded-2xl bg-alloy-blue/8 p-5 w-20 h-20 mx-auto mb-4 ring-1 ring-alloy-blue/10 group-hover:bg-alloy-blue/12 group-hover:ring-alloy-juniper/20 transition-all duration-200">
                       <img
                         src="/icons/vacuum-blue.png"
                         alt=""
@@ -228,8 +242,9 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                       setModalStep("form");
                     }}
                     className="public-modal-service-card group"
+                    data-stagger="1"
                   >
-                    <div className="flex items-center justify-center rounded-2xl bg-alloy-pine/8 p-5 w-20 h-20 mx-auto mb-4 ring-1 ring-alloy-pine/10 group-hover:bg-alloy-pine/12 group-hover:ring-alloy-juniper/20 transition-all duration-200">
+                    <div className="public-modal-service-icon flex items-center justify-center rounded-2xl bg-alloy-pine/8 p-5 w-20 h-20 mx-auto mb-4 ring-1 ring-alloy-pine/10 group-hover:bg-alloy-pine/12 group-hover:ring-alloy-juniper/20 transition-all duration-200">
                       <img
                         src="/icons/gutter-blue.png"
                         alt=""
@@ -257,7 +272,7 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
               </div>
             ) : modalStep === "form" ? (
               // Form Display
-              <div className="transition-opacity duration-200">
+              <div className="public-form-step">
                 {/* Back button - only show if not opened with defaultService */}
                 {!defaultService && (
                   <button

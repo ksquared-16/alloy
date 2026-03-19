@@ -11,7 +11,7 @@ import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
 import GetQuoteButton from "@/components/GetQuoteButton";
 import HeroSpecs from "@/components/HeroSpecs";
-import HomeAmbient from "@/components/HomeAmbient";
+import HomeAmbient, { HeroPerimeterSpecs } from "@/components/HomeAmbient";
 
 export default function Home() {
   const howItWorksSteps = [
@@ -119,9 +119,18 @@ export default function Home() {
 
       {/* Content sits above atmosphere */}
       <div className="relative z-10">
-        {/* Hero — floating card on light atmospheric canvas */}
-        <section className="mx-auto max-w-6xl px-4 md:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
-          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden home-hero-float">
+        {/* Hero — floating card embedded in atmosphere */}
+        <section className="relative mx-auto max-w-6xl px-4 md:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
+          {/* Layered motion behind and around hero */}
+          <div className="home-hero-ambient-zone">
+            <div className="home-hero-ambient-gradient" />
+            <div className="home-hero-ambient-blur home-hero-ambient-blur-1" />
+            <div className="home-hero-ambient-blur home-hero-ambient-blur-2" />
+            <div className="home-hero-ambient-blur home-hero-ambient-blur-3" />
+          </div>
+          <HeroPerimeterSpecs />
+          <div className="relative z-10 home-hero-float-wrapper">
+          <div className="relative min-h-[480px] md:min-h-[460px] lg:min-h-[520px] overflow-hidden home-hero-float">
             <Image
               src="/hero/cleaning-hero.jpeg"
               alt="Clean modern home interior"
@@ -151,9 +160,9 @@ export default function Home() {
 
             <HeroSpecs />
 
-            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-10 md:py-0 px-5 md:px-12 lg:px-14">
-              <div className="max-w-xl space-y-5 md:space-y-6 w-full">
-                <p className="text-xs md:text-sm font-semibold text-white/95 uppercase tracking-widest px-4 py-2 rounded-full inline-block border border-white/25 bg-white/10 backdrop-blur-sm">
+            <div className="relative z-10 flex min-h-[480px] md:min-h-[460px] lg:min-h-[520px] items-start py-8 md:py-10 px-5 md:px-12 lg:px-14">
+              <div className="max-w-xl space-y-4 md:space-y-5 w-full">
+                <p className="text-xs md:text-sm font-semibold text-white/95 uppercase tracking-widest px-4 py-2 rounded-full inline-block border border-white/25 bg-white/10 backdrop-blur-sm shrink-0">
                   Born in Bend. Built for trust.
                 </p>
                 <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.12] tracking-tight [text-shadow:0_2px_20px_rgba(0,0,0,0.35)]">
@@ -162,12 +171,12 @@ export default function Home() {
                 <p className="text-base md:text-lg text-white/92 leading-relaxed max-w-lg [text-shadow:0_1px_6px_rgba(0,0,0,0.25)]">
                   Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                  <GetQuoteButton className="public-btn-primary !bg-alloy-blue hover:!bg-alloy-blue/90 !text-white !shadow-lg hover:!shadow-xl">
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 pb-8 md:pb-10">
+                  <GetQuoteButton className="home-hero-cta home-quote-cta-pine public-btn-primary !text-white !shadow-lg !py-4 !px-7">
                     Get a quote
                   </GetQuoteButton>
                   <Link href="#how-it-works">
-                    <SecondaryButton className="!bg-white/15 !border-white/40 !text-white hover:!bg-white/25 hover:!border-white/50 w-full sm:w-auto transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+                    <SecondaryButton className="home-hero-cta home-hero-cta-secondary !bg-white/15 !border-white/40 !text-white hover:!bg-white/25 hover:!border-white/50 w-full sm:w-auto !py-4 !px-7 transition-all duration-200">
                       See how Alloy works
                     </SecondaryButton>
                   </Link>
@@ -175,21 +184,22 @@ export default function Home() {
               </div>
             </div>
           </div>
+          </div>
         </section>
 
       {/* How Alloy Makes It Easy — stone section, Bend Pine accent */}
       <Section id="how-it-works" className="home-section-transition home-section-stone">
-        <div className="rounded-2xl md:rounded-3xl py-12 md:py-16 px-5 md:px-10">
-          <h2 className="home-heading text-2xl md:text-3xl text-center mb-10 md:mb-14">
+        <div className="home-section-atmosphere home-section-glow-how rounded-2xl md:rounded-3xl py-4 md:py-5 px-4 md:px-8 relative">
+          <h2 className="home-heading text-2xl md:text-3xl text-center mb-4 md:mb-6">
             How Alloy Makes It Easy
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 max-w-5xl mx-auto">
             {howItWorksSteps.map((step) => (
               <div
                 key={step.number}
-                className="home-card home-card-lift text-center p-6 md:p-8"
+                className="home-card home-card-lift text-center p-4 md:p-6"
               >
-                <div className="w-14 h-14 md:w-16 md:h-16 bg-alloy-pine text-white rounded-2xl flex items-center justify-center text-xl md:text-2xl font-bold mx-auto mb-4 md:mb-5 shadow-lg shadow-alloy-pine/20">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-alloy-pine text-white rounded-2xl flex items-center justify-center text-lg md:text-xl font-bold mx-auto mb-3 md:mb-4 shadow-lg shadow-alloy-pine/20">
                   {step.number}
                 </div>
                 <h3 className="text-lg md:text-xl font-semibold text-alloy-pine mb-2">
@@ -201,8 +211,8 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="max-w-3xl mx-auto mt-12 md:mt-14 text-center">
-            <div className="home-card p-6 md:p-8">
+          <div className="max-w-3xl mx-auto mt-4 md:mt-6 text-center">
+            <div className="home-card p-4 md:p-6">
               <p className="text-base md:text-lg text-alloy-midnight font-medium leading-relaxed">
                 Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
               </p>
@@ -213,25 +223,28 @@ export default function Home() {
 
       {/* Services we offer — light section */}
       <Section className="home-section-transition home-section-light">
-        <h2 className="home-heading text-2xl md:text-3xl text-center mb-2">
+        <div className="home-section-atmosphere home-section-glow-services relative">
+        <h2 className="home-heading text-2xl md:text-3xl text-center mb-1">
           Services we offer
         </h2>
-        <p className="text-center text-sm md:text-base text-alloy-midnight/75 mb-10 md:mb-12">
+        <p className="text-center text-sm md:text-base text-alloy-midnight/75 mb-4 md:mb-5">
           Home cleaning is available now. More services coming soon.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
           {SERVICES.map((service) => (
             <ServiceCard key={service.id} service={service} />
           ))}
+        </div>
         </div>
       </Section>
 
       {/* Why Alloy Is Different — alt tint, Bend Pine life */}
       <Section className="home-section-transition home-section-alt">
-        <h2 className="home-heading text-2xl md:text-3xl text-center mb-10 md:mb-12">
+        <div className="home-section-atmosphere home-section-glow-why relative">
+        <h2 className="home-heading text-2xl md:text-3xl text-center mb-4 md:mb-5">
           Why Alloy Is Different
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 max-w-5xl mx-auto">
           {whyAlloyIsDifferent.map((value) => (
             <BrandValueCard
               key={value.title}
@@ -256,24 +269,25 @@ export default function Home() {
             />
           ))}
         </div>
+        </div>
       </Section>
 
       {/* Testimonials — stone again for rhythm */}
       <Section className="home-section-transition home-section-stone">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="home-heading text-2xl md:text-3xl text-center mb-2">
+        <div className="home-section-atmosphere home-section-glow-testimonials max-w-6xl mx-auto relative">
+          <h2 className="home-heading text-2xl md:text-3xl text-center mb-1">
             What people are saying about Alloy
           </h2>
-          <p className="text-sm md:text-base text-alloy-midnight/70 text-center mb-10 md:mb-12">
+          <p className="text-sm md:text-base text-alloy-midnight/70 text-center mb-4 md:mb-5">
             Early supporters — customer reviews coming soon.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10 md:mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-6">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="home-card home-card-lift rounded-2xl p-6 md:p-7"
+                className="home-card home-card-lift rounded-2xl p-4 md:p-5"
               >
-                <div className="flex gap-0.5 mb-4">
+                <div className="flex gap-0.5 mb-3">
                   {[...Array(5)].map((_, i) => (
                     <svg
                       key={i}
@@ -302,10 +316,10 @@ export default function Home() {
             ))}
           </div>
           <div className="text-center">
-            <GetQuoteButton className="public-btn-primary w-full sm:w-auto !bg-alloy-blue !text-white">
+            <GetQuoteButton className="home-quote-cta-pine public-btn-primary w-full sm:w-auto !text-white">
               Get a quote
             </GetQuoteButton>
-            <p className="text-sm text-alloy-midnight/60 mt-6">
+            <p className="text-sm text-alloy-midnight/60 mt-4">
               Had a great experience?{" "}
               <a
                 href="https://www.google.com/search?sca_esv=7670df6d756a93b6&sxsrf=AE3TifNkBI028mC6V8lu01Pi7_VO0zSISw:1767651952450&si=AMgyJEtREmoPL4P1I5IDCfuA8gybfVI2d5Uj7QMwYCZHKDZ-E1vaBZPzHkn18HCW9v8UVy2cjwvDEtsPTjI29B5Ok2Wd7GZcsLRus5HtywFRGe9rcAgM3BMkhEoX69tYnzEXHihFmtQ-&q=Alloy+Services+Reviews&sa=X&ved=2ahUKEwjxmNnVuPWRAxU8JDQIHRExOEIQ0bkNegQILxAD#lrd=0x12915f0438ac783:0x94b6c943526afd86,3,,,,"
@@ -322,7 +336,8 @@ export default function Home() {
 
       {/* FAQ — light */}
       <Section className="home-section-transition home-section-light">
-        <h2 className="home-heading text-2xl md:text-3xl text-center mb-10 md:mb-12">
+        <div className="home-section-atmosphere home-section-glow-faq relative">
+        <h2 className="home-heading text-2xl md:text-3xl text-center mb-4 md:mb-5">
           Frequently Asked Questions
         </h2>
         <div className="max-w-3xl mx-auto">
@@ -332,22 +347,25 @@ export default function Home() {
             </Accordion>
           ))}
         </div>
+        </div>
       </Section>
 
       {/* Final CTA — premium conversion block */}
-      <Section className="py-12 md:py-16 lg:py-20">
-        <div className="home-cta-block p-8 md:p-10 lg:p-12 text-center relative">
-          <h2 className="home-heading-inverse text-2xl md:text-3xl lg:text-4xl font-bold mb-3 md:mb-4">
+      <Section className="py-4 md:py-5 lg:py-6">
+        <div className="home-section-atmosphere home-section-glow-cta">
+        <div className="home-cta-block p-5 md:p-6 lg:p-8 text-center relative">
+          <h2 className="home-heading-inverse text-2xl md:text-3xl lg:text-4xl font-bold mb-2 md:mb-3">
             Ready to get started?
           </h2>
-          <p className="text-base md:text-lg text-white/90 mb-6 md:mb-8 max-w-xl mx-auto">
+          <p className="text-base md:text-lg text-white/90 mb-4 md:mb-5 max-w-xl mx-auto">
             Select a service to get a quote.
           </p>
           <div className="flex justify-center">
-            <GetQuoteButton className="public-btn-primary !bg-alloy-blue hover:!bg-alloy-blue/90 !text-white !shadow-lg hover:!shadow-xl !px-8 !py-3.5 !text-base">
+            <GetQuoteButton className="home-quote-cta-pine public-btn-primary !text-white !shadow-lg hover:!shadow-xl !px-8 !py-3.5 !text-base">
               Get a Quote
             </GetQuoteButton>
           </div>
+        </div>
         </div>
       </Section>
       </div>

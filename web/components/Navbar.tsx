@@ -105,8 +105,8 @@ export default function Navbar() {
               );
             })}
 
-            {/* Get a Quote CTA - Alloy Blue for hierarchy */}
-            <GetQuoteButton className="!px-5 !py-2.5 !text-sm !bg-alloy-blue hover:!bg-alloy-blue/90 !text-white !shadow-md hover:!shadow-lg transition-all" />
+            {/* Get a Quote CTA - Bend Pine #00A283 */}
+            <GetQuoteButton className="quote-cta-bend-pine !px-5 !py-2.5 !text-sm !text-white !shadow-md hover:!shadow-lg transition-all" />
           </div>
         </div>
 
@@ -191,7 +191,7 @@ export default function Navbar() {
               })}
               <div className="pt-2">
                 <div onClick={() => setMobileMenuOpen(false)} className="w-full">
-                  <GetQuoteButton className="w-full !bg-alloy-blue !text-white" />
+                  <GetQuoteButton className="w-full quote-cta-bend-pine !text-white" />
                 </div>
               </div>
             </div>

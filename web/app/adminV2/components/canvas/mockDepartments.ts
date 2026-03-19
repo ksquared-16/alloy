@@ -18,6 +18,12 @@ export type MockDepartment = {
   compact2Value: string;
   health: DepartmentNodeData["health"];
   alertCount: number;
+  /** System-driven tile: primary signal line */
+  primarySignal?: string;
+  /** System-driven: secondary context line */
+  secondaryContext?: string;
+  /** System-driven: agent summary lines (exactly 2 max) */
+  agentSummary?: string[];
 };
 
 export const MOCK_DEPARTMENTS: MockDepartment[] = [
@@ -35,6 +41,9 @@ export const MOCK_DEPARTMENTS: MockDepartment[] = [
     compact1Value: "312",
     compact2Label: "Queue depth",
     compact2Value: "14",
+    primarySignal: "42 active jobs",
+    secondaryContext: "3 need review today",
+    agentSummary: ["Dispatch Agent: Active", "Scheduling Agent: Healthy"],
   },
   {
     id: "dept-sales",
@@ -50,6 +59,9 @@ export const MOCK_DEPARTMENTS: MockDepartment[] = [
     compact1Value: "48",
     compact2Label: "Win rate",
     compact2Value: "18%",
+    primarySignal: "12 deals in pipeline",
+    secondaryContext: "2 deals need follow-up",
+    agentSummary: ["Follow-up Agent: Active", "Scoring Agent: Healthy"],
   },
   {
     id: "dept-finance",
@@ -65,6 +77,9 @@ export const MOCK_DEPARTMENTS: MockDepartment[] = [
     compact1Value: "428",
     compact2Label: "Margin",
     compact2Value: "31%",
+    primarySignal: "8 invoices open",
+    secondaryContext: "2 exceptions need review",
+    agentSummary: ["Billing Agent: Attention", "Reconciliation Agent: Healthy"],
   },
   {
     id: "dept-customer-success",
@@ -80,6 +95,9 @@ export const MOCK_DEPARTMENTS: MockDepartment[] = [
     compact1Value: "4.6",
     compact2Label: "Escalations",
     compact2Value: "1",
+    primarySignal: "5 active cases",
+    secondaryContext: "1 escalation pending",
+    agentSummary: ["Support Agent: Active", "Escalation Agent: Healthy"],
   },
   {
     id: "dept-ai-systems",
@@ -95,5 +113,8 @@ export const MOCK_DEPARTMENTS: MockDepartment[] = [
     compact1Value: "1,240",
     compact2Label: "Cost / 1k",
     compact2Value: "$0.42",
+    primarySignal: "1,240 runs today",
+    secondaryContext: "1 failure requires review",
+    agentSummary: ["Processing Agent: Active", "Monitoring Agent: Attention"],
   },
 ];

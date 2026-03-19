@@ -26,15 +26,15 @@ export type CompanyLayout = {
 
 const BASE = {
   COMPANY_DEPT_NODE_WIDTH: 632,
-  COMPANY_DEPT_NODE_HEIGHT: 598,
+  COMPANY_DEPT_NODE_HEIGHT: 384,
   COMPANY_GRID_DEPT_WIDTH: 588,
-  COMPANY_GRID_DEPT_HEIGHT: 556,
+  COMPANY_GRID_DEPT_HEIGHT: 352,
   COMPANY_GAP_X: 128,
-  COMPANY_GAP_Y: 100,
+  COMPANY_GAP_Y: 72,
   COMPANY_OFFSET_X: 52,
-  COMPANY_OFFSET_Y: 28,
-  CARD_PAD: 32,
-  fitViewPadding: 0.072,
+  COMPANY_OFFSET_Y: 22,
+  CARD_PAD: 18,
+  fitViewPadding: 0.068,
   actionPanelWidth: 360,
 };
 
@@ -55,7 +55,7 @@ export function getResponsiveLayout(viewportWidth: number): CompanyLayout {
     COMPANY_OFFSET_X: Math.round(BASE.COMPANY_OFFSET_X * scale),
     COMPANY_OFFSET_Y: Math.round(BASE.COMPANY_OFFSET_Y * scale),
     CARD_PAD: Math.round(BASE.CARD_PAD * scale),
-    fitViewPadding: scale === SCALE_LARGE ? 0.072 : scale === SCALE_LAPTOP ? 0.055 : 0.07,
+    fitViewPadding: scale === SCALE_LARGE ? 0.068 : scale === SCALE_LAPTOP ? 0.055 : 0.07,
     actionPanelWidth: Math.round(BASE.actionPanelWidth * (scale === SCALE_LARGE ? 1 : scale === SCALE_LAPTOP ? 0.96 : 0.88)),
   };
 }

@@ -2,9 +2,9 @@
 
 import { useRef } from "react";
 import Section from "@/components/Section";
-import PrimaryButton from "@/components/PrimaryButton";
 import GutterLeadForm from "@/components/gutters/GutterLeadForm";
 import GetQuoteButton from "@/components/GetQuoteButton";
+import PublicPageShell from "@/components/PublicPageShell";
 
 export default function GuttersPage() {
   const formRef = useRef<HTMLDivElement>(null);
@@ -17,13 +17,12 @@ export default function GuttersPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="bg-alloy-stone">
-        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
-          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
+    <PublicPageShell>
+      {/* Hero Section — atmosphere shows through; gradient background (add /public/hero/gutters_hero.jpeg to use an image) */}
+      <section className="public-hero-section">
+        <div className="mx-auto max-w-6xl px-4 md:px-8">
+          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg bg-gradient-to-br from-alloy-midnight via-[#003366] to-alloy-pine/90">
+            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent z-[1]" aria-hidden />
 
             {/* Content Overlay */}
             <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
@@ -40,7 +39,7 @@ export default function GuttersPage() {
                   <li>Protect your home from water damage</li>
                 </ul>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <GetQuoteButton defaultService="gutters" className="w-full sm:w-auto">
+                  <GetQuoteButton defaultService="gutters" className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary w-full sm:w-auto !text-white">
                     Request gutter quote
                   </GetQuoteButton>
                 </div>
@@ -51,8 +50,8 @@ export default function GuttersPage() {
       </section>
 
       {/* Why Gutters Matter */}
-      <Section className="py-12 md:py-20">
-        <div className="max-w-4xl mx-auto">
+      <Section className="py-12 md:py-20 home-section-transition home-section-stone">
+        <div className="max-w-4xl mx-auto home-section-atmosphere relative">
           <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-8 md:mb-12">
             Why Gutter Cleaning Matters
           </h2>
@@ -157,7 +156,7 @@ export default function GuttersPage() {
           </div>
         </div>
       </Section>
-    </div>
+    </PublicPageShell>
   );
 }
 

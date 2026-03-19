@@ -1,41 +1,111 @@
 "use client";
 
 /**
- * Full-page atmospheric layer for homepage: soft radial blooms (Alloy blue, pine, juniper)
- * and visible drifting specs. Renders fixed behind content so the page feels alive and premium.
+ * Full-page motion environment: adminV2-style atmospheric field (lighter customer-facing).
+ * - Large drifting gradient clouds (heavy blur)
+ * - Slow radial blooms (breathe)
+ * - Dense drifting specs: small/medium/large, blue + juniper, clearly visible in screenshots.
  */
-const PAGE_SPEC_POSITIONS: { left: string; top: string; juniper?: boolean }[] = [
-  { left: "8%", top: "12%" },
-  { left: "22%", top: "8%", juniper: true },
-  { left: "45%", top: "15%" },
-  { left: "72%", top: "22%" },
-  { left: "88%", top: "18%", juniper: true },
-  { left: "12%", top: "35%" },
-  { left: "38%", top: "42%" },
-  { left: "65%", top: "38%" },
-  { left: "92%", top: "45%" },
-  { left: "5%", top: "62%" },
-  { left: "28%", top: "68%", juniper: true },
-  { left: "55%", top: "72%" },
-  { left: "78%", top: "65%" },
-  { left: "18%", top: "88%" },
-  { left: "50%", top: "92%" },
-  { left: "82%", top: "85%", juniper: true },
+const CLOUDS = [
+  { className: "home-atmosphere-cloud home-atmosphere-cloud-1" },
+  { className: "home-atmosphere-cloud home-atmosphere-cloud-2" },
+  { className: "home-atmosphere-cloud home-atmosphere-cloud-3" },
+  { className: "home-atmosphere-cloud home-atmosphere-cloud-4" },
+  { className: "home-atmosphere-cloud home-atmosphere-cloud-5" },
+];
+
+const BLOOMS = [
+  { className: "home-atmosphere-bloom home-atmosphere-bloom-blue" },
+  { className: "home-atmosphere-bloom home-atmosphere-bloom-pine", style: { animationDelay: "-2s" } },
+  { className: "home-atmosphere-bloom home-atmosphere-bloom-juniper", style: { animationDelay: "-4s" } },
+  { className: "home-atmosphere-bloom home-atmosphere-bloom-mid", style: { animationDelay: "-6s" } },
+];
+
+type SpecSize = "sm" | "md" | "lg";
+type SpecPoint = { left: string; top: string; juniper?: boolean; size?: SpecSize };
+
+/** AdminV2-style dense distribution: grid + edges + content bands so specs read clearly */
+function buildSpecPositions(): SpecPoint[] {
+  const out: SpecPoint[] = [];
+  // Grid (dense but performant: ~10x10)
+  for (let row = 0; row <= 10; row++) {
+    const t = 3 + row * 8.5;
+    for (let col = 0; col <= 11; col++) {
+      const l = 4 + col * 8;
+      const juniper = (row + col) % 3 === 0;
+      const size: SpecSize = (row + col) % 5 === 0 ? "lg" : (row + col) % 3 === 1 ? "sm" : "md";
+      out.push({ left: `${l}%`, top: `${t}%`, juniper, size });
+    }
+  }
+  // Edge perimeter
+  for (let i = 0; i < 24; i++) {
+    out.push({ left: `${(i * 4.2) % 100}%`, top: "1%", juniper: i % 2 === 0, size: "md" });
+    out.push({ left: `${(i * 4.2) % 100}%`, top: "99%", juniper: i % 2 === 1, size: "sm" });
+    out.push({ left: "1%", top: `${6 + (i * 4)}%`, juniper: i % 3 === 0, size: i % 4 === 0 ? "lg" : "md" });
+    out.push({ left: "99%", top: `${6 + (i * 4)}%`, juniper: i % 3 === 1, size: i % 4 === 1 ? "lg" : "md" });
+  }
+  // Hero band
+  for (let i = 0; i < 22; i++) {
+    out.push({ left: `${4 + (i * 4.2) % 92}%`, top: `${12 + (i % 6) * 3}%`, juniper: i % 2 === 0, size: i % 5 === 0 ? "lg" : "md" });
+  }
+  // Mid + lower bands
+  for (let i = 0; i < 20; i++) {
+    out.push({ left: `${5 + (i * 4.8) % 90}%`, top: `${48 + (i % 4) * 12}%`, juniper: i % 3 === 0, size: i % 4 === 0 ? "lg" : "sm" });
+    out.push({ left: `${6 + (i * 4.5) % 88}%`, top: `${78 + (i % 3) * 7}%`, juniper: i % 2 === 1, size: "md" });
+  }
+  return out;
+}
+
+const SPEC_POSITIONS = buildSpecPositions();
+
+const HERO_PERIMETER_SPECS: { left: string; top: string; juniper?: boolean; size?: SpecSize }[] = [
+  { left: "2%", top: "22%", juniper: true, size: "lg" },
+  { left: "5%", top: "50%" },
+  { left: "8%", top: "78%", juniper: true, size: "md" },
+  { left: "45%", top: "4%", size: "md" },
+  { left: "52%", top: "4%", juniper: true, size: "lg" },
+  { left: "96%", top: "30%" },
+  { left: "94%", top: "55%", juniper: true, size: "md" },
+  { left: "92%", top: "82%" },
+  { left: "50%", top: "96%", juniper: true, size: "lg" },
 ];
 
 export default function HomeAmbient() {
   return (
     <div className="home-atmosphere" aria-hidden>
-      {/* Soft radial blooms */}
-      <div className="home-atmosphere-bloom home-atmosphere-bloom-blue" />
-      <div className="home-atmosphere-bloom home-atmosphere-bloom-pine" style={{ animationDelay: "-2s" }} />
-      <div className="home-atmosphere-bloom home-atmosphere-bloom-juniper" style={{ animationDelay: "-4s" }} />
-      {/* Drifting specs */}
-      {PAGE_SPEC_POSITIONS.map((pos, i) => (
+      {CLOUDS.map((c, i) => (
+        <div key={`cloud-${i}`} className={c.className} />
+      ))}
+      {BLOOMS.map((b, i) => (
+        <div key={`bloom-${i}`} className={b.className} style={b.style} />
+      ))}
+      {SPEC_POSITIONS.map((pos, i) => (
         <div
           key={i}
-          className={`public-ambient-spec public-ambient-spec-dot ${pos.juniper ? "public-ambient-spec-dot-juniper" : ""}`}
-          style={{ left: pos.left, top: pos.top }}
+          className={`public-ambient-spec public-ambient-spec-dot ${pos.juniper ? "public-ambient-spec-dot-juniper" : ""} ${pos.size === "sm" ? "public-ambient-spec-sm" : ""} ${pos.size === "lg" ? "public-ambient-spec-lg" : ""}`}
+          style={{
+            left: pos.left,
+            top: pos.top,
+            animationDelay: `${(i % 60) * 0.15}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function HeroPerimeterSpecs() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-visible -z-10" aria-hidden>
+      {HERO_PERIMETER_SPECS.map((pos, i) => (
+        <div
+          key={i}
+          className={`public-ambient-spec public-ambient-spec-dot absolute ${pos.juniper ? "public-ambient-spec-dot-juniper" : ""} ${pos.size === "sm" ? "public-ambient-spec-sm" : ""} ${pos.size === "lg" ? "public-ambient-spec-lg" : ""}`}
+          style={{
+            left: pos.left,
+            top: pos.top,
+            animationDelay: `${i * 0.4}s`,
+          }}
         />
       ))}
     </div>

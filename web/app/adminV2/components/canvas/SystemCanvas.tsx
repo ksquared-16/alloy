@@ -101,10 +101,12 @@ function managerClusterCenter(
 /** Ambient anchor below manager card faces — specs orbit dark gap, not white tiles */
 function ambientFocusAnchorBehindCards(
   count: number,
-  focusAnchor: { x: number; y: number }
+  focusAnchor: { x: number; y: number },
+  layout: CompanyLayout
 ): { x: number; y: number } {
   const mc = managerClusterCenter(count, focusAnchor);
-  const deptCx = focusAnchor.x + DEPT_W / 2;
+  const deptW = layout.COMPANY_DEPT_NODE_WIDTH;
+  const deptCx = focusAnchor.x + deptW / 2;
   return {
     x: mc.x * 0.72 + deptCx * 0.28,
     y: mc.y + 155,
@@ -139,11 +141,13 @@ function DepartmentEnterRunner({
   focusAnchor,
   managerCount,
   departmentKey,
+  layout,
 }: {
   active: boolean;
   focusAnchor: { x: number; y: number } | null;
   managerCount: number;
   departmentKey: DepartmentKey | null;
+  layout: CompanyLayout;
 }) {
   const { setCenter } = useReactFlow();
   const ranKeyRef = useRef<string | null>(null);
@@ -160,9 +164,11 @@ function DepartmentEnterRunner({
     if (ranKeyRef.current === runKey) return;
 
     const c = managerClusterCenter(managerCount, focusAnchor);
-    const deptCy = focusAnchor.y + DEPT_H / 2;
+    const deptW = layout.COMPANY_DEPT_NODE_WIDTH;
+    const deptH = layout.COMPANY_DEPT_NODE_HEIGHT;
+    const deptCy = focusAnchor.y + deptH / 2;
     const blendY = deptCy * 0.2 + c.y * 0.8;
-    const blendX = focusAnchor.x + DEPT_W / 2;
+    const blendX = focusAnchor.x + deptW / 2;
     const cx = blendX * 0.26 + c.x * 0.74;
     const cy = blendY;
 
@@ -182,7 +188,7 @@ function DepartmentEnterRunner({
       cancelled = true;
       window.cancelAnimationFrame(id);
     };
-  }, [active, focusAnchor, managerCount, departmentKey, setCenter]);
+  }, [active, focusAnchor, managerCount, departmentKey, layout, setCenter]);
 
   return null;
 }
@@ -378,7 +384,7 @@ export default function SystemCanvas({
           const idx = MOCK_DEPARTMENTS.findIndex((d) => d.key === selectedDepartmentKey);
           return idx >= 0 ? getDepartmentPosition(idx, layout) : { x: 120, y: 80 };
         })();
-      return ambientFocusAnchorBehindCards(n, fallback);
+      return ambientFocusAnchorBehindCards(n, fallback, layout);
     }
     if (activatingDepartmentId) {
       return deptCenterFromId(activatingDepartmentId, layout);
@@ -490,6 +496,9 @@ export default function SystemCanvas({
               tileWidth: layout.COMPANY_GRID_DEPT_WIDTH,
               tileHeight: layout.COMPANY_GRID_DEPT_HEIGHT,
               cardPad: layout.CARD_PAD,
+              primarySignal: d.primarySignal,
+              secondaryContext: d.secondaryContext,
+              agentSummary: d.agentSummary,
             },
             draggable: !activatingDepartmentId,
             selected: selectedNodeId === d.id,
@@ -642,6 +651,7 @@ export default function SystemCanvas({
               selectedDepartmentKey ? managersForProof(selectedDepartmentKey).length : 0
             }
             departmentKey={selectedDepartmentKey}
+            layout={layout}
           />
           <div
             className="pointer-events-none"

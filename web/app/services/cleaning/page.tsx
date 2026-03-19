@@ -7,6 +7,7 @@ import Section from "@/components/Section";
 import Accordion from "@/components/Accordion";
 import CleaningQuoteForm from "@/components/cleaning/CleaningQuoteForm";
 import GetQuoteButton from "@/components/GetQuoteButton";
+import PublicPageShell from "@/components/PublicPageShell";
 import heroCleaningImage from "../../../public/hero/home_cleaning_hero.jpeg";
 
 type OptionKey = "standard" | "deep" | "moveout";
@@ -180,7 +181,7 @@ export default function CleaningPage() {
 
   const GetQuoteCTA = () => (
     <div className="flex justify-center mt-8">
-      <GetQuoteButton className="w-full md:w-auto" defaultService="cleaning" />
+      <GetQuoteButton defaultService="cleaning" className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary w-full md:w-auto !text-white" />
     </div>
   );
 
@@ -256,10 +257,10 @@ export default function CleaningPage() {
   }, [isOpen]);
 
   return (
-    <div>
-      {/* Hero — compact on mobile, short headline + subtext + CTA */}
-      <section className="bg-alloy-stone" ref={heroRef}>
-        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
+    <PublicPageShell>
+      {/* Hero — atmosphere shows through (consistent with homepage) */}
+      <section className="public-hero-section" ref={heroRef}>
+        <div className="mx-auto max-w-6xl px-4 md:px-8">
           {/* Hero image: static import from web/public/hero/home_cleaning_hero.jpeg — ensures correct path and loads on all devices */}
           <div className="relative min-h-[240px] sm:min-h-[300px] md:min-h-[420px] lg:min-h-[480px] h-[240px] sm:h-[300px] md:h-[420px] lg:h-[480px] overflow-hidden rounded-xl shadow-lg">
             <Image
@@ -280,22 +281,13 @@ export default function CleaningPage() {
                   Alloy provides home cleaning in Bend & Central Oregon, without the runaround.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <GetQuoteButton defaultService="cleaning" className="w-full sm:w-auto">
+                  <GetQuoteButton defaultService="cleaning" className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary w-full sm:w-auto !text-white">
                     Get a quote
                   </GetQuoteButton>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Supporting copy — moved out of hero */}
-      <section className="bg-white">
-        <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 md:py-8">
-          <p className="text-alloy-midnight/90 text-base md:text-lg leading-relaxed">
-            We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
-          </p>
         </div>
       </section>
 
@@ -325,17 +317,24 @@ export default function CleaningPage() {
       )}
 
       {/* Cleaning Options — tiles only; details in modal */}
-      <Section className="py-12 md:py-16 bg-white">
+      <Section className="py-12 md:py-16 home-section-light">
         <h2 className="text-3xl font-bold text-alloy-midnight mb-8 text-center">
           Cleaning Options
         </h2>
 
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => openOptionModal("standard")}
-              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openOptionModal("standard");
+                }
+              }}
+              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full cursor-pointer ${
                 modalOpen && activeOption === "standard"
                   ? "border-alloy-blue bg-alloy-stone/30"
                   : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
@@ -356,18 +355,28 @@ export default function CleaningPage() {
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
                 <button
                   type="button"
-                  onClick={(e) => openOptionModal("standard", e)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openOptionModal("standard", e);
+                  }}
                   className="text-sm text-alloy-blue hover:underline"
                 >
                   Learn more
                 </button>
               </span>
-            </button>
+            </div>
 
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => openOptionModal("deep")}
-              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openOptionModal("deep");
+                }
+              }}
+              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full cursor-pointer ${
                 modalOpen && activeOption === "deep"
                   ? "border-alloy-blue bg-alloy-stone/30"
                   : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
@@ -385,18 +394,28 @@ export default function CleaningPage() {
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
                 <button
                   type="button"
-                  onClick={(e) => openOptionModal("deep", e)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openOptionModal("deep", e);
+                  }}
                   className="text-sm text-alloy-blue hover:underline"
                 >
                   Learn more
                 </button>
               </span>
-            </button>
+            </div>
 
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => openOptionModal("moveout")}
-              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full ${
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openOptionModal("moveout");
+                }
+              }}
+              className={`rounded-lg p-6 border-2 text-left transition-colors flex flex-col h-full cursor-pointer ${
                 modalOpen && activeOption === "moveout"
                   ? "border-alloy-blue bg-alloy-stone/30"
                   : "border-alloy-stone/50 bg-alloy-stone hover:border-alloy-stone/70"
@@ -414,13 +433,16 @@ export default function CleaningPage() {
               <span className="mt-4 pt-3 border-t border-alloy-stone/50">
                 <button
                   type="button"
-                  onClick={(e) => openOptionModal("moveout", e)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openOptionModal("moveout", e);
+                  }}
                   className="text-sm text-alloy-blue hover:underline"
                 >
                   Learn more
                 </button>
               </span>
-            </button>
+            </div>
           </div>
         </div>
         <GetQuoteCTA />
@@ -535,13 +557,13 @@ export default function CleaningPage() {
 
       {/* Secondary CTA */}
       <Section className="py-16">
-        <div className="bg-alloy-pine rounded-lg p-8 md:p-12 text-center text-white">
+        <div className="home-cta-block rounded-lg p-8 md:p-12 text-center text-white">
           <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
           <p className="text-lg mb-6 opacity-90">
             Submit your quote request above. We'll text you shortly to confirm details.
           </p>
           <div className="flex justify-center">
-            <GetQuoteButton defaultService="cleaning" className="bg-white !text-alloy-midnight hover:bg-alloy-stone hover:!text-alloy-midnight">
+            <GetQuoteButton defaultService="cleaning" className="home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white">
               Start my quote
             </GetQuoteButton>
           </div>
@@ -624,6 +646,6 @@ export default function CleaningPage() {
           </div>,
           document.body
         )}
-    </div>
+    </PublicPageShell>
   );
 }

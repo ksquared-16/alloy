@@ -21,7 +21,7 @@ export type DepartmentActionsConfig = {
 export const MOCK_DEPARTMENT_ACTIONS: Record<DepartmentKey, DepartmentActionsConfig> = {
   operations: {
     quickActions: [
-      { id: "ops-optimize", label: "Optimize", icon: "gear" },
+      { id: "ops-optimize", label: "Optimize schedule", icon: "gear" },
       { id: "ops-review-queue", label: "Review queue", icon: "list" },
     ],
     nextBestAction: "3 delayed jobs need review",
@@ -46,7 +46,7 @@ export const MOCK_DEPARTMENT_ACTIONS: Record<DepartmentKey, DepartmentActionsCon
   customerSuccess: {
     quickActions: [
       { id: "cs-cases", label: "Review cases", icon: "list" },
-      { id: "cs-escalate", label: "Escalate issues", icon: "warning" },
+      { id: "cs-escalate", label: "Escalate issue", icon: "warning" },
     ],
     nextBestAction: "1 case approaching SLA",
     isPriority: false,
