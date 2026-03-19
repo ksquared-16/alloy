@@ -252,15 +252,39 @@ export async function GET(
                 return NextResponse.json({ error: "Location not found" }, { status: 404 });
             }
             const customerId = (locRow as { customer_id: string }).customer_id;
-            const [customerRes, jobsRes, schedulesRes] = await Promise.all([
+            const [customerRes, jobsRes, schedulesRes, plRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : { data: null },
                 supabase.from("jobs").select("id, created_at, title, scheduled_at").eq("location_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").eq("location_id", id).eq("org_id", ctx.orgId).order("start_at", { ascending: false }).limit(LIMIT),
+                supabase.from("person_locations").select("person_id, is_primary, relationship_type").eq("location_id", id).eq("org_id", ctx.orgId).limit(LIMIT),
             ]);
+            const plList = plRes.data ?? [];
+            const pids = [...new Set(plList.map((r: { person_id: string }) => r.person_id))];
+            const { data: personRows } =
+                pids.length > 0
+                    ? await supabase.from("persons").select("id, first_name, last_name, full_name, email").eq("org_id", ctx.orgId).in("id", pids)
+                    : { data: [] as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null; email?: string | null }[] };
+            const pname = new Map(
+                (personRows ?? []).map((p) => {
+                    const nm =
+                        (p.full_name && String(p.full_name).trim()) ||
+                        [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
+                        (p.email && String(p.email).trim()) ||
+                        null;
+                    return [p.id, nm] as const;
+                })
+            );
+            const linked_persons = plList.map((r: { person_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
+                person_id: r.person_id,
+                _person_name: pname.get(r.person_id) ?? null,
+                is_primary: !!r.is_primary,
+                relationship_type: r.relationship_type ?? null,
+            }));
             return NextResponse.json({
                 customer: customerRes.data ?? null,
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
+                linked_persons,
             });
         }
 
@@ -413,7 +437,7 @@ export async function GET(
             if (!personRow) {
                 return NextResponse.json({ error: "Person not found" }, { status: 404 });
             }
-            const [customerPersonsRes, relationshipsRes, contactsRes, membersRes] = await Promise.all([
+            const [customerPersonsRes, relationshipsRes, contactsRes, membersRes, plRes, oppRes] = await Promise.all([
                 supabase
                     .from("customer_persons")
                     .select("id, customer_id, person_id, role, created_at")
@@ -437,6 +461,19 @@ export async function GET(
                     .from("customer_members")
                     .select("id, display_name, relationship, customer_id, created_at")
                     .eq("person_id", id)
+                    .eq("org_id", ctx.orgId)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT),
+                supabase
+                    .from("person_locations")
+                    .select("location_id, is_primary, relationship_type")
+                    .eq("person_id", id)
+                    .eq("org_id", ctx.orgId)
+                    .limit(LIMIT),
+                supabase
+                    .from("opportunities")
+                    .select("id, name, status_key, job_date, quote_total, created_at")
+                    .eq("primary_person_id", id)
                     .eq("org_id", ctx.orgId)
                     .order("created_at", { ascending: false })
                     .limit(LIMIT),
@@ -472,11 +509,34 @@ export async function GET(
                 _other_person_name: personNameMap.get(r.from_person_id === id ? r.to_person_id : r.from_person_id) ?? null,
                 _relationship_type_label: r.relationship_type ? (relTypeLabelMap.get(r.relationship_type) ?? r.relationship_type) : null,
             }));
+            const plLocList = plRes.data ?? [];
+            const locIds = [...new Set(plLocList.map((r: { location_id: string }) => r.location_id))];
+            const { data: locRows } =
+                locIds.length > 0
+                    ? await supabase.from("locations").select("id, label, postal_code, city, address1").eq("org_id", ctx.orgId).in("id", locIds)
+                    : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
+            const locLabelMap = new Map(
+                (locRows ?? []).map((l) => {
+                    const lbl =
+                        (l.label && String(l.label).trim()) ||
+                        [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") ||
+                        null;
+                    return [l.id, lbl] as const;
+                })
+            );
+            const linked_locations = plLocList.map((r: { location_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
+                location_id: r.location_id,
+                _location_label: locLabelMap.get(r.location_id) ?? null,
+                is_primary: !!r.is_primary,
+                relationship_type: r.relationship_type ?? null,
+            }));
             return NextResponse.json({
                 customer_persons,
                 person_relationships,
                 compatibility_contacts: contactsRes.data ?? [],
                 compatibility_members: membersRes.data ?? [],
+                linked_locations,
+                opportunities: oppRes.data ?? [],
             });
         }
 

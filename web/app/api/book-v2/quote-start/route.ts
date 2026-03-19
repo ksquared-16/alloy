@@ -379,13 +379,24 @@ async function upsertPersonLocationForQuote(
   }
 }
 
+/** Default label for quote-created locations: "{Person Name} — {ZIP}" or "{Person Name} — Location". */
+export function quoteLocationLabel(personDisplayName: string | null | undefined, postalCode: string | null | undefined): string {
+  const name = personDisplayName?.trim() || "";
+  const zip = postalCode?.trim() || "";
+  if (name && zip) return `${name} — ${zip}`;
+  if (name) return `${name} — Location`;
+  if (zip) return zip;
+  return "Quote location";
+}
+
 /** Lightweight quote-stage location (customer_id null until booking). */
 async function createQuoteLocation(
   supabase: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
-  postalCode: string | null
+  postalCode: string | null,
+  personDisplayName?: string | null
 ): Promise<string | null> {
-  const label = postalCode?.trim() ? postalCode.trim() : "Quote location";
+  const label = quoteLocationLabel(personDisplayName ?? null, postalCode);
   const { data: created, error } = await supabase
     .from("locations")
     .insert({
@@ -640,7 +651,8 @@ export async function POST(request: NextRequest) {
         .single();
       const existingLocId = (oppLoc as { location_id?: string | null } | null)?.location_id ?? null;
       if (existingLocId) {
-        const label = zip?.trim() ? `Quote — ${zip.trim()}` : "Quote location";
+        const personName = [first_name, last_name].filter(Boolean).join(" ").trim() || null;
+        const label = quoteLocationLabel(personName, zip);
         await supabase
           .from("locations")
           .update({
@@ -651,14 +663,16 @@ export async function POST(request: NextRequest) {
           .eq("org_id", orgIdForWrites);
         locationId = existingLocId;
       } else {
-        const created = await createQuoteLocation(supabase, orgIdForWrites, zip);
+        const personName = [first_name, last_name].filter(Boolean).join(" ").trim() || null;
+        const created = await createQuoteLocation(supabase, orgIdForWrites, zip, personName);
         if (!created) {
           return NextResponse.json({ ok: false, message: "Failed to create quote location" }, { status: 500 });
         }
         locationId = created;
       }
     } else {
-      const created = await createQuoteLocation(supabase, orgIdForWrites, zip);
+      const personName = [first_name, last_name].filter(Boolean).join(" ").trim() || null;
+      const created = await createQuoteLocation(supabase, orgIdForWrites, zip, personName);
       if (!created) {
         return NextResponse.json({ ok: false, message: "Failed to create quote location" }, { status: 500 });
       }

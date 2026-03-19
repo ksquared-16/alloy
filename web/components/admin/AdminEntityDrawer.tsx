@@ -443,6 +443,8 @@ export default function AdminEntityDrawer() {
     const [pipelines, setPipelines] = useState<{ id: string; name: string }[]>([]);
     const [stages, setStages] = useState<{ id: string; pipeline_id: string; name: string; position: number }[]>([]);
     const [oppVerticalOptions, setOppVerticalOptions] = useState<{ id: string; name: string }[]>([]);
+    /** Opportunity drawer: labeled selects for relationship field_keys from field_definitions. */
+    const [oppRefFieldSelectOptions, setOppRefFieldSelectOptions] = useState<Record<string, { value: string; label: string }[]>>({});
     const [workflowConditions, setWorkflowConditions] = useState<{ target_entity?: string; field_path: string; operator: string; value: string }[]>([]);
     const [workflowActions, setWorkflowActions] = useState<{ action_type: string; target_entity?: string; payload?: Record<string, unknown> }[]>([]);
     const [runModalOpen, setRunModalOpen] = useState(false);
@@ -650,7 +652,14 @@ export default function AdminEntityDrawer() {
     type AddonRelatedPayload = { jobs: unknown[]; quotes: unknown[] };
     const [addonRelatedData, setAddonRelatedData] = useState<AddonRelatedPayload | null>(null);
     const [addonRelatedLoading, setAddonRelatedLoading] = useState(false);
-    type PersonRelatedPayload = { customer_persons: { id: string; customer_id: string; _customer_name?: string | null }[]; person_relationships: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null }[]; compatibility_contacts: unknown[]; compatibility_members: unknown[] };
+    type PersonRelatedPayload = {
+        customer_persons: { id: string; customer_id: string; _customer_name?: string | null }[];
+        person_relationships: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null }[];
+        compatibility_contacts: unknown[];
+        compatibility_members: unknown[];
+        linked_locations?: { location_id: string; _location_label?: string | null; is_primary?: boolean; relationship_type?: string | null }[];
+        opportunities?: { id: string; name?: string | null; status_key?: string | null; job_date?: string | null; quote_total?: number | null; created_at?: string }[];
+    };
     const [personRelatedData, setPersonRelatedData] = useState<PersonRelatedPayload | null>(null);
     const [personRelatedLoading, setPersonRelatedLoading] = useState(false);
     const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules", "payments"];
@@ -852,6 +861,86 @@ export default function AdminEntityDrawer() {
                 .finally(() => setOpportunityRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, opportunityRelatedData]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !data || (data as { _create?: boolean })._create || drawer.id === "new") {
+            setOppRefFieldSelectOptions({});
+            return;
+        }
+        let cancelled = false;
+        const d = data as Record<string, unknown>;
+        const customerId = typeof d.customer_id === "string" && d.customer_id.trim() ? d.customer_id.trim() : null;
+        const personQs = customerId ? `?customer_id=${encodeURIComponent(customerId)}` : "";
+        (async () => {
+            try {
+                const [locJ, personJ] = await Promise.all([
+                    fetch("/api/admin/location-options").then((r) => (r.ok ? r.json() : { locations: [] })),
+                    fetch(`/api/admin/person-options${personQs}`).then((r) => (r.ok ? r.json() : { persons: [] })),
+                ]);
+                if (cancelled) return;
+                const out: Record<string, { value: string; label: string }[]> = {};
+                const locOpts = ((locJ.locations ?? []) as { id: string; label: string }[]).map((x) => ({
+                    value: x.id,
+                    label: (x.label && String(x.label).trim()) || `${x.id.slice(0, 8)}…`,
+                }));
+                const locId = String(d.location_id ?? "").trim();
+                if (locId && !locOpts.some((o) => o.value === locId)) {
+                    const nm = String(d._location_name ?? "").trim();
+                    locOpts.unshift({ value: locId, label: nm || `${locId.slice(0, 8)}…` });
+                }
+                out.location_id = locOpts;
+
+                const pOpts = ((personJ.persons ?? []) as { id: string; label: string }[]).map((x) => ({
+                    value: x.id,
+                    label: (x.label && String(x.label).trim()) || `${x.id.slice(0, 8)}…`,
+                }));
+                const pid = String(d.primary_person_id ?? "").trim();
+                if (pid && !pOpts.some((o) => o.value === pid)) {
+                    const nm = String(d._primary_person_name ?? "").trim();
+                    pOpts.unshift({ value: pid, label: nm || `${pid.slice(0, 8)}…` });
+                }
+                out.primary_person_id = pOpts;
+
+                const [coJ, custJ] = await Promise.all([
+                    customerId
+                        ? fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(customerId)}`).then((r) =>
+                              r.ok ? r.json() : { contacts: [] }
+                          )
+                        : Promise.resolve({ contacts: [] }),
+                    fetch("/api/admin/customer-options").then((r) => (r.ok ? r.json() : { customers: [] })),
+                ]);
+                if (cancelled) return;
+                const cOpts = ((coJ.contacts ?? []) as { id: string; label: string }[]).map((x) => ({
+                    value: x.id,
+                    label: (x.label && String(x.label).trim()) || `${x.id.slice(0, 8)}…`,
+                }));
+                const ctid = String(d.primary_contact_id ?? "").trim();
+                if (ctid && !cOpts.some((o) => o.value === ctid)) {
+                    const nm = String(d._primary_contact_name ?? d._contact_name ?? "").trim();
+                    cOpts.unshift({ value: ctid, label: nm || `${ctid.slice(0, 8)}…` });
+                }
+                out.primary_contact_id = cOpts;
+
+                const custOpts = ((custJ.customers ?? []) as { id: string; name?: string | null }[]).map((x) => ({
+                    value: x.id,
+                    label: (x.name && String(x.name).trim()) || `${x.id.slice(0, 8)}…`,
+                }));
+                const curCust = String(d.customer_id ?? "").trim();
+                if (curCust && !custOpts.some((o) => o.value === curCust)) {
+                    const nm = String(d._customer_name ?? "").trim();
+                    custOpts.unshift({ value: curCust, label: nm || `${curCust.slice(0, 8)}…` });
+                }
+                out.customer_id = custOpts;
+
+                setOppRefFieldSelectOptions(out);
+            } catch {
+                if (!cancelled) setOppRefFieldSelectOptions({});
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, data]);
 
     useEffect(() => {
         if (drawer.type !== "service_offerings" || !drawer.id) {
@@ -2678,6 +2767,111 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "persons" && data && !(data as { _create?: boolean })._create) {
+            const p = data as Record<string, unknown>;
+            const linkedLocs =
+                (p._linked_locations as {
+                    location_id: string;
+                    _location_label?: string | null;
+                    is_primary?: boolean;
+                    relationship_type?: string | null;
+                }[]) ?? [];
+            const opps =
+                (p._linked_opportunities as {
+                    id: string;
+                    name?: string | null;
+                    status_key?: string | null;
+                    quote_total?: number | null;
+                }[]) ?? [];
+            const custRows =
+                (p._customer_persons as {
+                    id: string;
+                    customer_id: string;
+                    _customer_name?: string | null;
+                    _role_label?: string | null;
+                    role?: string | null;
+                }[]) ?? [];
+            const subheading = "text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50 mb-2";
+            return {
+                relationships: (
+                    <div className="space-y-5">
+                        <div>
+                            <h4 className={subheading}>Customers</h4>
+                            {custRows.length === 0 ? (
+                                <p className="text-sm text-alloy-midnight/60">No customer links.</p>
+                            ) : (
+                                <ul className="space-y-2 text-sm">
+                                    {custRows.map((cp) => (
+                                        <li key={cp.id}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openDrawer({ type: "customers", id: cp.customer_id })}
+                                                className="text-alloy-blue hover:underline text-left"
+                                            >
+                                                {cp._customer_name?.trim() || cp.customer_id.slice(0, 8) + "…"}
+                                            </button>
+                                            {(cp._role_label ?? cp.role) ? (
+                                                <span className="text-alloy-muted ml-1">· {cp._role_label ?? cp.role}</span>
+                                            ) : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div>
+                            <h4 className={subheading}>Locations</h4>
+                            {linkedLocs.length === 0 ? (
+                                <p className="text-sm text-alloy-midnight/60">No locations linked (person_locations).</p>
+                            ) : (
+                                <ul className="space-y-2 text-sm">
+                                    {linkedLocs.map((row) => (
+                                        <li key={row.location_id}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openDrawer({ type: "locations", id: row.location_id })}
+                                                className="text-alloy-blue hover:underline text-left"
+                                            >
+                                                {row._location_label?.trim() || row.location_id.slice(0, 8) + "…"}
+                                            </button>
+                                            {row.is_primary ? <span className="text-alloy-muted ml-1">· Primary</span> : null}
+                                            {row.relationship_type ? (
+                                                <span className="text-alloy-muted ml-1">· {row.relationship_type}</span>
+                                            ) : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div>
+                            <h4 className={subheading}>Opportunities</h4>
+                            {opps.length === 0 ? (
+                                <p className="text-sm text-alloy-midnight/60">No opportunities with this person as primary.</p>
+                            ) : (
+                                <ul className="space-y-2 text-sm">
+                                    {opps.map((o) => (
+                                        <li key={o.id}>
+                                            <button
+                                                type="button"
+                                                onClick={() => openDrawer({ type: "opportunities", id: o.id })}
+                                                className="text-alloy-blue hover:underline text-left"
+                                            >
+                                                {o.name?.trim() || o.id.slice(0, 8) + "…"}
+                                            </button>
+                                            {(o.status_key || o.quote_total != null) && (
+                                                <span className="text-alloy-muted ml-1">
+                                                    {o.status_key ? `· ${o.status_key}` : ""}
+                                                    {o.quote_total != null ? ` · ${formatMoneyFromDollars(Number(o.quote_total))}` : ""}
+                                                </span>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                ),
+            };
+        }
         if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
             const locDefs = (
                 (data._field_definitions as {
@@ -2691,7 +2885,58 @@ export default function AdminEntityDrawer() {
             )
                 .filter((d) => !d.is_system && d.is_visible_in_drawer !== false)
                 .sort((a, b) => a.sort_order - b.sort_order);
+            const locRec = data as Record<string, unknown>;
+            const customerId = locRec.customer_id as string | null | undefined;
+            const customerName = (locRec._customer_name as string | null | undefined)?.trim();
+            const linkedPersons =
+                (locRec._linked_persons as {
+                    person_id: string;
+                    _person_name?: string | null;
+                    is_primary?: boolean;
+                    relationship_type?: string | null;
+                }[]) ?? [];
+            const locSubheading = "text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50 mb-2";
             return {
+                customer: customerId ? (
+                    <div className="py-1">
+                        <span className="text-alloy-slate text-sm font-medium">Customer: </span>
+                        <button
+                            type="button"
+                            onClick={() => openDrawer({ type: "customers", id: customerId })}
+                            className="text-alloy-blue hover:underline text-sm"
+                        >
+                            {customerName || "Open customer"}
+                        </button>
+                    </div>
+                ) : (
+                    <p className="text-sm text-alloy-midnight/60">No customer on this location.</p>
+                ),
+                relationships: (
+                    <div className="space-y-2">
+                        <h4 className={locSubheading}>People (person_locations)</h4>
+                        {linkedPersons.length === 0 ? (
+                            <p className="text-sm text-alloy-midnight/60">No people linked to this location.</p>
+                        ) : (
+                            <ul className="space-y-2 text-sm">
+                                {linkedPersons.map((row) => (
+                                    <li key={row.person_id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => openDrawer({ type: "persons", id: row.person_id })}
+                                            className="text-alloy-blue hover:underline text-left"
+                                        >
+                                            {row._person_name?.trim() || row.person_id.slice(0, 8) + "…"}
+                                        </button>
+                                        {row.is_primary ? <span className="text-alloy-muted ml-1">· Primary</span> : null}
+                                        {row.relationship_type ? (
+                                            <span className="text-alloy-muted ml-1">· {row.relationship_type}</span>
+                                        ) : null}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ),
                 custom_property_fields: (
                     <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
                         {locDefs.length === 0 ? (
@@ -2822,20 +3067,70 @@ export default function AdminEntityDrawer() {
             if (t === "boolean") return "primary_yes_no";
             return "text";
         };
-        return sectionOrder.map(([sectionKey, fields]) => ({
+        const opportunityRelField = (fieldKey: string): Partial<EntityDrawerFieldConfig> | null => {
+            if (drawer.type !== "opportunities") return null;
+            if (fieldKey === "primary_person_id") {
+                return { renderHint: "link", linkTarget: { idField: "primary_person_id", entityType: "persons" } };
+            }
+            if (fieldKey === "location_id") {
+                return { renderHint: "link", linkTarget: { idField: "location_id", entityType: "locations" } };
+            }
+            if (fieldKey === "primary_contact_id") {
+                return { renderHint: "link", linkTarget: { idField: "primary_contact_id", entityType: "contacts" } };
+            }
+            if (fieldKey === "customer_id") {
+                return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+            }
+            return null;
+        };
+        const fromDefs = sectionOrder.map(([sectionKey, fields]) => ({
             key: sectionKey,
             title: sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1).replace(/_/g, " "),
             defaultExpanded: true,
             collapsible: true,
-            gridCols: 2,
-            fields: fields.sort((a, b) => a.sort_order - b.sort_order).map((f) => ({
-                key: f.field_key,
-                label: f.label ?? f.field_key,
-                span: 1 as const,
-                renderHint: hintFromType(f.field_type),
-                editable: true,
-            })),
+            gridCols: 2 as const,
+            fields: fields.sort((a, b) => a.sort_order - b.sort_order).map((f) => {
+                const rel = opportunityRelField(f.field_key);
+                const baseHint = hintFromType(f.field_type);
+                return {
+                    key: f.field_key,
+                    label: f.label ?? f.field_key,
+                    span: 1 as const,
+                    renderHint: (rel?.renderHint ?? baseHint) as EntityDrawerFieldConfig["renderHint"],
+                    editable: true,
+                    ...(rel?.linkTarget ? { linkTarget: rel.linkTarget } : {}),
+                };
+            }),
         }));
+        const keys = new Set(fromDefs.map((s) => s.key));
+        const append: EntityDrawerSectionConfig[] = [];
+        if (drawer.type === "persons" && data && !(data as { _create?: boolean })._create && !keys.has("relationships")) {
+            append.push({
+                key: "relationships",
+                title: "Relationships",
+                defaultExpanded: true,
+                collapsible: true,
+                gridCols: 1 as const,
+                fields: [],
+            });
+        }
+        if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
+            const loc = data as { customer_id?: string | null };
+            if (!keys.has("customer") && loc.customer_id) {
+                append.push({ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1 as const, fields: [] });
+            }
+            if (!keys.has("relationships")) {
+                append.push({
+                    key: "relationships",
+                    title: "Relationships",
+                    defaultExpanded: true,
+                    collapsible: true,
+                    gridCols: 1 as const,
+                    fields: [],
+                });
+            }
+        }
+        return [...fromDefs, ...append];
     }, [drawer.type, data]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
@@ -2859,8 +3154,12 @@ export default function AdminEntityDrawer() {
             const nm = String(d._vertical_name ?? "").trim();
             vertOpts.push({ value: vid, label: nm || `${vid.slice(0, 8)}…` });
         }
-        return { pipeline_stage_id: stageOpts, vertical_id: vertOpts };
-    }, [drawer.type, data, pipelines, stages, oppVerticalOptions]);
+        return {
+            pipeline_stage_id: stageOpts,
+            vertical_id: vertOpts,
+            ...oppRefFieldSelectOptions,
+        };
+    }, [drawer.type, data, pipelines, stages, oppVerticalOptions, oppRefFieldSelectOptions]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -3194,7 +3493,48 @@ export default function AdminEntityDrawer() {
                                             </ul>
                                         </section>
                                     )}
-                                    {(!personRelatedData.customer_persons?.length && !personRelatedData.person_relationships?.length && !personRelatedData.compatibility_contacts?.length && !personRelatedData.compatibility_members?.length) && (
+                                    {((personRelatedData.linked_locations?.length) ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Locations</h3>
+                                            <p className="text-xs text-alloy-midnight/60 mb-1">Linked via person_locations.</p>
+                                            <ul className="space-y-1.5 text-sm">
+                                                {(personRelatedData.linked_locations ?? []).map((row: { location_id: string; _location_label?: string | null; is_primary?: boolean; relationship_type?: string | null }) => (
+                                                    <li key={row.location_id}>
+                                                        <button type="button" onClick={() => openDrawer({ type: "locations", id: row.location_id })} className="text-alloy-blue hover:underline">
+                                                            {row._location_label?.trim() || row.location_id.slice(0, 8) + "…"}
+                                                        </button>
+                                                        {row.is_primary ? <span className="text-alloy-muted ml-1">· Primary</span> : null}
+                                                        {row.relationship_type ? <span className="text-alloy-muted ml-1">· {row.relationship_type}</span> : null}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {((personRelatedData.opportunities?.length) ?? 0) > 0 && (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Opportunities</h3>
+                                            <ul className="space-y-1.5 text-sm">
+                                                {(personRelatedData.opportunities ?? []).map((o: { id: string; name?: string | null; status_key?: string | null; quote_total?: number | null; job_date?: string | null }) => (
+                                                    <li key={o.id}>
+                                                        <button type="button" onClick={() => openDrawer({ type: "opportunities", id: o.id })} className="text-alloy-blue hover:underline">
+                                                            {o.name?.trim() || o.id.slice(0, 8) + "…"}
+                                                        </button>
+                                                        <span className="text-alloy-muted ml-1">
+                                                            {o.status_key ? `· ${o.status_key}` : ""}
+                                                            {o.quote_total != null ? ` · ${formatMoneyFromDollars(Number(o.quote_total))}` : ""}
+                                                            {o.job_date ? ` · ${formatDate(String(o.job_date))}` : ""}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    )}
+                                    {(!personRelatedData.customer_persons?.length &&
+                                        !personRelatedData.person_relationships?.length &&
+                                        !personRelatedData.compatibility_contacts?.length &&
+                                        !personRelatedData.compatibility_members?.length &&
+                                        !(personRelatedData.linked_locations?.length ?? 0) &&
+                                        !(personRelatedData.opportunities?.length ?? 0)) && (
                                         <p className="text-sm text-alloy-midnight/60">No related records.</p>
                                     )}
                                 </div>

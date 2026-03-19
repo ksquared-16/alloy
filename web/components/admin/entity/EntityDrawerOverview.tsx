@@ -195,7 +195,15 @@ function renderFieldEditNode(
   }
 
   const refOpts = selectOptionsByFieldKey?.[key];
-  if (refOpts && refOpts.length > 0 && (key === "pipeline_stage_id" || key === "vertical_id")) {
+  const refSelectKeys = new Set([
+    "pipeline_stage_id",
+    "vertical_id",
+    "primary_person_id",
+    "location_id",
+    "primary_contact_id",
+    "customer_id",
+  ]);
+  if (refOpts && refOpts.length > 0 && refSelectKeys.has(key)) {
     return (
       <select
         value={String(value ?? "")}
@@ -295,6 +303,10 @@ export default function EntityDrawerOverview({
                 : key === "pipeline_stage_id" && record._pipeline_stage_name != null ? record._pipeline_stage_name
                 : key === "vertical_id" && record._vertical_name != null ? record._vertical_name
                 : key === "location_id" && record._location_name != null ? record._location_name
+                : key === "primary_person_id" && record._primary_person_name != null ? record._primary_person_name
+                : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
+                  ? (record._primary_contact_name ?? record._contact_name)
+                : key === "customer_id" && record._customer_name != null ? record._customer_name
                 : undefined;
               const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
               const rawForRead =

@@ -1,16 +1,19 @@
 /**
  * Admin discount programs: validation + CRUD against discount_programs (+ benefits, qualifiers, commitment_rules).
  * Reads use public.discount_programs_admin_v. Legacy discount_codes remain for runtime/job flows.
+ *
+ * Writes use explicit per-table payloads only — never project view-only or joined fields onto discount_programs.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Row shape from discount_programs_admin_v (nullable-friendly). */
+/** Row shape from discount_programs_admin_v (nullable-friendly). View-only / joined fields may appear here. */
 export type DiscountProgramAdminViewRow = {
     id: string;
     org_id?: string | null;
     name?: string | null;
     code?: string | null;
+    description?: string | null;
     status?: string | null;
     program_type?: string | null;
     stacking_mode?: string | null;
@@ -20,21 +23,21 @@ export type DiscountProgramAdminViewRow = {
     first_time_customer_only?: boolean | null;
     auto_apply?: boolean | null;
     applies_to_entity_type?: string | null;
-    ghl_tag?: string | null;
+    /** View-only: do not write to discount_programs */
     legacy_discount_code_id?: string | null;
     is_legacy_migrated?: boolean | null;
     created_at?: string | null;
     updated_at?: string | null;
-    /** Denormalized primary benefit */
+    /** Joined primary benefit (view) */
     primary_benefit_id?: string | null;
     primary_benefit_type?: string | null;
     primary_benefit_applies_to?: string | null;
     primary_benefit_service_index?: number | null;
     primary_benefit_amount_cents?: number | null;
     primary_benefit_percent_basis_points?: number | null;
-    /** Vertical restriction (UI / enriched from discount_program_qualifiers.vertical_slug_in value_json) */
+    /** Enriched from discount_program_qualifiers (not a programs column) */
     applies_to_vertical_slug?: string | null;
-    /** Denormalized commitment */
+    /** Joined commitment (view) */
     commitment_rule_id?: string | null;
     enrollment_mode?: string | null;
     commitment_start_mode?: string | null;
@@ -66,9 +69,11 @@ export type DiscountProgramCommitmentInput = {
     max_redemptions_per_customer: number;
 };
 
+/** Validated admin write body (maps to one or more tables; not a DB row shape). */
 export type DiscountProgramWritePayload = {
     name: string;
     code: string | null;
+    description: string | null;
     status: string;
     program_type: string;
     stacking_mode: string;
@@ -78,11 +83,121 @@ export type DiscountProgramWritePayload = {
     first_time_customer_only: boolean;
     auto_apply: boolean;
     applies_to_entity_type: string;
-    ghl_tag?: string | null;
     primary_benefit: DiscountProgramBenefitInput;
     applies_to_vertical_slug?: string | null;
     commitment?: DiscountProgramCommitmentInput | null;
 };
+
+// ---- Explicit DB payload builders (discount_programs physical columns only) ----
+
+export function buildDiscountProgramsInsertPayload(
+    orgId: string | null,
+    p: DiscountProgramWritePayload
+): Record<string, unknown> {
+    return {
+        org_id: orgId,
+        name: p.name,
+        code: p.code,
+        description: p.description,
+        status: p.status,
+        program_type: p.program_type,
+        stacking_mode: p.stacking_mode,
+        priority: p.priority,
+        valid_from: p.valid_from,
+        valid_to: p.valid_to,
+        first_time_customer_only: p.first_time_customer_only,
+        auto_apply: p.auto_apply,
+        applies_to_entity_type: p.applies_to_entity_type,
+    };
+}
+
+export function buildDiscountProgramsUpdatePayload(p: DiscountProgramWritePayload): Record<string, unknown> {
+    return {
+        name: p.name,
+        code: p.code,
+        description: p.description,
+        status: p.status,
+        program_type: p.program_type,
+        stacking_mode: p.stacking_mode,
+        priority: p.priority,
+        valid_from: p.valid_from,
+        valid_to: p.valid_to,
+        first_time_customer_only: p.first_time_customer_only,
+        auto_apply: p.auto_apply,
+        applies_to_entity_type: p.applies_to_entity_type,
+    };
+}
+
+export function buildDiscountProgramBenefitsInsertPayload(
+    programId: string,
+    b: DiscountProgramBenefitInput
+): Record<string, unknown> {
+    return {
+        discount_program_id: programId,
+        benefit_type: b.benefit_type,
+        applies_to: b.applies_to,
+        service_index: b.service_index ?? null,
+        amount_cents: b.amount_cents ?? null,
+        percent_basis_points: b.percent_basis_points ?? null,
+        sort_order: 0,
+    };
+}
+
+export function buildDiscountProgramBenefitsUpdatePayload(b: DiscountProgramBenefitInput): Record<string, unknown> {
+    return {
+        benefit_type: b.benefit_type,
+        applies_to: b.applies_to,
+        service_index: b.service_index ?? null,
+        amount_cents: b.amount_cents ?? null,
+        percent_basis_points: b.percent_basis_points ?? null,
+    };
+}
+
+export function buildDiscountProgramCommitmentRulesInsertPayload(
+    programId: string,
+    c: DiscountProgramCommitmentInput
+): Record<string, unknown> {
+    return {
+        discount_program_id: programId,
+        enrollment_mode: c.enrollment_mode,
+        commitment_start_mode: c.commitment_start_mode,
+        benefit_grant_timing: c.benefit_grant_timing,
+        required_service_count: c.required_service_count,
+        timeframe_days: c.timeframe_days,
+        qualifying_service_status: c.qualifying_service_status,
+        breach_policy: c.breach_policy,
+        max_redemptions_per_customer: c.max_redemptions_per_customer,
+    };
+}
+
+export function buildDiscountProgramCommitmentRulesUpdatePayload(c: DiscountProgramCommitmentInput): Record<string, unknown> {
+    return {
+        enrollment_mode: c.enrollment_mode,
+        commitment_start_mode: c.commitment_start_mode,
+        benefit_grant_timing: c.benefit_grant_timing,
+        required_service_count: c.required_service_count,
+        timeframe_days: c.timeframe_days,
+        qualifying_service_status: c.qualifying_service_status,
+        breach_policy: c.breach_policy,
+        max_redemptions_per_customer: c.max_redemptions_per_customer,
+    };
+}
+
+export function buildDiscountProgramQualifiersVerticalInsertPayload(
+    orgId: string | null,
+    programId: string,
+    verticalSlugs: string[]
+): Record<string, unknown> {
+    return {
+        org_id: orgId,
+        discount_program_id: programId,
+        qualifier_type: "vertical_slug_in",
+        operator: "in",
+        value_json: { values: verticalSlugs },
+        sort_order: 1,
+        metadata: {},
+    };
+}
 
 export function validateDiscountProgramPayload(
     body: unknown,
@@ -96,6 +211,12 @@ export function validateDiscountProgramPayload(
     const name = typeof o.name === "string" ? o.name.trim() : "";
     const codeRaw = o.code;
     const code = codeRaw === null || codeRaw === undefined ? null : typeof codeRaw === "string" ? codeRaw.trim().toUpperCase() || null : null;
+    const description =
+        o.description === null || o.description === undefined
+            ? null
+            : typeof o.description === "string"
+              ? o.description.trim() || null
+              : null;
     const status = typeof o.status === "string" && o.status.trim() ? o.status.trim() : "active";
     const program_type = typeof o.program_type === "string" && o.program_type.trim() ? o.program_type.trim() : "code";
     const stacking_mode = typeof o.stacking_mode === "string" && o.stacking_mode.trim() ? o.stacking_mode.trim() : "exclusive";
@@ -123,12 +244,6 @@ export function validateDiscountProgramPayload(
     const auto_apply = o.auto_apply === true;
     const applies_to_entity_type =
         typeof o.applies_to_entity_type === "string" && o.applies_to_entity_type.trim() ? o.applies_to_entity_type.trim() : "job";
-    const ghl_tag =
-        o.ghl_tag === null || o.ghl_tag === undefined
-            ? null
-            : typeof o.ghl_tag === "string"
-              ? o.ghl_tag.trim() || null
-              : null;
 
     if (!name) {
         return { ok: false, error: "name is required" };
@@ -270,6 +385,7 @@ export function validateDiscountProgramPayload(
         value: {
             name,
             code,
+            description,
             status,
             program_type,
             stacking_mode,
@@ -279,7 +395,6 @@ export function validateDiscountProgramPayload(
             first_time_customer_only,
             auto_apply,
             applies_to_entity_type,
-            ghl_tag,
             primary_benefit: {
                 benefit_type,
                 applies_to,
@@ -290,67 +405,6 @@ export function validateDiscountProgramPayload(
             applies_to_vertical_slug: vertical,
             commitment,
         },
-    };
-}
-
-function programInsertRow(orgId: string | null, p: DiscountProgramWritePayload): Record<string, unknown> {
-    return {
-        org_id: orgId,
-        name: p.name,
-        code: p.code,
-        status: p.status,
-        program_type: p.program_type,
-        stacking_mode: p.stacking_mode,
-        priority: p.priority,
-        valid_from: p.valid_from,
-        valid_to: p.valid_to,
-        first_time_customer_only: p.first_time_customer_only,
-        auto_apply: p.auto_apply,
-        applies_to_entity_type: p.applies_to_entity_type,
-        ghl_tag: p.ghl_tag ?? null,
-    };
-}
-
-function programUpdatePatch(p: DiscountProgramWritePayload): Record<string, unknown> {
-    return {
-        name: p.name,
-        code: p.code,
-        status: p.status,
-        program_type: p.program_type,
-        stacking_mode: p.stacking_mode,
-        priority: p.priority,
-        valid_from: p.valid_from,
-        valid_to: p.valid_to,
-        first_time_customer_only: p.first_time_customer_only,
-        auto_apply: p.auto_apply,
-        applies_to_entity_type: p.applies_to_entity_type,
-        ghl_tag: p.ghl_tag ?? null,
-    };
-}
-
-function benefitInsertRow(programId: string, b: DiscountProgramBenefitInput): Record<string, unknown> {
-    return {
-        discount_program_id: programId,
-        benefit_type: b.benefit_type,
-        applies_to: b.applies_to,
-        service_index: b.service_index ?? null,
-        amount_cents: b.amount_cents ?? null,
-        percent_basis_points: b.percent_basis_points ?? null,
-        sort_order: 0,
-    };
-}
-
-function commitmentInsertRow(programId: string, c: DiscountProgramCommitmentInput): Record<string, unknown> {
-    return {
-        discount_program_id: programId,
-        enrollment_mode: c.enrollment_mode,
-        commitment_start_mode: c.commitment_start_mode,
-        benefit_grant_timing: c.benefit_grant_timing,
-        required_service_count: c.required_service_count,
-        timeframe_days: c.timeframe_days,
-        qualifying_service_status: c.qualifying_service_status,
-        breach_policy: c.breach_policy,
-        max_redemptions_per_customer: c.max_redemptions_per_customer,
     };
 }
 
@@ -402,13 +456,12 @@ export function parseVerticalSlugFromQualifierValueJson(value_json: unknown): st
     return parts.length ? parts.join(", ") : null;
 }
 
-/** Turn admin vertical field (comma-separated ok) into value_json.values. */
-function verticalSlugInputToValueJson(slugInput: string): { values: string[] } {
-    const values = slugInput
+/** Turn admin vertical field (comma-separated ok) into slug list for value_json.values. */
+function verticalSlugInputToSlugList(slugInput: string): string[] {
+    return slugInput
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-    return { values };
 }
 
 async function fetchProgramOrgId(supabase: SupabaseClient, programId: string): Promise<string | null> {
@@ -431,20 +484,14 @@ async function syncVerticalQualifier(supabase: SupabaseClient, programId: string
     const trimmed = typeof slugInput === "string" ? slugInput.trim() : "";
     if (!trimmed) return;
 
-    const { values } = verticalSlugInputToValueJson(trimmed);
+    const values = verticalSlugInputToSlugList(trimmed);
     if (values.length === 0) return;
 
     const org_id = await fetchProgramOrgId(supabase, programId);
 
-    const { error } = await supabase.from("discount_program_qualifiers").insert({
-        org_id,
-        discount_program_id: programId,
-        qualifier_type: "vertical_slug_in",
-        operator: "in",
-        value_json: { values },
-        sort_order: 1,
-        metadata: {},
-    });
+    const { error } = await supabase
+        .from("discount_program_qualifiers")
+        .insert(buildDiscountProgramQualifiersVerticalInsertPayload(org_id, programId, values));
     if (error) throw new Error(error.message);
 }
 
@@ -495,20 +542,20 @@ async function mergeVerticalSlugsOntoProgramRows(
 }
 
 export async function createDiscountProgram(supabase: SupabaseClient, orgId: string | null, payload: DiscountProgramWritePayload) {
-    const progRow = programInsertRow(orgId, payload);
-    const { data: program, error: pErr } = await supabase.from("discount_programs").insert(progRow).select("id").single();
+    const programInsert = buildDiscountProgramsInsertPayload(orgId, payload);
+    const { data: program, error: pErr } = await supabase.from("discount_programs").insert(programInsert).select("id").single();
     if (pErr) throw new Error(pErr.message);
     const programId = (program as { id: string }).id;
 
-    const { error: bErr } = await supabase.from("discount_program_benefits").insert(benefitInsertRow(programId, payload.primary_benefit));
+    const benefitInsert = buildDiscountProgramBenefitsInsertPayload(programId, payload.primary_benefit);
+    const { error: bErr } = await supabase.from("discount_program_benefits").insert(benefitInsert);
     if (bErr) throw new Error(bErr.message);
 
     await syncVerticalQualifier(supabase, programId, payload.applies_to_vertical_slug ?? null);
 
     if (payload.program_type === "commitment" && payload.commitment) {
-        const { error: cErr } = await supabase
-            .from("discount_program_commitment_rules")
-            .insert(commitmentInsertRow(programId, payload.commitment));
+        const ruleInsert = buildDiscountProgramCommitmentRulesInsertPayload(programId, payload.commitment);
+        const { error: cErr } = await supabase.from("discount_program_commitment_rules").insert(ruleInsert);
         if (cErr) throw new Error(cErr.message);
     }
 
@@ -518,32 +565,22 @@ export async function createDiscountProgram(supabase: SupabaseClient, orgId: str
 }
 
 export async function updateDiscountProgram(supabase: SupabaseClient, programId: string, payload: DiscountProgramWritePayload) {
-    const { data: existing, error: exErr } = await supabase
-        .from("discount_programs")
-        .select("id, legacy_discount_code_id, is_legacy_migrated")
-        .eq("id", programId)
-        .maybeSingle();
+    const { data: existing, error: exErr } = await supabase.from("discount_programs").select("id").eq("id", programId).maybeSingle();
     if (exErr) throw new Error(exErr.message);
     if (!existing) throw new Error("Discount program not found");
 
-    const patch = programUpdatePatch(payload);
-    const { error: uErr } = await supabase.from("discount_programs").update(patch).eq("id", programId);
+    const programUpdate = buildDiscountProgramsUpdatePayload(payload);
+    const { error: uErr } = await supabase.from("discount_programs").update(programUpdate).eq("id", programId);
     if (uErr) throw new Error(uErr.message);
 
     const benefitId = await fetchPrimaryBenefitId(supabase, programId);
-    const b = payload.primary_benefit;
-    const benefitUpdate = {
-        benefit_type: b.benefit_type,
-        applies_to: b.applies_to,
-        service_index: b.service_index ?? null,
-        amount_cents: b.amount_cents ?? null,
-        percent_basis_points: b.percent_basis_points ?? null,
-    };
+    const benefitUpdate = buildDiscountProgramBenefitsUpdatePayload(payload.primary_benefit);
     if (benefitId) {
         const { error: bErr } = await supabase.from("discount_program_benefits").update(benefitUpdate).eq("id", benefitId);
         if (bErr) throw new Error(bErr.message);
     } else {
-        const { error: bErr } = await supabase.from("discount_program_benefits").insert(benefitInsertRow(programId, b));
+        const benefitInsert = buildDiscountProgramBenefitsInsertPayload(programId, payload.primary_benefit);
+        const { error: bErr } = await supabase.from("discount_program_benefits").insert(benefitInsert);
         if (bErr) throw new Error(bErr.message);
     }
 
@@ -551,22 +588,13 @@ export async function updateDiscountProgram(supabase: SupabaseClient, programId:
 
     if (payload.program_type === "commitment" && payload.commitment) {
         const ruleId = await fetchCommitmentRuleId(supabase, programId);
-        const c = payload.commitment;
-        const commitmentUpdate = {
-            enrollment_mode: c.enrollment_mode,
-            commitment_start_mode: c.commitment_start_mode,
-            benefit_grant_timing: c.benefit_grant_timing,
-            required_service_count: c.required_service_count,
-            timeframe_days: c.timeframe_days,
-            qualifying_service_status: c.qualifying_service_status,
-            breach_policy: c.breach_policy,
-            max_redemptions_per_customer: c.max_redemptions_per_customer,
-        };
+        const commitmentUpdate = buildDiscountProgramCommitmentRulesUpdatePayload(payload.commitment);
         if (ruleId) {
             const { error: cErr } = await supabase.from("discount_program_commitment_rules").update(commitmentUpdate).eq("id", ruleId);
             if (cErr) throw new Error(cErr.message);
         } else {
-            const { error: cErr } = await supabase.from("discount_program_commitment_rules").insert(commitmentInsertRow(programId, c));
+            const ruleInsert = buildDiscountProgramCommitmentRulesInsertPayload(programId, payload.commitment);
+            const { error: cErr } = await supabase.from("discount_program_commitment_rules").insert(ruleInsert);
             if (cErr) throw new Error(cErr.message);
         }
     }

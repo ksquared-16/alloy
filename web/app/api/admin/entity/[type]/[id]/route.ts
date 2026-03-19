@@ -540,6 +540,37 @@ export async function GET(
                 out._customer = null;
                 out._customer_name = null;
             }
+            const { data: plRows } = await supabase
+                .from("person_locations")
+                .select("person_id, is_primary, relationship_type")
+                .eq("location_id", id)
+                .eq("org_id", ctx.orgId);
+            const plList = plRows ?? [];
+            const personIdsFromPl = [...new Set(plList.map((r: { person_id: string }) => r.person_id))];
+            const { data: personRowsForLoc } =
+                personIdsFromPl.length > 0
+                    ? await supabase
+                          .from("persons")
+                          .select("id, first_name, last_name, full_name, email")
+                          .eq("org_id", ctx.orgId)
+                          .in("id", personIdsFromPl)
+                    : { data: [] as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null; email?: string | null }[] };
+            const personNameById = new Map(
+                (personRowsForLoc ?? []).map((p) => {
+                    const nm =
+                        (p.full_name && String(p.full_name).trim()) ||
+                        [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
+                        (p.email && String(p.email).trim()) ||
+                        null;
+                    return [p.id, nm] as const;
+                })
+            );
+            out._linked_persons = plList.map((row: { person_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
+                person_id: row.person_id,
+                _person_name: personNameById.get(row.person_id) ?? null,
+                is_primary: !!row.is_primary,
+                relationship_type: row.relationship_type ?? null,
+            }));
             await attachFieldDefinitionsAndValues(supabase, out, "locations", id);
             return NextResponse.json(out);
         }
@@ -912,6 +943,47 @@ export async function GET(
             const { data: memberRows } = await supabase.from("customer_members").select("id, display_name, relationship, customer_id").eq("person_id", id).eq("org_id", ctx.orgId).limit(PERSON_LIMIT);
             out._compatibility_contacts = contactRows ?? [];
             out._compatibility_members = memberRows ?? [];
+
+            const { data: plLocRows } = await supabase
+                .from("person_locations")
+                .select("location_id, is_primary, relationship_type")
+                .eq("person_id", id)
+                .eq("org_id", ctx.orgId)
+                .limit(PERSON_LIMIT);
+            const locLinkList = plLocRows ?? [];
+            const locIdsFromPl = [...new Set(locLinkList.map((r: { location_id: string }) => r.location_id))];
+            const { data: locRowsForPerson } =
+                locIdsFromPl.length > 0
+                    ? await supabase
+                          .from("locations")
+                          .select("id, label, postal_code, city, address1")
+                          .eq("org_id", ctx.orgId)
+                          .in("id", locIdsFromPl)
+                    : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
+            const locLabelById = new Map(
+                (locRowsForPerson ?? []).map((l) => {
+                    const lbl =
+                        (l.label && String(l.label).trim()) ||
+                        [l.address1, l.city, l.postal_code].filter(Boolean).join(", ") ||
+                        null;
+                    return [l.id, lbl] as const;
+                })
+            );
+            out._linked_locations = locLinkList.map((row: { location_id: string; is_primary?: boolean | null; relationship_type?: string | null }) => ({
+                location_id: row.location_id,
+                _location_label: locLabelById.get(row.location_id) ?? null,
+                is_primary: !!row.is_primary,
+                relationship_type: row.relationship_type ?? null,
+            }));
+
+            const { data: oppRows } = await supabase
+                .from("opportunities")
+                .select("id, name, status_key, job_date, quote_total, created_at")
+                .eq("primary_person_id", id)
+                .eq("org_id", ctx.orgId)
+                .order("created_at", { ascending: false })
+                .limit(PERSON_LIMIT);
+            out._linked_opportunities = oppRows ?? [];
 
             await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
             return NextResponse.json(out);

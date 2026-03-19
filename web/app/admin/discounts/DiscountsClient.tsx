@@ -26,6 +26,7 @@ type CommitmentFormFields = {
 type DiscountFormState = {
     name: string;
     code: string;
+    description: string;
     status: string;
     program_type: string;
     stacking_mode: string;
@@ -35,7 +36,6 @@ type DiscountFormState = {
     first_time_customer_only: boolean;
     auto_apply: boolean;
     applies_to_entity_type: string;
-    ghl_tag: string;
     applies_to_vertical_slug: string;
     primary_benefit_type: string;
     primary_benefit_applies_to: string;
@@ -62,6 +62,7 @@ function defaultCreateForm(): DiscountFormState {
     return {
         name: "",
         code: "",
+        description: "",
         status: "active",
         program_type: "code",
         stacking_mode: "exclusive",
@@ -71,7 +72,6 @@ function defaultCreateForm(): DiscountFormState {
         first_time_customer_only: false,
         auto_apply: false,
         applies_to_entity_type: "job",
-        ghl_tag: "",
         applies_to_vertical_slug: "",
         primary_benefit_type: "percent_off",
         primary_benefit_applies_to: "first_service",
@@ -123,6 +123,7 @@ function rowToForm(row: DiscountProgramAdminViewRow): DiscountFormState {
     return {
         name: row.name ?? "",
         code: row.code ?? "",
+        description: row.description ?? "",
         status: row.status ?? "active",
         program_type: row.program_type ?? "code",
         stacking_mode: row.stacking_mode ?? "exclusive",
@@ -132,7 +133,6 @@ function rowToForm(row: DiscountProgramAdminViewRow): DiscountFormState {
         first_time_customer_only: row.first_time_customer_only === true,
         auto_apply: row.auto_apply === true,
         applies_to_entity_type: row.applies_to_entity_type ?? "job",
-        ghl_tag: row.ghl_tag ?? "",
         applies_to_vertical_slug: row.applies_to_vertical_slug ?? "",
         primary_benefit_type: row.primary_benefit_type ?? "percent_off",
         primary_benefit_applies_to: row.primary_benefit_applies_to ?? "first_service",
@@ -152,6 +152,7 @@ function rowToForm(row: DiscountProgramAdminViewRow): DiscountFormState {
     };
 }
 
+/** API body: only fields validateDiscountProgramPayload consumes — never pass a raw view row. */
 function buildPayload(form: DiscountFormState): Record<string, unknown> {
     const priority = parseInt(form.priority, 10);
     const benefitType = form.primary_benefit_type;
@@ -176,6 +177,7 @@ function buildPayload(form: DiscountFormState): Record<string, unknown> {
     const payload: Record<string, unknown> = {
         name: form.name.trim(),
         code: form.code.trim() ? form.code.trim().toUpperCase() : null,
+        description: form.description.trim() || null,
         status: form.status.trim() || "active",
         program_type: form.program_type,
         stacking_mode: form.stacking_mode.trim() || "exclusive",
@@ -185,7 +187,6 @@ function buildPayload(form: DiscountFormState): Record<string, unknown> {
         first_time_customer_only: form.first_time_customer_only,
         auto_apply: form.auto_apply,
         applies_to_entity_type: form.applies_to_entity_type.trim() || "job",
-        ghl_tag: form.ghl_tag.trim() || null,
         primary_benefit,
         applies_to_vertical_slug: form.applies_to_vertical_slug.trim() || null,
     };
@@ -494,6 +495,16 @@ export default function DiscountsClient({ initialData: initialDataProp, error: e
                             />
                             {codeLocked && <p className="text-xs text-alloy-midnight/50 mt-1">Code is read-only for migrated programs.</p>}
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">Description</label>
+                            <textarea
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                disabled={readOnly}
+                                rows={3}
+                                className={INPUT_CLASS}
+                            />
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">Status</label>
@@ -592,16 +603,6 @@ export default function DiscountsClient({ initialData: initialDataProp, error: e
                                 disabled={readOnly}
                                 className={INPUT_CLASS}
                                 placeholder="job"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-alloy-midnight/70 mb-1">GHL tag</label>
-                            <input
-                                type="text"
-                                value={formData.ghl_tag}
-                                onChange={(e) => setFormData({ ...formData, ghl_tag: e.target.value })}
-                                disabled={readOnly}
-                                className={INPUT_CLASS}
                             />
                         </div>
                     </section>

@@ -21,7 +21,7 @@ interface TabConfig {
     rowIdKey?: string;
 }
 
-const EMPTY: Record<string, unknown[]> = { people: [], opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [] };
+const EMPTY: Record<string, unknown[]> = { people: [], opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [], linked_persons: [] };
 
 export default function RelatedRecordsTabs({
     entityType,
@@ -180,6 +180,11 @@ export default function RelatedRecordsTabs({
         );
     } else if (entityType === "location") {
         tabs.push(
+            { key: "linked_persons", label: "People", entityType: "persons", dataKey: "linked_persons", rowIdKey: "person_id", columns: [
+                { key: "_person_name", label: "Name", render: (v) => (v as string)?.trim() || "—" },
+                { key: "is_primary", label: "Primary", render: (v) => (v ? "Yes" : "No") },
+                { key: "relationship_type", label: "Link", render: (v) => (v as string)?.trim() || "—" },
+            ]},
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
                 { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
                 { key: "title", label: "Title" },
