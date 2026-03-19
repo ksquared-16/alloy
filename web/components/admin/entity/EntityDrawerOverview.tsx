@@ -28,6 +28,8 @@ interface EntityDrawerOverviewProps {
   getStatusLabel?: (key: string) => string | null;
   /** When a field has linkTarget, call this to open the related entity drawer. */
   onOpenDrawer?: (entityType: string, id: string) => void;
+  /** Reference selects (e.g. pipeline_stage_id, vertical_id) — labels in UI, values are real ids. */
+  selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>;
 }
 
 function formatFieldValue(
@@ -102,14 +104,16 @@ function makeKeydownHandlers(
 function renderFieldEditNode(
   field: EntityDrawerFieldConfig,
   formData: Record<string, unknown>,
+  record: Record<string, unknown>,
   onFieldChange: (key: string, value: unknown) => void,
   onBlur: () => void,
   onEscape: (key: string) => void,
   statusDefs: StatusDefOption[] | undefined,
-  disabled: boolean
+  disabled: boolean,
+  selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>
 ): ReactNode {
   const key = field.key;
-  const value = formData[key];
+  const value = formData[key] !== undefined && formData[key] !== "" ? formData[key] : record[key];
   const hint = field.renderHint ?? "text";
   const onKeyDown = makeKeydownHandlers(key, onBlur, onEscape);
 
@@ -190,6 +194,27 @@ function renderFieldEditNode(
     );
   }
 
+  const refOpts = selectOptionsByFieldKey?.[key];
+  if (refOpts && refOpts.length > 0 && (key === "pipeline_stage_id" || key === "vertical_id")) {
+    return (
+      <select
+        value={String(value ?? "")}
+        onChange={(e) => onFieldChange(key, e.target.value || null)}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
+        className={INLINE_EDIT_SELECT}
+      >
+        <option value="">— None —</option>
+        {refOpts.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (key === "recurrence_unit") {
     return (
       <select
@@ -239,6 +264,7 @@ export default function EntityDrawerOverview({
   statusDefs,
   getStatusLabel,
   onOpenDrawer,
+  selectOptionsByFieldKey,
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
   const sections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
@@ -270,15 +296,26 @@ export default function EntityDrawerOverview({
                 : key === "vertical_id" && record._vertical_name != null ? record._vertical_name
                 : key === "location_id" && record._location_name != null ? record._location_name
                 : undefined;
-              const rawValue = displayFallback !== undefined
-                ? displayFallback
-                : editFormData[key] !== undefined
-                  ? editFormData[key]
-                  : record[key];
-              const displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
-              const showEdit = !!(canEdit && field.editable && onFieldChange);
-              const editNode = showEdit
-                ? renderFieldEditNode(field, editFormData, handleFieldChange, handleBlur, handleEscape, statusDefs, !canEdit)
+              const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
+              const rawForRead =
+                displayFallback !== undefined ? displayFallback : record[key];
+              const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;
+              let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
+              if (!showFieldEdit && (displayValue === null || displayValue === undefined || displayValue === "")) {
+                displayValue = "—";
+              }
+              const editNode = showFieldEdit
+                ? renderFieldEditNode(
+                    field,
+                    editFormData,
+                    record,
+                    handleFieldChange,
+                    handleBlur,
+                    handleEscape,
+                    statusDefs,
+                    !canEdit,
+                    selectOptionsByFieldKey
+                  )
                 : undefined;
               return (
                 <EntityDrawerField
@@ -287,7 +324,7 @@ export default function EntityDrawerOverview({
                   value={displayValue}
                   span={field.span ?? 1}
                   editNode={editNode}
-                  isEditing={showEdit}
+                  isEditing={showFieldEdit}
                 />
               );
             })

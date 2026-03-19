@@ -16,27 +16,58 @@ import {
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
 import { getEntityPresentation, toPresentationType, type DrawerTabKey, type EntityDrawerSectionConfig, type EntityDrawerFieldConfig } from "@/lib/entityPresentation";
-
-const LOCATION_BASIC_SECTION: EntityDrawerSectionConfig = {
-    key: "location_basic",
-    title: "Basic info",
-    defaultExpanded: true,
-    collapsible: true,
-    gridCols: 2,
-    fields: [
-        { key: "label", label: "Name", span: 1, renderHint: "text", editable: false },
-        { key: "postal_code", label: "Postal code", span: 1, renderHint: "text", editable: false },
-        { key: "address1", label: "Address 1", span: 1, renderHint: "text", editable: false },
-        { key: "city", label: "City", span: 1, renderHint: "text", editable: false },
-        { key: "state", label: "State", span: 1, renderHint: "text", editable: false },
-    ],
-};
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
+
+/** Launch: keep quote_total / discount fields visible; hide extra cents/subtotal noise (defs still exist in admin). */
+const OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS = new Set([
+    "recurring_price_cents",
+    "estimated_price_cents",
+    "monetary_value_cents",
+    "quote_subtotal",
+    "discount_validated_at",
+]);
+
+type FieldDefRow = {
+    field_key: string;
+    field_type: string;
+    is_system: boolean;
+    is_visible_in_drawer?: boolean;
+};
+
+/** Hydrate form state for every drawer-visible field_definition from the entity GET (system columns + merged field_values). */
+function drawerValueFromRecord(fieldKey: string, fieldType: string, record: Record<string, unknown>): unknown {
+    const raw = record[fieldKey];
+    if (raw === null || raw === undefined) return "";
+    const t = (fieldType || "text").toLowerCase();
+    if (t === "boolean") {
+        if (raw === true || raw === "true") return "true";
+        if (raw === false || raw === "false") return "false";
+        return "";
+    }
+    if (t === "number") {
+        if (typeof raw === "number" && !Number.isNaN(raw)) return raw;
+        const n = parseFloat(String(raw).replace(/,/g, ""));
+        return Number.isFinite(n) ? n : "";
+    }
+    return raw;
+}
+
+function mergeConfiguredFieldFormValues(
+    initial: Record<string, unknown>,
+    record: Record<string, unknown>,
+    defs: FieldDefRow[] | undefined
+): void {
+    if (!defs?.length) return;
+    for (const d of defs) {
+        if (d.is_visible_in_drawer === false) continue;
+        initial[d.field_key] = drawerValueFromRecord(d.field_key, d.field_type, record);
+    }
+}
 
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
 
@@ -1276,7 +1307,7 @@ export default function AdminEntityDrawer() {
                         : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents))
                             ? Number(opp.monetary_value_cents) / 100
                             : "";
-            setFormData({
+            const initial: Record<string, unknown> = {
                 name: (opp.name as string) ?? "",
                 job_date: (opp.job_date as string)?.slice(0, 10) ?? "",
                 job_time_window: (opp.job_time_window as string) ?? "",
@@ -1299,7 +1330,10 @@ export default function AdminEntityDrawer() {
                 external_id: (opp.external_id as string) ?? "",
                 notes: (meta.notes as string) ?? "",
                 customer_notes: (meta.notes as string) ?? "",
-            });
+            };
+            mergeConfiguredFieldFormValues(initial, opp, (data._field_definitions as FieldDefRow[] | undefined) ?? []);
+            if (quoteTotal !== "" && quoteTotal != null) initial.quote_total = quoteTotal;
+            setFormData(initial);
         } else if (drawer.type === "jobs") {
             const meta = (data.metadata as Record<string, unknown>) || {};
             setFormData({
@@ -1412,25 +1446,23 @@ export default function AdminEntityDrawer() {
                 entity_type: data.entity_type ?? "",
             });
         } else if (drawer.type === "locations") {
+            const locData = data as Record<string, unknown>;
             const locBase: Record<string, unknown> = {
-                label: data.label ?? "",
-                customer_id: (data.customer_id as string) ?? "",
-                location_type_id: (data.location_type_id as string) ?? "",
-                location_type: (data.location_type as string) ?? "",
-                is_active: data.is_active ?? true,
-                is_primary: data.is_primary ?? false,
-                address1: data.address1 ?? "",
-                address2: data.address2 ?? "",
-                city: data.city ?? "",
-                state: data.state ?? "",
-                postal_code: data.postal_code ?? "",
-                country: data.country ?? "",
-                access_notes: data.access_notes ?? "",
+                label: locData.label ?? "",
+                customer_id: (locData.customer_id as string) ?? "",
+                location_type_id: (locData.location_type_id as string) ?? "",
+                location_type: (locData.location_type as string) ?? "",
+                is_active: locData.is_active ?? true,
+                is_primary: locData.is_primary ?? false,
+                address1: locData.address1 ?? "",
+                address2: locData.address2 ?? "",
+                city: locData.city ?? "",
+                state: locData.state ?? "",
+                postal_code: locData.postal_code ?? "",
+                country: locData.country ?? "",
+                access_notes: locData.access_notes ?? "",
             };
-            const locFd = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
-            for (const d of locFd) {
-                if (!d.is_system) locBase[d.field_key] = (data as Record<string, unknown>)[d.field_key] ?? "";
-            }
+            mergeConfiguredFieldFormValues(locBase, locData, (data._field_definitions as FieldDefRow[] | undefined) ?? []);
             setFormData(locBase);
         } else if (drawer.type === "customer_members") {
             const rel = (data.relationship as string) ?? "";
@@ -1802,8 +1834,9 @@ export default function AdminEntityDrawer() {
                 notes: (meta.notes as string) ?? "",
                 customer_notes: (meta.notes as string) ?? "",
             };
-            const oppDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
-            for (const d of oppDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (opp[d.field_key] as string) ?? ""; }
+            const oppDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
+            mergeConfiguredFieldFormValues(initial as Record<string, unknown>, opp, oppDefs);
+            if (quoteTotal !== "" && quoteTotal != null) (initial as Record<string, unknown>).quote_total = quoteTotal;
         } else if (drawer.type === "schedules") {
             initial = {
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
@@ -1877,12 +1910,8 @@ export default function AdminEntityDrawer() {
                 country: (locData.country as string) ?? "",
                 access_notes: (locData.access_notes as string) ?? "",
             };
-            const locDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
-            for (const d of locDefs) {
-                if (!d.is_system) {
-                    (initial as Record<string, unknown>)[d.field_key] = locData[d.field_key] ?? "";
-                }
-            }
+            const locDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
+            mergeConfiguredFieldFormValues(initial as Record<string, unknown>, locData, locDefs);
         } else if (drawer.type === "persons") {
             initial = {
                 full_name: (data.full_name as string) ?? "",
@@ -2648,9 +2677,14 @@ export default function AdminEntityDrawer() {
                             </p>
                         ) : (
                             locDefs.map((f) => {
-                                const raw =
-                                    (isEditing && canMutate ? formData[f.field_key] : (data as Record<string, unknown>)[f.field_key]) ??
-                                    "";
+                                const drec = data as Record<string, unknown>;
+                                const mergedVal =
+                                    isEditing && canMutate
+                                        ? (formData[f.field_key] !== undefined && formData[f.field_key] !== ""
+                                              ? formData[f.field_key]
+                                              : drec[f.field_key])
+                                        : drec[f.field_key];
+                                const raw = mergedVal ?? "";
                                 const str = raw === true || raw === false ? (raw ? "Yes" : "No") : String(raw ?? "");
                                 const edit = isEditing && canMutate;
                                 return (
@@ -2661,7 +2695,7 @@ export default function AdminEntityDrawer() {
                                         {edit ? (
                                             f.field_type === "boolean" ? (
                                                 <select
-                                                    value={String(formData[f.field_key] ?? "")}
+                                                    value={String(formData[f.field_key] ?? drec[f.field_key] ?? "")}
                                                     onChange={(e) =>
                                                         setFormData((prev) => ({ ...prev, [f.field_key]: e.target.value }))
                                                     }
@@ -2680,7 +2714,9 @@ export default function AdminEntityDrawer() {
                                                     value={
                                                         formData[f.field_key] != null && formData[f.field_key] !== ""
                                                             ? String(formData[f.field_key])
-                                                            : ""
+                                                            : drec[f.field_key] != null && drec[f.field_key] !== ""
+                                                              ? String(drec[f.field_key])
+                                                              : ""
                                                     }
                                                     onChange={(e) =>
                                                         setFormData((prev) => ({
@@ -2696,7 +2732,7 @@ export default function AdminEntityDrawer() {
                                             ) : f.field_type === "date" || f.field_type === "datetime" ? (
                                                 <input
                                                     type={f.field_type === "date" ? "date" : "datetime-local"}
-                                                    value={String(formData[f.field_key] ?? "").slice(0, 16)}
+                                                    value={String(formData[f.field_key] ?? drec[f.field_key] ?? "").slice(0, 16)}
                                                     onChange={(e) =>
                                                         setFormData((prev) => ({
                                                             ...prev,
@@ -2710,7 +2746,7 @@ export default function AdminEntityDrawer() {
                                                 />
                                             ) : (
                                                 <input
-                                                    value={String(formData[f.field_key] ?? "")}
+                                                    value={String(formData[f.field_key] ?? drec[f.field_key] ?? "")}
                                                     onChange={(e) =>
                                                         setFormData((prev) => ({
                                                             ...prev,
@@ -2740,7 +2776,10 @@ export default function AdminEntityDrawer() {
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!data || (data as { _create?: boolean })._create) return [];
         const defs = (data._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
-        const visible = defs.filter((d) => d.is_visible_in_drawer !== false);
+        let visible = defs.filter((d) => d.is_visible_in_drawer !== false);
+        if (drawer.type === "opportunities") {
+            visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
+        }
         if (visible.length === 0) return [];
         const bySection = new Map<string, typeof visible>();
         for (const d of visible) {
@@ -2776,11 +2815,29 @@ export default function AdminEntityDrawer() {
         }));
     }, [drawer.type, data]);
 
-    const overviewSectionsOverride = useMemo((): EntityDrawerSectionConfig[] | undefined => {
-        if (configDrivenOverviewSections.length === 0) return undefined;
-        if (drawer.type === "locations") return [LOCATION_BASIC_SECTION, ...configDrivenOverviewSections];
-        return configDrivenOverviewSections;
-    }, [drawer.type, configDrivenOverviewSections]);
+    const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
+        if (drawer.type !== "opportunities" || !data) return {};
+        const d = data as Record<string, unknown>;
+        const stageOpts: { value: string; label: string }[] = [];
+        pipelines.forEach((p) => {
+            stages
+                .filter((s) => s.pipeline_id === p.id)
+                .sort((a, b) => a.position - b.position)
+                .forEach((s) => stageOpts.push({ value: s.id, label: `${p.name}: ${s.name}` }));
+        });
+        const sid = String(d.pipeline_stage_id ?? "");
+        if (sid && !stageOpts.some((o) => o.value === sid)) {
+            const nm = String(d._pipeline_stage_name ?? "").trim();
+            stageOpts.push({ value: sid, label: nm || `${sid.slice(0, 8)}…` });
+        }
+        const vertOpts = [...oppVerticalOptions.map((v) => ({ value: v.id, label: v.name }))];
+        const vid = String(d.vertical_id ?? "");
+        if (vid && !vertOpts.some((o) => o.value === vid)) {
+            const nm = String(d._vertical_name ?? "").trim();
+            vertOpts.push({ value: vid, label: nm || `${vid.slice(0, 8)}…` });
+        }
+        return { pipeline_stage_id: stageOpts, vertical_id: vertOpts };
+    }, [drawer.type, data, pipelines, stages, oppVerticalOptions]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -4323,7 +4380,8 @@ export default function AdminEntityDrawer() {
                             entityType={presentationType}
                             data={data as Record<string, unknown>}
                             customSectionContent={overviewCustomContent}
-                            overviewSectionsOverride={overviewSectionsOverride}
+                            overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                            selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                             isEditing={isEditing}
                             formData={formData}
                             onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
@@ -4844,64 +4902,55 @@ export default function AdminEntityDrawer() {
                                     <div className="space-y-4">
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                            <div>
+                                        <div>
                                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Stage</label>
-                                            {canMutate ? (
-                                                <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} className={INLINE_EDIT_INPUT_CLASS}>
-                                                    <option value="">— None —</option>
-                                                    {(() => {
-                                                        const sid = String(formData.pipeline_stage_id ?? "");
-                                                        const stageOpts: { id: string; name: string }[] = [];
-                                                        pipelines.forEach((p) => {
-                                                            stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position).forEach((s) => {
-                                                                stageOpts.push({ id: s.id, name: `${p.name}: ${s.name}` });
-                                                            });
+                                            <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
+                                                <option value="">— None —</option>
+                                                {(() => {
+                                                    const sid = String(formData.pipeline_stage_id ?? "");
+                                                    const stageOpts: { id: string; name: string }[] = [];
+                                                    pipelines.forEach((p) => {
+                                                        stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position).forEach((s) => {
+                                                            stageOpts.push({ id: s.id, name: `${p.name}: ${s.name}` });
                                                         });
-                                                        if (sid && !stageOpts.some((o) => o.id === sid)) {
-                                                            const nm = String((data as { _pipeline_stage_name?: string | null })?._pipeline_stage_name ?? "").trim();
-                                                            stageOpts.push({ id: sid, name: nm || `${sid.slice(0, 8)}…` });
-                                                        }
-                                                        return stageOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>);
-                                                    })()}
-                                                </select>
-                                            ) : (
-                                                <span className="text-sm text-alloy-midnight/90">{(data as { _pipeline_stage_name?: string | null })?._pipeline_stage_name ?? "—"}</span>
-                                            )}
-                                            </div>
+                                                    });
+                                                    if (sid && !stageOpts.some((o) => o.id === sid)) {
+                                                        const nm = String((data as { _pipeline_stage_name?: string | null })?._pipeline_stage_name ?? "").trim();
+                                                        stageOpts.push({ id: sid, name: nm || `${sid.slice(0, 8)}…` });
+                                                    }
+                                                    return stageOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>);
+                                                })()}
+                                            </select>
+                                        </div>
                                         <div>
                                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical</label>
-                                            {canMutate ? (
-                                                <select
-                                                    value={String(formData.vertical_id ?? "")}
-                                                    onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))}
-                                                    onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }}
-                                                    className={INLINE_EDIT_INPUT_CLASS}
-                                                >
-                                                    <option value="">— None —</option>
-                                                    {(() => {
-                                                        const vid = String(formData.vertical_id ?? "");
-                                                        const opts = [...oppVerticalOptions];
-                                                        if (vid && !opts.some((o) => o.id === vid)) {
-                                                            const nm = String((data as { _vertical_name?: string | null })?._vertical_name ?? "").trim();
-                                                            opts.push({ id: vid, name: nm || `${vid.slice(0, 8)}…` });
-                                                        }
-                                                        return opts.map((v) => <option key={v.id} value={v.id}>{v.name}</option>);
-                                                    })()}
-                                                </select>
-                                            ) : (
-                                                <span className="text-sm text-alloy-midnight/90">{(data as { _vertical_name?: string | null })?._vertical_name ?? "—"}</span>
-                                            )}
+                                            <select
+                                                value={String(formData.vertical_id ?? "")}
+                                                onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))}
+                                                onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }}
+                                                disabled={!canMutate}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            >
+                                                <option value="">— None —</option>
+                                                {(() => {
+                                                    const vid = String(formData.vertical_id ?? "");
+                                                    const opts = [...oppVerticalOptions];
+                                                    if (vid && !opts.some((o) => o.id === vid)) {
+                                                        const nm = String((data as { _vertical_name?: string | null })?._vertical_name ?? "").trim();
+                                                        opts.push({ id: vid, name: nm || `${vid.slice(0, 8)}…` });
+                                                    }
+                                                    return opts.map((v) => <option key={v.id} value={v.id}>{v.name}</option>);
+                                                })()}
+                                            </select>
                                         </div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Estimated price (cents)</label><input type="number" value={formData.estimated_price_cents != null && formData.estimated_price_cents !== "" ? String(formData.estimated_price_cents) : ""} onChange={(e) => setFormData((f) => ({ ...f, estimated_price_cents: e.target.value === "" ? null : parseInt(e.target.value, 10) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : formData.quote_total !== "" && formData.quote_total != null ? String(formData.quote_total) : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote subtotal</label><input type="number" step="0.01" value={formData.quote_subtotal != null && formData.quote_subtotal !== "" ? String(formData.quote_subtotal) : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_subtotal: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Discount amount</label><input type="number" step="0.01" value={formData.discount_amount != null && formData.discount_amount !== "" ? String(formData.discount_amount) : ""} onChange={(e) => setFormData((f) => ({ ...f, discount_amount: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Discount code</label><input value={String(formData.discount_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, discount_code: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                            {statusDefsLoading ? null : (
+                                        {statusDefsLoading ? null : (
                                             <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                         )}
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Notes</label><textarea value={String(formData.notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} rows={2} /></div>
-                                            </div>
+                                    </div>
                                     <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                     <DrawerLinkWithName label="Person" id={data?._primary_person_id != null ? String(data._primary_person_id) : null} type="persons" displayName={String(data?._primary_person_name ?? data?._contact_name ?? "")} />
                                     <DrawerLinkWithName label="Contact (compatibility)" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={String(data?._contact_name ?? "")} />
