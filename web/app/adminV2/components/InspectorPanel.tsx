@@ -9,6 +9,8 @@ import {
   MOCK_COMMAND_CENTER_SUGGESTIONS,
   MOCK_SYSTEM_ACTION_GROUPS,
 } from "./inspector/mockCommandCenter";
+import { MOCK_DEPARTMENT_ACTIONS } from "./canvas/mockDepartmentActions";
+import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 
 const RAIL_INNER_MAX = 272;
@@ -90,7 +92,45 @@ function SystemActionsBlock() {
   );
 }
 
-function CommandCenterPanel() {
+function NextStepBlock({ departmentName, nextBestAction }: { departmentName: string; nextBestAction: string }) {
+  return (
+    <div
+      style={{
+        marginBottom: SECTION_GAP,
+        padding: "14px 16px",
+        borderRadius: 10,
+        border: `1px solid ${derived.inspectorCommandHairline}`,
+        backgroundColor: derived.inspectorCardQuiet,
+        borderLeft: `3px solid ${brand.primary}`,
+        boxShadow: derived.cardShadow,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: brand.primary,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          marginBottom: 6,
+        }}
+      >
+        Next step · {departmentName}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: neutral.textPrimary, lineHeight: 1.4 }}>
+        {nextBestAction}
+      </div>
+    </div>
+  );
+}
+
+function CommandCenterPanel({ selectedNodeId }: { selectedNodeId: string | null }) {
+  const selectedDept = selectedNodeId
+    ? MOCK_DEPARTMENTS.find((d) => d.id === selectedNodeId)
+    : null;
+  const nextStepConfig = selectedDept ? MOCK_DEPARTMENT_ACTIONS[selectedDept.key] : null;
+  const showNextStep = nextStepConfig?.nextBestAction != null;
+
   return (
     <div
       style={{
@@ -101,6 +141,12 @@ function CommandCenterPanel() {
         boxSizing: "border-box",
       }}
     >
+      {showNextStep && selectedDept && (
+        <NextStepBlock
+          departmentName={selectedDept.name}
+          nextBestAction={nextStepConfig!.nextBestAction}
+        />
+      )}
       <header style={{ marginBottom: SECTION_GAP + 4, textAlign: "left" }}>
         <div
           style={{
@@ -387,7 +433,7 @@ export default function InspectorPanel({
         zIndex: 1,
       }}
     >
-      {showCommandCenter && <CommandCenterPanel />}
+      {showCommandCenter && <CommandCenterPanel selectedNodeId={selectedNodeId} />}
       {showDepartmentDetail && resolvedKey && <DepartmentInspector departmentKey={resolvedKey} />}
     </aside>
   );

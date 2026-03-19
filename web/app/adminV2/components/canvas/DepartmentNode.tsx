@@ -8,6 +8,7 @@ import {
   COMPANY_GRID_DEPT_WIDTH,
   COMPANY_GRID_DEPT_HEIGHT,
 } from "./canvasLayout";
+import type { QuickAction } from "./mockDepartmentActions";
 
 export type DepartmentNodeData = {
   name: string;
@@ -24,6 +25,12 @@ export type DepartmentNodeData = {
   alertCount: number;
   zoomingOut?: boolean;
   activating?: boolean;
+  /** Mock: quick actions shown on hover/selection */
+  quickActions?: QuickAction[];
+  /** Mock: next step when this department is selected */
+  nextBestAction?: string;
+  /** Mock: highlight as priority on company canvas */
+  isPriority?: boolean;
 };
 
 const HEALTH_LABELS: Record<DepartmentNodeData["health"], string> = {
@@ -46,15 +53,20 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
   const fill = getDepartmentColor(data.departmentKey);
   const zoomingOut = data.zoomingOut ?? false;
   const activating = data.activating ?? false;
+  const quickActions = data.quickActions ?? [];
+  const nextBestAction = data.nextBestAction;
+  const isPriority = data.isPriority ?? false;
+  const showNextStep = selected && nextBestAction;
 
   return (
     <div
-      className="adminv2-dept-node-fixed"
+      className={`adminv2-dept-node-fixed ${selected ? "adminv2-dept-selected" : ""} ${isPriority ? "adminv2-dept-priority" : ""}`}
       style={{
         position: "relative",
         width: W,
         height: H,
         flexShrink: 0,
+        cursor: "pointer",
       }}
     >
       <Handle type="target" position={Position.Top} />
@@ -237,21 +249,41 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
             paddingTop: 4,
           }}
         >
-          <span
-            style={{
-              fontSize: 36,
-              fontWeight: 600,
-              color: HEALTH_COLOR[data.health],
-              letterSpacing: "-0.02em",
-              lineHeight: 1.05,
-              textTransform: "uppercase",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              minWidth: 0,
-            }}
-          >
-            {HEALTH_LABELS[data.health]}
+          <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: 36,
+                fontWeight: 600,
+                color: HEALTH_COLOR[data.health],
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                textTransform: "uppercase",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+              }}
+            >
+              {HEALTH_LABELS[data.health]}
+            </span>
+            {data.health !== "good" && (
+              <span
+                className="adminv2-dept-status-chip"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  backgroundColor: data.health === "critical" ? semantic.warning : "rgba(245, 158, 11, 0.18)",
+                  color: data.health === "critical" ? neutral.surface : semantic.warning,
+                  flexShrink: 0,
+                }}
+              >
+                Action needed
+              </span>
+            )}
           </span>
           {data.alertCount > 0 ? (
             <span
@@ -289,6 +321,36 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
             </span>
           )}
         </div>
+        {quickActions.length > 0 && (
+          <div className="adminv2-dept-actions-row" aria-hidden>
+            {quickActions.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className="adminv2-dept-quick-action"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  border: `1px solid ${derived.border}`,
+                  color: brand.primary,
+                  backgroundColor: neutral.surface,
+                }}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {showNextStep && (
+          <div
+            className="adminv2-dept-next-step"
+            style={{
+              borderTop: `1px solid ${derived.border}`,
+              color: semantic.info,
+            }}
+          >
+            {nextBestAction}
+          </div>
+        )}
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>

@@ -2,8 +2,8 @@
  * Maps field_definitions.field_type → field_values typed columns.
  * Clears sibling columns on write so one source column is authoritative.
  */
+/** field_values table has only typed columns (no legacy value column). */
 export type FieldValueRow = {
-  value?: string | null;
   value_text?: string | null;
   value_number?: number | null;
   value_boolean?: boolean | null;
@@ -11,8 +11,8 @@ export type FieldValueRow = {
   value_json?: unknown | null;
 };
 
+/** Typed columns only; used for insert/update. Do not add legacy value. */
 const EMPTY_TYPED: Record<string, unknown> = {
-  value: null,
   value_text: null,
   value_number: null,
   value_boolean: null,
@@ -75,7 +75,6 @@ export function displayFromFieldValueRow(
     return String(row.value_date).slice(0, t === "date" ? 10 : 16);
   }
   if (row.value_text != null && row.value_text !== "") return row.value_text;
-  if (row.value != null && row.value !== "") return row.value;
   if (row.value_json != null) {
     try {
       return typeof row.value_json === "string" ? row.value_json : JSON.stringify(row.value_json);

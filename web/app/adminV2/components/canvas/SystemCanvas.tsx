@@ -29,6 +29,7 @@ import {
   COMPANY_DEPT_NODE_HEIGHT,
 } from "./canvasLayout";
 import { MOCK_DEPARTMENTS } from "./mockDepartments";
+import { MOCK_DEPARTMENT_ACTIONS } from "./mockDepartmentActions";
 import { getManagersForDepartment } from "./mockManagers";
 import { getManagerCardStats } from "./mockManagerStats";
 import type { DepartmentNodeData } from "./DepartmentNode";
@@ -382,32 +383,38 @@ export default function SystemCanvas({
   const departmentNodes: Node<DepartmentNodeData & { zoomingOut?: boolean; activating?: boolean }>[] =
     useMemo(
       () =>
-        MOCK_DEPARTMENTS.map((d, i) => ({
-          id: d.id,
-          type: "department",
-          position: getCompanyDepartmentDisplayPosition(i),
-          data: {
-            name: d.name,
-            departmentKey: d.key,
-            primaryKpi: d.primaryKpi,
-            primaryValue: d.primaryValue,
-            secondaryKpi: d.secondaryKpi,
-            secondaryValue: d.secondaryValue,
-            compact1Label: d.compact1Label,
-            compact1Value: d.compact1Value,
-            compact2Label: d.compact2Label,
-            compact2Value: d.compact2Value,
-            health: d.health,
-            alertCount: d.alertCount,
-            zoomingOut:
-              activatingDepartmentId != null && activatingDepartmentId !== d.id,
-            activating: activatingDepartmentId === d.id,
-          },
-          draggable: !activatingDepartmentId,
-          selected: selectedNodeId === d.id,
-          zIndex: 60,
-          className: "adminv2-rf-foreground",
-        })),
+        MOCK_DEPARTMENTS.map((d, i) => {
+          const actions = MOCK_DEPARTMENT_ACTIONS[d.key];
+          return {
+            id: d.id,
+            type: "department",
+            position: getCompanyDepartmentDisplayPosition(i),
+            data: {
+              name: d.name,
+              departmentKey: d.key,
+              primaryKpi: d.primaryKpi,
+              primaryValue: d.primaryValue,
+              secondaryKpi: d.secondaryKpi,
+              secondaryValue: d.secondaryValue,
+              compact1Label: d.compact1Label,
+              compact1Value: d.compact1Value,
+              compact2Label: d.compact2Label,
+              compact2Value: d.compact2Value,
+              health: d.health,
+              alertCount: d.alertCount,
+              zoomingOut:
+                activatingDepartmentId != null && activatingDepartmentId !== d.id,
+              activating: activatingDepartmentId === d.id,
+              quickActions: actions?.quickActions,
+              nextBestAction: actions?.nextBestAction,
+              isPriority: actions?.isPriority,
+            },
+            draggable: !activatingDepartmentId,
+            selected: selectedNodeId === d.id,
+            zIndex: 60,
+            className: "adminv2-rf-foreground",
+          };
+        }),
       [selectedNodeId, activatingDepartmentId]
     );
 
