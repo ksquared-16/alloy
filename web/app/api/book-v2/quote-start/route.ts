@@ -74,6 +74,33 @@ function optionToApiKey(option: CleaningFrequencyOption): "one_time" | "weekly" 
   return "one_time";
 }
 
+/** Normalize request keys: sqft/frequency variants -> square_footage, cleaning_frequency. Leaves other keys as-is. */
+function normalizeQuoteStartBody(raw: Record<string, unknown>): QuoteStartBody {
+  const square_footage =
+    raw.square_footage != null
+      ? (raw.square_footage as string | number)
+      : raw.sqft != null
+        ? (raw.sqft as string | number)
+        : raw.sqft_key != null
+          ? (raw.sqft_key as string)
+          : undefined;
+  const cleaning_frequency =
+    raw.cleaning_frequency != null && raw.cleaning_frequency !== ""
+      ? (raw.cleaning_frequency as "one_time" | "weekly" | "biweekly" | "monthly")
+      : raw.frequency != null && raw.frequency !== ""
+        ? (raw.frequency as "one_time" | "weekly" | "biweekly" | "monthly")
+        : raw.cleaning_freq != null && raw.cleaning_freq !== ""
+          ? (raw.cleaning_freq as "one_time" | "weekly" | "biweekly" | "monthly")
+          : undefined;
+  return {
+    ...raw,
+    square_footage: square_footage as string | number | undefined,
+    cleaning_frequency: cleaning_frequency ?? (raw.cleaning_frequency as "one_time" | "weekly" | "biweekly" | "monthly" | undefined),
+    bedrooms: (raw.bedrooms ?? raw.beds) as number | undefined,
+    bathrooms: (raw.bathrooms ?? raw.baths) as number | undefined,
+  } as QuoteStartBody;
+}
+
 /**
  * Compute initial quote using Supabase RPC (admin client).
  */
@@ -226,10 +253,24 @@ async function getFieldDefinitionMeta(
     .eq("is_active", true)
     .limit(1);
   if (error) {
-    console.error("[QUOTE_START] field_definitions lookup failed:", fieldKey, entityType, error.message);
+    console.error("[QUOTE_START_FIELD_VALUES] field_definitions lookup failed", {
+      org_id: orgId,
+      entity_type: entityType,
+      field_key: fieldKey,
+      error: error.message,
+    });
     return null;
   }
   const row = (data as FieldDefMeta[] | null)?.[0];
+  if (row) {
+    console.log("[QUOTE_START_FIELD_VALUES] field definition resolved", {
+      org_id: orgId,
+      entity_type: entityType,
+      field_key: fieldKey,
+      field_definition_id: row.id,
+      field_type: row.field_type,
+    });
+  }
   return row ?? null;
 }
 
@@ -243,6 +284,14 @@ async function upsertTypedFieldValue(
 ): Promise<void> {
   const typed = payloadFromFieldType(def.field_type, rawDisplay);
   const now = new Date().toISOString();
+  console.log("[QUOTE_START_FIELD_VALUES] typed payload", {
+    entity_type: entityType,
+    entity_id: entityId,
+    field_definition_id: def.id,
+    field_type: def.field_type,
+    rawDisplay: rawDisplay?.slice(0, 80),
+    typed,
+  });
   const { data: existing } = await supabase
     .from("field_values")
     .select("id")
@@ -251,18 +300,40 @@ async function upsertTypedFieldValue(
     .eq("field_definition_id", def.id)
     .maybeSingle();
   if (existing?.id) {
-    await supabase
+    const { error: updateErr } = await supabase
       .from("field_values")
       .update({ ...typed, updated_at: now })
       .eq("id", (existing as { id: string }).id);
+    if (updateErr) {
+      console.error("[QUOTE_START_FIELD_VALUES] update failed", {
+        entity_type: entityType,
+        entity_id: entityId,
+        field_definition_id: def.id,
+        error: updateErr.message,
+        code: updateErr.code,
+      });
+    } else {
+      console.log("[QUOTE_START_FIELD_VALUES] update ok", { entity_type: entityType, entity_id: entityId, field_definition_id: def.id });
+    }
   } else {
-    await supabase.from("field_values").insert({
+    const { error: insertErr } = await supabase.from("field_values").insert({
       org_id: orgId,
       entity_type: entityType,
       entity_id: entityId,
       field_definition_id: def.id,
       ...typed,
     });
+    if (insertErr) {
+      console.error("[QUOTE_START_FIELD_VALUES] insert failed", {
+        entity_type: entityType,
+        entity_id: entityId,
+        field_definition_id: def.id,
+        error: insertErr.message,
+        code: insertErr.code,
+      });
+    } else {
+      console.log("[QUOTE_START_FIELD_VALUES] insert ok", { entity_type: entityType, entity_id: entityId, field_definition_id: def.id });
+    }
   }
 }
 
@@ -374,7 +445,9 @@ export async function POST(request: NextRequest) {
     }
     console.log("[QUOTE_START] using_service_role=true");
 
-    const body = (await request.json()) as QuoteStartBody;
+    const rawBody = (await request.json()) as Record<string, unknown>;
+    // Normalize request keys so backend always sees square_footage + cleaning_frequency
+    const body = normalizeQuoteStartBody(rawBody);
     const email = body.email != null ? normalizeEmail(body.email) : null;
     const phone = body.phone != null ? normalizePhone(body.phone) : null;
 
@@ -443,6 +516,10 @@ export async function POST(request: NextRequest) {
     const locationSqftDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "square_footage");
     if (!locationSqftDef) {
       console.error(
+        "[QUOTE_START_FIELD_VALUES] field definition not found: org_id=%s entity_type=location field_key=square_footage",
+        orgIdForWrites
+      );
+      console.error(
         "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=location + field_key=square_footage. Cannot persist square_footage to field_values."
       );
       return NextResponse.json(
@@ -461,6 +538,10 @@ export async function POST(request: NextRequest) {
       "cleaning_frequency"
     );
     if (!opportunityFreqDef) {
+      console.error(
+        "[QUOTE_START_FIELD_VALUES] field definition not found: org_id=%s entity_type=opportunity field_key=cleaning_frequency",
+        orgIdForWrites
+      );
       console.error(
         "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=opportunity + field_key=cleaning_frequency."
       );
@@ -674,6 +755,21 @@ export async function POST(request: NextRequest) {
     const squareFootageFieldValue = serializeSquareFootageForFieldValue(
       body.square_footage ?? square_footage_raw
     );
+
+    console.log("[QUOTE_START_FIELD_VALUES] normalized quote input", {
+      square_footage: body.square_footage ?? square_footage_raw,
+      squareFootageFieldValue,
+      cleaning_frequency: body.cleaning_frequency,
+      cleaningFrequencyValue,
+      promo_campaign: body.promo_campaign ?? null,
+      locationId,
+      opportunityId,
+    });
+    console.log("[QUOTE_START_FIELD_VALUES] resolved field definition ids", {
+      location_square_footage: locationSqftDef?.id ?? null,
+      opportunity_cleaning_frequency: opportunityFreqDef?.id ?? null,
+      opportunity_promo_campaign: opportunityPromoDef?.id ?? null,
+    });
 
     await upsertTypedFieldValue(
       supabase,
