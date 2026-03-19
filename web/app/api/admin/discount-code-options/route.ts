@@ -4,6 +4,10 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 
 /** GET: active discount codes for dropdown. Auth: getAdminContext (admin/ops).
  * Query: vertical_slug (optional) - filter by applies_to_vertical_slug null or match.
+ *
+ * Runtime / jobs still reference public.discount_codes.id (discount_code_id). Admin discount
+ * programs live in discount_programs*; new programs created there do not appear here until
+ * booking/job flows are migrated to programs (or a compatibility sync is added).
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();

@@ -1,15 +1,21 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAdmin } from "@/lib/adminAuth";
-import { NextRequest, NextResponse } from "next/server";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
+import {
+    deleteDiscountProgram,
+    updateDiscountProgram,
+    validateDiscountProgramPayload,
+} from "@/lib/admin/discountProgramAdmin";
 import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
+import { NextRequest, NextResponse } from "next/server";
 
-/** DELETE: hard delete discount code (admin only). Enforces lifecycle eligibility. */
-export async function DELETE(
-    _request: NextRequest,
-    context: { params: Promise<{ id: string }> }
-) {
-    const forbidden = await requireAdmin();
-    if (forbidden) return forbidden;
+/** DELETE: remove discount program and related benefit/qualifier/commitment rows (not legacy discount_codes). */
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -21,40 +27,45 @@ export async function DELETE(
         );
     }
 
-    const supabase = createAdminClient();
-    const { error } = await supabase.from("discount_codes").delete().eq("id", id);
-    if (error) {
-        const msg = error.code === "23503" ? "Cannot delete: discount code is in use." : error.message;
-        return NextResponse.json({ error: msg }, { status: 400 });
+    try {
+        const supabase = createAdminClient();
+        await deleteDiscountProgram(supabase, id);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Delete failed";
+        return NextResponse.json({ error: message }, { status: 400 });
     }
     return NextResponse.json({ ok: true });
 }
 
-export async function PATCH(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const forbidden = await requireAdmin();
-  if (forbidden) return forbidden;
-  try {
-    const { id } = await context.params;
-    const supabase = createAdminClient();
-    const body = await request.json();
-
-    const { data, error } = await supabase
-      .from("discount_codes")
-      .update(body)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+/** PATCH: update program + upsert primary benefit, vertical qualifier, commitment rule when applicable. */
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    return NextResponse.json(data);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
+    let body: unknown;
+    try {
+        body = await request.json();
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const parsed = validateDiscountProgramPayload(body, "update");
+    if (!parsed.ok) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+
+    try {
+        const supabase = createAdminClient();
+        const row = await updateDiscountProgram(supabase, id, parsed.value);
+        return NextResponse.json(row);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Update failed";
+        return NextResponse.json({ error: message }, { status: 400 });
+    }
+}

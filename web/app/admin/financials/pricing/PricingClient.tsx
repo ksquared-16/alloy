@@ -468,7 +468,7 @@ export default function PricingClient() {
                     ["pricing-dimensions", "Pricing Dimensions"],
                     ["dimension-values", "Dimension Values"],
                     ["add-ons", "Add-Ons"],
-                    ["discount-codes", "Discount Codes"],
+                    ["discount-codes", "Discount programs"],
                     ["legacy", "Legacy"],
                 ] as const).map(([tab, label]) => (
                     <button

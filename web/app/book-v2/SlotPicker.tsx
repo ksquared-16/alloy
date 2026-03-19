@@ -311,7 +311,7 @@ export default function SlotPicker({
         return (
             <div className="flex items-center justify-center py-12">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <div className="w-12 h-12 border-4 border-alloy-juniper border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-alloy-midnight/70">Loading available slots...</p>
                 </div>
             </div>
@@ -398,8 +398,8 @@ export default function SlotPicker({
                                         ${cell.disabled
                                             ? "border-transparent bg-alloy-stone/10 text-alloy-midnight/40 cursor-not-allowed"
                                             : selectedDateKey === cell.dateKey
-                                                ? "border-alloy-blue bg-alloy-blue text-white shadow-md"
-                                                : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
+                                                ? "border-alloy-juniper bg-alloy-juniper text-white shadow-md"
+                                                : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-juniper/60 hover:bg-alloy-stone/10"
                                         }
                                     `}
                                     >
@@ -439,7 +439,7 @@ export default function SlotPicker({
                                 <button
                                     type="button"
                                     onClick={onConfirmTime}
-                                    className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm shadow-sm"
+                                    className="w-full lg:w-fit lg:min-w-[200px] px-6 py-2.5 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold rounded-lg text-sm shadow-sm"
                                 >
                                     Confirm time
                                 </button>
@@ -469,8 +469,8 @@ export default function SlotPicker({
                                                         className={`
                                                             w-full lg:w-[180px] lg:max-w-[180px] min-h-[40px] px-3 py-2 rounded-md border-2 text-sm font-medium transition-all text-center
                                                             ${isSelected
-                                                                ? "border-alloy-blue bg-alloy-blue text-white shadow-sm"
-                                                                : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-blue hover:bg-alloy-stone/10"
+                                                                ? "border-alloy-juniper bg-alloy-juniper text-white shadow-sm"
+                                                                : "border-alloy-stone/30 bg-white text-alloy-midnight hover:border-alloy-juniper/60 hover:bg-alloy-stone/10"
                                                             }
                                                         `}
                                                     >

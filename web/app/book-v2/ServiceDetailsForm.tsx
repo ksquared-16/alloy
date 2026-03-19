@@ -114,7 +114,7 @@ export default function ServiceDetailsForm({
                             value={formData.address}
                             onChange={(e) => handleChange("address", e.target.value)}
                             placeholder="123 Main Street"
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
                         />
                     </div>
 
@@ -127,7 +127,7 @@ export default function ServiceDetailsForm({
                             value={formData.city}
                             onChange={(e) => handleChange("city", e.target.value)}
                             placeholder="Los Angeles"
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
                         />
                     </div>
                 </div>
@@ -140,7 +140,7 @@ export default function ServiceDetailsForm({
                     <select
                         value={formData.home_type}
                         onChange={(e) => handleChange("home_type", e.target.value)}
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent bg-white"
+                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                     >
                         <option value="">Select home type</option>
                         <option value="Single-Family Home">Single-Family Home</option>
@@ -160,7 +160,7 @@ export default function ServiceDetailsForm({
                         <select
                             value={formData.bedrooms}
                             onChange={(e) => handleChange("bedrooms", e.target.value)}
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent bg-white"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                         >
                             <option value="">Select</option>
                             <option value="1">1</option>
@@ -178,7 +178,7 @@ export default function ServiceDetailsForm({
                         <select
                             value={formData.bathrooms}
                             onChange={(e) => handleChange("bathrooms", e.target.value)}
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent bg-white"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                         >
                             <option value="">Select</option>
                             <option value="1">1</option>
@@ -197,7 +197,7 @@ export default function ServiceDetailsForm({
                     <select
                         value={formData.access_method}
                         onChange={(e) => handleAccessMethodChange(e.target.value as ServiceDetails["access_method"])}
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent bg-white"
+                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                     >
                         <option value="home">I will be home</option>
                         <option value="code">Door/Garage Code</option>
@@ -223,7 +223,7 @@ export default function ServiceDetailsForm({
                                         : "Provide building access instructions"
                             }
                             rows={3}
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent resize-none"
+                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent resize-none"
                         />
                     </div>
                 )}
@@ -238,7 +238,7 @@ export default function ServiceDetailsForm({
                         onChange={(e) => handleChange("additional_notes", e.target.value)}
                         placeholder="Special instructions, parking info, pet details, etc."
                         rows={3}
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent resize-none"
+                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent resize-none"
                     />
                 </div>
             </div>

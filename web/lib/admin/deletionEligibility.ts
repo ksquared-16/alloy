@@ -145,21 +145,42 @@ const evalAddons: Evaluator = async (id) => {
 };
 
 const evalDiscounts: Evaluator = async (id) => {
-    const redemptions = await countRef("discount_redemptions", "discount_code_id", id);
-    if (redemptions > 0)
+    const supabase = createAdminClient();
+    const { data: program } = await supabase
+        .from("discount_programs")
+        .select("id, legacy_discount_code_id")
+        .eq("id", id)
+        .maybeSingle();
+
+    if (!program) {
         return {
             allowed: false,
-            reason: "Cannot delete: discount code has redemptions. Deactivate instead.",
-            recommended_action: "deactivate",
+            reason: "Discount program not found (admin deletes use discount program id).",
+            recommended_action: "blocked",
         };
-    const jobs = await countRef("jobs", "discount_code_id", id);
-    if (jobs > 0)
-        return {
-            allowed: false,
-            reason: "Cannot delete: referenced by jobs. Deactivate instead.",
-            recommended_action: "deactivate",
-        };
-    return { allowed: true, reason: "Not referenced; safe to delete.", recommended_action: "delete" };
+    }
+
+    const legacyId = (program as { legacy_discount_code_id?: string | null }).legacy_discount_code_id ?? null;
+    const codeIdForRefs = legacyId;
+
+    if (codeIdForRefs) {
+        const redemptions = await countRef("discount_redemptions", "discount_code_id", codeIdForRefs);
+        if (redemptions > 0)
+            return {
+                allowed: false,
+                reason: "Cannot delete: linked legacy code has redemptions. Deactivate the program instead.",
+                recommended_action: "deactivate",
+            };
+        const jobs = await countRef("jobs", "discount_code_id", codeIdForRefs);
+        if (jobs > 0)
+            return {
+                allowed: false,
+                reason: "Cannot delete: linked legacy code is referenced by jobs. Deactivate the program instead.",
+                recommended_action: "deactivate",
+            };
+    }
+
+    return { allowed: true, reason: "Not referenced by legacy job/redemption FKs; safe to delete program row.", recommended_action: "delete" };
 };
 
 const evalEntityLabels: Evaluator = async () => {

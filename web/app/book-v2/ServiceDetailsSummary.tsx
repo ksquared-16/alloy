@@ -77,7 +77,7 @@ export default function ServiceDetailsSummary({
                             {details.additional_notes.length > maxNotesLength && (
                                 <button
                                     onClick={() => setShowFullNotes(!showFullNotes)}
-                                    className="text-xs text-alloy-blue hover:underline mt-1"
+                                    className="text-xs text-alloy-juniper hover:underline mt-1"
                                 >
                                     {showFullNotes ? "Show less" : "Show more"}
                                 </button>
@@ -89,7 +89,7 @@ export default function ServiceDetailsSummary({
 
             <button
                 onClick={onEdit}
-                className="text-sm text-alloy-blue hover:underline font-medium"
+                className="text-sm text-alloy-juniper hover:underline font-medium"
             >
                 Edit details
             </button>

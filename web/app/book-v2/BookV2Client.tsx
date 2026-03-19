@@ -1536,7 +1536,7 @@ export default function BookV2Client() {
     if (rescheduleToken?.trim()) {
         if (rescheduleLoading) {
             return (
-                <div className="min-h-screen py-6 md:py-10">
+                <div className="py-6 md:py-10">
                     <Section className="max-w-7xl">
                         <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
                             <p className="text-alloy-midnight/70">Loading…</p>
@@ -1547,12 +1547,12 @@ export default function BookV2Client() {
         }
         if (rescheduleError) {
             return (
-                <div className="min-h-screen py-6 md:py-10">
+                <div className="py-6 md:py-10">
                     <Section className="max-w-7xl">
                         <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
                             <h2 className="text-xl font-semibold text-alloy-midnight mb-2">Unable to reschedule</h2>
                             <p className="text-alloy-midnight/70 text-sm mb-4">{rescheduleError}</p>
-                            <a href="/" className="text-alloy-blue hover:underline text-sm">Go home</a>
+                            <a href="/" className="text-alloy-juniper hover:underline text-sm font-medium">Go home</a>
                         </div>
                     </Section>
                 </div>
@@ -1563,12 +1563,12 @@ export default function BookV2Client() {
             const endDate = new Date(rescheduleResult.end_at);
             const formatted = startDate.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
             return (
-                <div className="min-h-screen py-6 md:py-10">
+                <div className="py-6 md:py-10">
                     <Section className="max-w-7xl">
                         <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
                             <h2 className="text-xl font-semibold text-alloy-midnight mb-2">Appointment rescheduled</h2>
                             <p className="text-alloy-midnight/70 text-sm mb-4">Your appointment is now scheduled for {formatted}.</p>
-                            <a href="/" className="text-alloy-blue hover:underline text-sm">Go home</a>
+                            <a href="/" className="text-alloy-juniper hover:underline text-sm font-medium">Go home</a>
                         </div>
                     </Section>
                 </div>
@@ -1600,7 +1600,7 @@ export default function BookV2Client() {
                     .finally(() => setRescheduleSubmitting(false));
             };
             return (
-                <div className="min-h-screen py-6 md:py-10">
+                <div className="py-6 md:py-10">
                     <Section className="max-w-7xl">
                         <div className="max-w-4xl mx-auto space-y-6">
                             <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6">
@@ -1625,7 +1625,7 @@ export default function BookV2Client() {
     }
 
     return (
-        <div className="min-h-screen py-6 md:py-10">
+        <div className="py-6 md:py-10">
             <Section className="max-w-7xl">
                 {/* Step 1: Get a quote in 30 seconds (no quote yet) */}
                 {currentStep === "quote_start" && !debug && (
@@ -1645,7 +1645,7 @@ export default function BookV2Client() {
                                         value={quoteStartForm.first_name}
                                         onChange={(e) => setQuoteStartForm((f) => ({ ...f, first_name: e.target.value }))}
                                         placeholder="Jane"
-                                        className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                        className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                         autoComplete="given-name"
                                     />
                                 </div>
@@ -1656,7 +1656,7 @@ export default function BookV2Client() {
                                         value={quoteStartForm.last_name}
                                         onChange={(e) => setQuoteStartForm((f) => ({ ...f, last_name: e.target.value }))}
                                         placeholder="Doe"
-                                        className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                        className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                         autoComplete="family-name"
                                     />
                                 </div>
@@ -1668,7 +1668,7 @@ export default function BookV2Client() {
                                     value={quoteStartForm.zip}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, zip: e.target.value }))}
                                     placeholder="e.g. 97702"
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                     maxLength={10}
                                 />
                             </div>
@@ -1677,7 +1677,7 @@ export default function BookV2Client() {
                                 <select
                                     value={quoteStartForm.square_footage}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, square_footage: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
                                     <option value="">Select</option>
                                     {SQUARE_FOOTAGE_OPTIONS.map((opt) => (
@@ -1692,7 +1692,7 @@ export default function BookV2Client() {
                                 <select
                                     value={quoteStartForm.cleaning_frequency}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly" }))}
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
                                     <option value="one_time">One-time</option>
                                     <option value="weekly">Weekly</option>
@@ -1707,7 +1707,7 @@ export default function BookV2Client() {
                                     value={quoteStartForm.email}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, email: e.target.value }))}
                                     placeholder="you@example.com"
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 />
                             </div>
                             <div>
@@ -1719,14 +1719,14 @@ export default function BookV2Client() {
                                     value={quoteStartForm.phone}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, phone: e.target.value }))}
                                     placeholder="(541) 555-0123"
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 />
                             </div>
                             {quoteStartError && <p className="text-sm text-red-600">{quoteStartError}</p>}
                             <button
                                 type="submit"
                                 disabled={quoteStartSubmitting}
-                                className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50"
+                                className="w-full home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
                             >
                                 {quoteStartSubmitting ? "Saving…" : "Get my quote"}
                             </button>
@@ -1778,7 +1778,7 @@ export default function BookV2Client() {
                             )}
                             <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1">
                                 <span className="text-alloy-midnight font-semibold">Total (first visit)</span>
-                                <span className="font-bold text-alloy-blue">
+                                <span className="font-bold text-alloy-juniper">
                                     ${(quote.estimated_price ?? quote.first_clean_price ?? 0).toFixed(2)}
                                 </span>
                             </div>
@@ -1806,7 +1806,7 @@ export default function BookV2Client() {
                                         disabled={refineLoading}
                                         className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-normal break-words text-left ${
                                             refineFrequency === freq
-                                                ? "bg-alloy-blue text-white"
+                                                ? "bg-alloy-juniper text-white shadow-sm"
                                                 : "bg-alloy-stone/20 text-alloy-midnight hover:bg-alloy-stone/30"
                                         } disabled:opacity-50`}
                                     >
@@ -1832,7 +1832,7 @@ export default function BookV2Client() {
                                                 checked={selectedAddonKeys.includes(addonKey)}
                                                 onChange={() => handleRefineAddOnToggle(addonKey)}
                                                 disabled={refineLoading}
-                                                className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                                                className="rounded border-alloy-stone/50 text-alloy-juniper focus:ring-alloy-juniper"
                                             />
                                             <span className="text-sm text-alloy-midnight">
                                                 {dbAddon?.label ?? id}
@@ -1848,7 +1848,7 @@ export default function BookV2Client() {
                         <button
                             type="button"
                             onClick={handleRefineContinue}
-                            className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                            className="w-full home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-6 py-3 rounded-lg"
                         >
                             Confirm Quote
                         </button>
@@ -1866,7 +1866,7 @@ export default function BookV2Client() {
                         </p>
                         <a
                             href="/book-v2"
-                            className="inline-block bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                            className="inline-block home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-6 py-3 rounded-lg"
                         >
                             Get a Quote
                         </a>
@@ -1927,7 +1927,7 @@ export default function BookV2Client() {
                                                         </span>
                                                     </div>
                                                 )}
-                                                <p className="text-2xl font-bold text-alloy-blue leading-tight">
+                                                <p className="text-2xl font-bold text-alloy-juniper leading-tight">
                                                     ${displayPrice.toFixed(2)}
                                                 </p>
                                             </div>
@@ -1974,13 +1974,13 @@ export default function BookV2Client() {
                                                         }
                                                     }}
                                                     placeholder="Enter code"
-                                                    className="flex-1 text-sm px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                                                    className="flex-1 text-sm px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
                                                     disabled={isValidatingDiscount}
                                                 />
                                                 <button
                                                     onClick={handleValidateDiscount}
                                                     disabled={isValidatingDiscount || !discountCode.trim()}
-                                                    className="px-4 py-2 bg-alloy-blue text-white text-sm font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="px-4 py-2 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {isValidatingDiscount ? "..." : "Apply"}
                                                 </button>
@@ -2058,7 +2058,7 @@ export default function BookV2Client() {
                                     <button
                                         type="button"
                                         onClick={handleEditQuote}
-                                        className="text-xs text-alloy-midnight/60 hover:text-alloy-blue hover:underline"
+                                        className="text-xs text-alloy-midnight/60 hover:text-alloy-juniper hover:underline"
                                     >
                                         Change quote
                                     </button>
@@ -2073,7 +2073,7 @@ export default function BookV2Client() {
                                     slotConfirmed 
                                         ? "bg-alloy-juniper text-white" 
                                         : currentStep === "slot_selection"
-                                            ? "bg-alloy-blue text-white"
+                                            ? "bg-alloy-juniper text-white shadow-sm"
                                             : "bg-alloy-stone/30 text-alloy-midnight/60"
                                 }`}>
                                     {slotConfirmed ? "✓" : "1"}
@@ -2111,7 +2111,7 @@ export default function BookV2Client() {
                                     </p>
                                     <button
                                         onClick={handleChangeSlot}
-                                        className="text-xs text-alloy-blue hover:underline mt-2"
+                                        className="text-xs text-alloy-juniper hover:underline mt-2"
                                     >
                                         Change time slot
                                     </button>
@@ -2127,7 +2127,7 @@ export default function BookV2Client() {
                                         serviceDetailsConfirmed 
                                             ? "bg-alloy-juniper text-white" 
                                             : currentStep === "service_details" || currentStep === "payment"
-                                                ? "bg-alloy-blue text-white"
+                                                ? "bg-alloy-juniper text-white shadow-sm"
                                                 : "bg-alloy-stone/30 text-alloy-midnight/60"
                                     }`}>
                                         {serviceDetailsConfirmed ? "✓" : "2"}
@@ -2166,7 +2166,7 @@ export default function BookV2Client() {
                                             <div className="mt-6 pt-6 border-t border-alloy-stone/20">
                                                 <button
                                                     onClick={handleConfirmServiceDetails}
-                                                    className="w-full sm:w-auto sm:px-6 px-4 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm"
+                                                    className="w-full sm:w-auto sm:px-6 px-4 py-2.5 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold rounded-lg text-sm"
                                                 >
                                                     Confirm Details
                                                 </button>
@@ -2210,7 +2210,7 @@ export default function BookV2Client() {
                                                 value={paymentIdentityEmail}
                                                 onChange={(e) => { setPaymentIdentityEmail(e.target.value); setPaymentIdentityError(null); }}
                                                 placeholder="you@example.com"
-                                                className="w-full px-3 py-2 border border-alloy-stone/40 rounded-lg text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:outline-none focus:ring-2 focus:ring-alloy-blue/50"
+                                                className="w-full px-3 py-2 border border-alloy-stone/40 rounded-lg text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70/50"
                                                 autoComplete="email"
                                             />
                                         </div>
@@ -2223,7 +2223,7 @@ export default function BookV2Client() {
                                                 value={paymentIdentityPhone}
                                                 onChange={(e) => { setPaymentIdentityPhone(e.target.value); setPaymentIdentityError(null); }}
                                                 placeholder="+1 555 123 4567"
-                                                className="w-full px-3 py-2 border border-alloy-stone/40 rounded-lg text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:outline-none focus:ring-2 focus:ring-alloy-blue/50"
+                                                className="w-full px-3 py-2 border border-alloy-stone/40 rounded-lg text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70/50"
                                                 autoComplete="tel"
                                             />
                                         </div>
@@ -2231,7 +2231,7 @@ export default function BookV2Client() {
                                         <button
                                             type="submit"
                                             disabled={paymentIdentitySubmitting}
-                                            className="w-full sm:w-auto px-6 py-2.5 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors text-sm disabled:opacity-60"
+                                            className="w-full sm:w-auto px-6 py-2.5 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold rounded-lg text-sm disabled:opacity-60"
                                         >
                                             {paymentIdentitySubmitting ? "Saving…" : "Continue"}
                                         </button>
@@ -2256,7 +2256,7 @@ export default function BookV2Client() {
                                                     This job total
                                                 </p>
                                                 {firstVisitTotal != null ? (
-                                                    <p className="text-xl font-bold text-alloy-blue">
+                                                    <p className="text-xl font-bold text-alloy-juniper">
                                                         ${firstVisitTotal.toFixed(2)}
                                                     </p>
                                                 ) : (
@@ -2293,7 +2293,7 @@ export default function BookV2Client() {
                                             {!stripe || !cardNumber || !cardExpiry || !cardCvc ? (
                                                 <div className="px-4 py-8 border border-alloy-stone/30 rounded-lg bg-alloy-stone/10 flex items-center justify-center">
                                                     <div className="text-center">
-                                                        <div className="w-6 h-6 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                                        <div className="w-6 h-6 border-2 border-alloy-juniper border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                                                         <p className="text-xs text-alloy-midnight/60">Loading payment form...</p>
                                                     </div>
                                                 </div>
@@ -2337,7 +2337,7 @@ export default function BookV2Client() {
                                                             value={postalCode}
                                                             onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, "").slice(0, 5))}
                                                             placeholder="12345"
-                                                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-transparent"
+                                                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
                                                             maxLength={5}
                                                         />
                                                     </div>
@@ -2354,14 +2354,14 @@ export default function BookV2Client() {
                                         <button
                                             type="submit"
                                             disabled={isProcessingPayment || !stripe || !cardNumber || !cardExpiry || !cardCvc || !resolvedEmail || !resolvedPhone}
-                                            className="w-full px-6 py-3 bg-alloy-blue text-white font-semibold rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="w-full px-6 py-3 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {isProcessingPayment ? "Processing..." : "Complete Booking"}
                                         </button>
 
                                         {isProcessingPayment && (
                                             <div className="flex items-center justify-center gap-2 text-xs text-alloy-midnight/60">
-                                                <div className="w-4 h-4 border-2 border-alloy-blue border-t-transparent rounded-full animate-spin"></div>
+                                                <div className="w-4 h-4 border-2 border-alloy-juniper border-t-transparent rounded-full animate-spin"></div>
                                                 <span>Finalizing booking...</span>
                                             </div>
                                         )}
@@ -2414,7 +2414,7 @@ export default function BookV2Client() {
                         )}
                         <a
                             href="/"
-                            className="inline-block bg-alloy-blue text-white font-semibold px-8 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors"
+                            className="inline-block home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-8 py-3 rounded-lg"
                         >
                             Return to Home
                         </a>

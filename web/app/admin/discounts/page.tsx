@@ -1,21 +1,16 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { listDiscountProgramsAdmin } from "@/lib/admin/discountProgramAdmin";
 import DiscountsClient from "./DiscountsClient";
 
 export default async function DiscountsPage() {
   const supabase = createAdminClient();
-
-  const { data: discounts, error } = await supabase
-    .from("discount_codes")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  const { data: discounts, error } = await listDiscountProgramsAdmin(supabase);
 
   if (error) {
-    console.error("Error fetching discounts:", error);
+    console.error("Error fetching discount programs:", error);
   }
 
   return (
     <DiscountsClient initialData={discounts || []} error={error?.message} />
   );
 }
-
