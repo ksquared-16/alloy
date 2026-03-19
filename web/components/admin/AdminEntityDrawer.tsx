@@ -2852,16 +2852,19 @@ export default function AdminEntityDrawer() {
                                 <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
                             ) : (() => {
                                 const d = opportunityRelatedData;
-                                const opp = data as { customer_id?: string | null; _customer_name?: string | null; primary_person_id?: string | null; primary_contact_id?: string | null; _primary_person_name?: string | null; _primary_contact_name?: string | null; _contact_name?: string | null } | null | undefined;
+                                const opp = data as { customer_id?: string | null; _customer_name?: string | null; primary_person_id?: string | null; primary_contact_id?: string | null; location_id?: string | null; _location_id?: string | null; _location_name?: string | null; _primary_person_name?: string | null; _primary_contact_name?: string | null; _contact_name?: string | null } | null | undefined;
                                 const personItem = opp?.primary_person_id ? [{ id: opp.primary_person_id, entityType: "persons" as const, label: (opp._primary_person_name as string)?.trim() || "Person", meta: undefined }] : [];
                                 const customerItem = opp?.customer_id ? [{ id: opp.customer_id, entityType: "customers" as const, label: (opp._customer_name as string)?.trim() || customerSingular, meta: undefined }] : [];
                                 const contactItem = opp?.primary_contact_id ? [{ id: opp.primary_contact_id, entityType: "contacts" as const, label: (opp._primary_contact_name ?? opp._contact_name as string)?.trim() || contactSingular, meta: undefined }] : [];
+                                const locationId = (opp?.location_id ?? opp?._location_id) as string | null | undefined;
+                                const locationItem = locationId ? [{ id: locationId, entityType: "locations" as const, label: (opp?._location_name as string)?.trim() || "Location", meta: undefined }] : [];
                                 const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
                                 const quoteItems = (d?.quotes ?? []).map((q) => ({ id: q.id, label: "Quote", meta: q.created_at ? formatDate(q.created_at) : undefined }));
                                 const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined }));
                                 type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
                                 const sections: Sec[] = [
                                     { key: "person", title: "Person", defaultExpanded: true, items: personItem },
+                                    { key: "location", title: "Location", defaultExpanded: true, items: locationItem },
                                     { key: "customer", title: customerSingular, defaultExpanded: true, items: customerItem },
                                     { key: "contact", title: "Contact (compatibility)", defaultExpanded: false, items: contactItem },
                                     { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems, addAction: { label: "Add Job", onClick: () => openDrawer({ type: "jobs", id: "new", defaultJobPrefill: { opportunity_id: drawer.id ?? undefined, customer_id: opp?.customer_id ?? undefined, primary_contact_id: opp?.primary_contact_id ?? undefined } }) } },

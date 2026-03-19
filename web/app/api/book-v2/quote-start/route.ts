@@ -423,6 +423,10 @@ export interface QuoteStartBody {
   quote_context?: Record<string, unknown>;
   /** Optional campaign id/slug for opportunity field_values.promo_campaign */
   promo_campaign?: string;
+  /** If true, persist to person custom field person.sms_consent when definition exists */
+  sms_consent?: boolean;
+  /** If true, persist to person custom field person.email_consent when definition exists */
+  email_consent?: boolean;
   home_type?: string;
   bedrooms?: number;
   bathrooms?: number;
@@ -576,6 +580,15 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+    }
+
+    let personSmsConsentDef: FieldDefMeta | null = null;
+    let personEmailConsentDef: FieldDefMeta | null = null;
+    if (body.sms_consent) {
+      personSmsConsentDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "sms_consent");
+    }
+    if (body.email_consent) {
+      personEmailConsentDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "email_consent");
     }
 
     // 3) Compute quote (before location/dedupe so inputs are stable)
@@ -819,6 +832,27 @@ export async function POST(request: NextRequest) {
         opportunityId,
         opportunityPromoDef,
         promoRaw
+      );
+    }
+
+    if (personSmsConsentDef && body.sms_consent) {
+      await upsertTypedFieldValue(
+        supabase,
+        orgIdForWrites,
+        "person",
+        personId,
+        personSmsConsentDef,
+        "true"
+      );
+    }
+    if (personEmailConsentDef && body.email_consent) {
+      await upsertTypedFieldValue(
+        supabase,
+        orgIdForWrites,
+        "person",
+        personId,
+        personEmailConsentDef,
+        "true"
       );
     }
 

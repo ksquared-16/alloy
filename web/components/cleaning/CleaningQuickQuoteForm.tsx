@@ -82,6 +82,7 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
           cleaning_frequency: cleaning_frequency || "one_time",
           email: email?.trim() || undefined,
           phone: phone.trim(),
+          sms_consent: smsConsent,
         }),
       });
       const data = await res.json();

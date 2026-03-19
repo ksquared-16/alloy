@@ -46,14 +46,13 @@ async function attachFieldDefinitionsAndValues(
     const { data: fvRows } = await supabase
         .from("field_values")
         .select(
-            "field_definition_id, value, value_text, value_number, value_boolean, value_date, value_json"
+            "field_definition_id, value_text, value_number, value_boolean, value_date, value_json"
         )
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)
         .in("field_definition_id", defIds);
     type FvRow = {
         field_definition_id: string;
-        value?: string | null;
         value_text?: string | null;
         value_number?: number | null;
         value_boolean?: boolean | null;
@@ -202,11 +201,13 @@ export async function GET(
                 out._customer_name = null;
             }
             // Prefer primary_person_id for display; fallback to contact
+            const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
+                p ? ((p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null) : null;
             if (opp.primary_person_id) {
-                const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", opp.primary_person_id).maybeSingle();
-                const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
+                const { data: person } = await supabase.from("persons").select("id, first_name, last_name, full_name").eq("id", opp.primary_person_id).maybeSingle();
+                const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
                 out._primary_person_id = p?.id ?? null;
-                out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
+                out._primary_person_name = personDisplayName(p);
                 out._contact_name = out._primary_person_name;
                 out._primary_contact_name = out._primary_person_name;
             } else if (opp.primary_contact_id) {
@@ -216,10 +217,10 @@ export async function GET(
                 out._contact_name = name;
                 out._primary_contact_name = name;
                 if (c && (c as { person_id?: string | null }).person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", (c as { person_id: string }).person_id).maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
+                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name, full_name").eq("id", (c as { person_id: string }).person_id).maybeSingle();
+                    const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
                     out._primary_person_id = p?.id ?? null;
-                    out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
+                    out._primary_person_name = personDisplayName(p);
                 } else {
                     out._primary_person_id = null;
                     out._primary_person_name = null;
@@ -245,12 +246,15 @@ export async function GET(
                 out._vertical_name = null;
             }
             if (opp.location_id) {
-                const loc = await supabase.from("locations").select("id, label, address1, city, state").eq("id", opp.location_id).maybeSingle();
-                const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null } | null;
-                out._location_name = l ? (l.label || [l.address1, l.city, l.state].filter(Boolean).join(", ") || null) : null;
+                const loc = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", opp.location_id).maybeSingle();
+                const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null } | null;
+                out._location_name = l ? (l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null) : null;
+                out._location_id = opp.location_id;
             } else {
                 out._location_name = null;
+                out._location_id = null;
             }
+            out._status_display = (out._pipeline_stage_name as string) ?? opp.status_key ?? opp.status ?? null;
             const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)
                 : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents)) ? Number(opp.estimated_price_cents) / 100
                 : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
@@ -270,12 +274,12 @@ export async function GET(
             let _person_id: string | null = null;
             let _person_name: string | null = null;
             if (contact.person_id) {
-                const { data: personRow } = await supabase.from("persons").select("id, first_name, last_name, email, phone, created_at, updated_at").eq("id", contact.person_id).maybeSingle();
+                const { data: personRow } = await supabase.from("persons").select("id, first_name, last_name, full_name, email, phone, created_at, updated_at").eq("id", contact.person_id).maybeSingle();
                 if (personRow) {
                     _person = personRow as Record<string, unknown>;
                     _person_id = (personRow as { id: string }).id;
-                    const p = personRow as { first_name?: string | null; last_name?: string | null };
-                    _person_name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null;
+                    const p = personRow as { full_name?: string | null; first_name?: string | null; last_name?: string | null };
+                    _person_name = (p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null;
                 }
             }
             let _linked_customer_name: string | null = null;
@@ -857,8 +861,11 @@ export async function GET(
                 return NextResponse.json(personErr?.code === "PGRST116" ? "Not found" : personErr?.message ?? "Not found", { status: 404 });
             }
             const out: Record<string, unknown> = { ...personRow };
-            const p = personRow as { first_name?: string | null; last_name?: string | null };
-            out._person_name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null;
+            const p = personRow as { full_name?: string | null; first_name?: string | null; last_name?: string | null };
+            out._person_name =
+                (p.full_name && p.full_name.trim()) ||
+                [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
+                null;
 
             const { data: cpRows } = await supabase
                 .from("customer_persons")

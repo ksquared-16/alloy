@@ -403,36 +403,36 @@
   background: rgba(0, 162, 131, 0.7);
 }
 
-/* Quick actions: visible on hover or when selected */
+/* Quick actions: always visible; hover enhances */
 .adminv2-dept-actions-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 0 0;
-  margin-top: 6px;
-  border-top: 1px solid var(--adminv2-border, rgba(0, 0, 0, 0.08));
-  opacity: 0;
-  transition: opacity 200ms ease;
+  gap: 10px;
+  padding: 0;
+  margin-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
 }
 
-.adminv2-dept-node-fixed:hover .adminv2-dept-actions-row,
-.adminv2-dept-node-fixed.adminv2-dept-selected .adminv2-dept-actions-row {
-  opacity: 1;
-}
-
 .adminv2-dept-quick-action {
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 12px;
+  min-height: 30px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .adminv2-dept-quick-action:hover {
-  filter: brightness(0.97);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  filter: brightness(0.96);
 }
 
 /* Next best action: shown when department is selected */
@@ -458,6 +458,17 @@
     box-shadow:
       0 0 0 1px rgba(0, 69, 140, 0.2),
       0 8px 20px rgba(39, 63, 82, 0.13);
+  }
+}
+
+@keyframes adminv2-action-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

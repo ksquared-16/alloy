@@ -8,7 +8,7 @@ import {
   COMPANY_GRID_DEPT_WIDTH,
   COMPANY_GRID_DEPT_HEIGHT,
 } from "./canvasLayout";
-import type { QuickAction } from "./mockDepartmentActions";
+import type { QuickAction, QuickActionIcon } from "./mockDepartmentActions";
 
 export type DepartmentNodeData = {
   name: string;
@@ -31,6 +31,8 @@ export type DepartmentNodeData = {
   nextBestAction?: string;
   /** Mock: highlight as priority on company canvas */
   isPriority?: boolean;
+  /** Opens floating action panel (company view) */
+  onQuickActionClick?: (actionId: string) => void;
 };
 
 const HEALTH_LABELS: Record<DepartmentNodeData["health"], string> = {
@@ -49,14 +51,65 @@ const W = COMPANY_GRID_DEPT_WIDTH;
 const H = COMPANY_GRID_DEPT_HEIGHT;
 const CARD_PAD = 32;
 
+const ICON_SIZE = 14;
+const ICON_GAP = 6;
+
+function QuickActionIconSvg({ icon, size = ICON_SIZE }: { icon: QuickActionIcon; size?: number }) {
+  const s = size;
+  const common = { width: s, height: s, fill: "currentColor", stroke: "currentColor" };
+  switch (icon) {
+    case "gear":
+      return (
+        <svg viewBox="0 0 24 24" {...common} aria-hidden>
+          <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5z" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "list":
+      return (
+        <svg viewBox="0 0 24 24" {...common} aria-hidden>
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "mail":
+      return (
+        <svg viewBox="0 0 24 24" {...common} aria-hidden>
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M22 6l-10 7L2 6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "warning":
+      return (
+        <svg viewBox="0 0 24 24" {...common} aria-hidden>
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 9v4M12 17h.01" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "eye":
+      return (
+        <svg viewBox="0 0 24 24" {...common} aria-hidden>
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="12" cy="12" r="3" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg viewBox="0 0 24 24" {...common} aria-hidden>
+          <path d="M20 6L9 17l-5-5" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeData>) {
   const fill = getDepartmentColor(data.departmentKey);
   const zoomingOut = data.zoomingOut ?? false;
   const activating = data.activating ?? false;
   const quickActions = data.quickActions ?? [];
-  const nextBestAction = data.nextBestAction;
   const isPriority = data.isPriority ?? false;
-  const showNextStep = selected && nextBestAction;
+  const onQuickActionClick = data.onQuickActionClick;
 
   return (
     <div
@@ -328,27 +381,23 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
                 key={a.id}
                 type="button"
                 className="adminv2-dept-quick-action"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickActionClick?.(a.id);
+                }}
                 style={{
                   border: `1px solid ${derived.border}`,
                   color: brand.primary,
-                  backgroundColor: neutral.surface,
+                  backgroundColor: neutral.background,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: ICON_GAP,
                 }}
               >
-                {a.label}
+                <QuickActionIconSvg icon={a.icon} />
+                <span>{a.label}</span>
               </button>
             ))}
-          </div>
-        )}
-        {showNextStep && (
-          <div
-            className="adminv2-dept-next-step"
-            style={{
-              borderTop: `1px solid ${derived.border}`,
-              color: semantic.info,
-            }}
-          >
-            {nextBestAction}
           </div>
         )}
       </div>

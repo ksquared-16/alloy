@@ -17,6 +17,7 @@ import {
 import "reactflow/dist/style.css";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import DepartmentNode from "./DepartmentNode";
+import ActionPanelNode from "./ActionPanelNode";
 import ManagerNode, { MANAGER_CARD_WIDTH } from "./ManagerNode";
 import AmbientFocusNode from "./AmbientFocusNode";
 import ChamberAmbientNode from "./ChamberAmbientNode";
@@ -27,9 +28,11 @@ import {
   getCompanyChamberAmbientRect,
   COMPANY_DEPT_NODE_WIDTH,
   COMPANY_DEPT_NODE_HEIGHT,
+  COMPANY_GRID_DEPT_WIDTH,
+  COMPANY_GRID_DEPT_HEIGHT,
 } from "./canvasLayout";
 import { MOCK_DEPARTMENTS } from "./mockDepartments";
-import { MOCK_DEPARTMENT_ACTIONS } from "./mockDepartmentActions";
+import { MOCK_DEPARTMENT_ACTIONS, getActionPanelContent } from "./mockDepartmentActions";
 import { getManagersForDepartment } from "./mockManagers";
 import { getManagerCardStats } from "./mockManagerStats";
 import type { DepartmentNodeData } from "./DepartmentNode";
@@ -186,8 +189,12 @@ function FitCompanyView({ zoomLevel }: { zoomLevel: "company" | "department" }) 
   return null;
 }
 
+const ACTION_PANEL_WIDTH = 360;
+const PANEL_GAP_BELOW_TILE = 12;
+
 const nodeTypes = {
   department: DepartmentNode,
+  actionPanel: ActionPanelNode,
   manager: ManagerNode,
   ambientFocus: AmbientFocusNode,
   chamberAmbient: ChamberAmbientNode,
@@ -221,6 +228,11 @@ export default function SystemCanvas({
   selectedNodeIdRef.current = selectedNodeId;
   const ambientFadeTimerRef = useRef<number | null>(null);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
+  const [activeAction, setActiveAction] = useState<{
+    nodeId: string;
+    actionId: string;
+    flowPosition: { x: number; y: number };
+  } | null>(null);
   const pendingZoomRef = useRef<{
     nodeId: string;
     key: DepartmentKey;
@@ -284,6 +296,25 @@ export default function SystemCanvas({
   useEffect(() => {
     if (zoomLevel === "company") setMapToolsOpen(false);
   }, [zoomLevel]);
+
+  useEffect(() => {
+    if (!activeAction) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActiveAction(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeAction]);
+
+  const onQuickActionClick = useCallback((nodeId: string, actionId: string) => {
+    const idx = MOCK_DEPARTMENTS.findIndex((d) => d.id === nodeId);
+    const displayPos = getCompanyDepartmentDisplayPosition(idx >= 0 ? idx : 0);
+    const flowPosition = {
+      x: displayPos.x + COMPANY_GRID_DEPT_WIDTH / 2 - ACTION_PANEL_WIDTH / 2,
+      y: displayPos.y + COMPANY_GRID_DEPT_HEIGHT + PANEL_GAP_BELOW_TILE,
+    };
+    setActiveAction({ nodeId, actionId, flowPosition });
+  }, []);
 
   const ambientVariant: "company" | "focus" = useMemo(() => {
     if (zoomLevel === "department" && selectedDepartmentKey) return "focus";
@@ -408,6 +439,7 @@ export default function SystemCanvas({
               quickActions: actions?.quickActions,
               nextBestAction: actions?.nextBestAction,
               isPriority: actions?.isPriority,
+              onQuickActionClick,
             },
             draggable: !activatingDepartmentId,
             selected: selectedNodeId === d.id,
@@ -415,7 +447,7 @@ export default function SystemCanvas({
             className: "adminv2-rf-foreground",
           };
         }),
-      [selectedNodeId, activatingDepartmentId]
+      [selectedNodeId, activatingDepartmentId, onQuickActionClick]
     );
 
   const managerNodes: Node<ManagerNodeData>[] = useMemo(() => {
@@ -447,9 +479,36 @@ export default function SystemCanvas({
   }, [selectedDepartmentKey, selectedNodeId]);
 
   const contentNodes = zoomLevel === "company" ? departmentNodes : managerNodes;
+  const actionPanelNode: Node | null = useMemo(() => {
+    if (!activeAction || zoomLevel !== "company") return null;
+    const content = getActionPanelContent(activeAction.actionId);
+    const title = content?.title ?? "Action";
+    const description = content?.description ?? "";
+    const primaryLabel = content?.primaryLabel ?? "OK";
+    const secondaryLabel = content?.secondaryLabel;
+    return {
+      id: "__action_panel__",
+      type: "actionPanel",
+      position: activeAction.flowPosition,
+      data: {
+        title,
+        description,
+        primaryLabel,
+        secondaryLabel,
+        onClose: () => setActiveAction(null),
+      },
+      draggable: false,
+      selectable: false,
+      zIndex: 300,
+      className: "adminv2-rf-foreground",
+    };
+  }, [activeAction, zoomLevel]);
+
   const nodes = useMemo(() => {
-    return [...(ambientNodes as Node[]), ...contentNodes];
-  }, [ambientNodes, contentNodes]);
+    const list: Node[] = [...(ambientNodes as Node[]), ...contentNodes];
+    if (actionPanelNode) list.push(actionPanelNode);
+    return list;
+  }, [ambientNodes, contentNodes, actionPanelNode]);
 
   const [nodesState, setNodes, onNodesChange] = useNodesState(nodes as Node[]);
   const [edges, , onEdgesChange] = useEdgesState<Edge>([]);
@@ -460,6 +519,8 @@ export default function SystemCanvas({
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      if (node.id === "__action_panel__") return;
+      setActiveAction(null);
       if (isAmbientNodeId(node.id)) return;
       if (activatingDepartmentId) return;
       if (node.type === "department" && zoomLevel === "company") {
@@ -478,6 +539,7 @@ export default function SystemCanvas({
   );
 
   const onPaneClick = useCallback(() => {
+    setActiveAction(null);
     if (!activatingDepartmentId) onNodeSelect(null);
   }, [onNodeSelect, activatingDepartmentId]);
 
