@@ -425,7 +425,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const locationSqftDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "square_footage");
+    const promoRaw =
+      typeof body.promo_campaign === "string" ? body.promo_campaign.trim() : "";
+
+    const [locationSqftDef, opportunityFreqDef, opportunityPromoDef, personSmsConsentDef, personEmailConsentDef] =
+      await Promise.all([
+        getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "square_footage"),
+        getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "cleaning_frequency"),
+        promoRaw
+          ? getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "promo_campaign")
+          : Promise.resolve(null as FieldDefMeta | null),
+        body.sms_consent
+          ? getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "sms_consent")
+          : Promise.resolve(null as FieldDefMeta | null),
+        body.email_consent
+          ? getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "email_consent")
+          : Promise.resolve(null as FieldDefMeta | null),
+      ]);
+
     if (!locationSqftDef) {
       console.error(
         "[QUOTE_START_FIELD_VALUES] field definition not found: org_id=%s entity_type=location field_key=square_footage",
@@ -443,12 +460,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const opportunityFreqDef = await getFieldDefinitionMeta(
-      supabase,
-      orgIdForWrites,
-      "opportunity",
-      "cleaning_frequency"
-    );
     if (!opportunityFreqDef) {
       console.error(
         "[QUOTE_START_FIELD_VALUES] field definition not found: org_id=%s entity_type=opportunity field_key=cleaning_frequency",
@@ -466,37 +477,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const promoRaw =
-      typeof body.promo_campaign === "string" ? body.promo_campaign.trim() : "";
-    let opportunityPromoDef: FieldDefMeta | null = null;
-    if (promoRaw) {
-      opportunityPromoDef = await getFieldDefinitionMeta(
-        supabase,
-        orgIdForWrites,
-        "opportunity",
-        "promo_campaign"
+    if (promoRaw && !opportunityPromoDef) {
+      console.error(
+        "[QUOTE_START] CRITICAL: Request included promo_campaign but no active field_definition for entity_type=opportunity + field_key=promo_campaign."
       );
-      if (!opportunityPromoDef) {
-        console.error(
-          "[QUOTE_START] CRITICAL: Request included promo_campaign but no active field_definition for entity_type=opportunity + field_key=promo_campaign."
-        );
-        return NextResponse.json(
-          {
-            ok: false,
-            message: "Server misconfiguration: opportunity field promo_campaign is not defined for this org",
-          },
-          { status: 500 }
-        );
-      }
-    }
-
-    let personSmsConsentDef: FieldDefMeta | null = null;
-    let personEmailConsentDef: FieldDefMeta | null = null;
-    if (body.sms_consent) {
-      personSmsConsentDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "sms_consent");
-    }
-    if (body.email_consent) {
-      personEmailConsentDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "email_consent");
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Server misconfiguration: opportunity field promo_campaign is not defined for this org",
+        },
+        { status: 500 }
+      );
     }
 
     // 3) Compute quote (before location/dedupe so inputs are stable)
@@ -519,34 +510,24 @@ export async function POST(request: NextRequest) {
 
     const existingOppQuery = supabase
       .from("opportunities")
-      .select("id, pipeline_stage_id")
+      .select("id, pipeline_stage_id, metadata, location_id")
       .eq("primary_person_id", personId)
       .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1);
     const { data: existingOpp } = await existingOppQuery.maybeSingle();
 
-    const metaSourceMatches = async () => {
-      if (!existingOpp) return false;
-      const { data: opp } = await supabase
-        .from("opportunities")
-        .select("metadata")
-        .eq("id", existingOpp.id)
-        .single();
-      const meta = (opp?.metadata as Record<string, unknown>) ?? {};
-      return meta.source === "web_quote";
-    };
-    const shouldReuse = existingOpp && (await metaSourceMatches());
+    const existingOppRow = existingOpp as
+      | { id: string; metadata?: Record<string, unknown> | null; location_id?: string | null }
+      | null
+      | undefined;
+    const shouldReuse =
+      !!existingOppRow && (existingOppRow.metadata as Record<string, unknown> | undefined)?.source === "web_quote";
 
     /** Create or refresh lightweight Location; reuse existing row when deduping same opportunity. */
     let locationId: string;
-    if (shouldReuse && existingOpp) {
-      const { data: oppLoc } = await supabase
-        .from("opportunities")
-        .select("location_id")
-        .eq("id", existingOpp.id)
-        .single();
-      const existingLocId = (oppLoc as { location_id?: string | null } | null)?.location_id ?? null;
+    if (shouldReuse && existingOppRow) {
+      const existingLocId = existingOppRow.location_id ?? null;
       if (existingLocId) {
         const personName = [first_name, last_name].filter(Boolean).join(" ").trim() || null;
         const label = quoteLocationLabel(personName, zip);
@@ -576,8 +557,8 @@ export async function POST(request: NextRequest) {
       locationId = created;
     }
 
-    if (shouldReuse && existingOpp) {
-      opportunityId = existingOpp.id;
+    if (shouldReuse && existingOppRow) {
+      opportunityId = existingOppRow.id;
       const updatePayload: Record<string, unknown> = {
         location_id: locationId,
         pipeline_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,

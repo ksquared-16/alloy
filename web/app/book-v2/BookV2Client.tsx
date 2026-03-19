@@ -38,11 +38,12 @@ interface QuoteResponse {
 
 interface DiscountData {
     code: string;
-    discount_code_id: string;
+    /** Legacy discount_codes id when program links to migrated code; null for program-only promos. */
+    discount_code_id: string | null;
     discount_amount: number;
     quote_total: number;
-    /** When validate API returns a program id (discount programs migration). */
-    discount_program_id?: string | null;
+    discount_program_id: string | null;
+    discount_program_name?: string | null;
 }
 
 type BookingStep = "quote_start" | "refine_quote" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
@@ -647,15 +648,24 @@ export default function BookV2Client() {
             if (prefill) {
                 try {
                     const prefillData = JSON.parse(prefill);
-                    if (prefillData.discount_code && prefillData.discount_code_id && prefillData.discount_amount != null) {
+                    const prefillAmt = prefillData.discount_amount;
+                    const prefillProg = typeof prefillData.discount_program_id === "string" && prefillData.discount_program_id.trim();
+                    const prefillLegacy = typeof prefillData.discount_code_id === "string" && prefillData.discount_code_id.trim();
+                    const prefillCode =
+                        (typeof prefillData.discount_program_code === "string" && prefillData.discount_program_code.trim()) ||
+                        (typeof prefillData.discount_code === "string" && prefillData.discount_code.trim()) ||
+                        "";
+                    if (typeof prefillAmt === "number" && prefillCode && (prefillProg || prefillLegacy)) {
                         setDiscountData({
-                            code: prefillData.discount_code,
-                            discount_code_id: prefillData.discount_code_id,
-                            discount_amount: prefillData.discount_amount,
-                            quote_total: prefillData.quote_total || 0,
-                            discount_program_id: prefillData.discount_program_id ?? null,
+                            code: prefillCode,
+                            discount_code_id: prefillLegacy ? String(prefillData.discount_code_id).trim() : null,
+                            discount_amount: prefillAmt,
+                            quote_total: typeof prefillData.quote_total === "number" ? prefillData.quote_total : 0,
+                            discount_program_id: prefillProg ? String(prefillData.discount_program_id).trim() : null,
+                            discount_program_name:
+                                typeof prefillData.discount_program_name === "string" ? prefillData.discount_program_name : null,
                         });
-                        setDiscountCode(prefillData.discount_code);
+                        setDiscountCode(prefillCode);
                     }
                 } catch (e) {
                     console.warn("Failed to load discount from prefill:", e);
@@ -1258,7 +1268,6 @@ export default function BookV2Client() {
         }
 
         try {
-            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
             const quoteSubtotal =
                 (typeof quote.first_clean_price === "number" && quote.first_clean_price > 0)
                     ? quote.first_clean_price
@@ -1287,7 +1296,7 @@ export default function BookV2Client() {
                 }
             }
 
-            const response = await fetch(`${apiBaseUrl}/discounts/validate`, {
+            const response = await fetch("/api/book-v2/validate-promo", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -1314,17 +1323,20 @@ export default function BookV2Client() {
                 return;
             }
 
-            if (data.valid === true) {
-                const programId =
-                    typeof data.discount_program_id === "string" && data.discount_program_id.trim()
-                        ? data.discount_program_id.trim()
+            if (data.valid === true && data.discount_program_id) {
+                const programId = String(data.discount_program_id).trim();
+                const displayCode = (data.discount_program_code || discountCode).trim().toUpperCase();
+                const legacyId =
+                    typeof data.discount_code_id === "string" && data.discount_code_id.trim()
+                        ? data.discount_code_id.trim()
                         : null;
                 setDiscountData({
-                    code: discountCode.trim().toUpperCase(),
-                    discount_code_id: data.discount_code_id,
+                    code: displayCode,
+                    discount_code_id: legacyId,
                     discount_amount: data.discount_amount,
                     quote_total: data.quote_total,
                     discount_program_id: programId,
+                    discount_program_name: data.discount_program_name ?? null,
                 });
                 setDiscountError(null);
 
@@ -1339,18 +1351,21 @@ export default function BookV2Client() {
                         console.warn("Failed to parse prefill:", e);
                     }
                 }
-                prefillData.discount_code = discountCode.trim().toUpperCase();
-                prefillData.discount_code_id = data.discount_code_id;
+                prefillData.discount_code = displayCode;
+                prefillData.discount_program_id = programId;
+                prefillData.discount_program_code = displayCode;
+                if (data.discount_program_name) prefillData.discount_program_name = data.discount_program_name;
+                else delete prefillData.discount_program_name;
+                if (legacyId) prefillData.discount_code_id = legacyId;
+                else delete prefillData.discount_code_id;
                 prefillData.discount_amount = data.discount_amount;
                 prefillData.quote_total = data.quote_total;
-                if (programId) prefillData.discount_program_id = programId;
-                else delete prefillData.discount_program_id;
                 const jsonData = JSON.stringify(prefillData);
                 sessionStorage.setItem("alloy_booking_prefill", jsonData);
                 localStorage.setItem("alloy_booking_prefill", jsonData);
 
                 const oppId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
-                if (oppId && data.discount_code_id) {
+                if (oppId && (programId || legacyId)) {
                     try {
                         const persistRes = await fetch("/api/book-v2/opportunity-discount", {
                             method: "POST",
@@ -1360,9 +1375,9 @@ export default function BookV2Client() {
                                 quote_subtotal: quoteSubtotal,
                                 quote_total: data.quote_total,
                                 discount_amount: data.discount_amount,
-                                discount_code_id: data.discount_code_id,
+                                discount_code_id: legacyId,
                                 discount_program_id: programId,
-                                discount_code: discountCode.trim().toUpperCase(),
+                                discount_code: displayCode,
                             }),
                         });
                         const persistJson = (await persistRes.json().catch(() => ({}))) as { ok?: boolean; message?: string };
@@ -1546,6 +1561,7 @@ export default function BookV2Client() {
                 discount_amount: discountData?.discount_amount ?? 0,
                 quote_total: discountData?.quote_total ?? quoteSubtotal,
                 discount_code_id: discountData?.discount_code_id ?? null,
+                discount_program_id: discountData?.discount_program_id ?? null,
                 discount_code: (discountData?.code ?? discountCode.trim()) || null,
                 contact_email: resolvedEmail || prefillData.email,
                 contact_phone: phoneForConfirm,
@@ -2113,6 +2129,8 @@ export default function BookV2Client() {
                                                                 delete p.discount_amount;
                                                                 delete p.quote_total;
                                                                 delete p.discount_program_id;
+                                                                delete p.discount_program_code;
+                                                                delete p.discount_program_name;
                                                                 const out = JSON.stringify(p);
                                                                 sessionStorage.setItem("alloy_booking_prefill", out);
                                                                 localStorage.setItem("alloy_booking_prefill", out);

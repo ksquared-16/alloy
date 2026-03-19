@@ -32,6 +32,76 @@ function logAndThrowConfirmError(context: string, err: unknown, payload: Record<
     throw new Error(`Confirm ${context}: ${msg} (code: ${code})`);
 }
 
+/** Returns a NextResponse to send if the customer already redeemed this promo, or null if OK. */
+async function assertNoPriorDiscountRedemption(
+    supabase: Supabase,
+    params: {
+        customerId: string;
+        discount_code_id: string | null;
+        discount_program_id: string | null;
+        booking_attempt_id: string | null;
+    }
+): Promise<NextResponse | null> {
+    const { customerId, discount_code_id, discount_program_id, booking_attempt_id } = params;
+    const attempt = booking_attempt_id ?? null;
+
+    if (discount_program_id) {
+        const { data: existingProgram, error: errProg } = await supabase
+            .from("discount_redemptions")
+            .select("id")
+            .eq("discount_program_id", discount_program_id)
+            .eq("customer_id", customerId)
+            .limit(1)
+            .maybeSingle();
+        if (errProg) {
+            return NextResponse.json(
+                { ok: false, message: "Failed to check discount usage", booking_attempt_id: attempt },
+                { status: 500 }
+            );
+        }
+        if (existingProgram) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    message: "That promo code has already been used for this customer.",
+                    reason: "discount_already_used",
+                    booking_attempt_id: attempt,
+                },
+                { status: 409 }
+            );
+        }
+    }
+
+    if (discount_code_id) {
+        const { data: existingCode, error: errCode } = await supabase
+            .from("discount_redemptions")
+            .select("id")
+            .eq("discount_code_id", discount_code_id)
+            .eq("customer_id", customerId)
+            .limit(1)
+            .maybeSingle();
+        if (errCode) {
+            return NextResponse.json(
+                { ok: false, message: "Failed to check discount usage", booking_attempt_id: attempt },
+                { status: 500 }
+            );
+        }
+        if (existingCode) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    message: "That promo code has already been used for this customer.",
+                    reason: "discount_already_used",
+                    booking_attempt_id: attempt,
+                },
+                { status: 409 }
+            );
+        }
+    }
+
+    return null;
+}
+
 /**
  * Ensure person has a customer and customer_persons link. Optionally create a compatibility Contact for downstream (discount_redemptions, workflows).
  * Returns { customerId, contactId }. contactId is set when a compatibility contact is created or when person is already linked to a contact-backed customer.
@@ -369,7 +439,8 @@ function getCadenceIntervalFromServiceFrequencyKey(
  * - quote_subtotal: number
  * - discount_amount: number (optional)
  * - quote_total: number
- * - discount_code_id: string | null (optional)
+ * - discount_code_id: string | null (optional; legacy discount_codes row)
+ * - discount_program_id: string | null (optional; discount_programs row — either this or discount_code_id when discounted)
  * - contact_email: string
  * - contact_phone: string
  * - contact_first_name: string (optional)
@@ -400,6 +471,7 @@ export async function POST(request: NextRequest) {
             discount_amount = 0,
             quote_total,
             discount_code_id = null,
+            discount_program_id: discount_program_id_raw = null,
             discount_code = null,
             contact_email,
             contact_phone,
@@ -427,6 +499,11 @@ export async function POST(request: NextRequest) {
             customer_id: customer_id_from_quote,
         } = body;
 
+        const discount_program_id =
+            typeof discount_program_id_raw === "string" && discount_program_id_raw.trim()
+                ? discount_program_id_raw.trim()
+                : null;
+
         const service_frequency_key = normalizeFrequencyKey(frequency_label);
         const is_recurring = service_frequency_key !== "one_time";
         const firstCleanCents = typeof first_clean_price === "number" && first_clean_price > 0
@@ -436,7 +513,7 @@ export async function POST(request: NextRequest) {
             ? Math.round(recurring_price * 100)
             : null;
         console.log(
-            "[BOOK_V2_CONFIRM_START] booking_attempt_id=%s email=%s phone=%s slot_start=%s slot_end=%s frequency_label=%s service_frequency_key=%s discount_code_id=%s discount_code=%s discount_amount=%s",
+            "[BOOK_V2_CONFIRM_START] booking_attempt_id=%s email=%s phone=%s slot_start=%s slot_end=%s frequency_label=%s service_frequency_key=%s discount_code_id=%s discount_program_id=%s discount_code=%s discount_amount=%s",
             booking_attempt_id ?? "None",
             contact_email ?? "None",
             contact_phone ?? "None",
@@ -445,6 +522,7 @@ export async function POST(request: NextRequest) {
             frequency_label ?? "None",
             service_frequency_key,
             discount_code_id ?? "None",
+            discount_program_id ?? "None",
             discount_code ?? "None",
             discount_amount
         );
@@ -471,11 +549,15 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
-        // discount_code_id is required when booking is discounted
+        // discount_program_id or discount_code_id when booking is discounted
         const hasDiscount = Number(discount_amount) > 0 || (quote_total != null && quote_subtotal != null && Number(quote_total) < Number(quote_subtotal));
-        if (hasDiscount && !discount_code_id) {
+        if (hasDiscount && !discount_code_id && !discount_program_id) {
             return NextResponse.json(
-                { ok: false, message: "Discount requires a valid discount code (discount_code_id missing).", booking_attempt_id: booking_attempt_id ?? null },
+                {
+                    ok: false,
+                    message: "Discount requires a valid promo (discount_program_id or discount_code_id missing).",
+                    booking_attempt_id: booking_attempt_id ?? null,
+                },
                 { status: 400 }
             );
         }
@@ -769,26 +851,14 @@ export async function POST(request: NextRequest) {
             }
 
             // Discount check (Step 2)
-            if (discount_code_id && customerId) {
-                const { data: existingRedemption, error: redemptionCheckError } = await supabase
-                    .from("discount_redemptions")
-                    .select("id")
-                    .eq("discount_code_id", discount_code_id)
-                    .eq("customer_id", customerId)
-                    .limit(1)
-                    .maybeSingle();
-                if (redemptionCheckError) {
-                    return NextResponse.json(
-                        { ok: false, message: "Failed to check discount usage", booking_attempt_id: booking_attempt_id ?? null },
-                        { status: 500 }
-                    );
-                }
-                if (existingRedemption) {
-                    return NextResponse.json(
-                        { ok: false, message: "That promo code has already been used for this customer.", reason: "discount_already_used", booking_attempt_id: booking_attempt_id ?? null },
-                        { status: 409 }
-                    );
-                }
+            if (customerId && (discount_code_id || discount_program_id)) {
+                const redemptionEarly = await assertNoPriorDiscountRedemption(supabase, {
+                    customerId,
+                    discount_code_id,
+                    discount_program_id,
+                    booking_attempt_id,
+                });
+                if (redemptionEarly) return redemptionEarly;
             }
 
             const slotStartDateQ = new Date(slot_start);
@@ -842,9 +912,14 @@ export async function POST(request: NextRequest) {
                 metadata: mergedMetadata,
             };
             if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
+            if (discount_program_id != null) {
+                (oppUpdate as Record<string, unknown>).discount_program_id = discount_program_id;
+            }
             if (discount_code_id != null) {
                 (oppUpdate as Record<string, unknown>).discount_code_id = discount_code_id;
-                (oppUpdate as Record<string, unknown>).discount_code = discount_code ?? null;
+            }
+            if (discount_code != null) {
+                (oppUpdate as Record<string, unknown>).discount_code = discount_code;
             }
 
             const { error: oppUpdateError } = await supabase
@@ -994,29 +1069,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 2: If discount used, check redemption not already recorded (enforce "once per customer")
-        if (discount_code_id && customerId) {
-            const { data: existingRedemption, error: redemptionCheckError } = await supabase
-                .from("discount_redemptions")
-                .select("id")
-                .eq("discount_code_id", discount_code_id)
-                .eq("customer_id", customerId)
-                .limit(1)
-                .maybeSingle();
-
-            if (redemptionCheckError) {
-                console.error("[BOOK_V2_CONFIRM] Error checking discount redemption booking_attempt_id=", booking_attempt_id, redemptionCheckError);
-                return NextResponse.json(
-                    { ok: false, message: "Failed to check discount usage", booking_attempt_id: booking_attempt_id ?? null },
-                    { status: 500 }
-                );
-            }
-            if (existingRedemption) {
-                console.log("[BOOK_V2_CONFIRM_REDEMPTION_ALREADY_USED] booking_attempt_id=%s customer_id=%s discount_code_id=%s", booking_attempt_id ?? "None", customerId, discount_code_id);
-                return NextResponse.json(
-                    { ok: false, message: "That promo code has already been used for this customer.", reason: "discount_already_used", booking_attempt_id: booking_attempt_id ?? null },
-                    { status: 409 }
-                );
-            }
+        if (customerId && (discount_code_id || discount_program_id)) {
+            const redemptionMid = await assertNoPriorDiscountRedemption(supabase, {
+                customerId,
+                discount_code_id,
+                discount_program_id,
+                booking_attempt_id,
+            });
+            if (redemptionMid) return redemptionMid;
         }
 
         // Step 3: Use vertical_id we already fetched (else branch)
@@ -1128,8 +1188,9 @@ export async function POST(request: NextRequest) {
                 metadata: mergedMetaElse,
             };
             if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
-            if (discount_code_id != null) {
-                updatePayload.discount_code_id = discount_code_id;
+            if (discount_program_id != null || discount_code_id != null) {
+                if (discount_program_id != null) updatePayload.discount_program_id = discount_program_id;
+                if (discount_code_id != null) updatePayload.discount_code_id = discount_code_id;
                 if (discount_code != null) updatePayload.discount_code = discount_code;
                 updatePayload.discount_amount = discount_amount ?? null;
             }
@@ -1190,8 +1251,9 @@ export async function POST(request: NextRequest) {
                 estimated_price_cents: estimatedPriceCentsNew,
                 monetary_value_cents: estimatedPriceCentsNew ?? undefined,
                 ...(recurringCents != null && { recurring_price_cents: recurringCents }),
-                ...(discount_code_id != null && {
-                    discount_code_id,
+                ...(discount_program_id != null && { discount_program_id }),
+                ...(discount_code_id != null && { discount_code_id }),
+                ...((discount_program_id != null || discount_code_id != null) && {
                     discount_code: discount_code ?? null,
                     discount_amount: discount_amount ?? null,
                 }),
@@ -1316,9 +1378,10 @@ export async function POST(request: NextRequest) {
                     home_type: home_type ?? null,
                 },
             };
-            if (discount_code_id != null) {
+            if (discount_program_id != null || discount_code_id != null) {
                 jobUpdatePayload.discounted = true;
-                jobUpdatePayload.discount_code_id = discount_code_id;
+                if (discount_program_id != null) jobUpdatePayload.discount_program_id = discount_program_id;
+                if (discount_code_id != null) jobUpdatePayload.discount_code_id = discount_code_id;
                 jobUpdatePayload.discount_code = discount_code ?? null;
                 jobUpdatePayload.discount_amount = discount_amount ?? null;
             }
@@ -1376,9 +1439,10 @@ export async function POST(request: NextRequest) {
                 estimated_total_cents: effectiveFirstCleanCents,
                 recurring_total_cents: is_recurring ? recurringCents : null,
                 ...(effectiveFirstCleanCents != null && { gross_price_cents: effectiveFirstCleanCents }),
-                ...(discount_code_id != null && {
+                ...((discount_program_id != null || discount_code_id != null) && {
                     discounted: true,
-                    discount_code_id,
+                    ...(discount_program_id != null && { discount_program_id }),
+                    ...(discount_code_id != null && { discount_code_id }),
                     discount_code: discount_code ?? null,
                     discount_amount: discount_amount ?? null,
                 }),
@@ -1429,20 +1493,33 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Step 5b: Persist discount redemption immediately after job creation (unique uniq_redemption_per_customer_code)
-        if (discount_code_id) {
+        // Step 5b: Persist discount redemption immediately after job creation
+        if (discount_code_id || discount_program_id) {
             if (contactId == null) {
-                console.error("[BOOK_V2_CONFIRM] discount_code_id provided but contactId is null (discount_redemptions.contact_id required)");
+                console.error(
+                    "[BOOK_V2_CONFIRM] discount redemption requested but contactId is null (discount_redemptions.contact_id required) booking_attempt_id=%s",
+                    booking_attempt_id ?? "None"
+                );
                 return NextResponse.json(
                     { ok: false, message: "Unable to record discount redemption.", booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
                 );
             }
-            console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_BEFORE] booking_attempt_id=%s discount_code_id=%s customer_id=%s contact_id=%s opportunity_id=%s job_id=%s", booking_attempt_id ?? "None", discount_code_id, customerId, contactId, opportunityId, jobId);
+            console.log(
+                "[BOOK_V2_CONFIRM_REDEMPTION_INSERT_BEFORE] booking_attempt_id=%s discount_code_id=%s discount_program_id=%s customer_id=%s contact_id=%s opportunity_id=%s job_id=%s",
+                booking_attempt_id ?? "None",
+                discount_code_id ?? "None",
+                discount_program_id ?? "None",
+                customerId,
+                contactId,
+                opportunityId,
+                jobId
+            );
             const { data: redemptionRow, error: redemptionInsertError } = await supabase
                 .from("discount_redemptions")
                 .insert({
-                    discount_code_id,
+                    discount_code_id: discount_code_id ?? null,
+                    discount_program_id: discount_program_id ?? null,
                     discount_code: discount_code ?? null,
                     customer_id: customerId,
                     contact_id: contactId,
@@ -1465,7 +1542,13 @@ export async function POST(request: NextRequest) {
                         redemptionInsertError.message.includes("uniq_redemption_per_customer_code")
                     ));
                 if (isUniqueViolation) {
-                    console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_CONFLICT] booking_attempt_id=%s customer_id=%s discount_code_id=%s (uniq_redemption_per_customer_code)", booking_attempt_id ?? "None", customerId, discount_code_id);
+                    console.log(
+                        "[BOOK_V2_CONFIRM_REDEMPTION_INSERT_CONFLICT] booking_attempt_id=%s customer_id=%s discount_code_id=%s discount_program_id=%s",
+                        booking_attempt_id ?? "None",
+                        customerId,
+                        discount_code_id ?? "None",
+                        discount_program_id ?? "None"
+                    );
                     return NextResponse.json(
                         { ok: false, message: "That promo code has already been used for this customer.", reason: "discount_already_used", booking_attempt_id: booking_attempt_id ?? null },
                         { status: 409 }
@@ -1477,7 +1560,13 @@ export async function POST(request: NextRequest) {
                     { status: 500 }
                 );
             }
-            console.log("[BOOK_V2_CONFIRM_REDEMPTION_INSERT_AFTER] booking_attempt_id=%s redemption_id=%s discount_code_id=%s", booking_attempt_id ?? "None", redemptionRow?.id ?? "?", discount_code_id);
+            console.log(
+                "[BOOK_V2_CONFIRM_REDEMPTION_INSERT_AFTER] booking_attempt_id=%s redemption_id=%s discount_code_id=%s discount_program_id=%s",
+                booking_attempt_id ?? "None",
+                redemptionRow?.id ?? "?",
+                discount_code_id ?? "None",
+                discount_program_id ?? "None"
+            );
         }
 
         // Step 5c: If recurring, ensure customer_subscriptions row (cadence+interval) and get subscription id for schedule linkage

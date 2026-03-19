@@ -137,6 +137,9 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
       mergeFirstFreeCampaignBookingPrefill({
         email,
         phone,
+        discount_program_id: validated.prefill.discount_program_id,
+        discount_program_code: validated.prefill.discount_program_code,
+        discount_program_name: validated.prefill.discount_program_name,
         discount_code: validated.prefill.discount_code,
         discount_code_id: validated.prefill.discount_code_id,
         discount_amount: validated.prefill.discount_amount,

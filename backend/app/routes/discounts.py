@@ -42,6 +42,10 @@ class ValidateDiscountResponse(BaseModel):
     quote_total: Optional[float] = None
     supa_contact_id: Optional[str] = None
     supa_customer_id: Optional[str] = None
+    # New: discount program (when code maps to discount_programs, not legacy discount_codes)
+    discount_program_id: Optional[str] = None
+    discount_program_code: Optional[str] = None
+    program_type: Optional[str] = None
 
 
 class RedeemDiscountRequest(BaseModel):

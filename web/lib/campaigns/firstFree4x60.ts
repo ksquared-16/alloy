@@ -1,6 +1,6 @@
 /**
  * QR / landing campaign: "First Service Free - Complete 4 in 60 Days"
- * Discount program code in DB: FIRSTFREE4X60
+ * Discount program code in DB: FIRSTFREE4X60 (runtime validation: /api/book-v2/validate-promo → discount_programs).
  */
 
 export const FIRSTFREE4X60_CAMPAIGN_QUERY = "firstfree4x60" as const;

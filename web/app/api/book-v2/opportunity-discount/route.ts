@@ -99,14 +99,13 @@ export async function POST(request: NextRequest) {
 
     const hasDiscount = discount_amount > 0 || quote_total < quote_subtotal;
     const discount_code_id = body.discount_code_id?.trim() || null;
-    if (hasDiscount && !discount_code_id) {
+    const discount_program_id = body.discount_program_id?.trim() || null;
+    if (hasDiscount && !discount_code_id && !discount_program_id) {
       return NextResponse.json(
-        { ok: false, message: "discount_code_id required when discount is applied" },
+        { ok: false, message: "discount_program_id or discount_code_id required when discount is applied" },
         { status: 400 }
       );
     }
-
-    const discount_program_id = body.discount_program_id?.trim() || null;
     const totalCents = Math.round(quote_total * 100);
 
     const update: Record<string, unknown> = {
