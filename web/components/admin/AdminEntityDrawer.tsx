@@ -116,7 +116,7 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 const DRAWER_ROW_SPACING = "space-y-4";
 
-/** Entity types that use inline-edit (no Edit toggle); always show inputs, save on blur or Save. */
+/** Entity types that use inline-edit; always show inputs, save on blur or Save (no overview read/edit toggle). */
 const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
 
 /** Subtle input styling: looks like text until hover/focus. */
@@ -1220,17 +1220,18 @@ export default function AdminEntityDrawer() {
             .catch(() => setScheduleVendors([]));
     }, [drawer.type, drawer.id]);
 
-    useEffect(() => {
-        if (drawer.type !== "workflows" || !data) return;
-        if ((data as { _create?: boolean })._create) {
-            setWorkflowConditions([]);
-            setWorkflowActions([]);
-            const defaultEntity = drawer.defaultWorkflowEntityType ?? "";
-            setFormData({ name: "", description: "", enabled: true, event_type: "", entity_type: defaultEntity });
-            return;
-        }
-        if (data._conditions) {
-            const cond = (data._conditions as { target_entity?: string; field_path?: string; field?: string; operator?: string; value?: string; value_jsonb?: unknown }[]).map((c) => {
+    const hydrateWorkflowEditorFromData = useCallback((raw: Record<string, unknown>) => {
+        if ((raw as { _create?: boolean })._create) return;
+        setFormData((prev) => ({
+            ...prev,
+            name: (raw.name as string) ?? "",
+            description: (raw.description as string) ?? "",
+            enabled: (raw as { enabled?: boolean }).enabled !== false,
+            event_type: (raw.event_type as string) ?? "",
+            entity_type: (raw.entity_type as string) ?? "",
+        }));
+        if (raw._conditions) {
+            const cond = (raw._conditions as { target_entity?: string; field_path?: string; field?: string; operator?: string; value?: string; value_jsonb?: unknown }[]).map((c) => {
                 let fieldPath = (c.field_path ?? c.field ?? "").toString().trim();
                 const entityType = (c.target_entity ?? "").toString().trim();
                 if ((entityType === "vendor" || entityType === "vendors") && fieldPath.startsWith("vendor.")) {
@@ -1244,16 +1245,43 @@ export default function AdminEntityDrawer() {
                 };
             });
             setWorkflowConditions(cond);
+        } else {
+            setWorkflowConditions([]);
         }
-        if (data._actions) {
-            const acts = (data._actions as { action_type?: string; target_entity?: string; payload?: unknown }[]).map((a) => ({
+        if (raw._actions) {
+            const acts = (raw._actions as { action_type?: string; target_entity?: string; payload?: unknown }[]).map((a) => ({
                 action_type: a.action_type ?? "log",
                 target_entity: a.target_entity ?? undefined,
-                payload: a.payload && typeof a.payload === "object" ? a.payload as Record<string, unknown> : {},
+                payload: a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {},
             }));
             setWorkflowActions(acts);
+        } else {
+            setWorkflowActions([]);
         }
-    }, [drawer.type, drawer.defaultWorkflowEntityType, data]);
+    }, []);
+
+    useEffect(() => {
+        if (drawer.type !== "workflows" || !data) return;
+        if ((data as { _create?: boolean })._create) {
+            setWorkflowConditions([]);
+            setWorkflowActions([]);
+            const defaultEntity = drawer.defaultWorkflowEntityType ?? "";
+            setFormData({ name: "", description: "", enabled: true, event_type: "", entity_type: defaultEntity });
+            return;
+        }
+        hydrateWorkflowEditorFromData(data as Record<string, unknown>);
+    }, [drawer.type, drawer.defaultWorkflowEntityType, data, hydrateWorkflowEditorFromData]);
+
+    /** Existing records: open drawer already in edit mode when the user can mutate (Save still required to persist). */
+    useEffect(() => {
+        if (!drawer.type || !drawer.id || drawer.id === "new" || loading) return;
+        if (!data || (data as { _create?: boolean })._create) return;
+        if (!canEditInDrawer(drawer.type) || !canMutate) {
+            setIsEditing(false);
+            return;
+        }
+        setIsEditing(true);
+    }, [drawer.type, drawer.id, loading, data, canMutate]);
 
     const openReschedule = useCallback((s: { id: string; start_at: string; end_at: string; timezone: string }) => {
         setRescheduleScheduleId(s.id);
@@ -1974,7 +2002,6 @@ export default function AdminEntityDrawer() {
                 if (!actRes.ok) throw new Error((actJson.error as string) || "Save actions failed");
                 setData((prev) => prev ? { ...prev, ...json, _conditions: workflowConditions, _actions: workflowActions } : prev);
                 refetch();
-                setIsEditing(false);
                 router.refresh();
                 return;
             }
@@ -2002,7 +2029,6 @@ export default function AdminEntityDrawer() {
                 if (!res.ok) throw new Error((json.error as string) || "Save failed");
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
-                setIsEditing(false);
                 router.refresh();
                 return;
             }
@@ -2231,7 +2257,6 @@ export default function AdminEntityDrawer() {
                         openDrawer({ type: "locations", id: newId });
                         router.refresh();
                     }
-                    setIsEditing(false);
                     return;
                 }
                 delete locPayload.customer_id;
@@ -2246,7 +2271,6 @@ export default function AdminEntityDrawer() {
                 if (!res.ok) throw new Error((json.error as string) || "Save failed");
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
-                setIsEditing(false);
                 router.refresh();
                 return;
             }
@@ -2255,7 +2279,6 @@ export default function AdminEntityDrawer() {
             if (!res.ok) throw new Error((json.error as string) || "Save failed");
             setData((prev) => (prev ? { ...prev, ...json } : prev));
             refetch();
-            setIsEditing(false);
             router.refresh();
             if (drawer.type === "jobs" && drawer.id) {
                 window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: drawer.id } }));
@@ -2874,25 +2897,33 @@ export default function AdminEntityDrawer() {
                     <button type="button" onClick={handleInlineCancel} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                 </>
             )}
-            {drawer.type === "workflows" && (
+            {drawer.type === "workflows" && !(data as { _create?: boolean })?._create && (
                 <>
-                    {!isEditing && canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>}
-                    {!isEditing && <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>}
-                    {isEditing && <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>}
-                    {isEditing && <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>}
+                    {canMutate && (
+                        <>
+                            <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSaveError(null);
+                                    if (data && !(data as { _create?: boolean })._create) hydrateWorkflowEditorFromData(data as Record<string, unknown>);
+                                }}
+                                className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
+                            >
+                                Cancel
+                            </button>
+                        </>
+                    )}
+                    <button type="button" onClick={() => { setRunModalOpen(true); setRunPayload("{}"); setRunResult(null); setRunJsonError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Run {workflowSingular.toLowerCase()}</button>
                 </>
             )}
             {drawer.type === "schedules" && canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
-            {drawer.type === "locations" && (
-                !isEditing ? (
-                    canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={startEdit} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90">Edit</button>
-                        ) : (
-                            <>
-                                <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
-                                <button type="button" onClick={() => { setIsEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
-                            </>
-                        )
-                    )}
+            {drawer.type === "locations" && canMutate && !(data as { _create?: boolean })?._create && (
+                <>
+                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                    <button type="button" onClick={() => { startEdit(); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                </>
+            )}
             {canMutate && !(data as { _create?: boolean })?._create && drawer.id && drawer.id !== "new" && canHardDeleteEntityType(drawer.type) && (
                 deletionEligibilityLoading ? (
                     <span className="text-xs text-alloy-midnight/50">Checking…</span>
