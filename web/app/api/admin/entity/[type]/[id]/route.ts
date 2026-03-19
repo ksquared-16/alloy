@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
+import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
@@ -185,6 +186,15 @@ export async function GET(
                 .limit(1)
                 .maybeSingle();
             out._next_schedule = (nextSched as { start_at?: string } | null)?.start_at ?? null;
+            out._discount_selection = await inferJobDiscountSelectionToken(supabase, {
+                discount_program_id: (data as { discount_program_id?: string | null }).discount_program_id ?? null,
+                discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
+            });
+            out._discount_label = await buildJobDiscountDisplayLabel(supabase, {
+                discount_program_id: (data as { discount_program_id?: string | null }).discount_program_id ?? null,
+                discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
+                discount_code: (data as { discount_code?: string | null }).discount_code ?? null,
+            });
             await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
             return NextResponse.json(out);
         }

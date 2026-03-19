@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { executeWorkflowRun } from "@/lib/workflowRun";
-import { validateDiscountCodeForJob } from "@/lib/admin/validateDiscountCode";
+import { inferJobDiscountSelectionToken, parseJobDiscountSelectionInput, resolveJobDiscountSelection, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
@@ -90,12 +90,24 @@ export async function GET(
         }
     }
 
+    const _discount_selection = await inferJobDiscountSelectionToken(supabase, {
+        discount_program_id: (j.discount_program_id as string | null | undefined) ?? null,
+        discount_code_id: (j.discount_code_id as string | null | undefined) ?? null,
+    });
+    const _discount_label = await buildJobDiscountDisplayLabel(supabase, {
+        discount_program_id: (j.discount_program_id as string | null | undefined) ?? null,
+        discount_code_id: (j.discount_code_id as string | null | undefined) ?? null,
+        discount_code: (j.discount_code as string | null | undefined) ?? null,
+    });
+
     return NextResponse.json({
         ...j,
         _customer_name,
         _assigned_vendor_name,
         _primary_person_name,
         _primary_contact_name,
+        _discount_selection,
+        _discount_label,
     });
 }
 
@@ -151,10 +163,22 @@ export async function PATCH(
             }
         }
 
-        // Discount fields: validate and recompute when discount_code_id is present
-        const bodyDiscountCodeId = typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
+        // Discount: body.discount_code_id carries selection token (program:uuid | code:uuid) or legacy plain code uuid
         if (body.discount_code_id !== undefined) {
-            if (bodyDiscountCodeId) {
+            const raw =
+                body.discount_code_id === null || body.discount_code_id === ""
+                    ? null
+                    : typeof body.discount_code_id === "string"
+                      ? body.discount_code_id.trim()
+                      : null;
+            const parsed = raw ? parseJobDiscountSelectionInput(raw) : null;
+            if (!raw) {
+                updates.discount_code_id = null;
+                updates.discount_program_id = null;
+                updates.discount_code = null;
+                updates.discount_amount = 0;
+                updates.discounted = false;
+            } else {
                 const { data: jobRow } = await supabase.from("jobs").select("gross_price_cents, vertical_id").eq("id", id).eq("org_id", ctx.orgId).single();
                 const currentGross = (jobRow as { gross_price_cents?: number | null } | null)?.gross_price_cents ?? 0;
                 const gross = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : currentGross;
@@ -164,31 +188,15 @@ export async function PATCH(
                     const { data: vert } = await supabase.from("verticals").select("slug").eq("id", verticalId).maybeSingle();
                     jobVerticalSlug = (vert as { slug?: string | null } | null)?.slug ?? null;
                 }
-                const { data: codeRow, error: codeErr } = await supabase
-                    .from("discount_codes")
-                    .select("id, code, is_active, discount_type, discount_value, applies_to_vertical_slug, starts_at, ends_at")
-                    .eq("id", bodyDiscountCodeId)
-                    .maybeSingle();
-                if (codeErr) {
-                    return NextResponse.json({ error: codeErr.message }, { status: 500 });
+                const resolved = await resolveJobDiscountSelection(supabase, parsed, gross, jobVerticalSlug, ctx.orgId);
+                if (!resolved.ok) {
+                    return NextResponse.json({ error: resolved.error }, { status: 400 });
                 }
-                const result = validateDiscountCodeForJob(
-                    codeRow as Parameters<typeof validateDiscountCodeForJob>[0],
-                    gross,
-                    jobVerticalSlug
-                );
-                if ("error" in result) {
-                    return NextResponse.json({ error: result.error }, { status: 400 });
-                }
-                updates.discount_code_id = bodyDiscountCodeId;
-                updates.discount_code = result.code;
-                updates.discount_amount = result.discount_amount_cents;
-                updates.discounted = true;
-            } else {
-                updates.discount_code_id = null;
-                updates.discount_code = null;
-                updates.discount_amount = 0;
-                updates.discounted = false;
+                updates.discount_code_id = resolved.value.discount_code_id;
+                updates.discount_program_id = resolved.value.discount_program_id;
+                updates.discount_code = resolved.value.discount_code;
+                updates.discount_amount = resolved.value.discount_amount;
+                updates.discounted = resolved.value.discounted;
             }
         }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { validateDiscountCodeForJob } from "@/lib/admin/validateDiscountCode";
+import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
@@ -149,7 +149,8 @@ export async function POST(request: NextRequest) {
   const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
   const gross_price_cents = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : null;
   const primary_contact_id = typeof body.primary_contact_id === "string" && body.primary_contact_id.trim() ? body.primary_contact_id.trim() : null;
-  const discount_code_id = typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
+  const discount_selection_raw =
+    typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
 
   if (!customer_id) {
     return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
@@ -204,24 +205,19 @@ export async function POST(request: NextRequest) {
   let discount_code: string | null = null;
   let discount_amount: number = 0;
   let discounted = false;
-  if (discount_code_id) {
-    const { data: codeRow, error: codeErr } = await supabase
-      .from("discount_codes")
-      .select("id, code, is_active, discount_type, discount_value, applies_to_vertical_slug, starts_at, ends_at")
-      .eq("id", discount_code_id)
-      .maybeSingle();
-    if (codeErr) return NextResponse.json({ error: codeErr.message }, { status: 500 });
-    const result = validateDiscountCodeForJob(
-      codeRow as Parameters<typeof validateDiscountCodeForJob>[0],
-      gross_price_cents ?? 0,
-      job_vertical_slug
-    );
-    if ("error" in result) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+  let discount_code_id: string | null = null;
+  let discount_program_id: string | null = null;
+  const parsedDiscount = discount_selection_raw ? parseJobDiscountSelectionInput(discount_selection_raw) : null;
+  if (parsedDiscount) {
+    const resolved = await resolveJobDiscountSelection(supabase, parsedDiscount, gross_price_cents ?? 0, job_vertical_slug, ctx.orgId);
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: 400 });
     }
-    discount_code = result.code;
-    discount_amount = result.discount_amount_cents;
-    discounted = true;
+    discount_code_id = resolved.value.discount_code_id;
+    discount_program_id = resolved.value.discount_program_id;
+    discount_code = resolved.value.discount_code;
+    discount_amount = resolved.value.discount_amount;
+    discounted = resolved.value.discounted;
   }
 
   const row: Record<string, unknown> = {
@@ -239,6 +235,7 @@ export async function POST(request: NextRequest) {
     location_id: location_id ?? undefined,
     metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : {},
     discount_code_id: discount_code_id ?? null,
+    discount_program_id: discount_program_id ?? null,
     discount_code,
     discount_amount,
     discounted,

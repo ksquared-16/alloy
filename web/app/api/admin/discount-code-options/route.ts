@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { fetchJobDiscountOptionsForAdmin } from "@/lib/admin/jobDiscountSelection";
 
-/** GET: active discount codes for dropdown. Auth: getAdminContext (admin/ops).
- * Query: vertical_slug (optional) - filter by applies_to_vertical_slug null or match.
- *
- * Runtime / jobs still reference public.discount_codes.id (discount_code_id). Admin discount
- * programs live in discount_programs*; new programs created there do not appear here until
- * booking/job flows are migrated to programs (or a compatibility sync is added).
+/**
+ * GET: discount options for job/admin dropdowns.
+ * - discount_options: programs (discount_programs_admin_v) + orphan legacy discount_codes
+ * - discount_codes: deprecated shape for older clients (id = legacy code uuid only)
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();
@@ -21,42 +20,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const vertical_slug = searchParams.get("vertical_slug")?.trim() || null;
 
-    const supabase = createAdminClient();
-    const now = new Date().toISOString();
+    try {
+        const supabase = createAdminClient();
+        const discount_options = await fetchJobDiscountOptionsForAdmin(supabase, ctx.orgId, vertical_slug);
 
-    let q = supabase
-        .from("discount_codes")
-        .select("id, code, discount_type, discount_value, applies_to_vertical_slug, first_job_only")
-        .eq("is_active", true)
-        .or(`starts_at.is.null,starts_at.lte.${now}`)
-        .or(`ends_at.is.null,ends_at.gte.${now}`)
-        .order("code", { ascending: true });
+        const discount_codes = discount_options
+            .filter((o) => o.value.startsWith("code:"))
+            .map((o) => ({
+                id: o.legacy_code_id!,
+                code: o.code,
+                discount_type: o.discount_type,
+                discount_value: o.discount_value,
+                applies_to_vertical_slug: o.applies_to_vertical_slug,
+                first_job_only: o.first_job_only,
+            }));
 
-    if (vertical_slug) {
-        q = q.or(`applies_to_vertical_slug.is.null,applies_to_vertical_slug.eq.${vertical_slug}`);
+        return NextResponse.json({ discount_options, discount_codes });
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Failed to load discount options";
+        return NextResponse.json({ error: msg }, { status: 500 });
     }
-
-    const { data: rows, error } = await q;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    const discount_codes = (rows ?? []).map((r) => {
-        const row = r as {
-            id: string;
-            code: string | null;
-            discount_type: string | null;
-            discount_value: number | string | null;
-            applies_to_vertical_slug: string | null;
-            first_job_only: boolean | null;
-        };
-        return {
-            id: row.id,
-            code: row.code ?? "",
-            discount_type: row.discount_type ?? null,
-            discount_value: row.discount_value ?? null,
-            applies_to_vertical_slug: row.applies_to_vertical_slug ?? null,
-            first_job_only: row.first_job_only ?? null,
-        };
-    });
-
-    return NextResponse.json({ discount_codes });
 }
