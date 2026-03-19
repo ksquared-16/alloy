@@ -54,15 +54,16 @@ export default function CollapsibleQuoteForm() {
               Takes about a minute. We'll text to confirm details and scheduling.
             </p>
           </div>
-          <button
+          <PrimaryButton
+            type="button"
             onClick={handleExpand}
-            aria-expanded="false"
+            aria-expanded={false}
             aria-controls="quote-form-content"
             aria-label="Expand quote form"
-            className="md:w-auto w-full"
+            className="w-full md:w-auto"
           >
-            <PrimaryButton className="w-full md:w-auto">Get a quote</PrimaryButton>
-          </button>
+            Get a quote
+          </PrimaryButton>
         </div>
       )}
 

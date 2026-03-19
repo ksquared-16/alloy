@@ -42,15 +42,13 @@ export default function GetQuoteButton({
   }
 
   return (
-    <button
+    <PrimaryButton
       type="button"
       onClick={handleClick}
-      className="w-full sm:w-auto"
+      className={className ? `w-full sm:w-auto ${className}` : "w-full sm:w-auto"}
     >
-      <PrimaryButton className={className}>
-        {children || "Get a Quote"}
-      </PrimaryButton>
-    </button>
+      {children || "Get a Quote"}
+    </PrimaryButton>
   );
 }
 

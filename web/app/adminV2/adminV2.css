@@ -361,6 +361,43 @@
   word-break: break-word;
 }
 
+/* Responsive typography: preserve hierarchy, slight scale on smaller viewports */
+@media (max-width: 1679px) {
+  .adminv2-dept-node-fixed .adminv2-dept-title {
+    font-size: 48px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-primary-value {
+    font-size: 54px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-secondary-value {
+    font-size: 38px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-compact-value {
+    font-size: 30px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-health {
+    font-size: 30px !important;
+  }
+}
+
+@media (max-width: 1279px) {
+  .adminv2-dept-node-fixed .adminv2-dept-title {
+    font-size: 42px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-primary-value {
+    font-size: 48px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-secondary-value {
+    font-size: 34px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-compact-value {
+    font-size: 26px !important;
+  }
+  .adminv2-dept-node-fixed .adminv2-dept-health {
+    font-size: 26px !important;
+  }
+}
+
 .adminv2-dept-focus-ring {
   transition: box-shadow 220ms ease, border-color 220ms ease;
 }
@@ -469,6 +506,53 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Action panel: responsive width and spacing */
+.adminv2-action-panel {
+  box-sizing: border-box;
+}
+
+.adminv2-action-panel-view-records-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 1679px) {
+  .adminv2-inspector-rail {
+    width: 18rem;
+    min-width: 18rem;
+  }
+  .adminv2-action-panel {
+    padding: 16px !important;
+  }
+  .adminv2-action-panel-title {
+    font-size: 15px !important;
+  }
+  .adminv2-action-panel-desc {
+    font-size: 13px !important;
+  }
+  .adminv2-action-panel-actions {
+    gap: 8px !important;
+  }
+  .adminv2-action-panel-actions button {
+    padding: 8px 14px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 1279px) {
+  .adminv2-action-panel {
+    padding: 14px !important;
+  }
+  .adminv2-action-panel-title {
+    font-size: 14px !important;
+  }
+  .adminv2-action-panel-desc {
+    font-size: 12px !important;
+  }
+  .adminv2-action-panel-records ul {
+    font-size: 12px !important;
   }
 }
 

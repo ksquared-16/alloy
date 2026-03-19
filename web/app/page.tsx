@@ -10,6 +10,8 @@ import Accordion from "@/components/Accordion";
 import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
 import GetQuoteButton from "@/components/GetQuoteButton";
+import HeroSpecs from "@/components/HeroSpecs";
+import HomeAmbient from "@/components/HomeAmbient";
 
 export default function Home() {
   const howItWorksSteps = [
@@ -111,43 +113,61 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="bg-alloy-stone">
-        <div className="mx-auto max-w-6xl px-4 md:px-8 py-6 md:py-10">
-          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden rounded-xl shadow-lg">
-            {/* Background Image */}
+    <div className="min-h-screen home-page">
+      {/* Full-page ambient layer: blooms + drifting specs (visible, restrained) */}
+      <HomeAmbient />
+
+      {/* Content sits above atmosphere */}
+      <div className="relative z-10">
+        {/* Hero — floating card on light atmospheric canvas */}
+        <section className="mx-auto max-w-6xl px-4 md:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
+          <div className="relative min-h-[420px] md:h-[400px] lg:h-[460px] overflow-hidden home-hero-float">
             <Image
               src="/hero/cleaning-hero.jpeg"
               alt="Clean modern home interior"
               fill
               priority
-              className="object-cover"
+              className="object-cover object-[70%_50%]"
               sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1152px"
             />
 
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-alloy-midnight/60 via-alloy-midnight/25 to-transparent" />
+            {/* Lighter overlay — readable text without heavy slab */}
+            <div
+              className="absolute inset-0 z-0"
+              style={{
+                background:
+                  "linear-gradient(108deg, rgba(24,39,58,0.72) 0%, rgba(24,39,58,0.48) 35%, rgba(24,39,58,0.18) 60%, transparent 80%)",
+              }}
+            />
 
-            {/* Content Overlay */}
-            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-8 md:py-0 px-4 md:px-10 lg:px-12">
-              <div className="max-w-xl space-y-3 md:space-y-6 w-full">
-                <p className="text-xs md:text-sm font-medium text-white uppercase tracking-wide px-3 py-1.5 rounded-full inline-block relative">
-                  <span className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/25 to-black/20 rounded-full backdrop-blur-sm"></span>
-                  <span className="relative z-10">Born in Bend. Built for trust.</span>
+            {/* Soft blue/pine glow behind content */}
+            <div
+              className="absolute inset-0 z-[1] public-glow-ambient public-glow-ambient-breathe"
+              style={{
+                background:
+                  "radial-gradient(ellipse 60% 70% at 24% 50%, rgba(0,69,140,0.22) 0%, rgba(39,63,82,0.08) 45%, transparent 70%)",
+              }}
+            />
+
+            <HeroSpecs />
+
+            <div className="relative z-10 flex min-h-[420px] md:h-full items-center py-10 md:py-0 px-5 md:px-12 lg:px-14">
+              <div className="max-w-xl space-y-5 md:space-y-6 w-full">
+                <p className="text-xs md:text-sm font-semibold text-white/95 uppercase tracking-widest px-4 py-2 rounded-full inline-block border border-white/25 bg-white/10 backdrop-blur-sm">
+                  Born in Bend. Built for trust.
                 </p>
-                <h1 className="text-3xl md:text-5xl lg:text-5xl font-bold text-white leading-tight">
+                <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.12] tracking-tight [text-shadow:0_2px_20px_rgba(0,0,0,0.35)]">
                   Trusted home services, without the runaround.
-          </h1>
-                <p className="text-base md:text-lg text-white/90">
+                </h1>
+                <p className="text-base md:text-lg text-white/92 leading-relaxed max-w-lg [text-shadow:0_1px_6px_rgba(0,0,0,0.25)]">
                   Alloy handles everything from scheduling, confirmation, and follow-up, using trusted local professionals in Bend. One point of contact. Real accountability.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <GetQuoteButton>
+                <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                  <GetQuoteButton className="public-btn-primary !bg-alloy-blue hover:!bg-alloy-blue/90 !text-white !shadow-lg hover:!shadow-xl">
                     Get a quote
                   </GetQuoteButton>
                   <Link href="#how-it-works">
-                    <SecondaryButton className="!bg-white/20 backdrop-blur-md !border !border-white/50 !text-white hover:!bg-white/30 w-full sm:w-auto">
+                    <SecondaryButton className="!bg-white/15 !border-white/40 !text-white hover:!bg-white/25 hover:!border-white/50 w-full sm:w-auto transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
                       See how Alloy works
                     </SecondaryButton>
                   </Link>
@@ -155,42 +175,48 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* How Alloy Makes It Easy */}
-      <Section id="how-it-works" className="py-8 md:py-10 bg-alloy-stone">
-        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-8 md:mb-12">
-          How Alloy Makes It Easy
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          {howItWorksSteps.map((step) => (
-            <div key={step.number} className="text-center">
-              <div className="w-14 h-14 md:w-16 md:h-16 bg-alloy-juniper text-white rounded-full flex items-center justify-center text-xl md:text-2xl font-bold mx-auto mb-3 md:mb-4 shadow-md">
-                {step.number}
+      {/* How Alloy Makes It Easy — stone section, Bend Pine accent */}
+      <Section id="how-it-works" className="home-section-transition home-section-stone">
+        <div className="rounded-2xl md:rounded-3xl py-12 md:py-16 px-5 md:px-10">
+          <h2 className="home-heading text-2xl md:text-3xl text-center mb-10 md:mb-14">
+            How Alloy Makes It Easy
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
+            {howItWorksSteps.map((step) => (
+              <div
+                key={step.number}
+                className="home-card home-card-lift text-center p-6 md:p-8"
+              >
+                <div className="w-14 h-14 md:w-16 md:h-16 bg-alloy-pine text-white rounded-2xl flex items-center justify-center text-xl md:text-2xl font-bold mx-auto mb-4 md:mb-5 shadow-lg shadow-alloy-pine/20">
+                  {step.number}
+                </div>
+                <h3 className="text-lg md:text-xl font-semibold text-alloy-pine mb-2">
+                  {step.title}
+                </h3>
+                <p className="text-sm md:text-base text-alloy-midnight/80 leading-relaxed">
+                  {step.description}
+                </p>
               </div>
-              <h3 className="text-lg md:text-xl font-semibold text-alloy-pine mb-2">
-                {step.title}
-              </h3>
-              <p className="text-sm md:text-base text-alloy-midnight/80">{step.description}</p>
+            ))}
+          </div>
+          <div className="max-w-3xl mx-auto mt-12 md:mt-14 text-center">
+            <div className="home-card p-6 md:p-8">
+              <p className="text-base md:text-lg text-alloy-midnight font-medium leading-relaxed">
+                Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
+              </p>
             </div>
-          ))}
-        </div>
-        <div className="max-w-3xl mx-auto mt-8 md:mt-12 text-center">
-          <div className="bg-white/80 rounded-lg p-4 md:p-6 border border-alloy-stone/30">
-            <p className="text-base md:text-lg text-alloy-midnight font-medium">
-              Alloy provides home cleaning in Bend & Central Oregon, without the runaround. We handle scheduling, confirmation, and follow-up, and we stay involved from start to finish. Our goal is to keep the process simple, offer a first class experience, and ensure you always have one point of contact.
-            </p>
           </div>
         </div>
       </Section>
 
-      {/* Current Services */}
-      <Section className="py-12 md:py-20">
-        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-4">
+      {/* Services we offer — light section */}
+      <Section className="home-section-transition home-section-light">
+        <h2 className="home-heading text-2xl md:text-3xl text-center mb-2">
           Services we offer
         </h2>
-        <p className="text-center text-sm md:text-base text-alloy-midnight/80 mb-8 md:mb-12">
+        <p className="text-center text-sm md:text-base text-alloy-midnight/75 mb-10 md:mb-12">
           Home cleaning is available now. More services coming soon.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -200,12 +226,12 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Why Alloy Is Different */}
-      <Section className="py-12 md:py-20 bg-white">
-        <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-6 md:mb-4">
+      {/* Why Alloy Is Different — alt tint, Bend Pine life */}
+      <Section className="home-section-transition home-section-alt">
+        <h2 className="home-heading text-2xl md:text-3xl text-center mb-10 md:mb-12">
           Why Alloy Is Different
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 max-w-5xl mx-auto">
           {whyAlloyIsDifferent.map((value) => (
             <BrandValueCard
               key={value.title}
@@ -232,22 +258,21 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Testimonials */}
-      <Section className="py-12 md:py-20 bg-alloy-pine/5">
+      {/* Testimonials — stone again for rhythm */}
+      <Section className="home-section-transition home-section-stone">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-bold text-alloy-pine text-center mb-3">
+          <h2 className="home-heading text-2xl md:text-3xl text-center mb-2">
             What people are saying about Alloy
           </h2>
-          <p className="text-sm md:text-base text-alloy-midnight/70 text-center mb-8 md:mb-12">
+          <p className="text-sm md:text-base text-alloy-midnight/70 text-center mb-10 md:mb-12">
             Early supporters — customer reviews coming soon.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 md:mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10 md:mb-12">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="bg-white rounded-2xl shadow-md p-5 md:p-6 border border-alloy-stone/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
+                className="home-card home-card-lift rounded-2xl p-6 md:p-7"
               >
-                {/* 5-star rating */}
                 <div className="flex gap-0.5 mb-4">
                   {[...Array(5)].map((_, i) => (
                     <svg
@@ -264,7 +289,7 @@ export default function Home() {
                 <p className="text-sm md:text-base text-alloy-midnight/80 mb-4 leading-relaxed">
                   &quot;{testimonial.quote}&quot;
                 </p>
-                <div className="pt-4 border-t border-alloy-stone/20">
+                <div className="pt-4 border-t border-alloy-stone/30">
                   <p className="text-sm md:text-base font-semibold text-alloy-pine">
                     — {testimonial.name}
                   </p>
@@ -277,7 +302,7 @@ export default function Home() {
             ))}
           </div>
           <div className="text-center">
-            <GetQuoteButton className="w-full sm:w-auto">
+            <GetQuoteButton className="public-btn-primary w-full sm:w-auto !bg-alloy-blue !text-white">
               Get a quote
             </GetQuoteButton>
             <p className="text-sm text-alloy-midnight/60 mt-6">
@@ -295,9 +320,9 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* FAQ */}
-      <Section className="py-12 md:py-20 bg-white">
-        <h2 className="text-2xl md:text-3xl font-bold text-alloy-midnight text-center mb-8 md:mb-12">
+      {/* FAQ — light */}
+      <Section className="home-section-transition home-section-light">
+        <h2 className="home-heading text-2xl md:text-3xl text-center mb-10 md:mb-12">
           Frequently Asked Questions
         </h2>
         <div className="max-w-3xl mx-auto">
@@ -309,20 +334,23 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Final CTA */}
-      <Section className="py-10 md:py-12 lg:py-16">
-        <div className="bg-alloy-blue rounded-lg p-5 md:p-6 lg:p-8 text-center text-white">
-          <h2 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4">Ready to get started?</h2>
-          <p className="text-base md:text-lg mb-5 md:mb-6 opacity-90">
+      {/* Final CTA — premium conversion block */}
+      <Section className="py-12 md:py-16 lg:py-20">
+        <div className="home-cta-block p-8 md:p-10 lg:p-12 text-center relative">
+          <h2 className="home-heading-inverse text-2xl md:text-3xl lg:text-4xl font-bold mb-3 md:mb-4">
+            Ready to get started?
+          </h2>
+          <p className="text-base md:text-lg text-white/90 mb-6 md:mb-8 max-w-xl mx-auto">
             Select a service to get a quote.
           </p>
           <div className="flex justify-center">
-            <GetQuoteButton className="!bg-alloy-juniper hover:!bg-alloy-juniper/90 !text-white">
+            <GetQuoteButton className="public-btn-primary !bg-alloy-blue hover:!bg-alloy-blue/90 !text-white !shadow-lg hover:!shadow-xl !px-8 !py-3.5 !text-base">
               Get a Quote
             </GetQuoteButton>
           </div>
         </div>
       </Section>
+      </div>
     </div>
   );
 }

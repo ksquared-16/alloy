@@ -4,7 +4,6 @@ import { memo } from "react";
 import type { NodeProps } from "reactflow";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 
-const PANEL_WIDTH = 360;
 const PANEL_PADDING = 20;
 const BORDER_RADIUS = 14;
 const SHADOW = "0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06)";
@@ -12,13 +11,16 @@ const SHADOW = "0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06)"
 export type ActionPanelNodeData = {
   title: string;
   description: string;
+  records: string[];
   primaryLabel: string;
   secondaryLabel?: string;
+  panelWidth: number;
   onClose: () => void;
 };
 
 function ActionPanelNodeComponent({ data }: NodeProps<ActionPanelNodeData>) {
-  const { title, description, primaryLabel, secondaryLabel, onClose } = data;
+  const { title, description, records, primaryLabel, secondaryLabel, panelWidth, onClose } = data;
+  const hasRecords = Array.isArray(records) && records.length > 0;
 
   return (
     <div
@@ -26,7 +28,9 @@ function ActionPanelNodeComponent({ data }: NodeProps<ActionPanelNodeData>) {
       role="dialog"
       aria-label={title}
       style={{
-        width: PANEL_WIDTH,
+        width: panelWidth,
+        minWidth: 280,
+        maxWidth: "min(420px, 92vw)",
         padding: PANEL_PADDING,
         borderRadius: BORDER_RADIUS,
         backgroundColor: neutral.surface,
@@ -37,6 +41,7 @@ function ActionPanelNodeComponent({ data }: NodeProps<ActionPanelNodeData>) {
       onClick={(e) => e.stopPropagation()}
     >
       <h3
+        className="adminv2-action-panel-title"
         style={{
           margin: 0,
           marginBottom: 8,
@@ -50,9 +55,10 @@ function ActionPanelNodeComponent({ data }: NodeProps<ActionPanelNodeData>) {
         {title}
       </h3>
       <p
+        className="adminv2-action-panel-desc"
         style={{
           margin: 0,
-          marginBottom: 16,
+          marginBottom: hasRecords ? 12 : 16,
           fontSize: 14,
           fontWeight: 400,
           color: derived.textSecondary,
@@ -61,7 +67,68 @@ function ActionPanelNodeComponent({ data }: NodeProps<ActionPanelNodeData>) {
       >
         {description}
       </p>
+      {hasRecords && (
+        <div
+          className="adminv2-action-panel-records"
+          style={{
+            marginBottom: 16,
+            paddingTop: 12,
+            paddingBottom: 12,
+            borderTop: `1px solid ${derived.border}`,
+            borderBottom: `1px solid ${derived.border}`,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: derived.textSecondary,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginBottom: 8,
+            }}
+          >
+            Records / context
+          </div>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontSize: 13,
+              fontWeight: 500,
+              color: neutral.textPrimary,
+              lineHeight: 1.5,
+            }}
+          >
+            {records.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="adminv2-action-panel-view-records">
+        <button
+          type="button"
+          onClick={() => onClose()}
+          className="adminv2-action-panel-view-records-link"
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            marginBottom: 14,
+            fontSize: 13,
+            fontWeight: 500,
+            color: brand.primary,
+            cursor: "pointer",
+            textDecoration: "none",
+            letterSpacing: "0.01em",
+          }}
+        >
+          View related records
+        </button>
+      </div>
       <div
+        className="adminv2-action-panel-actions"
         style={{
           display: "flex",
           alignItems: "center",

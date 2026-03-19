@@ -26,10 +26,8 @@ import {
   getCompanyDepartmentDisplayPosition,
   getCompanyGridCenter,
   getCompanyChamberAmbientRect,
-  COMPANY_DEPT_NODE_WIDTH,
-  COMPANY_DEPT_NODE_HEIGHT,
-  COMPANY_GRID_DEPT_WIDTH,
-  COMPANY_GRID_DEPT_HEIGHT,
+  getResponsiveLayout,
+  type CompanyLayout,
 } from "./canvasLayout";
 import { MOCK_DEPARTMENTS } from "./mockDepartments";
 import { MOCK_DEPARTMENT_ACTIONS, getActionPanelContent } from "./mockDepartmentActions";
@@ -55,14 +53,15 @@ const AMBIENT_FADE_DELAY_MS = 2200;
 const PROOF_MANAGER_LIMIT = 2;
 const AMBIENT_FOCUS_SIZE = 1120;
 const AMBIENT_FOCUS_HALF = AMBIENT_FOCUS_SIZE / 2;
-const DEPT_W = COMPANY_DEPT_NODE_WIDTH;
-const DEPT_H = COMPANY_DEPT_NODE_HEIGHT;
+const ACTION_PANEL_HEIGHT_ESTIMATE = 280;
 
-function deptCenterFromId(id: string): { x: number; y: number } | null {
+function deptCenterFromId(id: string, layout: CompanyLayout): { x: number; y: number } | null {
   const idx = MOCK_DEPARTMENTS.findIndex((d) => d.id === id);
   if (idx < 0) return null;
-  const p = getDepartmentPosition(idx);
-  return { x: p.x + DEPT_W / 2, y: p.y + DEPT_H / 2 };
+  const p = getDepartmentPosition(idx, layout);
+  const W = layout.COMPANY_DEPT_NODE_WIDTH;
+  const H = layout.COMPANY_DEPT_NODE_HEIGHT;
+  return { x: p.x + W / 2, y: p.y + H / 2 };
 }
 
 const MANAGER_GAP = 64;
@@ -114,6 +113,24 @@ function ambientFocusAnchorBehindCards(
 
 function managersForProof(key: DepartmentKey) {
   return getManagersForDepartment(key).slice(0, PROOF_MANAGER_LIMIT);
+}
+
+type ScreenToFlowFn = (position: { x: number; y: number }) => { x: number; y: number };
+
+/** Exposes React Flow's screenToFlowPosition to parent (must be inside ReactFlowProvider). */
+function SetScreenToFlowRef({
+  projectRef,
+}: {
+  projectRef: React.MutableRefObject<ScreenToFlowFn | null>;
+}) {
+  const { screenToFlowPosition } = useReactFlow();
+  useEffect(() => {
+    projectRef.current = screenToFlowPosition;
+    return () => {
+      projectRef.current = null;
+    };
+  }, [screenToFlowPosition, projectRef]);
+  return null;
 }
 
 /** One smooth move from current viewport → department operating view */
@@ -170,14 +187,19 @@ function DepartmentEnterRunner({
   return null;
 }
 
-function FitCompanyView({ zoomLevel }: { zoomLevel: "company" | "department" }) {
+function FitCompanyView({
+  zoomLevel,
+  fitViewPadding,
+}: {
+  zoomLevel: "company" | "department";
+  fitViewPadding: number;
+}) {
   const { fitView } = useReactFlow();
   useEffect(() => {
     if (zoomLevel !== "company") return;
     const id = window.setTimeout(() => {
       fitView({
-        /* ~10% zoom-out vs prior tight fit + visible gutter from viewport edges */
-        padding: 0.072,
+        padding: fitViewPadding,
         duration: 420,
         maxZoom: 2.05,
         minZoom: 0.26,
@@ -185,12 +207,11 @@ function FitCompanyView({ zoomLevel }: { zoomLevel: "company" | "department" }) 
       });
     }, 0);
     return () => clearTimeout(id);
-  }, [zoomLevel, fitView]);
+  }, [zoomLevel, fitView, fitViewPadding]);
   return null;
 }
 
-const ACTION_PANEL_WIDTH = 360;
-const PANEL_GAP_BELOW_TILE = 12;
+const PANEL_OFFSET_BELOW_BUTTON = 8;
 
 const nodeTypes = {
   department: DepartmentNode,
@@ -233,6 +254,17 @@ export default function SystemCanvas({
     actionId: string;
     flowPosition: { x: number; y: number };
   } | null>(null);
+  const screenToFlowRef = useRef<ScreenToFlowFn | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(
+    () => (typeof window !== "undefined" ? window.innerWidth : 1920)
+  );
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const layout = useMemo(() => getResponsiveLayout(viewportWidth), [viewportWidth]);
   const pendingZoomRef = useRef<{
     nodeId: string;
     key: DepartmentKey;
@@ -306,15 +338,29 @@ export default function SystemCanvas({
     return () => window.removeEventListener("keydown", onKey);
   }, [activeAction]);
 
-  const onQuickActionClick = useCallback((nodeId: string, actionId: string) => {
-    const idx = MOCK_DEPARTMENTS.findIndex((d) => d.id === nodeId);
-    const displayPos = getCompanyDepartmentDisplayPosition(idx >= 0 ? idx : 0);
-    const flowPosition = {
-      x: displayPos.x + COMPANY_GRID_DEPT_WIDTH / 2 - ACTION_PANEL_WIDTH / 2,
-      y: displayPos.y + COMPANY_GRID_DEPT_HEIGHT + PANEL_GAP_BELOW_TILE,
-    };
-    setActiveAction({ nodeId, actionId, flowPosition });
-  }, []);
+  const onQuickActionClick = useCallback(
+    (nodeId: string, actionId: string, event: React.MouseEvent<HTMLButtonElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = rect.left + rect.width / 2;
+      const clickY = rect.bottom;
+      const screenToFlow = screenToFlowRef.current;
+      if (!screenToFlow) return;
+      const flowPoint = screenToFlow({ x: clickX, y: clickY });
+      const panelW = layout.actionPanelWidth;
+      let flowX = flowPoint.x - panelW / 2;
+      let flowY = flowPoint.y + PANEL_OFFSET_BELOW_BUTTON;
+      const container = canvasContainerRef.current;
+      if (container) {
+        const vr = container.getBoundingClientRect();
+        const flowTL = screenToFlow({ x: vr.left, y: vr.top });
+        const flowBR = screenToFlow({ x: vr.right, y: vr.bottom });
+        flowX = Math.max(flowTL.x, Math.min(flowBR.x - panelW, flowX));
+        flowY = Math.max(flowTL.y, Math.min(flowBR.y - ACTION_PANEL_HEIGHT_ESTIMATE, flowY));
+      }
+      setActiveAction({ nodeId, actionId, flowPosition: { x: flowX, y: flowY } });
+    },
+    [layout.actionPanelWidth]
+  );
 
   const ambientVariant: "company" | "focus" = useMemo(() => {
     if (zoomLevel === "department" && selectedDepartmentKey) return "focus";
@@ -330,18 +376,18 @@ export default function SystemCanvas({
         pos ??
         (() => {
           const idx = MOCK_DEPARTMENTS.findIndex((d) => d.key === selectedDepartmentKey);
-          return idx >= 0 ? getDepartmentPosition(idx) : { x: 120, y: 80 };
+          return idx >= 0 ? getDepartmentPosition(idx, layout) : { x: 120, y: 80 };
         })();
       return ambientFocusAnchorBehindCards(n, fallback);
     }
     if (activatingDepartmentId) {
-      return deptCenterFromId(activatingDepartmentId);
+      return deptCenterFromId(activatingDepartmentId, layout);
     }
     if (zoomLevel === "company") {
-      return getCompanyGridCenter();
+      return getCompanyGridCenter(layout);
     }
     return null;
-  }, [zoomLevel, selectedDepartmentKey, activatingDepartmentId]);
+  }, [zoomLevel, selectedDepartmentKey, activatingDepartmentId, layout]);
 
   const ambientHalf = AMBIENT_FOCUS_HALF;
   const ambientIntensityForNode = ambientIntensity;
@@ -353,7 +399,7 @@ export default function SystemCanvas({
       zoomLevel === "company" && activatingDepartmentId == null;
 
     if (companyIdle) {
-      const rect = getCompanyChamberAmbientRect();
+      const rect = getCompanyChamberAmbientRect(layout);
       const cx = rect.x + rect.width / 2;
       const cy = rect.y + rect.height / 2;
       /* 1×1 flow bounds so fitView / controls don’t zoom to the full ambient rect */
@@ -409,6 +455,7 @@ export default function SystemCanvas({
     focusAmbientTier,
     zoomLevel,
     activatingDepartmentId,
+    layout,
   ]);
 
   const departmentNodes: Node<DepartmentNodeData & { zoomingOut?: boolean; activating?: boolean }>[] =
@@ -419,7 +466,7 @@ export default function SystemCanvas({
           return {
             id: d.id,
             type: "department",
-            position: getCompanyDepartmentDisplayPosition(i),
+            position: getCompanyDepartmentDisplayPosition(i, layout),
             data: {
               name: d.name,
               departmentKey: d.key,
@@ -440,6 +487,9 @@ export default function SystemCanvas({
               nextBestAction: actions?.nextBestAction,
               isPriority: actions?.isPriority,
               onQuickActionClick,
+              tileWidth: layout.COMPANY_GRID_DEPT_WIDTH,
+              tileHeight: layout.COMPANY_GRID_DEPT_HEIGHT,
+              cardPad: layout.CARD_PAD,
             },
             draggable: !activatingDepartmentId,
             selected: selectedNodeId === d.id,
@@ -447,7 +497,7 @@ export default function SystemCanvas({
             className: "adminv2-rf-foreground",
           };
         }),
-      [selectedNodeId, activatingDepartmentId, onQuickActionClick]
+      [selectedNodeId, activatingDepartmentId, onQuickActionClick, layout]
     );
 
   const managerNodes: Node<ManagerNodeData>[] = useMemo(() => {
@@ -484,6 +534,7 @@ export default function SystemCanvas({
     const content = getActionPanelContent(activeAction.actionId);
     const title = content?.title ?? "Action";
     const description = content?.description ?? "";
+    const records = content?.records ?? [];
     const primaryLabel = content?.primaryLabel ?? "OK";
     const secondaryLabel = content?.secondaryLabel;
     return {
@@ -493,8 +544,10 @@ export default function SystemCanvas({
       data: {
         title,
         description,
+        records,
         primaryLabel,
         secondaryLabel,
+        panelWidth: layout.actionPanelWidth,
         onClose: () => setActiveAction(null),
       },
       draggable: false,
@@ -502,7 +555,7 @@ export default function SystemCanvas({
       zIndex: 300,
       className: "adminv2-rf-foreground",
     };
-  }, [activeAction, zoomLevel]);
+  }, [activeAction, zoomLevel, layout.actionPanelWidth]);
 
   const nodes = useMemo(() => {
     const list: Node[] = [...(ambientNodes as Node[]), ...contentNodes];
@@ -528,14 +581,14 @@ export default function SystemCanvas({
         pendingZoomRef.current = {
           nodeId: node.id,
           key: (node.data as DepartmentNodeData).departmentKey,
-          position: idx >= 0 ? getDepartmentPosition(idx) : node.position,
+          position: idx >= 0 ? getDepartmentPosition(idx, layout) : node.position,
         };
         setActivatingDepartmentId(node.id);
       } else {
         onNodeSelect(node.id);
       }
     },
-    [zoomLevel, onNodeSelect, activatingDepartmentId]
+    [zoomLevel, onNodeSelect, activatingDepartmentId, layout]
   );
 
   const onPaneClick = useCallback(() => {
@@ -545,6 +598,7 @@ export default function SystemCanvas({
 
   return (
     <div
+      ref={canvasContainerRef}
       className="w-full h-full relative overflow-hidden"
       style={{
         backgroundColor: derived.canvasChamberBase,
@@ -579,7 +633,8 @@ export default function SystemCanvas({
             size={1.35}
             color={derived.canvasChamberGridDot}
           />
-          <FitCompanyView zoomLevel={zoomLevel} />
+          <SetScreenToFlowRef projectRef={screenToFlowRef} />
+          <FitCompanyView zoomLevel={zoomLevel} fitViewPadding={layout.fitViewPadding} />
           <DepartmentEnterRunner
             active={zoomLevel === "department" && selectedDepartmentKey != null}
             focusAnchor={focusAnchor}

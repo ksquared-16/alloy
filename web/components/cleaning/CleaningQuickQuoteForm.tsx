@@ -144,100 +144,130 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
     }
   };
 
+  const labelBase =
+    "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">First name *</label>
-          <input
-            type="text"
-            value={form.first_name}
-            onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
-            placeholder="e.g. Jamie"
-            className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-            maxLength={80}
-            autoComplete="given-name"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Last name *</label>
-          <input
-            type="text"
-            value={form.last_name}
-            onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
-            placeholder="e.g. Smith"
-            className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-            maxLength={80}
-            autoComplete="family-name"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">ZIP code *</label>
-        <input
-          type="text"
-          value={form.zip}
-          onChange={(e) => setForm((f) => ({ ...f, zip: e.target.value }))}
-          placeholder="e.g. 97702"
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-          maxLength={10}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage *</label>
-        <select
-          value={form.square_footage}
-          onChange={(e) => setForm((f) => ({ ...f, square_footage: e.target.value }))}
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-        >
-          <option value="">Select</option>
-          {SQUARE_FOOTAGE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Cleaning frequency</label>
-        <select
-          value={form.cleaning_frequency}
-          onChange={(e) => setForm((f) => ({ ...f, cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly" }))}
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-        >
-          <option value="one_time">One-time</option>
-          <option value="weekly">Weekly</option>
-          <option value="biweekly">Every 2 weeks</option>
-          <option value="monthly">Monthly</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email (so we can save your quote)</label>
-        <input
-          type="email"
-          value={form.email}
-          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-          placeholder="you@example.com"
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone *</label>
-        <input
-          type="tel"
-          required
-          aria-required
-          value={form.phone}
-          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-          placeholder="(541) 555-0123"
-          className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-blue"
-        />
-        <p className="mt-1.5 text-xs text-alloy-midnight/60">
-          Phone number is required for booking coordination. SMS messages are optional and require separate consent below.
+    <form onSubmit={handleSubmit} className="space-y-0">
+      {/* Contact — name & location */}
+      <div className="space-y-4 pb-6 border-b border-alloy-stone/50">
+        <p className="public-form-section-title">
+          Your details
         </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={labelBase}>First name *</label>
+            <input
+              type="text"
+              value={form.first_name}
+              onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
+              placeholder="e.g. Jamie"
+              className="public-form-input"
+              maxLength={80}
+              autoComplete="given-name"
+            />
+          </div>
+          <div>
+            <label className={labelBase}>Last name *</label>
+            <input
+              type="text"
+              value={form.last_name}
+              onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
+              placeholder="e.g. Smith"
+              className="public-form-input"
+              maxLength={80}
+              autoComplete="family-name"
+            />
+          </div>
+        </div>
+        <div>
+          <label className={labelBase}>ZIP code *</label>
+          <input
+            type="text"
+            value={form.zip}
+            onChange={(e) => setForm((f) => ({ ...f, zip: e.target.value }))}
+            placeholder="e.g. 97702"
+            className="public-form-input"
+            maxLength={10}
+          />
+        </div>
       </div>
-      <div className="pt-1">
-        <label className="flex items-start gap-2 text-xs text-alloy-midnight/80 cursor-pointer">
+
+      {/* Home & schedule */}
+      <div className="space-y-4 py-6 border-b border-alloy-stone/50">
+        <p className="public-form-section-title">
+          Home & schedule
+        </p>
+        <div>
+          <label className={labelBase}>Approximate square footage *</label>
+          <select
+            value={form.square_footage}
+            onChange={(e) => setForm((f) => ({ ...f, square_footage: e.target.value }))}
+            className="public-form-input"
+          >
+            <option value="">Select</option>
+            {SQUARE_FOOTAGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelBase}>Cleaning frequency</label>
+          <select
+            value={form.cleaning_frequency}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly",
+              }))
+            }
+            className="public-form-input"
+          >
+            <option value="one_time">One-time</option>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Every 2 weeks</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Contact — email & phone */}
+      <div className="space-y-4 py-6 border-b border-alloy-stone/50">
+        <p className="public-form-section-title">
+          How we&apos;ll reach you
+        </p>
+        <div>
+          <label className={labelBase}>Email (so we can save your quote)</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            placeholder="you@example.com"
+            className="public-form-input"
+          />
+        </div>
+        <div>
+          <label className={labelBase}>Phone *</label>
+          <input
+            type="tel"
+            required
+            aria-required
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            placeholder="(541) 555-0123"
+            className="public-form-input"
+          />
+          <p className="mt-1.5 text-xs text-alloy-midnight/55">
+            Phone is required for booking. SMS is optional — consent below.
+          </p>
+        </div>
+      </div>
+
+      {/* Consent */}
+      <div className="pt-6">
+        <label className="flex items-start gap-3 text-sm text-alloy-midnight/80 cursor-pointer">
           <input
             type="checkbox"
             checked={smsConsent}
@@ -245,19 +275,25 @@ export default function CleaningQuickQuoteForm({ onSuccess }: CleaningQuickQuote
               setSmsConsent(e.target.checked);
               setConsentError(null);
             }}
-            className="mt-0.5 h-4 w-4 rounded border-alloy-stone/70 text-alloy-juniper focus:ring-alloy-juniper"
+            className="mt-0.5 h-4 w-4 rounded border-alloy-stone/60 text-alloy-juniper focus:ring-2 focus:ring-alloy-juniper/25 focus:ring-offset-0 transition-colors"
           />
-          <span>
-            By checking this box, you agree to receive transactional SMS messages from Alloy regarding your quote, appointment updates, and service notifications. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for assistance. Consent is not a condition of purchase.
+          <span className="leading-relaxed">
+            By checking this box, you agree to receive transactional SMS from Alloy about your quote and appointments. Message and data rates may apply. Reply STOP to opt out. Consent is not required to purchase.
           </span>
         </label>
-        {consentError && <p className="mt-1 text-xs text-red-600">{consentError}</p>}
+        {consentError && <p className="mt-2 text-sm text-red-600">{consentError}</p>}
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
+
       <button
         type="submit"
         disabled={submitting}
-        className="w-full bg-alloy-blue text-white font-semibold px-6 py-3 rounded-lg hover:bg-alloy-blue/90 transition-colors disabled:opacity-50"
+        className="public-form-cta public-btn-primary mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {submitting ? "Saving…" : "Get my quote"}
       </button>

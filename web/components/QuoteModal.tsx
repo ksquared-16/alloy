@@ -90,19 +90,22 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 public-modal-overlay"
       onClick={(e) => {
-        // Close when clicking backdrop
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
       style={{ touchAction: "none" }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col border border-[#59678b]/40" style={{ maxHeight: "90dvh" }}>
+      <div
+        className="public-modal-shell public-modal-shell-premium max-w-4xl w-full flex flex-col overflow-hidden"
+        style={{ maxHeight: "90dvh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Sticky Header */}
-        <div className="sticky top-0 bg-white border-b border-alloy-stone/20 px-4 sm:px-6 py-4 flex items-center justify-between z-10 shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-alloy-midnight">
+        <div className="sticky top-0 bg-white border-b border-alloy-stone/25 px-5 sm:px-6 py-4 flex items-center justify-between z-10 shrink-0 rounded-t-[1.375rem]">
+          <h2 className="text-lg sm:text-xl font-bold text-alloy-pine tracking-tight">
             {modalStep === "submitted"
               ? selectedVertical === "cleaning"
                 ? "Your Quote"
@@ -116,7 +119,7 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
           <button
             type="button"
             onClick={onClose}
-            className="text-alloy-midnight/60 hover:text-alloy-midnight transition-colors p-2 -mr-2"
+            className="text-alloy-midnight/60 hover:text-alloy-midnight hover:bg-alloy-stone/80 rounded-lg transition-colors p-2 -mr-2"
             aria-label="Close modal"
           >
             <svg
@@ -136,7 +139,11 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }} data-modal-content>
+        <div
+          className="flex-1 overflow-y-auto overscroll-contain transition-opacity duration-200"
+          style={{ WebkitOverflowScrolling: "touch" }}
+          data-modal-content
+        >
           <div className="p-4 sm:p-6">
             {modalStep === "submitted" && selectedVertical === "gutters" ? (
               // Submitted view only for gutters (cleaning goes directly to /book)
@@ -175,36 +182,41 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
             ) : selectedVertical === null ? (
               // Service Selection
               <div className="space-y-6">
-                <p className="text-alloy-midnight/80 text-center">
+                <p className="text-alloy-midnight/80 text-center text-sm md:text-base">
                   Select a service to get started.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Cleaning Option — short form in modal, then /book-v2 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                  {/* Cleaning Option */}
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedVertical("cleaning");
                       setModalStep("form");
                     }}
-                    className="bg-white rounded-lg shadow-md p-4 sm:p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
+                    className="public-modal-service-card group"
                   >
-                    <div className="mb-4 flex items-center justify-center">
+                    <div className="flex items-center justify-center rounded-2xl bg-alloy-blue/8 p-5 w-20 h-20 mx-auto mb-4 ring-1 ring-alloy-blue/10 group-hover:bg-alloy-blue/12 group-hover:ring-alloy-juniper/20 transition-all duration-200">
                       <img
                         src="/icons/vacuum-blue.png"
-                        alt="Home Cleaning"
-                        width={56}
-                        height={56}
-                        className="w-14 h-14"
+                        alt=""
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 object-contain"
                       />
                     </div>
-                    <h3 className="text-xl font-bold text-alloy-pine mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-alloy-juniper mb-2 inline-block">
+                      Available now
+                    </span>
+                    <h3 className="text-xl font-bold text-alloy-pine mb-2 tracking-tight">
                       Home Cleaning
                     </h3>
-                    <p className="text-alloy-midnight/70 mb-4 text-sm flex-grow">
+                    <p className="text-alloy-midnight/70 mb-5 text-sm flex-grow leading-relaxed">
                       Professional home cleaning services.
                     </p>
                     <div className="mt-auto">
-                      <PrimaryButton className="w-full">Get a cleaning quote</PrimaryButton>
+                      <span className="public-cta-appearance block w-full text-center">
+                        Get a cleaning quote
+                      </span>
                     </div>
                   </button>
 
@@ -215,32 +227,37 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                       setSelectedVertical("gutters");
                       setModalStep("form");
                     }}
-                    className="bg-white rounded-lg shadow-md p-4 sm:p-5 md:p-6 border border-alloy-stone/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer text-left flex flex-col h-full"
+                    className="public-modal-service-card group"
                   >
-                    <div className="mb-4 flex items-center justify-center">
+                    <div className="flex items-center justify-center rounded-2xl bg-alloy-pine/8 p-5 w-20 h-20 mx-auto mb-4 ring-1 ring-alloy-pine/10 group-hover:bg-alloy-pine/12 group-hover:ring-alloy-juniper/20 transition-all duration-200">
                       <img
                         src="/icons/gutter-blue.png"
-                        alt="Gutter Cleaning"
-                        width={56}
-                        height={56}
-                        className="w-14 h-14"
+                        alt=""
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 object-contain"
                       />
                     </div>
-                    <h3 className="text-xl font-bold text-alloy-pine mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-alloy-muted mb-2 inline-block">
+                      Early access
+                    </span>
+                    <h3 className="text-xl font-bold text-alloy-pine mb-2 tracking-tight">
                       Gutter Cleaning
                     </h3>
-                    <p className="text-alloy-midnight/70 mb-4 text-sm flex-grow">
+                    <p className="text-alloy-midnight/70 mb-5 text-sm flex-grow leading-relaxed">
                       Sign up early and get $25 off your first service.
                     </p>
                     <div className="mt-auto">
-                      <PrimaryButton className="w-full">Get Early Access</PrimaryButton>
+                      <span className="public-cta-appearance block w-full text-center">
+                        Get Early Access
+                      </span>
                     </div>
                   </button>
                 </div>
               </div>
             ) : modalStep === "form" ? (
               // Form Display
-              <div>
+              <div className="transition-opacity duration-200">
                 {/* Back button - only show if not opened with defaultService */}
                 {!defaultService && (
                   <button
@@ -249,7 +266,7 @@ export default function QuoteModal({ isOpen, onClose, defaultService }: QuoteMod
                       setSelectedVertical(null);
                       setModalStep("picker");
                     }}
-                    className="text-sm text-alloy-midnight/70 hover:text-alloy-midnight transition-colors flex items-center gap-2 mb-4 sm:mb-6"
+                    className="text-sm text-alloy-midnight/70 hover:text-alloy-midnight hover:bg-alloy-stone/60 rounded-lg transition-colors flex items-center gap-2 mb-4 sm:mb-6 py-2 px-1 -ml-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

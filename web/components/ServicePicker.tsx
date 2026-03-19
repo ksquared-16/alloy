@@ -86,24 +86,23 @@ export default function ServicePicker({ variant = "button", className = "" }: Se
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      <button
+      <PrimaryButton
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="true"
         className="w-full sm:w-auto"
       >
-        <PrimaryButton className="w-full sm:w-auto">
-          Get a Quote
-          <svg
-            className={`inline-block w-4 h-4 ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </PrimaryButton>
-      </button>
+        Get a Quote
+        <svg
+          className={`inline-block w-4 h-4 ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </PrimaryButton>
       {isOpen && (
         <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-alloy-stone/30 py-2 z-50">
           {services.map((service) => (

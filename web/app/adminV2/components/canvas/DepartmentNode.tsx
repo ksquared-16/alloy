@@ -31,8 +31,12 @@ export type DepartmentNodeData = {
   nextBestAction?: string;
   /** Mock: highlight as priority on company canvas */
   isPriority?: boolean;
-  /** Opens floating action panel (company view) */
-  onQuickActionClick?: (actionId: string) => void;
+  /** Opens floating action panel (company view); event used for positioning */
+  onQuickActionClick?: (nodeId: string, actionId: string, event: React.MouseEvent<HTMLButtonElement>) => void;
+  /** Responsive: tile dimensions and padding (from canvas layout) */
+  tileWidth?: number;
+  tileHeight?: number;
+  cardPad?: number;
 };
 
 const HEALTH_LABELS: Record<DepartmentNodeData["health"], string> = {
@@ -47,9 +51,9 @@ const HEALTH_COLOR: Record<DepartmentNodeData["health"], string> = {
   critical: semantic.warning,
 };
 
-const W = COMPANY_GRID_DEPT_WIDTH;
-const H = COMPANY_GRID_DEPT_HEIGHT;
-const CARD_PAD = 32;
+const DEFAULT_W = COMPANY_GRID_DEPT_WIDTH;
+const DEFAULT_H = COMPANY_GRID_DEPT_HEIGHT;
+const DEFAULT_CARD_PAD = 32;
 
 const ICON_SIZE = 14;
 const ICON_GAP = 6;
@@ -103,13 +107,16 @@ function QuickActionIconSvg({ icon, size = ICON_SIZE }: { icon: QuickActionIcon;
   }
 }
 
-function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeData>) {
+function DepartmentNodeComponent({ id, data, selected }: NodeProps<DepartmentNodeData>) {
   const fill = getDepartmentColor(data.departmentKey);
   const zoomingOut = data.zoomingOut ?? false;
   const activating = data.activating ?? false;
   const quickActions = data.quickActions ?? [];
   const isPriority = data.isPriority ?? false;
   const onQuickActionClick = data.onQuickActionClick;
+  const W = data.tileWidth ?? DEFAULT_W;
+  const H = data.tileHeight ?? DEFAULT_H;
+  const CARD_PAD = data.cardPad ?? DEFAULT_CARD_PAD;
 
   return (
     <div
@@ -153,7 +160,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           }}
         />
         <div
-          className="adminv2-dept-title-clamp"
+          className="adminv2-dept-title-clamp adminv2-dept-title"
           style={{
             fontSize: 56,
             fontWeight: 700,
@@ -168,6 +175,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           {data.name}
         </div>
         <div
+          className="adminv2-dept-primary-value"
           style={{
             fontSize: 64,
             fontWeight: 600,
@@ -193,6 +201,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
           {data.primaryKpi}
         </div>
         <div
+          className="adminv2-dept-secondary-value"
           style={{
             fontSize: 44,
             fontWeight: 600,
@@ -245,6 +254,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
               {data.compact1Label}
             </div>
             <div
+              className="adminv2-dept-compact-value"
               style={{
                 fontSize: 36,
                 fontWeight: 600,
@@ -275,6 +285,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
               {data.compact2Label}
             </div>
             <div
+              className="adminv2-dept-compact-value"
               style={{
                 fontSize: 36,
                 fontWeight: 600,
@@ -304,6 +315,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
         >
           <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
             <span
+              className="adminv2-dept-health"
               style={{
                 fontSize: 36,
                 fontWeight: 600,
@@ -383,7 +395,7 @@ function DepartmentNodeComponent({ data, selected }: NodeProps<DepartmentNodeDat
                 className="adminv2-dept-quick-action"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onQuickActionClick?.(a.id);
+                  onQuickActionClick?.(id, a.id, e);
                 }}
                 style={{
                   border: `1px solid ${derived.border}`,

@@ -29,14 +29,14 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-alloy-stone shadow-sm border-b border-alloy-stone/60">
+    <nav className="sticky top-0 z-50 home-header-translucent">
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Desktop Layout - Logo Left, Links Right */}
         <div className="hidden md:flex items-center justify-between h-20">
-          {/* Logo - Left */}
+          {/* Logo - Left (white wordmark on dark) */}
           <Link href="/" className="flex items-center">
             <Image
-              src="/brand/alloy-wordmark-blue.svg"
+              src="/brand/alloy-wordmark-white.svg"
               alt="Alloy logo"
               width={360}
               height={96}
@@ -51,11 +51,11 @@ export default function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={`
-                  text-alloy-midnight hover:text-alloy-juniper 
+                  text-white/90 hover:text-white
                   transition-colors font-medium pb-1 relative flex items-center gap-1
-                  outline-none focus:outline-none
+                  outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#18273A]
                   ${pathname?.startsWith("/services/") || pathname === "/gutters"
-                    ? "border-b-2 border-alloy-juniper"
+                    ? "border-b-2 border-alloy-juniper text-white"
                     : ""}
                 `}
               >
@@ -95,9 +95,9 @@ export default function Navbar() {
                   key={link.href}
                   href={link.href}
                   className={`
-                    text-alloy-midnight hover:text-alloy-juniper 
+                    text-white/90 hover:text-white
                     transition-colors font-medium pb-1 relative
-                    ${isActive ? "border-b-2 border-alloy-juniper" : ""}
+                    ${isActive ? "border-b-2 border-alloy-juniper text-white" : ""}
                   `}
                 >
                   {link.label}
@@ -105,8 +105,8 @@ export default function Navbar() {
               );
             })}
 
-            {/* Get a Quote CTA */}
-            <GetQuoteButton className="!px-4 !py-2 !text-sm" />
+            {/* Get a Quote CTA - Alloy Blue for hierarchy */}
+            <GetQuoteButton className="!px-5 !py-2.5 !text-sm !bg-alloy-blue hover:!bg-alloy-blue/90 !text-white !shadow-md hover:!shadow-lg transition-all" />
           </div>
         </div>
 
@@ -115,7 +115,7 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center">
             <Image
-              src="/brand/alloy-wordmark-blue.svg"
+              src="/brand/alloy-wordmark-white.svg"
               alt="Alloy logo"
               width={280}
               height={72}
@@ -126,7 +126,7 @@ export default function Navbar() {
 
           {/* Mobile Menu Button */}
           <button
-            className="p-3 rounded-md text-alloy-midnight hover:bg-white/50 transition-colors"
+            className="p-3 rounded-lg text-white/90 hover:text-white hover:bg-white/10 transition-colors"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -150,10 +150,10 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-6 border-t border-alloy-midnight/10">
+          <div className="md:hidden py-6 border-t border-white/10">
             <div className="flex flex-col space-y-5">
-              <div className="pb-2 border-b border-alloy-midnight/10">
-                <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/60 mb-2">Services</p>
+              <div className="pb-2 border-b border-white/10">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/50 mb-2">Services</p>
                 {servicesLinks.map((link) => {
                   const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
                   return (
@@ -161,7 +161,7 @@ export default function Navbar() {
                       key={link.href}
                       href={link.href}
                       className={`
-                        block text-alloy-midnight hover:text-alloy-juniper 
+                        block text-white/90 hover:text-white
                         transition-colors font-medium py-2 pl-4 relative
                         ${isActive ? "text-alloy-juniper font-semibold" : ""}
                       `}
@@ -179,9 +179,9 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={`
-                      text-alloy-midnight hover:text-alloy-juniper 
+                      text-white/90 hover:text-white
                       transition-colors font-medium py-2 relative
-                      ${isActive ? "border-b-2 border-alloy-juniper inline-block w-fit" : ""}
+                      ${isActive ? "border-b-2 border-alloy-juniper inline-block w-fit text-white" : ""}
                     `}
                     onClick={() => setMobileMenuOpen(false)}
                   >
@@ -191,7 +191,7 @@ export default function Navbar() {
               })}
               <div className="pt-2">
                 <div onClick={() => setMobileMenuOpen(false)} className="w-full">
-                  <GetQuoteButton className="w-full" />
+                  <GetQuoteButton className="w-full !bg-alloy-blue !text-white" />
                 </div>
               </div>
             </div>

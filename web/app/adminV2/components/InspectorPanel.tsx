@@ -425,7 +425,7 @@ export default function InspectorPanel({
 
   return (
     <aside
-      className="w-80 flex-shrink-0 overflow-y-auto min-h-0 self-stretch"
+      className="adminv2-inspector-rail w-80 flex-shrink-0 overflow-y-auto min-h-0 self-stretch"
       style={{
         background: `linear-gradient(185deg, ${derived.inspectorCommandRail} 0%, ${derived.inspectorCommandRailWash} 42%, ${derived.inspectorCommandRail} 100%)`,
         borderLeft: `1px solid ${derived.inspectorCommandHairline}`,

@@ -59,3 +59,480 @@ body {
 .admin-link-danger {
   @apply text-alloy-ember hover:text-alloy-ember/90 hover:underline focus:outline-none focus:ring-2 focus:ring-alloy-ember/30 focus:ring-offset-1 rounded;
 }
+
+/* ========== Public site: premium primitives (hero, modals, cards, buttons) ========== */
+
+/* Teal accent for hover/focus/active (restrained) */
+:root {
+  --public-teal: rgba(0, 162, 131, 1);
+  --public-teal-soft: rgba(0, 162, 131, 0.12);
+  --public-teal-glow: rgba(0, 162, 131, 0.25);
+  --public-blue-glow: rgba(0, 69, 140, 0.2);
+  --public-ambient-blue-teal: radial-gradient(
+    ellipse 80% 70% at 30% 50%,
+    rgba(0, 69, 140, 0.08) 0%,
+    rgba(0, 162, 131, 0.05) 45%,
+    transparent 70%
+  );
+}
+
+/* Slow ambient bloom for glow layers */
+@keyframes public-ambient-bloom {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Visible-but-restrained drifting specs (adminV2-inspired) */
+@keyframes public-spec-float {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(8px, -10px);
+    opacity: 0.92;
+  }
+}
+
+@keyframes public-spec-float-slow {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-6px, 8px);
+    opacity: 0.85;
+  }
+}
+
+@keyframes public-spec-drift-alt {
+  0%,
+  100% {
+    transform: translate(4px, 4px);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(-8px, -6px);
+    opacity: 0.8;
+  }
+}
+
+/* Ambient glow layer (soft blue/teal radial) */
+.public-glow-ambient {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: var(--public-ambient-blue-teal);
+  border-radius: inherit;
+}
+
+.public-glow-ambient-breathe {
+  animation: public-ambient-bloom 6s ease-in-out infinite;
+}
+
+/* Premium card: white, depth, edge */
+.public-card {
+  background: #ffffff;
+  border-radius: 1rem;
+  border: 1px solid rgba(69, 96, 139, 0.12);
+  box-shadow:
+    0 1px 3px rgba(39, 63, 82, 0.06),
+    0 4px 12px rgba(39, 63, 82, 0.06);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.public-card:hover {
+  box-shadow:
+    0 4px 12px rgba(39, 63, 82, 0.08),
+    0 8px 24px rgba(39, 63, 82, 0.06);
+  border-color: rgba(0, 162, 131, 0.2);
+}
+
+/* Card lift on hover */
+.public-card-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* Button: premium depth and states */
+.public-btn-primary {
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.public-btn-primary:hover {
+  box-shadow: 0 4px 14px rgba(0, 69, 140, 0.25);
+  transform: translateY(-1px);
+}
+
+.public-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 69, 140, 0.2);
+}
+
+/* Focus ring: navy + teal accent */
+.public-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-alloy-blue), 0 0 0 6px var(--public-teal-soft);
+}
+
+/* Modal overlay and shell */
+.public-modal-overlay {
+  background: rgba(24, 39, 58, 0.38);
+  backdrop-filter: blur(8px);
+  transition: opacity 0.2s ease;
+}
+
+.public-modal-shell {
+  background: #ffffff;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(69, 96, 139, 0.14);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset,
+    0 4px 6px -2px rgba(39, 63, 82, 0.08),
+    0 18px 40px -12px rgba(39, 63, 82, 0.18);
+}
+
+/* Premium modal shell: stronger depth, edge lighting */
+.public-modal-shell-premium {
+  background: #ffffff;
+  border-radius: 1.375rem;
+  border: 1px solid rgba(69, 96, 139, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 1) inset,
+    0 1px 2px rgba(0, 69, 140, 0.06),
+    0 8px 16px -4px rgba(39, 63, 82, 0.1),
+    0 24px 48px -12px rgba(39, 63, 82, 0.18),
+    0 0 0 1px rgba(0, 69, 140, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+/* Modal service card: polished, intentional hover */
+.public-modal-service-card {
+  background: #ffffff;
+  border-radius: 1rem;
+  border: 1px solid rgba(69, 96, 139, 0.1);
+  box-shadow: 0 2px 8px rgba(39, 63, 82, 0.06), 0 4px 16px rgba(39, 63, 82, 0.04);
+  padding: 1.5rem 1.5rem 1.75rem;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.public-modal-service-card:hover {
+  border-color: rgba(0, 69, 140, 0.18);
+  box-shadow:
+    0 8px 24px rgba(39, 63, 82, 0.1),
+    0 0 0 1px rgba(0, 162, 131, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Quote form: premium inputs and section hierarchy */
+.public-form-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid rgba(69, 96, 139, 0.2);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: var(--color-alloy-forge);
+  font-size: 0.9375rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
+}
+
+.public-form-input::placeholder {
+  color: rgba(24, 39, 58, 0.45);
+}
+
+.public-form-input:hover {
+  border-color: rgba(69, 96, 139, 0.3);
+}
+
+.public-form-input:focus {
+  outline: none;
+  border-color: var(--color-alloy-blue);
+  box-shadow: 0 0 0 3px rgba(0, 69, 140, 0.12), 0 0 0 1px rgba(0, 162, 131, 0.08);
+}
+
+.public-form-section-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-alloy-pine);
+  margin-bottom: 0.75rem;
+  padding-left: 0.5rem;
+  border-left: 3px solid rgba(0, 69, 140, 0.35);
+}
+
+.public-form-cta {
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  background: var(--color-alloy-blue);
+  color: #fff;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.public-form-cta:hover:not(:disabled) {
+  background: rgba(0, 69, 140, 0.9);
+  box-shadow: 0 4px 14px rgba(0, 69, 140, 0.3);
+}
+
+.public-form-cta:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 69, 140, 0.2), 0 0 0 1px rgba(0, 162, 131, 0.15);
+}
+
+/* Hero: floating micro-specs container */
+.public-hero-specs {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.public-hero-spec {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 4px rgba(0, 162, 131, 0.2);
+}
+
+.public-hero-spec:nth-child(odd) {
+  animation: public-spec-float 7s ease-in-out infinite;
+}
+
+.public-hero-spec:nth-child(even) {
+  animation: public-spec-float-slow 9s ease-in-out infinite;
+}
+
+/* Page-level ambient specs (visible on light background) */
+.public-ambient-spec {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.public-ambient-spec-dot {
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  background: rgba(0, 69, 140, 0.35);
+  box-shadow: 0 0 12px rgba(0, 69, 140, 0.25);
+}
+
+.public-ambient-spec-dot-juniper {
+  background: rgba(0, 162, 131, 0.3);
+  box-shadow: 0 0 10px rgba(0, 162, 131, 0.2);
+}
+
+.public-ambient-spec:nth-child(3n + 1) {
+  animation: public-spec-float 11s ease-in-out infinite;
+}
+
+.public-ambient-spec:nth-child(3n + 2) {
+  animation: public-spec-float-slow 13s ease-in-out infinite;
+}
+
+.public-ambient-spec:nth-child(3n) {
+  animation: public-spec-drift-alt 10s ease-in-out infinite;
+}
+
+/* ========== Homepage visual system (brand hierarchy, section depth, transitions) ========== */
+
+/* Brand roles: Midnight Forge = depth/anchor, Alloy Blue = primary/CTA, Bend Pine = life/accent, Juniper = small emphasis, River Stone/white = surfaces */
+:root {
+  --home-forge: #18273A;
+  --home-forge-soft: rgba(24, 39, 58, 0.06);
+  --home-forge-edge: rgba(24, 39, 58, 0.08);
+  --home-blue: #00458C;
+  --home-pine: #273F52;
+  --home-stone: #F4F6F9;
+  --home-stone-warm: #eef1f6;
+}
+
+/* Page wrapper: light atmospheric canvas (no heavy dark) */
+.home-page {
+  background: var(--home-stone);
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Full-page ambient layer: soft radial blooms (Alloy blue + pine/juniper) */
+.home-atmosphere {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.home-atmosphere-bloom {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: public-ambient-bloom 8s ease-in-out infinite;
+}
+
+.home-atmosphere-bloom-blue {
+  width: 60vmax;
+  height: 60vmax;
+  left: -15vmax;
+  top: -10vmax;
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.12) 0%, transparent 65%);
+}
+
+.home-atmosphere-bloom-pine {
+  width: 50vmax;
+  height: 50vmax;
+  right: -10vmax;
+  top: 30%;
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.08) 0%, transparent 65%);
+}
+
+.home-atmosphere-bloom-juniper {
+  width: 45vmax;
+  height: 45vmax;
+  left: 20%;
+  bottom: -5vmax;
+  background: radial-gradient(circle, rgba(0, 162, 131, 0.06) 0%, transparent 65%);
+}
+
+/* Translucent header (reduces visual heaviness) */
+.home-header-translucent {
+  background: rgba(24, 39, 58, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Floating hero card: sits on atmospheric background with perimeter glow */
+.home-hero-float {
+  border-radius: 1.5rem;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 4px 24px rgba(39, 63, 82, 0.12),
+    0 24px 64px -16px rgba(39, 63, 82, 0.2),
+    0 0 80px -20px rgba(0, 69, 140, 0.15);
+}
+
+/* Section backgrounds: alternate light / darker for rhythm */
+.home-section-anchor {
+  background: var(--home-forge);
+  color: #fff;
+}
+
+.home-section-light {
+  background: #ffffff;
+  position: relative;
+}
+
+.home-section-stone {
+  background: linear-gradient(180deg, var(--home-stone) 0%, var(--home-stone-warm) 50%, var(--home-stone) 100%);
+  position: relative;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.home-section-alt {
+  background: linear-gradient(180deg, rgba(39, 63, 82, 0.03) 0%, rgba(39, 63, 82, 0.02) 100%);
+  position: relative;
+}
+
+/* Section transition: soft top edge so sections don’t feel stacked */
+.home-section-transition {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+@media (min-width: 768px) {
+  .home-section-transition {
+    padding-top: 5rem;
+    padding-bottom: 5rem;
+  }
+}
+
+/* Homepage card: premium, brand-aligned */
+.home-card {
+  background: #ffffff;
+  border-radius: 1rem;
+  border: 1px solid var(--home-forge-edge);
+  box-shadow: 0 1px 3px rgba(39, 63, 82, 0.06), 0 6px 20px rgba(39, 63, 82, 0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.home-card:hover {
+  box-shadow: 0 8px 24px rgba(39, 63, 82, 0.08), 0 2px 8px rgba(0, 69, 140, 0.06);
+  border-color: rgba(39, 63, 82, 0.14);
+}
+
+.home-card-lift:hover {
+  transform: translateY(-3px);
+}
+
+/* Homepage section heading */
+.home-heading {
+  color: var(--home-pine);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.home-heading-inverse {
+  color: #ffffff;
+}
+
+/* Final CTA block — premium, blue/pine glow (not heavy dark slab) */
+.home-cta-block {
+  background: linear-gradient(145deg, rgba(0, 69, 140, 0.92) 0%, rgba(39, 63, 82, 0.9) 100%);
+  color: #fff;
+  border-radius: 1.25rem;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 4px 24px rgba(0, 69, 140, 0.2),
+    0 24px 48px -12px rgba(39, 63, 82, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.home-cta-block::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 70% at 50% 80%, rgba(0, 162, 131, 0.12) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Subtle section ambient: very soft gradient edge for depth (optional use) */
+.home-section-ambient {
+  position: relative;
+}
+
+.home-section-ambient::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--home-forge-edge), transparent);
+  pointer-events: none;
+}
