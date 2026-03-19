@@ -648,19 +648,27 @@ export default function BookV2Client() {
             if (prefill) {
                 try {
                     const prefillData = JSON.parse(prefill);
-                    const prefillAmt = prefillData.discount_amount;
-                    const prefillProg = typeof prefillData.discount_program_id === "string" && prefillData.discount_program_id.trim();
-                    const prefillLegacy = typeof prefillData.discount_code_id === "string" && prefillData.discount_code_id.trim();
+                    const rawAmt = prefillData.discount_amount;
+                    const prefillAmt =
+                        typeof rawAmt === "number" && Number.isFinite(rawAmt) ? rawAmt : Number(rawAmt);
+                    const prefillProg =
+                        typeof prefillData.discount_program_id === "string" && prefillData.discount_program_id.trim();
+                    const prefillLegacy =
+                        typeof prefillData.discount_code_id === "string" && prefillData.discount_code_id.trim();
                     const prefillCode =
                         (typeof prefillData.discount_program_code === "string" && prefillData.discount_program_code.trim()) ||
                         (typeof prefillData.discount_code === "string" && prefillData.discount_code.trim()) ||
                         "";
-                    if (typeof prefillAmt === "number" && prefillCode && (prefillProg || prefillLegacy)) {
+                    const rawTotal = prefillData.quote_total;
+                    const quoteTotalPrefill =
+                        typeof rawTotal === "number" && Number.isFinite(rawTotal) ? rawTotal : Number(rawTotal);
+                    const hasProgramOrLegacy = Boolean(prefillProg || prefillLegacy);
+                    if (prefillCode && hasProgramOrLegacy && Number.isFinite(prefillAmt) && prefillAmt >= 0) {
                         setDiscountData({
                             code: prefillCode,
                             discount_code_id: prefillLegacy ? String(prefillData.discount_code_id).trim() : null,
                             discount_amount: prefillAmt,
-                            quote_total: typeof prefillData.quote_total === "number" ? prefillData.quote_total : 0,
+                            quote_total: Number.isFinite(quoteTotalPrefill) ? quoteTotalPrefill : 0,
                             discount_program_id: prefillProg ? String(prefillData.discount_program_id).trim() : null,
                             discount_program_name:
                                 typeof prefillData.discount_program_name === "string" ? prefillData.discount_program_name : null,

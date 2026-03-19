@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useRef, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useRef, useCallback, useMemo, ReactNode } from "react";
 
 type DefaultService = "cleaning" | "gutters" | null;
 
@@ -39,7 +39,8 @@ export function QuoteModalProvider({ children }: { children: ReactNode }) {
     onCampaignQuoteCompleteRef.current?.();
   }, []);
 
-  const openModal = (options?: {
+  /** Stable identity required: consumers (e.g. campaign useEffect) must not re-run on every provider render. */
+  const openModal = useCallback((options?: {
     defaultService?: "cleaning" | "gutters";
     campaignQuoteFlow?: CampaignQuoteFlowId | null;
     onCampaignQuoteComplete?: () => void;
@@ -48,26 +49,29 @@ export function QuoteModalProvider({ children }: { children: ReactNode }) {
     setDefaultService(options?.defaultService || null);
     setCampaignQuoteFlow(options?.campaignQuoteFlow ?? null);
     setIsOpen(true);
-  };
+  }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setIsOpen(false);
     setDefaultService(null);
     setCampaignQuoteFlow(null);
     onCampaignQuoteCompleteRef.current = null;
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      isOpen,
+      defaultService,
+      campaignQuoteFlow,
+      invokeCampaignQuoteComplete,
+      openModal,
+      closeModal,
+    }),
+    [isOpen, defaultService, campaignQuoteFlow, invokeCampaignQuoteComplete, openModal, closeModal]
+  );
 
   return (
-    <QuoteModalContext.Provider
-      value={{
-        isOpen,
-        defaultService,
-        campaignQuoteFlow,
-        invokeCampaignQuoteComplete,
-        openModal,
-        closeModal,
-      }}
-    >
+    <QuoteModalContext.Provider value={value}>
       {children}
     </QuoteModalContext.Provider>
   );

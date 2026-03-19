@@ -220,7 +220,11 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
             <input
               type="checkbox"
               checked={termsAccepted}
-              onChange={(e) => setTermsAccepted(e.target.checked)}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setTermsAccepted(v);
+                if (v) setTermsError(null);
+              }}
               className="mt-1 h-4 w-4 rounded border-alloy-stone/60 text-alloy-juniper focus:ring-alloy-juniper"
             />
             <span>

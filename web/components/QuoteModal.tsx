@@ -330,13 +330,16 @@ export default function QuoteModal({
                       campaignQuoteMode={campaignQuoteFlow === "firstfree4x60" ? { id: "firstfree4x60" } : undefined}
                       onSuccess={() => {
                         const isCampaign = campaignQuoteFlow === "firstfree4x60";
-                        if (isCampaign && invokeCampaignQuoteComplete) {
-                          invokeCampaignQuoteComplete();
+                        if (isCampaign) {
+                          // Close quote shell first so only the terms modal is visible (avoid stacked modals).
+                          onClose();
+                          if (invokeCampaignQuoteComplete) {
+                            queueMicrotask(() => invokeCampaignQuoteComplete());
+                          }
+                          return;
                         }
                         onClose();
-                        if (!isCampaign) {
-                          router.push("/book-v2");
-                        }
+                        router.push("/book-v2");
                       }}
                     />
                   </div>
