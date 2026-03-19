@@ -1,21 +1,12 @@
-import { Suspense } from "react";
-import FirstFree4x60Client from "./FirstFree4x60Client";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "First cleaning offer | Alloy",
-  description: "Recurring standard cleaning — complete 4 visits in 60 days. Get a quote and book.",
+  description:
+    "Recurring standard cleaning — complete 4 visits in 60 days. Opens the homepage with the offer; quote and terms in modals, then book.",
 };
 
+/** QR / short link: same flow as `/?campaign=firstfree4x60` */
 export default function FirstFree4x60Page() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen home-page flex items-center justify-center">
-          <p className="text-alloy-midnight/70 text-sm">Loading…</p>
-        </div>
-      }
-    >
-      <FirstFree4x60Client />
-    </Suspense>
-  );
+  redirect("/?campaign=firstfree4x60");
 }

@@ -12,6 +12,7 @@ import { SERVICES } from "@/lib/services";
 import GetQuoteButton from "@/components/GetQuoteButton";
 import HeroSpecs from "@/components/HeroSpecs";
 import HomeAmbient, { HeroPerimeterSpecs } from "@/components/HomeAmbient";
+import FirstFreeCampaignHomeFlow from "@/components/offers/FirstFreeCampaignHomeFlow";
 
 export default function Home() {
   const howItWorksSteps = [
@@ -119,6 +120,7 @@ export default function Home() {
 
       {/* Content sits above atmosphere */}
       <div className="relative z-10">
+        <FirstFreeCampaignHomeFlow />
         {/* Hero — floating card embedded in atmosphere */}
         <section className="relative mx-auto max-w-6xl px-4 md:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
           {/* Layered motion behind and around hero */}

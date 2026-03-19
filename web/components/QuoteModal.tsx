@@ -304,6 +304,23 @@ export default function QuoteModal({
                 {/* Form */}
                 {selectedVertical === "cleaning" ? (
                   <div className="space-y-4">
+                    {campaignQuoteFlow === "firstfree4x60" ? (
+                      <div
+                        className="rounded-xl border border-alloy-juniper/25 bg-alloy-juniper/5 px-4 py-3 text-sm text-alloy-midnight"
+                        role="region"
+                        aria-label="Promotional offer"
+                      >
+                        <p className="font-semibold text-alloy-pine mb-1">
+                          First cleaning on us — 4 visits in 60 days
+                        </p>
+                        <p className="text-alloy-midnight/85 leading-relaxed">
+                          Sign up for <strong>recurring standard cleaning</strong>. Complete four visits within 60 days
+                          and your <strong>first clean is covered</strong> by this offer. Use{" "}
+                          <strong>Get my recurring quote</strong> below — next you&apos;ll review the program terms,
+                          then continue to booking.
+                        </p>
+                      </div>
+                    ) : null}
                     <p className="text-sm text-alloy-midnight/80">
                       {campaignQuoteFlow === "firstfree4x60"
                         ? "Recurring standard cleaning only. We’ll save your quote for the next step."

@@ -1,23 +1,24 @@
-# Campaign: FIRSTFREE4X60 (`/offers/firstfree4x60`)
+# Campaign: FIRSTFREE4X60
 
-## Route
+## Entry URLs
 
-- **Landing:** `/offers/firstfree4x60` (copy + CTA only; quote opens in global modal)
-- **Booking handoff:** `{NEXT_PUBLIC_BOOKING_PATH or /book-v2}?campaign=firstfree4x60`
+- **Home with campaign:** `/?campaign=firstfree4x60`
+- **Alias (redirect):** `/offers/firstfree4x60` → `/?campaign=firstfree4x60` (QRs and short links)
+
+There is **no dedicated offer landing page**. The homepage loads; the global **QuoteModal** opens automatically (via `FirstFreeCampaignHomeFlow`).
 
 ## Campaign mode
 
 - Query param: `campaign=firstfree4x60` (constant `FIRSTFREE4X60_CAMPAIGN_QUERY` in `web/lib/campaigns/firstFree4x60.ts`).
 - Discount program code (for validation): `FIRSTFREE4X60` (`FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE`).
 - Client session after T&C: `sessionStorage` key `alloy_campaign_firstfree4x60_v1` (JSON `FirstFree4x60SessionV1`).
-- **Modal:** `openModal({ defaultService: "cleaning", campaignQuoteFlow: "firstfree4x60", onCampaignQuoteComplete })` (`web/lib/quoteModal.tsx`). `QuoteModal` renders `CleaningQuickQuoteForm` with `campaignQuoteMode={{ id: "firstfree4x60" }}` (recurring-only).
+- **Quote modal:** `openModal({ defaultService: "cleaning", campaignQuoteFlow: "firstfree4x60", onCampaignQuoteComplete })` (`web/lib/quoteModal.tsx`). `QuoteModal` shows a **deal callout** at the top of the cleaning form and renders `CleaningQuickQuoteForm` with `campaignQuoteMode={{ id: "firstfree4x60" }}` (recurring-only).
 
-## Quote → booking handoff
+## Quote → terms → booking
 
-1. **Landing CTA** opens the shared **QuoteModal**; **`CleaningQuickQuoteForm`** saves `alloy_quote_v1` (with `quote_input`) + `alloy_booking_prefill`, then `onCampaignQuoteComplete` advances the landing page to the T&C step.
-2. Optional: full-page **`CleaningQuoteForm`** still supports `campaignQuoteMode` for other entry points (not used on this landing page).
-3. `alloy_booking_prefill` is merged on the landing page with `campaign`, `discount_program_code`, `campaign_source`.
-4. After T&C, `validateDiscountCodeForBooking` POSTs to **`${NEXT_PUBLIC_API_BASE_URL}/discounts/validate`** with code `FIRSTFREE4X60`. On success, prefill gets `discount_code`, `discount_code_id`, `discount_amount`, `quote_total`.
+1. User lands on home with `?campaign=firstfree4x60` → quote modal opens (cleaning, campaign flow).
+2. **`CleaningQuickQuoteForm`** saves `alloy_quote_v1` (with `quote_input`) + `alloy_booking_prefill`, then closes the modal and **`onCampaignQuoteComplete`** runs: merge prefill (`mergeFirstFreeCampaignBookingPrefill`), Meta `Lead`, open **`FirstFreeTermsModal`** (second modal, same overlay/shell pattern as quote).
+3. User accepts T&C → `validateDiscountCodeForBooking` POSTs to **`${NEXT_PUBLIC_API_BASE_URL}/discounts/validate`** with code `FIRSTFREE4X60`. On success, prefill gets discount fields; navigate to **`{booking path}?campaign=firstfree4x60`** (e.g. `/book-v2?campaign=firstfree4x60`).
 
 ## Assumptions / blockers
 
@@ -26,8 +27,8 @@
 
 ## Manual test
 
-1. Open `/offers/firstfree4x60` — campaign copy + CTA; click **Get my recurring quote** → same global quote modal as elsewhere.
-2. In modal: recurring-only frequency; submit — modal closes; T&C step appears; `alloy_quote_v1` populated.
-3. Accept T&C — Network: `POST .../discounts/validate`; then navigate to `/book-v2?campaign=firstfree4x60`.
+1. Open `/?campaign=firstfree4x60` or `/offers/firstfree4x60` — home loads; quote modal opens; deal callout visible.
+2. Submit **Get my recurring quote** — modal closes; **Offer terms** modal opens; `alloy_quote_v1` populated.
+3. Accept T&C — Network: `POST .../discounts/validate`; then navigate to `/book-v2?campaign=firstfree4x60` (or configured booking path).
 4. Confirm discount UI shows applied; frequency chips exclude One-time.
 5. Open `/book-v2` without `campaign` — one-time and normal flows unchanged.
