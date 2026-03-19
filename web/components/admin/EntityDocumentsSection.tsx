@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { formatDateTime } from "@/lib/adminFormatters";
 
+/** Aligned with `NormalizedDocumentRow` from `/api/admin/related/...` and upload response. */
 export type EntityDocumentListItem = {
     id: string;
     name?: string | null;
@@ -16,18 +17,22 @@ export type EntityDocumentListItem = {
 type Props = {
     documents: EntityDocumentListItem[];
     loading?: boolean;
+    /** When set (e.g. related API failed), show error state for the list; upload may still work. */
+    fetchError?: string | null;
+    onRetryFetch?: () => void;
     /** Canonical type for documents.entity_type (e.g. customer, job, contact). */
     uploadEntityType: string;
     entityId: string;
     canMutate: boolean;
     onAfterUpload: () => void;
-    /** Optional title above list (default: none — parent often has section header). */
     showUpload?: boolean;
 };
 
 export default function EntityDocumentsSection({
     documents,
     loading = false,
+    fetchError = null,
+    onRetryFetch,
     uploadEntityType,
     entityId,
     canMutate,
@@ -39,14 +44,34 @@ export default function EntityDocumentsSection({
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [docType, setDocType] = useState("");
     const [title, setTitle] = useState("");
+    const [openingId, setOpeningId] = useState<string | null>(null);
+    const [openError, setOpenError] = useState<string | null>(null);
 
     const openSignedUrl = async (docId: string) => {
-        const res = await fetch(`/api/admin/documents/${encodeURIComponent(docId)}/signed-url`);
-        const json = await res.json().catch(() => ({}));
-        if (json.ok && (json as { signedUrl?: string }).signedUrl) {
-            window.open((json as { signedUrl: string }).signedUrl, "_blank", "noopener,noreferrer");
-        } else {
-            alert((json as { error?: string }).error || "Could not open file");
+        setOpenError(null);
+        setOpeningId(docId);
+        try {
+            const res = await fetch(`/api/admin/documents/${encodeURIComponent(docId)}/signed-url`);
+            let json: { ok?: boolean; signedUrl?: string; error?: string; code?: string } = {};
+            try {
+                json = (await res.json()) as typeof json;
+            } catch {
+                setOpenError(`Could not read response (${res.status})`);
+                return;
+            }
+            if (!res.ok) {
+                setOpenError(json.error || `Could not open file (${res.status})`);
+                return;
+            }
+            if (json.ok && json.signedUrl) {
+                window.open(json.signedUrl, "_blank", "noopener,noreferrer");
+                return;
+            }
+            setOpenError(json.error || "Could not open file");
+        } catch (e) {
+            setOpenError((e as Error).message || "Network error while opening file");
+        } finally {
+            setOpeningId(null);
         }
     };
 
@@ -64,8 +89,15 @@ export default function EntityDocumentsSection({
             if (docType.trim()) fd.set("doc_type", docType.trim());
             if (title.trim()) fd.set("title", title.trim());
             const res = await fetch("/api/admin/documents/upload", { method: "POST", body: fd });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error || "Upload failed");
+            let json: { error?: string; code?: string } = {};
+            try {
+                json = (await res.json()) as typeof json;
+            } catch {
+                throw new Error(`Upload failed (${res.status})`);
+            }
+            if (!res.ok) {
+                throw new Error(json.error || `Upload failed (${res.status})`);
+            }
             onAfterUpload();
         } catch (err) {
             setUploadError((err as Error).message);
@@ -83,6 +115,8 @@ export default function EntityDocumentsSection({
         const raw = doc.uploaded_at || doc.created_at;
         return raw ? formatDateTime(raw) : "";
     };
+
+    const listEmpty = documents.length === 0;
 
     return (
         <div className="space-y-3">
@@ -118,15 +152,44 @@ export default function EntityDocumentsSection({
                     >
                         {uploading ? "Uploading…" : "Choose file"}
                     </button>
-                    {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+                    {uploadError && (
+                        <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-800" role="alert">
+                            {uploadError}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {fetchError && (
+                <div
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 flex flex-wrap items-center justify-between gap-2"
+                    role="alert"
+                >
+                    <span>Could not load documents: {fetchError}</span>
+                    {onRetryFetch && (
+                        <button
+                            type="button"
+                            onClick={onRetryFetch}
+                            className="shrink-0 px-2 py-1 text-xs font-medium rounded border border-amber-300 hover:bg-amber-100"
+                        >
+                            Retry
+                        </button>
+                    )}
                 </div>
             )}
 
             {loading ? (
-                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-            ) : documents.length === 0 ? (
-                <p className="text-sm text-alloy-midnight/60">No documents yet.</p>
-            ) : (
+                <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-4 text-sm text-alloy-midnight/60" aria-busy="true">
+                    Loading documents…
+                </div>
+            ) : listEmpty && !fetchError ? (
+                <div className="rounded-lg border border-dashed border-alloy-stone/40 bg-alloy-stone/5 px-3 py-4 text-center text-sm text-alloy-midnight/60">
+                    <p className="font-medium text-alloy-midnight/70">No documents linked yet</p>
+                    <p className="mt-1 text-xs text-alloy-midnight/50">
+                        {canMutate ? "Upload a file above to attach it to this record." : "Documents will appear here after upload."}
+                    </p>
+                </div>
+            ) : listEmpty && fetchError ? null : (
                 <ul className="space-y-2">
                     {documents.map((doc) => (
                         <li
@@ -136,19 +199,26 @@ export default function EntityDocumentsSection({
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium text-alloy-forge/90 truncate">{displayName(doc)}</p>
                                 <p className="text-xs text-alloy-muted">
-                                    {[doc.document_type, doc.status, displayWhen(doc)].filter(Boolean).join(" · ")}
+                                    {[doc.document_type, doc.status, displayWhen(doc)].filter(Boolean).join(" · ") || "—"}
                                 </p>
                             </div>
                             <button
                                 type="button"
+                                disabled={openingId === doc.id}
                                 onClick={() => openSignedUrl(doc.id)}
-                                className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 shrink-0"
+                                className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-blue/10 shrink-0 disabled:opacity-50"
                             >
-                                Open
+                                {openingId === doc.id ? "Opening…" : "Open"}
                             </button>
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {openError && (
+                <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-800" role="alert">
+                    {openError}
+                </div>
             )}
         </div>
     );

@@ -1,5 +1,6 @@
 /**
  * Maps public.documents rows to a stable shape for admin UI (legacy + canonical columns).
+ * All `/api/admin/related/...` document arrays use this shape so drawers and Related tabs stay consistent.
  */
 export type NormalizedDocumentRow = {
     id: string;

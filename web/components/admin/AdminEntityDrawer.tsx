@@ -724,6 +724,7 @@ export default function AdminEntityDrawer() {
             setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
+        setLocationDocuments([]);
         setOpportunityRelatedData(null);
         setPaymentRelatedData(null);
         setRedemptionRelatedData(null);
@@ -734,6 +735,7 @@ export default function AdminEntityDrawer() {
         setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
+        setLocationDocuments([]);
         setOpportunityRelatedData(null);
         setLoading(true);
         setError(null);
@@ -855,7 +857,9 @@ export default function AdminEntityDrawer() {
             setVendorRelatedLoading(true);
             fetch(`/api/admin/related/vendor/${drawer.id}`)
                 .then((r) => (r.ok ? r.json() : null))
-                .then((json: VendorRelatedPayload | null) => setVendorRelatedData(json ?? null))
+                .then((json: VendorRelatedPayload | null) =>
+                    setVendorRelatedData(json ? { ...json, documents: json.documents ?? [] } : null)
+                )
                 .catch(() => setVendorRelatedData(null))
                 .finally(() => setVendorRelatedLoading(false));
         }
@@ -866,7 +870,9 @@ export default function AdminEntityDrawer() {
         setVendorRelatedLoading(true);
         fetch(`/api/admin/related/vendor/${drawer.id}`)
             .then((r) => (r.ok ? r.json() : null))
-            .then((json: VendorRelatedPayload | null) => setVendorRelatedData(json ?? null))
+            .then((json: VendorRelatedPayload | null) =>
+                setVendorRelatedData(json ? { ...json, documents: json.documents ?? [] } : null)
+            )
             .catch(() => setVendorRelatedData(null))
             .finally(() => setVendorRelatedLoading(false));
     }, [drawer.type, drawer.id]);

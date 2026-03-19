@@ -286,6 +286,7 @@ export async function GET(
                 schedules: schedulesRes.data ?? [],
                 contacts: contactsWithRole,
                 assignments: assignmentsRes.data ?? [],
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
             });
         }
 

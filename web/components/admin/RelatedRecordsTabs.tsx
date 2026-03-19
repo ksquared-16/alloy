@@ -48,12 +48,18 @@ export default function RelatedRecordsTabs({
         setLoading(true);
         setError(null);
         fetch(`/api/admin/related/${entityType}/${entityId}`)
-            .then((res) => {
-                if (!res.ok) throw new Error("Failed to load related");
-                return res.json();
+            .then(async (res) => {
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const msg =
+                        (json as { error?: string }).error ||
+                        (res.status === 404 ? "Record not found" : `Failed to load related records (${res.status})`);
+                    throw new Error(msg);
+                }
+                return json as Record<string, unknown>;
             })
-            .then((json) => setData({ ...EMPTY, ...json }))
-            .catch((e) => setError(e.message))
+            .then((json) => setData({ ...EMPTY, ...json } as Record<string, unknown[]>))
+            .catch((e) => setError((e as Error).message))
             .finally(() => setLoading(false));
     }, [entityType, entityId]);
 
@@ -214,11 +220,12 @@ export default function RelatedRecordsTabs({
 
     const active = tabs.find((t) => t.key === activeTab) ?? tabs[0];
     const rows = (data[active.dataKey] ?? []) as Record<string, unknown>[];
+    const hideGlobalErrorBanner = Boolean(error && active.isDocumentsPanel && activeTab === "documents");
 
     return (
         <div className="mt-6 border-t border-alloy-stone/30 pt-4">
             <h3 className="text-sm font-semibold text-alloy-midnight/80 mb-3">Related</h3>
-            {error && <p className="text-red-600 text-sm mb-2">Error: {error}</p>}
+            {error && !hideGlobalErrorBanner && <p className="text-red-600 text-sm mb-2">Error: {error}</p>}
             {loading ? (
                 <p className="text-alloy-midnight/60 text-sm">Loading related records…</p>
             ) : (
@@ -276,6 +283,8 @@ export default function RelatedRecordsTabs({
                         <EntityDocumentsSection
                             documents={(data.documents ?? []) as EntityDocumentListItem[]}
                             loading={loading}
+                            fetchError={error}
+                            onRetryFetch={refetch}
                             uploadEntityType={active.documentUploadEntityType}
                             entityId={entityId}
                             canMutate={canMutate}
