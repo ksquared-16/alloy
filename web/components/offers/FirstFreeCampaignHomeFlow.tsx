@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuoteModal } from "@/lib/quoteModal";
 import {
@@ -11,13 +11,18 @@ import { mergeFirstFreeCampaignBookingPrefill } from "@/lib/campaigns/mergeFirst
 import { trackMetaEvent } from "@/lib/metaPixel";
 import FirstFreeTermsModal from "@/components/offers/FirstFreeTermsModal";
 
+/** Single source of truth so we don’t auto-reopen the quote modal after advancing to terms. */
+type FirstFreeFlowPhase = "quote_modal" | "terms_modal";
+
 function FirstFreeCampaignHomeFlowInner() {
   const searchParams = useSearchParams();
   const campaignParam = searchParams.get("campaign");
   const { openModal } = useQuoteModal();
   const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const flowPhaseRef = useRef<FirstFreeFlowPhase>("quote_modal");
 
   const handleQuoteStepComplete = useCallback(() => {
+    flowPhaseRef.current = "terms_modal";
     mergeFirstFreeCampaignBookingPrefill({});
     try {
       const raw = typeof window !== "undefined" ? localStorage.getItem("alloy_quote_v1") : null;
@@ -38,7 +43,11 @@ function FirstFreeCampaignHomeFlowInner() {
   }, []);
 
   useEffect(() => {
-    if (!isFirstFree4x60CampaignQuery(campaignParam)) return;
+    if (!isFirstFree4x60CampaignQuery(campaignParam)) {
+      flowPhaseRef.current = "quote_modal";
+      return;
+    }
+    if (flowPhaseRef.current !== "quote_modal") return;
     const run = () => {
       openModal({
         defaultService: "cleaning",
@@ -56,7 +65,13 @@ function FirstFreeCampaignHomeFlowInner() {
   if (!isFirstFree4x60CampaignQuery(campaignParam)) return null;
 
   return (
-    <FirstFreeTermsModal isOpen={termsModalOpen} onClose={() => setTermsModalOpen(false)} />
+    <FirstFreeTermsModal
+      isOpen={termsModalOpen}
+      onClose={() => {
+        setTermsModalOpen(false);
+        flowPhaseRef.current = "quote_modal";
+      }}
+    />
   );
 }
 

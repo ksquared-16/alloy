@@ -10,7 +10,10 @@ import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing";
-import { isFirstFree4x60CampaignQuery } from "@/lib/campaigns/firstFree4x60";
+import {
+    FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
+    isFirstFree4x60CampaignQuery,
+} from "@/lib/campaigns/firstFree4x60";
 
 interface QuoteInputStored {
     zip?: string;
@@ -332,6 +335,8 @@ export default function BookV2Client() {
     const refineRequestIdRef = useRef(0);
     /** If a one-time quote lands in campaign mode, bump to weekly once via quote-refine. */
     const firstFreeCampaignRecurringBootstrapRef = useRef(false);
+    /** One-shot auto-validate FIRSTFREE4X60 on refine when prefill is campaign but amounts weren’t hydrated. */
+    const firstFreePromoAutoAppliedRef = useRef(false);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
     const bookingAttemptIdRef = useRef<string | null>(null);
@@ -683,6 +688,168 @@ export default function BookV2Client() {
             console.error("Failed to load quote from storage:", e);
         }
     }, [debug]);
+
+    // FIRSTFREE4X60: show program code in the promo input even before apply/hydrate completes
+    useEffect(() => {
+        if (debug || !campaignFirstFree4x60) return;
+        if (discountCode.trim()) return;
+        try {
+            const raw =
+                sessionStorage.getItem("alloy_booking_prefill") || localStorage.getItem("alloy_booking_prefill");
+            if (!raw) return;
+            const p = JSON.parse(raw) as Record<string, unknown>;
+            if (p.campaign !== "firstfree4x60" && !p.discount_program_code && !p.discount_code) return;
+            const c =
+                (typeof p.discount_program_code === "string" && p.discount_program_code.trim()) ||
+                (typeof p.discount_code === "string" && p.discount_code.trim()) ||
+                FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE;
+            setDiscountCode(String(c).trim().toUpperCase());
+        } catch {
+            // ignore
+        }
+    }, [debug, campaignFirstFree4x60, discountCode]);
+
+    // FIRSTFREE4X60: if terms didn’t write amounts into prefill, validate once on refine (no duplicate after ref is set)
+    useEffect(() => {
+        if (debug || !campaignFirstFree4x60) return;
+        if (firstFreePromoAutoAppliedRef.current) return;
+        if (!quote || !hasQuote || currentStep !== "refine_quote") return;
+        if (discountData) return;
+
+        let prefillCheck: Record<string, unknown> = {};
+        try {
+            const rawCheck =
+                sessionStorage.getItem("alloy_booking_prefill") || localStorage.getItem("alloy_booking_prefill");
+            if (rawCheck) prefillCheck = JSON.parse(rawCheck) as Record<string, unknown>;
+        } catch {
+            return;
+        }
+        const pid =
+            typeof prefillCheck.discount_program_id === "string" && prefillCheck.discount_program_id.trim();
+        const lid =
+            typeof prefillCheck.discount_code_id === "string" && prefillCheck.discount_code_id.trim();
+        const rawAm0 = prefillCheck.discount_amount;
+        const am0 = typeof rawAm0 === "number" ? rawAm0 : Number(rawAm0);
+        if ((pid || lid) && Number.isFinite(am0) && am0 >= 0) {
+            return;
+        }
+
+        const subtotal =
+            typeof quote.first_clean_price === "number" && quote.first_clean_price > 0
+                ? quote.first_clean_price
+                : typeof quote.estimated_price === "number" && quote.estimated_price > 0
+                    ? quote.estimated_price
+                    : 0;
+        if (subtotal <= 0) return;
+
+        if (prefillCheck.campaign !== "firstfree4x60") return;
+
+        firstFreePromoAutoAppliedRef.current = true;
+
+        const email = typeof prefillCheck.email === "string" ? prefillCheck.email : undefined;
+        const phone = typeof prefillCheck.phone === "string" ? prefillCheck.phone : undefined;
+
+        void (async () => {
+            try {
+                setIsValidatingDiscount(true);
+                setDiscountError(null);
+                const res = await fetch("/api/book-v2/validate-promo", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        code: FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
+                        email: email?.trim() || undefined,
+                        phone: phone?.trim() || undefined,
+                        quote_subtotal: subtotal,
+                        vertical_key: "cleaning",
+                    }),
+                });
+                const data = (await res.json()) as {
+                    valid?: boolean;
+                    discount_program_id?: string;
+                    discount_program_code?: string;
+                    discount_program_name?: string | null;
+                    discount_code_id?: string | null;
+                    discount_amount?: number;
+                    quote_total?: number;
+                };
+                if (!res.ok || !data.valid || !data.discount_program_id || typeof data.discount_amount !== "number") {
+                    return;
+                }
+                const programId = String(data.discount_program_id).trim();
+                const displayCode = (
+                    data.discount_program_code || FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE
+                ).trim().toUpperCase();
+                const legacyId =
+                    typeof data.discount_code_id === "string" && data.discount_code_id.trim()
+                        ? data.discount_code_id.trim()
+                        : null;
+                const qt =
+                    typeof data.quote_total === "number" ? data.quote_total : subtotal - data.discount_amount;
+                setDiscountData({
+                    code: displayCode,
+                    discount_code_id: legacyId,
+                    discount_amount: data.discount_amount,
+                    quote_total: qt,
+                    discount_program_id: programId,
+                    discount_program_name: data.discount_program_name ?? null,
+                });
+                setDiscountCode(displayCode);
+                try {
+                    const existingPrefill =
+                        sessionStorage.getItem("alloy_booking_prefill") ||
+                        localStorage.getItem("alloy_booking_prefill");
+                    let base: Record<string, unknown> = {};
+                    if (existingPrefill) {
+                        try {
+                            base = JSON.parse(existingPrefill) as Record<string, unknown>;
+                        } catch {
+                            base = {};
+                        }
+                    }
+                    const merged: Record<string, unknown> = {
+                        ...base,
+                        discount_code: displayCode,
+                        discount_program_id: programId,
+                        discount_program_code: displayCode,
+                        discount_amount: data.discount_amount,
+                        quote_total: qt,
+                        campaign: "firstfree4x60",
+                    };
+                    if (legacyId) merged.discount_code_id = legacyId;
+                    const json = JSON.stringify(merged);
+                    sessionStorage.setItem("alloy_booking_prefill", json);
+                    localStorage.setItem("alloy_booking_prefill", json);
+                } catch {
+                    // ignore
+                }
+                const oppId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
+                if (oppId && (programId || legacyId)) {
+                    try {
+                        await fetch("/api/book-v2/opportunity-discount", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                opportunity_id: oppId,
+                                quote_subtotal: subtotal,
+                                quote_total: qt,
+                                discount_amount: data.discount_amount,
+                                discount_code_id: legacyId,
+                                discount_program_id: programId,
+                                discount_code: displayCode,
+                            }),
+                        });
+                    } catch {
+                        // ignore
+                    }
+                }
+            } catch {
+                // ignore
+            } finally {
+                setIsValidatingDiscount(false);
+            }
+        })();
+    }, [debug, campaignFirstFree4x60, quote, hasQuote, currentStep, discountData]);
 
     // Check if payment is unlocked (requires both steps to be confirmed)
     const isPaymentUnlocked = slotConfirmed && serviceDetailsConfirmed;
@@ -1932,12 +2099,53 @@ export default function BookV2Client() {
                                     </div>
                                 </>
                             )}
-                            <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1">
-                                <span className="text-alloy-midnight font-semibold">Total (first visit)</span>
-                                <span className="font-bold text-alloy-juniper">
-                                    ${(quote.estimated_price ?? quote.first_clean_price ?? 0).toFixed(2)}
-                                </span>
-                            </div>
+                            {(() => {
+                                const addonsSum =
+                                    quote.addons_total ??
+                                    quote.addons?.reduce((s, a) => s + (a.price ?? 0), 0) ??
+                                    0;
+                                const firstVisitGross =
+                                    typeof quote.estimated_price === "number" && quote.estimated_price > 0
+                                        ? quote.estimated_price
+                                        : typeof quote.first_clean_price === "number" && quote.first_clean_price > 0
+                                            ? quote.first_clean_price + addonsSum
+                                            : 0;
+                                const showPromo =
+                                    discountData && discountData.discount_amount > 0 && firstVisitGross > 0;
+                                return (
+                                    <>
+                                        {showPromo ? (
+                                            <>
+                                                <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1 text-sm">
+                                                    <span className="text-alloy-midnight">Subtotal (first visit)</span>
+                                                    <span className="font-medium text-alloy-midnight">
+                                                        ${firstVisitGross.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-baseline justify-between text-sm text-green-700">
+                                                    <span>Promo ({discountData.code})</span>
+                                                    <span className="font-semibold">
+                                                        −${discountData.discount_amount.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1">
+                                                    <span className="text-alloy-midnight font-semibold">Total (first visit)</span>
+                                                    <span className="font-bold text-alloy-juniper">
+                                                        ${discountData.quote_total.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="flex items-baseline justify-between border-t border-alloy-stone/20 pt-2 mt-1">
+                                                <span className="text-alloy-midnight font-semibold">Total (first visit)</span>
+                                                <span className="font-bold text-alloy-juniper">
+                                                    ${firstVisitGross.toFixed(2)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                             {quote.recurring_price != null && quote.recurring_price > 0 && quote.frequency_label && (
                                 <div className="flex items-baseline justify-between pt-1">
                                     <span className="text-alloy-midnight">
@@ -2002,6 +2210,110 @@ export default function BookV2Client() {
                                 })}
                             </div>
                             {refineError && <p className="text-sm text-red-600 mt-2">{refineError}</p>}
+                        </div>
+
+                        {/* Promo: visible on refine (campaign users land here first; same controls as later steps) */}
+                        <div className="mb-6 pt-2 border-t border-alloy-stone/20">
+                            <p className="text-sm font-semibold text-alloy-midnight mb-3">Promo code</p>
+                            {discountData ? (
+                                <div className="space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={discountData.code}
+                                            aria-label="Applied promo code"
+                                            className="flex-1 text-sm px-3 py-2 border border-green-200 bg-green-50/60 rounded-lg text-alloy-midnight"
+                                        />
+                                        <span className="text-xs text-green-700 font-semibold shrink-0">
+                                            Applied — −${discountData.discount_amount.toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                setDiscountData(null);
+                                                setDiscountCode("");
+                                                setDiscountError(null);
+                                                const oppId =
+                                                    typeof window !== "undefined"
+                                                        ? localStorage.getItem("alloy_opportunity_id")
+                                                        : null;
+                                                if (oppId) {
+                                                    try {
+                                                        await fetch("/api/book-v2/opportunity-discount", {
+                                                            method: "POST",
+                                                            headers: { "Content-Type": "application/json" },
+                                                            body: JSON.stringify({
+                                                                opportunity_id: oppId,
+                                                                clear: true,
+                                                            }),
+                                                        });
+                                                    } catch {
+                                                        // ignore
+                                                    }
+                                                }
+                                                try {
+                                                    const prefillRaw =
+                                                        sessionStorage.getItem("alloy_booking_prefill") ||
+                                                        localStorage.getItem("alloy_booking_prefill");
+                                                    if (prefillRaw) {
+                                                        const p = JSON.parse(prefillRaw) as Record<string, unknown>;
+                                                        delete p.discount_code;
+                                                        delete p.discount_code_id;
+                                                        delete p.discount_amount;
+                                                        delete p.quote_total;
+                                                        delete p.discount_program_id;
+                                                        delete p.discount_program_code;
+                                                        delete p.discount_program_name;
+                                                        const out = JSON.stringify(p);
+                                                        sessionStorage.setItem("alloy_booking_prefill", out);
+                                                        localStorage.setItem("alloy_booking_prefill", out);
+                                                    }
+                                                } catch {
+                                                    // ignore
+                                                }
+                                            }}
+                                            className="text-xs text-alloy-midnight/60 hover:text-alloy-midnight underline"
+                                        >
+                                            Remove promo
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={discountCode}
+                                            onChange={(e) => {
+                                                setDiscountCode(e.target.value.toUpperCase());
+                                                setDiscountError(null);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    void handleValidateDiscount();
+                                                }
+                                            }}
+                                            placeholder="Enter code"
+                                            className="flex-1 text-sm px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
+                                            disabled={isValidatingDiscount}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleValidateDiscount()}
+                                            disabled={isValidatingDiscount || !discountCode.trim()}
+                                            className="px-4 py-2 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                        >
+                                            {isValidatingDiscount ? "…" : "Apply"}
+                                        </button>
+                                    </div>
+                                    {discountError && (
+                                        <p className="text-xs text-red-600">{discountError}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <button

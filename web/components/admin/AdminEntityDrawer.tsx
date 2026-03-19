@@ -8,6 +8,7 @@ import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill, type 
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
+import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS, formatPayoutPercent, personDisplayName } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
 import {
@@ -630,9 +631,21 @@ export default function AdminEntityDrawer() {
         schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
         contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null; _role?: string | null; _is_primary?: boolean }[];
         assignments: { id: string; schedule_id?: string; vendor_id?: string; assignment_status_id?: string | null; created_at?: string }[];
+        documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
     };
     const [vendorRelatedData, setVendorRelatedData] = useState<VendorRelatedPayload | null>(null);
     const [vendorRelatedLoading, setVendorRelatedLoading] = useState(false);
+    type LocationDocumentsRow = {
+        id: string;
+        name?: string | null;
+        original_filename?: string | null;
+        document_type?: string | null;
+        status?: string | null;
+        uploaded_at?: string | null;
+        created_at?: string | null;
+    };
+    const [locationDocuments, setLocationDocuments] = useState<LocationDocumentsRow[]>([]);
+    const [locationDocumentsLoading, setLocationDocumentsLoading] = useState(false);
     type OpportunityRelatedPayload = {
         jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null; customer_id?: string | null }[];
         schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
@@ -838,7 +851,7 @@ export default function AdminEntityDrawer() {
             setVendorRelatedData(null);
             return;
         }
-        if (drawerTab === "related" && !vendorRelatedData) {
+        if ((drawerTab === "related" || drawerTab === "documents") && !vendorRelatedData) {
             setVendorRelatedLoading(true);
             fetch(`/api/admin/related/vendor/${drawer.id}`)
                 .then((r) => (r.ok ? r.json() : null))
@@ -847,6 +860,40 @@ export default function AdminEntityDrawer() {
                 .finally(() => setVendorRelatedLoading(false));
         }
     }, [drawer.type, drawer.id, drawerTab, vendorRelatedData]);
+
+    const refetchVendorRelated = useCallback(() => {
+        if (drawer.type !== "vendors" || !drawer.id || drawer.id === "new") return;
+        setVendorRelatedLoading(true);
+        fetch(`/api/admin/related/vendor/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json: VendorRelatedPayload | null) => setVendorRelatedData(json ?? null))
+            .catch(() => setVendorRelatedData(null))
+            .finally(() => setVendorRelatedLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "locations" || !drawer.id || drawer.id === "new") {
+            setLocationDocuments([]);
+            return;
+        }
+        if (drawerTab !== "documents") return;
+        let cancelled = false;
+        setLocationDocumentsLoading(true);
+        fetch(`/api/admin/related/location/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : { documents: [] }))
+            .then((json: { documents?: LocationDocumentsRow[] }) => {
+                if (!cancelled) setLocationDocuments(json.documents ?? []);
+            })
+            .catch(() => {
+                if (!cancelled) setLocationDocuments([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLocationDocumentsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, drawerTab]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id) {
@@ -1023,6 +1070,29 @@ export default function AdminEntityDrawer() {
             .then((res) => res.ok ? res.json() : { vendors: [] })
             .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorOptions(json.vendors ?? []))
             .catch(() => setJobVendorOptions([]));
+    }, [drawer.type, drawer.id]);
+
+    const refetchJobRelatedData = useCallback(() => {
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
+        setJobRelatedLoading(true);
+        fetch(`/api/admin/related/job/${drawer.id}`)
+            .then((res) => (res.ok ? res.json() : { schedules: [], opportunity: null, messages: [], discounts: [], documents: [] }))
+            .then((json: { schedules?: { id: string; job_id?: string; start_at: string; end_at: string; timezone: string }[]; opportunity?: { id: string; name?: string | null; created_at?: string; status_key?: string | null; quote_total?: number | null } | null; messages?: unknown[]; discounts?: { id: string; created_at?: string; _code?: string | null }[]; documents?: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[] }) => {
+                const opp = json.opportunity && typeof (json.opportunity as { id?: string }).id === "string" ? json.opportunity : null;
+                setJobRelatedData({
+                    schedules: json.schedules ?? [],
+                    opportunity: opp,
+                    messages: json.messages ?? [],
+                    discounts: (json.discounts ?? []) as JobRelatedPayload["discounts"],
+                    documents: (json.documents ?? []) as JobRelatedPayload["documents"],
+                });
+                setJobSchedules((json.schedules ?? []) as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[]);
+            })
+            .catch(() => {
+                setJobSchedules([]);
+                setJobRelatedData(null);
+            })
+            .finally(() => setJobRelatedLoading(false));
     }, [drawer.type, drawer.id]);
 
     const refetchJobPayments = useCallback(() => {
@@ -4337,22 +4407,14 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "documents" && drawer.type === "contacts" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            {contactRelatedLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                            ) : ((contactRelatedData?.documents?.length ?? 0) > 0) ? (
-                                <ul className="space-y-1">
-                                    {(contactRelatedData?.documents ?? []).map((doc) => (
-                                        <li key={doc.id}>
-                                            <button type="button" className="w-full text-left text-sm rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors flex flex-col gap-0.5">
-                                                <span className="text-alloy-forge/90 font-medium">{doc.name ?? "Untitled"}</span>
-                                                <span className="text-alloy-muted text-xs">{doc.document_type ?? ""}{doc.uploaded_at ? ` · ${formatDateTime(doc.uploaded_at)}` : ""}</span>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
-                            )}
+                            <EntityDocumentsSection
+                                documents={contactRelatedData?.documents ?? []}
+                                loading={contactRelatedLoading}
+                                uploadEntityType="contact"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={() => setContactRelatedData(null)}
+                            />
                         </div>
                     )}
                     {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
@@ -4458,77 +4520,53 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "documents" && drawer.type === "customer_members" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            {memberRelatedDataLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                            ) : (memberRelatedData?.documents?.length ?? 0) > 0 ? (
-                                <ul className="space-y-2">
-                                    {(memberRelatedData?.documents ?? []).map((doc) => (
-                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
-                                            <span className="font-medium text-alloy-forge/90">{(doc as { name?: string | null }).name || (doc as { original_filename?: string | null }).original_filename || "Document"}</span>
-                                            <span className="text-alloy-muted text-xs">{[(doc as { document_type?: string | null }).document_type, (doc as { status?: string | null }).status, (doc as { uploaded_at?: string | null }).uploaded_at ? formatDateTime((doc as { uploaded_at: string }).uploaded_at) : (doc as { created_at?: string | null }).created_at ? formatDateTime((doc as { created_at: string }).created_at) : ""].filter(Boolean).join(" · ")}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
-                            )}
+                            <EntityDocumentsSection
+                                documents={memberRelatedData?.documents ?? []}
+                                loading={memberRelatedDataLoading}
+                                uploadEntityType="customer_member"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={refetchMemberRelated}
+                            />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "customers" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            {customerRelatedLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                            ) : (customerRelatedData?.documents?.length ?? 0) > 0 ? (
-                                <ul className="space-y-2">
-                                    {(customerRelatedData?.documents ?? []).map((doc) => (
-                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
-                                            <span className="font-medium text-alloy-forge/90">{doc.name ?? "Untitled"}</span>
-                                            <span className="text-alloy-muted text-xs">{[doc.document_type, doc.status, doc.uploaded_at ? formatDateTime(doc.uploaded_at) : ""].filter(Boolean).join(" · ")}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
-                            )}
+                            <EntityDocumentsSection
+                                documents={customerRelatedData?.documents ?? []}
+                                loading={customerRelatedLoading}
+                                uploadEntityType="customer"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={() => setCustomerRelatedData(null)}
+                            />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            {opportunityRelatedLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                            ) : (opportunityRelatedData?.documents?.length ?? 0) > 0 ? (
-                                <ul className="space-y-2">
-                                    {(opportunityRelatedData?.documents ?? []).map((doc) => (
-                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
-                                            <span className="font-medium text-alloy-forge/90">{doc.name ?? doc.original_filename ?? "Document"}</span>
-                                            <span className="text-alloy-muted text-xs">{[doc.document_type, doc.status, doc.uploaded_at ? formatDateTime(doc.uploaded_at) : doc.created_at ? formatDateTime(doc.created_at) : ""].filter(Boolean).join(" · ")}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
-                            )}
+                            <EntityDocumentsSection
+                                documents={opportunityRelatedData?.documents ?? []}
+                                loading={opportunityRelatedLoading}
+                                uploadEntityType="opportunity"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={() => setOpportunityRelatedData(null)}
+                            />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "jobs" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            {jobRelatedLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                            ) : (jobRelatedData?.documents?.length ?? 0) > 0 ? (
-                                <ul className="space-y-2">
-                                    {(jobRelatedData?.documents ?? []).map((doc) => (
-                                        <li key={doc.id} className="text-sm flex flex-col gap-0.5">
-                                            <span className="font-medium text-alloy-forge/90">{doc.name ?? doc.original_filename ?? "Document"}</span>
-                                            <span className="text-alloy-muted text-xs">{[doc.document_type, doc.status, doc.uploaded_at ? formatDateTime(doc.uploaded_at) : doc.created_at ? formatDateTime(doc.created_at) : ""].filter(Boolean).join(" · ")}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-alloy-midnight/60">No documents available.</p>
-                            )}
+                            <EntityDocumentsSection
+                                documents={jobRelatedData?.documents ?? []}
+                                loading={jobRelatedLoading}
+                                uploadEntityType="job"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={refetchJobRelatedData}
+                            />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
@@ -4539,7 +4577,7 @@ export default function AdminEntityDrawer() {
                                     const insurancePath = (data as { insurance_doc_path?: string | null })?.insurance_doc_path;
                                     const driversPath = (data as { drivers_license_doc_path?: string | null })?.drivers_license_doc_path;
                                     const hasAny = insurancePath || driversPath;
-                                    if (!hasAny) return <p className="text-sm text-alloy-midnight/60">No documents available.</p>;
+                                    if (!hasAny) return <p className="text-sm text-alloy-midnight/60">No vendor application files on record.</p>;
                                     return (
                                         <ul className="space-y-2">
                                             {insurancePath && (
@@ -4558,6 +4596,37 @@ export default function AdminEntityDrawer() {
                                     );
                                 })()}
                             </section>
+                            <section>
+                                <h3 className={DRAWER_SECTION_HEADER_CLASS}>Attached documents</h3>
+                                <EntityDocumentsSection
+                                    documents={vendorRelatedData?.documents ?? []}
+                                    loading={vendorRelatedLoading}
+                                    uploadEntityType="vendor"
+                                    entityId={drawer.id}
+                                    canMutate={canMutate}
+                                    onAfterUpload={refetchVendorRelated}
+                                />
+                            </section>
+                        </div>
+                    )}
+                    {drawerTab === "documents" && drawer.type === "locations" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            <EntityDocumentsSection
+                                documents={locationDocuments}
+                                loading={locationDocumentsLoading}
+                                uploadEntityType="location"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={() => {
+                                    setLocationDocumentsLoading(true);
+                                    fetch(`/api/admin/related/location/${drawer.id}`)
+                                        .then((r) => (r.ok ? r.json() : { documents: [] }))
+                                        .then((json: { documents?: LocationDocumentsRow[] }) => setLocationDocuments(json.documents ?? []))
+                                        .catch(() => setLocationDocuments([]))
+                                        .finally(() => setLocationDocumentsLoading(false));
+                                }}
+                            />
                         </div>
                     )}
                     {drawerTab === "activity" && (

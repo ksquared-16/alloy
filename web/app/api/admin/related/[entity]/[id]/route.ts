@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 
 const LIMIT = 25;
+
+const DOC_SELECT =
+    "id, org_id, title, original_filename, doc_type, status, created_at, mime_type, bucket, storage_path, owner_contact_id, entity_type, entity_id";
+
+function mergeDocumentLists(lists: (Record<string, unknown>[] | null | undefined)[]): NormalizedDocumentRow[] {
+    const byId = new Map<string, NormalizedDocumentRow>();
+    for (const list of lists) {
+        for (const row of list ?? []) {
+            if (!row?.id) continue;
+            const n = normalizeDocumentRows([row])[0];
+            if (n) byId.set(n.id, n);
+        }
+    }
+    return [...byId.values()].sort((a, b) => {
+        const ta = a.created_at || a.uploaded_at || "";
+        const tb = b.created_at || b.uploaded_at || "";
+        return tb.localeCompare(ta);
+    }).slice(0, LIMIT);
+}
 
 export async function GET(
     request: NextRequest,
@@ -24,7 +44,7 @@ export async function GET(
             const customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
             const vendorId = (contactRow as { vendor_id?: string | null } | null)?.vendor_id ?? null;
 
-            const [linkedCustomerRes, linkedVendorRes, oppRes, jobsRes, subsRes, cmcRes, vcRes, messagesRes, documentsRes, redemptionsRes] = await Promise.all([
+            const [linkedCustomerRes, linkedVendorRes, oppRes, jobsRes, subsRes, cmcRes, vcRes, messagesRes, docByOwner, docByEntityContact, docByEntityContacts, redemptionsRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
                 vendorId ? supabase.from("vendors").select("id, name").eq("id", vendorId).maybeSingle() : Promise.resolve({ data: null }),
                 supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT),
@@ -33,9 +53,12 @@ export async function GET(
                 supabase.from("customer_member_contacts").select("id, customer_member_id, contact_id").eq("contact_id", id).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("vendor_contacts").select("id, vendor_id, contact_id, role").eq("contact_id", id).limit(LIMIT),
                 supabase.from("messages_outbox").select("id, created_at, to_phone, status").eq("to_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
-                supabase.from("documents").select("id, name, document_type, uploaded_at").eq("owner_contact_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : { data: r.data ?? [] })),
+                supabase.from("documents").select(DOC_SELECT).eq("org_id", ctx.orgId).eq("owner_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase.from("documents").select(DOC_SELECT).eq("org_id", ctx.orgId).eq("entity_type", "contact").eq("entity_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase.from("documents").select(DOC_SELECT).eq("org_id", ctx.orgId).eq("entity_type", "contacts").eq("entity_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("discount_redemptions").select("id, created_at, discount_code_id, customer_id").eq("contact_id", id).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
+            const documentsMerged = mergeDocumentLists([docByOwner.data, docByEntityContact.data, docByEntityContacts.data]);
 
             const linkedCustomer = linkedCustomerRes.data;
             const linkedVendor = linkedVendorRes.data;
@@ -49,7 +72,7 @@ export async function GET(
                 customer_member_contacts: cmcRes.data ?? [],
                 vendor_contacts: vcRes.data ?? [],
                 messages: messagesRes.data ?? [],
-                documents: documentsRes.data ?? [],
+                documents: documentsMerged,
                 discount_redemptions: redemptionsRes.data ?? [],
                 contact_tags: [],
             });
@@ -66,7 +89,15 @@ export async function GET(
                 supabase.from("payments").select("id, created_at, amount_cents, paid_at, status_key, provider_payment_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("customer_subscriptions").select("id, created_at, status, start_date, primary_contact_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("discount_redemptions").select("id, created_at, discount_code_id, customer_id").eq("customer_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
-                supabase.from("documents").select("id, name, document_type, uploaded_at, status").eq("entity_type", "customer").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .eq("entity_type", "customer")
+                    .eq("entity_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
                 supabase.from("customer_persons").select("id, customer_id, person_id, role, created_at").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
             const cpRows = cpRes.data ?? [];
@@ -114,7 +145,7 @@ export async function GET(
                 payments: paymentsRes.data ?? [],
                 customer_subscriptions: subsRes.data ?? [],
                 discount_redemptions: redemptionsRes.data ?? [],
-                documents: documentsRes.data ?? [],
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
                 messages: messagesRes.data ?? [],
                 customer_tags: [],
                 _primary_contact_id: primaryContactId,
@@ -124,7 +155,15 @@ export async function GET(
         if (entity === "opportunity") {
             const [jobsRes, documentsRes] = await Promise.all([
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, job_status_id, customer_id, opportunity_id").eq("opportunity_id", id).order("created_at", { ascending: false }).limit(LIMIT),
-                supabase.from("documents").select("id, name, original_filename, document_type, status, uploaded_at, created_at").or("entity_type.eq.opportunity,entity_type.eq.opportunities").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .or("entity_type.eq.opportunity,entity_type.eq.opportunities")
+                    .eq("entity_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
             ]);
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];
@@ -138,7 +177,7 @@ export async function GET(
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
-                documents: documentsRes.data ?? [],
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
                 discount_redemptions: discountRedemptions,
                 quotes: [],
                 messages: [],
@@ -160,7 +199,15 @@ export async function GET(
                 supabase.from("schedules").select("id, job_id, start_at, end_at, timezone, status_key, price_cents, canceled_at").eq("job_id", id).order("start_at", { ascending: true }).limit(LIMIT),
                 opportunityId ? supabase.from("opportunities").select("id, name, created_at, status_key, quote_total").eq("id", opportunityId).maybeSingle() : Promise.resolve({ data: null }),
                 supabase.from("discount_redemptions").select("id, created_at, discount_code_id, job_id").eq("job_id", id).order("created_at", { ascending: false }).limit(LIMIT),
-                supabase.from("documents").select("id, name, original_filename, document_type, status, uploaded_at, created_at").or("entity_type.eq.job,entity_type.eq.jobs").eq("entity_id", id).order("uploaded_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
+                supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .or("entity_type.eq.job,entity_type.eq.jobs")
+                    .eq("entity_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
             ]);
             const schedules = (schedulesRes.data ?? []) as { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string; status_key?: string | null; price_cents?: number | null; canceled_at?: string | null }[];
             const scheduleIds = schedules.map((s) => s.id);
@@ -201,15 +248,24 @@ export async function GET(
                 opportunity: opportunityRes.data ?? null,
                 messages: [],
                 discounts: discountsWithCode,
-                documents: documentsRes.data ?? [],
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
             });
         }
 
         if (entity === "vendor") {
-            const [jobsRes, vcRes, assignmentsRes] = await Promise.all([
+            const [jobsRes, vcRes, assignmentsRes, documentsRes] = await Promise.all([
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id").eq("assigned_vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("vendor_contacts").select("id, contact_id, role").eq("vendor_id", id),
                 supabase.from("assignments").select("id, schedule_id, vendor_id, assignment_status_id, created_at").eq("vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .or("entity_type.eq.vendor,entity_type.eq.vendors")
+                    .eq("entity_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
             ]);
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             const schedulesRes = jobIds.length > 0
@@ -252,11 +308,20 @@ export async function GET(
                 return NextResponse.json({ error: "Location not found" }, { status: 404 });
             }
             const customerId = (locRow as { customer_id: string }).customer_id;
-            const [customerRes, jobsRes, schedulesRes, plRes] = await Promise.all([
+            const [customerRes, jobsRes, schedulesRes, plRes, documentsRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : { data: null },
                 supabase.from("jobs").select("id, created_at, title, scheduled_at").eq("location_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").eq("location_id", id).eq("org_id", ctx.orgId).order("start_at", { ascending: false }).limit(LIMIT),
                 supabase.from("person_locations").select("person_id, is_primary, relationship_type").eq("location_id", id).eq("org_id", ctx.orgId).limit(LIMIT),
+                supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .or("entity_type.eq.location,entity_type.eq.locations")
+                    .eq("entity_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
             ]);
             const plList = plRes.data ?? [];
             const pids = [...new Set(plList.map((r: { person_id: string }) => r.person_id))];
@@ -285,6 +350,7 @@ export async function GET(
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
                 linked_persons,
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
             });
         }
 
@@ -394,10 +460,11 @@ export async function GET(
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : { data: null },
                 supabase
                     .from("documents")
-                    .select("id, name, original_filename, document_type, status, uploaded_at, created_at")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
                     .eq("entity_type", "customer_member")
                     .eq("entity_id", id)
-                    .order("uploaded_at", { ascending: false })
+                    .order("created_at", { ascending: false })
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
@@ -423,7 +490,7 @@ export async function GET(
             return NextResponse.json({
                 linkedContacts,
                 customer: customerRes.data ?? null,
-                documents: documentsRes.data ?? [],
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
             });
         }
 

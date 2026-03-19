@@ -331,11 +331,11 @@ export default function QuoteModal({
                       onSuccess={() => {
                         const isCampaign = campaignQuoteFlow === "firstfree4x60";
                         if (isCampaign) {
-                          // Close quote shell first so only the terms modal is visible (avoid stacked modals).
-                          onClose();
+                          // MUST run before onClose(): closeModal() clears onCampaignQuoteCompleteRef — a microtask would fire too late.
                           if (invokeCampaignQuoteComplete) {
-                            queueMicrotask(() => invokeCampaignQuoteComplete());
+                            invokeCampaignQuoteComplete();
                           }
+                          onClose();
                           return;
                         }
                         onClose();

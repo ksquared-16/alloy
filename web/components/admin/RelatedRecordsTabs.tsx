@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Drawer from "@/components/admin/Drawer";
+import EntityDocumentsSection, { type EntityDocumentListItem } from "@/components/admin/EntityDocumentsSection";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -19,6 +20,10 @@ interface TabConfig {
     dataKey: string;
     /** When set, use this row key for opening the drawer (e.g. "person_id" for people tab). */
     rowIdKey?: string;
+    /** If true, render documents list + upload instead of a table (dataKey should be "documents"). */
+    isDocumentsPanel?: boolean;
+    /** Canonical documents.entity_type for upload API. */
+    documentUploadEntityType?: string;
 }
 
 const EMPTY: Record<string, unknown[]> = { people: [], opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [], linked_persons: [] };
@@ -104,6 +109,7 @@ export default function RelatedRecordsTabs({
                 { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
                 { key: "timezone", label: "Timezone" },
             ]},
+            { key: "documents", label: "Documents", entityType: "contacts", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "contact", columns: [] },
         );
     } else if (entityType === "customer") {
         tabs.push(
@@ -156,6 +162,7 @@ export default function RelatedRecordsTabs({
                 { key: "created_at", label: "Redeemed", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
                 { key: "discount_code_id", label: "Code ID", render: (v) => (v && typeof v === "string") ? (v as string).slice(0, 8) + "…" : "—" },
             ]},
+            { key: "documents", label: "Documents", entityType: "customers", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "customer", columns: [] },
         );
     } else if (entityType === "opportunity") {
         tabs.push(
@@ -169,6 +176,7 @@ export default function RelatedRecordsTabs({
                 { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
                 { key: "timezone", label: "Timezone" },
             ]},
+            { key: "documents", label: "Documents", entityType: "opportunities", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "opportunity", columns: [] },
         );
     } else if (entityType === "job") {
         tabs.push(
@@ -177,6 +185,7 @@ export default function RelatedRecordsTabs({
                 { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
                 { key: "timezone", label: "Timezone" },
             ]},
+            { key: "documents", label: "Documents", entityType: "jobs", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "job", columns: [] },
         );
     } else if (entityType === "location") {
         tabs.push(
@@ -195,6 +204,7 @@ export default function RelatedRecordsTabs({
                 { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
                 { key: "timezone", label: "Timezone" },
             ]},
+            { key: "documents", label: "Documents", entityType: "locations", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "location", columns: [] },
         );
     }
 
@@ -262,7 +272,16 @@ export default function RelatedRecordsTabs({
                             </button>
                         </div>
                     )}
-                    {rows.length === 0 ? (
+                    {active.isDocumentsPanel && active.documentUploadEntityType ? (
+                        <EntityDocumentsSection
+                            documents={(data.documents ?? []) as EntityDocumentListItem[]}
+                            loading={loading}
+                            uploadEntityType={active.documentUploadEntityType}
+                            entityId={entityId}
+                            canMutate={canMutate}
+                            onAfterUpload={refetch}
+                        />
+                    ) : rows.length === 0 ? (
                         <p className="text-alloy-midnight/60 text-sm">No {active.label.toLowerCase()} found.</p>
                     ) : (
                         <div className="overflow-x-auto">

@@ -109,6 +109,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
                     { href: "/admin/system/opportunity-fields", label: "Opportunity Fields" },
                     { href: "/admin/system/vendor-fields", label: "Vendor Fields" },
                     { href: "/admin/system/schedule-fields", label: "Schedule Fields" },
+                    { href: "/admin/system/document-fields", label: "Document Fields" },
                 ],
             },
             { href: "/admin/system/payouts", label: "Payouts" },
