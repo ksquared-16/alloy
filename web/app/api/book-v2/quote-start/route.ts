@@ -385,7 +385,7 @@ async function createQuoteLocation(
   orgId: string,
   postalCode: string | null
 ): Promise<string | null> {
-  const label = postalCode?.trim() ? `Quote — ${postalCode.trim()}` : "Quote location";
+  const label = postalCode?.trim() ? postalCode.trim() : "Quote location";
   const { data: created, error } = await supabase
     .from("locations")
     .insert({

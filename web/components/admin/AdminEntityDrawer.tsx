@@ -1822,30 +1822,31 @@ export default function AdminEntityDrawer() {
                 is_active: !!data.is_active,
             };
         } else if (drawer.type === "locations") {
+            const locData = data as Record<string, unknown>;
             initial = {
-                label: (data.label as string) ?? "",
-                customer_id: (data.customer_id as string) ?? "",
-                location_type_id: (data.location_type_id as string) ?? "",
-                location_type: (data.location_type as string) ?? "",
-                is_active: data.is_active ?? true,
-                is_primary: data.is_primary ?? false,
-                address1: (data.address1 as string) ?? "",
-                address2: (data.address2 as string) ?? "",
-                city: (data.city as string) ?? "",
-                state: (data.state as string) ?? "",
-                postal_code: (data.postal_code as string) ?? "",
-                country: (data.country as string) ?? "",
-                access_notes: (data.access_notes as string) ?? "",
+                label: (locData.label as string) ?? "",
+                customer_id: (locData.customer_id as string) ?? "",
+                location_type_id: (locData.location_type_id as string) ?? "",
+                location_type: (locData.location_type as string) ?? "",
+                is_active: locData.is_active ?? true,
+                is_primary: locData.is_primary ?? false,
+                address1: (locData.address1 as string) ?? "",
+                address2: (locData.address2 as string) ?? "",
+                city: (locData.city as string) ?? "",
+                state: (locData.state as string) ?? "",
+                postal_code: (locData.postal_code as string) ?? "",
+                country: (locData.country as string) ?? "",
+                access_notes: (locData.access_notes as string) ?? "",
             };
             const locDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
             for (const d of locDefs) {
                 if (!d.is_system) {
-                    (initial as Record<string, unknown>)[d.field_key] =
-                        (data as Record<string, unknown>)[d.field_key] ?? "";
+                    (initial as Record<string, unknown>)[d.field_key] = locData[d.field_key] ?? "";
                 }
             }
         } else if (drawer.type === "persons") {
             initial = {
+                full_name: (data.full_name as string) ?? "",
                 first_name: (data.first_name as string) ?? "",
                 last_name: (data.last_name as string) ?? "",
                 email: (data.email as string) ?? "",
@@ -1855,7 +1856,7 @@ export default function AdminEntityDrawer() {
             };
             const defs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
             for (const d of defs) {
-                if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? "";
+                if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data as Record<string, unknown>)[d.field_key] ?? "";
             }
         } else {
             return;

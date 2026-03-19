@@ -37,16 +37,24 @@ export type DepartmentNodeData = {
   tileWidth?: number;
   tileHeight?: number;
   cardPad?: number;
-  /** System-driven tile (Sales): primary signal, secondary context, agent summary */
+  /** System-driven tile: primary signal, secondary context, agent summary (legacy) */
   primarySignal?: string;
   secondaryContext?: string;
   agentSummary?: string[];
+  /** Manager/agent rollup: top-level KPI (dominant) */
+  topKpi?: string;
+  /** Compact system summary e.g. "3 agents active · 1 needs review" */
+  agentRollup?: string;
+  /** Agent name + status reporting up */
+  agentStates?: { name: string; status: string }[];
+  /** One short insight e.g. "Top performer: Scheduling Agent" */
+  topPerformer?: string;
 };
 
 const HEALTH_LABELS: Record<DepartmentNodeData["health"], string> = {
   good: "Good",
   attention: "Attention",
-  critical: "Critical",
+  critical: "At risk",
 };
 
 const HEALTH_COLOR: Record<DepartmentNodeData["health"], string> = {
@@ -124,11 +132,14 @@ function SystemTileContent({
   onQuickActionClick: DepartmentNodeData["onQuickActionClick"];
   fill: string;
 }) {
-  const primarySignal = data.primarySignal ?? data.primaryValue ?? "—";
-  const secondaryContext = data.secondaryContext ?? "No urgent actions";
-  const agentSummary = data.agentSummary ?? [];
+  const topKpi = data.primarySignal ?? data.primaryValue ?? "—";
+  const agentRollup = data.agentRollup ?? "";
+  const agentStates = data.agentStates ?? [];
+  const topPerformer = data.topPerformer ?? "";
   const primaryAction = quickActions[0];
   const secondaryAction = quickActions[1];
+
+  const hasRollup = agentRollup || agentStates.length > 0 || topPerformer;
 
   return (
     <div
@@ -139,18 +150,18 @@ function SystemTileContent({
         minHeight: 0,
       }}
     >
-      {/* Band 1: Header — name + status */}
+      {/* Band 1: Status + Title (manager rollup header) */}
       <div
         style={{
           flexShrink: 0,
-          marginBottom: 8,
+          marginBottom: 6,
         }}
       >
         <div
           style={{
             height: 3,
             borderRadius: 2,
-            marginBottom: 6,
+            marginBottom: 5,
             background: `linear-gradient(90deg, ${fill} 0%, ${brand.secondary} 100%)`,
           }}
         />
@@ -164,17 +175,6 @@ function SystemTileContent({
         >
           <span
             style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: neutral.textPrimary,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.2,
-            }}
-          >
-            {data.name}
-          </span>
-          <span
-            style={{
               fontSize: 10,
               fontWeight: 700,
               textTransform: "uppercase",
@@ -185,100 +185,114 @@ function SystemTileContent({
             {HEALTH_LABELS[data.health]}
           </span>
         </div>
+        <span
+          style={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: neutral.textPrimary,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.2,
+            display: "block",
+          }}
+        >
+          {data.name}
+        </span>
       </div>
 
-      {/* Band 2: Signal — primary + secondary context */}
+      {/* Band 2: Top-level KPI (one dominant) */}
       <div
         style={{
           flexShrink: 0,
-          marginBottom: 8,
-          paddingBottom: 8,
+          marginBottom: 6,
+          paddingBottom: 6,
           borderBottom: `1px solid ${derived.border}`,
         }}
       >
-        <div
+        <span
           style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: 12,
+            fontSize: 22,
+            fontWeight: 600,
+            color: neutral.textPrimary,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.25,
           }}
         >
-          <span
-            style={{
-              fontSize: 24,
-              fontWeight: 600,
-              color: neutral.textPrimary,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.25,
-              minWidth: 0,
-              flex: "1 1 auto",
-            }}
-          >
-            {primarySignal}
-          </span>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 500,
-              color: derived.textSecondary,
-              lineHeight: 1.35,
-              flexShrink: 0,
-              maxWidth: "55%",
-              textAlign: "right",
-            }}
-          >
-            {secondaryContext}
-          </span>
-        </div>
+          {topKpi}
+        </span>
       </div>
 
-      {/* Band 3: Action — agents, actions, details (anchored to bottom) */}
+      {/* Band 3: Agent rollup + states + insight + actions (legible, fills card) */}
       <div
         style={{
-          marginTop: "auto",
           flexShrink: 0,
           paddingTop: 8,
         }}
       >
-        {/* Agent row: structural pills */}
-        {agentSummary.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              marginBottom: 8,
-              alignItems: "center",
-            }}
-          >
-            {agentSummary.slice(0, 3).map((line, i) => (
-              <span
-                key={i}
+        {hasRollup && (
+          <>
+            {/* Agent rollup */}
+            {agentRollup && (
+              <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 13,
                   fontWeight: 600,
-                  color: neutral.textPrimary,
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  border: `1px solid ${derived.border}`,
-                  background: "rgba(0,0,0,0.03)",
-                  lineHeight: 1.3,
+                  color: derived.textSecondary,
+                  marginBottom: 6,
+                  lineHeight: 1.4,
                 }}
               >
-                {line}
-              </span>
-            ))}
-          </div>
+                {agentRollup}
+              </div>
+            )}
+            {/* Agent states: reporting up (Name — Status) */}
+            {agentStates.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  marginBottom: 6,
+                }}
+              >
+                {agentStates.slice(0, 3).map((a, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: neutral.textPrimary,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {a.name} — <span style={{ color: a.status === "Healthy" ? semantic.success : semantic.warning }}>{a.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Top performer / insight */}
+            {topPerformer && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: derived.textSecondary,
+                  marginBottom: 8,
+                  lineHeight: 1.4,
+                }}
+              >
+                {topPerformer}
+              </div>
+            )}
+          </>
         )}
-        {/* Actions row */}
+        {/* Actions row (two max) */}
         <div
           style={{
             display: "flex",
             flexDirection: "row",
             flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 6,
+            gap: 10,
+            marginBottom: 8,
           }}
         >
           {primaryAction && (
@@ -290,13 +304,13 @@ function SystemTileContent({
                 onQuickActionClick?.(id, primaryAction.id, e);
               }}
               style={{
-                minHeight: 30,
-                padding: "5px 11px",
+                minHeight: 34,
+                padding: "6px 12px",
                 borderRadius: 8,
                 border: `1px solid ${derived.border}`,
                 color: neutral.surface,
                 backgroundColor: brand.primary,
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 600,
                 display: "inline-flex",
                 alignItems: "center",
@@ -304,7 +318,7 @@ function SystemTileContent({
                 gap: ICON_GAP,
               }}
             >
-              <QuickActionIconSvg icon={primaryAction.icon} size={12} />
+              <QuickActionIconSvg icon={primaryAction.icon} size={13} />
               <span>{primaryAction.label}</span>
             </button>
           )}
@@ -317,13 +331,13 @@ function SystemTileContent({
                 onQuickActionClick?.(id, secondaryAction.id, e);
               }}
               style={{
-                minHeight: 30,
-                padding: "5px 11px",
+                minHeight: 34,
+                padding: "6px 12px",
                 borderRadius: 8,
                 border: `1px solid ${derived.border}`,
                 color: brand.primary,
                 backgroundColor: "transparent",
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 600,
                 display: "inline-flex",
                 alignItems: "center",
@@ -331,16 +345,15 @@ function SystemTileContent({
                 gap: ICON_GAP,
               }}
             >
-              <QuickActionIconSvg icon={secondaryAction.icon} size={11} />
+              <QuickActionIconSvg icon={secondaryAction.icon} size={12} />
               <span>{secondaryAction.label}</span>
             </button>
           )}
         </div>
-        {/* Details: completes bottom edge of node */}
         <span
           className="adminv2-dept-view-details"
           style={{
-            fontSize: 11,
+            fontSize: 13,
             fontWeight: 500,
             color: brand.primary,
             cursor: "pointer",

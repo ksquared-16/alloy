@@ -113,7 +113,7 @@ body {
     opacity: 0.6;
   }
   50% {
-    transform: translate(10px, -12px);
+    transform: translate(12px, -14px);
     opacity: 0.95;
   }
 }
@@ -125,7 +125,7 @@ body {
     opacity: 0.55;
   }
   50% {
-    transform: translate(-8px, 10px);
+    transform: translate(-10px, 12px);
     opacity: 0.9;
   }
 }
@@ -133,11 +133,11 @@ body {
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(5px, 5px);
+    transform: translate(6px, 6px);
     opacity: 0.5;
   }
   50% {
-    transform: translate(-10px, -8px);
+    transform: translate(-12px, -10px);
     opacity: 0.88;
   }
 }
@@ -533,10 +533,10 @@ body {
   --home-pine: #273F52;
   --home-stone: #F4F6F9;
   --home-stone-warm: #eef1f6;
-  /* Atmospheric base: airy, pale, luminous; reduced blue dominance */
-  --home-atmosphere-base: #eef2f7;
-  --home-atmosphere-mid: #f1f4f9;
-  --home-atmosphere-soft: #f4f7fb;
+  /* Atmospheric base: 50% lower opacity (lighter, more transparent) */
+  --home-atmosphere-base: #f4f6f9;
+  --home-atmosphere-mid: #f6f8fb;
+  --home-atmosphere-soft: #f8fafc;
 }
 
 /* Page wrapper: richer blue-teal atmospheric field; white content floats above */

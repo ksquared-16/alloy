@@ -263,7 +263,18 @@ export default function EntityDrawerOverview({
         // Prefer custom section content when provided (e.g. contact Canonical Person link); otherwise use config-driven fields.
         const children: ReactNode = customContent ?? (hasFields
           ? section.fields!.map((field: EntityDrawerFieldConfig) => {
-              const rawValue = editFormData[field.key] !== undefined ? editFormData[field.key] : (field.key === "status_key" && record._status_display != null ? record._status_display : record[field.key]);
+              const key = field.key;
+              const displayFallback =
+                key === "status_key" && record._status_display != null ? record._status_display
+                : key === "pipeline_stage_id" && record._pipeline_stage_name != null ? record._pipeline_stage_name
+                : key === "vertical_id" && record._vertical_name != null ? record._vertical_name
+                : key === "location_id" && record._location_name != null ? record._location_name
+                : undefined;
+              const rawValue = displayFallback !== undefined
+                ? displayFallback
+                : editFormData[key] !== undefined
+                  ? editFormData[key]
+                  : record[key];
               const displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
               const showEdit = !!(canEdit && field.editable && onFieldChange);
               const editNode = showEdit
