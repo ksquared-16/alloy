@@ -16,6 +16,21 @@ import {
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
 import { getEntityPresentation, toPresentationType, type DrawerTabKey, type EntityDrawerSectionConfig, type EntityDrawerFieldConfig } from "@/lib/entityPresentation";
+
+const LOCATION_BASIC_SECTION: EntityDrawerSectionConfig = {
+    key: "location_basic",
+    title: "Basic info",
+    defaultExpanded: true,
+    collapsible: true,
+    gridCols: 2,
+    fields: [
+        { key: "label", label: "Name", span: 1, renderHint: "text", editable: false },
+        { key: "postal_code", label: "Postal code", span: 1, renderHint: "text", editable: false },
+        { key: "address1", label: "Address 1", span: 1, renderHint: "text", editable: false },
+        { key: "city", label: "City", span: 1, renderHint: "text", editable: false },
+        { key: "state", label: "State", span: 1, renderHint: "text", editable: false },
+    ],
+};
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
@@ -1252,24 +1267,36 @@ export default function AdminEntityDrawer() {
         if (!data) return;
         if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
+            const opp = data as Record<string, unknown>;
+            const quoteTotal =
+                opp.quote_total != null && !Number.isNaN(Number(opp.quote_total))
+                    ? Number(opp.quote_total)
+                    : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents))
+                        ? Number(opp.estimated_price_cents) / 100
+                        : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents))
+                            ? Number(opp.monetary_value_cents) / 100
+                            : "";
             setFormData({
-                name: (data.name as string) ?? "",
-                job_date: (data.job_date as string)?.slice(0, 10) ?? "",
-                job_time_window: (data.job_time_window as string) ?? "",
-                status: (data.status as string) ?? "",
-                status_key: (data.status_key as string) ?? "",
-                pipeline_stage_id: (data.pipeline_stage_id as string) ?? "",
-                vertical_id: (data.vertical_id as string) ?? "",
-                quote_total: data.quote_total ?? "",
-                quote_subtotal: data.quote_subtotal ?? "",
-                discount_amount: data.discount_amount ?? "",
-                discount_code: (data.discount_code as string) ?? "",
-                source: (data.source as string) ?? "",
-                assigned_to: (data.assigned_to as string) ?? "",
-                lost_reason: (data.lost_reason as string) ?? "",
-                appointment_id: (data.appointment_id as string) ?? "",
-                external_source: (data.external_source as string) ?? "",
-                external_id: (data.external_id as string) ?? "",
+                name: (opp.name as string) ?? "",
+                job_date: (opp.job_date as string)?.slice(0, 10) ?? "",
+                job_time_window: (opp.job_time_window as string) ?? "",
+                status: (opp.status as string) ?? "",
+                status_key: (opp.status_key as string) ?? "",
+                pipeline_stage_id: (opp.pipeline_stage_id as string) ?? "",
+                vertical_id: (opp.vertical_id as string) ?? "",
+                quote_total: quoteTotal,
+                quote_subtotal: opp.quote_subtotal ?? "",
+                discount_amount: opp.discount_amount ?? "",
+                discount_code: (opp.discount_code as string) ?? "",
+                estimated_price_cents: opp.estimated_price_cents ?? "",
+                monetary_value_cents: opp.monetary_value_cents ?? "",
+                recurring_price_cents: opp.recurring_price_cents ?? "",
+                source: (opp.source as string) ?? "",
+                assigned_to: (opp.assigned_to as string) ?? "",
+                lost_reason: (opp.lost_reason as string) ?? "",
+                appointment_id: (opp.appointment_id as string) ?? "",
+                external_source: (opp.external_source as string) ?? "",
+                external_id: (opp.external_id as string) ?? "",
                 notes: (meta.notes as string) ?? "",
                 customer_notes: (meta.notes as string) ?? "",
             });
@@ -1743,28 +1770,40 @@ export default function AdminEntityDrawer() {
             for (const d of vendorDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
+            const opp = data as Record<string, unknown>;
+            const quoteTotal =
+                opp.quote_total != null && !Number.isNaN(Number(opp.quote_total))
+                    ? Number(opp.quote_total)
+                    : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents))
+                        ? Number(opp.estimated_price_cents) / 100
+                        : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents))
+                            ? Number(opp.monetary_value_cents) / 100
+                            : "";
             initial = {
-                name: (data.name as string) ?? "",
-                job_date: (data.job_date as string)?.slice(0, 10) ?? "",
-                job_time_window: (data.job_time_window as string) ?? "",
-                status_key: (data.status_key as string) ?? "",
-                pipeline_stage_id: (data.pipeline_stage_id as string) ?? "",
-                vertical_id: (data.vertical_id as string) ?? "",
-                quote_total: data.quote_total ?? "",
-                quote_subtotal: data.quote_subtotal ?? "",
-                discount_amount: data.discount_amount ?? "",
-                discount_code: (data.discount_code as string) ?? "",
-                source: (data.source as string) ?? "",
-                assigned_to: (data.assigned_to as string) ?? "",
-                lost_reason: (data.lost_reason as string) ?? "",
-                appointment_id: (data.appointment_id as string) ?? "",
-                external_source: (data.external_source as string) ?? "",
-                external_id: (data.external_id as string) ?? "",
+                name: (opp.name as string) ?? "",
+                job_date: (opp.job_date as string)?.slice(0, 10) ?? "",
+                job_time_window: (opp.job_time_window as string) ?? "",
+                status_key: (opp.status_key as string) ?? "",
+                pipeline_stage_id: (opp.pipeline_stage_id as string) ?? "",
+                vertical_id: (opp.vertical_id as string) ?? "",
+                quote_total: quoteTotal,
+                quote_subtotal: opp.quote_subtotal ?? "",
+                discount_amount: opp.discount_amount ?? "",
+                discount_code: (opp.discount_code as string) ?? "",
+                estimated_price_cents: opp.estimated_price_cents ?? "",
+                monetary_value_cents: opp.monetary_value_cents ?? "",
+                recurring_price_cents: opp.recurring_price_cents ?? "",
+                source: (opp.source as string) ?? "",
+                assigned_to: (opp.assigned_to as string) ?? "",
+                lost_reason: (opp.lost_reason as string) ?? "",
+                appointment_id: (opp.appointment_id as string) ?? "",
+                external_source: (opp.external_source as string) ?? "",
+                external_id: (opp.external_id as string) ?? "",
                 notes: (meta.notes as string) ?? "",
                 customer_notes: (meta.notes as string) ?? "",
             };
             const oppDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
-            for (const d of oppDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
+            for (const d of oppDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (opp[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "schedules") {
             initial = {
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
@@ -2736,6 +2775,12 @@ export default function AdminEntityDrawer() {
             })),
         }));
     }, [drawer.type, data]);
+
+    const overviewSectionsOverride = useMemo((): EntityDrawerSectionConfig[] | undefined => {
+        if (configDrivenOverviewSections.length === 0) return undefined;
+        if (drawer.type === "locations") return [LOCATION_BASIC_SECTION, ...configDrivenOverviewSections];
+        return configDrivenOverviewSections;
+    }, [drawer.type, configDrivenOverviewSections]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -4278,7 +4323,7 @@ export default function AdminEntityDrawer() {
                             entityType={presentationType}
                             data={data as Record<string, unknown>}
                             customSectionContent={overviewCustomContent}
-                            overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                            overviewSectionsOverride={overviewSectionsOverride}
                             isEditing={isEditing}
                             formData={formData}
                             onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
@@ -4801,40 +4846,57 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                             <div>
                                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Stage</label>
-                                            <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
+                                            {canMutate ? (
+                                                <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} className={INLINE_EDIT_INPUT_CLASS}>
                                                     <option value="">— None —</option>
-                                                    {pipelines.map((p) => {
-                                                        const pipelineStages = stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position);
-                                                        return pipelineStages.map((s) => (
-                                                            <option key={s.id} value={s.id}>{p.name}: {s.name}</option>
-                                                        ));
-                                                    })}
+                                                    {(() => {
+                                                        const sid = String(formData.pipeline_stage_id ?? "");
+                                                        const stageOpts: { id: string; name: string }[] = [];
+                                                        pipelines.forEach((p) => {
+                                                            stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position).forEach((s) => {
+                                                                stageOpts.push({ id: s.id, name: `${p.name}: ${s.name}` });
+                                                            });
+                                                        });
+                                                        if (sid && !stageOpts.some((o) => o.id === sid)) {
+                                                            const nm = String((data as { _pipeline_stage_name?: string | null })?._pipeline_stage_name ?? "").trim();
+                                                            stageOpts.push({ id: sid, name: nm || `${sid.slice(0, 8)}…` });
+                                                        }
+                                                        return stageOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>);
+                                                    })()}
                                                 </select>
+                                            ) : (
+                                                <span className="text-sm text-alloy-midnight/90">{(data as { _pipeline_stage_name?: string | null })?._pipeline_stage_name ?? "—"}</span>
+                                            )}
                                             </div>
                                         <div>
                                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical</label>
-                                            <select
-                                                value={String(formData.vertical_id ?? "")}
-                                                onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))}
-                                                onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }}
-                                                disabled={!canMutate}
-                                                className={INLINE_EDIT_INPUT_CLASS}
-                                            >
-                                                <option value="">— None —</option>
-                                                {(() => {
-                                                    const vid = String(formData.vertical_id ?? "");
-                                                    const opts = [...oppVerticalOptions];
-                                                    if (vid && !opts.some((o) => o.id === vid)) {
-                                                        const nm = String((data as { _vertical_name?: string | null })?._vertical_name ?? "").trim();
-                                                        opts.push({ id: vid, name: nm || `${vid.slice(0, 8)}…` });
-                                                    }
-                                                    return opts.map((v) => (
-                                                        <option key={v.id} value={v.id}>{v.name}</option>
-                                                    ));
-                                                })()}
-                                            </select>
+                                            {canMutate ? (
+                                                <select
+                                                    value={String(formData.vertical_id ?? "")}
+                                                    onChange={(e) => setFormData((f) => ({ ...f, vertical_id: e.target.value || null }))}
+                                                    onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }}
+                                                    className={INLINE_EDIT_INPUT_CLASS}
+                                                >
+                                                    <option value="">— None —</option>
+                                                    {(() => {
+                                                        const vid = String(formData.vertical_id ?? "");
+                                                        const opts = [...oppVerticalOptions];
+                                                        if (vid && !opts.some((o) => o.id === vid)) {
+                                                            const nm = String((data as { _vertical_name?: string | null })?._vertical_name ?? "").trim();
+                                                            opts.push({ id: vid, name: nm || `${vid.slice(0, 8)}…` });
+                                                        }
+                                                        return opts.map((v) => <option key={v.id} value={v.id}>{v.name}</option>);
+                                                    })()}
+                                                </select>
+                                            ) : (
+                                                <span className="text-sm text-alloy-midnight/90">{(data as { _vertical_name?: string | null })?._vertical_name ?? "—"}</span>
+                                            )}
                                         </div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Estimated price (cents)</label><input type="number" value={formData.estimated_price_cents != null && formData.estimated_price_cents !== "" ? String(formData.estimated_price_cents) : ""} onChange={(e) => setFormData((f) => ({ ...f, estimated_price_cents: e.target.value === "" ? null : parseInt(e.target.value, 10) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote Total ($)</label><input type="number" step="0.01" value={typeof formData.quote_total === "number" && !Number.isNaN(formData.quote_total) ? formData.quote_total : formData.quote_total !== "" && formData.quote_total != null ? String(formData.quote_total) : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_total: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Quote subtotal</label><input type="number" step="0.01" value={formData.quote_subtotal != null && formData.quote_subtotal !== "" ? String(formData.quote_subtotal) : ""} onChange={(e) => setFormData((f) => ({ ...f, quote_subtotal: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Discount amount</label><input type="number" step="0.01" value={formData.discount_amount != null && formData.discount_amount !== "" ? String(formData.discount_amount) : ""} onChange={(e) => setFormData((f) => ({ ...f, discount_amount: e.target.value === "" ? null : parseFloat(e.target.value) }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Discount code</label><input value={String(formData.discount_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, discount_code: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                             {statusDefsLoading ? null : (
                                             <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
                                         )}
