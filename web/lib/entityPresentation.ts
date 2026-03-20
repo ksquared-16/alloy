@@ -85,8 +85,46 @@ export interface EntityDrawerSectionConfig {
   gridCols?: 1 | 2;
   /** Ordered list of field keys (or full field configs) to show in this section. */
   fields: EntityDrawerFieldConfig[];
+  /**
+   * Optional grouped blocks inside one collapsible section (e.g. Jobs → Pricing → Summary / Discount).
+   * When present, overview renders these instead of top-level `fields`.
+   */
+  subsections?: { title: string; fields: EntityDrawerFieldConfig[] }[];
   /** If true, section order/visibility cannot be changed by user layout (future). */
   locked?: boolean;
+}
+
+/** Single Jobs drawer Pricing block: Summary + Discount (canonical net = display_total_cents). */
+export function getJobUnifiedPricingSection(): EntityDrawerSectionConfig {
+  return {
+    key: "pricing",
+    title: "Pricing",
+    defaultExpanded: false,
+    collapsible: true,
+    gridCols: 2,
+    fields: [],
+    locked: true,
+    subsections: [
+      {
+        title: "Summary",
+        fields: [
+          { key: "gross_price_cents", label: "Gross Price", span: 1, renderHint: "money", editable: true },
+          { key: "display_total_cents", label: "Final Total (after discount)", span: 1, renderHint: "money", editable: false },
+          { key: "recurring_total_cents", label: "Recurring Total", span: 1, renderHint: "money", editable: false },
+          { key: "contractor_payout_cents", label: "Contractor Payout", span: 1, renderHint: "money", editable: false },
+          { key: "alloy_fee_cents", label: "Platform Fee", span: 1, renderHint: "money", editable: false },
+        ],
+      },
+      {
+        title: "Discount",
+        fields: [
+          { key: "discount_code_id", label: "Discount code", span: 1, renderHint: "text", editable: true },
+          { key: "_discount_amount_cents", label: "Discount amount", span: 1, renderHint: "money", editable: false },
+          { key: "_discount_applied", label: "Discount applied", span: 1, renderHint: "primary_yes_no", editable: false },
+        ],
+      },
+    ],
+  };
 }
 
 /** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
@@ -566,42 +604,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           ],
           locked: true,
         },
-        {
-          key: "pricing",
-          title: "Pricing",
-          defaultExpanded: false,
-          collapsible: true,
-          gridCols: 2,
-          fields: [
-            {
-              key: "estimated_total_cents",
-              label: "Estimated total (reference)",
-              span: 1,
-              renderHint: "money",
-              editable: true,
-            },
-            { key: "gross_price_cents", label: "Subtotal / gross (before discount)", span: 1, renderHint: "money", editable: true },
-            {
-              key: "_discount_amount_cents",
-              label: "Discount amount",
-              span: 1,
-              renderHint: "money",
-              editable: false,
-            },
-            {
-              key: "display_total_cents",
-              label: "Final total (after discount)",
-              span: 1,
-              renderHint: "money",
-              editable: false,
-            },
-            { key: "contractor_split_bps", label: "Contractor split %", span: 1, renderHint: "text", editable: true },
-            { key: "alloy_split_bps", label: "Alloy split %", span: 1, renderHint: "text", editable: true },
-            { key: "contractor_payout_cents", label: "Contractor payout", span: 1, renderHint: "money" },
-            { key: "alloy_fee_cents", label: "Alloy fee", span: 1, renderHint: "money" },
-          ],
-          locked: true,
-        },
+        getJobUnifiedPricingSection(),
         {
           key: "notes",
           title: "Notes",

@@ -213,6 +213,12 @@ export async function GET(
             const display_total_cents = computeJobDisplayTotalCents(data as JobPriceInput);
             out.display_total_cents = display_total_cents;
             out._price_display = display_total_cents != null ? display_total_cents / 100 : null;
+            const codeStr = String((data as { discount_code?: string | null }).discount_code ?? "").trim();
+            out._discount_applied =
+                Number(out._discount_amount_cents ?? 0) > 0 ||
+                !!codeStr ||
+                !!(data as { discount_code_id?: string | null }).discount_code_id ||
+                !!(data as { discount_program_id?: string | null }).discount_program_id;
             const { data: nextSched } = await supabase
                 .from("schedules")
                 .select("start_at")
@@ -783,11 +789,16 @@ export async function GET(
             const JOBS_LIMIT = 25;
             const { data: vendorJobs } = await supabase
                 .from("jobs")
-                .select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id")
+                .select(
+                    "id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id, estimated_total_cents, discount_amount, discounted"
+                )
                 .eq("assigned_vendor_id", id)
                 .order("created_at", { ascending: false })
                 .limit(JOBS_LIMIT);
-            out._vendor_jobs = vendorJobs ?? [];
+            out._vendor_jobs = (vendorJobs ?? []).map((row) => ({
+                ...row,
+                display_total_cents: computeJobDisplayTotalCents(row as JobPriceInput),
+            }));
             const jobIds = (vendorJobs ?? []).map((j: { id: string }) => j.id);
             const { data: vendorSchedules } = jobIds.length > 0
                 ? await supabase

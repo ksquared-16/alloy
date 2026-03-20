@@ -16,7 +16,14 @@ import {
     WORKFLOW_EVENT_TYPES,
     WORKFLOW_ENTITY_ID_QUICK_FILL,
 } from "@/lib/workflowVocab";
-import { getEntityPresentation, toPresentationType, type DrawerTabKey, type EntityDrawerSectionConfig, type EntityDrawerFieldConfig } from "@/lib/entityPresentation";
+import {
+    getEntityPresentation,
+    getJobUnifiedPricingSection,
+    toPresentationType,
+    type DrawerTabKey,
+    type EntityDrawerSectionConfig,
+    type EntityDrawerFieldConfig,
+} from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
@@ -108,7 +115,16 @@ type VendorFormData = {
 type ContactVendorShape = { id: string; name: string | null; vendor_status_id: string | null; created_at: string };
 
 /** Vendor drawer: job row (entity GET _vendor_jobs). */
-type VendorDrawerJob = { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string };
+type VendorDrawerJob = {
+    id: string;
+    title: string;
+    scheduled_at: string;
+    job_status_id: string;
+    gross_price_cents: number;
+    recurring_total_cents: number;
+    opportunity_id: string;
+    display_total_cents?: number | null;
+};
 
 function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] {
     return EDITABLE_TYPES.includes(type as (typeof EDITABLE_TYPES)[number]);
@@ -647,11 +663,21 @@ export default function AdminEntityDrawer() {
     const [redemptionRelatedLoading, setRedemptionRelatedLoading] = useState(false);
     type VendorRelatedPayload = {
         people: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; _is_primary?: boolean }[];
-        jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null; gross_price_cents?: number | null; recurring_total_cents?: number | null; opportunity_id?: string }[];
+        jobs: {
+            id: string;
+            created_at?: string;
+            title?: string | null;
+            scheduled_at?: string | null;
+            job_status_id?: string | null;
+            gross_price_cents?: number | null;
+            recurring_total_cents?: number | null;
+            opportunity_id?: string;
+            display_total_cents?: number | null;
+        }[];
         schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string; status_key?: string | null; price_cents?: number | null }[];
         assignments: { id: string; schedule_id?: string; vendor_id?: string; assignment_status_id?: string | null; created_at?: string }[];
         documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
-        financials_summary?: { job_count: number; total_gross_cents: number };
+        financials_summary?: { job_count: number; total_gross_cents: number; total_display_cents?: number };
     };
     const [vendorRelatedData, setVendorRelatedData] = useState<VendorRelatedPayload | null>(null);
     const [vendorRelatedLoading, setVendorRelatedLoading] = useState(false);
@@ -3324,16 +3350,24 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => d.field_key !== "primary_contact_id");
         }
-        /** Registry pricing rows are replaced by canonical summary (same as list: display_total_cents). */
-        const jobCanonicalPricingKeys = new Set([
+        /** Unified Pricing section owns these; strip from field_definitions-driven sections to avoid duplicates. */
+        const jobDrawerPricingFieldKeys = new Set([
             "estimated_total_cents",
             "gross_price_cents",
             "discount_amount",
             "display_total_cents",
             "_discount_amount_cents",
+            "recurring_total_cents",
+            "contractor_payout_cents",
+            "alloy_fee_cents",
+            "discount_code",
+            "discount_code_id",
+            "discount_program_id",
+            "contractor_split_bps",
+            "alloy_split_bps",
         ]);
         if (drawer.type === "jobs") {
-            visible = visible.filter((d) => !jobCanonicalPricingKeys.has(d.field_key));
+            visible = visible.filter((d) => !jobDrawerPricingFieldKeys.has(d.field_key));
         }
         if (visible.length === 0) {
             if (!(drawer.type === "jobs" && data && !(data as { _create?: boolean })._create)) {
@@ -3458,37 +3492,43 @@ export default function AdminEntityDrawer() {
         }
         let result: EntityDrawerSectionConfig[] = [...fromDefs, ...append];
         if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create) {
-            const jobPricingSummarySection: EntityDrawerSectionConfig = {
-                key: "job_pricing_summary",
-                title: "Pricing summary",
-                defaultExpanded: true,
-                collapsible: true,
-                gridCols: 2 as const,
-                fields: [
-                    {
-                        key: "gross_price_cents",
-                        label: "Gross price / subtotal (before discount)",
-                        span: 1,
-                        renderHint: "money",
-                        editable: true,
-                    },
-                    {
-                        key: "_discount_amount_cents",
-                        label: "Discount amount",
-                        span: 1,
-                        renderHint: "money",
-                        editable: false,
-                    },
-                    {
-                        key: "display_total_cents",
-                        label: "Final total (after discount)",
-                        span: 1,
-                        renderHint: "money",
-                        editable: false,
-                    },
-                ],
+            const jobSectionRank: Record<string, number> = {
+                job_details: 0,
+                customer_location: 1,
+                scheduling: 2,
+                pricing: 3,
+                notes: 4,
+                record_info: 5,
             };
-            result = [jobPricingSummarySection, ...result];
+            const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
+            const unifiedPricing = getJobUnifiedPricingSection();
+            if (fromDefs.length === 0 && append.length === 0) {
+                const base = (getEntityPresentation("jobs").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+                result = base.map((s) => (s.key === "pricing" ? unifiedPricing : s));
+            } else {
+                result = result
+                    .filter((s) => s.key !== "discount" && s.key !== "job_pricing_summary")
+                    .map((s) => ({
+                        ...s,
+                        fields: s.fields.filter((f) => !jobDrawerPricingFieldKeys.has(f.key)),
+                        subsections: s.subsections
+                            ?.map((sub) => ({
+                                ...sub,
+                                fields: sub.fields.filter((f) => !jobDrawerPricingFieldKeys.has(f.key)),
+                            }))
+                            .filter((sub) => sub.fields.length > 0),
+                    }))
+                    .filter((s) => {
+                        const sf = s.fields?.length ?? 0;
+                        const ss = s.subsections?.length ?? 0;
+                        return sf > 0 || ss > 0;
+                    });
+                const withoutPricing = result.filter((s) => s.key !== "pricing");
+                const notesIdx = withoutPricing.findIndex((s) => s.key === "notes");
+                const insertAt = notesIdx >= 0 ? notesIdx : withoutPricing.length;
+                result = [...withoutPricing.slice(0, insertAt), unifiedPricing, ...withoutPricing.slice(insertAt)];
+                result.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
+            }
         }
         if (drawer.type === "vendors" && fromDefs.length > 0) {
             const fieldKeys = new Set<string>();
@@ -3601,6 +3641,24 @@ export default function AdminEntityDrawer() {
                 });
             }
             out.assigned_vendor_id = vendorOpts;
+
+            const discOpts = jobDiscountOptions.map((o) => ({ value: o.value, label: o.label }));
+            const dJob = data as {
+                _discount_selection?: string | null;
+                discount_code?: string | null;
+                _discount_label?: string | null;
+                discount_code_id?: string | null;
+            };
+            const selTok = String(dJob._discount_selection ?? "").trim();
+            let discountOpts = discOpts;
+            if (selTok && !discountOpts.some((o) => o.value === selTok)) {
+                const lbl =
+                    String(dJob.discount_code ?? "").trim() ||
+                    String(dJob._discount_label ?? "").trim() ||
+                    selTok;
+                discountOpts = [...discountOpts, { value: selTok, label: lbl }];
+            }
+            out.discount_code_id = discountOpts;
         }
         if (drawer.type === "vendors" && data) {
             const d = data as {
@@ -3639,6 +3697,7 @@ export default function AdminEntityDrawer() {
         jobContactOptions,
         jobOpportunityOptions,
         jobCatalogStatusOptions,
+        jobDiscountOptions,
     ]);
 
     if (!drawer.type || !drawer.id) return null;
@@ -4471,7 +4530,9 @@ export default function AdminEntityDrawer() {
                                     label: (j.title as string) || "Job",
                                     meta: [
                                         j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null,
-                                        j.gross_price_cents != null ? formatMoneyFromCents(j.gross_price_cents) : null,
+                                        (j.display_total_cents != null ? j.display_total_cents : j.gross_price_cents) != null
+                                            ? formatMoneyFromCents(Number(j.display_total_cents ?? j.gross_price_cents))
+                                            : null,
                                         j.created_at ? formatDate(j.created_at as string) : null,
                                     ]
                                         .filter(Boolean)
@@ -4487,12 +4548,15 @@ export default function AdminEntityDrawer() {
                                 }));
                                 const fin = d.financials_summary;
                                 const finItems =
-                                    fin && (fin.job_count > 0 || fin.total_gross_cents > 0)
+                                    fin &&
+                                        (fin.job_count > 0 ||
+                                            fin.total_gross_cents > 0 ||
+                                            (fin.total_display_cents ?? 0) > 0)
                                         ? [
                                               {
                                                   id: "financials-summary",
                                                   label: `Assigned jobs (in scope): ${fin.job_count}`,
-                                                  meta: `Total gross (summed): ${formatMoneyFromCents(fin.total_gross_cents)}`,
+                                                  meta: `Total (net, summed): ${formatMoneyFromCents(fin.total_display_cents ?? fin.total_gross_cents)}`,
                                               },
                                           ]
                                         : [];
@@ -4936,7 +5000,17 @@ export default function AdminEntityDrawer() {
                                         Assigned jobs (in related-data scope): <strong>{vendorRelatedData.financials_summary.job_count}</strong>
                                     </p>
                                     <p>
-                                        Gross total (summed from those jobs): <strong>{formatMoneyFromCents(vendorRelatedData.financials_summary.total_gross_cents)}</strong>
+                                        Total (net after discount, summed):{" "}
+                                        <strong>
+                                            {formatMoneyFromCents(
+                                                vendorRelatedData.financials_summary.total_display_cents ??
+                                                    vendorRelatedData.financials_summary.total_gross_cents
+                                            )}
+                                        </strong>
+                                    </p>
+                                    <p className="text-alloy-midnight/60">
+                                        Gross total (reference):{" "}
+                                        <strong>{formatMoneyFromCents(vendorRelatedData.financials_summary.total_gross_cents)}</strong>
                                     </p>
                                     <p className="text-xs text-alloy-midnight/50">Figures mirror the Related tab job list (API-capped). Open individual jobs for full pricing and ledger context.</p>
                                 </div>
@@ -5781,7 +5855,14 @@ export default function AdminEntityDrawer() {
                                                             <li key={job.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
                                                                 <button type="button" onClick={() => openDrawer({ type: "jobs", id: job.id })} className="text-alloy-blue hover:underline font-medium">{job.title || job.id.slice(0, 8)}</button>
                                                                 <div className="text-alloy-midnight/70 mt-0.5">Scheduled: {job.scheduled_at ? formatDateTime(job.scheduled_at) : "-"} · Status: {job.job_status_id ?? "-"}</div>
-                                                                {job.gross_price_cents != null && <div>Gross: {formatMoneyFromCents(job.gross_price_cents)}</div>}
+                                                                {(job.display_total_cents != null || job.gross_price_cents != null) && (
+                                                                    <div>
+                                                                        Total:{" "}
+                                                                        {formatMoneyFromCents(
+                                                                            Number(job.display_total_cents ?? job.gross_price_cents ?? 0)
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                                 {job.recurring_total_cents != null && <div>Recurring: {formatMoneyFromCents(job.recurring_total_cents)}</div>}
                                                                 {job.opportunity_id && <button type="button" onClick={() => openDrawer({ type: "opportunities", id: job.opportunity_id })} className="text-alloy-blue hover:underline text-xs">Opportunity</button>}
                                                                 {scheds.length > 0 && <div className="mt-1 text-xs"><strong>Schedules:</strong> {scheds.map((s) => `${formatDateTime(s.start_at)} – ${formatDateTime(s.end_at)} (${s.timezone || "-"})`).join("; ")}</div>}

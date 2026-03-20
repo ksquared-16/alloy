@@ -192,6 +192,7 @@ function renderFieldEditNode(
     "customer_id",
     "opportunity_id",
     "job_status_id",
+    "discount_code_id",
   ]);
   /** Reference selects must win over generic `status` hint so e.g. vendor_status_id is never driven by status_definitions. */
   if (refOpts && refOpts.length > 0 && refSelectKeys.has(key)) {
@@ -298,63 +299,92 @@ export default function EntityDrawerOverview({
     handleBlur();
   };
 
+  const renderOverviewField = (field: EntityDrawerFieldConfig): ReactNode => {
+    const key = field.key;
+    const displayFallback =
+      key === "status_key" && record._status_display != null
+        ? record._status_display
+        : key === "vendor_status_id" && record._status_display != null
+          ? record._status_display
+          : key === "assigned_vendor_id" && record._vendor_name != null
+            ? record._vendor_name
+            : key === "pipeline_stage_id" && record._pipeline_stage_name != null
+              ? record._pipeline_stage_name
+              : key === "vertical_id" && record._vertical_name != null
+                ? record._vertical_name
+                : key === "location_id" && record._location_name != null
+                  ? record._location_name
+                  : key === "primary_person_id" && record._primary_person_name != null
+                    ? record._primary_person_name
+                    : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
+                      ? (record._primary_contact_name ?? record._contact_name)
+                      : key === "customer_id" && record._customer_name != null
+                        ? record._customer_name
+                        : key === "opportunity_id" && record._opportunity_name != null
+                          ? record._opportunity_name
+                          : key === "job_status_id" && record._job_status_label != null
+                            ? record._job_status_label
+                            : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
+                              ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
+                              : undefined;
+    const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
+    const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
+    const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;
+    let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
+    if (!showFieldEdit && (displayValue === null || displayValue === undefined || displayValue === "")) {
+      displayValue = "—";
+    }
+    const editNode = showFieldEdit
+      ? renderFieldEditNode(
+          field,
+          editFormData,
+          record,
+          handleFieldChange,
+          handleBlur,
+          handleEscape,
+          statusDefs,
+          !canEdit,
+          selectOptionsByFieldKey
+        )
+      : undefined;
+    return (
+      <EntityDrawerField
+        key={field.key}
+        label={field.label}
+        value={displayValue}
+        span={field.span ?? 1}
+        editNode={editNode}
+        isEditing={showFieldEdit}
+      />
+    );
+  };
+
   return (
     <div className="space-y-0 pt-5" data-entity-drawer-overview>
       {sections.map((section: EntityDrawerSectionConfig) => {
-        const hasFields = section.fields && section.fields.length > 0;
+        const hasSubsections = (section.subsections?.length ?? 0) > 0;
+        const hasTopFields = section.fields && section.fields.length > 0;
+        const hasFields = hasTopFields || hasSubsections;
         const customContent = customSectionContent[section.key];
 
-        // Prefer custom section content when provided (e.g. contact Canonical Person link); otherwise use config-driven fields.
-        const children: ReactNode = customContent ?? (hasFields
-          ? section.fields!.map((field: EntityDrawerFieldConfig) => {
-              const key = field.key;
-              const displayFallback =
-                key === "status_key" && record._status_display != null ? record._status_display
-                : key === "vendor_status_id" && record._status_display != null ? record._status_display
-                : key === "assigned_vendor_id" && record._vendor_name != null ? record._vendor_name
-                : key === "pipeline_stage_id" && record._pipeline_stage_name != null ? record._pipeline_stage_name
-                : key === "vertical_id" && record._vertical_name != null ? record._vertical_name
-                : key === "location_id" && record._location_name != null ? record._location_name
-                : key === "primary_person_id" && record._primary_person_name != null ? record._primary_person_name
-                : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
-                  ? (record._primary_contact_name ?? record._contact_name)
-                : key === "customer_id" && record._customer_name != null ? record._customer_name
-                : key === "opportunity_id" && record._opportunity_name != null ? record._opportunity_name
-                : key === "job_status_id" && record._job_status_label != null ? record._job_status_label
-                : undefined;
-              const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
-              const rawForRead =
-                displayFallback !== undefined ? displayFallback : record[key];
-              const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;
-              let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
-              if (!showFieldEdit && (displayValue === null || displayValue === undefined || displayValue === "")) {
-                displayValue = "—";
-              }
-              const editNode = showFieldEdit
-                ? renderFieldEditNode(
-                    field,
-                    editFormData,
-                    record,
-                    handleFieldChange,
-                    handleBlur,
-                    handleEscape,
-                    statusDefs,
-                    !canEdit,
-                    selectOptionsByFieldKey
-                  )
-                : undefined;
-              return (
-                <EntityDrawerField
-                  key={field.key}
-                  label={field.label}
-                  value={displayValue}
-                  span={field.span ?? 1}
-                  editNode={editNode}
-                  isEditing={showFieldEdit}
-                />
-              );
-            })
-          : null);
+        const gridInner = section.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
+
+        const children: ReactNode =
+          customContent ??
+          (hasSubsections ? (
+            <div className={`${section.gridCols === 2 ? "md:col-span-2" : ""} w-full space-y-6`}>
+              {section.subsections!.map((sub) => (
+                <div key={sub.title}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3">
+                    {sub.title}
+                  </p>
+                  <div className={`grid gap-x-6 gap-y-4 ${gridInner}`}>{sub.fields.map((f) => renderOverviewField(f))}</div>
+                </div>
+              ))}
+            </div>
+          ) : hasTopFields ? (
+            section.fields!.map((f) => renderOverviewField(f))
+          ) : null);
 
         if (!hasFields && !customContent) return null;
 

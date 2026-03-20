@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 
 const LIMIT = 25;
 
@@ -268,7 +269,9 @@ export async function GET(
             const [jobsRes, assignmentsRes, documentsRes] = await Promise.all([
                 supabase
                     .from("jobs")
-                    .select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id")
+                    .select(
+                        "id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id, estimated_total_cents, discount_amount, discounted"
+                    )
                     .eq("assigned_vendor_id", id)
                     .order("created_at", { ascending: false })
                     .limit(LIMIT),
@@ -288,7 +291,17 @@ export async function GET(
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
-            const jobs = (jobsRes.data ?? []) as { id: string; gross_price_cents?: number | null }[];
+            const jobsRaw = jobsRes.data ?? [];
+            type VendorRelatedJobRow = Record<string, unknown> & {
+                id: string;
+                gross_price_cents?: number | null;
+                display_total_cents?: number | null;
+            };
+            const jobs: VendorRelatedJobRow[] = jobsRaw.map((row) => ({
+                ...(row as Record<string, unknown>),
+                id: (row as { id: string }).id,
+                display_total_cents: computeJobDisplayTotalCents(row as JobPriceInput),
+            }));
             const jobIds = jobs.map((j) => j.id);
             const schedulesRes = jobIds.length > 0
                 ? await supabase
@@ -299,15 +312,20 @@ export async function GET(
                     .limit(LIMIT)
                 : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string; status_key?: string | null; price_cents?: number | null }[] };
             const totalGrossCents = jobs.reduce((acc, j) => acc + (typeof j.gross_price_cents === "number" ? j.gross_price_cents : 0), 0);
+            const totalDisplayCents = jobs.reduce((acc, j) => {
+                const n = j.display_total_cents;
+                return acc + (typeof n === "number" ? n : 0);
+            }, 0);
             return NextResponse.json({
                 people,
-                jobs: jobsRes.data ?? [],
+                jobs,
                 schedules: schedulesRes.data ?? [],
                 assignments: assignmentsRes.data ?? [],
                 documents: normalizeDocumentRows(documentsRes.data ?? []),
                 financials_summary: {
                     job_count: jobs.length,
                     total_gross_cents: totalGrossCents,
+                    total_display_cents: totalDisplayCents,
                 },
             });
         }
