@@ -704,7 +704,11 @@ export async function GET(
                 out._vendor_status_label = null;
             }
             out._status_display = (out._vendor_status_label as string | null) ?? v.status_key ?? v.status ?? null;
-            const { data: statusOptions } = await supabase.from("vendor_statuses").select("id, key, label").eq("is_active", true).order("position", { ascending: true });
+            const { data: statusOptions } = await supabase
+                .from("vendor_statuses")
+                .select("id, key, label, position")
+                .eq("is_active", true)
+                .order("position", { ascending: true });
             out._vendor_status_options = statusOptions ?? [];
 
             const directPersonId = v.primary_person_id ?? null;

@@ -1388,7 +1388,7 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.defaultCustomerId, data]);
 
     useEffect(() => {
-        if (!drawer.type || !STATUS_ENTITY_TYPES.includes(drawer.type)) {
+        if (!drawer.type || !STATUS_ENTITY_TYPES.includes(drawer.type) || drawer.type === "vendors") {
             setStatusDefsForDrawer([]);
             return;
         }
@@ -2114,7 +2114,10 @@ export default function AdminEntityDrawer() {
                 payout_override_value: typeof v.payout_override_value === "number" ? v.payout_override_value : "",
             };
             const vendorDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
-            for (const d of vendorDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
+            for (const d of vendorDefs) {
+                if (d.is_system || d.field_key === "status_key" || d.field_key === "status") continue;
+                (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? "";
+            }
         } else if (drawer.type === "opportunities") {
             const meta = (data.metadata as Record<string, unknown>) || {};
             const opp = data as Record<string, unknown>;
@@ -2495,7 +2498,8 @@ export default function AdminEntityDrawer() {
             if (drawer.type === "vendors") {
                 if (payload.vendor_status_id === "" || payload.vendor_status_id === undefined) payload.vendor_status_id = null;
                 if (payload.primary_person_id === "" || payload.primary_person_id === undefined) payload.primary_person_id = null;
-                if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
+                delete payload.status_key;
+                delete payload.status;
                 const daysStr = payload.days_available as string | undefined;
                 payload.days_available = daysStr ? String(daysStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
                 const zipsStr = payload.service_area_zip_codes as string | undefined;
@@ -3311,6 +3315,9 @@ export default function AdminEntityDrawer() {
         if (!data || (data as { _create?: boolean })._create) return [];
         const defs = (data._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
         let visible = defs.filter((d) => d.is_visible_in_drawer !== false);
+        if (drawer.type === "vendors") {
+            visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
+        }
         if (drawer.type === "opportunities") {
             visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
         }
@@ -3425,7 +3432,27 @@ export default function AdminEntityDrawer() {
                 });
             }
         }
-        return [...fromDefs, ...append];
+        let result: EntityDrawerSectionConfig[] = [...fromDefs, ...append];
+        if (drawer.type === "vendors" && fromDefs.length > 0) {
+            const fieldKeys = new Set<string>();
+            for (const s of fromDefs) {
+                for (const f of s.fields) fieldKeys.add(f.key);
+            }
+            if (!fieldKeys.has("vendor_status_id")) {
+                result = [
+                    {
+                        key: "vendor_status_core",
+                        title: "Vendor status",
+                        defaultExpanded: true,
+                        collapsible: true,
+                        gridCols: 2 as const,
+                        fields: [{ key: "vendor_status_id", label: "Status", span: 1 as const, renderHint: "text", editable: true }],
+                    },
+                    ...result,
+                ];
+            }
+        }
+        return result;
     }, [drawer.type, data]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
@@ -5206,11 +5233,22 @@ export default function AdminEntityDrawer() {
                             selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                             isEditing={isEditing}
                             formData={formData}
-                            onFieldChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
+                            onFieldChange={(key, value) => {
+                                setFormData((prev) => {
+                                    const next: Record<string, unknown> = { ...prev, [key]: value };
+                                    if (drawer.type === "vendors" && key === "vendor_status_id") {
+                                        const opts =
+                                            (data as { _vendor_status_options?: { id: string; key: string }[] })._vendor_status_options ?? [];
+                                        const opt = opts.find((o) => o.id === value);
+                                        next.status_key = value ? (opt?.key ?? prev.status_key) : "";
+                                    }
+                                    return next;
+                                });
+                            }}
                             onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
                             canEdit={!!canMutate}
-                            statusDefs={statusDefsForDrawer}
-                            getStatusLabel={getStatusLabel}
+                            statusDefs={drawer.type === "vendors" ? [] : statusDefsForDrawer}
+                            getStatusLabel={drawer.type === "vendors" ? () => null : getStatusLabel}
                             onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                         />
                     )}

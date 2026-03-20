@@ -117,25 +117,6 @@ function renderFieldEditNode(
   const hint = field.renderHint ?? "text";
   const onKeyDown = makeKeydownHandlers(key, onBlur, onEscape);
 
-  if (hint === "status" && statusDefs && statusDefs.length > 0) {
-    const options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-    return (
-      <select
-        value={String(value ?? "")}
-        onChange={(e) => onFieldChange(key, e.target.value || null)}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        disabled={disabled}
-        className={INLINE_EDIT_SELECT}
-      >
-        <option value="">— None —</option>
-        {options.map((s) => (
-          <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-        ))}
-      </select>
-    );
-  }
-
   if (hint === "datetime" || hint === "date") {
     const str = value != null ? String(value) : "";
     const type = hint === "date" ? "date" : "datetime-local";
@@ -207,6 +188,7 @@ function renderFieldEditNode(
     "opportunity_id",
     "job_status_id",
   ]);
+  /** Reference selects must win over generic `status` hint so e.g. vendor_status_id is never driven by status_definitions. */
   if (refOpts && refOpts.length > 0 && refSelectKeys.has(key)) {
     return (
       <select
@@ -222,6 +204,25 @@ function renderFieldEditNode(
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (hint === "status" && statusDefs && statusDefs.length > 0) {
+    const options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    return (
+      <select
+        value={String(value ?? "")}
+        onChange={(e) => onFieldChange(key, e.target.value || null)}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
+        className={INLINE_EDIT_SELECT}
+      >
+        <option value="">— None —</option>
+        {options.map((s) => (
+          <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
         ))}
       </select>
     );
