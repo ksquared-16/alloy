@@ -10,6 +10,7 @@ import {
     type OrgSettingsRow,
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
+import { normalizeJobDiscountAmountToCents } from "@/lib/admin/jobDisplayPrice";
 
 const basisJob = "job_completed_occurrences";
 const basisVendorJob = "vendor_job_completed_occurrences";
@@ -111,8 +112,9 @@ function loadScheduleAndJob(
 /** Same gross/net/discount as postScheduleCompletion. */
 function computeCustomerPaymentAmounts(schedule: ScheduleRow, job: JobRow): { gross_cents: number; discount_cents: number; net_cents: number } {
     const grossCents = Math.max(0, Math.round(Number(schedule.price_cents ?? job.gross_price_cents ?? 0)));
-    const jobDiscountRaw = Math.max(0, Math.round(Number(job.discount_amount ?? 0)));
-    const discountCents = Math.min(jobDiscountRaw, grossCents);
+    const jobGross = Math.max(0, Math.round(Number(job.gross_price_cents ?? 0)));
+    const basisForDiscount = jobGross > 0 ? jobGross : grossCents;
+    const discountCents = Math.min(normalizeJobDiscountAmountToCents(job.discount_amount, basisForDiscount), grossCents);
     const effectiveDiscountCents = schedule.price_cents == null ? discountCents : 0;
     const netCents = Math.max(0, grossCents - effectiveDiscountCents);
     return { gross_cents: grossCents, discount_cents: effectiveDiscountCents, net_cents: netCents };

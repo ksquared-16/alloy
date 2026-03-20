@@ -4,7 +4,12 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
 import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
-import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
+import {
+    computeJobDisplayTotalCents,
+    computeJobGrossBasisCents,
+    normalizeJobDiscountAmountToCents,
+    type JobPriceInput,
+} from "@/lib/admin/jobDisplayPrice";
 import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
@@ -189,13 +194,18 @@ export async function GET(
             }
             const jobStatusId = (data as { job_status_id?: string | null }).job_status_id;
             const statusKey = (data as { status_key?: string | null }).status_key;
-            let jobStatusRow: { status_key?: string | null; label?: string | null } | null = null;
+            let jobStatusRow: { key?: string | null; label?: string | null } | null = null;
             if (jobStatusId) {
-                const { data: js } = await supabase.from("job_statuses").select("status_key, label").eq("id", jobStatusId).maybeSingle();
-                jobStatusRow = (js as { status_key?: string | null; label?: string | null } | null) ?? null;
+                const { data: js } = await supabase.from("job_statuses").select("key, label").eq("id", jobStatusId).maybeSingle();
+                jobStatusRow = (js as { key?: string | null; label?: string | null } | null) ?? null;
             }
             out._job_status_label = jobStatusRow?.label ?? null;
-            out._status_display = statusKey ?? jobStatusRow?.status_key ?? null;
+            out._status_display = statusKey ?? jobStatusRow?.key ?? null;
+            const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
+            out._discount_amount_cents = normalizeJobDiscountAmountToCents(
+                (data as { discount_amount?: number | string | null }).discount_amount,
+                grossBasis
+            );
             const display_total_cents = computeJobDisplayTotalCents(data as JobPriceInput);
             out.display_total_cents = display_total_cents;
             out._price_display = display_total_cents != null ? display_total_cents / 100 : null;

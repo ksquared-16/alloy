@@ -10,7 +10,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("job_statuses")
-    .select("id, label")
+    .select("id, key, label")
     .eq("is_active", true)
     .or(`org_id.eq.${ctx.orgId},org_id.is.null`)
     .order("position", { ascending: true })

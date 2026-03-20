@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       ? supabase.from("vendors").select("id, name, company_name, email, phone, primary_person_id").in("id", vendorIds)
       : { data: [] },
     locationIds.length ? supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds) : { data: [] },
-    jobStatusIds.length ? supabase.from("job_statuses").select("id, status_key, label").in("id", jobStatusIds) : { data: [] },
+    jobStatusIds.length ? supabase.from("job_statuses").select("id, key, label").in("id", jobStatusIds) : { data: [] },
     jobIds.length
       ? supabase
           .from("schedules")
@@ -85,9 +85,9 @@ export async function GET(request: NextRequest) {
     const summary = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
     return [l.id, summary];
   }));
-  /** job_status_id -> status_key from catalog (for _status_display / status badge lookup) */
+  /** job_status_id -> catalog `key` (for _status_display / status badge lookup vs status_definitions) */
   const jobStatusKeyById = new Map(
-    (statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { status_key?: string | null }).status_key ?? null])
+    (statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { key?: string | null }).key ?? null])
   );
   const nextScheduleByJobId = new Map<string, string>();
   for (const s of nextSchedulesRes.data ?? []) {

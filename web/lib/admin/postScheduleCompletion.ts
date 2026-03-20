@@ -11,6 +11,7 @@ import {
     type OrgSettingsRow,
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
+import { normalizeJobDiscountAmountToCents } from "@/lib/admin/jobDisplayPrice";
 
 const SOURCE_TYPE = "schedule_completed";
 const REQUIRED_MAPPING_KEYS = [
@@ -126,8 +127,9 @@ export async function postScheduleCompletion(params: {
     const j = job as JobRow;
 
     const grossCents = Math.max(0, Math.round(Number(s.price_cents ?? j.gross_price_cents ?? 0)));
-    const jobDiscountRaw = Math.max(0, Math.round(Number(j.discount_amount ?? 0)));
-    const discountCents = Math.min(jobDiscountRaw, grossCents);
+    const jobGross = Math.max(0, Math.round(Number(j.gross_price_cents ?? 0)));
+    const basisForDiscount = jobGross > 0 ? jobGross : grossCents;
+    const discountCents = Math.min(normalizeJobDiscountAmountToCents(j.discount_amount, basisForDiscount), grossCents);
     const effectiveDiscountCents = s.price_cents == null ? discountCents : 0;
     const netCents = Math.max(0, grossCents - effectiveDiscountCents);
 

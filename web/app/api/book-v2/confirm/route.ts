@@ -720,6 +720,14 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        /** Book-v2 body uses dollars; `jobs.discount_amount` is stored in integer cents (same as admin resolver). */
+        const discountAmountDollars =
+            typeof discount_amount === "number" && Number.isFinite(discount_amount)
+                ? discount_amount
+                : Number(discount_amount) || 0;
+        const jobDiscountAmountCents =
+            hasDiscount && discountAmountDollars > 0 ? Math.round(discountAmountDollars * 100) : null;
+
         const supabase = createServiceRoleClient();
         const confirmRouteT0 = typeof performance !== "undefined" ? performance.now() : Date.now();
         bookV2PerfLog("confirm_route_entry", confirmRouteT0, booking_attempt_id ?? null);
@@ -1554,7 +1562,7 @@ export async function POST(request: NextRequest) {
                 if (discount_program_id != null) jobUpdatePayload.discount_program_id = discount_program_id;
                 if (discount_code_id != null) jobUpdatePayload.discount_code_id = discount_code_id;
                 jobUpdatePayload.discount_code = discount_code ?? null;
-                jobUpdatePayload.discount_amount = discount_amount ?? null;
+                jobUpdatePayload.discount_amount = jobDiscountAmountCents;
             }
 
             // Backfill vertical_id if missing
@@ -1617,7 +1625,7 @@ export async function POST(request: NextRequest) {
                     ...(discount_program_id != null && { discount_program_id }),
                     ...(discount_code_id != null && { discount_code_id }),
                     discount_code: discount_code ?? null,
-                    discount_amount: discount_amount ?? null,
+                    discount_amount: jobDiscountAmountCents,
                 }),
                 metadata: {
                     booking_source: "book-v2",

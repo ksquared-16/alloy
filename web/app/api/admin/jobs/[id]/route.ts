@@ -7,7 +7,12 @@ import { inferJobDiscountSelectionToken, parseJobDiscountSelectionInput, resolve
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
-import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
+import {
+    computeJobDisplayTotalCents,
+    computeJobGrossBasisCents,
+    normalizeJobDiscountAmountToCents,
+    type JobPriceInput,
+} from "@/lib/admin/jobDisplayPrice";
 
 const ALLOWED_KEYS = [
     "title",
@@ -114,7 +119,10 @@ export async function GET(
         discount_code: (j.discount_code as string | null | undefined) ?? null,
     });
 
-    const display_total_cents = computeJobDisplayTotalCents(j);
+    const jPrice = j as JobPriceInput;
+    const grossBasis = computeJobGrossBasisCents(jPrice) ?? 0;
+    const _discount_amount_cents = normalizeJobDiscountAmountToCents(jPrice.discount_amount, grossBasis);
+    const display_total_cents = computeJobDisplayTotalCents(jPrice);
 
     return NextResponse.json({
         ...j,
@@ -124,6 +132,7 @@ export async function GET(
         _primary_contact_name,
         _discount_selection,
         _discount_label,
+        _discount_amount_cents,
         display_total_cents,
         _price_display: display_total_cents != null ? display_total_cents / 100 : null,
     });

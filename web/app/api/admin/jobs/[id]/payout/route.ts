@@ -7,6 +7,7 @@ import {
     type OrgSettingsRow,
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
+import { normalizeJobDiscountAmountToCents } from "@/lib/admin/jobDisplayPrice";
 
 type ScheduleRow = {
     id: string;
@@ -138,8 +139,12 @@ export async function GET(
     });
 
     const jobGrossPriceCents = (job as { gross_price_cents?: number | null }).gross_price_cents ?? null;
-    const jobDiscountCents = Number((job as { discount_amount?: number | string | null }).discount_amount ?? 0);
-    const jobNetCents = Math.max(0, (jobGrossPriceCents ?? 0) - jobDiscountCents);
+    const grossForNorm = Math.max(0, jobGrossPriceCents ?? 0);
+    const jobDiscountCents = normalizeJobDiscountAmountToCents(
+        (job as { discount_amount?: number | string | null }).discount_amount,
+        grossForNorm
+    );
+    const jobNetCents = Math.max(0, grossForNorm - Math.min(jobDiscountCents, grossForNorm));
     const jobVendor = jobAssignedVendorId ? vendorMap.get(jobAssignedVendorId) ?? null : null;
     const { policy: jobPolicy, source } = resolveVendorPayoutPolicy({
         orgSettings,

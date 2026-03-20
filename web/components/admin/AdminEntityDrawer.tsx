@@ -1608,6 +1608,7 @@ export default function AdminEntityDrawer() {
                 gross_price_cents: data.gross_price_cents ?? null,
                 discount_amount: data.discount_amount ?? null,
                 display_total_cents: (data as { display_total_cents?: number | null }).display_total_cents ?? null,
+                _discount_amount_cents: (data as { _discount_amount_cents?: number | null })._discount_amount_cents ?? null,
                 customer_id: (data.customer_id as string) ?? "",
                 opportunity_id: (data.opportunity_id as string) ?? "",
                 location_id: (data.location_id as string) ?? "",
@@ -2025,6 +2026,7 @@ export default function AdminEntityDrawer() {
             gross_price_cents: data.gross_price_cents ?? null,
             discount_amount: data.discount_amount ?? null,
             display_total_cents: (data as { display_total_cents?: number | null }).display_total_cents ?? null,
+            _discount_amount_cents: (data as { _discount_amount_cents?: number | null })._discount_amount_cents ?? null,
             primary_contact_id: (data.primary_contact_id as string) ?? "",
             discount_code_id:
                 (data as { _discount_selection?: string })._discount_selection ??
@@ -3385,21 +3387,30 @@ export default function AdminEntityDrawer() {
             collapsible: true,
             gridCols: 2 as const,
             fields: fields.sort((a, b) => a.sort_order - b.sort_order).map((f) => {
+                const fieldKey =
+                    drawer.type === "jobs" && f.field_key === "discount_amount" ? "_discount_amount_cents" : f.field_key;
                 const rel = relFieldOverride(f.field_key);
                 let baseHint = hintFromType(f.field_type);
                 if (drawer.type === "jobs" && f.field_key === "status_key") baseHint = "status";
                 if (
                     (drawer.type === "jobs" || drawer.type === "opportunities") &&
-                    (f.field_key.endsWith("_cents") || f.field_key === "discount_amount" || f.field_key === "display_total_cents")
+                    (fieldKey.endsWith("_cents") ||
+                        f.field_key === "discount_amount" ||
+                        f.field_key === "display_total_cents")
                 ) {
                     baseHint = "money";
                 }
+                const jobReadonlyMoney =
+                    drawer.type === "jobs" &&
+                    (fieldKey === "display_total_cents" ||
+                        fieldKey === "_discount_amount_cents" ||
+                        f.field_key === "discount_amount");
                 return {
-                    key: f.field_key,
+                    key: fieldKey,
                     label: f.label ?? f.field_key,
                     span: 1 as const,
                     renderHint: (rel?.renderHint ?? baseHint) as EntityDrawerFieldConfig["renderHint"],
-                    editable: !(drawer.type === "jobs" && (f.field_key === "display_total_cents" || f.field_key === "discount_amount")),
+                    editable: !jobReadonlyMoney,
                     ...(rel?.linkTarget ? { linkTarget: rel.linkTarget } : {}),
                 };
             }),
