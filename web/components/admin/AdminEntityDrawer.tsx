@@ -523,6 +523,8 @@ export default function AdminEntityDrawer() {
         computed: { gross_cents: number; discount_cents: number; net_cents: number; payout_percent: number; payout_cents: number; alloy_fee_cents: number };
     } | null>(null);
     const [scheduleFinancialsLoading, setScheduleFinancialsLoading] = useState(false);
+    const [scheduleRelatedDocuments, setScheduleRelatedDocuments] = useState<JobRelatedPayload["documents"]>([]);
+    const [scheduleRelatedDocumentsLoading, setScheduleRelatedDocumentsLoading] = useState(false);
     const [jobFinancials, setJobFinancials] = useState<{
         job: { id: string; customer_id: string | null; assigned_vendor_id: string | null; gross_price_cents: number | null; discount_code: string | null; discount_amount: number | string | null };
         schedules: { id: string; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null; posted: boolean }[];
@@ -1874,6 +1876,24 @@ export default function AdminEntityDrawer() {
             .catch(() => setScheduleFinancials(null))
             .finally(() => setScheduleFinancialsLoading(false));
     }, [drawer.type, drawer.id]);
+
+    const refetchScheduleRelatedDocuments = useCallback(() => {
+        if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") return;
+        setScheduleRelatedDocumentsLoading(true);
+        fetch(`/api/admin/related/schedule/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : { documents: [] }))
+            .then((json: { documents?: JobRelatedPayload["documents"] }) => setScheduleRelatedDocuments(json.documents ?? []))
+            .catch(() => setScheduleRelatedDocuments([]))
+            .finally(() => setScheduleRelatedDocumentsLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") {
+            setScheduleRelatedDocuments([]);
+            return;
+        }
+        refetchScheduleRelatedDocuments();
+    }, [drawer.type, drawer.id, refetchScheduleRelatedDocuments]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
@@ -4572,6 +4592,19 @@ export default function AdminEntityDrawer() {
                                 entityId={drawer.id}
                                 canMutate={canMutate}
                                 onAfterUpload={refetchJobRelatedData}
+                            />
+                        </div>
+                    )}
+                    {drawerTab === "documents" && drawer.type === "schedules" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            <EntityDocumentsSection
+                                documents={scheduleRelatedDocuments}
+                                loading={scheduleRelatedDocumentsLoading}
+                                uploadEntityType="schedule"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={refetchScheduleRelatedDocuments}
                             />
                         </div>
                     )}

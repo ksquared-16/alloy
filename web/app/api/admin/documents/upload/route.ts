@@ -35,6 +35,8 @@ const CANONICAL_ENTITY_TYPE: Record<string, string> = {
     vendor: "vendor",
     persons: "person",
     person: "person",
+    schedules: "schedule",
+    schedule: "schedule",
 };
 
 function sanitizeFilename(name: string): string {
@@ -53,12 +55,8 @@ async function assertEntityInOrg(
             return !!data;
         }
         case "contact": {
-            const { data } = await supabase.from("contacts").select("id, customer_id").eq("id", entityId).maybeSingle();
-            if (!data) return false;
-            const cid = (data as { customer_id?: string | null }).customer_id;
-            if (!cid) return false;
-            const { data: cust } = await supabase.from("customers").select("id").eq("id", cid).eq("org_id", orgId).maybeSingle();
-            return !!cust;
+            const { data } = await supabase.from("contacts").select("id").eq("id", entityId).eq("org_id", orgId).maybeSingle();
+            return !!data;
         }
         case "opportunity": {
             const { data } = await supabase.from("opportunities").select("id").eq("id", entityId).eq("org_id", orgId).maybeSingle();
@@ -82,6 +80,10 @@ async function assertEntityInOrg(
         }
         case "person": {
             const { data } = await supabase.from("persons").select("id").eq("id", entityId).eq("org_id", orgId).maybeSingle();
+            return !!data;
+        }
+        case "schedule": {
+            const { data } = await supabase.from("schedules").select("id").eq("id", entityId).eq("org_id", orgId).maybeSingle();
             return !!data;
         }
         default:

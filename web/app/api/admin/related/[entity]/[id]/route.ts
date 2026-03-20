@@ -291,15 +291,28 @@ export async function GET(
         }
 
         if (entity === "schedule") {
-            const { data: scheduleRow } = await supabase.from("schedules").select("location_id").eq("id", id).maybeSingle();
-            const locationId = (scheduleRow as { location_id?: string | null } | null)?.location_id ?? null;
+            const { data: scheduleRow } = await supabase.from("schedules").select("location_id, org_id").eq("id", id).maybeSingle();
+            if (!scheduleRow || (scheduleRow as { org_id?: string }).org_id !== ctx.orgId) {
+                return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+            }
+            const locationId = (scheduleRow as { location_id?: string | null }).location_id ?? null;
             let location: Record<string, unknown> | null = null;
             if (locationId) {
                 const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active").eq("id", locationId).maybeSingle();
                 if (loc) location = loc as Record<string, unknown>;
             }
+            const documentsRes = await supabase
+                .from("documents")
+                .select(DOC_SELECT)
+                .eq("org_id", ctx.orgId)
+                .eq("entity_type", "schedule")
+                .eq("entity_id", id)
+                .order("created_at", { ascending: false })
+                .limit(LIMIT)
+                .then((r) => (r.error ? { data: [] } : r));
             return NextResponse.json({
                 location,
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
             });
         }
 

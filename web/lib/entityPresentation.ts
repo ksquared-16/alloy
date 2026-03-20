@@ -625,7 +625,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       defaultSort: { key: "start_at", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "financials", "activity"],
+      tabs: ["overview", "related", "financials", "documents", "activity"],
       headerFields: [{ key: "status_key", renderHint: "status" }],
       layoutMode: 2,
       overviewSections: [

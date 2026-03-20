@@ -1,7 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
+import type { V1DocumentEntityValue } from "@/lib/admin/v1DocumentEntities";
+import AssociatedDocumentUploadModal from "@/components/admin/AssociatedDocumentUploadModal";
 
 /** Aligned with `NormalizedDocumentRow` from `/api/admin/related/...` and upload response. */
 export type EntityDocumentListItem = {
@@ -39,7 +42,8 @@ export default function EntityDocumentsSection({
     onAfterUpload,
     showUpload = true,
 }: Props) {
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadModalOpen, setUploadModalOpen] = useState(false);
+    const fileUploadSupported = isV1DocumentEntityType(uploadEntityType);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [docType, setDocType] = useState("");
@@ -75,7 +79,7 @@ export default function EntityDocumentsSection({
         }
     };
 
-    const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const onPickFileLegacy = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         e.target.value = "";
         if (!file || !canMutate) return;
@@ -120,7 +124,31 @@ export default function EntityDocumentsSection({
 
     return (
         <div className="space-y-3">
-            {showUpload && canMutate && (
+            {showUpload && canMutate && fileUploadSupported && (
+                <>
+                    <div className="rounded-lg border border-alloy-stone/30 bg-alloy-pine/5 p-3 space-y-2">
+                        <p className="text-xs font-medium text-alloy-midnight/70">Attach document</p>
+                        <p className="text-[11px] text-alloy-midnight/50">Uploads are linked to this record.</p>
+                        <button
+                            type="button"
+                            onClick={() => setUploadModalOpen(true)}
+                            className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90"
+                        >
+                            Upload…
+                        </button>
+                    </div>
+                    <AssociatedDocumentUploadModal
+                        isOpen={uploadModalOpen}
+                        onClose={() => setUploadModalOpen(false)}
+                        onSuccess={onAfterUpload}
+                        lockAssociation
+                        fixedEntityType={uploadEntityType as V1DocumentEntityValue}
+                        fixedEntityId={entityId}
+                    />
+                </>
+            )}
+
+            {showUpload && canMutate && !fileUploadSupported && (
                 <div className="rounded-lg border border-alloy-stone/30 bg-alloy-pine/5 p-3 space-y-2">
                     <p className="text-xs font-medium text-alloy-midnight/70">Upload document</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -143,15 +171,10 @@ export default function EntityDocumentsSection({
                             />
                         </div>
                     </div>
-                    <input ref={fileInputRef} type="file" className="hidden" onChange={onPickFile} />
-                    <button
-                        type="button"
-                        disabled={uploading}
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                    >
-                        {uploading ? "Uploading…" : "Choose file"}
-                    </button>
+                    <label className="inline-block">
+                        <span className="sr-only">Choose file</span>
+                        <input type="file" className="text-sm" disabled={uploading} onChange={onPickFileLegacy} />
+                    </label>
                     {uploadError && (
                         <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-800" role="alert">
                             {uploadError}
@@ -186,7 +209,7 @@ export default function EntityDocumentsSection({
                 <div className="rounded-lg border border-dashed border-alloy-stone/40 bg-alloy-stone/5 px-3 py-4 text-center text-sm text-alloy-midnight/60">
                     <p className="font-medium text-alloy-midnight/70">No documents linked yet</p>
                     <p className="mt-1 text-xs text-alloy-midnight/50">
-                        {canMutate ? "Upload a file above to attach it to this record." : "Documents will appear here after upload."}
+                        {canMutate ? "Upload a file to attach it to this record." : "Documents will appear here after upload."}
                     </p>
                 </div>
             ) : listEmpty && fetchError ? null : (

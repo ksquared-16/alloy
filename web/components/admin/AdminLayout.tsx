@@ -61,6 +61,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/opportunities", label: "Opportunities", entityType: "opportunities" },
             { href: "/admin/jobs", label: "Jobs", entityType: "jobs" },
             { href: "/admin/schedules", label: "Schedules", entityType: "schedules" },
+            { href: "/admin/documents", label: "Documents" },
             { href: "/admin/locations", label: "Locations", entityType: "locations" },
             {
                 label: "Workflows",
@@ -122,6 +123,7 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/opportunities": LayoutGrid,
         "/admin/jobs": Briefcase,
         "/admin/schedules": Calendar,
+        "/admin/documents": FileText,
         "/admin/locations": MapPin,
         "/admin/messaging": MessageSquare,
         "/admin/messages-outbox": Mail,

@@ -48,7 +48,6 @@ export default function DocumentFieldsClient() {
     const [items, setItems] = useState<DocFieldDef[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [configLocked, setConfigLocked] = useState(false);
 
     const [createOpen, setCreateOpen] = useState(false);
     const [createKey, setCreateKey] = useState("");
@@ -70,16 +69,6 @@ export default function DocumentFieldsClient() {
     const [editSort, setEditSort] = useState<number | "">("");
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
-
-    const fetchConfigLock = useCallback(async () => {
-        try {
-            const res = await fetch("/api/admin/org-settings");
-            const json = await res.json().catch(() => ({}));
-            if (res.ok) setConfigLocked(Boolean((json as { config_locked?: boolean }).config_locked));
-        } catch {
-            setConfigLocked(false);
-        }
-    }, []);
 
     const fetchItems = useCallback(async () => {
         const dt = docTypeFilter.trim();
@@ -104,10 +93,6 @@ export default function DocumentFieldsClient() {
     }, [docTypeFilter]);
 
     useEffect(() => {
-        fetchConfigLock();
-    }, [fetchConfigLock]);
-
-    useEffect(() => {
         fetchItems();
     }, [fetchItems]);
 
@@ -117,7 +102,7 @@ export default function DocumentFieldsClient() {
         setDocTypeFilter(next);
     };
 
-    const locked = configLocked || !canMutate;
+    const locked = !canMutate;
 
     const openCreate = () => {
         setCreateKey("");
@@ -240,7 +225,7 @@ export default function DocumentFieldsClient() {
                     >
                         Load fields
                     </button>
-                    {canMutate && !configLocked && (
+                    {canMutate && (
                         <button
                             type="button"
                             onClick={openCreate}
@@ -250,9 +235,6 @@ export default function DocumentFieldsClient() {
                         </button>
                     )}
                 </div>
-                {configLocked && (
-                    <p className="mt-2 text-sm text-amber-800">Organization configuration is locked; field changes are disabled.</p>
-                )}
             </SectionCard>
 
             {loading && <p className="text-sm text-[#59678b] mt-4">Loading…</p>}
@@ -273,13 +255,13 @@ export default function DocumentFieldsClient() {
                                     <th className="pb-2 pr-4 font-semibold">AI</th>
                                     <th className="pb-2 pr-4 font-semibold">Sort</th>
                                     <th className="pb-2 pr-4 font-semibold">Hint</th>
-                                    {canMutate && !configLocked && <th className="pb-2 font-semibold">Actions</th>}
+                                    {canMutate && <th className="pb-2 font-semibold">Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={canMutate && !configLocked ? 8 : 7} className="py-4 text-[#59678b]">
+                                        <td colSpan={canMutate ? 8 : 7} className="py-4 text-[#59678b]">
                                             No definitions for this doc type. Add fields to describe extracted or manual values.
                                         </td>
                                     </tr>
@@ -295,7 +277,7 @@ export default function DocumentFieldsClient() {
                                             <td className="py-2 pr-4 text-[#59678b] max-w-[200px] truncate" title={row.extraction_hint ?? ""}>
                                                 {row.extraction_hint ?? "—"}
                                             </td>
-                                            {canMutate && !configLocked && (
+                                            {canMutate && (
                                                 <td className="py-2 space-x-2">
                                                     <button
                                                         type="button"
