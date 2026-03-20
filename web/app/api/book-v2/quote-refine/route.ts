@@ -349,11 +349,22 @@ export async function POST(request: NextRequest) {
 
     const opportunityId = body.opportunity_id?.trim() || null;
     if (opportunityId) {
-      const { data: existing } = await supabase
+      console.log("[QUOTE_REFINE_OPPORTUNITY] opportunity_id received", { opportunity_id: opportunityId });
+
+      const { data: existing, error: fetchOppErr } = await supabase
         .from("opportunities")
         .select("id, metadata, org_id, location_id")
         .eq("id", opportunityId)
-        .single();
+        .maybeSingle();
+
+      if (fetchOppErr) {
+        console.error("[QUOTE_REFINE_OPPORTUNITY] opportunity fetch failed", {
+          opportunity_id: opportunityId,
+          message: fetchOppErr.message,
+          code: fetchOppErr.code,
+        });
+      }
+
       if (existing) {
         const row = existing as {
           metadata?: Record<string, unknown> | null;
@@ -370,10 +381,26 @@ export async function POST(request: NextRequest) {
           cleaning_frequency: typeof apiKeyFromFreq === "string" ? apiKeyFromFreq : "one_time",
           add_ons: selectedKeys,
         };
-        const est = quoteOutput.estimated_price;
-        const recurringCents =
+        const estRaw = quoteOutput.estimated_price;
+        if (estRaw != null && !Number.isFinite(Number(estRaw))) {
+          console.error("[QUOTE_REFINE_OPPORTUNITY] non-finite estimated_price", {
+            opportunity_id: opportunityId,
+            estRaw,
+          });
+          return NextResponse.json(
+            { ok: false, message: "Invalid quote estimate from pricing engine" },
+            { status: 500 }
+          );
+        }
+        const est =
+          estRaw != null && Number.isFinite(Number(estRaw)) ? Number(estRaw) : null;
+        const recurringNum =
           quoteOutput.recurring_price != null && !Number.isNaN(Number(quoteOutput.recurring_price))
-            ? Math.round(Number(quoteOutput.recurring_price) * 100)
+            ? Number(quoteOutput.recurring_price)
+            : null;
+        const recurringCents =
+          recurringNum != null && Number.isFinite(recurringNum)
+            ? Math.round(recurringNum * 100)
             : null;
 
         const oppUpdate: Record<string, unknown> = {
@@ -388,6 +415,7 @@ export async function POST(request: NextRequest) {
           discount_code_id: null,
           discount_program_id: null,
           discount_code: null,
+          updated_at: new Date().toISOString(),
         };
         if (est != null) {
           const cents = Math.round(est * 100);
@@ -402,7 +430,55 @@ export async function POST(request: NextRequest) {
           oppUpdate.recurring_price_cents = null;
         }
 
-        await supabase.from("opportunities").update(oppUpdate).eq("id", opportunityId);
+        console.log("[QUOTE_REFINE_OPPORTUNITY] computed pricing snapshot", {
+          opportunity_id: opportunityId,
+          est_raw: estRaw,
+          est_finite: est,
+          estimated_price_cents: est != null ? Math.round(est * 100) : null,
+          monetary_value_cents: est != null ? Math.round(est * 100) : null,
+          quote_subtotal: est,
+          quote_total: est,
+          recurring_price_cents: recurringCents,
+        });
+        console.log("[QUOTE_REFINE_OPPORTUNITY] update payload keys", {
+          opportunity_id: opportunityId,
+          keys: Object.keys(oppUpdate),
+          metadata_has_quote_input: !!(oppUpdate.metadata as Record<string, unknown>)?.quote_input,
+          metadata_has_quote_output: !!(oppUpdate.metadata as Record<string, unknown>)?.quote_output,
+        });
+
+        const { data: updatedRows, error: oppUpdateErr } = await supabase
+          .from("opportunities")
+          .update(oppUpdate)
+          .eq("id", opportunityId)
+          .select("id");
+
+        if (oppUpdateErr) {
+          console.error("[QUOTE_REFINE_OPPORTUNITY] opportunity update failed", {
+            opportunity_id: opportunityId,
+            message: oppUpdateErr.message,
+            code: oppUpdateErr.code,
+            details: oppUpdateErr.details,
+            hint: oppUpdateErr.hint,
+          });
+          return NextResponse.json(
+            { ok: false, message: "Failed to persist quote on opportunity" },
+            { status: 500 }
+          );
+        }
+        if (!updatedRows?.length) {
+          console.error("[QUOTE_REFINE_OPPORTUNITY] opportunity update matched 0 rows", {
+            opportunity_id: opportunityId,
+          });
+          return NextResponse.json(
+            { ok: false, message: "Opportunity not found for quote update" },
+            { status: 404 }
+          );
+        }
+        console.log("[QUOTE_REFINE_OPPORTUNITY] opportunity update ok", {
+          opportunity_id: opportunityId,
+          returned_id: updatedRows[0]?.id ?? null,
+        });
 
         const orgId = row.org_id ?? null;
         const locationId = row.location_id ?? null;
@@ -436,6 +512,10 @@ export async function POST(request: NextRequest) {
             );
           }
         }
+      } else if (!fetchOppErr) {
+        console.warn("[QUOTE_REFINE_OPPORTUNITY] no opportunity row for id (skipping persist)", {
+          opportunity_id: opportunityId,
+        });
       }
     }
 
