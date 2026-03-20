@@ -1696,17 +1696,28 @@ export default function BookV2Client() {
                     },
                 },
             };
-            let confirmError = (await stripe.confirmCardSetup(client_secret, confirmPayloadStripe)).error;
+            let setupResult = await stripe.confirmCardSetup(client_secret, confirmPayloadStripe);
+            let confirmError = setupResult.error;
             if (confirmError && typeof confirmError.message === "string" && confirmError.message.toLowerCase().includes("no such setupintent")) {
                 if (process.env.NODE_ENV !== "production") {
                     console.log("[BOOK_V2_SETUP_INTENT] retrying with fresh SetupIntent after no such setupintent");
                 }
                 client_secret = await createSetupIntentOnce();
-                confirmError = (await stripe.confirmCardSetup(client_secret, confirmPayloadStripe)).error;
+                setupResult = await stripe.confirmCardSetup(client_secret, confirmPayloadStripe);
+                confirmError = setupResult.error;
             }
             if (confirmError) {
                 throw new Error(confirmError.message || "Payment setup failed");
             }
+            const si = setupResult.setupIntent;
+            const pmFromSetup = si?.payment_method;
+            const stripePaymentMethodId =
+                typeof pmFromSetup === "string"
+                    ? pmFromSetup
+                    : pmFromSetup && typeof pmFromSetup === "object" && "id" in pmFromSetup
+                      ? String((pmFromSetup as { id: string }).id)
+                      : null;
+            const stripeSetupIntentId = si?.id && typeof si.id === "string" ? si.id : null;
 
             // Step 3: Confirm booking in Supabase (always run after successful Stripe setup)
             if (process.env.NODE_ENV !== "production") {
@@ -1764,6 +1775,8 @@ export default function BookV2Client() {
             if (storedPersonId) confirmPayload.person_id = storedPersonId;
             if (storedContactId) confirmPayload.contact_id = storedContactId;
             if (storedCustomerId) confirmPayload.customer_id = storedCustomerId;
+            if (stripePaymentMethodId) confirmPayload.stripe_payment_method_id = stripePaymentMethodId;
+            if (stripeSetupIntentId) confirmPayload.stripe_setup_intent_id = stripeSetupIntentId;
 
             const bookingResponse = await fetch("/api/book-v2/confirm", {
                 method: "POST",

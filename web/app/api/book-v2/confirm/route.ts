@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
-import { ensureCustomerAddressLocation } from "@/lib/bookingLocations";
+import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
+import {
+    BOOKED_PIPELINE_STAGE_ID,
+    BOOKING_CONFIRM_JOB_STATUS_ID,
+    BOOKING_CONFIRM_JOB_STATUS_KEY,
+    BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
+    BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
+    BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
+} from "@/lib/book-v2/bookingConstants";
+import { persistBookingPaymentMethod } from "@/lib/book-v2/persistBookingPaymentMethod";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -356,34 +365,6 @@ async function ensureCustomerForContactInConfirm(
     return customerId;
 }
 
-/** Get or create pipeline stage by name (for Booked). */
-async function getOrCreateBookedStage(
-    supabase: ReturnType<typeof createServiceRoleClient>,
-    pipelineId: string
-): Promise<string | null> {
-    const { data: existing } = await supabase
-        .from("pipeline_stages")
-        .select("id")
-        .eq("pipeline_id", pipelineId)
-        .ilike("name", "Booked")
-        .limit(1)
-        .maybeSingle();
-    if (existing?.id) return existing.id;
-    const { data: created, error } = await supabase
-        .from("pipeline_stages")
-        .insert({
-            pipeline_id: pipelineId,
-            name: "Booked",
-            position: 100,
-            show_in_funnel: true,
-            show_in_pie_chart: true,
-        })
-        .select("id")
-        .single();
-    if (error || !created) return null;
-    return created.id;
-}
-
 /**
  * Normalize frequency label to service_frequency_key
  */
@@ -457,6 +438,8 @@ function getCadenceIntervalFromServiceFrequencyKey(
  * - recurring_price: number (optional; used for jobs.recurring_total_cents when recurring)
  * - quote_input: object (optional; persisted to opportunity.metadata.quote_input)
  * - quote_output: object (optional; persisted to opportunity.metadata.quote_output)
+ * - stripe_payment_method_id: string (optional; pm_… from successful confirmCardSetup — persists default card + customer_payment_methods)
+ * - stripe_setup_intent_id: string (optional; seti_… for customers.setup_intent_id denorm)
  */
 export async function POST(request: NextRequest) {
     let bookingAttemptId: string | null = null;
@@ -497,7 +480,14 @@ export async function POST(request: NextRequest) {
             contact_id: contact_id_from_quote,
             person_id: person_id_from_quote,
             customer_id: customer_id_from_quote,
+            stripe_payment_method_id: stripe_pm_body,
+            stripe_setup_intent_id: stripe_si_body,
         } = body;
+
+        const stripe_payment_method_id =
+            typeof stripe_pm_body === "string" && stripe_pm_body.trim().startsWith("pm_") ? stripe_pm_body.trim() : null;
+        const stripe_setup_intent_id =
+            typeof stripe_si_body === "string" && stripe_si_body.trim() ? stripe_si_body.trim() : null;
 
         const discount_program_id =
             typeof discount_program_id_raw === "string" && discount_program_id_raw.trim()
@@ -871,11 +861,6 @@ export async function POST(request: NextRequest) {
                 : first_clean_price != null ? Math.round(first_clean_price * 100)
                 : null;
 
-            const { data: pipelines } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
-            const pipelineId = pipelines?.[0]?.id ?? null;
-            let bookedStageId: string | null = null;
-            if (pipelineId) bookedStageId = await getOrCreateBookedStage(supabase, pipelineId);
-
             const existingMeta = await (async () => {
                 const { data: opp } = await supabase.from("opportunities").select("metadata").eq("id", opportunityId).single();
                 return ((opp?.metadata as Record<string, unknown>) ?? {}) as Record<string, unknown>;
@@ -910,6 +895,8 @@ export async function POST(request: NextRequest) {
                 estimated_price_cents: estimatedPriceCents,
                 monetary_value_cents: estimatedPriceCents,
                 metadata: mergedMetadata,
+                pipeline_stage_id: BOOKED_PIPELINE_STAGE_ID,
+                status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
             };
             if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
             if (discount_program_id != null) {
@@ -1132,11 +1119,6 @@ export async function POST(request: NextRequest) {
             if (webQuoteOpp) existingOpp = webQuoteOpp;
         }
 
-        const { data: pipelinesForBooked } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
-        const pipelineIdForBooked = pipelinesForBooked?.[0]?.id ?? null;
-        let bookedStageIdElse: string | null = null;
-        if (pipelineIdForBooked) bookedStageIdElse = await getOrCreateBookedStage(supabase, pipelineIdForBooked);
-
         if (existingOpp) {
             opportunityId = existingOpp.id;
             console.log(`[BOOK_V2_CONFIRM] Found existing opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId} (reused)`);
@@ -1186,6 +1168,8 @@ export async function POST(request: NextRequest) {
                 ...(contactId != null && { primary_contact_id: contactId }),
                 ...(personIdFromQuote != null && { primary_person_id: personIdFromQuote }),
                 metadata: mergedMetaElse,
+                pipeline_stage_id: BOOKED_PIPELINE_STAGE_ID,
+                status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
             };
             if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
             if (discount_program_id != null || discount_code_id != null) {
@@ -1243,6 +1227,8 @@ export async function POST(request: NextRequest) {
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 status: "open",
                 source: "website",
+                pipeline_stage_id: BOOKED_PIPELINE_STAGE_ID,
+                status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
                 quote_subtotal: quote_subtotal ?? null,
@@ -1278,9 +1264,13 @@ export async function POST(request: NextRequest) {
         }
         } // end else (!useQuoteIds)
 
-        // Step 4b: Ensure customer address location for job/schedule linkage
+        // Step 4b: Canonical location — reuse opportunity.location_id when present (quote stage), else create/link
         const orgIdForLocation = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-        const { data: oppForLocation } = await supabase.from("opportunities").select("metadata").eq("id", opportunityId).maybeSingle();
+        const { data: oppForLocation } = await supabase
+            .from("opportunities")
+            .select("metadata, location_id")
+            .eq("id", opportunityId)
+            .maybeSingle();
         const oppMeta = (oppForLocation?.metadata as Record<string, unknown>) ?? {};
         const quoteInput = (oppMeta.quote_input as Record<string, unknown>) ?? {};
         function asOptionalString(v: unknown): string | undefined {
@@ -1309,7 +1299,9 @@ export async function POST(request: NextRequest) {
         }
         let locationId: string | null = null;
         try {
-            locationId = await ensureCustomerAddressLocation(supabase, {
+            locationId = await ensureCanonicalBookingLocation(supabase, {
+                opportunity_id: opportunityId,
+                existing_location_id: (oppForLocation as { location_id?: string | null } | null)?.location_id ?? null,
                 org_id: orgIdForLocation,
                 customer_id: customerId,
                 address_line1: address ?? null,
@@ -1318,7 +1310,7 @@ export async function POST(request: NextRequest) {
                 postal_code: locationPostalCode,
             });
         } catch (locErr) {
-            console.warn("[BOOK_V2_CONFIRM] ensureCustomerAddressLocation failed", locErr);
+            console.warn("[BOOK_V2_CONFIRM] ensureCanonicalBookingLocation failed", locErr);
         }
 
         // Step 5: Create or update job
@@ -1369,6 +1361,8 @@ export async function POST(request: NextRequest) {
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
+                job_status_id: BOOKING_CONFIRM_JOB_STATUS_ID,
+                status_key: BOOKING_CONFIRM_JOB_STATUS_KEY,
                 ...(locationId != null && { location_id: locationId }),
                 metadata: {
                     ...jobMeta,
@@ -1429,6 +1423,8 @@ export async function POST(request: NextRequest) {
                 ...(personIdFromQuote && { primary_person_id: personIdFromQuote }),
                 ...(contactId != null && { primary_contact_id: contactId }),
                 vertical_id: verticalId,
+                job_status_id: BOOKING_CONFIRM_JOB_STATUS_ID,
+                status_key: BOOKING_CONFIRM_JOB_STATUS_KEY,
                 ...(locationId != null && { location_id: locationId }),
                 title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 description: `Scheduled cleaning service`,
@@ -1646,6 +1642,8 @@ export async function POST(request: NextRequest) {
                 end_at: slot_end,
                 duration_minutes: 120,
                 timezone,
+                schedule_status_id: BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
+                status_key: BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
                 metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
             if (locationId != null) updatePayload.location_id = locationId;
@@ -1674,6 +1672,8 @@ export async function POST(request: NextRequest) {
                 end_at: slot_end,
                 duration_minutes: 120,
                 timezone,
+                schedule_status_id: BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
+                status_key: BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
                 ...(locationId != null && { location_id: locationId }),
                 metadata: { booking_attempt_id: booking_attempt_id ?? undefined },
             };
@@ -1716,31 +1716,17 @@ export async function POST(request: NextRequest) {
             console.log(`[BOOK_V2_CONFIRM] Created new schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
         }
 
-        // Step 8: Check if customer has saved payment method
         let hasSavedPaymentMethod = false;
         let paymentMethodBrand: string | null = null;
         let paymentMethodLast4: string | null = null;
 
-        if (customerId) {
-            const { data: customer, error: customerFetchError } = await supabase
-                .from("customers")
-                .select("default_payment_method_id, stripe_customer_id, payment_method_brand, payment_method_last4")
-                .eq("id", customerId)
-                .maybeSingle();
-
-            if (!customerFetchError && customer) {
-                hasSavedPaymentMethod = !!customer.default_payment_method_id;
-                paymentMethodBrand = customer.payment_method_brand || null;
-                paymentMethodLast4 = customer.payment_method_last4 || null;
-            }
-        }
-
-        // Step 9: Integrity check - verify all linkages
+        // Step 8: Integrity check - verify all linkages
         const { data: integrityCheck, error: integrityError } = await supabase
             .from("schedules")
             .select(`
                 id,
                 job_id,
+                location_id,
                 start_at,
                 end_at,
                 timezone,
@@ -1752,12 +1738,14 @@ export async function POST(request: NextRequest) {
                     primary_person_id,
                     opportunity_id,
                     vertical_id,
+                    location_id,
                     opportunities!inner(
                         id,
                         customer_id,
                         primary_contact_id,
                         primary_person_id,
-                        vertical_id
+                        vertical_id,
+                        location_id
                     )
                 )
             `)
@@ -1806,6 +1794,20 @@ export async function POST(request: NextRequest) {
         if (job?.id !== jobId) {
             integrityIssues.push(`schedule.job_id mismatch: expected=${jobId} actual=${job?.id}`);
         }
+        if (locationId != null) {
+            const schedLoc = (integrityCheck as { location_id?: string | null }).location_id;
+            const jobLoc = job?.location_id;
+            const oppLoc = opportunity?.location_id;
+            if (schedLoc !== locationId) {
+                integrityIssues.push(`schedule.location_id mismatch: expected=${locationId} actual=${schedLoc}`);
+            }
+            if (jobLoc !== locationId) {
+                integrityIssues.push(`job.location_id mismatch: expected=${locationId} actual=${jobLoc}`);
+            }
+            if (oppLoc !== locationId) {
+                integrityIssues.push(`opportunity.location_id mismatch: expected=${locationId} actual=${oppLoc}`);
+            }
+        }
         if (!integrityCheck.start_at || !integrityCheck.end_at || !integrityCheck.timezone) {
             integrityIssues.push(`schedule missing required fields: start_at=${!!integrityCheck.start_at} end_at=${!!integrityCheck.end_at} timezone=${!!integrityCheck.timezone}`);
         }
@@ -1825,6 +1827,27 @@ export async function POST(request: NextRequest) {
             `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
         );
 
+        if (stripe_payment_method_id) {
+            await persistBookingPaymentMethod(supabase, {
+                customerId,
+                stripePaymentMethodId: stripe_payment_method_id,
+                setupIntentId: stripe_setup_intent_id,
+            });
+        }
+
+        if (customerId) {
+            const { data: customerAfterPm } = await supabase
+                .from("customers")
+                .select("default_payment_method_id, payment_method_brand, payment_method_last4")
+                .eq("id", customerId)
+                .maybeSingle();
+            if (customerAfterPm) {
+                hasSavedPaymentMethod = !!(customerAfterPm as { default_payment_method_id?: string | null }).default_payment_method_id;
+                paymentMethodBrand = (customerAfterPm as { payment_method_brand?: string | null }).payment_method_brand || null;
+                paymentMethodLast4 = (customerAfterPm as { payment_method_last4?: string | null }).payment_method_last4 || null;
+            }
+        }
+
         // Step 10: Auto-run booking_confirmed workflows (opportunity stage, job status, assignment created by workflows)
         const orgIdForWorkflows = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
         let workflowQuery = supabase
@@ -1838,18 +1861,20 @@ export async function POST(request: NextRequest) {
         }
         const { data: bookingWorkflows } = await workflowQuery;
         if (bookingWorkflows?.length) {
-            const { data: pipelines } = await supabase.from("pipelines").select("id").order("name", { ascending: true }).limit(1);
-            const pipelineIdForBooked = pipelines?.[0]?.id ?? null;
-            let bookedStageIdForPayload: string | null = null;
-            if (pipelineIdForBooked) bookedStageIdForPayload = await getOrCreateBookedStage(supabase, pipelineIdForBooked);
-
-            const { data: jobRow } = await supabase.from("jobs").select("*").eq("id", jobId).single();
-            const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
-            let contactRow: Record<string, unknown> | null = null;
-            if (contactId) {
-                const { data: c } = await supabase.from("contacts").select("*").eq("id", contactId).maybeSingle();
-                contactRow = c as Record<string, unknown> | null;
-            }
+            const [jobRes, oppRes, customerRes, scheduleRes, contactRes] = await Promise.all([
+                supabase.from("jobs").select("*").eq("id", jobId).single(),
+                supabase.from("opportunities").select("*").eq("id", opportunityId).single(),
+                supabase.from("customers").select("*").eq("id", customerId).single(),
+                supabase.from("schedules").select("*").eq("id", scheduleId).single(),
+                contactId
+                    ? supabase.from("contacts").select("*").eq("id", contactId).maybeSingle()
+                    : Promise.resolve({ data: null as null }),
+            ]);
+            const jobRow = jobRes.data;
+            const oppRow = oppRes.data;
+            const customerRow = customerRes.data;
+            const scheduleRow = scheduleRes.data;
+            const contactRow = (contactRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
             let personRow: Record<string, unknown> | null = null;
             if (personIdFromQuote) {
                 const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle();
@@ -1858,8 +1883,6 @@ export async function POST(request: NextRequest) {
                 const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", (contactRow as { person_id: string }).person_id).maybeSingle();
                 personRow = p as Record<string, unknown> | null;
             }
-            const { data: customerRow } = await supabase.from("customers").select("*").eq("id", customerId).single();
-            const { data: scheduleRow } = await supabase.from("schedules").select("*").eq("id", scheduleId).single();
             const normalizedSchedule =
                 scheduleRow ?? {
                     id: scheduleId,
@@ -1873,7 +1896,7 @@ export async function POST(request: NextRequest) {
                 event_type: "booking_confirmed",
                 occurred_at: new Date().toISOString(),
                 org_id: orgIdForWorkflows,
-                booked_stage_id: bookedStageIdForPayload,
+                booked_stage_id: BOOKED_PIPELINE_STAGE_ID,
                 job: jobRow ?? null,
                 contact: contactRow ?? null,
                 person: personRow ?? null,

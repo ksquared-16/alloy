@@ -90,3 +90,62 @@ export async function ensureCustomerAddressLocation(
   }
   return (created as { id: string })?.id ?? null;
 }
+
+export type EnsureCanonicalBookingLocationParams = EnsureCustomerAddressLocationParams & {
+  opportunity_id: string;
+  /** When set (including null), skips an extra opportunities select — pass from a combined read for perf */
+  existing_location_id?: string | null;
+};
+
+/**
+ * Prefer the opportunity's quote-stage location: attach customer and refresh address fields.
+ * If the opportunity has no location, reuse ensureCustomerAddressLocation and link opportunity.location_id.
+ */
+export async function ensureCanonicalBookingLocation(
+  supabase: SupabaseClient,
+  params: EnsureCanonicalBookingLocationParams
+): Promise<string | null> {
+  const { opportunity_id, existing_location_id: preloadedLocId, ...locParams } = params;
+
+  let existingId: string | null = null;
+  if (preloadedLocId !== undefined) {
+    existingId = preloadedLocId;
+  } else {
+    const { data: opp } = await supabase
+      .from("opportunities")
+      .select("location_id")
+      .eq("id", opportunity_id)
+      .maybeSingle();
+    existingId = (opp as { location_id?: string | null } | null)?.location_id ?? null;
+  }
+  const { address_line1, city, state, postal_code, customer_id } = locParams;
+  const a1 = (address_line1 ?? "").trim();
+  const pc = (postal_code ?? "").trim();
+  const cityNorm = (city ?? "").trim();
+
+  if (existingId) {
+    const patch: Record<string, unknown> = {
+      customer_id,
+      address1: a1 || null,
+      city: cityNorm || null,
+      state: (state ?? "").trim() || null,
+      postal_code: pc || null,
+    };
+    if (a1) patch.label = a1;
+    const { error } = await supabase.from("locations").update(patch).eq("id", existingId);
+    if (!error) return existingId;
+    console.error("[BOOKING_LOCATIONS] ensureCanonicalBookingLocation update failed, falling back", error);
+  }
+
+  const createdOrFound = await ensureCustomerAddressLocation(supabase, locParams);
+  if (createdOrFound) {
+    const { error: linkErr } = await supabase
+      .from("opportunities")
+      .update({ location_id: createdOrFound })
+      .eq("id", opportunity_id);
+    if (linkErr) {
+      console.warn("[BOOKING_LOCATIONS] failed to set opportunity.location_id", linkErr);
+    }
+  }
+  return createdOrFound;
+}
