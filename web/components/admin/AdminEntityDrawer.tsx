@@ -509,6 +509,8 @@ export default function AdminEntityDrawer() {
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
     const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
+    const [jobCatalogStatusOptions, setJobCatalogStatusOptions] = useState<{ id: string; label: string | null }[]>([]);
+    const [jobPersonOptions, setJobPersonOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>({ relationships: true, financials: false, scheduling: false, ledger: false });
     const [jobDiscountOptions, setJobDiscountOptions] = useState<JobDiscountOptionDto[]>([]);
     const [scheduleCreateForm, setScheduleCreateForm] = useState<{ start_at: string; end_at: string; timezone: string }>({ start_at: "", end_at: "", timezone: "" });
@@ -1605,6 +1607,11 @@ export default function AdminEntityDrawer() {
                 assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
                 gross_price_cents: data.gross_price_cents ?? null,
                 discount_amount: data.discount_amount ?? null,
+                display_total_cents: (data as { display_total_cents?: number | null }).display_total_cents ?? null,
+                customer_id: (data.customer_id as string) ?? "",
+                opportunity_id: (data.opportunity_id as string) ?? "",
+                location_id: (data.location_id as string) ?? "",
+                primary_contact_id: (data.primary_contact_id as string) ?? "",
             });
         } else if (drawer.type === "contacts") {
             setFormData({
@@ -1782,7 +1789,7 @@ export default function AdminEntityDrawer() {
             .catch(() => setJobDiscountOptions([]));
     }, [drawer.type, (data as { _vertical_slug?: string | null } | null)?._vertical_slug]);
 
-    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id", "assigned_vendor_id"] as const;
+    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "status_key", "job_status_id", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id", "assigned_vendor_id"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
             setVendorPayout(null);
@@ -1911,6 +1918,33 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, formData.customer_id]);
 
     useEffect(() => {
+        if (drawer.type !== "jobs") {
+            setJobCatalogStatusOptions([]);
+            return;
+        }
+        fetch("/api/admin/job-statuses")
+            .then((r) => (r.ok ? r.json() : { job_statuses: [] }))
+            .then((j: { job_statuses?: { id: string; label: string | null }[] }) => setJobCatalogStatusOptions(j.job_statuses ?? []))
+            .catch(() => setJobCatalogStatusOptions([]));
+    }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs") {
+            setJobPersonOptions([]);
+            return;
+        }
+        const cid = typeof formData.customer_id === "string" ? formData.customer_id.trim() : "";
+        if (!cid) {
+            setJobPersonOptions([]);
+            return;
+        }
+        fetch(`/api/admin/person-options?customer_id=${encodeURIComponent(cid)}`)
+            .then((r) => (r.ok ? r.json() : { persons: [] }))
+            .then((j: { persons?: { id: string; label: string }[] }) => setJobPersonOptions(j.persons ?? []))
+            .catch(() => setJobPersonOptions([]));
+    }, [drawer.type, formData.customer_id]);
+
+    useEffect(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
             setJobPayout(null);
             return;
@@ -1986,9 +2020,11 @@ export default function AdminEntityDrawer() {
             service_frequency_key: (data.service_frequency_key as string) ?? "",
             is_recurring: data.is_recurring ?? false,
             status_key: (data.status_key as string) ?? "",
+            job_status_id: (data.job_status_id as string) ?? "",
             internal_notes: (meta.internal_notes as string) ?? "",
             gross_price_cents: data.gross_price_cents ?? null,
             discount_amount: data.discount_amount ?? null,
+            display_total_cents: (data as { display_total_cents?: number | null }).display_total_cents ?? null,
             primary_contact_id: (data.primary_contact_id as string) ?? "",
             discount_code_id:
                 (data as { _discount_selection?: string })._discount_selection ??
@@ -2450,6 +2486,7 @@ export default function AdminEntityDrawer() {
                 if (payload.customer_id === "") payload.customer_id = null;
                 if (payload.opportunity_id === "") payload.opportunity_id = null;
                 if (payload.location_id === "") payload.location_id = null;
+                if (payload.job_status_id === "" || payload.job_status_id === undefined) payload.job_status_id = null;
             }
             if (drawer.type === "schedules") {
                 if (payload.start_at) payload.start_at = new Date(payload.start_at as string).toISOString();
@@ -3277,6 +3314,9 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities") {
             visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
         }
+        if (drawer.type === "jobs") {
+            visible = visible.filter((d) => d.field_key !== "primary_contact_id");
+        }
         if (visible.length === 0) return [];
         const bySection = new Map<string, typeof visible>();
         for (const d of visible) {
@@ -3296,19 +3336,38 @@ export default function AdminEntityDrawer() {
             if (t === "boolean") return "primary_yes_no";
             return "text";
         };
-        const opportunityRelField = (fieldKey: string): Partial<EntityDrawerFieldConfig> | null => {
-            if (drawer.type !== "opportunities") return null;
-            if (fieldKey === "primary_person_id") {
-                return { renderHint: "link", linkTarget: { idField: "primary_person_id", entityType: "persons" } };
+        const relFieldOverride = (fieldKey: string): Partial<EntityDrawerFieldConfig> | null => {
+            if (drawer.type === "opportunities") {
+                if (fieldKey === "primary_person_id") {
+                    return { renderHint: "link", linkTarget: { idField: "primary_person_id", entityType: "persons" } };
+                }
+                if (fieldKey === "location_id") {
+                    return { renderHint: "link", linkTarget: { idField: "location_id", entityType: "locations" } };
+                }
+                if (fieldKey === "primary_contact_id") {
+                    return { renderHint: "link", linkTarget: { idField: "primary_contact_id", entityType: "contacts" } };
+                }
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                return null;
             }
-            if (fieldKey === "location_id") {
-                return { renderHint: "link", linkTarget: { idField: "location_id", entityType: "locations" } };
-            }
-            if (fieldKey === "primary_contact_id") {
-                return { renderHint: "link", linkTarget: { idField: "primary_contact_id", entityType: "contacts" } };
-            }
-            if (fieldKey === "customer_id") {
-                return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+            if (drawer.type === "jobs") {
+                if (fieldKey === "primary_person_id") {
+                    return { renderHint: "link", linkTarget: { idField: "primary_person_id", entityType: "persons" } };
+                }
+                if (fieldKey === "location_id") {
+                    return { renderHint: "link", linkTarget: { idField: "location_id", entityType: "locations" } };
+                }
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                if (fieldKey === "opportunity_id") {
+                    return { renderHint: "link", linkTarget: { idField: "opportunity_id", entityType: "opportunities" } };
+                }
+                if (fieldKey === "assigned_vendor_id") {
+                    return { renderHint: "link", linkTarget: { idField: "assigned_vendor_id", entityType: "vendors" } };
+                }
             }
             return null;
         };
@@ -3319,14 +3378,21 @@ export default function AdminEntityDrawer() {
             collapsible: true,
             gridCols: 2 as const,
             fields: fields.sort((a, b) => a.sort_order - b.sort_order).map((f) => {
-                const rel = opportunityRelField(f.field_key);
-                const baseHint = hintFromType(f.field_type);
+                const rel = relFieldOverride(f.field_key);
+                let baseHint = hintFromType(f.field_type);
+                if (drawer.type === "jobs" && f.field_key === "status_key") baseHint = "status";
+                if (
+                    (drawer.type === "jobs" || drawer.type === "opportunities") &&
+                    (f.field_key.endsWith("_cents") || f.field_key === "discount_amount" || f.field_key === "display_total_cents")
+                ) {
+                    baseHint = "money";
+                }
                 return {
                     key: f.field_key,
                     label: f.label ?? f.field_key,
                     span: 1 as const,
                     renderHint: (rel?.renderHint ?? baseHint) as EntityDrawerFieldConfig["renderHint"],
-                    editable: true,
+                    editable: !(drawer.type === "jobs" && (f.field_key === "display_total_cents" || f.field_key === "discount_amount")),
                     ...(rel?.linkTarget ? { linkTarget: rel.linkTarget } : {}),
                 };
             }),
@@ -3389,6 +3455,55 @@ export default function AdminEntityDrawer() {
             Object.assign(out, oppRefFieldSelectOptions);
         }
         if (drawer.type === "jobs" && data) {
+            const d = data as Record<string, unknown>;
+            const custOpts = jobCustomerOptions.map((c) => ({ value: c.id, label: c.name ?? c.id }));
+            const custId = String(d.customer_id ?? "");
+            if (custId && !custOpts.some((o) => o.value === custId)) {
+                const nm = String(d._customer_name ?? "").trim();
+                custOpts.push({ value: custId, label: nm || `${custId.slice(0, 8)}…` });
+            }
+            out.customer_id = custOpts;
+
+            const locOpts = jobLocationOptions.map((l) => ({ value: l.id, label: l.label ?? l.id }));
+            const locId = String(d.location_id ?? "");
+            if (locId && !locOpts.some((o) => o.value === locId)) {
+                const nm = String(d._location_name ?? d._location_label ?? "").trim();
+                locOpts.push({ value: locId, label: nm || `${locId.slice(0, 8)}…` });
+            }
+            out.location_id = locOpts;
+
+            const personOpts = jobPersonOptions.map((p) => ({ value: p.id, label: p.label ?? p.id }));
+            const ppid = String(d.primary_person_id ?? "");
+            if (ppid && !personOpts.some((o) => o.value === ppid)) {
+                const nm = String(d._primary_person_name ?? "").trim();
+                personOpts.push({ value: ppid, label: nm || `${ppid.slice(0, 8)}…` });
+            }
+            out.primary_person_id = personOpts;
+
+            const contactOpts = jobContactOptions.map((c) => ({ value: c.id, label: c.label ?? c.id }));
+            const pcid = String(d.primary_contact_id ?? "");
+            if (pcid && !contactOpts.some((o) => o.value === pcid)) {
+                const nm = String(d._contact_name ?? d._primary_contact_name ?? "").trim();
+                contactOpts.push({ value: pcid, label: nm || `${pcid.slice(0, 8)}…` });
+            }
+            out.primary_contact_id = contactOpts;
+
+            const oppOpts = jobOpportunityOptions.map((o) => ({ value: o.id, label: o.label ?? o.id }));
+            const oid = String(d.opportunity_id ?? "");
+            if (oid && !oppOpts.some((o) => o.value === oid)) {
+                const nm = String(d._opportunity_name ?? "").trim();
+                oppOpts.push({ value: oid, label: nm || `${oid.slice(0, 8)}…` });
+            }
+            out.opportunity_id = oppOpts;
+
+            const jobStOpts = jobCatalogStatusOptions.map((s) => ({ value: s.id, label: s.label ?? s.id }));
+            const jsid = String(d.job_status_id ?? "");
+            if (jsid && !jobStOpts.some((o) => o.value === jsid)) {
+                const nm = String(d._job_status_label ?? "").trim();
+                jobStOpts.push({ value: jsid, label: nm || `${jsid.slice(0, 8)}…` });
+            }
+            out.job_status_id = jobStOpts;
+
             const vendorOpts = jobVendorOptions.map((v) => ({
                 value: v.id,
                 label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
@@ -3425,7 +3540,22 @@ export default function AdminEntityDrawer() {
             out.primary_person_id = pOpts;
         }
         return out;
-    }, [drawer.type, data, pipelines, stages, oppVerticalOptions, oppRefFieldSelectOptions, jobVendorOptions, vendorPrimaryPersonOptions]);
+    }, [
+        drawer.type,
+        data,
+        pipelines,
+        stages,
+        oppVerticalOptions,
+        oppRefFieldSelectOptions,
+        jobVendorOptions,
+        vendorPrimaryPersonOptions,
+        jobCustomerOptions,
+        jobLocationOptions,
+        jobPersonOptions,
+        jobContactOptions,
+        jobOpportunityOptions,
+        jobCatalogStatusOptions,
+    ]);
 
     if (!drawer.type || !drawer.id) return null;
 

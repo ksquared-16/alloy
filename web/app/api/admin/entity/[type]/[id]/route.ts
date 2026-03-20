@@ -143,6 +143,9 @@ export async function GET(
                 out._primary_person_id = null;
                 out._primary_person_name = null;
             }
+            if (typeof out._primary_person_id === "string" && out._primary_person_id.trim()) {
+                out.primary_person_id = out._primary_person_id;
+            }
             if ((data as { customer_id?: string }).customer_id) {
                 const customer = await supabase.from("customers").select("name").eq("id", (data as { customer_id: string }).customer_id).single();
                 out._customer_name = customer.data?.name ?? null;

@@ -517,6 +517,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "title", label: "Title", span: 1, renderHint: "text", editable: true },
             { key: "service_key", label: "Service", span: 1, renderHint: "text", editable: true },
             { key: "job_type", label: "Job type", span: 1, renderHint: "text", editable: true },
+            // Jobs use two status layers: `status_key` (status_definitions, workflow) and `job_status_id` (job_statuses catalog).
+            // Keep both editable until product deprecates one in favor of the other.
             {
               key: "status_key",
               label: "Workflow status",

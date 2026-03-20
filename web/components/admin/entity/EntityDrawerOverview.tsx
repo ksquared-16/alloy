@@ -204,6 +204,8 @@ function renderFieldEditNode(
     "location_id",
     "primary_contact_id",
     "customer_id",
+    "opportunity_id",
+    "job_status_id",
   ]);
   if (refOpts && refOpts.length > 0 && refSelectKeys.has(key)) {
     return (
@@ -311,6 +313,8 @@ export default function EntityDrawerOverview({
                 : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
                   ? (record._primary_contact_name ?? record._contact_name)
                 : key === "customer_id" && record._customer_name != null ? record._customer_name
+                : key === "opportunity_id" && record._opportunity_name != null ? record._opportunity_name
+                : key === "job_status_id" && record._job_status_label != null ? record._job_status_label
                 : undefined;
               const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
               const rawForRead =

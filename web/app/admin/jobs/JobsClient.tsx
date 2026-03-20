@@ -27,6 +27,9 @@ export type JobRow = {
   location_id: string | null;
   gross_price_cents?: number | null;
   estimated_total_cents?: number | null;
+  discount_amount?: number | null;
+  discounted?: boolean | null;
+  display_total_cents?: number | null;
   _customer_name?: string | null;
   _assigned_vendor_name?: string | null;
   _vendor_name?: string | null;
