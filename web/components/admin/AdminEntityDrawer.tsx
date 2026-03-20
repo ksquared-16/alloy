@@ -675,6 +675,7 @@ export default function AdminEntityDrawer() {
         compatibility_members: unknown[];
         linked_locations?: { location_id: string; _location_label?: string | null; is_primary?: boolean; relationship_type?: string | null }[];
         opportunities?: { id: string; name?: string | null; status_key?: string | null; job_date?: string | null; quote_total?: number | null; created_at?: string }[];
+        documents?: JobRelatedPayload["documents"];
     };
     const [personRelatedData, setPersonRelatedData] = useState<PersonRelatedPayload | null>(null);
     const [personRelatedLoading, setPersonRelatedLoading] = useState(false);
@@ -795,7 +796,7 @@ export default function AdminEntityDrawer() {
             setPersonRelatedData(null);
             return;
         }
-        if (drawerTab === "related" && !personRelatedData) {
+        if ((drawerTab === "related" || drawerTab === "documents") && !personRelatedData) {
             setPersonRelatedLoading(true);
             fetch(`/api/admin/related/person/${drawer.id}`)
                 .then((r) => (r.ok ? r.json() : null))
@@ -4566,6 +4567,19 @@ export default function AdminEntityDrawer() {
                                 entityId={drawer.id}
                                 canMutate={canMutate}
                                 onAfterUpload={() => setCustomerRelatedData(null)}
+                            />
+                        </div>
+                    )}
+                    {drawerTab === "documents" && drawer.type === "persons" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            <EntityDocumentsSection
+                                documents={personRelatedData?.documents ?? []}
+                                loading={personRelatedLoading}
+                                uploadEntityType="person"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={() => setPersonRelatedData(null)}
                             />
                         </div>
                     )}

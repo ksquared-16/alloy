@@ -518,7 +518,7 @@ export async function GET(
             if (!personRow) {
                 return NextResponse.json({ error: "Person not found" }, { status: 404 });
             }
-            const [customerPersonsRes, relationshipsRes, contactsRes, membersRes, plRes, oppRes] = await Promise.all([
+            const [customerPersonsRes, relationshipsRes, contactsRes, membersRes, plRes, oppRes, documentsRes] = await Promise.all([
                 supabase
                     .from("customer_persons")
                     .select("id, customer_id, person_id, role, created_at")
@@ -558,6 +558,15 @@ export async function GET(
                     .eq("org_id", ctx.orgId)
                     .order("created_at", { ascending: false })
                     .limit(LIMIT),
+                supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .eq("entity_type", "person")
+                    .eq("entity_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT)
+                    .then((r) => (r.error ? { data: [] } : r)),
             ]);
             const cpRows = customerPersonsRes.data ?? [];
             const customerIds = [...new Set(cpRows.map((r: { customer_id: string }) => r.customer_id))];
@@ -618,6 +627,7 @@ export async function GET(
                 compatibility_members: membersRes.data ?? [],
                 linked_locations,
                 opportunities: oppRes.data ?? [],
+                documents: normalizeDocumentRows(documentsRes.data ?? []),
             });
         }
 
