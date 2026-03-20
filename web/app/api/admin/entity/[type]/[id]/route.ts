@@ -200,7 +200,11 @@ export async function GET(
                 jobStatusRow = (js as { key?: string | null; label?: string | null } | null) ?? null;
             }
             out._job_status_label = jobStatusRow?.label ?? null;
-            out._status_display = statusKey ?? jobStatusRow?.key ?? null;
+            const persistedStatusKey = typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null;
+            /** Workflow key for badge + drawer: DB status_key, else job_statuses.key (list + form stay aligned). */
+            const effectiveWorkflowKey = persistedStatusKey ?? (jobStatusRow?.key ? String(jobStatusRow.key) : null);
+            out._status_display = effectiveWorkflowKey;
+            out.status_key = effectiveWorkflowKey;
             const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
             out._discount_amount_cents = normalizeJobDiscountAmountToCents(
                 (data as { discount_amount?: number | string | null }).discount_amount,

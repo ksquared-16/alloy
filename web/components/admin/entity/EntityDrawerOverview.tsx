@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react";
 import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
-import { formatDate, formatDateTime, formatMoney, formatPhoneUS, formatPayoutPercent, RECURRENCE_UNIT_OPTIONS } from "@/lib/adminFormatters";
+import { formatDate, formatDateTime, formatMoney, formatMoneyFromCents, formatPhoneUS, formatPayoutPercent, RECURRENCE_UNIT_OPTIONS } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
@@ -48,8 +48,13 @@ function formatFieldValue(
       return formatDate(value as string);
     case "datetime":
       return formatDateTime(value as string);
-    case "money":
+    case "money": {
+      const n = typeof value === "number" ? value : typeof value === "string" ? parseFloat(value) : NaN;
+      if (key === "_discount_amount_cents" && Number.isFinite(n) && n > 0) {
+        return `-${formatMoneyFromCents(n)}`;
+      }
       return formatMoney(value as number | string | null | undefined, key);
+    }
     case "status":
       return (
         <StatusBadge

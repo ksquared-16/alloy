@@ -3324,7 +3324,22 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => d.field_key !== "primary_contact_id");
         }
-        if (visible.length === 0) return [];
+        /** Registry pricing rows are replaced by canonical summary (same as list: display_total_cents). */
+        const jobCanonicalPricingKeys = new Set([
+            "estimated_total_cents",
+            "gross_price_cents",
+            "discount_amount",
+            "display_total_cents",
+            "_discount_amount_cents",
+        ]);
+        if (drawer.type === "jobs") {
+            visible = visible.filter((d) => !jobCanonicalPricingKeys.has(d.field_key));
+        }
+        if (visible.length === 0) {
+            if (!(drawer.type === "jobs" && data && !(data as { _create?: boolean })._create)) {
+                return [];
+            }
+        }
         const bySection = new Map<string, typeof visible>();
         for (const d of visible) {
             const sk = d.section_key ?? "details";
@@ -3442,6 +3457,39 @@ export default function AdminEntityDrawer() {
             }
         }
         let result: EntityDrawerSectionConfig[] = [...fromDefs, ...append];
+        if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create) {
+            const jobPricingSummarySection: EntityDrawerSectionConfig = {
+                key: "job_pricing_summary",
+                title: "Pricing summary",
+                defaultExpanded: true,
+                collapsible: true,
+                gridCols: 2 as const,
+                fields: [
+                    {
+                        key: "gross_price_cents",
+                        label: "Gross price / subtotal (before discount)",
+                        span: 1,
+                        renderHint: "money",
+                        editable: true,
+                    },
+                    {
+                        key: "_discount_amount_cents",
+                        label: "Discount amount",
+                        span: 1,
+                        renderHint: "money",
+                        editable: false,
+                    },
+                    {
+                        key: "display_total_cents",
+                        label: "Final total (after discount)",
+                        span: 1,
+                        renderHint: "money",
+                        editable: false,
+                    },
+                ],
+            };
+            result = [jobPricingSummarySection, ...result];
+        }
         if (drawer.type === "vendors" && fromDefs.length > 0) {
             const fieldKeys = new Set<string>();
             for (const s of fromDefs) {
