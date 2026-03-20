@@ -80,6 +80,36 @@ function clearBookingIdentityKeys(): void {
     }
 }
 
+/** Stripe.js returns camelCase `setupIntent`; guard against alternate shapes. */
+function extractSetupIntentFromConfirmResult(setupResult: {
+    setupIntent?: unknown;
+    [key: string]: unknown;
+}): { id?: unknown; payment_method?: unknown } | null {
+    const raw =
+        setupResult.setupIntent ??
+        (typeof setupResult.setup_intent === "object" && setupResult.setup_intent
+            ? setupResult.setup_intent
+            : null);
+    if (!raw || typeof raw !== "object") return null;
+    return raw as { id?: unknown; payment_method?: unknown };
+}
+
+/** `seti_xxx_secret_yyy` → `seti_xxx` (publishable-key safe; no secret logged). */
+function parseSetupIntentIdFromClientSecret(clientSecret: string): string | null {
+    if (typeof clientSecret !== "string" || !clientSecret.includes("_secret_")) return null;
+    const prefix = clientSecret.split("_secret_")[0]?.trim();
+    return prefix && prefix.startsWith("seti_") ? prefix : null;
+}
+
+function extractPaymentMethodIdFromStripe(pm: unknown): string | null {
+    if (typeof pm === "string" && pm.trim().startsWith("pm_")) return pm.trim();
+    if (pm && typeof pm === "object" && "id" in pm) {
+        const id = (pm as { id: unknown }).id;
+        if (typeof id === "string" && id.startsWith("pm_")) return id;
+    }
+    return null;
+}
+
 /** Clear quote-related keys from localStorage and sessionStorage (e.g. after QUOTE_ID_MISMATCH) */
 function clearQuoteStorage(): void {
     if (typeof window === "undefined") return;
@@ -1731,19 +1761,52 @@ export default function BookV2Client() {
                 throw new Error(confirmError.message || "Payment setup failed");
             }
             perfLog("stripe_confirm_card_setup", tStripeConfirm);
-            const si = setupResult.setupIntent;
-            const pmFromSetup = si?.payment_method;
-            const stripePaymentMethodId =
-                typeof pmFromSetup === "string"
-                    ? pmFromSetup
-                    : pmFromSetup && typeof pmFromSetup === "object" && "id" in pmFromSetup
-                      ? String((pmFromSetup as { id: string }).id)
-                      : null;
-            const stripeSetupIntentId = si?.id && typeof si.id === "string" ? si.id : null;
 
-            console.log(
-                `[BOOKING_PAYMENT_METHOD] client pm_present=${!!stripePaymentMethodId} si_present=${!!stripeSetupIntentId} booking_attempt_id=${attemptId}`
-            );
+            const siObj = extractSetupIntentFromConfirmResult(setupResult as { setupIntent?: unknown; [key: string]: unknown });
+            let stripePaymentMethodId: string | null = extractPaymentMethodIdFromStripe(siObj?.payment_method ?? null);
+            let stripeSetupIntentId: string | null =
+                siObj?.id != null && typeof siObj.id === "string" && siObj.id.startsWith("seti_") ? siObj.id : null;
+
+            if (!stripeSetupIntentId) {
+                stripeSetupIntentId = parseSetupIntentIdFromClientSecret(client_secret);
+            }
+
+            if (!stripePaymentMethodId) {
+                const tRetrieveSi = typeof performance !== "undefined" ? performance.now() : 0;
+                const retrieved = await stripe.retrieveSetupIntent(client_secret);
+                perfLog("stripe_retrieve_setup_intent", tRetrieveSi);
+                if (retrieved.error) {
+                    console.warn("[BOOKING_PAYMENT_METHOD_CLIENT] retrieveSetupIntent after confirm returned error", {
+                        booking_attempt_id: attemptId,
+                        message: retrieved.error.message,
+                    });
+                } else if (retrieved.setupIntent) {
+                    stripePaymentMethodId =
+                        extractPaymentMethodIdFromStripe(retrieved.setupIntent.payment_method) ?? stripePaymentMethodId;
+                    if (!stripeSetupIntentId && typeof retrieved.setupIntent.id === "string" && retrieved.setupIntent.id.startsWith("seti_")) {
+                        stripeSetupIntentId = retrieved.setupIntent.id;
+                    }
+                }
+            }
+
+            const siStatus =
+                siObj && typeof (siObj as { status?: unknown }).status === "string"
+                    ? (siObj as { status: string }).status
+                    : null;
+            console.log("[BOOKING_PAYMENT_METHOD_CLIENT] stripe ids resolved before confirm API", {
+                booking_attempt_id: attemptId,
+                setup_intent_object_from_confirm: !!siObj,
+                setup_intent_status: siStatus,
+                setup_intent_id_present: !!stripeSetupIntentId,
+                payment_method_id_present: !!stripePaymentMethodId,
+                setup_intent_id_prefix: stripeSetupIntentId ? `${stripeSetupIntentId.slice(0, 15)}…` : null,
+                payment_method_id_prefix: stripePaymentMethodId ? `${stripePaymentMethodId.slice(0, 15)}…` : null,
+            });
+            if (!stripeSetupIntentId && !stripePaymentMethodId) {
+                console.warn("[BOOKING_PAYMENT_METHOD_CLIENT] WARNING no seti_ or pm_ after confirm, client_secret parse, and retrieveSetupIntent", {
+                    booking_attempt_id: attemptId,
+                });
+            }
 
             // Step 3: Confirm booking in Supabase (always run after successful Stripe setup)
             if (process.env.NODE_ENV !== "production") {
@@ -1803,6 +1866,13 @@ export default function BookV2Client() {
             if (storedCustomerId) confirmPayload.customer_id = storedCustomerId;
             if (stripePaymentMethodId) confirmPayload.stripe_payment_method_id = stripePaymentMethodId;
             if (stripeSetupIntentId) confirmPayload.stripe_setup_intent_id = stripeSetupIntentId;
+
+            console.log("[BOOKING_PAYMENT_METHOD_CLIENT] calling /api/book-v2/confirm", {
+                booking_attempt_id: attemptId,
+                payload_keys: Object.keys(confirmPayload).sort(),
+                stripe_setup_intent_id_in_payload: Object.prototype.hasOwnProperty.call(confirmPayload, "stripe_setup_intent_id"),
+                stripe_payment_method_id_in_payload: Object.prototype.hasOwnProperty.call(confirmPayload, "stripe_payment_method_id"),
+            });
 
             if (typeof performance !== "undefined") {
                 console.log(

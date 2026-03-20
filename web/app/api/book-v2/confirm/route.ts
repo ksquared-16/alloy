@@ -656,6 +656,9 @@ export async function POST(request: NextRequest) {
         console.log(
             `[BOOKING_PAYMENT_METHOD] confirm body pm_present=${!!stripe_payment_method_id} si_present=${!!stripe_setup_intent_id} booking_attempt_id=${booking_attempt_id ?? "none"}`
         );
+        console.log(
+            `[BOOKING_PAYMENT_METHOD] confirm body key/type pm_key_in_json=${Object.prototype.hasOwnProperty.call(body, "stripe_payment_method_id")} si_key_in_json=${Object.prototype.hasOwnProperty.call(body, "stripe_setup_intent_id")} pm_type=${typeof stripe_pm_body} si_type=${typeof stripe_si_body}`
+        );
 
         const discount_program_id =
             typeof discount_program_id_raw === "string" && discount_program_id_raw.trim()
