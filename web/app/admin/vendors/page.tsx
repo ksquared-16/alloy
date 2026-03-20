@@ -16,6 +16,7 @@ type VendorRow = {
     status_key: string | null;
     status?: string | null;
     primary_contact_id: string | null;
+    primary_person_id: string | null;
     payout_percent: number | null;
     w9_received?: boolean | null;
     ach_verified?: boolean | null;
@@ -28,7 +29,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
     const supabase = createAdminClient();
     const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
 
-    const vendorCols = "id, created_at, updated_at, submitted_at, name, company_name, email, phone, vendor_status_id, status_key, primary_contact_id, payout_percent, service_area_zip_codes, days_available";
+    const vendorCols = "id, created_at, updated_at, submitted_at, name, company_name, email, phone, vendor_status_id, status_key, primary_contact_id, primary_person_id, payout_percent, service_area_zip_codes, days_available";
     let q = supabase
         .from("vendors")
         .select(vendorCols)
@@ -50,6 +51,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
     }
 
     const primaryContactIds = [...new Set(vendorList.map((v) => v.primary_contact_id).filter(Boolean))] as string[];
+    const primaryPersonIds = [...new Set(vendorList.map((v) => v.primary_person_id).filter(Boolean))] as string[];
     let primaryContacts: Record<string, { name: string; email: string | null; phone: string | null }> = {};
     if (primaryContactIds.length > 0) {
         const { data: contacts } = await supabase
@@ -59,6 +61,17 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
         for (const c of contacts ?? []) {
             const name = [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || "—";
             primaryContacts[c.id] = { name: name || "—", email: c.email ?? null, phone: c.phone ?? null };
+        }
+    }
+    let primaryPersons: Record<string, { name: string; email: string | null; phone: string | null }> = {};
+    if (primaryPersonIds.length > 0) {
+        const { data: persons } = await supabase
+            .from("persons")
+            .select("id, first_name, last_name, email, phone")
+            .in("id", primaryPersonIds);
+        for (const p of persons ?? []) {
+            const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || "—";
+            primaryPersons[p.id] = { name: name || "—", email: p.email ?? null, phone: p.phone ?? null };
         }
     }
 
@@ -75,6 +88,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
     const rows = vendorList.map((v) => {
         const status = v.vendor_status_id ? statusById[v.vendor_status_id] : null;
         const pc = v.primary_contact_id ? primaryContacts[v.primary_contact_id] : null;
+        const pp = v.primary_person_id ? primaryPersons[v.primary_person_id] : null;
         const _status_display = v.status_key ?? v.status ?? status?.key ?? "";
         const _updated = v.updated_at ?? v.created_at ?? null;
         return {
@@ -82,9 +96,10 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
             _vendor_status_key: status?.key ?? "",
             _vendor_status_label: status?.label ?? "",
             _status_display: _status_display || null,
+            _primary_person_name: pp?.name ?? null,
             _primary_contact_name: pc?.name ?? null,
-            _vendor_email: pc?.email ?? v.email ?? null,
-            _vendor_phone: pc?.phone ?? v.phone ?? null,
+            _vendor_email: pp?.email ?? pc?.email ?? v.email ?? null,
+            _vendor_phone: pp?.phone ?? pc?.phone ?? v.phone ?? null,
             _jobs_count: jobsByVendor[v.id] ?? 0,
             _updated,
         };

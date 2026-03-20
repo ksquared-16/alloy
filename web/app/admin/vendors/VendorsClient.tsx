@@ -24,6 +24,7 @@ export interface Vendor {
     status_key?: string | null;
     status?: string | null;
     primary_contact_id: string | null;
+    primary_person_id: string | null;
     payout_percent: number | null;
     w9_received?: boolean | null;
     ach_verified?: boolean | null;
@@ -32,6 +33,7 @@ export interface Vendor {
     _vendor_status_key: string;
     _vendor_status_label: string;
     _status_display: string | null;
+    _primary_person_name: string | null;
     _primary_contact_name: string | null;
     _vendor_email: string | null;
     _vendor_phone: string | null;
@@ -110,6 +112,7 @@ export default function VendorsClient({
                 (row) =>
                     (row.name ?? "").toLowerCase().includes(q) ||
                     (row.company_name ?? "").toLowerCase().includes(q) ||
+                    (row._primary_person_name ?? "").toLowerCase().includes(q) ||
                     (row._primary_contact_name ?? "").toLowerCase().includes(q) ||
                     (row._vendor_email ?? "").toLowerCase().includes(q) ||
                     (row._vendor_phone ?? "").toLowerCase().includes(q)

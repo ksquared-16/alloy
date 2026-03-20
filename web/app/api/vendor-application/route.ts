@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 
 const BUCKET = "vendor_documents";
 
@@ -102,47 +103,30 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceRoleClient();
 
-    let contactId: string;
+    const personId = await findOrCreatePersonInOrg(supabase, {
+      email,
+      phone,
+      first_name,
+      last_name,
+      org_id: orgId,
+    });
 
-    const { data: existingContact } = await supabase
-      .from("contacts")
-      .select("id, first_name, last_name, phone, address_line1, city, state, postal_code")
-      .ilike("email", email)
-      .limit(1)
-      .maybeSingle();
+    if (!personId) {
+      console.error("[VENDOR_APPLICATION] Could not resolve person");
+      return NextResponse.json({ ok: false, error: "Failed to save applicant profile" }, { status: 500 });
+    }
 
-    if (existingContact) {
-      contactId = (existingContact as { id: string }).id;
-      const updates: Record<string, unknown> = {};
-      if (first_name) updates.first_name = first_name;
-      if (last_name) updates.last_name = last_name;
-      if (phone) updates.phone = phone;
-      if (postal_code !== undefined) updates.postal_code = postal_code || null;
-      if (orgId) updates.org_id = orgId;
-      if (Object.keys(updates).length > 0) {
-        await supabase.from("contacts").update(updates).eq("id", contactId);
-      }
-    } else {
-      const contactInsert: Record<string, unknown> = {
-        email,
-        phone,
+    const emailNorm = email.trim().toLowerCase();
+    await supabase
+      .from("persons")
+      .update({
         first_name,
         last_name,
-        postal_code: postal_code || null,
-        contact_type: "lead",
-      };
-      if (orgId) contactInsert.org_id = orgId;
-      const { data: newContact, error: contactErr } = await supabase
-        .from("contacts")
-        .insert(contactInsert)
-        .select("id")
-        .single();
-      if (contactErr || !newContact) {
-        console.error("[VENDOR_APPLICATION] Contact insert failed:", contactErr?.message);
-        return NextResponse.json({ ok: false, error: "Failed to save contact" }, { status: 500 });
-      }
-      contactId = (newContact as { id: string }).id;
-    }
+        phone: phone || null,
+        email: emailNorm,
+      })
+      .eq("id", personId)
+      .eq("org_id", orgId);
 
     const { data: pendingStatus } = await supabase
       .from("vendor_statuses")
@@ -159,7 +143,8 @@ export async function POST(request: NextRequest) {
       vendor_status_id: vendorStatusId,
       email,
       phone,
-      primary_contact_id: contactId,
+      primary_person_id: personId,
+      primary_contact_id: null,
       owns_supplies,
       days_available: days_available.length ? days_available : null,
       operating_hours_open: operating_hours_open || null,
@@ -229,14 +214,50 @@ export async function POST(request: NextRequest) {
     });
     if (up2) {
       console.error("[VENDOR_APPLICATION] upload failed", { which: "drivers_license", error: up2 });
-      await supabase
-        .from("vendors")
-        .update({
-          vendor_status_id: vendorStatusId,
-          insurance_doc_path: insurancePath,
-        })
-        .eq("id", vendorId);
+      await supabase.from("vendors").update({ insurance_doc_path: insurancePath }).eq("id", vendorId);
       return NextResponse.json({ ok: false, error: "Failed to upload drivers license" }, { status: 400 });
+    }
+
+    const insuranceFilename = proof_of_insurance.name?.trim() || "proof_of_insurance";
+    const driversFilename = drivers_license.name?.trim() || "drivers_license";
+
+    const { error: doc1Err } = await supabase.from("documents").insert({
+      org_id: orgId,
+      entity_type: "vendor",
+      entity_id: vendorId,
+      doc_type: "insurance",
+      title: "Proof of insurance",
+      original_filename: insuranceFilename,
+      mime_type: contentType(proof_of_insurance),
+      byte_size: insuranceBuf.length,
+      bucket: BUCKET,
+      storage_path: insurancePath,
+      status: "uploaded",
+    });
+    if (doc1Err) {
+      console.error("[VENDOR_APPLICATION] documents insert (insurance) failed:", doc1Err.message);
+      await supabase.storage.from(BUCKET).remove([insurancePath, driversPath]).catch(() => {});
+      return NextResponse.json({ ok: false, error: "Failed to save document records" }, { status: 500 });
+    }
+
+    const { error: doc2Err } = await supabase.from("documents").insert({
+      org_id: orgId,
+      entity_type: "vendor",
+      entity_id: vendorId,
+      doc_type: "drivers_license",
+      title: "Driver's license",
+      original_filename: driversFilename,
+      mime_type: contentType(drivers_license),
+      byte_size: driversBuf.length,
+      bucket: BUCKET,
+      storage_path: driversPath,
+      status: "uploaded",
+    });
+    if (doc2Err) {
+      console.error("[VENDOR_APPLICATION] documents insert (drivers_license) failed:", doc2Err.message);
+      await supabase.from("documents").delete().eq("org_id", orgId).eq("storage_path", insurancePath);
+      await supabase.storage.from(BUCKET).remove([insurancePath, driversPath]).catch(() => {});
+      return NextResponse.json({ ok: false, error: "Failed to save document records" }, { status: 500 });
     }
 
     await supabase
@@ -247,14 +268,9 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", vendorId);
 
-    console.log("[VENDOR_APPLICATION] uploaded docs", { vendorId, insurance_doc_path: insurancePath, drivers_license_doc_path: driversPath });
+    console.log("[VENDOR_APPLICATION] created", { vendorId, personId, insurancePath, driversPath });
 
-    await supabase
-      .from("contacts")
-      .update({ vendor_id: vendorId })
-      .eq("id", contactId);
-
-    return NextResponse.json({ ok: true, vendor_id: vendorId });
+    return NextResponse.json({ ok: true, vendor_id: vendorId, person_id: personId });
   } catch (err) {
     console.error("[VENDOR_APPLICATION] Error:", err);
     return NextResponse.json(

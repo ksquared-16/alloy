@@ -12,6 +12,7 @@ import {
   upsertTypedFieldValue,
   serializeSquareFootageForFieldValue,
 } from "@/lib/bookV2/fieldValueUpsert";
+import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 /** Opportunity Statuses pipeline — Quote Started stage (website quote submission). */
 const QUOTE_STARTED_PIPELINE_STAGE_ID = "0cd4bcc7-2dc0-4706-89a7-5cf8307c8b62";
 
@@ -169,71 +170,6 @@ async function computeQuote(
   };
 }
 
-/**
- * Find or create a person for quote/inquiry. Match by email first, then phone (within org).
- * Returns person id or null if org_id missing (cannot create) or insert fails.
- */
-async function findOrCreatePerson(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  params: {
-    email: string | null;
-    phone: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    org_id: string | null;
-  }
-): Promise<string | null> {
-  const { email, phone, first_name, last_name, org_id } = params;
-  const emailNorm = email?.trim() ? email.trim().toLowerCase() : null;
-  const phoneNorm = phone?.trim() || null;
-
-  if (!emailNorm && !phoneNorm) return null;
-
-  // Find: email first, then phone. Scope by org when we have one so we don't cross-org match.
-  if (emailNorm) {
-    let q = supabase.from("persons").select("id").ilike("email", emailNorm).limit(1);
-    if (org_id) q = q.eq("org_id", org_id);
-    const { data: byEmail } = await q.maybeSingle();
-    if (byEmail?.id) return byEmail.id;
-  }
-  if (phoneNorm) {
-    let q = supabase.from("persons").select("id").eq("phone", phoneNorm).limit(1);
-    if (org_id) q = q.eq("org_id", org_id);
-    const { data: byPhone } = await q.maybeSingle();
-    if (byPhone?.id) return byPhone.id;
-  }
-
-  if (!org_id) return null;
-
-  const { data: created, error } = await supabase
-    .from("persons")
-    .insert({
-      org_id,
-      first_name: first_name ?? null,
-      last_name: last_name ?? null,
-      email: emailNorm ?? null,
-      phone: phoneNorm ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (error || !created) {
-    if (error?.code === "23505") {
-      if (emailNorm) {
-        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).ilike("email", emailNorm).limit(1).maybeSingle();
-        if (again?.id) return again.id;
-      }
-      if (phoneNorm) {
-        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).eq("phone", phoneNorm).limit(1).maybeSingle();
-        if (again?.id) return again.id;
-      }
-    }
-    console.warn("[QUOTE_START] findOrCreatePerson failed", error?.message);
-    return null;
-  }
-  return (created as { id: string }).id;
-}
-
 async function upsertPersonLocationForQuote(
   supabase: ReturnType<typeof createServiceRoleClient>,
   orgId: string,
@@ -381,7 +317,7 @@ export async function POST(request: NextRequest) {
     const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
     // 1) Find or create Person only (no Contact, no Customer).
-    const personId = await findOrCreatePerson(supabase, {
+    const personId = await findOrCreatePersonInOrg(supabase, {
       email: email || null,
       phone: phone || null,
       first_name,

@@ -4573,6 +4573,9 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "documents" && drawer.type === "persons" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            <p className="text-xs text-alloy-midnight/60 -mt-1 mb-2">
+                                Includes files linked to this person and onboarding documents from any vendor that lists this person as the primary person.
+                            </p>
                             <EntityDocumentsSection
                                 documents={personRelatedData?.documents ?? []}
                                 loading={personRelatedLoading}
@@ -4623,43 +4626,19 @@ export default function AdminEntityDrawer() {
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
-                        <div className="pt-2 space-y-4">
-                            <section>
-                                <h3 className={DRAWER_SECTION_HEADER_CLASS}>Verification Documents</h3>
-                                {(() => {
-                                    const insurancePath = (data as { insurance_doc_path?: string | null })?.insurance_doc_path;
-                                    const driversPath = (data as { drivers_license_doc_path?: string | null })?.drivers_license_doc_path;
-                                    const hasAny = insurancePath || driversPath;
-                                    if (!hasAny) return <p className="text-sm text-alloy-midnight/60">No vendor application files on record.</p>;
-                                    return (
-                                        <ul className="space-y-2">
-                                            {insurancePath && (
-                                                <li className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-alloy-stone/10">
-                                                    <span className="text-sm font-medium text-alloy-forge/90">Insurance document</span>
-                                                    <button type="button" onClick={async () => { const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(insurancePath)}`); const json = await res.json().catch(() => ({})); if (json.ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank"); else alert((json as { error?: string }).error || "Failed to get link"); }} className="text-xs px-2 py-1 border border-alloy-blue/50 rounded hover:bg-alloy-blue/10 text-alloy-blue shrink-0">View</button>
-                                                </li>
-                                            )}
-                                            {driversPath && (
-                                                <li className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-alloy-stone/10">
-                                                    <span className="text-sm font-medium text-alloy-forge/90">Driver&apos;s license</span>
-                                                    <button type="button" onClick={async () => { const res = await fetch(`/api/admin/vendors/${drawer.id}/documents/signed-url?path=${encodeURIComponent(driversPath)}`); const json = await res.json().catch(() => ({})); if (json.ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank"); else alert((json as { error?: string }).error || "Failed to get link"); }} className="text-xs px-2 py-1 border border-alloy-blue/50 rounded hover:bg-alloy-blue/10 text-alloy-blue shrink-0">View</button>
-                                                </li>
-                                            )}
-                                        </ul>
-                                    );
-                                })()}
-                            </section>
-                            <section>
-                                <h3 className={DRAWER_SECTION_HEADER_CLASS}>Attached documents</h3>
-                                <EntityDocumentsSection
-                                    documents={vendorRelatedData?.documents ?? []}
-                                    loading={vendorRelatedLoading}
-                                    uploadEntityType="vendor"
-                                    entityId={drawer.id}
-                                    canMutate={canMutate}
-                                    onAfterUpload={refetchVendorRelated}
-                                />
-                            </section>
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            <p className="text-xs text-alloy-midnight/60 -mt-1 mb-2">
+                                Canonical files live in the documents list below. Legacy storage paths may still exist on the vendor record for older integrations.
+                            </p>
+                            <EntityDocumentsSection
+                                documents={vendorRelatedData?.documents ?? []}
+                                loading={vendorRelatedLoading}
+                                uploadEntityType="vendor"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={refetchVendorRelated}
+                            />
                         </div>
                     )}
                     {drawerTab === "documents" && drawer.type === "locations" && drawer.id && drawer.id !== "new" && (

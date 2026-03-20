@@ -620,6 +620,26 @@ export async function GET(
                 is_primary: !!r.is_primary,
                 relationship_type: r.relationship_type ?? null,
             }));
+            const { data: vendorRowsForPerson } = await supabase
+                .from("vendors")
+                .select("id")
+                .eq("org_id", ctx.orgId)
+                .eq("primary_person_id", id)
+                .limit(LIMIT);
+            const linkedVendorIds = (vendorRowsForPerson ?? []).map((r: { id: string }) => r.id);
+            let vendorDocsForPerson: Record<string, unknown>[] = [];
+            if (linkedVendorIds.length > 0) {
+                const vdRes = await supabase
+                    .from("documents")
+                    .select(DOC_SELECT)
+                    .eq("org_id", ctx.orgId)
+                    .or("entity_type.eq.vendor,entity_type.eq.vendors")
+                    .in("entity_id", linkedVendorIds)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT);
+                vendorDocsForPerson = vdRes.error ? [] : (vdRes.data ?? []);
+            }
+            const personDocsMerged = mergeDocumentLists([documentsRes.data, vendorDocsForPerson]);
             return NextResponse.json({
                 customer_persons,
                 person_relationships,
@@ -627,7 +647,7 @@ export async function GET(
                 compatibility_members: membersRes.data ?? [],
                 linked_locations,
                 opportunities: oppRes.data ?? [],
-                documents: normalizeDocumentRows(documentsRes.data ?? []),
+                documents: personDocsMerged,
             });
         }
 

@@ -652,7 +652,12 @@ export async function GET(
         if (type === "vendors") {
             const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).single();
             if (vErr || !vendor) return NextResponse.json(vErr?.message || "Not found", { status: vErr?.code === "PGRST116" ? 404 : 500 });
-            const v = vendor as Record<string, unknown> & { status_key?: string | null; status?: string | null; primary_contact_id?: string | null };
+            const v = vendor as Record<string, unknown> & {
+                status_key?: string | null;
+                status?: string | null;
+                primary_contact_id?: string | null;
+                primary_person_id?: string | null;
+            };
             const out: Record<string, unknown> = { ...vendor };
             out._status_display = v.status_key ?? v.status ?? null;
 
@@ -666,7 +671,21 @@ export async function GET(
             const { data: statusOptions } = await supabase.from("vendor_statuses").select("id, key, label").eq("is_active", true).order("position", { ascending: true });
             out._vendor_status_options = statusOptions ?? [];
 
-            const primaryContactId = v.primary_contact_id;
+            const directPersonId = v.primary_person_id ?? null;
+            const primaryContactId = v.primary_contact_id ?? null;
+
+            type PersonLite = { id: string; first_name?: string | null; last_name?: string | null } | null;
+            let personLite: PersonLite = null;
+
+            if (directPersonId) {
+                const { data: pDirect } = await supabase
+                    .from("persons")
+                    .select("id, first_name, last_name")
+                    .eq("id", directPersonId)
+                    .maybeSingle();
+                personLite = (pDirect as PersonLite) ?? null;
+            }
+
             if (primaryContactId) {
                 const { data: pc } = await supabase
                     .from("contacts")
@@ -678,20 +697,25 @@ export async function GET(
                 out._primary_contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || null : null;
                 out._primary_contact_email = c?.email ?? null;
                 out._primary_contact_phone = c?.phone ?? null;
-                if (c?.person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", c.person_id).maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
-                    out._primary_person_id = p?.id ?? null;
-                    out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
-                } else {
-                    out._primary_person_id = null;
-                    out._primary_person_name = null;
+                if (!personLite && c?.person_id) {
+                    const { data: pFromContact } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name")
+                        .eq("id", c.person_id)
+                        .maybeSingle();
+                    personLite = (pFromContact as PersonLite) ?? null;
                 }
             } else {
                 out._primary_contact = null;
                 out._primary_contact_name = null;
                 out._primary_contact_email = null;
                 out._primary_contact_phone = null;
+            }
+
+            if (personLite) {
+                out._primary_person_id = personLite.id;
+                out._primary_person_name = [personLite.first_name, personLite.last_name].filter(Boolean).join(" ").trim() || null;
+            } else {
                 out._primary_person_id = null;
                 out._primary_person_name = null;
             }

@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useCallback, FormEvent } from "react";
 import { createPortal } from "react-dom";
-import PrimaryButton from "@/components/PrimaryButton";
-
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const labelClass = "block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70";
-const inputBase = "w-full rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2";
-const inputClass = inputBase + " border border-alloy-stone/80 bg-white focus:ring-alloy-blue focus:border-alloy-blue";
-const errorInputClass = inputBase + " border-red-500 bg-white focus:ring-red-500 focus:border-red-500";
+const labelClass = "block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1";
+const inputClass =
+  "w-full px-3 py-2 text-sm border border-alloy-stone/30 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70";
+const ctaClass =
+  "w-full home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50";
 
 type Vertical = { id: string; name: string; slug: string };
 
@@ -250,13 +249,21 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
       }}
       style={{ touchAction: "none" }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col border border-[#59678b]/40" style={{ maxHeight: "90dvh" }}>
-        <div className="sticky top-0 bg-white border-b border-alloy-stone/20 px-4 sm:px-6 py-4 flex items-center justify-between z-10 shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-alloy-midnight">Apply to Join</h2>
+      <div
+        className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm max-w-2xl w-full flex flex-col"
+        style={{ maxHeight: "90dvh" }}
+      >
+        <div className="sticky top-0 bg-white border-b border-alloy-stone/20 px-4 sm:px-8 py-5 flex items-start justify-between gap-4 z-10 shrink-0">
+          <div>
+            <h2 className="text-2xl font-bold text-alloy-midnight">Apply to join our team</h2>
+            <p className="text-sm text-alloy-midnight/80 mt-1 max-w-xl">
+              Tell us about your services and availability. We&apos;ll review your application and follow up shortly.
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-alloy-midnight/60 hover:text-alloy-midnight transition-colors p-2 -mr-2"
+            className="text-alloy-midnight/60 hover:text-alloy-midnight transition-colors p-2 -mr-2 shrink-0 rounded-lg hover:bg-alloy-stone/10"
             aria-label="Close modal"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,25 +273,25 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
-          <div className="p-4 sm:p-6">
+          <div className="p-4 sm:p-8">
             {submitSuccess ? (
-              <div className="text-center py-8">
+              <div className="text-center py-6 sm:py-8">
                 <div className="mb-4">
                   <svg className="w-16 h-16 mx-auto text-alloy-juniper" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-alloy-midnight mb-2">Application received</h3>
-                <p className="text-alloy-midnight/70 mb-6">We&apos;ve received your application and we&apos;re reviewing it. We&apos;ll reach out soon.</p>
-                <PrimaryButton type="button" onClick={handleCloseAfterSuccess}>
+                <h3 className="text-2xl font-bold text-alloy-midnight mb-2">Application received</h3>
+                <p className="text-sm text-alloy-midnight/80 mb-6 max-w-md mx-auto">
+                  We&apos;ve received your application and we&apos;re reviewing it. We&apos;ll reach out soon.
+                </p>
+                <button type="button" onClick={handleCloseAfterSuccess} className={ctaClass}>
                   Done
-                </PrimaryButton>
+                </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {submitError && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">{submitError}</div>
-                )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {submitError && <p className="text-sm text-red-600">{submitError}</p>}
 
                 <div>
                   <span className={labelClass}>Services offered *</span>
@@ -293,14 +300,21 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {verticals.map((v) => (
-                        <label key={v.id} className="inline-flex items-center gap-2 cursor-pointer">
+                        <label
+                          key={v.id}
+                          className={`inline-flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
+                            form.vertical_ids.includes(v.id)
+                              ? "border-alloy-juniper/50 bg-alloy-juniper/10 text-alloy-midnight"
+                              : "border-alloy-stone/30 bg-white hover:border-alloy-stone/50"
+                          }`}
+                        >
                           <input
                             type="checkbox"
                             checked={form.vertical_ids.includes(v.id)}
                             onChange={() => toggleVertical(v.id)}
-                            className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                            className="rounded border-alloy-stone/40 text-alloy-juniper focus:ring-alloy-juniper/70"
                           />
-                          <span className="text-sm text-alloy-midnight">{v.name}</span>
+                          <span>{v.name}</span>
                         </label>
                       ))}
                     </div>
@@ -313,7 +327,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                     {form.service_area_zip_codes.map((z) => (
                       <span
                         key={z}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-alloy-stone/20 rounded text-sm"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-alloy-stone/15 border border-alloy-stone/25 rounded-lg text-sm"
                       >
                         {z}
                         <button type="button" onClick={() => removeZip(z)} className="text-alloy-midnight/60 hover:text-alloy-midnight" aria-label={`Remove ${z}`}>&times;</button>
@@ -341,7 +355,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                         name="owns_supplies"
                         checked={form.owns_supplies === true}
                         onChange={() => setForm((f) => ({ ...f, owns_supplies: true }))}
-                        className="text-alloy-blue focus:ring-alloy-blue"
+                        className="text-alloy-juniper focus:ring-alloy-juniper/70"
                       />
                       <span className="text-sm">Yes</span>
                     </label>
@@ -351,7 +365,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                         name="owns_supplies"
                         checked={form.owns_supplies === false}
                         onChange={() => setForm((f) => ({ ...f, owns_supplies: false }))}
-                        className="text-alloy-blue focus:ring-alloy-blue"
+                        className="text-alloy-juniper focus:ring-alloy-juniper/70"
                       />
                       <span className="text-sm">No</span>
                     </label>
@@ -367,7 +381,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                           type="checkbox"
                           checked={form.days_available.includes(d)}
                           onChange={() => toggleDay(d)}
-                          className="rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                            className="rounded border-alloy-stone/40 text-alloy-juniper focus:ring-alloy-juniper/70"
                         />
                         <span className="text-sm">{d}</span>
                       </label>
@@ -514,13 +528,13 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                   />
                 </div>
 
-                <div className="space-y-3 border-t border-alloy-stone/20 pt-4">
+                <div className="space-y-3 border-t border-alloy-stone/20 pt-5">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={form.consent_contractor_agreement}
                       onChange={(e) => setForm((f) => ({ ...f, consent_contractor_agreement: e.target.checked }))}
-                      className="mt-1 rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                      className="mt-1 rounded border-alloy-stone/40 text-alloy-juniper focus:ring-alloy-juniper/70"
                     />
                     <span className="text-sm text-alloy-midnight">I agree to the contractor agreement. *</span>
                   </label>
@@ -529,7 +543,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                       type="checkbox"
                       checked={form.consent_marketing}
                       onChange={(e) => setForm((f) => ({ ...f, consent_marketing: e.target.checked }))}
-                      className="mt-1 rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                      className="mt-1 rounded border-alloy-stone/40 text-alloy-juniper focus:ring-alloy-juniper/70"
                     />
                     <span className="text-sm text-alloy-midnight">I agree to receive marketing communications.</span>
                   </label>
@@ -538,16 +552,16 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                       type="checkbox"
                       checked={form.consent_legal}
                       onChange={(e) => setForm((f) => ({ ...f, consent_legal: e.target.checked }))}
-                      className="mt-1 rounded border-alloy-stone/50 text-alloy-blue focus:ring-alloy-blue"
+                      className="mt-1 rounded border-alloy-stone/40 text-alloy-juniper focus:ring-alloy-juniper/70"
                     />
                     <span className="text-sm text-alloy-midnight">I agree to the legal terms. *</span>
                   </label>
                 </div>
 
                 <div className="pt-2">
-                  <PrimaryButton type="submit" disabled={submitting} className="w-full">
+                  <button type="submit" disabled={submitting} className={ctaClass}>
                     {submitting ? "Submitting…" : "Submit application"}
-                  </PrimaryButton>
+                  </button>
                 </div>
               </form>
             )}
