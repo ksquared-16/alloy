@@ -27,6 +27,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
+    company_name: "",
     email: "",
     phone: "",
     address_line1: "",
@@ -193,6 +194,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
       const fd = new FormData();
       fd.set("first_name", form.first_name.trim());
       fd.set("last_name", form.last_name.trim());
+      fd.set("company_name", form.company_name.trim());
       fd.set("email", form.email.trim());
       fd.set("phone", form.phone.trim());
       fd.set("address_line1", form.address_line1.trim());
@@ -433,6 +435,18 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                       autoComplete="family-name"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Company / business name</label>
+                  <input
+                    type="text"
+                    value={form.company_name}
+                    onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
+                    className={inputClass}
+                    placeholder="Optional — helps when several people share one vendor"
+                    autoComplete="organization"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

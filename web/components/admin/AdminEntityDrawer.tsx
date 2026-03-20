@@ -75,6 +75,7 @@ const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "custo
 
 type VendorFormData = {
     vendor_status_id?: string | null;
+    primary_person_id?: string | null;
     status_key?: string | null;
     name?: string;
     company_name?: string;
@@ -105,8 +106,6 @@ type VendorFormData = {
 /** Contact drawer: vendor linked via contacts.vendor_id (from entity GET _contact_vendor). */
 type ContactVendorShape = { id: string; name: string | null; vendor_status_id: string | null; created_at: string };
 
-/** Vendor drawer: contact from contacts where vendor_id = vendor.id (entity GET _vendor_contacts). */
-type VendorDrawerContact = { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; vendor_contact_role: string | null };
 /** Vendor drawer: job row (entity GET _vendor_jobs). */
 type VendorDrawerJob = { id: string; title: string; scheduled_at: string; job_status_id: string; gross_price_cents: number; recurring_total_cents: number; opportunity_id: string };
 
@@ -347,6 +346,33 @@ function JobDrawerRelationshipsSection(props: {
             {p.jobExpandedSections.relationships && (
                 <div className="space-y-3 pb-3">
                     <div>
+                        <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select value={p.jobAssignedVendorId ?? ""} onChange={(e) => p.setJobAssignedVendorId(e.target.value || null)} className="px-2 py-1.5 border rounded text-sm min-w-[140px]">
+                                <option value="">(none)</option>
+                                {p.jobVendorOptions.map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                        {v.name ?? v.id}
+                                    </option>
+                                ))}
+                            </select>
+                            {p.jobAssignedVendorId ? (
+                                <button type="button" onClick={() => p.openDrawer({ type: "vendors", id: p.jobAssignedVendorId as string })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">
+                                    Open
+                                </button>
+                            ) : null}
+                            <button type="button" disabled={p.jobAssignedVendorSaving} onClick={p.saveJobAssignedVendor} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">
+                                {p.jobAssignedVendorSaving ? "Saving…" : "Save"}
+                            </button>
+                        </div>
+                        {p.canMutate && (
+                            <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
+                                <input type="checkbox" checked={p.applyVendorToUpcoming} onChange={(e) => p.setApplyVendorToUpcoming(e.target.checked)} />
+                                Apply to all upcoming schedules
+                            </label>
+                        )}
+                    </div>
+                    <div>
                         <label className="block text-sm text-alloy-midnight/70 mb-0.5">{p.customerSingular}</label>
                         <div className="flex gap-2 items-center flex-wrap">
                             <select value={String(p.formData.customer_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, customer_id: e.target.value, primary_contact_id: "", opportunity_id: "" }))} disabled={!p.canMutate} className="flex-1 min-w-[140px] px-2 py-1.5 border rounded text-sm disabled:opacity-60">
@@ -383,18 +409,6 @@ function JobDrawerRelationshipsSection(props: {
                             </select>
                             {String(p.formData.opportunity_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "opportunities", id: String(p.formData.opportunity_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
                         </div>
-                    </div>
-                    <div>
-                        <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <select value={p.jobAssignedVendorId ?? ""} onChange={(e) => p.setJobAssignedVendorId(e.target.value || null)} className="px-2 py-1.5 border rounded text-sm min-w-[140px]">
-                                <option value="">(none)</option>
-                                {p.jobVendorOptions.map((v) => <option key={v.id} value={v.id}>{v.name ?? v.id}</option>)}
-                            </select>
-                            {p.jobAssignedVendorId ? <button type="button" onClick={() => p.openDrawer({ type: "vendors", id: p.jobAssignedVendorId as string })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
-                            <button type="button" disabled={p.jobAssignedVendorSaving} onClick={p.saveJobAssignedVendor} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{p.jobAssignedVendorSaving ? "Saving…" : "Save"}</button>
-                        </div>
-                        {p.canMutate && <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70"><input type="checkbox" checked={p.applyVendorToUpcoming} onChange={(e) => p.setApplyVendorToUpcoming(e.target.checked)} />Apply to all upcoming schedules</label>}
                     </div>
                 </div>
             )}
@@ -488,12 +502,13 @@ export default function AdminEntityDrawer() {
     const [scheduleRescheduleSaving, setScheduleRescheduleSaving] = useState(false);
     const [jobVendorsForAssign, setJobVendorsForAssign] = useState<{ id: string; name: string }[]>([]);
     const [jobVendorOptions, setJobVendorOptions] = useState<{ id: string; name: string }[]>([]);
+    const [vendorPrimaryPersonOptions, setVendorPrimaryPersonOptions] = useState<{ value: string; label: string }[]>([]);
     const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
     const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
-    const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>({ relationships: true, financials: true, scheduling: true, ledger: true });
+    const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>({ relationships: true, financials: false, scheduling: false, ledger: false });
     const [jobDiscountOptions, setJobDiscountOptions] = useState<JobDiscountOptionDto[]>([]);
     const [scheduleCreateForm, setScheduleCreateForm] = useState<{ start_at: string; end_at: string; timezone: string }>({ start_at: "", end_at: "", timezone: "" });
     const [scheduleCreateSaving, setScheduleCreateSaving] = useState(false);
@@ -629,11 +644,12 @@ export default function AdminEntityDrawer() {
     const [redemptionRelatedData, setRedemptionRelatedData] = useState<DiscountRedemptionRelatedPayload | null>(null);
     const [redemptionRelatedLoading, setRedemptionRelatedLoading] = useState(false);
     type VendorRelatedPayload = {
-        jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null }[];
-        schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string }[];
-        contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null; _role?: string | null; _is_primary?: boolean }[];
+        people: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; _is_primary?: boolean }[];
+        jobs: { id: string; created_at?: string; title?: string | null; scheduled_at?: string | null; job_status_id?: string | null; gross_price_cents?: number | null; recurring_total_cents?: number | null; opportunity_id?: string }[];
+        schedules: { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string; status_key?: string | null; price_cents?: number | null }[];
         assignments: { id: string; schedule_id?: string; vendor_id?: string; assignment_status_id?: string | null; created_at?: string }[];
         documents: { id: string; name?: string | null; original_filename?: string | null; document_type?: string | null; status?: string | null; uploaded_at?: string | null; created_at?: string }[];
+        financials_summary?: { job_count: number; total_gross_cents: number };
     };
     const [vendorRelatedData, setVendorRelatedData] = useState<VendorRelatedPayload | null>(null);
     const [vendorRelatedLoading, setVendorRelatedLoading] = useState(false);
@@ -856,7 +872,7 @@ export default function AdminEntityDrawer() {
             setVendorRelatedData(null);
             return;
         }
-        if ((drawerTab === "related" || drawerTab === "documents") && !vendorRelatedData) {
+        if ((drawerTab === "related" || drawerTab === "documents" || drawerTab === "financials") && !vendorRelatedData) {
             setVendorRelatedLoading(true);
             fetch(`/api/admin/related/vendor/${drawer.id}`)
                 .then((r) => (r.ok ? r.json() : null))
@@ -1081,6 +1097,25 @@ export default function AdminEntityDrawer() {
             .catch(() => setJobVendorOptions([]));
     }, [drawer.type, drawer.id]);
 
+    useEffect(() => {
+        if (drawer.type !== "vendors" || !drawer.id || drawer.id === "new") {
+            setVendorPrimaryPersonOptions([]);
+            return;
+        }
+        fetch("/api/admin/persons?limit=500")
+            .then((r) => (r.ok ? r.json() : { persons: [] }))
+            .then((j: { persons?: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; _person_name?: string | null }[] }) => {
+                const persons = j.persons ?? [];
+                setVendorPrimaryPersonOptions(
+                    persons.map((p) => ({
+                        value: p.id,
+                        label: (p._person_name?.trim() || [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email || p.id.slice(0, 8)).trim(),
+                    }))
+                );
+            })
+            .catch(() => setVendorPrimaryPersonOptions([]));
+    }, [drawer.type, drawer.id]);
+
     const refetchJobRelatedData = useCallback(() => {
         if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
         setJobRelatedLoading(true);
@@ -1133,6 +1168,14 @@ export default function AdminEntityDrawer() {
             setJobAssignedVendorId(null);
         }
     }, [drawer.type, data]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs") return;
+        const raw = formData.assigned_vendor_id;
+        if (raw === undefined) return;
+        const s = typeof raw === "string" ? raw.trim() : "";
+        setJobAssignedVendorId(s ? s : null);
+    }, [drawer.type, formData.assigned_vendor_id]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities") {
@@ -1600,6 +1643,7 @@ export default function AdminEntityDrawer() {
             };
             const vendorForm: VendorFormData = {
                 vendor_status_id: vendorData.vendor_status_id ?? "",
+                primary_person_id: (vendorData as { primary_person_id?: string | null }).primary_person_id ?? "",
                 status_key: (data.status_key ?? (data as { status?: string | null }).status) as string ?? "",
                 name: vendorData.name ?? "",
                 company_name: vendorData.company_name ?? "",
@@ -1989,8 +2033,10 @@ export default function AdminEntityDrawer() {
             const custDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
             for (const d of custDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
         } else if (drawer.type === "vendors") {
-            const v = data as { name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null; external_source?: string | null; external_id?: string | null; w9_received?: boolean | null; ach_verified?: boolean | null; consent_contractor_agreement?: boolean | null; consent_legal?: boolean | null; consent_marketing?: boolean | null; payout_override_type?: string | null; payout_override_value?: number | null };
+            const v = data as { vendor_status_id?: string | null; primary_person_id?: string | null; name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null; external_source?: string | null; external_id?: string | null; w9_received?: boolean | null; ach_verified?: boolean | null; consent_contractor_agreement?: boolean | null; consent_legal?: boolean | null; consent_marketing?: boolean | null; payout_override_type?: string | null; payout_override_value?: number | null };
             initial = {
+                vendor_status_id: v.vendor_status_id ?? "",
+                primary_person_id: v.primary_person_id ?? "",
                 status_key: ((data.status_key ?? (data as { status?: string | null }).status) as string) ?? "",
                 name: v.name ?? "",
                 company_name: v.company_name ?? "",
@@ -2397,6 +2443,7 @@ export default function AdminEntityDrawer() {
             }
             if (drawer.type === "vendors") {
                 if (payload.vendor_status_id === "" || payload.vendor_status_id === undefined) payload.vendor_status_id = null;
+                if (payload.primary_person_id === "" || payload.primary_person_id === undefined) payload.primary_person_id = null;
                 if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
                 const daysStr = payload.days_available as string | undefined;
                 payload.days_available = daysStr ? String(daysStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
@@ -2575,7 +2622,7 @@ export default function AdminEntityDrawer() {
                             : drawer.type === "schedules"
                                 ? (data as { _create?: boolean })._create
                                     ? `New ${scheduleSingular}`
-                                    : `${scheduleSingular}: ${drawer.id ?? ""}`
+                                    : `${scheduleSingular}: ${String((data as { _schedule_display_title?: string })._schedule_display_title ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`
                                 : drawer.type === "locations"
                                     ? (data as { _create?: boolean })._create
                                         ? "New Location"
@@ -2589,7 +2636,7 @@ export default function AdminEntityDrawer() {
                                             : drawer.type === "vendors"
                                                 ? (data as { _create?: boolean })._create
                                                     ? `New ${vendorSingular}`
-                                                    : `${vendorSingular}: ${(data.name as string) || (drawer.id ?? "")}`
+                                                    : `${vendorSingular}: ${String((data.company_name as string) ?? "").trim() || (data.name as string) || (drawer.id ?? "")}`
                                                 : drawer.type === "payments"
                                                     ? `Payment: ${(data._payment_label as string) || ("Payment #" + (drawer.id ?? "").slice(-6))}`
                                                     : drawer.type === "service_offerings"
@@ -3129,8 +3176,59 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "vendors" && drawer.id && drawer.id !== "new") {
+            const vid = String(drawer.id);
+            const d = data as Record<string, unknown>;
+            const insurancePath = typeof d.insurance_doc_path === "string" ? d.insurance_doc_path : null;
+            const driversLicensePath = typeof d.drivers_license_doc_path === "string" ? d.drivers_license_doc_path : null;
+            return {
+                compliance_quick_links: (
+                    <div className="space-y-3">
+                        <p className="text-xs text-alloy-midnight/60 -mt-1">Quick access to onboarding compliance files. See the Documents tab for the full list.</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-alloy-midnight/70 text-sm shrink-0">Insurance</span>
+                            {insurancePath ? (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const res = await fetch(`/api/admin/vendors/${vid}/documents/signed-url?path=${encodeURIComponent(insurancePath)}`);
+                                        const json = await res.json().catch(() => ({}));
+                                        if ((json as { ok?: boolean }).ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank");
+                                        else alert((json as { error?: string }).error || "Failed to open file");
+                                    }}
+                                    className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-stone/20"
+                                >
+                                    View
+                                </button>
+                            ) : (
+                                <span className="text-sm text-alloy-midnight/50">Not on file</span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-alloy-midnight/70 text-sm shrink-0">Driver&apos;s license</span>
+                            {driversLicensePath ? (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const res = await fetch(`/api/admin/vendors/${vid}/documents/signed-url?path=${encodeURIComponent(driversLicensePath)}`);
+                                        const json = await res.json().catch(() => ({}));
+                                        if ((json as { ok?: boolean }).ok && (json as { signedUrl?: string }).signedUrl) window.open((json as { signedUrl: string }).signedUrl, "_blank");
+                                        else alert((json as { error?: string }).error || "Failed to open file");
+                                    }}
+                                    className="text-xs px-2 py-1 border border-alloy-blue/50 rounded text-alloy-blue hover:bg-alloy-stone/20"
+                                >
+                                    View
+                                </button>
+                            ) : (
+                                <span className="text-sm text-alloy-midnight/50">Not on file</span>
+                            )}
+                        </div>
+                    </div>
+                ),
+            };
+        }
         return {};
-    }, [drawer.type, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing]);
+    }, [drawer.type, drawer.id, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!data || (data as { _create?: boolean })._create) return [];
@@ -3199,7 +3297,7 @@ export default function AdminEntityDrawer() {
             append.push({
                 key: "relationships",
                 title: "Relationships",
-                defaultExpanded: true,
+                defaultExpanded: false,
                 collapsible: true,
                 gridCols: 1 as const,
                 fields: [],
@@ -3208,13 +3306,13 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
             const loc = data as { customer_id?: string | null };
             if (!keys.has("customer") && loc.customer_id) {
-                append.push({ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1 as const, fields: [] });
+                append.push({ key: "customer", title: "Customer", defaultExpanded: false, collapsible: true, gridCols: 1 as const, fields: [] });
             }
             if (!keys.has("relationships")) {
                 append.push({
                     key: "relationships",
                     title: "Relationships",
-                    defaultExpanded: true,
+                    defaultExpanded: false,
                     collapsible: true,
                     gridCols: 1 as const,
                     fields: [],
@@ -3225,32 +3323,63 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, data]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
-        if (drawer.type !== "opportunities" || !data) return {};
-        const d = data as Record<string, unknown>;
-        const stageOpts: { value: string; label: string }[] = [];
-        pipelines.forEach((p) => {
-            stages
-                .filter((s) => s.pipeline_id === p.id)
-                .sort((a, b) => a.position - b.position)
-                .forEach((s) => stageOpts.push({ value: s.id, label: `${p.name}: ${s.name}` }));
-        });
-        const sid = String(d.pipeline_stage_id ?? "");
-        if (sid && !stageOpts.some((o) => o.value === sid)) {
-            const nm = String(d._pipeline_stage_name ?? "").trim();
-            stageOpts.push({ value: sid, label: nm || `${sid.slice(0, 8)}…` });
+        const out: Record<string, { value: string; label: string }[]> = {};
+        if (drawer.type === "opportunities" && data) {
+            const d = data as Record<string, unknown>;
+            const stageOpts: { value: string; label: string }[] = [];
+            pipelines.forEach((p) => {
+                stages
+                    .filter((s) => s.pipeline_id === p.id)
+                    .sort((a, b) => a.position - b.position)
+                    .forEach((s) => stageOpts.push({ value: s.id, label: `${p.name}: ${s.name}` }));
+            });
+            const sid = String(d.pipeline_stage_id ?? "");
+            if (sid && !stageOpts.some((o) => o.value === sid)) {
+                const nm = String(d._pipeline_stage_name ?? "").trim();
+                stageOpts.push({ value: sid, label: nm || `${sid.slice(0, 8)}…` });
+            }
+            const vertOpts = [...oppVerticalOptions.map((v) => ({ value: v.id, label: v.name }))];
+            const vid = String(d.vertical_id ?? "");
+            if (vid && !vertOpts.some((o) => o.value === vid)) {
+                const nm = String(d._vertical_name ?? "").trim();
+                vertOpts.push({ value: vid, label: nm || `${vid.slice(0, 8)}…` });
+            }
+            out.pipeline_stage_id = stageOpts;
+            out.vertical_id = vertOpts;
+            Object.assign(out, oppRefFieldSelectOptions);
         }
-        const vertOpts = [...oppVerticalOptions.map((v) => ({ value: v.id, label: v.name }))];
-        const vid = String(d.vertical_id ?? "");
-        if (vid && !vertOpts.some((o) => o.value === vid)) {
-            const nm = String(d._vertical_name ?? "").trim();
-            vertOpts.push({ value: vid, label: nm || `${vid.slice(0, 8)}…` });
+        if (drawer.type === "jobs" && data) {
+            const vendorOpts = jobVendorOptions.map((v) => ({ value: v.id, label: v.name ?? v.id }));
+            const aid = String((data as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? "");
+            if (aid && !vendorOpts.some((o) => o.value === aid)) {
+                const nm = String((data as { _vendor_name?: string | null })._vendor_name ?? "").trim();
+                vendorOpts.push({ value: aid, label: nm || `${aid.slice(0, 8)}…` });
+            }
+            out.assigned_vendor_id = vendorOpts;
         }
-        return {
-            pipeline_stage_id: stageOpts,
-            vertical_id: vertOpts,
-            ...oppRefFieldSelectOptions,
-        };
-    }, [drawer.type, data, pipelines, stages, oppVerticalOptions, oppRefFieldSelectOptions]);
+        if (drawer.type === "vendors" && data) {
+            const d = data as {
+                _vendor_status_options?: { id: string; key: string; label: string | null }[];
+                vendor_status_id?: string | null;
+                _vendor_status_label?: string | null;
+                primary_person_id?: string | null;
+                _primary_person_name?: string | null;
+            };
+            const stOpts = (d._vendor_status_options ?? []).map((o) => ({ value: o.id, label: o.label ?? o.key }));
+            const vsid = String(d.vendor_status_id ?? "");
+            if (vsid && !stOpts.some((o) => o.value === vsid)) {
+                stOpts.push({ value: vsid, label: String(d._vendor_status_label ?? "").trim() || `${vsid.slice(0, 8)}…` });
+            }
+            out.vendor_status_id = stOpts;
+            const pOpts = [...vendorPrimaryPersonOptions];
+            const pid = String(d.primary_person_id ?? "");
+            if (pid && !pOpts.some((o) => o.value === pid)) {
+                pOpts.push({ value: pid, label: String(d._primary_person_name ?? "").trim() || `${pid.slice(0, 8)}…` });
+            }
+            out.primary_person_id = pOpts;
+        }
+        return out;
+    }, [drawer.type, data, pipelines, stages, oppVerticalOptions, oppRefFieldSelectOptions, jobVendorOptions, vendorPrimaryPersonOptions]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -3259,6 +3388,8 @@ export default function AdminEntityDrawer() {
             <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
         ) : drawer.type === "schedules" && data?.status_key ? (
             <StatusBadge label={getStatusLabel(data.status_key as string) ?? (data.status_key as string)} variant="default" />
+        ) : drawer.type === "vendors" && (data as { _status_display?: string | null })._status_display ? (
+            <StatusBadge label={String((data as { _status_display: string })._status_display)} variant="default" />
         ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (data as { status_key?: string }).status_key ? (
             <StatusBadge label={getStatusLabel((data as { status_key: string }).status_key) ?? (data as { status_key: string }).status_key} variant="default" />
         ) : null
@@ -4066,14 +4197,53 @@ export default function AdminEntityDrawer() {
                                 <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
                             ) : vendorRelatedData ? (() => {
                                 const d = vendorRelatedData;
-                                const vendorId = drawer.id;
-                                type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string; isPrimary?: boolean }[]; addAction?: { label: string; onClick: () => void } };
+                                type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string; isPrimary?: boolean }[] };
+                                const peopleItems = (d.people ?? []).map((p) => ({
+                                    id: p.id,
+                                    entityType: "persons" as const,
+                                    label: [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || (p.email as string) || "Person",
+                                    meta: [p.email, p.phone].filter(Boolean).join(" · ") || undefined,
+                                    isPrimary: !!(p as { _is_primary?: boolean })._is_primary,
+                                }));
+                                const jobItems = (d.jobs ?? []).map((j) => ({
+                                    id: j.id,
+                                    entityType: "jobs" as const,
+                                    label: (j.title as string) || "Job",
+                                    meta: [
+                                        j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null,
+                                        j.gross_price_cents != null ? formatMoneyFromCents(j.gross_price_cents) : null,
+                                        j.created_at ? formatDate(j.created_at as string) : null,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" · ") || undefined,
+                                }));
+                                const schedItems = (d.schedules ?? []).map((s) => ({
+                                    id: s.id,
+                                    entityType: "schedules" as const,
+                                    label: s.start_at ? formatDateTime(String(s.start_at)) : "Visit",
+                                    meta: [s.end_at ? formatDateTime(String(s.end_at)) : null, s.status_key ? String(s.status_key) : null, s.price_cents != null ? formatMoneyFromCents(s.price_cents) : null]
+                                        .filter(Boolean)
+                                        .join(" · ") || undefined,
+                                }));
+                                const fin = d.financials_summary;
+                                const finItems =
+                                    fin && (fin.job_count > 0 || fin.total_gross_cents > 0)
+                                        ? [
+                                              {
+                                                  id: "financials-summary",
+                                                  label: `Assigned jobs (in scope): ${fin.job_count}`,
+                                                  meta: `Total gross (summed): ${formatMoneyFromCents(fin.total_gross_cents)}`,
+                                              },
+                                          ]
+                                        : [];
                                 const sections: Sec[] = [
-                                    { key: "contacts", title: "Contacts", defaultExpanded: true, items: (d.contacts ?? []).map((c) => ({ id: c.id, entityType: "contacts" as const, label: [c.first_name, c.last_name].filter(Boolean).join(" ") || (c.email as string) || "Contact", meta: [c.email, c.phone].filter(Boolean).join(" · ") || (c.status_key as string) || undefined, isPrimary: !!(c as { _is_primary?: boolean })._is_primary })), addAction: { label: "Add Contact", onClick: () => openDrawer({ type: "contacts", id: "new", defaultVendorId: vendorId }) } },
-                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.job_status_id ? "Job" : null, j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
-                                    { key: "assignments", title: "Assignments", defaultExpanded: false, items: (d.assignments ?? []).map((a) => ({ id: a.id, label: `Assignment`, meta: a.created_at ? formatDateTime(a.created_at as string) : undefined })) },
+                                    { key: "people", title: "People", defaultExpanded: true, items: peopleItems },
+                                    { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems },
+                                    { key: "schedules", title: "Schedules", defaultExpanded: false, items: schedItems },
+                                    { key: "financials", title: "Financials (summary)", defaultExpanded: false, items: finItems },
+                                    { key: "assignments", title: "Assignments", defaultExpanded: false, items: (d.assignments ?? []).map((a) => ({ id: a.id, label: "Assignment", meta: a.created_at ? formatDateTime(a.created_at as string) : undefined })) },
                                 ];
-                                const visible = sections.filter((s) => s.items.length > 0 || s.addAction);
+                                const visible = sections.filter((s) => s.items.length > 0);
                                 if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
                                 return (
                                     <>
@@ -4090,40 +4260,30 @@ export default function AdminEntityDrawer() {
                                                 }}
                                                 defaultExpanded={sec.defaultExpanded}
                                             >
-                                                {sec.items.length > 0 ? (
-                                                    <div className="flex flex-col gap-2">
-                                                        {sec.addAction && (
-                                                            <div className="flex justify-end">
-                                                                <button type="button" onClick={sec.addAction.onClick} className="px-2 py-1 text-xs border border-alloy-stone/50 rounded hover:bg-alloy-stone/20 text-alloy-midnight">{sec.addAction.label}</button>
-                                                            </div>
-                                                        )}
-                                                        <ul className="space-y-0 list-none p-0 m-0">
-                                                            {sec.items.map((item) => (
-                                                                <li key={item.id}>
-                                                                    {item.entityType ? (
-                                                                        <button type="button" onClick={() => openDrawer({ type: item.entityType!, id: item.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
-                                                                            <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
-                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                            {(item as { isPrimary?: boolean }).isPrimary && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
-                                                                        </button>
-                                                                    ) : (
-                                                                        <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
-                                                                            <div className="font-medium">{item.label}</div>
-                                                                            {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
-                                                                        </div>
-                                                                    )}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                ) : sec.addAction ? (
-                                                    <div className="py-3 flex flex-col gap-2">
-                                                        <p className="text-sm text-alloy-midnight/60">No contacts yet.</p>
-                                                        <button type="button" onClick={sec.addAction.onClick} className="self-start px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{sec.addAction.label}</button>
-                                                    </div>
-                                                ) : (
-                                                    <ul className="space-y-0 list-none p-0 m-0" />
-                                                )}
+                                                <div className="flex flex-col gap-2">
+                                                    <ul className="space-y-0 list-none p-0 m-0">
+                                                        {sec.items.map((item) => (
+                                                            <li key={item.id}>
+                                                                {item.entityType ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openDrawer({ type: item.entityType!, id: item.id })}
+                                                                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent"
+                                                                    >
+                                                                        <div className="font-medium text-alloy-forge/90 text-sm">{item.label}</div>
+                                                                        {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                        {(item as { isPrimary?: boolean }).isPrimary && <span className="text-xs text-alloy-blue mt-0.5">Primary</span>}
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
+                                                                        <div className="font-medium">{item.label}</div>
+                                                                        {item.meta && <div className="text-xs text-alloy-muted mt-0.5">{item.meta}</div>}
+                                                                    </div>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
                                             </EntityDrawerSection>
                                         ))}
                                     </>
@@ -4505,7 +4665,27 @@ export default function AdminEntityDrawer() {
                             {!scheduleFinancialsLoading && !scheduleFinancials && <p className="text-sm text-alloy-midnight/50">Could not load financials.</p>}
                         </div>
                     )}
-                    {drawerTab === "financials" && ["vendors", "opportunities", "customers"].includes(drawer.type) && (
+                    {drawerTab === "financials" && drawer.type === "vendors" && drawer.id && drawer.id !== "new" && (
+                        <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Financials</h3>
+                            {vendorRelatedLoading ? (
+                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : vendorRelatedData?.financials_summary ? (
+                                <div className="space-y-2 text-sm text-alloy-midnight/80">
+                                    <p>
+                                        Assigned jobs (in related-data scope): <strong>{vendorRelatedData.financials_summary.job_count}</strong>
+                                    </p>
+                                    <p>
+                                        Gross total (summed from those jobs): <strong>{formatMoneyFromCents(vendorRelatedData.financials_summary.total_gross_cents)}</strong>
+                                    </p>
+                                    <p className="text-xs text-alloy-midnight/50">Figures mirror the Related tab job list (API-capped). Open individual jobs for full pricing and ledger context.</p>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-alloy-midnight/60">No financial summary available.</p>
+                            )}
+                        </div>
+                    )}
+                    {drawerTab === "financials" && (drawer.type === "opportunities" || drawer.type === "customers") && (
                         <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Financials</h3>
                             <p className="text-sm text-alloy-midnight/60">Financial details for {drawer.type} are available in the Financials section of the admin.</p>
@@ -5124,17 +5304,47 @@ export default function AdminEntityDrawer() {
                                                 <div className="space-y-4">
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} placeholder="Optional" /></div>
-                                                        {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
-                                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                                    )}
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
+                                                        <select
+                                                            value={String((formData as VendorFormData).vendor_status_id ?? "")}
+                                                            onChange={(e) => {
+                                                                const vid = e.target.value;
+                                                                const opts = (data as { _vendor_status_options?: { id: string; key: string }[] })._vendor_status_options ?? [];
+                                                                const opt = opts.find((o) => o.id === vid);
+                                                                setFormData((f) => ({ ...f, vendor_status_id: vid || "", status_key: opt?.key ?? "" }));
+                                                            }}
+                                                            onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }}
+                                                            disabled={!canMutate}
+                                                            className={INLINE_EDIT_INPUT_CLASS}
+                                                        >
+                                                            <option value="">— None —</option>
+                                                            {((data as { _vendor_status_options?: { id: string; label?: string | null; key: string }[] })._vendor_status_options ?? []).map((o) => (
+                                                                <option key={o.id} value={o.id}>{o.label ?? o.key}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Primary person</label>
+                                                        <select
+                                                            value={String((formData as VendorFormData).primary_person_id ?? "")}
+                                                            onChange={(e) => setFormData((f) => ({ ...f, primary_person_id: e.target.value || "" }))}
+                                                            onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }}
+                                                            disabled={!canMutate}
+                                                            className={INLINE_EDIT_INPUT_CLASS}
+                                                        >
+                                                            <option value="">— None —</option>
+                                                            {vendorPrimaryPersonOptions.map((o) => (
+                                                                <option key={o.value} value={o.value}>{o.label}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Email</label><input type="email" value={String(formData.email ?? "")} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Phone</label><input value={String(formData.phone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                 </div>
-                                                        <DrawerLinkWithName label="Person" id={data?._primary_person_id != null ? String(data._primary_person_id) : null} type="persons" displayName={String(data?._primary_person_name ?? "")} />
-                                                        <DrawerLinkWithName label="Contact (compatibility)" id={data?.primary_contact_id != null ? String(data.primary_contact_id) : null} type="contacts" displayName={data._primary_contact ? [((data._primary_contact as { first_name?: string }).first_name), ((data._primary_contact as { last_name?: string }).last_name)].filter(Boolean).join(" ") : null} />
                                             </div>
                                         </details>
-                                        <details className="border-b border-[#e6e8ec] pb-5 pt-4" open>
+                                        <details className="border-b border-[#e6e8ec] pb-5 pt-4">
                                             <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Payout</summary>
                                             <div className="space-y-2">
                                                 {vendorPayoutLoading ? (
@@ -5309,25 +5519,6 @@ export default function AdminEntityDrawer() {
                                                     })}
                                                 </ul>
                                             )}
-                                        </details>
-                                        <details className="pt-4 border-b border-[#e6e8ec] pb-4">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">
-                                                Contacts ({((data._vendor_contacts as VendorDrawerContact[]) ?? []).length})
-                                            </summary>
-                                            <ul className="space-y-1 mt-2">
-                                                {((data._vendor_contacts as VendorDrawerContact[]) ?? []).length === 0 ? (
-                                                    <li className="text-sm text-alloy-midnight/60">No contacts linked (contacts are linked via contact’s vendor_id).</li>
-                                                ) : (
-                                                    ((data._vendor_contacts as VendorDrawerContact[]) ?? []).map((c) => (
-                                                        <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-                                                            <button type="button" onClick={() => openDrawer({ type: "contacts", id: c.id })} className="text-alloy-blue hover:underline text-left">{[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email || c.id.slice(0, 8)}</button>
-                                                            <span className="text-alloy-midnight/50 text-xs">{c.email ?? ""}</span>
-                                                            <span className="text-alloy-midnight/50 text-xs">{c.phone ?? ""}</span>
-                                                            {c.vendor_contact_role && <span className="text-alloy-midnight/50 text-xs">({c.vendor_contact_role})</span>}
-                                                        </li>
-                                                    ))
-                                                )}
-                                            </ul>
                                         </details>
                                         <details className="pt-4 pb-2">
                                             <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Operational / Settings</summary>

@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
 
     const first_name = getStr(form, "first_name");
     const last_name = getStr(form, "last_name");
+    const company_name = getStr(form, "company_name");
     const email = getStr(form, "email");
     const phone = getStr(form, "phone");
     const address_line1 = getStr(form, "address_line1");
@@ -140,6 +141,7 @@ export async function POST(request: NextRequest) {
     const vendorPayload: Record<string, unknown> = {
       org_id: orgId,
       name: vendorName,
+      company_name: company_name || null,
       vendor_status_id: vendorStatusId,
       email,
       phone,

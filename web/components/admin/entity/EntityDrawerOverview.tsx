@@ -199,6 +199,8 @@ function renderFieldEditNode(
     "pipeline_stage_id",
     "vertical_id",
     "primary_person_id",
+    "vendor_status_id",
+    "assigned_vendor_id",
     "location_id",
     "primary_contact_id",
     "customer_id",
@@ -300,6 +302,8 @@ export default function EntityDrawerOverview({
               const key = field.key;
               const displayFallback =
                 key === "status_key" && record._status_display != null ? record._status_display
+                : key === "vendor_status_id" && record._status_display != null ? record._status_display
+                : key === "assigned_vendor_id" && record._vendor_name != null ? record._vendor_name
                 : key === "pipeline_stage_id" && record._pipeline_stage_name != null ? record._pipeline_stage_name
                 : key === "vertical_id" && record._vertical_name != null ? record._vertical_name
                 : key === "location_id" && record._location_name != null ? record._location_name

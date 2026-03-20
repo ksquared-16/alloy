@@ -516,6 +516,22 @@ export async function GET(
                 out._location_label = null;
                 out._location = null;
             }
+            const sched = schedule as { start_at?: string | null; end_at?: string | null };
+            const jobRef = out._job as { title?: string | null } | null;
+            const vertRef = out._vertical as { name?: string | null } | null;
+            const jobTitle = jobRef?.title?.trim() || null;
+            const vertName = vertRef?.name?.trim() || null;
+            const startRaw = sched.start_at ? String(sched.start_at) : "";
+            const endRaw = sched.end_at ? String(sched.end_at) : "";
+            const timePart =
+                startRaw && endRaw
+                    ? `${startRaw.slice(0, 10)} ${startRaw.slice(11, 16)}–${endRaw.slice(11, 16)}`
+                    : startRaw
+                      ? `${startRaw.slice(0, 10)} ${startRaw.slice(11, 16)}`
+                      : null;
+            const titleParts = [jobTitle, vertName, timePart].filter(Boolean) as string[];
+            out._schedule_display_title = titleParts.length > 0 ? titleParts.join(" · ") : "Schedule";
+
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             return NextResponse.json(out);
         }
@@ -659,8 +675,6 @@ export async function GET(
                 primary_person_id?: string | null;
             };
             const out: Record<string, unknown> = { ...vendor };
-            out._status_display = v.status_key ?? v.status ?? null;
-
             const statusId = (vendor as { vendor_status_id?: string }).vendor_status_id;
             if (statusId) {
                 const { data: statusRow } = await supabase.from("vendor_statuses").select("key, label").eq("id", statusId).single();
@@ -668,6 +682,7 @@ export async function GET(
             } else {
                 out._vendor_status_label = null;
             }
+            out._status_display = (out._vendor_status_label as string | null) ?? v.status_key ?? v.status ?? null;
             const { data: statusOptions } = await supabase.from("vendor_statuses").select("id, key, label").eq("is_active", true).order("position", { ascending: true });
             out._vendor_status_options = statusOptions ?? [];
 
@@ -743,18 +758,6 @@ export async function GET(
                     .order("start_at", { ascending: false })
                 : { data: [] as unknown[] };
             out._vendor_schedules = vendorSchedules ?? [];
-
-            const { data: vcRows } = await supabase.from("vendor_contacts").select("contact_id, role").eq("vendor_id", id);
-            const contactIds = (vcRows ?? []).map((r: { contact_id: string }) => r.contact_id);
-            const { data: vendorContactsData } = contactIds.length > 0
-                ? await supabase.from("contacts").select("id, first_name, last_name, email, phone").in("id", contactIds)
-                : { data: [] as unknown[] };
-            type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
-            const contactsWithRole = ((vendorContactsData ?? []) as ContactRow[]).map((c) => {
-                const link = (vcRows ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
-                return { ...c, _role: link?.role ?? null };
-            });
-            out._vendor_contacts = contactsWithRole;
 
             await attachFieldDefinitionsAndValues(supabase, out, "vendors", id);
             return NextResponse.json(out);

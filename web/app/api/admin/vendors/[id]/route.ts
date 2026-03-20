@@ -7,6 +7,7 @@ import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth"
 const ALLOWED_KEYS = [
     "vendor_status_id",
     "status_key",
+    "primary_person_id",
     "name",
     "company_name",
     "phone",
@@ -56,7 +57,7 @@ export async function PATCH(
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
             const raw = body[key];
-            if (key === "vendor_status_id") {
+            if (key === "vendor_status_id" || key === "primary_person_id") {
                 updates[key] = raw === "" || raw === null ? null : raw;
             } else if (key === "status_key") {
                 updates[key] = raw === "" || raw === null ? null : (typeof raw === "string" ? raw.trim() : raw);
@@ -78,6 +79,16 @@ export async function PATCH(
         }
 
         const supabase = createAdminClient();
+
+        if (updates.vendor_status_id !== undefined) {
+            const newVid = updates.vendor_status_id as string | null;
+            if (newVid) {
+                const { data: stRow } = await supabase.from("vendor_statuses").select("key").eq("id", newVid).maybeSingle();
+                updates.status_key = (stRow as { key?: string } | null)?.key ?? null;
+            } else {
+                updates.status_key = null;
+            }
+        }
         const { data: existing } = await supabase
             .from("vendors")
             .select("org_id, status_key")

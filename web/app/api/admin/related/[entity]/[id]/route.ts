@@ -253,10 +253,31 @@ export async function GET(
         }
 
         if (entity === "vendor") {
-            const [jobsRes, vcRes, assignmentsRes, documentsRes] = await Promise.all([
-                supabase.from("jobs").select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id").eq("assigned_vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
-                supabase.from("vendor_contacts").select("id, contact_id, role").eq("vendor_id", id),
-                supabase.from("assignments").select("id, schedule_id, vendor_id, assignment_status_id, created_at").eq("vendor_id", id).order("created_at", { ascending: false }).limit(LIMIT),
+            const { data: vendorRow } = await supabase.from("vendors").select("primary_person_id").eq("id", id).eq("org_id", ctx.orgId).maybeSingle();
+            const primaryPersonId = (vendorRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null;
+            let people: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; _is_primary?: boolean }[] = [];
+            if (primaryPersonId) {
+                const { data: p } = await supabase
+                    .from("persons")
+                    .select("id, first_name, last_name, email, phone")
+                    .eq("id", primaryPersonId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (p) people = [{ ...(p as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }), _is_primary: true }];
+            }
+            const [jobsRes, assignmentsRes, documentsRes] = await Promise.all([
+                supabase
+                    .from("jobs")
+                    .select("id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id")
+                    .eq("assigned_vendor_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT),
+                supabase
+                    .from("assignments")
+                    .select("id, schedule_id, vendor_id, assignment_status_id, created_at")
+                    .eq("vendor_id", id)
+                    .order("created_at", { ascending: false })
+                    .limit(LIMIT),
                 supabase
                     .from("documents")
                     .select(DOC_SELECT)
@@ -267,26 +288,27 @@ export async function GET(
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
-            const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
+            const jobs = (jobsRes.data ?? []) as { id: string; gross_price_cents?: number | null }[];
+            const jobIds = jobs.map((j) => j.id);
             const schedulesRes = jobIds.length > 0
-                ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false })
-                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
-            const contactIds = (vcRes.data ?? []).map((r: { contact_id: string }) => r.contact_id);
-            const contactsRes = contactIds.length > 0
-                ? await supabase.from("contacts").select("id, first_name, last_name, email, phone, status_key").in("id", contactIds)
-                : { data: [] as { id: string; first_name: string; last_name: string; email: string; phone: string; status_key?: string }[] };
-            const primaryContactRes = await supabase.from("vendors").select("primary_contact_id").eq("id", id).maybeSingle();
-            const primaryContactId = (primaryContactRes.data as { primary_contact_id?: string } | null)?.primary_contact_id ?? null;
-            const contactsWithRole = (contactsRes.data ?? []).map((c) => {
-                const link = (vcRes.data ?? []).find((r: { contact_id: string }) => r.contact_id === c.id) as { role?: string } | undefined;
-                return { ...c, _role: link?.role ?? null, _is_primary: c.id === primaryContactId };
-            });
+                ? await supabase
+                    .from("schedules")
+                    .select("id, job_id, start_at, end_at, timezone, status_key, price_cents")
+                    .in("job_id", jobIds)
+                    .order("start_at", { ascending: false })
+                    .limit(LIMIT)
+                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string; status_key?: string | null; price_cents?: number | null }[] };
+            const totalGrossCents = jobs.reduce((acc, j) => acc + (typeof j.gross_price_cents === "number" ? j.gross_price_cents : 0), 0);
             return NextResponse.json({
+                people,
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
-                contacts: contactsWithRole,
                 assignments: assignmentsRes.data ?? [],
                 documents: normalizeDocumentRows(documentsRes.data ?? []),
+                financials_summary: {
+                    job_count: jobs.length,
+                    total_gross_cents: totalGrossCents,
+                },
             });
         }
 

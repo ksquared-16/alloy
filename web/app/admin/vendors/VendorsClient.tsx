@@ -113,7 +113,6 @@ export default function VendorsClient({
                     (row.name ?? "").toLowerCase().includes(q) ||
                     (row.company_name ?? "").toLowerCase().includes(q) ||
                     (row._primary_person_name ?? "").toLowerCase().includes(q) ||
-                    (row._primary_contact_name ?? "").toLowerCase().includes(q) ||
                     (row._vendor_email ?? "").toLowerCase().includes(q) ||
                     (row._vendor_phone ?? "").toLowerCase().includes(q)
             );
@@ -147,7 +146,7 @@ export default function VendorsClient({
                 <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
                     <div className="space-y-3">
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Search (name, company, contact, email, phone)</label>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Search (name, company, person, email, phone)</label>
                             <input
                                 type="text"
                                 placeholder="Search…"
