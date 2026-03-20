@@ -9,18 +9,29 @@ async function findExistingContact(
     params: { email: string | null; phone: string | null; org_id: string | null }
 ): Promise<{ id: string; customer_id?: string | null } | null> {
     const { email, phone, org_id } = params;
-    if (email && String(email).trim()) {
-        let q = supabase.from("contacts").select("id, customer_id").ilike("email", String(email).trim());
-        if (org_id) q = q.eq("org_id", org_id);
-        const { data: byEmail } = await q.limit(1).maybeSingle();
-        if (byEmail?.id) return { id: (byEmail as { id: string }).id, customer_id: (byEmail as { customer_id?: string | null }).customer_id };
-    }
-    if (phone && String(phone).trim()) {
-        let q = supabase.from("contacts").select("id, customer_id").eq("phone", String(phone).trim());
-        if (org_id) q = q.eq("org_id", org_id);
-        const { data: byPhone } = await q.limit(1).maybeSingle();
-        if (byPhone?.id) return { id: (byPhone as { id: string }).id, customer_id: (byPhone as { customer_id?: string | null }).customer_id };
-    }
+    const emailTrim = email && String(email).trim() ? String(email).trim() : null;
+    const phoneTrim = phone && String(phone).trim() ? String(phone).trim() : null;
+
+    const emailP =
+        emailTrim != null
+            ? (() => {
+                  let q = supabase.from("contacts").select("id, customer_id").ilike("email", emailTrim);
+                  if (org_id) q = q.eq("org_id", org_id);
+                  return q.limit(1).maybeSingle();
+              })()
+            : Promise.resolve({ data: null });
+    const phoneP =
+        phoneTrim != null
+            ? (() => {
+                  let q = supabase.from("contacts").select("id, customer_id").eq("phone", phoneTrim);
+                  if (org_id) q = q.eq("org_id", org_id);
+                  return q.limit(1).maybeSingle();
+              })()
+            : Promise.resolve({ data: null });
+
+    const [{ data: byEmail }, { data: byPhone }] = await Promise.all([emailP, phoneP]);
+    if (byEmail?.id) return { id: (byEmail as { id: string }).id, customer_id: (byEmail as { customer_id?: string | null }).customer_id };
+    if (byPhone?.id) return { id: (byPhone as { id: string }).id, customer_id: (byPhone as { customer_id?: string | null }).customer_id };
     return null;
 }
 
@@ -346,20 +357,29 @@ async function ensureCustomerForPerson(
  * Returns: { ok: true, contact_id: string, customer_id: string } for payment/Stripe use.
  */
 export async function POST(request: NextRequest) {
+    const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
         const body = await request.json().catch(() => ({}));
         const person_id = body.person_id;
         if (!person_id || typeof person_id !== "string" || !person_id.trim()) {
+            console.log(
+                `[BOOK_V2_PERF] ensure_customer total_ms=${Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0)} status=400 reason=missing_person_id`
+            );
             return NextResponse.json({ ok: false, message: "person_id is required" }, { status: 400 });
         }
         const supabase = createServiceRoleClient();
         const vertical = await supabase.from("verticals").select("id").eq("slug", "cleaning").eq("is_active", true).limit(1).maybeSingle();
         const verticalId = vertical.data?.id ?? null;
         if (!verticalId) {
+            console.log(
+                `[BOOK_V2_PERF] ensure_customer total_ms=${Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0)} status=500 reason=no_vertical`
+            );
             return NextResponse.json({ ok: false, message: "Vertical not found" }, { status: 500 });
         }
         const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
         const { customerId, contactId } = await ensureCustomerForPerson(supabase, person_id.trim(), { vertical_id: verticalId, org_id: orgId });
+        const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
+        console.log(`[BOOK_V2_PERF] ensure_customer total_ms=${durationMs} person_id=${String(person_id).slice(0, 8)}…`);
         return NextResponse.json({
             ok: true,
             contact_id: contactId,

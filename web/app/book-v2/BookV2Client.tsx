@@ -1579,6 +1579,10 @@ export default function BookV2Client() {
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const perfSubmitT0 = typeof performance !== "undefined" ? performance.now() : 0;
+        if (typeof performance !== "undefined") {
+            console.log("[BOOK_V2_PERF] client phase=submit_click_start");
+        }
 
         const phoneForConfirm = resolvedPhone?.trim();
         if (!phoneForConfirm) {
@@ -1599,7 +1603,19 @@ export default function BookV2Client() {
             console.log("[BOOK_V2] booking_attempt_id=", attemptId);
         }
 
+        const perfLog = (phase: string, since: number) => {
+            if (typeof performance === "undefined") return;
+            console.log(
+                `[BOOK_V2_PERF] client phase=${phase} duration_ms=${Math.round(performance.now() - since)} booking_attempt_id=${attemptId} cumulative_ms=${Math.round(performance.now() - perfSubmitT0)}`
+            );
+        };
+
         try {
+            if (typeof performance !== "undefined") {
+                console.log(
+                    `[BOOK_V2_PERF] client phase=submit_preflight_ok duration_ms=${Math.round(performance.now() - perfSubmitT0)} booking_attempt_id=${attemptId}`
+                );
+            }
             // Get quote subtotal
             const quoteSubtotal =
                 (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0)
@@ -1626,12 +1642,14 @@ export default function BookV2Client() {
             const setupPersonId = typeof window !== "undefined" ? localStorage.getItem("alloy_person_id") : null;
             if (setupPersonId && (!setupContactId || !setupCustomerId)) {
                 try {
+                    const tEnsure = typeof performance !== "undefined" ? performance.now() : 0;
                     const ensureRes = await fetch("/api/book-v2/ensure-customer", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ person_id: setupPersonId }),
                     });
                     const ensureData = await ensureRes.json();
+                    perfLog("ensure_customer", tEnsure);
                     if (ensureRes.ok && ensureData.ok && ensureData.contact_id && ensureData.customer_id) {
                         setupContactId = ensureData.contact_id;
                         setupCustomerId = ensureData.customer_id;
@@ -1682,7 +1700,9 @@ export default function BookV2Client() {
                 return secret;
             };
 
+            const tSetupIntent = typeof performance !== "undefined" ? performance.now() : 0;
             let client_secret = await createSetupIntentOnce();
+            perfLog("setup_intent_create", tSetupIntent);
 
             // Step 2: Confirm SetupIntent with Stripe (retry once if "No such setupintent" — e.g. stale LIVE secret with TEST keys)
             const confirmPayloadStripe = {
@@ -1696,6 +1716,7 @@ export default function BookV2Client() {
                     },
                 },
             };
+            const tStripeConfirm = typeof performance !== "undefined" ? performance.now() : 0;
             let setupResult = await stripe.confirmCardSetup(client_secret, confirmPayloadStripe);
             let confirmError = setupResult.error;
             if (confirmError && typeof confirmError.message === "string" && confirmError.message.toLowerCase().includes("no such setupintent")) {
@@ -1709,6 +1730,7 @@ export default function BookV2Client() {
             if (confirmError) {
                 throw new Error(confirmError.message || "Payment setup failed");
             }
+            perfLog("stripe_confirm_card_setup", tStripeConfirm);
             const si = setupResult.setupIntent;
             const pmFromSetup = si?.payment_method;
             const stripePaymentMethodId =
@@ -1718,6 +1740,10 @@ export default function BookV2Client() {
                       ? String((pmFromSetup as { id: string }).id)
                       : null;
             const stripeSetupIntentId = si?.id && typeof si.id === "string" ? si.id : null;
+
+            console.log(
+                `[BOOKING_PAYMENT_METHOD] client pm_present=${!!stripePaymentMethodId} si_present=${!!stripeSetupIntentId} booking_attempt_id=${attemptId}`
+            );
 
             // Step 3: Confirm booking in Supabase (always run after successful Stripe setup)
             if (process.env.NODE_ENV !== "production") {
@@ -1778,6 +1804,12 @@ export default function BookV2Client() {
             if (stripePaymentMethodId) confirmPayload.stripe_payment_method_id = stripePaymentMethodId;
             if (stripeSetupIntentId) confirmPayload.stripe_setup_intent_id = stripeSetupIntentId;
 
+            if (typeof performance !== "undefined") {
+                console.log(
+                    `[BOOK_V2_PERF] client phase=submit_click_to_confirm_api_start duration_ms=${Math.round(performance.now() - perfSubmitT0)} booking_attempt_id=${attemptId}`
+                );
+            }
+            const tConfirmApi = typeof performance !== "undefined" ? performance.now() : 0;
             const bookingResponse = await fetch("/api/book-v2/confirm", {
                 method: "POST",
                 headers: {
@@ -1787,6 +1819,12 @@ export default function BookV2Client() {
             });
 
             const rawBody = await bookingResponse.text();
+            perfLog("confirm_api_fetch", tConfirmApi);
+            if (typeof performance !== "undefined") {
+                console.log(
+                    `[BOOK_V2_PERF] client phase=submit_total duration_ms=${Math.round(performance.now() - perfSubmitT0)} booking_attempt_id=${attemptId}`
+                );
+            }
             console.log("[BOOK_V2_FLOW] confirm_response booking_attempt_id=", attemptId, "status=", bookingResponse.status, "body=", rawBody);
             let result: {
                 ok?: boolean;

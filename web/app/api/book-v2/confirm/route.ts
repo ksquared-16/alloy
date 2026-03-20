@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
@@ -9,12 +10,23 @@ import {
     BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
     BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
 } from "@/lib/book-v2/bookingConstants";
-import { persistBookingPaymentMethod } from "@/lib/book-v2/persistBookingPaymentMethod";
+import { persistBookingPaymentMethod, resolveStripePaymentMethodId } from "@/lib/book-v2/persistBookingPaymentMethod";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
+
+function perfMs(start: number): number {
+    return Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - start);
+}
+
+function bookV2PerfLog(phase: string, start: number, bookingAttemptId: string | null, extra?: string) {
+    const suffix = extra ? ` ${extra}` : "";
+    console.log(
+        `[BOOK_V2_PERF] confirm phase=${phase} duration_ms=${perfMs(start)} booking_attempt_id=${bookingAttemptId ?? "none"}${suffix}`
+    );
+}
 
 const CONFIRM_SAFE_PAYLOAD_KEYS = ["org_id", "person_id", "customer_id", "first_name", "last_name", "email", "phone", "status", "name", "vertical_id", "primary_contact_id", "metadata", "contact_id"] as const;
 
@@ -54,14 +66,28 @@ async function assertNoPriorDiscountRedemption(
     const { customerId, discount_code_id, discount_program_id, booking_attempt_id } = params;
     const attempt = booking_attempt_id ?? null;
 
+    const programQ = discount_program_id
+        ? supabase
+              .from("discount_redemptions")
+              .select("id")
+              .eq("discount_program_id", discount_program_id)
+              .eq("customer_id", customerId)
+              .limit(1)
+              .maybeSingle()
+        : Promise.resolve({ data: null, error: null as null });
+    const codeQ = discount_code_id
+        ? supabase
+              .from("discount_redemptions")
+              .select("id")
+              .eq("discount_code_id", discount_code_id)
+              .eq("customer_id", customerId)
+              .limit(1)
+              .maybeSingle()
+        : Promise.resolve({ data: null, error: null as null });
+
+    const [{ data: existingProgram, error: errProg }, { data: existingCode, error: errCode }] = await Promise.all([programQ, codeQ]);
+
     if (discount_program_id) {
-        const { data: existingProgram, error: errProg } = await supabase
-            .from("discount_redemptions")
-            .select("id")
-            .eq("discount_program_id", discount_program_id)
-            .eq("customer_id", customerId)
-            .limit(1)
-            .maybeSingle();
         if (errProg) {
             return NextResponse.json(
                 { ok: false, message: "Failed to check discount usage", booking_attempt_id: attempt },
@@ -82,13 +108,6 @@ async function assertNoPriorDiscountRedemption(
     }
 
     if (discount_code_id) {
-        const { data: existingCode, error: errCode } = await supabase
-            .from("discount_redemptions")
-            .select("id")
-            .eq("discount_code_id", discount_code_id)
-            .eq("customer_id", customerId)
-            .limit(1)
-            .maybeSingle();
         if (errCode) {
             return NextResponse.json(
                 { ok: false, message: "Failed to check discount usage", booking_attempt_id: attempt },
@@ -109,6 +128,147 @@ async function assertNoPriorDiscountRedemption(
     }
 
     return null;
+}
+
+/** Deferred: workflow_events insert + booking_confirmed workflow runs (does not block HTTP response). Payment persists synchronously before this. */
+async function runDeferredBookingEffects(params: {
+    booking_attempt_id: string | null;
+    jobId: string;
+    opportunityId: string;
+    scheduleId: string;
+    customerId: string;
+    contactId: string | null;
+    personIdFromQuote: string | null;
+    slot_start: string;
+    slot_end: string;
+    timezone: string;
+}): Promise<void> {
+    const {
+        booking_attempt_id,
+        jobId,
+        opportunityId,
+        scheduleId,
+        customerId,
+        contactId,
+        personIdFromQuote,
+        slot_start,
+        slot_end,
+        timezone,
+    } = params;
+    const tDeferred = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const supa = createServiceRoleClient();
+    const orgIdForWorkflows = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+
+    try {
+        let workflowQuery = supa
+            .from("workflows")
+            .select("id")
+            .eq("enabled", true)
+            .eq("event_type", "booking_confirmed")
+            .eq("entity_type", "job");
+        if (orgIdForWorkflows) {
+            workflowQuery = workflowQuery.or(`org_id.eq.${orgIdForWorkflows},org_id.is.null`);
+        }
+        const tWfQuery = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const { data: bookingWorkflows } = await workflowQuery;
+        bookV2PerfLog("deferred_workflow_list_query", tWfQuery, booking_attempt_id, `count=${bookingWorkflows?.length ?? 0}`);
+
+        if (!bookingWorkflows?.length) {
+            return;
+        }
+
+        const tHydrate = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const [jobRes, oppRes, customerRes, scheduleRes, contactRes, personRes] = await Promise.all([
+            supa.from("jobs").select("*").eq("id", jobId).single(),
+            supa.from("opportunities").select("*").eq("id", opportunityId).single(),
+            supa.from("customers").select("*").eq("id", customerId).single(),
+            supa.from("schedules").select("*").eq("id", scheduleId).single(),
+            contactId ? supa.from("contacts").select("*").eq("id", contactId).maybeSingle() : Promise.resolve({ data: null as null }),
+            personIdFromQuote
+                ? supa.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle()
+                : Promise.resolve({ data: null as null }),
+        ]);
+        bookV2PerfLog("deferred_payload_hydrate_parallel", tHydrate, booking_attempt_id);
+
+        const jobRow = jobRes.data;
+        const oppRow = oppRes.data;
+        const customerRow = customerRes.data;
+        const scheduleRow = scheduleRes.data;
+        const contactRow = (contactRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
+        let personRow = (personRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
+
+        if (!personRow && contactRow && (contactRow as { person_id?: string | null }).person_id) {
+            const { data: p } = await supa
+                .from("persons")
+                .select("id, first_name, last_name, email, phone")
+                .eq("id", (contactRow as { person_id: string }).person_id)
+                .maybeSingle();
+            personRow = p as Record<string, unknown> | null;
+        }
+
+        const normalizedSchedule =
+            scheduleRow ??
+            ({
+                id: scheduleId,
+                start_at: slot_start,
+                end_at: slot_end,
+                timezone,
+                duration_minutes: 120,
+                created_at: new Date().toISOString(),
+            } as Record<string, unknown>);
+
+        const eventPayload: Record<string, unknown> = {
+            event_type: "booking_confirmed",
+            occurred_at: new Date().toISOString(),
+            org_id: orgIdForWorkflows,
+            booked_stage_id: BOOKED_PIPELINE_STAGE_ID,
+            job: jobRow ?? null,
+            contact: contactRow ?? null,
+            person: personRow ?? null,
+            customer: customerRow ?? null,
+            opportunity: oppRow ?? null,
+            schedule: normalizedSchedule,
+        };
+
+        const tEmit = typeof performance !== "undefined" ? performance.now() : Date.now();
+        let eventId: string | null = null;
+        try {
+            eventId = await emitEvent({
+                org_id: orgIdForWorkflows,
+                event_type: "booking_confirmed",
+                entity_type: "job",
+                entity_id: jobId,
+                action_type: null,
+                occurred_at: eventPayload.occurred_at as string,
+                payload: eventPayload,
+            });
+        } catch (emitErr: unknown) {
+            console.error("[BOOK_V2_CONFIRM_EMIT_EVENT]", emitErr);
+        }
+        bookV2PerfLog("deferred_emit_event", tEmit, booking_attempt_id);
+
+        const tRuns = typeof performance !== "undefined" ? performance.now() : Date.now();
+        await Promise.all(
+            bookingWorkflows.map((wf) =>
+                executeWorkflowRun(supa, wf.id, eventPayload, {
+                    event_id: eventId ?? null,
+                    org_id: orgIdForWorkflows,
+                })
+                    .then((runResult) => {
+                        console.log(
+                            `[BOOK_V2_CONFIRM_WORKFLOW] workflow_id=${wf.id} run_id=${runResult.workflow_run_id} status=${runResult.status}`
+                        );
+                    })
+                    .catch((wfErr: unknown) => {
+                        console.error("[BOOK_V2_CONFIRM_WORKFLOW_ERROR]", wf.id, wfErr);
+                    })
+            )
+        );
+        bookV2PerfLog("deferred_workflow_runs_parallel", tRuns, booking_attempt_id, `n=${bookingWorkflows.length}`);
+    } catch (e) {
+        console.error("[BOOK_V2_PERF] deferred_booking_effects_failed booking_attempt_id=", booking_attempt_id, e);
+    }
+    bookV2PerfLog("deferred_total", tDeferred, booking_attempt_id);
 }
 
 /**
@@ -482,12 +642,20 @@ export async function POST(request: NextRequest) {
             customer_id: customer_id_from_quote,
             stripe_payment_method_id: stripe_pm_body,
             stripe_setup_intent_id: stripe_si_body,
+            payment_method_id: payment_method_id_body,
         } = body;
 
         const stripe_payment_method_id =
-            typeof stripe_pm_body === "string" && stripe_pm_body.trim().startsWith("pm_") ? stripe_pm_body.trim() : null;
+            (typeof stripe_pm_body === "string" && stripe_pm_body.trim().startsWith("pm_") ? stripe_pm_body.trim() : null) ??
+            (typeof payment_method_id_body === "string" && payment_method_id_body.trim().startsWith("pm_")
+                ? payment_method_id_body.trim()
+                : null);
         const stripe_setup_intent_id =
             typeof stripe_si_body === "string" && stripe_si_body.trim() ? stripe_si_body.trim() : null;
+
+        console.log(
+            `[BOOKING_PAYMENT_METHOD] confirm body pm_present=${!!stripe_payment_method_id} si_present=${!!stripe_setup_intent_id} booking_attempt_id=${booking_attempt_id ?? "none"}`
+        );
 
         const discount_program_id =
             typeof discount_program_id_raw === "string" && discount_program_id_raw.trim()
@@ -553,6 +721,8 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = createServiceRoleClient();
+        const confirmRouteT0 = typeof performance !== "undefined" ? performance.now() : Date.now();
+        bookV2PerfLog("confirm_route_entry", confirmRouteT0, booking_attempt_id ?? null);
 
         const useQuoteIds =
             !!(opportunity_id_from_quote && (person_id_from_quote || contact_id_from_quote));
@@ -834,21 +1004,28 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // Backfill customer.vertical_id when reusing quote (customer may have been created before we set vertical_id)
-            const { data: custRow } = await supabase.from("customers").select("vertical_id").eq("id", customerId).single();
+            const tQuoteParallel = typeof performance !== "undefined" ? performance.now() : Date.now();
+            const needsDiscountEarly = !!(customerId && (discount_code_id || discount_program_id));
+            const [redemptionEarly, parallelReads] = await Promise.all([
+                needsDiscountEarly
+                    ? assertNoPriorDiscountRedemption(supabase, {
+                          customerId,
+                          discount_code_id,
+                          discount_program_id,
+                          booking_attempt_id,
+                      })
+                    : Promise.resolve(null),
+                Promise.all([
+                    supabase.from("customers").select("vertical_id").eq("id", customerId).single(),
+                    supabase.from("opportunities").select("metadata").eq("id", opportunityId).single(),
+                ]),
+            ]);
+            bookV2PerfLog("quote_parallel_discount_meta", tQuoteParallel, booking_attempt_id ?? null);
+            if (redemptionEarly) return redemptionEarly;
+
+            const [{ data: custRow }, { data: oppMetaRow }] = parallelReads;
             if (custRow && custRow.vertical_id == null) {
                 await supabase.from("customers").update({ vertical_id: verticalId }).eq("id", customerId);
-            }
-
-            // Discount check (Step 2)
-            if (customerId && (discount_code_id || discount_program_id)) {
-                const redemptionEarly = await assertNoPriorDiscountRedemption(supabase, {
-                    customerId,
-                    discount_code_id,
-                    discount_program_id,
-                    booking_attempt_id,
-                });
-                if (redemptionEarly) return redemptionEarly;
             }
 
             const slotStartDateQ = new Date(slot_start);
@@ -861,10 +1038,7 @@ export async function POST(request: NextRequest) {
                 : first_clean_price != null ? Math.round(first_clean_price * 100)
                 : null;
 
-            const existingMeta = await (async () => {
-                const { data: opp } = await supabase.from("opportunities").select("metadata").eq("id", opportunityId).single();
-                return ((opp?.metadata as Record<string, unknown>) ?? {}) as Record<string, unknown>;
-            })();
+            const existingMeta = ((oppMetaRow?.metadata as Record<string, unknown>) ?? {}) as Record<string, unknown>;
             const mergedMetadata: Record<string, unknown> = {
                 ...existingMeta,
                 booking_source: "book-v2",
@@ -1298,6 +1472,7 @@ export async function POST(request: NextRequest) {
             console.warn("[BOOK_V2_CONFIRM] postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null, opportunity_id: opportunityId });
         }
         let locationId: string | null = null;
+        const tCanonicalLoc = typeof performance !== "undefined" ? performance.now() : Date.now();
         try {
             locationId = await ensureCanonicalBookingLocation(supabase, {
                 opportunity_id: opportunityId,
@@ -1312,12 +1487,14 @@ export async function POST(request: NextRequest) {
         } catch (locErr) {
             console.warn("[BOOK_V2_CONFIRM] ensureCanonicalBookingLocation failed", locErr);
         }
+        bookV2PerfLog("canonical_location", tCanonicalLoc, booking_attempt_id ?? null);
 
         // Step 5: Create or update job
         // Reuse only if existing job has same booking_attempt_id (idempotent retry). Otherwise create new.
+        const tJobSchedBlock = typeof performance !== "undefined" ? performance.now() : Date.now();
         const { data: existingJobRow, error: jobSearchError } = await supabase
             .from("jobs")
-            .select("id, customer_id, primary_contact_id, metadata")
+            .select("id, customer_id, primary_contact_id, metadata, vertical_id, estimated_total_cents, gross_price_cents, service_frequency_key")
             .eq("opportunity_id", opportunityId)
             .limit(1)
             .maybeSingle();
@@ -1344,12 +1521,12 @@ export async function POST(request: NextRequest) {
             jobId = existingJob.id;
             console.log(`[BOOK_V2_CONFIRM] Found existing job booking_attempt_id=${booking_attempt_id ?? "None"} job_id=${jobId} (reused)`);
 
-            // Get existing job data to check what needs backfilling
-            const { data: existingJobData } = await supabase
-                .from("jobs")
-                .select("vertical_id, estimated_total_cents, gross_price_cents, service_frequency_key")
-                .eq("id", jobId)
-                .single();
+            const existingJobData = existingJob as {
+                vertical_id?: string | null;
+                estimated_total_cents?: number | null;
+                gross_price_cents?: number | null;
+                service_frequency_key?: string | null;
+            };
 
             // Update job and backfill all links and fields; persist metadata for this attempt
             const jobMeta = ((existingJob as { metadata?: Record<string, unknown> })?.metadata) || {};
@@ -1605,6 +1782,15 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        /** Net price in cents for this visit (financials + admin use schedule.price_cents when set). */
+        const schedulePriceCents =
+            quote_total != null && Number.isFinite(Number(quote_total))
+                ? Math.round(Number(quote_total) * 100)
+                : firstCleanCents ??
+                  (quote_subtotal != null && Number.isFinite(Number(quote_subtotal))
+                      ? Math.round(Number(quote_subtotal) * 100)
+                      : null);
+
         // Step 6: Create schedule
         // Reuse only if same start_at, end_at, timezone AND metadata.booking_attempt_id === booking_attempt_id. Otherwise create new row.
         const { data: existingSchedules, error: scheduleSearchError } = await supabase
@@ -1646,6 +1832,7 @@ export async function POST(request: NextRequest) {
                 status_key: BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
                 metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
+            if (schedulePriceCents != null) updatePayload.price_cents = schedulePriceCents;
             if (locationId != null) updatePayload.location_id = locationId;
             if (customerSubscriptionId && !(existingSchedule as { customer_subscription_id?: string | null }).customer_subscription_id) {
                 updatePayload.customer_subscription_id = customerSubscriptionId;
@@ -1674,6 +1861,7 @@ export async function POST(request: NextRequest) {
                 timezone,
                 schedule_status_id: BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
                 status_key: BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
+                ...(schedulePriceCents != null && { price_cents: schedulePriceCents }),
                 ...(locationId != null && { location_id: locationId }),
                 metadata: { booking_attempt_id: booking_attempt_id ?? undefined },
             };
@@ -1715,12 +1903,10 @@ export async function POST(request: NextRequest) {
             scheduleId = newSchedule.id;
             console.log(`[BOOK_V2_CONFIRM] Created new schedule booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId}`);
         }
-
-        let hasSavedPaymentMethod = false;
-        let paymentMethodBrand: string | null = null;
-        let paymentMethodLast4: string | null = null;
+        bookV2PerfLog("job_schedule_redemption_subscription", tJobSchedBlock, booking_attempt_id ?? null);
 
         // Step 8: Integrity check - verify all linkages
+        const tIntegrity = typeof performance !== "undefined" ? performance.now() : Date.now();
         const { data: integrityCheck, error: integrityError } = await supabase
             .from("schedules")
             .select(`
@@ -1826,14 +2012,33 @@ export async function POST(request: NextRequest) {
         console.log(
             `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
         );
+        bookV2PerfLog("integrity_check", tIntegrity, booking_attempt_id ?? null);
 
-        if (stripe_payment_method_id) {
+        let hasSavedPaymentMethod = false;
+        let paymentMethodBrand: string | null = null;
+        let paymentMethodLast4: string | null = null;
+
+        const tPersistSync = typeof performance !== "undefined" ? performance.now() : Date.now();
+        const resolvedPmId = await resolveStripePaymentMethodId({
+            paymentMethodFromBody: stripe_payment_method_id,
+            setupIntentIdFromBody: stripe_setup_intent_id,
+        });
+        console.log(
+            `[BOOKING_PAYMENT_METHOD] confirm after_integrity resolved_pm=${resolvedPmId ? "yes" : "no"} will_persist=${!!resolvedPmId}`
+        );
+
+        if (resolvedPmId) {
             await persistBookingPaymentMethod(supabase, {
                 customerId,
-                stripePaymentMethodId: stripe_payment_method_id,
+                stripePaymentMethodId: resolvedPmId,
                 setupIntentId: stripe_setup_intent_id,
             });
+        } else {
+            console.warn(
+                `[BOOKING_PAYMENT_METHOD] confirm skipping persistBookingPaymentMethod: could not resolve pm_ (body_pm=${!!stripe_payment_method_id} body_si=${!!stripe_setup_intent_id})`
+            );
         }
+        bookV2PerfLog("sync_persist_payment", tPersistSync, booking_attempt_id ?? null);
 
         if (customerId) {
             const { data: customerAfterPm } = await supabase
@@ -1848,94 +2053,26 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Step 10: Auto-run booking_confirmed workflows (opportunity stage, job status, assignment created by workflows)
-        const orgIdForWorkflows = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-        let workflowQuery = supabase
-            .from("workflows")
-            .select("id")
-            .eq("enabled", true)
-            .eq("event_type", "booking_confirmed")
-            .eq("entity_type", "job");
-        if (orgIdForWorkflows) {
-            workflowQuery = workflowQuery.or(`org_id.eq.${orgIdForWorkflows},org_id.is.null`);
-        }
-        const { data: bookingWorkflows } = await workflowQuery;
-        if (bookingWorkflows?.length) {
-            const [jobRes, oppRes, customerRes, scheduleRes, contactRes] = await Promise.all([
-                supabase.from("jobs").select("*").eq("id", jobId).single(),
-                supabase.from("opportunities").select("*").eq("id", opportunityId).single(),
-                supabase.from("customers").select("*").eq("id", customerId).single(),
-                supabase.from("schedules").select("*").eq("id", scheduleId).single(),
-                contactId
-                    ? supabase.from("contacts").select("*").eq("id", contactId).maybeSingle()
-                    : Promise.resolve({ data: null as null }),
-            ]);
-            const jobRow = jobRes.data;
-            const oppRow = oppRes.data;
-            const customerRow = customerRes.data;
-            const scheduleRow = scheduleRes.data;
-            const contactRow = (contactRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
-            let personRow: Record<string, unknown> | null = null;
-            if (personIdFromQuote) {
-                const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle();
-                personRow = p as Record<string, unknown> | null;
-            } else if (contactRow && (contactRow as { person_id?: string | null }).person_id) {
-                const { data: p } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", (contactRow as { person_id: string }).person_id).maybeSingle();
-                personRow = p as Record<string, unknown> | null;
-            }
-            const normalizedSchedule =
-                scheduleRow ?? {
-                    id: scheduleId,
-                    start_at: slot_start,
-                    end_at: slot_end,
-                    timezone,
-                    duration_minutes: 120,
-                    created_at: new Date().toISOString(),
-                };
-            const eventPayload: Record<string, unknown> = {
-                event_type: "booking_confirmed",
-                occurred_at: new Date().toISOString(),
-                org_id: orgIdForWorkflows,
-                booked_stage_id: BOOKED_PIPELINE_STAGE_ID,
-                job: jobRow ?? null,
-                contact: contactRow ?? null,
-                person: personRow ?? null,
-                customer: customerRow ?? null,
-                opportunity: oppRow ?? null,
-                schedule: normalizedSchedule,
-            };
-            let eventId: string | null = null;
-            try {
-                eventId = await emitEvent({
-                    org_id: orgIdForWorkflows,
-                    event_type: "booking_confirmed",
-                    entity_type: "job",
-                    entity_id: jobId,
-                    action_type: null,
-                    occurred_at: eventPayload.occurred_at as string,
-                    payload: eventPayload,
-                });
-            } catch (emitErr: unknown) {
-                console.error("[BOOK_V2_CONFIRM_EMIT_EVENT]", emitErr);
-            }
-            for (const wf of bookingWorkflows) {
-                try {
-                    const runResult = await executeWorkflowRun(supabase, wf.id, eventPayload, {
-                        event_id: eventId ?? null,
-                        org_id: orgIdForWorkflows,
-                    });
-                    console.log(`[BOOK_V2_CONFIRM_WORKFLOW] workflow_id=${wf.id} run_id=${runResult.workflow_run_id} status=${runResult.status}`);
-                } catch (wfErr: unknown) {
-                    console.error("[BOOK_V2_CONFIRM_WORKFLOW_ERROR]", wf.id, wfErr);
-                    // Don't fail the booking; log and continue
-                }
-            }
-        }
+        after(() =>
+            runDeferredBookingEffects({
+                booking_attempt_id: booking_attempt_id ?? null,
+                jobId,
+                opportunityId,
+                scheduleId,
+                customerId,
+                contactId,
+                personIdFromQuote,
+                slot_start,
+                slot_end,
+                timezone,
+            })
+        );
 
         // Structured logging
         console.log(
             `[BOOK_V2_CONFIRM_SUCCESS] booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
         );
+        bookV2PerfLog("confirm_total_to_response", confirmRouteT0, booking_attempt_id ?? null);
 
         return NextResponse.json({
             ok: true,
