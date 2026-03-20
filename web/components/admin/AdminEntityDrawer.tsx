@@ -22,6 +22,7 @@ import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
 import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from "@/lib/admin/jobDiscountSelection";
+import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
@@ -322,7 +323,7 @@ function JobDrawerRelationshipsSection(props: {
     primaryContactDisabled: boolean;
     jobLocationOptions: { id: string; label: string }[];
     jobOpportunityOptions: { id: string; label: string }[];
-    jobVendorOptions: { id: string; name: string | null }[];
+    jobVendorOptions: AdminVendorSelectOption[];
     jobAssignedVendorId: string | null;
     setJobAssignedVendorId: (v: string | null) => void;
     jobAssignedVendorSaving: boolean;
@@ -352,7 +353,7 @@ function JobDrawerRelationshipsSection(props: {
                                 <option value="">(none)</option>
                                 {p.jobVendorOptions.map((v) => (
                                     <option key={v.id} value={v.id}>
-                                        {v.name ?? v.id}
+                                        {v.label}
                                     </option>
                                 ))}
                             </select>
@@ -494,14 +495,14 @@ export default function AdminEntityDrawer() {
     const [vendorPayoutOverrideForm, setVendorPayoutOverrideForm] = useState<VendorPayoutOverridePolicy>({ mode: "flat", value: 80, completed_status_key: "completed", tiers: [{ from: 1, to: null, value: 80 }] });
     const [vendorPayoutOverrideSaving, setVendorPayoutOverrideSaving] = useState(false);
     const [workflowVerticals, setWorkflowVerticals] = useState<{ id: string; name: string; slug: string }[]>([]);
-    const [scheduleVendors, setScheduleVendors] = useState<{ id: string; name: string }[]>([]);
+    const [scheduleVendors, setScheduleVendors] = useState<AdminVendorSelectOption[]>([]);
     const [scheduleAssignLoading, setScheduleAssignLoading] = useState(false);
     const [scheduleCancelReason, setScheduleCancelReason] = useState("");
     const [scheduleCancelPrompt, setScheduleCancelPrompt] = useState(false);
     const [scheduleRescheduleForm, setScheduleRescheduleForm] = useState<{ start_at: string; end_at: string; copy_assignment: boolean } | null>(null);
     const [scheduleRescheduleSaving, setScheduleRescheduleSaving] = useState(false);
-    const [jobVendorsForAssign, setJobVendorsForAssign] = useState<{ id: string; name: string }[]>([]);
-    const [jobVendorOptions, setJobVendorOptions] = useState<{ id: string; name: string }[]>([]);
+    const [jobVendorsForAssign, setJobVendorsForAssign] = useState<AdminVendorSelectOption[]>([]);
+    const [jobVendorOptions, setJobVendorOptions] = useState<AdminVendorSelectOption[]>([]);
     const [vendorPrimaryPersonOptions, setVendorPrimaryPersonOptions] = useState<{ value: string; label: string }[]>([]);
     const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
@@ -1087,13 +1088,18 @@ export default function AdminEntityDrawer() {
             })
             .catch(() => { setJobSchedules([]); setJobRelatedData(null); })
             .finally(() => setJobRelatedLoading(false));
+        const normalizeVendorOptions = (list: AdminVendorSelectOption[]): AdminVendorSelectOption[] =>
+            list.map((v) => ({
+                ...v,
+                label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
+            }));
         fetch(`/api/admin/jobs/${drawer.id}/vendors-for-assign`)
-            .then((res) => res.ok ? res.json() : { vendors: [] })
-            .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorsForAssign(json.vendors ?? []))
+            .then((res) => (res.ok ? res.json() : { vendors: [] }))
+            .then((json: { vendors?: AdminVendorSelectOption[] }) => setJobVendorsForAssign(normalizeVendorOptions(json.vendors ?? [])))
             .catch(() => setJobVendorsForAssign([]));
         fetch("/api/admin/vendor-options")
-            .then((res) => res.ok ? res.json() : { vendors: [] })
-            .then((json: { vendors?: { id: string; name: string }[] }) => setJobVendorOptions(json.vendors ?? []))
+            .then((res) => (res.ok ? res.json() : { vendors: [] }))
+            .then((json: { vendors?: AdminVendorSelectOption[] }) => setJobVendorOptions(normalizeVendorOptions(json.vendors ?? [])))
             .catch(() => setJobVendorOptions([]));
     }, [drawer.type, drawer.id]);
 
@@ -1428,7 +1434,15 @@ export default function AdminEntityDrawer() {
         }
         fetch(`/api/admin/schedules/${drawer.id}/vendors-for-assign`)
             .then((r) => (r.ok ? r.json() : { vendors: [] }))
-            .then((json: { vendors?: { id: string; name: string }[] }) => setScheduleVendors(Array.isArray(json.vendors) ? json.vendors : []))
+            .then((json: { vendors?: AdminVendorSelectOption[] }) => {
+                const list = Array.isArray(json.vendors) ? json.vendors : [];
+                setScheduleVendors(
+                    list.map((v) => ({
+                        ...v,
+                        label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
+                    }))
+                );
+            })
             .catch(() => setScheduleVendors([]));
     }, [drawer.type, drawer.id]);
 
@@ -2542,7 +2556,20 @@ export default function AdminEntityDrawer() {
                 });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json.error as string) || "Reassign failed");
-                setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
+                const vendorLabel =
+                    vendorOption?.label ??
+                    (vendorOption ? formatVendorOptionLabel({ id: vendorOption.id, name: vendorOption.name }) : null);
+                setData((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              assigned_vendor_id: jobAssignedVendorId ?? null,
+                              _assigned_vendor: vendorOption ? { id: vendorOption.id, name: vendorLabel ?? "" } : null,
+                              _assigned_vendor_name: vendorLabel,
+                              _vendor_name: vendorLabel,
+                          }
+                        : prev
+                );
             } else {
                 const res = await fetch(`/api/admin/jobs/${drawer.id}`, {
                     method: "PATCH",
@@ -2551,7 +2578,20 @@ export default function AdminEntityDrawer() {
                 });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json.error as string) || "Save failed");
-                setData((prev) => (prev ? { ...prev, assigned_vendor_id: jobAssignedVendorId ?? null, _assigned_vendor: vendorOption, _assigned_vendor_name: vendorOption?.name ?? null } : prev));
+                const vendorLabel =
+                    vendorOption?.label ??
+                    (vendorOption ? formatVendorOptionLabel({ id: vendorOption.id, name: vendorOption.name }) : null);
+                setData((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              assigned_vendor_id: jobAssignedVendorId ?? null,
+                              _assigned_vendor: vendorOption ? { id: vendorOption.id, name: vendorLabel ?? "" } : null,
+                              _assigned_vendor_name: vendorLabel,
+                              _vendor_name: vendorLabel,
+                          }
+                        : prev
+                );
             }
             const payoutRes = await fetch(`/api/admin/jobs/${drawer.id}/payout`);
             if (payoutRes.ok) setJobPayout(await payoutRes.json());
@@ -3349,11 +3389,17 @@ export default function AdminEntityDrawer() {
             Object.assign(out, oppRefFieldSelectOptions);
         }
         if (drawer.type === "jobs" && data) {
-            const vendorOpts = jobVendorOptions.map((v) => ({ value: v.id, label: v.name ?? v.id }));
+            const vendorOpts = jobVendorOptions.map((v) => ({
+                value: v.id,
+                label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
+            }));
             const aid = String((data as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? "");
             if (aid && !vendorOpts.some((o) => o.value === aid)) {
                 const nm = String((data as { _vendor_name?: string | null })._vendor_name ?? "").trim();
-                vendorOpts.push({ value: aid, label: nm || `${aid.slice(0, 8)}…` });
+                vendorOpts.push({
+                    value: aid,
+                    label: nm || formatVendorOptionLabel({ id: aid }),
+                });
             }
             out.assigned_vendor_id = vendorOpts;
         }
@@ -6006,7 +6052,11 @@ export default function AdminEntityDrawer() {
                                                     className="px-2 py-1.5 border rounded text-sm"
                                                 >
                                                     <option value="">— Select vendor —</option>
-                                                    {scheduleVendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                                    {scheduleVendors.map((v) => (
+                                                        <option key={v.id} value={v.id}>
+                                                            {v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name })}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         )}

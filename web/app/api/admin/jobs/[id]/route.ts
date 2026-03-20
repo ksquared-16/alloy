@@ -6,6 +6,7 @@ import { executeWorkflowRun } from "@/lib/workflowRun";
 import { inferJobDiscountSelectionToken, parseJobDiscountSelectionInput, resolveJobDiscountSelection, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 
 const ALLOWED_KEYS = [
     "title",
@@ -72,8 +73,20 @@ export async function GET(
         _customer_name = (cust as { name?: string | null } | null)?.name ?? null;
     }
     if (vendorId) {
-        const { data: vendor } = await supabase.from("vendors").select("name").eq("id", vendorId).maybeSingle();
-        _assigned_vendor_name = (vendor as { name?: string | null } | null)?.name ?? null;
+        const { data: row } = await supabase
+            .from("vendors")
+            .select("id, name, company_name, email, phone, primary_person_id")
+            .eq("id", vendorId)
+            .maybeSingle();
+        const r = row as VendorRowForLabel | null;
+        if (r) {
+            let person: { first_name?: string | null; last_name?: string | null } | null = null;
+            if (r.primary_person_id) {
+                const { data: p } = await supabase.from("persons").select("first_name, last_name").eq("id", r.primary_person_id).maybeSingle();
+                person = p;
+            }
+            _assigned_vendor_name = vendorRowToDisplayStub(r, person).name;
+        }
     }
     if (primaryPersonId) {
         const { data: person } = await supabase.from("persons").select("first_name, last_name").eq("id", primaryPersonId).maybeSingle();

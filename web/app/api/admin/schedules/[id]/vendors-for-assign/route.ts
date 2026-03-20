@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 
 /** GET: vendors that can be assigned to this schedule (org + job vertical + approved). */
 export async function GET(
@@ -42,11 +43,12 @@ export async function GET(
 
     let query = supabase
         .from("vendors")
-        .select("id, name")
+        .select("id, name, company_name, email, phone, primary_person_id")
         .eq("org_id", orgId)
         .in("id", vendorIds)
         .order("name");
     if (approvedStatusId) query = query.eq("vendor_status_id", approvedStatusId);
-    const { data: vendors } = await query;
-    return NextResponse.json({ vendors: vendors ?? [] });
+    const { data: vendorRows } = await query;
+    const vendors = await withVendorSelectLabels(supabase, vendorRows ?? []);
+    return NextResponse.json({ vendors });
 }

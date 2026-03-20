@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
+import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
+import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("jobs")
     .select(
-      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at, gross_price_cents, estimated_total_cents",
+      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -54,7 +56,9 @@ export async function GET(request: NextRequest) {
 
   const [custRes, vendorRes, locationRes, statusRes, nextSchedulesRes] = await Promise.all([
     customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] },
-    vendorIds.length ? supabase.from("vendors").select("id, name").in("id", vendorIds) : { data: [] },
+    vendorIds.length
+      ? supabase.from("vendors").select("id, name, company_name, email, phone, primary_person_id").in("id", vendorIds)
+      : { data: [] },
     locationIds.length ? supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds) : { data: [] },
     jobStatusIds.length ? supabase.from("job_statuses").select("id, status_key, label").in("id", jobStatusIds) : { data: [] },
     jobIds.length
@@ -69,14 +73,22 @@ export async function GET(request: NextRequest) {
   ]);
 
   const customerMap = new Map((custRes.data ?? []).map((c) => [(c as { id: string }).id, (c as { name: string | null }).name ?? null]));
-  const vendorMap = new Map((vendorRes.data ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
+  const vendorRows = (vendorRes.data ?? []) as VendorRowForLabel[];
+  const vendorPersonIds = [...new Set(vendorRows.map((v) => v.primary_person_id).filter(Boolean))] as string[];
+  const { data: vendorPersons } =
+    vendorPersonIds.length > 0
+      ? await supabase.from("persons").select("id, first_name, last_name").in("id", vendorPersonIds)
+      : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] };
+  const vendorLabelById = buildVendorIdToLabelMap(vendorRows, vendorPersons ?? []);
   const locationMap = new Map((locationRes.data ?? []).map((loc) => {
     const l = loc as { id: string; label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
     const summary = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
     return [l.id, summary];
   }));
-  const statusByKey = new Map((statusRes.data ?? []).map((s) => [(s as { status_key: string }).status_key, (s as { label?: string | null }).label ?? null]));
-  const statusById = new Map((statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { label?: string | null }).label ?? null]));
+  /** job_status_id -> status_key from catalog (for _status_display / status badge lookup) */
+  const jobStatusKeyById = new Map(
+    (statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { status_key?: string | null }).status_key ?? null])
+  );
   const nextScheduleByJobId = new Map<string, string>();
   for (const s of nextSchedulesRes.data ?? []) {
     const row = s as { job_id: string; start_at: string };
@@ -95,6 +107,8 @@ export async function GET(request: NextRequest) {
       created_at?: string;
       gross_price_cents?: number | null;
       estimated_total_cents?: number | null;
+      discount_amount?: number | null;
+      discounted?: boolean | null;
       customer_id?: string | null;
       assigned_vendor_id?: string | null;
       location_id?: string | null;
@@ -104,12 +118,12 @@ export async function GET(request: NextRequest) {
       (jr.service_key && String(jr.service_key).trim()) ||
       (jr.job_number_for_customer && String(jr.job_number_for_customer).trim()) ||
       (jr.id ? jr.id.slice(-6) : "—");
-    const statusKey = jr.status_key ?? (jr.job_status_id ? statusById.get(jr.job_status_id) ?? null : null);
-    const _status_display = statusKey ?? (jr.job_status_id ? statusById.get(jr.job_status_id) ?? null : null);
+    const _status_display =
+      jr.status_key ?? (jr.job_status_id ? jobStatusKeyById.get(jr.job_status_id) ?? null : null);
     const _next_schedule = nextScheduleByJobId.get(jr.id) ?? null;
-    const _vendor_name = jr.assigned_vendor_id ? vendorMap.get(jr.assigned_vendor_id) ?? null : null;
-    const priceCents = jr.gross_price_cents ?? jr.estimated_total_cents ?? null;
-    const _price_display = priceCents != null ? priceCents / 100 : null;
+    const _vendor_name = jr.assigned_vendor_id ? vendorLabelById.get(jr.assigned_vendor_id) ?? null : null;
+    const display_total_cents = computeJobDisplayTotalCents(jr);
+    const _price_display = display_total_cents != null ? display_total_cents / 100 : null;
     const _updated = jr.updated_at ?? jr.created_at ?? null;
     return {
       ...j,
@@ -120,6 +134,7 @@ export async function GET(request: NextRequest) {
       _job_label,
       _status_display,
       _next_schedule,
+      display_total_cents,
       _price_display,
       _updated,
     };

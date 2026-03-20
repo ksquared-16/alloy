@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 
-/** GET: vendor options for dropdowns (id, name). Admin/ops. Non-archived only when column exists. */
+/** GET: vendor options for dropdowns (`id`, `name`, `label`). `value` = id; `label` = human-readable. */
 export async function GET() {
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -13,17 +14,16 @@ export async function GET() {
     }
 
     const supabase = createAdminClient();
-    let q = supabase
+    const { data: rows, error } = await supabase
         .from("vendors")
-        .select("id, name")
+        .select("id, name, company_name, email, phone, primary_person_id")
         .eq("org_id", ctx.orgId)
         .order("name", { ascending: true });
-
-    const { data: rows, error } = await q;
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ vendors: rows ?? [] });
+    const vendors = await withVendorSelectLabels(supabase, rows ?? []);
+    return NextResponse.json({ vendors });
 }

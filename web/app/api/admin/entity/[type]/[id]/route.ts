@@ -4,8 +4,29 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
 import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
+import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
+import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
+
+async function hydrateVendorDisplayStub(
+    supabase: ReturnType<typeof createAdminClient>,
+    vendorId: string
+): Promise<{ id: string; name: string } | null> {
+    const { data: row } = await supabase
+        .from("vendors")
+        .select("id, name, company_name, email, phone, primary_person_id")
+        .eq("id", vendorId)
+        .maybeSingle();
+    if (!row) return null;
+    const r = row as VendorRowForLabel;
+    let person: { first_name?: string | null; last_name?: string | null } | null = null;
+    if (r.primary_person_id) {
+        const { data: p } = await supabase.from("persons").select("first_name, last_name").eq("id", r.primary_person_id).maybeSingle();
+        person = p;
+    }
+    return vendorRowToDisplayStub(r, person);
+}
 
 const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
     customers: "customer",
@@ -130,9 +151,9 @@ export async function GET(
             }
             const assignedVendorId = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id;
             if (assignedVendorId) {
-                const { data: vendor } = await supabase.from("vendors").select("id, name").eq("id", assignedVendorId).single();
-                out._assigned_vendor = vendor ?? null;
-                out._vendor_name = (vendor as { name?: string | null } | null)?.name ?? null;
+                const stub = await hydrateVendorDisplayStub(supabase, assignedVendorId);
+                out._assigned_vendor = stub;
+                out._vendor_name = stub?.name ?? null;
             } else {
                 out._assigned_vendor = null;
                 out._vendor_name = null;
@@ -165,17 +186,16 @@ export async function GET(
             }
             const jobStatusId = (data as { job_status_id?: string | null }).job_status_id;
             const statusKey = (data as { status_key?: string | null }).status_key;
-            if (statusKey) {
-                out._status_display = statusKey;
-            } else if (jobStatusId) {
+            let jobStatusRow: { status_key?: string | null; label?: string | null } | null = null;
+            if (jobStatusId) {
                 const { data: js } = await supabase.from("job_statuses").select("status_key, label").eq("id", jobStatusId).maybeSingle();
-                out._status_display = (js as { status_key?: string | null; label?: string | null } | null)?.status_key ?? (js as { label?: string | null } | null)?.label ?? null;
-            } else {
-                out._status_display = null;
+                jobStatusRow = (js as { status_key?: string | null; label?: string | null } | null) ?? null;
             }
-            const gross = (data as { gross_price_cents?: number | null }).gross_price_cents;
-            const estimated = (data as { estimated_total_cents?: number | null }).estimated_total_cents;
-            out._price_display = gross != null ? gross / 100 : estimated != null ? estimated / 100 : null;
+            out._job_status_label = jobStatusRow?.label ?? null;
+            out._status_display = statusKey ?? jobStatusRow?.status_key ?? null;
+            const display_total_cents = computeJobDisplayTotalCents(data as JobPriceInput);
+            out.display_total_cents = display_total_cents;
+            out._price_display = display_total_cents != null ? display_total_cents / 100 : null;
             const { data: nextSched } = await supabase
                 .from("schedules")
                 .select("start_at")
@@ -478,8 +498,7 @@ export async function GET(
             const { data: assignment } = await supabase.from("assignments").select("id, schedule_id, job_id, vendor_id, assignment_status_id, created_at").eq("schedule_id", id).maybeSingle();
             out._assignment = assignment ?? null;
             if (assignment) {
-                const { data: vendor } = await supabase.from("vendors").select("id, name").eq("id", (assignment as { vendor_id: string }).vendor_id).single();
-                out._vendor = vendor ?? null;
+                out._vendor = await hydrateVendorDisplayStub(supabase, (assignment as { vendor_id: string }).vendor_id);
                 const statusId = (assignment as { assignment_status_id?: string }).assignment_status_id;
                 if (statusId) {
                     const { data: st } = await supabase.from("assignment_statuses").select("id, key, label").eq("id", statusId).single();
@@ -492,8 +511,7 @@ export async function GET(
                 const job = out._job as { assigned_vendor_id?: string | null } | null;
                 const jobVendorId = job?.assigned_vendor_id ?? null;
                 if (jobVendorId) {
-                    const { data: jobVendor } = await supabase.from("vendors").select("id, name").eq("id", jobVendorId).single();
-                    out._job_assigned_vendor = jobVendor ?? null;
+                    out._job_assigned_vendor = await hydrateVendorDisplayStub(supabase, jobVendorId);
                 } else {
                     out._job_assigned_vendor = null;
                 }
