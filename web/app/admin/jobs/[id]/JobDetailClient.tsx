@@ -32,7 +32,7 @@ type PaymentRow = {
 };
 
 type JobStatusOption = { id: string; label: string | null };
-type VendorOption = { id: string; name: string | null };
+type VendorOption = { id: string; name: string | null; label?: string | null };
 
 const TABS = ["overview", "related", "activity"] as const;
 type TabKey = (typeof TABS)[number];
@@ -101,11 +101,11 @@ export default function JobDetailClient({
     useEffect(() => {
         if (!isAdmin) return;
         (async () => {
-            const res = await fetch("/api/admin/vendors");
+            const res = await fetch(`/api/admin/jobs/${jobId}/vendors-for-assign`);
             const json = await res.json().catch(() => ({}));
             if (res.ok) setVendors(json.vendors ?? []);
         })();
-    }, [isAdmin]);
+    }, [isAdmin, jobId]);
 
     useEffect(() => {
         if (tab !== "related") return;
@@ -142,7 +142,9 @@ export default function JobDetailClient({
                 setAssignError((data as { error?: string }).error ?? "Update failed");
                 return;
             }
-            setJob((prev) => ({ ...prev, ...data, _assigned_vendor_name: vendors.find((v) => v.id === assignVendorId)?.name ?? null }));
+            const v = vendors.find((x) => x.id === assignVendorId);
+            const assignLabel = (v?.label?.trim() || v?.name?.trim()) ?? null;
+            setJob((prev) => ({ ...prev, ...data, _assigned_vendor_name: assignLabel }));
             setAssignDrawerOpen(false);
         } finally {
             setAssignLoading(false);
@@ -475,7 +477,7 @@ export default function JobDetailClient({
                         >
                             <option value="">Unassigned</option>
                             {vendors.map((v) => (
-                                <option key={v.id} value={v.id}>{v.name ?? v.id}</option>
+                                <option key={v.id} value={v.id}>{v.label?.trim() || v.name?.trim() || v.id}</option>
                             ))}
                         </select>
                     </div>

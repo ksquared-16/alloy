@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import type { OrgSettingsRow } from "@/lib/admin/vendorPayoutPolicy";
+import { resolveVendorAssignmentStatusId } from "@/lib/admin/vendorAssignmentPolicy";
 
 /** POST: reassign job vendor. Updates job.assigned_vendor_id and only future (non-completed) schedules. Admin only. */
 export async function POST(
@@ -53,14 +54,21 @@ export async function POST(
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
     if (vendorId) {
+        const requiredStatusId = await resolveVendorAssignmentStatusId(supabase);
+        if (!requiredStatusId) {
+            return NextResponse.json({ error: "Assignment policy status is not configured" }, { status: 400 });
+        }
         const { data: vendor, error: vErr } = await supabase
             .from("vendors")
-            .select("id")
+            .select("id, vendor_status_id")
             .eq("id", vendorId)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
         if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
         if (!vendor) return NextResponse.json({ error: "Vendor not found" }, { status: 400 });
+        if ((vendor as { vendor_status_id?: string | null }).vendor_status_id !== requiredStatusId) {
+            return NextResponse.json({ error: "Vendor is not eligible for assignment" }, { status: 400 });
+        }
     }
 
     const { error: jobUpdateErr } = await supabase

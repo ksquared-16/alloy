@@ -227,11 +227,24 @@ export async function PATCH(
             }
         }
 
+        const JOB_TIMESTAMPTZ_KEYS = ["scheduled_at", "completed_at"] as const;
+
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
             if (key === "discount_code_id" || key === "discount_code" || key === "discount_amount" || key === "discounted") continue; // handled above
             if (key === "assigned_vendor_id" || key === "primary_contact_id" || key === "customer_id" || key === "opportunity_id" || key === "location_id") {
                 updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+                continue;
+            }
+            if ((JOB_TIMESTAMPTZ_KEYS as readonly string[]).includes(key)) {
+                const v = body[key];
+                if (v === "" || v == null) {
+                    updates[key] = null;
+                } else if (typeof v === "string" && v.trim() === "") {
+                    updates[key] = null;
+                } else {
+                    updates[key] = v;
+                }
                 continue;
             }
             if (key === "gross_price_cents" && (body[key] === "" || body[key] == null)) {

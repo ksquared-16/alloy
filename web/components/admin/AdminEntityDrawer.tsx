@@ -502,7 +502,6 @@ export default function AdminEntityDrawer() {
     const [scheduleRescheduleForm, setScheduleRescheduleForm] = useState<{ start_at: string; end_at: string; copy_assignment: boolean } | null>(null);
     const [scheduleRescheduleSaving, setScheduleRescheduleSaving] = useState(false);
     const [jobVendorsForAssign, setJobVendorsForAssign] = useState<AdminVendorSelectOption[]>([]);
-    const [jobVendorOptions, setJobVendorOptions] = useState<AdminVendorSelectOption[]>([]);
     const [vendorPrimaryPersonOptions, setVendorPrimaryPersonOptions] = useState<{ value: string; label: string }[]>([]);
     const [jobAssignedVendorSaving, setJobAssignedVendorSaving] = useState(false);
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
@@ -1069,7 +1068,6 @@ export default function AdminEntityDrawer() {
             setJobRelatedData(null);
             setRescheduleForm(null);
             setJobVendorsForAssign([]);
-            setJobVendorOptions([]);
             setJobAssignedVendorId(null);
             setJobPayments([]);
             return;
@@ -1099,10 +1097,6 @@ export default function AdminEntityDrawer() {
             .then((res) => (res.ok ? res.json() : { vendors: [] }))
             .then((json: { vendors?: AdminVendorSelectOption[] }) => setJobVendorsForAssign(normalizeVendorOptions(json.vendors ?? [])))
             .catch(() => setJobVendorsForAssign([]));
-        fetch("/api/admin/vendor-options")
-            .then((res) => (res.ok ? res.json() : { vendors: [] }))
-            .then((json: { vendors?: AdminVendorSelectOption[] }) => setJobVendorOptions(normalizeVendorOptions(json.vendors ?? [])))
-            .catch(() => setJobVendorOptions([]));
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -2492,6 +2486,10 @@ export default function AdminEntityDrawer() {
                 if (payload.opportunity_id === "") payload.opportunity_id = null;
                 if (payload.location_id === "") payload.location_id = null;
                 if (payload.job_status_id === "" || payload.job_status_id === undefined) payload.job_status_id = null;
+                for (const tk of ["scheduled_at", "completed_at"] as const) {
+                    const tv = payload[tk];
+                    if (tv === "" || tv === undefined || (typeof tv === "string" && tv.trim() === "")) payload[tk] = null;
+                }
             }
             if (drawer.type === "schedules") {
                 if (payload.start_at) payload.start_at = new Date(payload.start_at as string).toISOString();
@@ -2590,7 +2588,7 @@ export default function AdminEntityDrawer() {
         if (!drawer.id || drawer.type !== "jobs") return;
         setJobAssignedVendorSaving(true);
         try {
-            const vendorOption = jobAssignedVendorId ? jobVendorOptions.find((v) => v.id === jobAssignedVendorId) ?? null : null;
+            const vendorOption = jobAssignedVendorId ? jobVendorsForAssign.find((v) => v.id === jobAssignedVendorId) ?? null : null;
             if (applyVendorToUpcoming && canMutate) {
                 const res = await fetch(`/api/admin/jobs/${drawer.id}/assign-vendor`, {
                     method: "POST",
@@ -2646,7 +2644,7 @@ export default function AdminEntityDrawer() {
         } finally {
             setJobAssignedVendorSaving(false);
         }
-    }, [drawer.id, drawer.type, jobAssignedVendorId, jobVendorOptions, applyVendorToUpcoming, canMutate, refetch, router]);
+    }, [drawer.id, drawer.type, jobAssignedVendorId, jobVendorsForAssign, applyVendorToUpcoming, canMutate, refetch, router]);
 
     const handleInlineCancel = useCallback(() => {
         try {
@@ -3542,13 +3540,13 @@ export default function AdminEntityDrawer() {
             }
             out.job_status_id = jobStOpts;
 
-            const vendorOpts = jobVendorOptions.map((v) => ({
+            const vendorOpts = jobVendorsForAssign.map((v) => ({
                 value: v.id,
                 label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
             }));
             const aid = String((data as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? "");
             if (aid && !vendorOpts.some((o) => o.value === aid)) {
-                const nm = String((data as { _vendor_name?: string | null })._vendor_name ?? "").trim();
+                const nm = String((data as { _assigned_vendor_name?: string | null })._assigned_vendor_name ?? "").trim();
                 vendorOpts.push({
                     value: aid,
                     label: nm || formatVendorOptionLabel({ id: aid }),
@@ -3585,7 +3583,7 @@ export default function AdminEntityDrawer() {
         stages,
         oppVerticalOptions,
         oppRefFieldSelectOptions,
-        jobVendorOptions,
+        jobVendorsForAssign,
         vendorPrimaryPersonOptions,
         jobCustomerOptions,
         jobLocationOptions,
@@ -3673,7 +3671,7 @@ export default function AdminEntityDrawer() {
                 </div>
     );
 
-    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
@@ -5853,7 +5851,7 @@ export default function AdminEntityDrawer() {
                                         primaryContactDisabled={primaryContactDisabled}
                                         jobLocationOptions={jobLocationOptions}
                                         jobOpportunityOptions={jobOpportunityOptions}
-                                        jobVendorOptions={jobVendorOptions}
+                                        jobVendorOptions={jobVendorsForAssign}
                                         jobAssignedVendorId={jobAssignedVendorId}
                                         setJobAssignedVendorId={setJobAssignedVendorId}
                                         jobAssignedVendorSaving={jobAssignedVendorSaving}

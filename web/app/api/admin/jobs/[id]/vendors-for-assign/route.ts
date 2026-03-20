@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
+import { resolveVendorAssignmentStatusId } from "@/lib/admin/vendorAssignmentPolicy";
 
 /** GET: vendors that can be assigned to this job (org + job vertical + approved). */
 export async function GET(
@@ -35,17 +36,18 @@ export async function GET(
     const vendorIds = ((vvRows ?? []) as { vendor_id: string }[]).map((r) => r.vendor_id);
     if (vendorIds.length === 0) return NextResponse.json({ vendors: [] });
 
-    const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", "approved").maybeSingle();
-    const approvedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
+    const approvedStatusId = await resolveVendorAssignmentStatusId(supabase);
 
-    let query = supabase
+    if (!approvedStatusId) {
+        return NextResponse.json({ vendors: [] });
+    }
+    const { data: vendorRows } = await supabase
         .from("vendors")
         .select("id, name, company_name, email, phone, primary_person_id")
         .eq("org_id", orgId)
         .in("id", vendorIds)
+        .eq("vendor_status_id", approvedStatusId)
         .order("name");
-    if (approvedStatusId) query = query.eq("vendor_status_id", approvedStatusId);
-    const { data: vendorRows } = await query;
     const vendors = await withVendorSelectLabels(supabase, vendorRows ?? []);
     return NextResponse.json({ vendors });
 }
