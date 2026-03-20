@@ -49,6 +49,15 @@ export default function Footer() {
               >
                 support@workwithalloy.com
               </a>
+              <span className="text-alloy-stone/50 mx-2" aria-hidden>
+                ·
+              </span>
+              <a
+                href="tel:+12108315653"
+                className="text-alloy-juniper hover:underline"
+              >
+                +1 210-831-5653
+              </a>
             </p>
           </div>
 
