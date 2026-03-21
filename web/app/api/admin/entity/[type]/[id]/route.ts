@@ -12,8 +12,9 @@ import {
 } from "@/lib/admin/jobDisplayPrice";
 import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 import { fetchEffectiveStatusDefinitions, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 
-const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
+const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "documents"] as const;
 
 async function hydrateVendorDisplayStub(
     supabase: ReturnType<typeof createAdminClient>,
@@ -839,6 +840,107 @@ export async function GET(
                 .eq("customer_subscription_id", id)
                 .order("subscription_sequence", { ascending: true });
             out._schedules = scheds ?? [];
+            out._ref = `SUB-${String(id).slice(-8)}`;
+            const schedList = (scheds ?? []) as { start_at?: string | null; canceled_at?: string | null }[];
+            const upcoming = schedList.find((s) => s.start_at && !s.canceled_at);
+            out._scheduled_for = upcoming?.start_at ?? schedList[0]?.start_at ?? null;
+            out.service_type =
+                (sub as { service_type?: string | null }).service_type ??
+                (sub as { service_key?: string | null }).service_key ??
+                null;
+            return NextResponse.json(out);
+        }
+
+        if (type === "documents") {
+            const ctx = await getAdminContext();
+            if (!ctx.ok) {
+                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
+            }
+            const { data: doc, error: docErr } = await supabase
+                .from("documents")
+                .select("*")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (docErr || !doc) {
+                return NextResponse.json(docErr?.message || "Not found", { status: docErr?.code === "PGRST116" ? 404 : 500 });
+            }
+            const row = doc as Record<string, unknown>;
+            const out: Record<string, unknown> = { ...row };
+            const n = normalizeDocumentRow(row);
+            out.name = n.name;
+            out.original_filename = n.original_filename;
+            out.document_type = n.document_type;
+            out.uploaded_at = n.uploaded_at;
+            out.status = n.status;
+            const sk = (row.status_key as string | null | undefined) ?? null;
+            out._status_display = await resolveStatusLabel(supabase, ctx.orgId, "documents", sk);
+            out._ref = `DOC-${String(id).slice(-8)}`;
+            const et = (row.entity_type as string | null)?.trim() ?? null;
+            const eid = (row.entity_id as string | null)?.trim() ?? null;
+            out._linked_record_type = et;
+            if (et && eid) {
+                const labelKey = `${et}:${eid}`;
+                const labelMap = new Map<string, string>();
+                if (et === "customer") {
+                    const { data: c } = await supabase.from("customers").select("id, name").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    if (c) labelMap.set(labelKey, (c as { name?: string | null }).name?.trim() || `Customer ${eid.slice(0, 8)}…`);
+                } else if (et === "vendor") {
+                    const { data: v } = await supabase.from("vendors").select("id, name").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    if (v) labelMap.set(labelKey, (v as { name?: string | null }).name?.trim() || `Vendor ${eid.slice(0, 8)}…`);
+                } else if (et === "job") {
+                    const { data: j } = await supabase.from("jobs").select("id, title").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    if (j) labelMap.set(labelKey, (j as { title?: string | null }).title?.trim() || `Job ${eid.slice(0, 8)}…`);
+                } else if (et === "schedule") {
+                    const { data: s } = await supabase.from("schedules").select("id, start_at").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    if (s) {
+                        const st = (s as { start_at?: string | null }).start_at;
+                        labelMap.set(labelKey, st ? `Visit ${new Date(st).toLocaleString()}` : `Schedule ${eid.slice(0, 8)}…`);
+                    }
+                } else if (et === "opportunity") {
+                    const { data: o } = await supabase.from("opportunities").select("id, name").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    if (o) labelMap.set(labelKey, (o as { name?: string | null }).name?.trim() || `Opportunity ${eid.slice(0, 8)}…`);
+                } else if (et === "contact") {
+                    const { data: c } = await supabase
+                        .from("contacts")
+                        .select("id, first_name, last_name, email")
+                        .eq("id", eid)
+                        .eq("org_id", ctx.orgId)
+                        .maybeSingle();
+                    if (c) {
+                        const cr = c as { first_name?: string | null; last_name?: string | null; email?: string | null };
+                        const nm = [cr.first_name, cr.last_name].filter(Boolean).join(" ").trim() || cr.email?.trim() || null;
+                        labelMap.set(labelKey, nm || `Contact ${eid.slice(0, 8)}…`);
+                    }
+                } else if (et === "person") {
+                    const { data: p } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name, email, full_name")
+                        .eq("id", eid)
+                        .eq("org_id", ctx.orgId)
+                        .maybeSingle();
+                    if (p) {
+                        const pr = p as {
+                            first_name?: string | null;
+                            last_name?: string | null;
+                            email?: string | null;
+                            full_name?: string | null;
+                        };
+                        const nm =
+                            (pr.full_name && String(pr.full_name).trim()) ||
+                            [pr.first_name, pr.last_name].filter(Boolean).join(" ").trim() ||
+                            pr.email?.trim() ||
+                            null;
+                        labelMap.set(labelKey, nm || `Person ${eid.slice(0, 8)}…`);
+                    }
+                }
+                out._linked_record_label = labelMap.get(labelKey) ?? null;
+            } else {
+                out._linked_record_label = null;
+            }
+            const exStatus = (row.extraction_status as string | null) ?? (row.ai_extraction_status as string | null) ?? null;
+            out._ai_extraction_status = exStatus;
+            out._uploaded_by = (row.uploaded_by as string | null) ?? null;
             return NextResponse.json(out);
         }
 

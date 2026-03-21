@@ -110,7 +110,7 @@ function mergeConfiguredFieldFormValues(
     }
 }
 
-const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
+const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "persons", "subscriptions", "documents"] as const;
 
 type VendorFormData = {
     vendor_status_id?: string | null;
@@ -182,6 +182,8 @@ const DRAWER_ACCENT_COLORS: Partial<Record<AdminDrawerEntityType, string>> = {
     contacts: "rgb(39,63,82)",
     customer_members: "rgb(39,63,82)",
     locations: "rgb(0,69,140)",
+    documents: "rgb(39,63,82)",
+    subscriptions: "rgb(0,162,131)",
 };
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -763,6 +765,9 @@ export default function AdminEntityDrawer() {
         "payments",
         "persons",
         "service_plan_templates",
+        "locations",
+        "documents",
+        "subscriptions",
     ];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
@@ -1799,6 +1804,7 @@ export default function AdminEntityDrawer() {
                 postal_code: locData.postal_code ?? "",
                 country: locData.country ?? "",
                 access_notes: locData.access_notes ?? "",
+                status_key: (locData.status_key as string) ?? "",
             };
             mergeConfiguredFieldFormValues(locBase, locData, (data._field_definitions as FieldDefRow[] | undefined) ?? []);
             setFormData(locBase);
@@ -1820,6 +1826,14 @@ export default function AdminEntityDrawer() {
                 status_key: (data.status_key as string) ?? "",
                 external_source: (data.external_source as string) ?? "",
                 external_id: (data.external_id as string) ?? "",
+            });
+        } else if (drawer.type === "subscriptions") {
+            setFormData({
+                status_key: (data.status_key as string) ?? "",
+            });
+        } else if (drawer.type === "documents") {
+            setFormData({
+                status_key: (data.status_key as string) ?? "",
             });
         }
         setSaveError(null);
@@ -2114,6 +2128,43 @@ export default function AdminEntityDrawer() {
         setInitialJobFormData(snapshot);
     }, [drawer.type, drawer.id, data?.id]);
 
+    /** Keep formData aligned with server row when switching drawers (subscriptions/documents/locations are not in INLINE_EDIT_ENTITY_TYPES). */
+    useEffect(() => {
+        if (!drawer.id || drawer.id === "new" || !data || (data as { _create?: boolean })._create) return;
+        if (String((data as { id?: string }).id) !== String(drawer.id)) return;
+
+        if (drawer.type === "subscriptions") {
+            setFormData((prev) => ({ ...prev, status_key: (data.status_key as string) ?? "" }));
+            return;
+        }
+        if (drawer.type === "documents") {
+            setFormData((prev) => ({ ...prev, status_key: (data.status_key as string) ?? "" }));
+            return;
+        }
+        if (drawer.type === "locations") {
+            const locData = data as Record<string, unknown>;
+            const next: Record<string, unknown> = {
+                label: (locData.label as string) ?? "",
+                customer_id: (locData.customer_id as string) ?? "",
+                location_type_id: (locData.location_type_id as string) ?? "",
+                location_type: (locData.location_type as string) ?? "",
+                is_active: locData.is_active ?? true,
+                is_primary: locData.is_primary ?? false,
+                address1: (locData.address1 as string) ?? "",
+                address2: (locData.address2 as string) ?? "",
+                city: (locData.city as string) ?? "",
+                state: (locData.state as string) ?? "",
+                postal_code: (locData.postal_code as string) ?? "",
+                country: (locData.country as string) ?? "",
+                access_notes: (locData.access_notes as string) ?? "",
+                status_key: (locData.status_key as string) ?? "",
+            };
+            const locDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
+            mergeConfiguredFieldFormValues(next, locData, locDefs);
+            setFormData((prev) => ({ ...prev, ...next }));
+        }
+    }, [drawer.type, drawer.id, data]);
+
     const jobFormDirty = useMemo(() => {
         if (drawer.type !== "jobs" || !initialJobFormData) return false;
         if (JOB_FORM_KEYS.some((k) => {
@@ -2285,25 +2336,6 @@ export default function AdminEntityDrawer() {
                 sort_order: data.sort_order != null ? Number(data.sort_order) : 0,
                 is_active: !!data.is_active,
             };
-        } else if (drawer.type === "locations") {
-            const locData = data as Record<string, unknown>;
-            initial = {
-                label: (locData.label as string) ?? "",
-                customer_id: (locData.customer_id as string) ?? "",
-                location_type_id: (locData.location_type_id as string) ?? "",
-                location_type: (locData.location_type as string) ?? "",
-                is_active: locData.is_active ?? true,
-                is_primary: locData.is_primary ?? false,
-                address1: (locData.address1 as string) ?? "",
-                address2: (locData.address2 as string) ?? "",
-                city: (locData.city as string) ?? "",
-                state: (locData.state as string) ?? "",
-                postal_code: (locData.postal_code as string) ?? "",
-                country: (locData.country as string) ?? "",
-                access_notes: (locData.access_notes as string) ?? "",
-            };
-            const locDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
-            mergeConfiguredFieldFormValues(initial as Record<string, unknown>, locData, locDefs);
         } else if (drawer.type === "persons") {
             initial = {
                 full_name: (data.full_name as string) ?? "",
@@ -2598,12 +2630,17 @@ export default function AdminEntityDrawer() {
             }
             if (drawer.type === "locations") {
                 const locPayload: Record<string, unknown> = {};
-                const keys = ["label", "customer_id", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes"] as const;
+                const keys = ["label", "customer_id", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes", "status_key"] as const;
                 for (const k of keys) {
                     if (formData[k] === undefined) continue;
                     if (k === "customer_id") {
                         const v = formData[k];
                         locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
+                        continue;
+                    }
+                    if (k === "status_key") {
+                        const v = formData.status_key;
+                        locPayload.status_key = typeof v === "string" && v.trim() ? v.trim() : null;
                         continue;
                     }
                     if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
@@ -2642,6 +2679,37 @@ export default function AdminEntityDrawer() {
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
                 router.refresh();
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: drawer.id } }));
+                return;
+            }
+            if (drawer.type === "subscriptions") {
+                const status_key = typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null;
+                const res = await fetch(`/api/admin/subscriptions/${drawer.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status_key }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json as { error?: string }).error || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                router.refresh();
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "subscriptions", id: drawer.id } }));
+                return;
+            }
+            if (drawer.type === "documents") {
+                const status_key = typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null;
+                const res = await fetch(`/api/admin/documents/${drawer.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status_key }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json as { error?: string }).error || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                router.refresh();
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "documents", id: drawer.id } }));
                 return;
             }
             const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -2993,8 +3061,10 @@ export default function AdminEntityDrawer() {
                                                                 ? (data as { _create?: boolean })._create
                                                                     ? "New Person"
                                                                     : `Person: ${(data._person_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "").slice(0, 8) + "…"}`
-                                                : drawer.type === "subscriptions"
-                                                                ? `${subscriptionSingular}: ${(data._customer_name as string) || (drawer.id ?? "").slice(0, 8)}…`
+                                                : drawer.type === "documents"
+                                                    ? `Document: ${String((data as { name?: string | null }).name ?? "").trim() || String((data as { original_filename?: string | null }).original_filename ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`
+                                                    : drawer.type === "subscriptions"
+                                                        ? `${subscriptionSingular}: ${(data._customer_name as string) || `${(drawer.id ?? "").slice(0, 8)}…`}`
                                                     : "Details"
         : loading
             ? "Loading…"
@@ -3571,8 +3641,75 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "subscriptions" && data && !(data as { _create?: boolean })._create && drawer.id && drawer.id !== "new") {
+            const subData = data as {
+                customer_id?: string;
+                _customer_name?: string | null;
+                _schedules?: {
+                    id: string;
+                    job_id: string;
+                    start_at: string;
+                    end_at: string;
+                    subscription_sequence: number;
+                    rescheduled_from_schedule_id: string | null;
+                    canceled_at: string | null;
+                    canceled_by: string | null;
+                    cancel_reason: string | null;
+                }[];
+            };
+            const schedules = subData._schedules ?? [];
+            return {
+                customer: (
+                    <div className="py-1">
+                        <DrawerLinkWithName
+                            label="Customer"
+                            id={subData.customer_id ?? null}
+                            type="customers"
+                            displayName={subData._customer_name ?? ""}
+                        />
+                    </div>
+                ),
+                schedules: (
+                    <div className="space-y-3">
+                        {schedules.length === 0 ? (
+                            <p className="text-sm text-alloy-midnight/60">No occurrences yet.</p>
+                        ) : (
+                            <ul className="space-y-2">
+                                {schedules.map((s) => (
+                                    <li key={s.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span>
+                                                #{s.subscription_sequence} — {formatDateTime(s.start_at)}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => openDrawer({ type: "schedules", id: s.id })}
+                                                className="text-alloy-blue hover:underline text-xs"
+                                            >
+                                                Open
+                                            </button>
+                                        </div>
+                                        {s.rescheduled_from_schedule_id ? (
+                                            <div className="text-alloy-midnight/60 text-xs mt-0.5">Rescheduled from schedule</div>
+                                        ) : null}
+                                        {s.canceled_at ? (
+                                            <div className="text-red-600/80 text-xs mt-0.5">
+                                                Canceled {formatDateTime(s.canceled_at)}
+                                                {s.canceled_by ? ` by ${s.canceled_by}` : ""}
+                                                {s.cancel_reason ? ` — ${s.cancel_reason}` : ""}
+                                            </div>
+                                        ) : null}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        <SubscriptionGenerateNextButton subscriptionId={drawer.id} onDone={refetch} />
+                    </div>
+                ),
+            };
+        }
         return {};
-    }, [drawer.type, drawer.id, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing]);
+    }, [drawer.type, drawer.id, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing, refetch]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!data || (data as { _create?: boolean })._create) return [];
@@ -3982,6 +4119,12 @@ export default function AdminEntityDrawer() {
                     <button type="button" onClick={() => { startEdit(); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
                 </>
             )}
+            {(drawer.type === "subscriptions" || drawer.type === "documents") && canMutate && drawer.id && drawer.id !== "new" && !(data as { _create?: boolean })?._create && (
+                <>
+                    <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+                    <button type="button" onClick={() => { startEdit(); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Cancel</button>
+                </>
+            )}
             {canMutate && !(data as { _create?: boolean })?._create && drawer.id && drawer.id !== "new" && canHardDeleteEntityType(drawer.type) && (
                 deletionEligibilityLoading ? (
                     <span className="text-xs text-alloy-midnight/50">Checking…</span>
@@ -3996,7 +4139,7 @@ export default function AdminEntityDrawer() {
                 </div>
     );
 
-    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
@@ -7138,59 +7281,6 @@ export default function AdminEntityDrawer() {
                                     <Field label={`${jobSingular} ID`} value={String(data?.job_id ?? "")} />
                                 </>
                             )}
-                            {drawer.type === "subscriptions" && data && (() => {
-                                const subData = data as {
-                                    id: string;
-                                    created_at: string;
-                                    customer_id: string;
-                                    status: string;
-                                    status_key?: string | null;
-                                    _status_display?: string | null;
-                                    start_date: string | null;
-                                    _frequency_label: string | null;
-                                    _customer_name: string | null;
-                                    _schedules?: { id: string; job_id: string; start_at: string; end_at: string; subscription_sequence: number; rescheduled_from_schedule_id: string | null; canceled_at: string | null; canceled_by: string | null; cancel_reason: string | null }[];
-                                };
-                                const schedules = subData._schedules ?? [];
-                                return (
-                                    <>
-                                        <details className="pt-2 pb-2 border-b border-[#e6e8ec]">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Overview</summary>
-                                            <div className="space-y-1">
-                                                <Field label="ID" value={subData.id} />
-                                                <Field label="Created" value={formatDateTime(subData.created_at)} />
-                                                <Field label="Customer" value={subData._customer_name ?? "—"} />
-                                                <DrawerLinkWithName label="Customer" id={subData.customer_id ?? null} type="customers" displayName={subData._customer_name} />
-                                                <Field label="Frequency" value={subData._frequency_label ?? "—"} />
-                                                <Field label="Status" value={subData._status_display ?? subData.status ?? "—"} />
-                                                <Field label="Start date" value={subData.start_date ?? "—"} />
-                                            </div>
-                                        </details>
-                                        <details className="pt-4 border-b border-[#e6e8ec] pb-4">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Schedules</summary>
-                                            {schedules.length === 0 ? (
-                                                <p className="text-sm text-alloy-midnight/60">No occurrences yet.</p>
-                                            ) : (
-                                                <ul className="space-y-2">
-                                                    {schedules.map((s) => (
-                                                        <li key={s.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span>#{s.subscription_sequence} — {formatDateTime(s.start_at)}</span>
-                                                                <button type="button" onClick={() => openDrawer({ type: "schedules", id: s.id })} className="text-alloy-blue hover:underline text-xs">Open</button>
-                                                            </div>
-                                                            {s.rescheduled_from_schedule_id && <div className="text-alloy-midnight/60 text-xs mt-0.5">Rescheduled from schedule</div>}
-                                                            {s.canceled_at && <div className="text-red-600/80 text-xs mt-0.5">Canceled {formatDateTime(s.canceled_at)}{s.canceled_by ? ` by ${s.canceled_by}` : ""}{s.cancel_reason ? ` — ${s.cancel_reason}` : ""}</div>}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            )}
-                                        </details>
-                                        {drawer.id && (
-                                            <SubscriptionGenerateNextButton subscriptionId={drawer.id} onDone={refetch} />
-                                        )}
-                                    </>
-                                );
-                            })()}
                         </>
                     )}
                 </div>

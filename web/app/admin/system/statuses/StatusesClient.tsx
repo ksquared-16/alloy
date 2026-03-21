@@ -35,6 +35,8 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     vendors: "vendors",
     service_plan_templates: "service_plan_templates",
     persons: "persons",
+    contacts: "contacts",
+    customer_members: "customer_members",
     locations: "locations",
     documents: "documents",
     payments: "payments",
