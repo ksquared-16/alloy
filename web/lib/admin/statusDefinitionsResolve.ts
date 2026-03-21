@@ -1,9 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const STATUS_DEF_COLUMNS =
+    "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata";
+
 export type StatusDefinitionRow = {
     id: string;
     org_id: string | null;
-    industry_id: string | null;
+    industry_key: string | null;
     entity_type: string;
     status_key: string;
     status_label: string | null;
@@ -33,7 +36,7 @@ export async function fetchOrgStatusDefinitions(
     const activeOnly = opts?.activeOnly !== false;
     let q = supabase
         .from("status_definitions")
-        .select("id, org_id, industry_id, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata")
+        .select(STATUS_DEF_COLUMNS)
         .eq("org_id", orgId)
         .eq("entity_type", entityType);
     if (activeOnly) q = q.eq("is_active", true);
@@ -46,18 +49,18 @@ export async function fetchOrgStatusDefinitions(
 }
 
 /**
- * Default rows: org_id IS NULL. Prefer industry-specific definitions over generic (industry_id NULL) per status_key.
+ * Default rows: org_id IS NULL. Prefer industry-specific definitions over generic (industry_key NULL) per status_key.
  */
 export async function fetchIndustryDefaultStatusDefinitions(
     supabase: SupabaseClient,
     entityType: string,
-    orgIndustryId: string | null,
+    orgIndustryKey: string | null,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
     const activeOnly = opts?.activeOnly !== false;
     let q = supabase
         .from("status_definitions")
-        .select("id, org_id, industry_id, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata")
+        .select(STATUS_DEF_COLUMNS)
         .is("org_id", null)
         .eq("entity_type", entityType);
     if (activeOnly) q = q.eq("is_active", true);
@@ -67,17 +70,25 @@ export async function fetchIndustryDefaultStatusDefinitions(
         ...r,
         metadata: (r.metadata as Record<string, unknown> | null) ?? null,
     }));
-    const generic = rows.filter((r) => r.industry_id == null);
-    const specific = orgIndustryId ? rows.filter((r) => r.industry_id === orgIndustryId) : [];
+    const generic = rows.filter((r) => r.industry_key == null || String(r.industry_key).trim() === "");
+    const specific = orgIndustryKey
+        ? rows.filter((r) => String(r.industry_key ?? "").trim() === orgIndustryKey)
+        : [];
     const byKey = new Map<string, StatusDefinitionRow>();
     for (const r of generic) byKey.set(r.status_key, r);
     for (const r of specific) byKey.set(r.status_key, r);
     return sortDefs(Array.from(byKey.values()));
 }
 
-export async function getOrgIndustryId(supabase: SupabaseClient, orgId: string): Promise<string | null> {
+/** Resolve org's industry to `industries.key` for matching `status_definitions.industry_key`. */
+export async function getOrgIndustryKey(supabase: SupabaseClient, orgId: string): Promise<string | null> {
     const { data } = await supabase.from("orgs").select("industry_id").eq("id", orgId).maybeSingle();
-    return ((data as { industry_id?: string | null } | null)?.industry_id ?? null) || null;
+    const industryId = (data as { industry_id?: string | null } | null)?.industry_id ?? null;
+    if (!industryId) return null;
+    const { data: ind } = await supabase.from("industries").select("key").eq("id", industryId).maybeSingle();
+    const k = (ind as { key?: string | null } | null)?.key;
+    if (k == null || String(k).trim() === "") return null;
+    return String(k).trim();
 }
 
 /**
@@ -91,8 +102,8 @@ export async function fetchEffectiveStatusDefinitions(
 ): Promise<StatusDefinitionRow[]> {
     const orgRows = await fetchOrgStatusDefinitions(supabase, orgId, entityType, opts);
     if (orgRows.length > 0) return sortDefs(orgRows);
-    const industryId = await getOrgIndustryId(supabase, orgId);
-    return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryId, opts);
+    const industryKey = await getOrgIndustryKey(supabase, orgId);
+    return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
 }
 
 export async function resolveStatusLabel(

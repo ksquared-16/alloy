@@ -67,7 +67,9 @@ export async function GET(request: NextRequest) {
 
         const { data: allOrgRows, error } = await supabase
             .from("status_definitions")
-            .select("id, org_id, industry_id, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata, created_at, updated_at")
+            .select(
+                "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata, created_at, updated_at"
+            )
             .eq("org_id", ctx.orgId)
             .order("entity_type", { ascending: true })
             .order("sort_order", { ascending: true })
@@ -147,7 +149,7 @@ export async function POST(request: NextRequest) {
         is_active,
         is_system: false,
         metadata: null,
-        industry_id: null as string | null,
+        industry_key: null as string | null,
     };
 
     const { data: created, error } = await supabase
