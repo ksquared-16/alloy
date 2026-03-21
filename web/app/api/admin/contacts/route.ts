@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 const CREATE_ALLOWED: readonly string[] = [
     "first_name",
@@ -57,6 +58,9 @@ export async function GET(request: NextRequest) {
     const { data: rows, error, count } = await q;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    const contactDefs = await fetchEffectiveStatusDefinitions(supabase, orgId, "contacts", { activeOnly: true });
+    const contactStatusLabels = displayLabelsFromDefinitions(contactDefs);
+
     const list = (rows ?? []) as { id: string; created_at: string | null; updated_at: string | null; first_name: string | null; last_name: string | null; customer_id: string | null; vendor_id: string | null; contact_type?: string | null; [k: string]: unknown }[];
     const customerIds = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
     const vendorIds = [...new Set(list.map((r) => r.vendor_id).filter(Boolean))] as string[];
@@ -99,7 +103,14 @@ export async function GET(request: NextRequest) {
         const _customer_name = r.customer_id && customerNames[r.customer_id] ? customerNames[r.customer_id] : "—";
         const _is_primary_contact = primaryForCustomer.has(r.id) || primaryForVendor.has(r.id);
         const _updated = r.updated_at ?? r.created_at ?? "";
-        return { ...r, _name, _customer_name, _is_primary_contact, _updated };
+        const sk = (r.status_key as string | null | undefined) ?? null;
+        const _status_display =
+            sk != null && String(sk).trim() !== ""
+                ? (contactStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
+                : (r.status as string | null) != null && String(r.status).trim() !== ""
+                  ? String(r.status).trim()
+                  : null;
+        return { ...r, _name, _customer_name, _is_primary_contact, _updated, _status_display };
     });
 
     return NextResponse.json({

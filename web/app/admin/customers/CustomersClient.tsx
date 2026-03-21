@@ -19,6 +19,7 @@ export interface Customer {
   name: string | null;
   status: string | null;
   status_key: string | null;
+  _status_display?: string | null;
   customer_type: string | null;
   primary_contact_id: string | null;
   vertical_id: string | null;

@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 const ALLOWED_KEYS = [
     "label",
@@ -19,6 +21,7 @@ const ALLOWED_KEYS = [
     "access_method_id",
     "access_notes",
     "metadata",
+    "status_key",
 ] as const;
 
 /** PATCH: update location. Admin only. Org-scoped. No customer_id or org_id change. */
@@ -51,7 +54,7 @@ export async function PATCH(
 
     const { data: existing, error: fetchErr } = await supabase
         .from("locations")
-        .select("id, org_id, customer_id")
+        .select("id, org_id, customer_id, status_key")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -121,7 +124,17 @@ export async function PATCH(
             updates[key] = !!body[key];
             continue;
         }
+        if (key === "status_key") {
+            const v = body.status_key;
+            updates.status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+            continue;
+        }
         updates[key] = body[key];
+    }
+
+    if (updates.status_key !== undefined) {
+        const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "locations", updates.status_key as string | null);
+        if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });
     }
 
     const systemKeys = [...ALLOWED_KEYS, "customer_id", "org_id", "vendor_id"] as const;
@@ -150,6 +163,8 @@ export async function PATCH(
             }
         }
 
+        const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
+
         const { data: updated, error: updateErr } = await supabase
             .from("locations")
             .update(updates)
@@ -160,6 +175,17 @@ export async function PATCH(
 
         if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 400 });
         if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        if (updates.status_key !== undefined) {
+            await emitStatusChangedEvent({
+                supabase,
+                orgId: ctx.orgId,
+                entityType: "locations",
+                entityId: id,
+                oldStatusKey,
+                newStatusKey: (updates.status_key as string | null) ?? null,
+            });
+        }
 
         logAdminAudit({
             entity: "locations",

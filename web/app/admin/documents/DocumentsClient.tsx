@@ -7,6 +7,7 @@ import AssociatedDocumentUploadModal from "@/components/admin/AssociatedDocument
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import {
     V1_DOCUMENT_ENTITY_OPTIONS,
     drawerTypeForDocumentEntity,
@@ -19,6 +20,8 @@ type DocListRow = {
     original_filename: string | null;
     document_type: string | null;
     status: string | null;
+    status_key?: string | null;
+    _status_display?: string | null;
     uploaded_at: string | null;
     created_at: string | null;
     entity_type: string | null;
@@ -74,6 +77,15 @@ export default function DocumentsClient() {
 
     useEffect(() => {
         fetchList();
+    }, [fetchList]);
+
+    useEffect(() => {
+        const onSaved = (ev: Event) => {
+            const d = (ev as CustomEvent<{ type?: string }>).detail;
+            if (d?.type === "documents") fetchList();
+        };
+        window.addEventListener("admin-entity-saved", onSaved);
+        return () => window.removeEventListener("admin-entity-saved", onSaved);
     }, [fetchList]);
 
     const loadHints = useCallback(async () => {
@@ -235,11 +247,11 @@ export default function DocumentsClient() {
                         <table className="w-full min-w-[880px] text-left text-sm">
                             <thead>
                                 <tr className="border-b border-alloy-stone/30 text-alloy-midnight/60">
+                                    <th className="pb-2 pr-3 font-semibold">Status</th>
                                     <th className="pb-2 pr-3 font-semibold">Title</th>
                                     <th className="pb-2 pr-3 font-semibold">Doc type</th>
                                     <th className="pb-2 pr-3 font-semibold">Entity</th>
                                     <th className="pb-2 pr-3 font-semibold">Related record</th>
-                                    <th className="pb-2 pr-3 font-semibold">Status</th>
                                     <th className="pb-2 pr-3 font-semibold">Created</th>
                                     <th className="pb-2 font-semibold">Actions</th>
                                 </tr>
@@ -254,6 +266,12 @@ export default function DocumentsClient() {
                                 ) : (
                                     rows.map((r) => (
                                         <tr key={r.id} className="border-b border-alloy-stone/20 align-top">
+                                            <td className="py-2 pr-3 whitespace-nowrap">
+                                                <StatusBadge
+                                                    label={r._status_display ?? r.status ?? "—"}
+                                                    variant={getStatusVariant(r._status_display ?? r.status)}
+                                                />
+                                            </td>
                                             <td className="py-2 pr-3 font-medium text-alloy-forge/90 max-w-[200px]">
                                                 <span className="line-clamp-2">{rowTitle(r)}</span>
                                             </td>
@@ -268,11 +286,17 @@ export default function DocumentsClient() {
                                                     "—"
                                                 )}
                                             </td>
-                                            <td className="py-2 pr-3 text-alloy-midnight/70">{r.status ?? "—"}</td>
                                             <td className="py-2 pr-3 text-alloy-midnight/60 whitespace-nowrap">
                                                 {r.created_at ? formatDateTime(r.created_at) : "—"}
                                             </td>
                                             <td className="py-2 space-x-1 whitespace-nowrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDrawer({ type: "documents", id: r.id })}
+                                                    className="text-xs px-2 py-1 border border-alloy-stone/40 rounded hover:bg-alloy-stone/10"
+                                                >
+                                                    Details
+                                                </button>
                                                 <button
                                                     type="button"
                                                     disabled={openingId === r.id}

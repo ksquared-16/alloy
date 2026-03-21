@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 200;
@@ -144,7 +145,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("documents")
-        .select("id, entity_type, entity_id, title, original_filename, doc_type, status, created_at")
+        .select("id, entity_type, entity_id, title, original_filename, doc_type, status, status_key, created_at")
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -161,14 +162,25 @@ export async function GET(request: NextRequest) {
 
     const rows = (rawRows ?? []) as DocRow[];
     const labelMap = await attachRelatedLabels(supabase, ctx.orgId, rows);
+    const docDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });
+    const docStatusLabels = displayLabelsFromDefinitions(docDefs);
 
     const documents = rows.map((src) => {
         const n = normalizeDocumentRow(src as unknown as Record<string, unknown>);
         const t = src.entity_type?.trim() ?? null;
         const eid = src.entity_id?.trim() ?? null;
         const related_label = t && eid ? labelMap.get(labelKey(t, eid)) ?? null : null;
+        const sk = (src as { status_key?: string | null }).status_key ?? null;
+        const _status_display =
+            sk != null && String(sk).trim() !== ""
+                ? (docStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
+                : n.status != null && String(n.status).trim() !== ""
+                  ? String(n.status).trim()
+                  : null;
         return {
             ...n,
+            status_key: sk,
+            _status_display,
             entity_type: t,
             entity_id: eid,
             related_label,

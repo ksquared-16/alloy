@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { assertAllowedStatusKey, displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list locations for current org (dropdowns). Admin + ops. is_active only by default. */
 export async function GET(request: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("locations")
-        .select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active, location_type, updated_at")
+        .select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active, location_type, status_key, updated_at")
         .eq("org_id", ctx.orgId)
         .order("is_primary", { ascending: false })
         .order("label", { ascending: true });
@@ -32,12 +33,28 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const list = (rows ?? []) as { id: string; label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; customer_id?: string | null; is_primary?: boolean; is_active?: boolean; location_type?: string | null; updated_at?: string | null }[];
+    const list = (rows ?? []) as {
+        id: string;
+        label?: string | null;
+        address1?: string | null;
+        city?: string | null;
+        state?: string | null;
+        postal_code?: string | null;
+        customer_id?: string | null;
+        is_primary?: boolean;
+        is_active?: boolean;
+        location_type?: string | null;
+        status_key?: string | null;
+        updated_at?: string | null;
+    }[];
     const customerIds = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
     const { data: customersData } = customerIds.length
         ? await supabase.from("customers").select("id, name").in("id", customerIds)
         : { data: [] };
     const customerMap = new Map((customersData ?? []).map((c: { id: string; name?: string | null }) => [c.id, c.name ?? null]));
+
+    const locDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "locations", { activeOnly: true });
+    const locStatusLabels = displayLabelsFromDefinitions(locDefs);
 
     const locations = list.map((r) => ({
         id: r.id,
@@ -51,7 +68,12 @@ export async function GET(request: NextRequest) {
         is_active: r.is_active !== false,
         location_type: r.location_type ?? null,
         updated_at: r.updated_at ?? null,
+        status_key: r.status_key ?? null,
         _customer_name: r.customer_id ? (customerMap.get(r.customer_id) ?? null) : null,
+        _status_display:
+            r.status_key != null && String(r.status_key).trim() !== ""
+                ? (locStatusLabels.get(String(r.status_key).trim()) ?? String(r.status_key).trim())
+                : null,
     }));
 
     return NextResponse.json({ locations });
@@ -138,6 +160,14 @@ export async function POST(request: NextRequest) {
     const access_notes = typeof body.access_notes === "string" ? (body.access_notes as string).trim() || null : null;
     const metadata = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
 
+    let status_key: string | null = null;
+    if (body.status_key !== undefined) {
+        const v = body.status_key;
+        status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+        const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "locations", status_key);
+        if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });
+    }
+
     if (customer_id && is_primary) {
         await supabase
             .from("locations")
@@ -165,6 +195,9 @@ export async function POST(request: NextRequest) {
         access_notes,
         metadata,
     };
+    if (body.status_key !== undefined) {
+        insert.status_key = status_key;
+    }
 
     const { data: created, error } = await supabase.from("locations").insert(insert).select().single();
     if (error) {

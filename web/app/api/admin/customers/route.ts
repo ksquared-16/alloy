@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 type CustomerRow = {
     id: string;
@@ -82,10 +83,12 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    const [jobsCountRes, oppCountRes] = await Promise.all([
+    const [jobsCountRes, oppCountRes, custStatusDefs] = await Promise.all([
         customerIds.length > 0 ? supabase.from("jobs").select("customer_id").in("customer_id", customerIds) : { data: [] as { customer_id: string }[] },
         customerIds.length > 0 ? supabase.from("opportunities").select("customer_id").in("customer_id", customerIds) : { data: [] as { customer_id: string }[] },
+        fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "customers", { activeOnly: true }),
     ]);
+    const customerStatusLabels = displayLabelsFromDefinitions(custStatusDefs);
     const jobCountByCustomer: Record<string, number> = {};
     (jobsCountRes.data ?? []).forEach((j: { customer_id: string }) => {
         jobCountByCustomer[j.customer_id] = (jobCountByCustomer[j.customer_id] ?? 0) + 1;
@@ -117,8 +120,16 @@ export async function GET(request: NextRequest) {
         const _active_jobs_count = jobCountByCustomer[r.id] ?? 0;
         const _open_opportunities_count = oppCountByCustomer[r.id] ?? 0;
         const _updated = r.updated_at ?? r.created_at ?? null;
+        const sk = r.status_key ?? null;
+        const _status_display =
+            sk != null && String(sk).trim() !== ""
+                ? (customerStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
+                : r.status != null && String(r.status).trim() !== ""
+                  ? String(r.status).trim()
+                  : null;
         return {
             ...r,
+            _status_display,
             _primary_person_name: _primary_person_name ?? undefined,
             _primary_person_id: _primary_person_id ?? undefined,
             _primary_contact_name,

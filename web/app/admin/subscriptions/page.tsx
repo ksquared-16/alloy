@@ -1,14 +1,22 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import SubscriptionsClient from "./SubscriptionsClient";
 import { addWeeks, addMonths } from "date-fns";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 
 export default async function AdminSubscriptionsPage() {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return <SubscriptionsClient initialData={[]} error="Unauthorized" />;
+    }
+
     const supabase = createAdminClient();
 
     const { data: subs, error } = await supabase
         .from("customer_subscriptions")
-        .select("id, created_at, customer_id, status, cadence, interval, start_date")
+        .select("id, created_at, customer_id, status, status_key, cadence, interval, start_date")
+        .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -33,6 +41,9 @@ export default async function AdminSubscriptionsPage() {
             customerMap[row.id] = row.name ?? "";
         }
     }
+
+    const subDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "subscriptions", { activeOnly: true });
+    const subStatusLabels = displayLabelsFromDefinitions(subDefs);
 
     const { data: scheds } = await supabase
         .from("schedules")
@@ -62,8 +73,18 @@ export default async function AdminSubscriptionsPage() {
             const next = cadence === "week" ? addWeeks(startDate, interval) : addMonths(startDate, interval);
             nextPreview = next.toISOString().slice(0, 10);
         }
+        const sk = (s as { status_key?: string | null }).status_key ?? null;
+        const legacySt = (s as { status?: string }).status;
+        const _status_display =
+            sk != null && String(sk).trim() !== ""
+                ? (subStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
+                : legacySt != null && String(legacySt).trim() !== ""
+                  ? String(legacySt).trim()
+                  : null;
         return {
             ...s,
+            status_key: sk,
+            _status_display,
             _frequency_label: formatFrequencyLabel(cadence, interval),
             _customer_name: customerMap[s.customer_id] || null,
             _last_occurrence: last?.start_at ?? null,

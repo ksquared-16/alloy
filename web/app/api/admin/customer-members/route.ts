@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list customer_members for org. Optional ?customer_id= filter. Admin + ops can read. */
 export async function GET(request: NextRequest) {
@@ -66,11 +67,19 @@ export async function GET(request: NextRequest) {
         return age >= 0 ? age : null;
     }
 
+    const memberDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "customer_members", { activeOnly: true });
+    const memberStatusLabels = displayLabelsFromDefinitions(memberDefs);
+
     const members = (rows ?? []).map((r) => {
         const id = (r as { id: string }).id;
         const relationshipKey = (r as { relationship: string | null }).relationship ?? null;
         const created_at = (r as { created_at: string }).created_at;
         const updated_at = (r as { updated_at?: string | null }).updated_at ?? null;
+        const sk = (r as { status_key?: string | null }).status_key ?? null;
+        const _status_display =
+            sk != null && String(sk).trim() !== ""
+                ? (memberStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
+                : null;
         return {
             id,
             customer_id: (r as { customer_id: string }).customer_id,
@@ -80,9 +89,10 @@ export async function GET(request: NextRequest) {
             last_name: (r as { last_name: string | null }).last_name ?? null,
             dob: (r as { dob: string | null }).dob ?? null,
             is_active: (r as { is_active: boolean }).is_active ?? true,
-            status_key: (r as { status_key?: string | null }).status_key ?? null,
+            status_key: sk,
             created_at,
             updated_at,
+            _status_display,
             _customer_name: customerMap.get((r as { customer_id: string }).customer_id) ?? null,
             _relationship_label: relationshipKey ? (relationshipMap.get(relationshipKey) ?? relationshipKey) : null,
             _age: ageFromDob((r as { dob: string | null }).dob),

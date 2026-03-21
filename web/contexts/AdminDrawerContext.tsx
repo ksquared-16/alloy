@@ -2,7 +2,25 @@
 
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
 
-export type AdminDrawerEntityType = "jobs" | "opportunities" | "contacts" | "customers" | "customer_members" | "persons" | "schedules" | "discount_redemptions" | "workflows" | "vendors" | "subscriptions" | "locations" | "payments" | "service_offerings" | "service_plan_templates" | "addons";
+/** Entity kinds that can open in the admin stack drawer (must match API + presentation registry usage). */
+export type AdminDrawerEntityType =
+    | "jobs"
+    | "schedules"
+    | "opportunities"
+    | "contacts"
+    | "customers"
+    | "customer_members"
+    | "persons"
+    | "locations"
+    | "documents"
+    | "vendors"
+    | "discount_redemptions"
+    | "workflows"
+    | "subscriptions"
+    | "payments"
+    | "service_offerings"
+    | "service_plan_templates"
+    | "addons";
 
 export type SchedulePrefill = {
     job_id: string;
