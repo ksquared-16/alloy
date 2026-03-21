@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import OpportunitiesClient from "./OpportunitiesClient";
 
 type SearchParams = { status_key?: string };
@@ -18,7 +19,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     const supabase = createAdminClient();
     const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
 
-    const cols = "id, created_at, updated_at, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, primary_person_id, external_id, vertical_id, pipeline_stage_id, source, estimated_price_cents, monetary_value_cents";
+    const cols = "id, created_at, updated_at, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, primary_person_id, external_id, vertical_id, source, estimated_price_cents, monetary_value_cents";
     let q = supabase
         .from("opportunities")
         .select(cols)
@@ -28,10 +29,9 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     const { data: opportunities, error } = await q;
 
     const verticalIds = [...new Set((opportunities ?? []).map((o) => o.vertical_id).filter(Boolean))] as string[];
-    const [stagesRes, customersRes, contactsRes, personsRes, verticalsRes] = await Promise.all([
-        supabase.from("pipeline_stages").select("id, name, pipeline_id").order("position", { ascending: true }),
+    const [customersRes, contactsRes, personsRes, verticalsRes] = await Promise.all([
         (opportunities ?? []).length
-            ? supabase.from("customers").select("id, name").in("id", [...new Set((opportunities ?? []).map((o) => o.customer_id).filter(Boolean))] as string[])
+            ? supabase.from("customers").select("id, name, org_id").in("id", [...new Set((opportunities ?? []).map((o) => o.customer_id).filter(Boolean))] as string[])
             : { data: [] },
         (opportunities ?? []).length
             ? supabase.from("contacts").select("id, first_name, last_name, email, phone").in("id", [...new Set((opportunities ?? []).map((o) => o.primary_contact_id).filter(Boolean))] as string[])
@@ -42,8 +42,22 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         verticalIds.length ? supabase.from("verticals").select("id, name").in("id", verticalIds) : { data: [] },
     ]);
 
-    const stages = stagesRes.data ?? [];
     const customerMap = new Map((customersRes.data ?? []).map((c) => [c.id, c]));
+    const orgIdsForOpp = [
+        ...new Set(
+            (customersRes.data ?? [])
+                .map((c) => (c as { org_id?: string | null }).org_id)
+                .filter(Boolean)
+        ),
+    ] as string[];
+    const oppStatusLabelByOrg = new Map<string, Map<string, string>>();
+    for (const oid of orgIdsForOpp) {
+        const defs = await fetchEffectiveStatusDefinitions(supabase, oid, "opportunities", { activeOnly: true });
+        oppStatusLabelByOrg.set(
+            oid,
+            new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]))
+        );
+    }
     const contactMap = new Map((contactsRes.data ?? []).map((c) => [c.id, c]));
     const personMap = new Map((personsRes.data ?? []).map((p) => [p.id, p]));
     const verticalMap = new Map((verticalsRes.data ?? []).map((v: { id: string; name?: string | null }) => [v.id, v.name ?? null]));
@@ -59,7 +73,11 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         const _primary_person_name = person
             ? [(person as { first_name?: string }).first_name, (person as { last_name?: string }).last_name].filter(Boolean).join(" ").trim() || null
             : null;
-        const _status_display = o.status_key ?? o.status ?? null;
+        const custOrg = (customer as { org_id?: string | null } | undefined)?.org_id ?? null;
+        const oppLabels = custOrg ? oppStatusLabelByOrg.get(custOrg) : null;
+        const sk = o.status_key ?? null;
+        const _status_display =
+            sk && oppLabels ? (oppLabels.get(sk) ?? sk) : sk ?? (o.status ?? null);
         const _updated = (o as { updated_at?: string | null }).updated_at ?? o.created_at ?? null;
         const _quote_total_display = quoteTotalDisplay(o as { quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null });
         return {
@@ -71,8 +89,6 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
             _primary_contact_name: contactName,
             _contact_email: (contact as { email?: string } | undefined)?.email ?? null,
             _contact_phone: (contact as { phone?: string } | undefined)?.phone ?? null,
-            _stage_name: o.pipeline_stage_id ? (stages.find((s) => s.id === o.pipeline_stage_id) as { name?: string })?.name ?? null : null,
-            _pipeline_stage_name: o.pipeline_stage_id ? (stages.find((s) => s.id === o.pipeline_stage_id) as { name?: string })?.name ?? null : null,
             _status_display: _status_display ?? null,
             _quote_total_display: _quote_total_display,
             _updated,
@@ -81,13 +97,12 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
 
     if (error) {
         console.error("Error fetching opportunities:", error);
-        return <OpportunitiesClient initialData={[]} stages={[]} error={error?.message} />;
+        return <OpportunitiesClient initialData={[]} error={error?.message} />;
     }
 
     return (
         <OpportunitiesClient
             initialData={rows}
-            stages={stages}
             error={undefined}
         />
     );

@@ -5,8 +5,9 @@ import { logAdminAudit } from "@/lib/adminAuth";
 import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/admin/postScheduleCompletion";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 
-const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "schedule_status_id", "metadata"] as const;
+const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
 function isCompletedStatus(s: string | null | undefined): boolean {
     return String(s ?? "").trim().toLowerCase() === "completed";
@@ -93,8 +94,9 @@ export async function PATCH(
                 updates[key] = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
                 continue;
             }
-            if (key === "schedule_status_id") {
-                updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+            if (key === "status_key") {
+                const v = body[key];
+                updates.status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
                 continue;
             }
             updates[key] = body[key];
@@ -113,13 +115,11 @@ export async function PATCH(
 
         const previousStatusKey = (schedule as { status_key?: string | null }).status_key;
 
-        if (updates.schedule_status_id !== undefined) {
-            const sid = updates.schedule_status_id as string | null;
-            if (sid) {
-                const { data: row } = await supabase.from("schedule_statuses").select("key").eq("id", sid).maybeSingle();
-                updates.status_key = (row as { key?: string | null } | null)?.key ?? previousStatusKey ?? null;
-            } else {
-                updates.status_key = null;
+        if (updates.status_key !== undefined) {
+            const sk = updates.status_key as string | null;
+            const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "schedules", sk);
+            if (!chk.ok) {
+                return NextResponse.json({ error: chk.message }, { status: 400 });
             }
         }
 
@@ -192,7 +192,7 @@ export async function PATCH(
             }
         }
 
-        if (updates.schedule_status_id !== undefined) {
+        if (updates.status_key !== undefined) {
             const metadata: Record<string, unknown> = {};
             const jobId = (schedule as { job_id?: string }).job_id;
             const assignedVendorId = (schedule as { assigned_vendor_id?: string | null }).assigned_vendor_id;

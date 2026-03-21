@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 
 /** PATCH: update status_key, paid_at, notes. Editable fields only. */
 export async function PATCH(
@@ -30,6 +31,24 @@ export async function PATCH(
     updates.updated_at = new Date().toISOString();
 
     const supabase = createAdminClient();
+    if (updates.status_key !== undefined) {
+        const { data: payRow } = await supabase.from("payments").select("job_id, customer_id").eq("id", id).maybeSingle();
+        const pr = payRow as { job_id?: string | null; customer_id?: string | null } | null;
+        let orgId: string | null = null;
+        if (pr?.job_id) {
+            const { data: j } = await supabase.from("jobs").select("org_id").eq("id", pr.job_id).maybeSingle();
+            orgId = (j as { org_id?: string } | null)?.org_id ?? null;
+        }
+        if (!orgId && pr?.customer_id) {
+            const { data: c } = await supabase.from("customers").select("org_id").eq("id", pr.customer_id).maybeSingle();
+            orgId = (c as { org_id?: string } | null)?.org_id ?? null;
+        }
+        if (orgId) {
+            const chk = await assertAllowedStatusKey(supabase, orgId, "payments", updates.status_key);
+            if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });
+        }
+    }
+
     const { data, error } = await supabase
         .from("payments")
         .update(updates)

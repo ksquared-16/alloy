@@ -20,6 +20,7 @@ const DEFAULT_ENTITY_LABELS: Record<string, { singular: string; plural: string }
     opportunities: { singular: "Opportunity", plural: "Opportunities" },
     workflows: { singular: "Workflow", plural: "Workflows" },
     locations: { singular: "Location", plural: "Locations" },
+    documents: { singular: "Document", plural: "Documents" },
     subscriptions: { singular: "Subscription", plural: "Subscriptions" },
     payments: { singular: "Payment", plural: "Payments" },
     messages: { singular: "Message", plural: "Messages" },
@@ -95,10 +96,17 @@ export function useEntityLabels(): EntityLabelsContextValue {
     return ctx;
 }
 
-export function EntityLabelsProvider({ children }: { children: ReactNode }) {
-    // Always start with {} so server and client first paint match (avoids hydration #418 when cache exists).
-    const [labels, setLabels] = useState<EntityLabelsMap>(() => ({}));
-    const [loading, setLoading] = useState(true);
+export function EntityLabelsProvider({
+    children,
+    initialLabels,
+}: {
+    children: ReactNode;
+    /** Server-hydrated map (same shape as labels) so nav labels match org config on first paint. */
+    initialLabels?: EntityLabelsMap;
+}) {
+    const seeded = !!(initialLabels && Object.keys(initialLabels).length > 0);
+    const [labels, setLabels] = useState<EntityLabelsMap>(() => (seeded ? { ...initialLabels! } : {}));
+    const [loading, setLoading] = useState(() => !seeded);
 
     const refreshEntityLabels = useCallback(async () => {
         try {
@@ -117,15 +125,19 @@ export function EntityLabelsProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
+        if (seeded) {
+            void refreshEntityLabels();
+            return;
+        }
         const cached = loadFromCache();
         if (Object.keys(cached ?? {}).length > 0) {
             setLabels(cached!);
             setLoading(false);
-            refreshEntityLabels();
+            void refreshEntityLabels();
             return;
         }
-        refreshEntityLabels();
-    }, [refreshEntityLabels]);
+        void refreshEntityLabels();
+    }, [seeded, refreshEntityLabels]);
 
     return (
         <EntityLabelsContext.Provider value={{ labels, loading, refreshEntityLabels }}>

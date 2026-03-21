@@ -29,7 +29,12 @@ import { AdminPreviewProvider } from "@/contexts/AdminPreviewContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import RecordPreviewPanel from "@/components/admin/RecordPreviewPanel";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { EntityLabelsProvider, useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
+import {
+    EntityLabelsProvider,
+    useEntityLabels,
+    getEntityLabel,
+    type EntityLabelsMap,
+} from "@/contexts/EntityLabelsContext";
 import AlloyLogo from "@/components/admin/AlloyLogo";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
@@ -61,7 +66,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/opportunities", label: "Opportunities", entityType: "opportunities" },
             { href: "/admin/jobs", label: "Jobs", entityType: "jobs" },
             { href: "/admin/schedules", label: "Schedules", entityType: "schedules" },
-            { href: "/admin/documents", label: "Documents" },
+            { href: "/admin/documents", label: "Documents", entityType: "documents" },
             { href: "/admin/locations", label: "Locations", entityType: "locations" },
             {
                 label: "Workflows",
@@ -182,19 +187,23 @@ interface AdminLayoutProps {
     children: ReactNode;
     userEmail: string;
     role: string;
+    initialEntityLabels?: EntityLabelsMap;
 }
 
-function navLinkLabel(link: NavLink, labels: Record<string, { singular: string | null; plural: string | null }>): string {
-    if (link.entityType) return getEntityLabel(labels, link.entityType, "plural");
+function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boolean): string {
+    if (link.entityType) {
+        if (labelsLoading) return link.label;
+        return getEntityLabel(labels, link.entityType, "plural");
+    }
     return link.label;
 }
 
-function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
+function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, "initialEntityLabels">) {
     const pathname = usePathname();
     const router = useRouter();
     const sidebarScrollRef = useRef<HTMLElement | null>(null);
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
-    const { labels } = useEntityLabels();
+    const { labels, loading: labelsLoading } = useEntityLabels();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
     const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
@@ -380,7 +389,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                                 <ul className="ml-3 mt-0.5 space-y-0.5 border-l border-admin-border pl-2">
                                                                     {item.subItems.map((sub) => {
                                                                         const isActive = pathname === sub.href;
-                                                                        const displayLabel = navLinkLabel(sub, labels);
+                                                                        const displayLabel = navLinkLabel(sub, labels, labelsLoading);
                                                                         return (
                                                                             <li key={sub.href}>
                                                                                 <Link
@@ -400,7 +409,7 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
                                                 const link = item as NavLink;
                                                 const isActive = pathname === link.href;
                                                 const LinkIcon = getLinkIcon(link.href, link.label);
-                                                const displayLabel = navLinkLabel(link, labels);
+                                                const displayLabel = navLinkLabel(link, labels, labelsLoading);
                                                 return (
                                                     <li key={link.href}>
                                                         <Link
@@ -437,11 +446,12 @@ function AdminLayoutInner({ children, userEmail, role }: AdminLayoutProps) {
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
+    const { initialEntityLabels, ...rest } = props;
     return (
         <AdminAuthProvider userEmail={props.userEmail} role={props.role}>
             <AdminVerticalProvider>
-                <EntityLabelsProvider>
-                    <AdminLayoutInner {...props} />
+                <EntityLabelsProvider initialLabels={initialEntityLabels}>
+                    <AdminLayoutInner {...rest} />
                 </EntityLabelsProvider>
             </AdminVerticalProvider>
         </AdminAuthProvider>

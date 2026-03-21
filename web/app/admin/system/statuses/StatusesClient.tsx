@@ -19,6 +19,10 @@ const ENTITY_TYPES = [
     "vendors",
     "service_plan_templates",
     "persons",
+    "locations",
+    "documents",
+    "payments",
+    "subscriptions",
 ] as const;
 
 const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
@@ -29,6 +33,10 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     vendors: "vendors",
     service_plan_templates: "service_plan_templates",
     persons: "persons",
+    locations: "locations",
+    documents: "documents",
+    payments: "payments",
+    subscriptions: "subscriptions",
 };
 
 const FALLBACK_LABELS: Record<string, string> = {
@@ -39,6 +47,10 @@ const FALLBACK_LABELS: Record<string, string> = {
     vendors: "Vendors",
     service_plan_templates: "Plan templates",
     persons: "People",
+    locations: "Locations",
+    documents: "Documents",
+    payments: "Payments",
+    subscriptions: "Subscriptions",
 };
 
 function entityTypeDisplayLabel(

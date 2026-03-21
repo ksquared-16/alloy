@@ -1,10 +1,12 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import VendorsClient from "./VendorsClient";
 
 type SearchParams = { status_key?: string };
 
 type VendorRow = {
     id: string;
+    org_id?: string | null;
     created_at: string | null;
     updated_at: string | null;
     submitted_at: string | null;
@@ -29,7 +31,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
     const supabase = createAdminClient();
     const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
 
-    const vendorCols = "id, created_at, updated_at, submitted_at, name, company_name, email, phone, vendor_status_id, status_key, primary_contact_id, primary_person_id, payout_percent, service_area_zip_codes, days_available";
+    const vendorCols = "id, created_at, updated_at, submitted_at, name, company_name, email, phone, vendor_status_id, status_key, org_id, primary_contact_id, primary_person_id, payout_percent, service_area_zip_codes, days_available";
     let q = supabase
         .from("vendors")
         .select(vendorCols)
@@ -40,13 +42,13 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
 
     const vendorList = (vendors ?? []) as VendorRow[];
 
-    let statusById: Record<string, { key: string; label: string }> = {};
-    const statusRes = await supabase
-        .from("vendor_statuses")
-        .select("id, key, label");
-    if (!statusRes.error && statusRes.data) {
-        statusById = Object.fromEntries(
-            statusRes.data.map((s) => [s.id, { key: s.key ?? "", label: s.label ?? "" }])
+    const vendorOrgIds = [...new Set(vendorList.map((v) => v.org_id).filter(Boolean))] as string[];
+    const vendorStatusLabelByOrg = new Map<string, Map<string, string>>();
+    for (const oid of vendorOrgIds) {
+        const defs = await fetchEffectiveStatusDefinitions(supabase, oid, "vendors", { activeOnly: true });
+        vendorStatusLabelByOrg.set(
+            oid,
+            new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]))
         );
     }
 
@@ -86,15 +88,18 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
     }
 
     const rows = vendorList.map((v) => {
-        const status = v.vendor_status_id ? statusById[v.vendor_status_id] : null;
         const pc = v.primary_contact_id ? primaryContacts[v.primary_contact_id] : null;
         const pp = v.primary_person_id ? primaryPersons[v.primary_person_id] : null;
-        const _status_display = v.status_key ?? v.status ?? status?.key ?? "";
+        const oid = v.org_id ?? null;
+        const vLabels = oid ? vendorStatusLabelByOrg.get(oid) : null;
+        const sk = v.status_key ?? null;
+        const _status_display =
+            sk && vLabels ? (vLabels.get(sk) ?? sk) : sk ?? (v.status ?? null);
         const _updated = v.updated_at ?? v.created_at ?? null;
         return {
             ...v,
-            _vendor_status_key: status?.key ?? "",
-            _vendor_status_label: status?.label ?? "",
+            _vendor_status_key: sk ?? "",
+            _vendor_status_label: _status_display ?? "",
             _status_display: _status_display || null,
             _primary_person_name: pp?.name ?? null,
             _primary_contact_name: pc?.name ?? null,

@@ -4,6 +4,7 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
 import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
+import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
@@ -52,15 +53,20 @@ export async function GET(request: NextRequest) {
   const customerIds = [...new Set(jobs.map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
   const vendorIds = [...new Set(jobs.map((j) => (j as { assigned_vendor_id?: string }).assigned_vendor_id).filter(Boolean))] as string[];
   const locationIds = [...new Set(jobs.map((j) => (j as { location_id?: string }).location_id).filter(Boolean))] as string[];
-  const jobStatusIds = [...new Set(jobs.map((j) => (j as { job_status_id?: string }).job_status_id).filter(Boolean))] as string[];
+  let jobStatusLabelByKey = new Map<string, string>();
+  try {
+    const defs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "jobs", { activeOnly: true });
+    jobStatusLabelByKey = new Map(defs.map((d) => [d.status_key, (d.status_label && d.status_label.trim()) || d.status_key]));
+  } catch {
+    jobStatusLabelByKey = new Map();
+  }
 
-  const [custRes, vendorRes, locationRes, statusRes, nextSchedulesRes] = await Promise.all([
+  const [custRes, vendorRes, locationRes, nextSchedulesRes] = await Promise.all([
     customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] },
     vendorIds.length
       ? supabase.from("vendors").select("id, name, company_name, email, phone, primary_person_id").in("id", vendorIds)
       : { data: [] },
     locationIds.length ? supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds) : { data: [] },
-    jobStatusIds.length ? supabase.from("job_statuses").select("id, key, label").in("id", jobStatusIds) : { data: [] },
     jobIds.length
       ? supabase
           .from("schedules")
@@ -85,16 +91,6 @@ export async function GET(request: NextRequest) {
     const summary = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
     return [l.id, summary];
   }));
-  /** job_status_id -> catalog row */
-  const jobStatusKeyById = new Map(
-    (statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { key?: string | null }).key ?? null])
-  );
-  const jobStatusLabelById = new Map(
-    (statusRes.data ?? []).map((s) => [
-      (s as { id: string }).id,
-      (s as { label?: string | null }).label ?? (s as { key?: string | null }).key ?? null,
-    ])
-  );
   const nextScheduleByJobId = new Map<string, string>();
   for (const s of nextSchedulesRes.data ?? []) {
     const row = s as { job_id: string; start_at: string };
@@ -124,10 +120,8 @@ export async function GET(request: NextRequest) {
       (jr.service_key && String(jr.service_key).trim()) ||
       (jr.job_number_for_customer && String(jr.job_number_for_customer).trim()) ||
       (jr.id ? jr.id.slice(-6) : "—");
-    const _status_display =
-      (jr.job_status_id ? jobStatusLabelById.get(jr.job_status_id) ?? null : null) ??
-      jr.status_key ??
-      (jr.job_status_id ? jobStatusKeyById.get(jr.job_status_id) ?? null : null);
+    const sk = jr.status_key && String(jr.status_key).trim() ? String(jr.status_key).trim() : null;
+    const _status_display = sk ? (jobStatusLabelByKey.get(sk) ?? sk) : null;
     const _next_schedule = nextScheduleByJobId.get(jr.id) ?? null;
     const _vendor_name = jr.assigned_vendor_id ? vendorLabelById.get(jr.assigned_vendor_id) ?? null : null;
     const display_total_cents = computeJobDisplayTotalCents(jr);
@@ -151,7 +145,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ jobs: result, total: count ?? result.length });
 }
 
-/** POST: create job. Admin only. customer_id and job_status_id required; status_key is derived from job_statuses. org_id from context. */
+/** POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required. */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContext();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -166,7 +160,7 @@ export async function POST(request: NextRequest) {
     // ignore
   }
   const customer_id = typeof body.customer_id === "string" ? body.customer_id.trim() : null;
-  const job_status_id = typeof body.job_status_id === "string" ? body.job_status_id.trim() : null;
+  const body_status_key = typeof body.status_key === "string" ? body.status_key.trim() : null;
   const is_recurring = body.is_recurring === true;
   const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
   const gross_price_cents = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : null;
@@ -177,15 +171,14 @@ export async function POST(request: NextRequest) {
   if (!customer_id) {
     return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
   }
-  if (!job_status_id) {
-    return NextResponse.json({ error: "job_status_id is required" }, { status: 400 });
-  }
-
   const supabase = createAdminClient();
-  const { data: jobStatusRow } = await supabase.from("job_statuses").select("key").eq("id", job_status_id).maybeSingle();
-  const status_key = (jobStatusRow as { key?: string | null } | null)?.key ?? null;
+  const status_key = body_status_key;
   if (!status_key) {
-    return NextResponse.json({ error: "Invalid job_status_id" }, { status: 400 });
+    return NextResponse.json({ error: "status_key is required" }, { status: 400 });
+  }
+  const statusCheck = await assertAllowedStatusKey(supabase, ctx.orgId, "jobs", status_key);
+  if (!statusCheck.ok) {
+    return NextResponse.json({ error: statusCheck.message }, { status: 400 });
   }
   const { data: customer } = await supabase
     .from("customers")
@@ -251,7 +244,6 @@ export async function POST(request: NextRequest) {
     org_id: ctx.orgId,
     customer_id,
     status_key,
-    job_status_id,
     is_recurring,
     service_frequency_key: service_frequency_key ?? null,
     gross_price_cents: gross_price_cents ?? null,

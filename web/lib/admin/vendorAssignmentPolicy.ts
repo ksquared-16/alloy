@@ -1,13 +1,10 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 /**
  * Who may be offered in job/schedule “assign vendor” UIs.
- * Tune per org/user later by threading a policy object from context.
+ * Eligibility: `vendors.status_key` equals this key (configure in status_definitions, entity_type=vendors).
  */
 export const VENDOR_ASSIGNMENT_VENDOR_STATUS_KEY = "approved" as const;
 
 export type VendorAssignmentPolicy = {
-    /** Must match `vendor_statuses.key` for the vendor row's `vendor_status_id`. */
     vendorStatusKey: string;
 };
 
@@ -15,16 +12,25 @@ export const DEFAULT_VENDOR_ASSIGNMENT_POLICY: VendorAssignmentPolicy = {
     vendorStatusKey: VENDOR_ASSIGNMENT_VENDOR_STATUS_KEY,
 };
 
-/** Resolves `vendor_status_id` for vendors eligible for assignment, or null if that status is missing/inactive. */
-export async function resolveVendorAssignmentStatusId(
-    supabase: SupabaseClient,
+/** Optional: restrict query to assignment-eligible vendors for this org. */
+export function applyVendorAssignmentFilter<T extends { eq: (a: string, b: string) => T }>(
+    q: T,
     policy: VendorAssignmentPolicy = DEFAULT_VENDOR_ASSIGNMENT_POLICY
-): Promise<string | null> {
-    const { data } = await supabase
-        .from("vendor_statuses")
-        .select("id")
-        .eq("key", policy.vendorStatusKey)
-        .eq("is_active", true)
-        .maybeSingle();
-    return (data as { id?: string } | null)?.id ?? null;
+): T {
+    return q.eq("status_key", policy.vendorStatusKey);
+}
+
+export type VendorEligibilityRow = { id: string; status_key?: string | null };
+
+export function vendorIsEligibleForAssignment(
+    vendor: VendorEligibilityRow | null | undefined,
+    policy: VendorAssignmentPolicy = DEFAULT_VENDOR_ASSIGNMENT_POLICY
+): boolean {
+    const sk = String(vendor?.status_key ?? "").trim().toLowerCase();
+    return sk === policy.vendorStatusKey.trim().toLowerCase();
+}
+
+/** @internal for routes that still receive a loose Supabase client */
+export function getAssignmentPolicy(): VendorAssignmentPolicy {
+    return DEFAULT_VENDOR_ASSIGNMENT_POLICY;
 }

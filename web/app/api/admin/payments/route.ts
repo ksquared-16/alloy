@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 export type PaymentListItem = {
     id: string;
@@ -41,7 +42,10 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("payments")
-        .select("id, created_at, updated_at, amount_cents, provider_payment_id, payment_status_id, job_id, customer_id, status_key, paid_at, posted_to_ledger_at, provider, payment_statuses(key, label)", { count: "exact" })
+        .select(
+            "id, created_at, updated_at, amount_cents, provider_payment_id, payment_status_id, job_id, customer_id, org_id, status_key, paid_at, posted_to_ledger_at, provider",
+            { count: "exact" }
+        )
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -66,6 +70,16 @@ export async function GET(request: NextRequest) {
     ]);
 
     const customerMap = new Map((custRes.data ?? []).map((c) => [(c as { id: string }).id, (c as { name?: string | null }).name ?? null]));
+
+    const orgIds = [...new Set(list.map((r) => (r as { org_id?: string | null }).org_id).filter(Boolean))] as string[];
+    const paymentStatusLabelByOrg = new Map<string, Map<string, string>>();
+    for (const oid of orgIds) {
+        const defs = await fetchEffectiveStatusDefinitions(supabase, oid, "payments", { activeOnly: true });
+        paymentStatusLabelByOrg.set(
+            oid,
+            new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]))
+        );
+    }
     const jobLabelMap = new Map((jobRes.data ?? []).map((j) => {
         const row = j as { id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null };
         const label = (row.title && String(row.title).trim()) || (row.service_key && String(row.service_key).trim()) || (row.job_number_for_customer && String(row.job_number_for_customer).trim()) || `Job #${row.id.slice(-6)}`;
@@ -73,12 +87,13 @@ export async function GET(request: NextRequest) {
     }));
 
     let payments: PaymentListItem[] = list.map((r) => {
-        const status = r.payment_statuses;
-        const rawStatus = Array.isArray(status) ? status[0] ?? null : (status as { key?: string; label?: string | null } | null) ?? null;
-        const statusObj: { key: string; label?: string | null } | null =
-            rawStatus != null && typeof rawStatus.key === "string" ? { key: rawStatus.key, label: rawStatus.label ?? null } : null;
         const statusKeyVal = (r as { status_key?: string | null }).status_key ?? null;
-        const _status_display = statusKeyVal ?? (statusObj?.label ?? statusObj?.key ?? null);
+        const orgId = (r as { org_id?: string | null }).org_id ?? null;
+        const labelMap = orgId ? paymentStatusLabelByOrg.get(orgId) : null;
+        const _status_display =
+            statusKeyVal && labelMap ? (labelMap.get(statusKeyVal) ?? statusKeyVal) : statusKeyVal ?? null;
+        const statusObj: { key: string; label?: string | null } | null =
+            statusKeyVal != null ? { key: statusKeyVal, label: _status_display } : null;
         const _payment_label = (r as { provider_payment_id?: string | null }).provider_payment_id?.trim() || `Payment #${(r as { id: string }).id.slice(-6)}`;
         const _updated = (r as { updated_at?: string | null }).updated_at ?? (r as { created_at: string }).created_at;
         return {
@@ -107,7 +122,7 @@ export async function GET(request: NextRequest) {
 
     if (statusKey) {
         const keys = statusKey.split(",").map((k) => k.trim().toLowerCase());
-        payments = payments.filter((p) => p.payment_statuses?.key && keys.includes(p.payment_statuses.key));
+        payments = payments.filter((p) => p.status_key && keys.includes(String(p.status_key).toLowerCase()));
     }
 
     return NextResponse.json({

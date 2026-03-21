@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
-import { resolveVendorAssignmentStatusId } from "@/lib/admin/vendorAssignmentPolicy";
+import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 
 /** GET: vendor options for dropdowns (`id`, `name`, `label`). `value` = id; `label` = human-readable.
- *  `?for_assignment=true` — only vendors whose `vendor_status_id` matches active `vendor_statuses` row for the assignment policy (default key `approved`).
+ *  `?for_assignment=true` — only vendors with `status_key` matching the assignment policy (default `approved`).
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();
@@ -20,18 +20,14 @@ export async function GET(request: NextRequest) {
     const forAssignment = ["1", "true", "yes"].includes(
         (request.nextUrl.searchParams.get("for_assignment") ?? "").toLowerCase()
     );
-    const assignmentStatusId = forAssignment ? await resolveVendorAssignmentStatusId(supabase) : null;
-    if (forAssignment && !assignmentStatusId) {
-        return NextResponse.json({ vendors: [] });
-    }
 
     let q = supabase
         .from("vendors")
         .select("id, name, company_name, email, phone, primary_person_id")
         .eq("org_id", ctx.orgId)
         .order("name", { ascending: true });
-    if (forAssignment && assignmentStatusId) {
-        q = q.eq("vendor_status_id", assignmentStatusId);
+    if (forAssignment) {
+        q = q.eq("status_key", DEFAULT_VENDOR_ASSIGNMENT_POLICY.vendorStatusKey);
     }
 
     const { data: rows, error } = await q;

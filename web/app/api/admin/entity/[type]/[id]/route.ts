@@ -11,6 +11,7 @@ import {
     type JobPriceInput,
 } from "@/lib/admin/jobDisplayPrice";
 import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
+import { fetchEffectiveStatusDefinitions, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons"] as const;
 
@@ -192,16 +193,9 @@ export async function GET(
             } else {
                 out._vertical_slug = null;
             }
-            const jobStatusId = (data as { job_status_id?: string | null }).job_status_id;
+            const orgIdJob = (data as { org_id?: string }).org_id;
             const statusKey = (data as { status_key?: string | null }).status_key;
-            let jobStatusRow: { key?: string | null; label?: string | null } | null = null;
-            if (jobStatusId) {
-                const { data: js } = await supabase.from("job_statuses").select("key, label").eq("id", jobStatusId).maybeSingle();
-                jobStatusRow = (js as { key?: string | null; label?: string | null } | null) ?? null;
-            }
-            out._job_status_label = jobStatusRow?.label ?? null;
-            const persistedStatusKey = typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null;
-            out._status_display = out._job_status_label ?? persistedStatusKey ?? (jobStatusRow?.key ? String(jobStatusRow.key) : null);
+            out._status_display = orgIdJob ? await resolveStatusLabel(supabase, orgIdJob, "jobs", statusKey) : (typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null);
             const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
             out._discount_amount_cents = normalizeJobDiscountAmountToCents(
                 (data as { discount_amount?: number | string | null }).discount_amount,
@@ -280,14 +274,8 @@ export async function GET(
                 out._primary_person_id = null;
                 out._primary_person_name = null;
             }
-            if (opp.pipeline_stage_id) {
-                const stage = await supabase.from("pipeline_stages").select("name").eq("id", opp.pipeline_stage_id).single();
-                out._stage_name = stage.data?.name ?? null;
-                out._pipeline_stage_name = stage.data?.name ?? null;
-            } else {
-                out._stage_name = null;
-                out._pipeline_stage_name = null;
-            }
+            out._stage_name = null;
+            out._pipeline_stage_name = null;
             if (opp.vertical_id) {
                 const { data: vert } = await supabase.from("verticals").select("name").eq("id", opp.vertical_id).maybeSingle();
                 out._vertical_name = (vert as { name?: string | null } | null)?.name ?? null;
@@ -303,7 +291,9 @@ export async function GET(
                 out._location_name = null;
                 out._location_id = null;
             }
-            out._status_display = (out._pipeline_stage_name as string) ?? null;
+            const oppOrgId = (opp as { org_id?: string }).org_id;
+            const oppSk = opp.status_key ?? null;
+            out._status_display = oppOrgId ? await resolveStatusLabel(supabase, oppOrgId, "opportunities", oppSk) : (oppSk ?? null);
             const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)
                 : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents)) ? Number(opp.estimated_price_cents) / 100
                 : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
@@ -569,15 +559,11 @@ export async function GET(
             const titleParts = [jobTitle, vertName, timePart].filter(Boolean) as string[];
             out._schedule_display_title = titleParts.length > 0 ? titleParts.join(" · ") : "Schedule";
 
-            const scheduleStatusId = (schedule as { schedule_status_id?: string | null }).schedule_status_id;
-            let scheduleStatusLabel: string | null = null;
-            if (scheduleStatusId) {
-                const { data: ss } = await supabase.from("schedule_statuses").select("label").eq("id", scheduleStatusId).maybeSingle();
-                scheduleStatusLabel = (ss as { label?: string | null } | null)?.label ?? null;
-            }
-            out._schedule_status_label = scheduleStatusLabel;
             const schedStatusKey = (schedule as { status_key?: string | null }).status_key;
-            out._status_display = scheduleStatusLabel ?? schedStatusKey ?? null;
+            const schedOrgId = (schedule as { org_id?: string }).org_id;
+            out._status_display = schedOrgId
+                ? await resolveStatusLabel(supabase, schedOrgId, "schedules", schedStatusKey)
+                : (typeof schedStatusKey === "string" && schedStatusKey.trim() ? schedStatusKey.trim() : null);
 
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             return NextResponse.json(out);
@@ -597,6 +583,8 @@ export async function GET(
                 return NextResponse.json(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found", { status: 404 });
             }
             const out: Record<string, unknown> = { ...location };
+            const locSk = (location as { status_key?: string | null }).status_key;
+            out._status_display = ctx.orgId ? await resolveStatusLabel(supabase, ctx.orgId, "locations", locSk) : (locSk ?? null);
             const locationTypeId = (location as { location_type_id?: string | null }).location_type_id;
             if (locationTypeId) {
                 const { data: typeRow } = await supabase.from("location_types").select("label").eq("id", locationTypeId).maybeSingle();
@@ -722,20 +710,12 @@ export async function GET(
                 primary_person_id?: string | null;
             };
             const out: Record<string, unknown> = { ...vendor };
-            const statusId = (vendor as { vendor_status_id?: string }).vendor_status_id;
-            if (statusId) {
-                const { data: statusRow } = await supabase.from("vendor_statuses").select("key, label").eq("id", statusId).single();
-                out._vendor_status_label = statusRow?.label ?? null;
-            } else {
-                out._vendor_status_label = null;
-            }
-            out._status_display = (out._vendor_status_label as string | null) ?? v.status_key ?? v.status ?? null;
-            const { data: statusOptions } = await supabase
-                .from("vendor_statuses")
-                .select("id, key, label, position")
-                .eq("is_active", true)
-                .order("position", { ascending: true });
-            out._vendor_status_options = statusOptions ?? [];
+            const vOrgId = (vendor as { org_id?: string }).org_id;
+            out._vendor_status_label = null;
+            out._status_display = vOrgId
+                ? await resolveStatusLabel(supabase, vOrgId, "vendors", v.status_key ?? v.status ?? null)
+                : (v.status_key ?? v.status ?? null);
+            out._vendor_status_options = [];
 
             const directPersonId = v.primary_person_id ?? null;
             const primaryContactId = v.primary_contact_id ?? null;
@@ -796,23 +776,29 @@ export async function GET(
             const { data: vendorJobs } = await supabase
                 .from("jobs")
                 .select(
-                    "id, created_at, title, scheduled_at, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id, estimated_total_cents, discount_amount, discounted"
+                    "id, created_at, title, scheduled_at, status_key, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id, estimated_total_cents, discount_amount, discounted"
                 )
                 .eq("assigned_vendor_id", id)
                 .order("created_at", { ascending: false })
                 .limit(JOBS_LIMIT);
-            const vendorJobStatusIds = [...new Set((vendorJobs ?? []).map((j: { job_status_id?: string | null }) => j.job_status_id).filter(Boolean))] as string[];
-            const { data: vendorJobStatuses } = vendorJobStatusIds.length
-                ? await supabase.from("job_statuses").select("id, label").in("id", vendorJobStatusIds)
-                : { data: [] as { id: string; label: string | null }[] };
-            const vendorJobStatusLabelById = new Map((vendorJobStatuses ?? []).map((r) => [(r as { id: string }).id, (r as { label: string | null }).label ?? null]));
-            out._vendor_jobs = (vendorJobs ?? []).map((row) => ({
-                ...row,
-                _job_status_label: (row as { job_status_id?: string | null }).job_status_id
-                    ? vendorJobStatusLabelById.get((row as { job_status_id: string }).job_status_id) ?? null
-                    : null,
-                display_total_cents: computeJobDisplayTotalCents(row as JobPriceInput),
-            }));
+            let jobStatusLabelByKey = new Map<string, string>();
+            if (vOrgId) {
+                try {
+                    const defs = await fetchEffectiveStatusDefinitions(supabase, vOrgId, "jobs", { activeOnly: true });
+                    jobStatusLabelByKey = new Map(defs.map((d) => [d.status_key, (d.status_label && d.status_label.trim()) || d.status_key]));
+                } catch {
+                    jobStatusLabelByKey = new Map();
+                }
+            }
+            out._vendor_jobs = (vendorJobs ?? []).map((row) => {
+                const jsk = (row as { status_key?: string | null }).status_key;
+                const jskTrim = jsk && String(jsk).trim() ? String(jsk).trim() : null;
+                return {
+                    ...row,
+                    _job_status_label: jskTrim ? (jobStatusLabelByKey.get(jskTrim) ?? jskTrim) : null,
+                    display_total_cents: computeJobDisplayTotalCents(row as JobPriceInput),
+                };
+            });
             const jobIds = (vendorJobs ?? []).map((j: { id: string }) => j.id);
             const { data: vendorSchedules } = jobIds.length > 0
                 ? await supabase
@@ -837,10 +823,16 @@ export async function GET(
             out._cadence = cadence;
             out._interval = interval;
             const customerId = (sub as { customer_id?: string }).customer_id;
+            let subOrgId: string | null = null;
             if (customerId) {
-                const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).single();
+                const { data: cust } = await supabase.from("customers").select("name, org_id").eq("id", customerId).single();
                 out._customer_name = cust?.name ?? null;
+                subOrgId = (cust as { org_id?: string } | null)?.org_id ?? null;
             }
+            const subSk = (sub as { status_key?: string | null }).status_key ?? null;
+            out._status_display = subOrgId
+                ? await resolveStatusLabel(supabase, subOrgId, "subscriptions", subSk)
+                : subSk ?? (sub as { status?: string | null }).status ?? null;
             const { data: scheds } = await supabase
                 .from("schedules")
                 .select("id, job_id, start_at, end_at, timezone, subscription_sequence, rescheduled_from_schedule_id, canceled_at, canceled_by, cancel_reason")
@@ -869,15 +861,19 @@ export async function GET(
             } else {
                 out._job_label = null;
             }
-            const statusKey = payment.status_key ?? null;
-            if (statusKey) {
-                out._status_display = statusKey;
-            } else if (payment.payment_status_id) {
-                const { data: ps } = await supabase.from("payment_statuses").select("key, label").eq("id", payment.payment_status_id).maybeSingle();
-                out._status_display = (ps as { key?: string | null; label?: string | null } | null)?.label ?? (ps as { key?: string | null } | null)?.key ?? null;
-            } else {
-                out._status_display = null;
+            let payOrgId: string | null = null;
+            if (payment.job_id) {
+                const { data: j } = await supabase.from("jobs").select("org_id").eq("id", payment.job_id).maybeSingle();
+                payOrgId = (j as { org_id?: string } | null)?.org_id ?? null;
             }
+            if (!payOrgId && payment.customer_id) {
+                const { data: c } = await supabase.from("customers").select("org_id").eq("id", payment.customer_id).maybeSingle();
+                payOrgId = (c as { org_id?: string } | null)?.org_id ?? null;
+            }
+            const paySk = payment.status_key ?? null;
+            out._status_display = payOrgId
+                ? await resolveStatusLabel(supabase, payOrgId, "payments", paySk)
+                : paySk ?? null;
             return NextResponse.json(out);
         }
         if (type === "customer_members") {
@@ -998,6 +994,8 @@ export async function GET(
                 (p.full_name && p.full_name.trim()) ||
                 [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
                 null;
+            const psk = (personRow as { status_key?: string | null }).status_key ?? null;
+            out._status_display = ctx.orgId ? await resolveStatusLabel(supabase, ctx.orgId, "persons", psk) : psk;
 
             const { data: cpRows } = await supabase
                 .from("customer_persons")
@@ -1115,6 +1113,11 @@ export async function GET(
                 (row.recurrence_unit as string) ?? null,
                 row.recurrence_interval != null ? Math.max(1, Number(row.recurrence_interval) || 1) : null
             );
+            const tplOrgId = (row as { org_id?: string }).org_id;
+            const tplSk = (row as { status_key?: string | null }).status_key ?? null;
+            out._status_display = tplOrgId
+                ? await resolveStatusLabel(supabase, tplOrgId, "service_plan_templates", tplSk)
+                : tplSk;
             return NextResponse.json(out);
         }
 

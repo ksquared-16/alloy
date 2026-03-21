@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 
 const ALLOWED_KEYS = ["name", "status", "status_key", "customer_type", "external_source", "external_id"] as const;
 
@@ -38,6 +39,11 @@ export async function PATCH(
         const existingRow = existing as { org_id?: string; status_key?: string | null; primary_contact_id?: string | null } | null;
         const oldStatusKey = existingRow?.status_key ?? null;
         const orgId = existingRow?.org_id;
+
+        if (updates.status_key !== undefined && orgId) {
+            const chk = await assertAllowedStatusKey(supabase, orgId, "customers", updates.status_key as string | null);
+            if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });
+        }
 
         const { data, error } = await supabase
             .from("customers")

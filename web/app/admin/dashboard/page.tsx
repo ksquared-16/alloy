@@ -11,8 +11,6 @@ async function getDashboardData(): Promise<DashboardData> {
         jobsRes,
         opportunitiesRes,
         vendorsRes,
-        vendorStatusesRes,
-        pipelineStagesRes,
         upcomingSchedulesRes,
         assignmentsForUpcomingRes,
         assignmentStatusesRes,
@@ -22,10 +20,8 @@ async function getDashboardData(): Promise<DashboardData> {
         outboxFailuresRes,
     ] = await Promise.all([
         supabase.from("jobs").select("id, assigned_vendor_id"),
-        supabase.from("opportunities").select("id, status, pipeline_stage_id"),
-        supabase.from("vendors").select("id, vendor_status_id"),
-        supabase.from("vendor_statuses").select("id, key"),
-        supabase.from("pipeline_stages").select("id, name"),
+        supabase.from("opportunities").select("id, status, status_key"),
+        supabase.from("vendors").select("id, status_key"),
         supabase.from("schedules").select("id, job_id, start_at, end_at").is("canceled_at", null).gte("start_at", now).lte("start_at", in7Days).order("start_at", { ascending: true }).limit(50),
         (async () => {
             const u = await supabase.from("schedules").select("id").is("canceled_at", null).gte("start_at", now).lte("start_at", in7Days).limit(500);
@@ -43,29 +39,21 @@ async function getDashboardData(): Promise<DashboardData> {
     const jobs = jobsRes.data ?? [];
     const opportunities = opportunitiesRes.data ?? [];
     const vendors = vendorsRes.data ?? [];
-    const vendorStatuses = (vendorStatusesRes.data ?? []) as { id: string; key: string }[];
-    const pipelineStages = (pipelineStagesRes.data ?? []) as { id: string; name: string }[];
     const upcomingSchedules = upcomingSchedulesRes.data ?? [];
     const assignmentsForUpcoming = (assignmentsForUpcomingRes.data ?? []) as { schedule_id: string; assignment_status_id: string }[];
     const statusRows = (assignmentStatusesRes.data ?? []) as { id: string; key: string }[];
     const statusKeyById = new Map(statusRows.map((s) => [s.id, s.key]));
 
-    const vendorStatusByKey = new Map(vendorStatuses.map((vs) => [vs.key, vs.id]));
-    const pendingId = vendorStatusByKey.get("pending");
-    const approvedId = vendorStatusByKey.get("approved");
-    const suspendedId = vendorStatusByKey.get("suspended");
-
     const jobsWithVendor = jobs.filter((j) => (j as { assigned_vendor_id?: string | null }).assigned_vendor_id).length;
     const booked = opportunities.filter((o) => (o.status ?? "").toLowerCase() === "closed").length;
-    const stageById = new Map(pipelineStages.map((s) => [s.id, s.name]));
     const byStage: Record<string, number> = {};
     opportunities.forEach((o) => {
-        const stageName = o.pipeline_stage_id ? (stageById.get(o.pipeline_stage_id) ?? "other") : "none";
-        const key = stageName.toLowerCase().replace(/\s+/g, "_");
+        const raw = (o as { status_key?: string | null }).status_key;
+        const key = raw && String(raw).trim() ? String(raw).trim().toLowerCase().replace(/\s+/g, "_") : "none";
         byStage[key] = (byStage[key] ?? 0) + 1;
     });
     if (Object.keys(byStage).length === 0) {
-        byStage.lead = opportunities.filter((o) => (o.status ?? "").toLowerCase() !== "closed").length;
+        byStage.open = opportunities.filter((o) => (o.status ?? "").toLowerCase() !== "closed").length;
         byStage.booked = booked;
     }
 
@@ -86,10 +74,12 @@ async function getDashboardData(): Promise<DashboardData> {
 
     const vendorCounts = { pending: 0, approved: 0, suspended: 0 };
     vendors.forEach((v) => {
-        const sid = (v as { vendor_status_id?: string | null }).vendor_status_id;
-        if (sid === pendingId) vendorCounts.pending++;
-        else if (sid === approvedId) vendorCounts.approved++;
-        else if (sid === suspendedId) vendorCounts.suspended++;
+        const k = String((v as { status_key?: string | null }).status_key ?? "")
+            .trim()
+            .toLowerCase();
+        if (k === "pending") vendorCounts.pending++;
+        else if (k === "approved") vendorCounts.approved++;
+        else if (k === "suspended") vendorCounts.suspended++;
     });
 
     const jobIdsUpcoming = [...new Set(upcomingSchedules.map((s) => (s as { job_id: string }).job_id).filter(Boolean))] as string[];

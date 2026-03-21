@@ -13,13 +13,14 @@ import {
     normalizeJobDiscountAmountToCents,
     type JobPriceInput,
 } from "@/lib/admin/jobDisplayPrice";
+import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 
 const ALLOWED_KEYS = [
     "title",
     "description",
     "job_type",
     "service_key",
-    "job_status_id",
+    "status_key",
     "is_recurring",
     "assigned_vendor_id",
     "metadata",
@@ -123,6 +124,9 @@ export async function GET(
     const _discount_amount_cents = normalizeJobDiscountAmountToCents(jPrice.discount_amount, grossBasis);
     const display_total_cents = computeJobDisplayTotalCents(jPrice);
 
+    const sk = j.status_key as string | null | undefined;
+    const _status_display = sk ? await resolveStatusLabel(supabase, ctx.orgId, "jobs", sk) : null;
+
     return NextResponse.json({
         ...j,
         _customer_name,
@@ -134,6 +138,7 @@ export async function GET(
         _discount_amount_cents,
         display_total_cents,
         _price_display: display_total_cents != null ? display_total_cents / 100 : null,
+        _status_display,
     });
 }
 
@@ -231,6 +236,11 @@ export async function PATCH(
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
             if (key === "discount_code_id" || key === "discount_code" || key === "discount_amount" || key === "discounted") continue; // handled above
+            if (key === "status_key") {
+                const v = body[key];
+                updates.status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
+                continue;
+            }
             if (key === "assigned_vendor_id" || key === "primary_contact_id" || key === "customer_id" || key === "opportunity_id" || key === "location_id") {
                 updates[key] = body[key] === "" || body[key] == null ? null : body[key];
                 continue;
@@ -259,13 +269,11 @@ export async function PATCH(
             updates[key] = body[key];
         }
 
-        if (updates.job_status_id !== undefined) {
-            const jid = updates.job_status_id as string | null;
-            if (jid) {
-                const { data: row } = await supabase.from("job_statuses").select("key").eq("id", jid).maybeSingle();
-                updates.status_key = (row as { key?: string | null } | null)?.key ?? null;
-            } else {
-                updates.status_key = null;
+        if (updates.status_key !== undefined) {
+            const sk = updates.status_key as string | null;
+            const check = await assertAllowedStatusKey(supabase, ctx.orgId, "jobs", sk);
+            if (!check.ok) {
+                return NextResponse.json({ error: check.message }, { status: 400 });
             }
         }
 
@@ -294,8 +302,9 @@ export async function PATCH(
 
         await upsertFieldValuesFromBody(supabase, ctx.orgId, "job", id, body, ALLOWED_KEYS);
 
-        const newStatusKey = updates.job_status_id !== undefined ? (updates.status_key as string | null) : oldStatusKey;
-        if (updates.job_status_id !== undefined) {
+        const newStatusKey =
+            updates.status_key !== undefined ? (updates.status_key as string | null) : oldStatusKey;
+        if (updates.status_key !== undefined) {
             const metadata: Record<string, unknown> = {};
             if ((existingJob as { customer_id?: string | null } | null)?.customer_id != null) metadata.customer_id = (existingJob as { customer_id: string }).customer_id;
             if ((existingJob as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id != null) metadata.assigned_vendor_id = (existingJob as { assigned_vendor_id: string }).assigned_vendor_id;

@@ -43,15 +43,8 @@ export interface Opportunity {
     _updated?: string | null;
 }
 
-interface Stage {
-    id: string;
-    name: string;
-    pipeline_id: string;
-}
-
 interface OpportunitiesClientProps {
     initialData: Opportunity[];
-    stages?: Stage[];
     error?: string;
 }
 
@@ -59,7 +52,6 @@ type StatusOption = { status_key: string; status_label: string | null };
 
 export default function OpportunitiesClient({
     initialData,
-    stages = [],
     error,
 }: OpportunitiesClientProps) {
     const { openDrawer } = useAdminDrawer();

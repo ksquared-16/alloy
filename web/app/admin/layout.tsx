@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminAuth } from "@/lib/adminAuth";
+import { loadEntityLabelsMapForUser } from "@/lib/admin/entityLabelsServer";
 import AdminLayout from "@/components/admin/AdminLayout";
 
 export default async function AdminLayoutWrapper({
@@ -13,8 +14,14 @@ export default async function AdminLayoutWrapper({
         redirect("/unauthorized");
     }
 
+    const initialEntityLabels = await loadEntityLabelsMapForUser(auth.user.id);
+
     return (
-        <AdminLayout userEmail={auth.user.email || "Unknown"} role={auth.role}>
+        <AdminLayout
+            userEmail={auth.user.email || "Unknown"}
+            role={auth.role}
+            initialEntityLabels={initialEntityLabels}
+        >
             {children}
         </AdminLayout>
     );

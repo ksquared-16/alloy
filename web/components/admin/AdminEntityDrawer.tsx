@@ -1289,12 +1289,23 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (drawer.type !== "workflows") return;
         Promise.all([
-            fetch("/api/admin/vendor-statuses").then((r) => (r.ok ? r.json() : [])),
+            fetch("/api/admin/status-definitions?entity_type=vendors")
+                .then((r) => (r.ok ? r.json() : { statuses: [] }))
+                .then((j: { statuses?: { id: string; status_key: string; status_label: string | null }[] }) =>
+                    (j.statuses ?? []).map((s) => ({
+                        id: s.id,
+                        key: s.status_key,
+                        label: (s.status_label?.trim() || s.status_key) as string,
+                    }))
+                ),
             fetch("/api/admin/verticals").then((r) => (r.ok ? r.json() : [])),
         ]).then(([statuses, verts]) => {
             setVendorStatuses(Array.isArray(statuses) ? statuses : []);
             setWorkflowVerticals(Array.isArray(verts) ? verts : []);
-        }).catch(() => { setVendorStatuses([]); setWorkflowVerticals([]); });
+        }).catch(() => {
+            setVendorStatuses([]);
+            setWorkflowVerticals([]);
+        });
     }, [drawer.type]);
 
     useEffect(() => {

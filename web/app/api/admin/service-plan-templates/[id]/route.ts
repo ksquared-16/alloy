@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { evaluateDeletionEligibility } from "@/lib/admin/deletionEligibility";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 
 /** DELETE: hard delete (admin only). Enforces lifecycle eligibility. */
 export async function DELETE(
@@ -62,16 +63,28 @@ export async function PATCH(
         updates.recurrence_interval = Number.isNaN(n) || n < 1 ? 1 : n;
     }
     if (body.is_active !== undefined) updates.is_active = !!body.is_active;
+    if (body.status_key !== undefined) {
+        updates.status_key =
+            body.status_key === "" || body.status_key == null
+                ? null
+                : typeof body.status_key === "string"
+                  ? body.status_key.trim() || null
+                  : null;
+    }
     if (Object.keys(updates).length === 0) {
         return NextResponse.json({ ok: true });
     }
     (updates as { updated_at: string }).updated_at = new Date().toISOString();
 
     const supabase = createAdminClient();
+    if (updates.status_key !== undefined && ctx.orgId) {
+        const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "service_plan_templates", updates.status_key as string | null);
+        if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });
+    }
     let q = supabase.from("service_plan_templates").update(updates).eq("id", id);
     if (ctx.orgId) q = q.eq("org_id", ctx.orgId);
     const { data, error } = await q
-        .select("id, plan_name, plan_key, is_recurring, recurrence_unit, recurrence_interval, is_active, updated_at")
+        .select("id, plan_name, plan_key, is_recurring, recurrence_unit, recurrence_interval, is_active, status_key, updated_at")
         .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

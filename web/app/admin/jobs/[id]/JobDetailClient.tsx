@@ -31,7 +31,6 @@ type PaymentRow = {
     payment_status: string | null;
 };
 
-type JobStatusOption = { id: string; label: string | null };
 type VendorOption = { id: string; name: string | null; label?: string | null };
 
 const TABS = ["overview", "related", "activity"] as const;
@@ -50,7 +49,6 @@ export default function JobDetailClient({
     const [tab, setTab] = useState<TabKey>("overview");
     const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
     const [payments, setPayments] = useState<PaymentRow[]>([]);
-    const [jobStatuses, setJobStatuses] = useState<JobStatusOption[]>([]);
     const [vendors, setVendors] = useState<VendorOption[]>([]);
     const { labels } = useEntityLabels();
     const vendorSingular = getEntityLabel(labels, "vendors", "singular");
@@ -75,28 +73,11 @@ export default function JobDetailClient({
 
     const isAdmin = role === "admin";
 
-    const statusLabel = useCallback(
-        (statusId: string | null | undefined) => {
-            if (!statusId) return null;
-            const s = jobStatuses.find((x) => x.id === statusId);
-            return s?.label ?? statusId;
-        },
-        [jobStatuses]
-    );
-
     const refetchJob = useCallback(async () => {
         const res = await fetch(`/api/admin/jobs/${jobId}`);
         const data = await res.json().catch(() => ({}));
         if (res.ok && data) setJob(data);
     }, [jobId]);
-
-    useEffect(() => {
-        (async () => {
-            const res = await fetch("/api/admin/job-statuses");
-            const json = await res.json().catch(() => ({}));
-            if (res.ok) setJobStatuses(json.job_statuses ?? []);
-        })();
-    }, []);
 
     useEffect(() => {
         if (!isAdmin) return;
@@ -241,6 +222,11 @@ export default function JobDetailClient({
         }
     };
 
+    const jobStatusDisplay =
+        (job._status_display as string | null | undefined)?.trim() ||
+        (job.status_key as string | null | undefined)?.trim() ||
+        null;
+
     const title = (job.title as string) ?? jobSingular;
     const customerName = (job._customer_name as string) ?? "—";
     const vendorName = (job._assigned_vendor_name as string) ?? null;
@@ -254,7 +240,7 @@ export default function JobDetailClient({
                 subtitle={`${jobSingular} details · ${customerName}`}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge label={statusLabel(job.job_status_id as string)} variant="neutral" />
+                        <StatusBadge label={jobStatusDisplay} variant="neutral" />
                         <StatusBadge label={vendorName ?? `Unassigned`} variant="default" />
                         {isAdmin ? (
                         <>
