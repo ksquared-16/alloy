@@ -10,16 +10,15 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { StatusDef } from "@/app/api/admin/status-definitions/route";
 
+/** Canonical admin-configurable workflow statuses for core CRM entities (matches status_definitions.entity_type). */
 const ENTITY_TYPES = [
-    "customers",
-    "contacts",
-    "customer_members",
-    "opportunities",
-    "jobs",
     "schedules",
+    "jobs",
+    "customers",
+    "opportunities",
     "vendors",
-    "subscriptions",
-    "payments",
+    "service_plan_templates",
+    "persons",
 ] as const;
 
 const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
@@ -27,11 +26,9 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     jobs: "jobs",
     schedules: "schedules",
     customers: "customers",
-    contacts: "contacts",
-    customer_members: "customer_members",
     vendors: "vendors",
-    subscriptions: "subscriptions",
-    payments: "payments",
+    service_plan_templates: "service_plan_templates",
+    persons: "persons",
 };
 
 const FALLBACK_LABELS: Record<string, string> = {
@@ -39,11 +36,9 @@ const FALLBACK_LABELS: Record<string, string> = {
     jobs: "Jobs",
     schedules: "Schedules",
     customers: "Customers",
-    contacts: "Contacts",
-    customer_members: "Members",
     vendors: "Vendors",
-    subscriptions: "Subscriptions",
-    payments: "Payments",
+    service_plan_templates: "Plan templates",
+    persons: "People",
 };
 
 function entityTypeDisplayLabel(
@@ -226,10 +221,15 @@ export default function StatusesClient() {
         return map;
     }, [statuses]);
 
-    const sortedEntityTypes = useMemo(
-        () => Object.keys(statusesByEntityType).sort((a, b) => a.localeCompare(b)),
-        [statusesByEntityType]
-    );
+    const allowedSet = useMemo(() => new Set<string>(ENTITY_TYPES as unknown as string[]), []);
+
+    const sortedEntityTypes = useMemo(() => {
+        const keys = Object.keys(statusesByEntityType).filter((t) => allowedSet.has(t));
+        const canonicalOrder: string[] = [...ENTITY_TYPES];
+        const ordered = canonicalOrder.filter((t) => keys.includes(t));
+        const extra = keys.filter((t) => !ordered.includes(t)).sort((a, b) => a.localeCompare(b));
+        return [...ordered, ...extra];
+    }, [statusesByEntityType, allowedSet]);
 
     useEffect(() => {
         if (entityTypeFilter || sortedEntityTypes.length !== 1) return;
@@ -373,7 +373,11 @@ export default function StatusesClient() {
                 <div>
                     <AdminPageHeader
                         title={entityTypeFilter ? `Statuses — ${filterLabel}` : "Statuses"}
-                        subtitle={entityTypeFilter ? undefined : "Manage workflow states for each entity."}
+                        subtitle={
+                            entityTypeFilter
+                                ? undefined
+                                : "Single source of truth for admin status labels and keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here; the saved value remains each entity’s status key (and server logic keeps legacy FKs in sync where needed)."
+                        }
                     />
                 </div>
                 {canMutate && (

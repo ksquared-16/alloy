@@ -16,6 +16,7 @@ const DEFAULT_ENTITY_LABELS: Record<string, { singular: string; plural: string }
     customers: { singular: "Customer", plural: "Customers" },
     contacts: { singular: "Contact", plural: "Contacts" },
     customer_members: { singular: "Member", plural: "Members" },
+    persons: { singular: "Person", plural: "People" },
     opportunities: { singular: "Opportunity", plural: "Opportunities" },
     workflows: { singular: "Workflow", plural: "Workflows" },
     locations: { singular: "Location", plural: "Locations" },

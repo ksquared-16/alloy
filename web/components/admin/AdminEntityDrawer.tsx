@@ -474,8 +474,6 @@ export default function AdminEntityDrawer() {
     const [rescheduleScheduleId, setRescheduleScheduleId] = useState<string | null>(null);
     const [rescheduleSaving, setRescheduleSaving] = useState(false);
     const [rescheduleError, setRescheduleError] = useState<string | null>(null);
-    const [pipelines, setPipelines] = useState<{ id: string; name: string }[]>([]);
-    const [stages, setStages] = useState<{ id: string; pipeline_id: string; name: string; position: number }[]>([]);
     const [oppVerticalOptions, setOppVerticalOptions] = useState<{ id: string; name: string }[]>([]);
     /** Opportunity drawer: labeled selects for relationship field_keys from field_definitions. */
     const [oppRefFieldSelectOptions, setOppRefFieldSelectOptions] = useState<Record<string, { value: string; label: string }[]>>({});
@@ -525,8 +523,6 @@ export default function AdminEntityDrawer() {
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
     const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
-    const [jobCatalogStatusOptions, setJobCatalogStatusOptions] = useState<{ id: string; label: string | null }[]>([]);
-    const [scheduleCatalogStatusOptions, setScheduleCatalogStatusOptions] = useState<{ id: string; label: string | null }[]>([]);
     const [jobPersonOptions, setJobPersonOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>({ relationships: true, financials: false, scheduling: false, ledger: false });
     const [jobDiscountOptions, setJobDiscountOptions] = useState<JobDiscountOptionDto[]>([]);
@@ -725,7 +721,18 @@ export default function AdminEntityDrawer() {
     };
     const [personRelatedData, setPersonRelatedData] = useState<PersonRelatedPayload | null>(null);
     const [personRelatedLoading, setPersonRelatedLoading] = useState(false);
-    const STATUS_ENTITY_TYPES = ["customers", "contacts", "customer_members", "vendors", "opportunities", "jobs", "schedules", "payments"];
+    const STATUS_ENTITY_TYPES = [
+        "customers",
+        "contacts",
+        "customer_members",
+        "vendors",
+        "opportunities",
+        "jobs",
+        "schedules",
+        "payments",
+        "persons",
+        "service_plan_templates",
+    ];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
         setLoading(true);
@@ -1169,20 +1176,33 @@ export default function AdminEntityDrawer() {
             .finally(() => setJobRelatedLoading(false));
     }, [drawer.type, drawer.id]);
 
+    const paymentParentJobId = useMemo(() => {
+        if (!drawer.id || drawer.id === "new") return null;
+        if (drawer.type === "jobs") return drawer.id;
+        if (drawer.type === "schedules" && data && !(data as { _create?: boolean })._create) {
+            const jid = (data as { job_id?: string | null }).job_id;
+            return jid && String(jid).trim() ? String(jid).trim() : null;
+        }
+        return null;
+    }, [drawer.type, drawer.id, data]);
+
     const refetchJobPayments = useCallback(() => {
-        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
+        if (!paymentParentJobId) return;
         setJobPaymentsLoading(true);
-        fetch(`/api/admin/jobs/${drawer.id}/payments`)
+        fetch(`/api/admin/jobs/${paymentParentJobId}/payments`)
             .then((res) => (res.ok ? res.json() : { payments: [] }))
             .then((json: { payments?: { id: string; created_at: string; amount_cents: number; provider_payment_id: string | null; payment_status_id: string; payment_statuses: { key: string } | null }[] }) => setJobPayments(json.payments ?? []))
             .catch(() => setJobPayments([]))
             .finally(() => setJobPaymentsLoading(false));
-    }, [drawer.type, drawer.id]);
+    }, [paymentParentJobId]);
 
     useEffect(() => {
-        if (drawer.type !== "jobs" || !drawer.id) return;
+        if (!paymentParentJobId) {
+            setJobPayments([]);
+            return;
+        }
         refetchJobPayments();
-    }, [drawer.type, drawer.id, refetchJobPayments]);
+    }, [paymentParentJobId, refetchJobPayments]);
 
     useEffect(() => {
         if (!paymentToast) return;
@@ -1209,21 +1229,16 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "opportunities") {
-            setPipelines([]);
-            setStages([]);
             setOppVerticalOptions([]);
             return;
         }
-        Promise.all([
-            fetch("/api/admin/pipelines").then((r) => r.ok ? r.json() : []),
-            fetch("/api/admin/pipeline-stages").then((r) => r.ok ? r.json() : []),
-            fetch("/api/admin/verticals").then((r) => (r.ok ? r.json() : [])),
-        ]).then(([pl, st, verts]) => {
-            setPipelines(Array.isArray(pl) ? pl : []);
-            setStages(Array.isArray(st) ? st : []);
-            const vlist = Array.isArray(verts) ? verts as { id: string; name?: string | null }[] : [];
-            setOppVerticalOptions(vlist.map((v) => ({ id: v.id, name: (v.name ?? v.id).trim() || v.id })));
-        }).catch(() => { setPipelines([]); setStages([]); setOppVerticalOptions([]); });
+        fetch("/api/admin/verticals")
+            .then((r) => (r.ok ? r.json() : []))
+            .then((verts) => {
+                const vlist = Array.isArray(verts) ? (verts as { id: string; name?: string | null }[]) : [];
+                setOppVerticalOptions(vlist.map((v) => ({ id: v.id, name: (v.name ?? v.id).trim() || v.id })));
+            })
+            .catch(() => setOppVerticalOptions([]));
     }, [drawer.type]);
 
     useEffect(() => {
@@ -1410,7 +1425,7 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.defaultCustomerId, data]);
 
     useEffect(() => {
-        if (!drawer.type || !STATUS_ENTITY_TYPES.includes(drawer.type) || drawer.type === "vendors") {
+        if (!drawer.type || !STATUS_ENTITY_TYPES.includes(drawer.type)) {
             setStatusDefsForDrawer([]);
             return;
         }
@@ -1589,7 +1604,7 @@ export default function AdminEntityDrawer() {
                 name: (opp.name as string) ?? "",
                 job_date: (opp.job_date as string)?.slice(0, 10) ?? "",
                 job_time_window: (opp.job_time_window as string) ?? "",
-                pipeline_stage_id: (opp.pipeline_stage_id as string) ?? "",
+                status_key: (opp.status_key as string) ?? "",
                 vertical_id: (opp.vertical_id as string) ?? "",
                 quote_total: quoteTotal,
                 quote_subtotal: opp.quote_subtotal ?? "",
@@ -1621,7 +1636,7 @@ export default function AdminEntityDrawer() {
                 completed_at: data.completed_at ? new Date(data.completed_at as string).toISOString().slice(0, 16) : "",
                 service_frequency_key: (data.service_frequency_key as string) ?? "",
                 is_recurring: data.is_recurring ?? false,
-                job_status_id: (data.job_status_id as string) ?? "",
+                status_key: (data.status_key as string) ?? "",
                 internal_notes: (meta.internal_notes as string) ?? "",
                 assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
                 gross_price_cents: data.gross_price_cents ?? null,
@@ -1683,7 +1698,6 @@ export default function AdminEntityDrawer() {
                 payout_override_value?: number | null;
             };
             const vendorForm: VendorFormData = {
-                vendor_status_id: vendorData.vendor_status_id ?? "",
                 primary_person_id: (vendorData as { primary_person_id?: string | null }).primary_person_id ?? "",
                 status_key: (data.status_key ?? (data as { status?: string | null }).status) as string ?? "",
                 name: vendorData.name ?? "",
@@ -1717,7 +1731,7 @@ export default function AdminEntityDrawer() {
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
                 end_at: data.end_at ? new Date(data.end_at as string).toISOString().slice(0, 16) : "",
                 timezone: data.timezone ?? "",
-                schedule_status_id: (data as { schedule_status_id?: string | null }).schedule_status_id ?? "",
+                status_key: (data.status_key as string) ?? "",
             });
         } else if (drawer.type === "workflows" && !(data as { _create?: boolean })._create) {
             setFormData({
@@ -1809,7 +1823,7 @@ export default function AdminEntityDrawer() {
             .catch(() => setJobDiscountOptions([]));
     }, [drawer.type, (data as { _vertical_slug?: string | null } | null)?._vertical_slug]);
 
-    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "job_status_id", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id", "assigned_vendor_id"] as const;
+    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id", "assigned_vendor_id"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
             setVendorPayout(null);
@@ -1938,35 +1952,14 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, formData.customer_id]);
 
     useEffect(() => {
-        if (drawer.type !== "jobs") {
-            setJobCatalogStatusOptions([]);
-            return;
-        }
-        fetch("/api/admin/job-statuses")
-            .then((r) => (r.ok ? r.json() : { job_statuses: [] }))
-            .then((j: { job_statuses?: { id: string; label: string | null }[] }) => setJobCatalogStatusOptions(j.job_statuses ?? []))
-            .catch(() => setJobCatalogStatusOptions([]));
-    }, [drawer.type]);
-
-    useEffect(() => {
-        if (drawer.type !== "schedules") {
-            setScheduleCatalogStatusOptions([]);
-            return;
-        }
-        fetch("/api/admin/schedule-statuses")
-            .then((r) => (r.ok ? r.json() : { schedule_statuses: [] }))
-            .then((j: { schedule_statuses?: { id: string; label: string | null }[] }) => setScheduleCatalogStatusOptions(j.schedule_statuses ?? []))
-            .catch(() => setScheduleCatalogStatusOptions([]));
-    }, [drawer.type]);
-
-    useEffect(() => {
-        if (drawer.type !== "jobs" || !(data as { _create?: boolean } | null)?._create || jobCatalogStatusOptions.length === 0) return;
+        if (drawer.type !== "jobs" || !(data as { _create?: boolean } | null)?._create || statusDefsForDrawer.length === 0) return;
         setFormData((prev) => {
-            if (String(prev.job_status_id ?? "").trim()) return prev;
-            const first = jobCatalogStatusOptions[0]?.id;
-            return first ? { ...prev, job_status_id: first } : prev;
+            if (String(prev.status_key ?? "").trim()) return prev;
+            const active = statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order);
+            const first = active[0]?.status_key ?? statusDefsForDrawer[0]?.status_key;
+            return first ? { ...prev, status_key: first } : prev;
         });
-    }, [drawer.type, data, jobCatalogStatusOptions]);
+    }, [drawer.type, data, statusDefsForDrawer]);
 
     useEffect(() => {
         if (drawer.type !== "jobs") {
@@ -2059,7 +2052,7 @@ export default function AdminEntityDrawer() {
             completed_at: data.completed_at ? new Date(data.completed_at as string).toISOString().slice(0, 16) : "",
             service_frequency_key: (data.service_frequency_key as string) ?? "",
             is_recurring: data.is_recurring ?? false,
-            job_status_id: (data.job_status_id as string) ?? "",
+            status_key: (data.status_key as string) ?? "",
             internal_notes: (meta.internal_notes as string) ?? "",
             gross_price_cents: data.gross_price_cents ?? null,
             discount_amount: data.discount_amount ?? null,
@@ -2125,7 +2118,6 @@ export default function AdminEntityDrawer() {
         } else if (drawer.type === "vendors") {
             const v = data as { vendor_status_id?: string | null; primary_person_id?: string | null; name?: string | null; company_name?: string | null; phone?: string | null; email?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; days_available?: string[] | null; operating_hours_open?: string | null; operating_hours_close?: string | null; owns_supplies?: boolean | null; max_daily_jobs?: number | null; payout_percent?: number | null; service_area_zip_codes?: string[] | null; external_source?: string | null; external_id?: string | null; w9_received?: boolean | null; ach_verified?: boolean | null; consent_contractor_agreement?: boolean | null; consent_legal?: boolean | null; consent_marketing?: boolean | null; payout_override_type?: string | null; payout_override_value?: number | null };
             initial = {
-                vendor_status_id: v.vendor_status_id ?? "",
                 primary_person_id: v.primary_person_id ?? "",
                 status_key: ((data.status_key ?? (data as { status?: string | null }).status) as string) ?? "",
                 name: v.name ?? "",
@@ -2173,7 +2165,7 @@ export default function AdminEntityDrawer() {
                 name: (opp.name as string) ?? "",
                 job_date: (opp.job_date as string)?.slice(0, 10) ?? "",
                 job_time_window: (opp.job_time_window as string) ?? "",
-                pipeline_stage_id: (opp.pipeline_stage_id as string) ?? "",
+                status_key: (opp.status_key as string) ?? "",
                 vertical_id: (opp.vertical_id as string) ?? "",
                 quote_total: quoteTotal,
                 quote_subtotal: opp.quote_subtotal ?? "",
@@ -2193,14 +2185,13 @@ export default function AdminEntityDrawer() {
             };
             const oppDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
             mergeConfiguredFieldFormValues(initial as Record<string, unknown>, opp, oppDefs);
-            delete (initial as Record<string, unknown>).status_key;
             if (quoteTotal !== "" && quoteTotal != null) (initial as Record<string, unknown>).quote_total = quoteTotal;
         } else if (drawer.type === "schedules") {
             initial = {
                 start_at: data.start_at ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
                 end_at: data.end_at ? new Date(data.end_at as string).toISOString().slice(0, 16) : "",
                 timezone: data.timezone ?? "",
-                schedule_status_id: (data as { schedule_status_id?: string | null }).schedule_status_id ?? "",
+                status_key: (data.status_key as string) ?? "",
             };
             const schedDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
             for (const d of schedDefs) { if (!d.is_system) (initial as Record<string, unknown>)[d.field_key] = (data[d.field_key] as string) ?? ""; }
@@ -2242,6 +2233,7 @@ export default function AdminEntityDrawer() {
                 recurrence_unit: (data.recurrence_unit as string) ?? "",
                 recurrence_interval: data.recurrence_interval != null ? Number(data.recurrence_interval) : 1,
                 is_active: !!data.is_active,
+                status_key: (data.status_key as string) ?? "",
             };
         } else if (drawer.type === "addons") {
             initial = {
@@ -2277,6 +2269,7 @@ export default function AdminEntityDrawer() {
                 last_name: (data.last_name as string) ?? "",
                 email: (data.email as string) ?? "",
                 phone: (data.phone as string) ?? "",
+                status_key: (data.status_key as string) ?? "",
                 created_at: (data.created_at as string) ?? "",
                 updated_at: (data.updated_at as string) ?? "",
             };
@@ -2404,6 +2397,8 @@ export default function AdminEntityDrawer() {
                     recurrence_unit: typeof formData.recurrence_unit === "string" ? (formData.recurrence_unit.trim() || null) : null,
                     recurrence_interval: interval,
                     is_active: !!formData.is_active,
+                    status_key:
+                        typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null,
                 };
                 const res = await fetch(`/api/admin/service-plan-templates/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                 const json = await res.json().catch(() => ({}));
@@ -2440,6 +2435,8 @@ export default function AdminEntityDrawer() {
                     last_name: typeof formData.last_name === "string" ? formData.last_name.trim() || null : null,
                     email: typeof formData.email === "string" ? formData.email.trim() || null : null,
                     phone: typeof formData.phone === "string" ? formData.phone.trim() || null : null,
+                    status_key:
+                        typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null,
                 };
                 const defs = (data?._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
                 for (const d of defs) {
@@ -2507,6 +2504,8 @@ export default function AdminEntityDrawer() {
                 if ("notes" in payload) delete payload.notes;
                 if ("customer_notes" in payload) delete payload.customer_notes;
                 if (notes !== undefined) payload.notes = (typeof notes === "string" && notes.trim() === "") ? null : notes;
+                delete payload.pipeline_stage_id;
+                if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
             }
             if (drawer.type === "jobs") {
                 if ("internal_notes" in payload) {
@@ -2529,7 +2528,8 @@ export default function AdminEntityDrawer() {
                 if (payload.customer_id === "") payload.customer_id = null;
                 if (payload.opportunity_id === "") payload.opportunity_id = null;
                 if (payload.location_id === "") payload.location_id = null;
-                if (payload.job_status_id === "" || payload.job_status_id === undefined) payload.job_status_id = null;
+                if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
+                delete payload.job_status_id;
                 for (const tk of ["scheduled_at", "completed_at"] as const) {
                     const tv = payload[tk];
                     if (tv === "" || tv === undefined || (typeof tv === "string" && tv.trim() === "")) payload[tk] = null;
@@ -2538,15 +2538,13 @@ export default function AdminEntityDrawer() {
             if (drawer.type === "schedules") {
                 if (payload.start_at) payload.start_at = new Date(payload.start_at as string).toISOString();
                 if (payload.end_at) payload.end_at = new Date(payload.end_at as string).toISOString();
-                delete payload.status_key;
-                if (payload.schedule_status_id === "" || payload.schedule_status_id === undefined) payload.schedule_status_id = null;
+                if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
+                delete payload.schedule_status_id;
             }
-            if (drawer.type === "jobs") delete payload.status_key;
-            if (drawer.type === "opportunities") delete payload.status_key;
             if (drawer.type === "vendors") {
-                if (payload.vendor_status_id === "" || payload.vendor_status_id === undefined) payload.vendor_status_id = null;
+                if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
+                delete payload.vendor_status_id;
                 if (payload.primary_person_id === "" || payload.primary_person_id === undefined) payload.primary_person_id = null;
-                delete payload.status_key;
                 delete payload.status;
                 const daysStr = payload.days_available as string | undefined;
                 payload.days_available = daysStr ? String(daysStr).split(",").map((s) => s.trim()).filter(Boolean) : null;
@@ -2726,6 +2724,99 @@ export default function AdminEntityDrawer() {
             {jobSchedules.length > 0 && !rescheduleForm && <button type="button" onClick={() => openReschedule(jobSchedules[0])} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Reschedule</button>}
         </div>
     ) : null;
+
+    const isScheduleExistingView = drawer.type === "schedules" && data && !(data as Record<string, unknown>)._create;
+    const schedulePaymentQuickActionsNode =
+        isScheduleExistingView && paymentParentJobId ? (
+            <div className="flex flex-wrap gap-2 items-center">
+                {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
+                    <button
+                        type="button"
+                        disabled={!!paymentActionLoading}
+                        onClick={async () => {
+                            setPaymentActionLoading("run");
+                            setPaymentToast(null);
+                            try {
+                                const res = await fetch("/api/admin/payments/run", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ job_id: paymentParentJobId }),
+                                });
+                                const json = await res.json().catch(() => ({}));
+                                if (res.status === 409) {
+                                    setPaymentToast({
+                                        type: "error",
+                                        message: (json as { error?: string }).error ?? "Job already has a paid payment",
+                                    });
+                                    refetchJobPayments();
+                                    return;
+                                }
+                                if (!res.ok) {
+                                    setPaymentToast({
+                                        type: "error",
+                                        message: (json as { error?: string }).error ?? "Run payment failed",
+                                    });
+                                    return;
+                                }
+                                setPaymentToast({ type: "success", message: "Payment succeeded" });
+                                refetchJobPayments();
+                                refetch();
+                            } catch (e) {
+                                setPaymentToast({ type: "error", message: (e as Error).message });
+                            } finally {
+                                setPaymentActionLoading(null);
+                            }
+                        }}
+                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    >
+                        {paymentActionLoading === "run" ? "…" : "Run Payment"}
+                    </button>
+                )}
+                {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
+                    <button
+                        type="button"
+                        disabled={!!paymentActionLoading}
+                        onClick={async () => {
+                            setPaymentActionLoading("retry");
+                            setPaymentToast(null);
+                            try {
+                                const res = await fetch("/api/admin/payments/run", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ job_id: paymentParentJobId }),
+                                });
+                                const json = await res.json().catch(() => ({}));
+                                if (res.status === 409) {
+                                    setPaymentToast({
+                                        type: "error",
+                                        message: (json as { error?: string }).error ?? "Job already has a paid payment",
+                                    });
+                                    refetchJobPayments();
+                                    return;
+                                }
+                                if (!res.ok) {
+                                    setPaymentToast({
+                                        type: "error",
+                                        message: (json as { error?: string }).error ?? "Retry failed",
+                                    });
+                                    return;
+                                }
+                                setPaymentToast({ type: "success", message: "Payment succeeded" });
+                                refetchJobPayments();
+                                refetch();
+                            } catch (e) {
+                                setPaymentToast({ type: "error", message: (e as Error).message });
+                            } finally {
+                                setPaymentActionLoading(null);
+                            }
+                        }}
+                        className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10 disabled:opacity-50"
+                    >
+                        {paymentActionLoading === "retry" ? "…" : "Retry Failed"}
+                    </button>
+                )}
+            </div>
+        ) : null;
 
     const title: React.ReactNode = data
         ? drawer.type === "contacts"
@@ -3365,17 +3456,21 @@ export default function AdminEntityDrawer() {
         let visible = defs.filter((d) => d.is_visible_in_drawer !== false);
         if (drawer.type === "vendors") {
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
+            visible = visible.filter((d) => d.field_key !== "vendor_status_id");
         }
         if (drawer.type === "opportunities") {
             visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
+            visible = visible.filter((d) => d.field_key !== "pipeline_stage_id");
         }
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => d.field_key !== "primary_contact_id");
             visible = visible.filter((d) => d.field_key !== "status_key");
+            visible = visible.filter((d) => d.field_key !== "job_status_id");
         }
         if (drawer.type === "schedules") {
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
+            visible = visible.filter((d) => d.field_key !== "schedule_status_id");
         }
         /** Unified Pricing section owns these; strip from field_definitions-driven sections to avoid duplicates. */
         const jobDrawerPricingFieldKeys = new Set([
@@ -3556,25 +3651,6 @@ export default function AdminEntityDrawer() {
                 result.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
             }
         }
-        if (drawer.type === "vendors" && fromDefs.length > 0) {
-            const fieldKeys = new Set<string>();
-            for (const s of fromDefs) {
-                for (const f of s.fields) fieldKeys.add(f.key);
-            }
-            if (!fieldKeys.has("vendor_status_id")) {
-                result = [
-                    {
-                        key: "vendor_status_core",
-                        title: "Vendor status",
-                        defaultExpanded: true,
-                        collapsible: true,
-                        gridCols: 2 as const,
-                        fields: [{ key: "vendor_status_id", label: "Status", span: 1 as const, renderHint: "text", editable: true }],
-                    },
-                    ...result,
-                ];
-            }
-        }
         return result;
     }, [drawer.type, data]);
 
@@ -3582,25 +3658,12 @@ export default function AdminEntityDrawer() {
         const out: Record<string, { value: string; label: string }[]> = {};
         if (drawer.type === "opportunities" && data) {
             const d = data as Record<string, unknown>;
-            const stageOpts: { value: string; label: string }[] = [];
-            pipelines.forEach((p) => {
-                stages
-                    .filter((s) => s.pipeline_id === p.id)
-                    .sort((a, b) => a.position - b.position)
-                    .forEach((s) => stageOpts.push({ value: s.id, label: s.name }));
-            });
-            const sid = String(d.pipeline_stage_id ?? "");
-            if (sid && !stageOpts.some((o) => o.value === sid)) {
-                const nm = String(d._pipeline_stage_name ?? "").trim();
-                stageOpts.push({ value: sid, label: nm || `${sid.slice(0, 8)}…` });
-            }
             const vertOpts = [...oppVerticalOptions.map((v) => ({ value: v.id, label: v.name }))];
             const vid = String(d.vertical_id ?? "");
             if (vid && !vertOpts.some((o) => o.value === vid)) {
                 const nm = String(d._vertical_name ?? "").trim();
                 vertOpts.push({ value: vid, label: nm || `${vid.slice(0, 8)}…` });
             }
-            out.pipeline_stage_id = stageOpts;
             out.vertical_id = vertOpts;
             Object.assign(out, oppRefFieldSelectOptions);
         }
@@ -3646,14 +3709,6 @@ export default function AdminEntityDrawer() {
             }
             out.opportunity_id = oppOpts;
 
-            const jobStOpts = jobCatalogStatusOptions.map((s) => ({ value: s.id, label: s.label ?? s.id }));
-            const jsid = String(d.job_status_id ?? "");
-            if (jsid && !jobStOpts.some((o) => o.value === jsid)) {
-                const nm = String(d._job_status_label ?? "").trim();
-                jobStOpts.push({ value: jsid, label: nm || `${jsid.slice(0, 8)}…` });
-            }
-            out.job_status_id = jobStOpts;
-
             const vendorOpts = jobVendorsForAssign.map((v) => ({
                 value: v.id,
                 label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
@@ -3686,16 +3741,6 @@ export default function AdminEntityDrawer() {
             }
             out.discount_code_id = discountOpts;
         }
-        if (drawer.type === "schedules" && data) {
-            const d = data as Record<string, unknown>;
-            const schOpts = scheduleCatalogStatusOptions.map((s) => ({ value: s.id, label: s.label ?? s.id }));
-            const ssid = String(d.schedule_status_id ?? "");
-            if (ssid && !schOpts.some((o) => o.value === ssid)) {
-                const nm = String(d._schedule_status_label ?? "").trim();
-                schOpts.push({ value: ssid, label: nm || `${ssid.slice(0, 8)}…` });
-            }
-            out.schedule_status_id = schOpts;
-        }
         if (drawer.type === "vendors" && data) {
             const d = data as {
                 _vendor_status_options?: { id: string; key: string; label: string | null }[];
@@ -3704,12 +3749,6 @@ export default function AdminEntityDrawer() {
                 primary_person_id?: string | null;
                 _primary_person_name?: string | null;
             };
-            const stOpts = (d._vendor_status_options ?? []).map((o) => ({ value: o.id, label: o.label ?? o.key }));
-            const vsid = String(d.vendor_status_id ?? "");
-            if (vsid && !stOpts.some((o) => o.value === vsid)) {
-                stOpts.push({ value: vsid, label: String(d._vendor_status_label ?? "").trim() || `${vsid.slice(0, 8)}…` });
-            }
-            out.vendor_status_id = stOpts;
             const pOpts = [...vendorPrimaryPersonOptions];
             const pid = String(d.primary_person_id ?? "");
             if (pid && !pOpts.some((o) => o.value === pid)) {
@@ -3721,8 +3760,6 @@ export default function AdminEntityDrawer() {
     }, [
         drawer.type,
         data,
-        pipelines,
-        stages,
         oppVerticalOptions,
         oppRefFieldSelectOptions,
         jobVendorsForAssign,
@@ -3732,8 +3769,6 @@ export default function AdminEntityDrawer() {
         jobPersonOptions,
         jobContactOptions,
         jobOpportunityOptions,
-        jobCatalogStatusOptions,
-        scheduleCatalogStatusOptions,
         jobDiscountOptions,
     ]);
 
@@ -3742,11 +3777,25 @@ export default function AdminEntityDrawer() {
     const drawerStatusBadge = data && !loading && !(data as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
             <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
-        ) : drawer.type === "schedules" && ((data as { _schedule_status_label?: string | null })._schedule_status_label || (data as { status_key?: string }).status_key) ? (
+        ) : drawer.type === "opportunities" &&
+          ((data as { _status_display?: string | null })._status_display || (data as { status_key?: string }).status_key) ? (
             <StatusBadge
                 label={
+                    String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
+                    getStatusLabel((data as { status_key?: string }).status_key) ||
+                    String((data as { status_key?: string }).status_key ?? "")
+                }
+                variant="default"
+            />
+        ) : drawer.type === "schedules" &&
+          ((data as { _status_display?: string | null })._status_display ||
+              (data as { _schedule_status_label?: string | null })._schedule_status_label ||
+              (data as { status_key?: string }).status_key) ? (
+            <StatusBadge
+                label={
+                    String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
                     String((data as { _schedule_status_label?: string | null })._schedule_status_label ?? "").trim() ||
-                    getStatusLabel((data as { status_key: string }).status_key) ||
+                    getStatusLabel((data as { status_key?: string }).status_key) ||
                     String((data as { status_key?: string }).status_key ?? "")
                 }
                 variant="default"
@@ -3768,6 +3817,7 @@ export default function AdminEntityDrawer() {
             {data && !loading && canEditInDrawer(drawer.type) && (
                 <>
             {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
+            {drawer.type === "schedules" && isScheduleExistingView && schedulePaymentQuickActionsNode}
                         {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
                             <>
                                 <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
@@ -3861,7 +3911,7 @@ export default function AdminEntityDrawer() {
                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Start (required)</label><input type="datetime-local" value={scheduleCreateForm.start_at} onChange={(e) => setScheduleCreateForm((f) => ({ ...f, start_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">End (required)</label><input type="datetime-local" value={scheduleCreateForm.end_at} onChange={(e) => setScheduleCreateForm((f) => ({ ...f, end_at: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Timezone</label><input value={scheduleCreateForm.timezone} onChange={(e) => setScheduleCreateForm((f) => ({ ...f, timezone: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" placeholder="e.g. America/Los_Angeles" /></div>
-                            <button type="button" disabled={scheduleCreateSaving || !scheduleCreateForm.start_at || !scheduleCreateForm.end_at || !drawer.defaultSchedulePrefill?.job_id} onClick={async () => { setScheduleCreateSaving(true); setSaveError(null); try { const prefill = drawer.defaultSchedulePrefill!; const start = new Date(scheduleCreateForm.start_at); const end = new Date(scheduleCreateForm.end_at); if (end <= start) { setSaveError("End must be after start"); return; } const body: Record<string, unknown> = { job_id: prefill.job_id, start_at: start.toISOString(), end_at: end.toISOString(), timezone: scheduleCreateForm.timezone || null, location_id: prefill.location_id || null }; if (prefill.schedule_status_id) body.schedule_status_id = prefill.schedule_status_id; else if (prefill.status_key) body.status_key = prefill.status_key; const res = await fetch("/api/admin/schedules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { openDrawer({ type: "schedules", id: newId }); router.refresh(); } } catch (e) { setSaveError((e as Error).message); } finally { setScheduleCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{scheduleCreateSaving ? "Creating…" : "Create Schedule"}</button>
+                            <button type="button" disabled={scheduleCreateSaving || !scheduleCreateForm.start_at || !scheduleCreateForm.end_at || !drawer.defaultSchedulePrefill?.job_id} onClick={async () => { setScheduleCreateSaving(true); setSaveError(null); try { const prefill = drawer.defaultSchedulePrefill!; const start = new Date(scheduleCreateForm.start_at); const end = new Date(scheduleCreateForm.end_at); if (end <= start) { setSaveError("End must be after start"); return; } const body: Record<string, unknown> = { job_id: prefill.job_id, start_at: start.toISOString(), end_at: end.toISOString(), timezone: scheduleCreateForm.timezone || null, location_id: prefill.location_id || null }; if (prefill.status_key) body.status_key = prefill.status_key; else if (prefill.schedule_status_id) body.schedule_status_id = prefill.schedule_status_id; const res = await fetch("/api/admin/schedules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { openDrawer({ type: "schedules", id: newId }); router.refresh(); } } catch (e) { setSaveError((e as Error).message); } finally { setScheduleCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{scheduleCreateSaving ? "Creating…" : "Create Schedule"}</button>
                         </div>
                     )}
                     {drawerTab === "related" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
@@ -4686,7 +4736,7 @@ export default function AdminEntityDrawer() {
                                 const dataForPrefill = data as { customer_id?: string | null; location_id?: string | null; assigned_vendor_id?: string | null } | null | undefined;
                                 type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
                                 const sections: Sec[] = [
-                                    { key: "schedules", title: "Schedules", defaultExpanded: true, items: scheduleItems, addAction: { label: "Add Schedule", onClick: async () => { let schedule_status_id: string | null = null; try { const r = await fetch("/api/admin/schedule-statuses"); const j = await r.json().catch(() => ({})); const rows = (j.schedule_statuses ?? []) as { id: string }[]; schedule_status_id = rows[0]?.id ?? null; } catch { /* ignore */ } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId, customer_id: dataForPrefill?.customer_id ?? null, location_id: dataForPrefill?.location_id ?? null, assigned_vendor_id: jobAssignedVendorId ?? dataForPrefill?.assigned_vendor_id ?? null, schedule_status_id } }); } } },
+                                    { key: "schedules", title: "Schedules", defaultExpanded: true, items: scheduleItems, addAction: { label: "Add Schedule", onClick: async () => { let status_key: string | null = null; try { const r = await fetch("/api/admin/status-options?entity_type=schedules"); const j = await r.json().catch(() => ({})); const opts = (j.options ?? []) as { value: string }[]; status_key = opts[0]?.value ?? null; } catch { /* ignore */ } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId, customer_id: dataForPrefill?.customer_id ?? null, location_id: dataForPrefill?.location_id ?? null, assigned_vendor_id: jobAssignedVendorId ?? dataForPrefill?.assigned_vendor_id ?? null, status_key } }); } } },
                                     { key: "opportunity", title: "Opportunity", defaultExpanded: !!opp, items: opp ? [{ id: opp.id, entityType: "opportunities" as const, label: (opp.name as string) || "Opportunity", meta: opp.created_at ? formatDate(opp.created_at as string) : undefined }] : [] },
                                     { key: "messages", title: "Messages", defaultExpanded: false, items: messageItems },
                                     { key: "discounts", title: "Discounts", defaultExpanded: false, items: discountItems },
@@ -5409,21 +5459,12 @@ export default function AdminEntityDrawer() {
                             isEditing={isEditing}
                             formData={formData}
                             onFieldChange={(key, value) => {
-                                setFormData((prev) => {
-                                    const next: Record<string, unknown> = { ...prev, [key]: value };
-                                    if (drawer.type === "vendors" && key === "vendor_status_id") {
-                                        const opts =
-                                            (data as { _vendor_status_options?: { id: string; key: string }[] })._vendor_status_options ?? [];
-                                        const opt = opts.find((o) => o.id === value);
-                                        next.status_key = value ? (opt?.key ?? prev.status_key) : "";
-                                    }
-                                    return next;
-                                });
+                                setFormData((prev) => ({ ...prev, [key]: value }));
                             }}
                             onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
                             canEdit={!!canMutate}
-                            statusDefs={drawer.type === "vendors" ? [] : statusDefsForDrawer}
-                            getStatusLabel={drawer.type === "vendors" ? () => null : getStatusLabel}
+                            statusDefs={statusDefsForDrawer}
+                            getStatusLabel={getStatusLabel}
                             onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                         />
                     )}
@@ -5695,23 +5736,31 @@ export default function AdminEntityDrawer() {
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} placeholder="Optional" /></div>
                                                     <div>
                                                         <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
-                                                        <select
-                                                            value={String((formData as VendorFormData).vendor_status_id ?? "")}
-                                                            onChange={(e) => {
-                                                                const vid = e.target.value;
-                                                                const opts = (data as { _vendor_status_options?: { id: string; key: string }[] })._vendor_status_options ?? [];
-                                                                const opt = opts.find((o) => o.id === vid);
-                                                                setFormData((f) => ({ ...f, vendor_status_id: vid || "", status_key: opt?.key ?? "" }));
-                                                            }}
-                                                            onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }}
-                                                            disabled={!canMutate}
-                                                            className={INLINE_EDIT_INPUT_CLASS}
-                                                        >
-                                                            <option value="">— None —</option>
-                                                            {((data as { _vendor_status_options?: { id: string; label?: string | null; key: string }[] })._vendor_status_options ?? []).map((o) => (
-                                                                <option key={o.id} value={o.id}>{o.label ?? o.key}</option>
-                                                            ))}
-                                                        </select>
+                                                        {statusDefsLoading ? (
+                                                            <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                                        ) : (
+                                                            <select
+                                                                value={String(formData.status_key ?? "")}
+                                                                onChange={(e) =>
+                                                                    setFormData((f) => ({ ...f, status_key: e.target.value || "" }))
+                                                                }
+                                                                onBlur={() => {
+                                                                    if (drawer.type === "vendors" && nonJobFormDirty) saveEdit();
+                                                                }}
+                                                                disabled={!canMutate}
+                                                                className={INLINE_EDIT_INPUT_CLASS}
+                                                            >
+                                                                <option value="">— None —</option>
+                                                                {statusDefsForDrawer
+                                                                    .filter((s) => s.is_active)
+                                                                    .sort((a, b) => a.sort_order - b.sort_order)
+                                                                    .map((s) => (
+                                                                        <option key={s.status_key} value={s.status_key}>
+                                                                            {s.status_label ?? s.status_key}
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Primary person</label>
@@ -5956,24 +6005,30 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Job Date</label><input type="date" value={String(formData.job_date ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_date: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Time Window</label><input value={String(formData.job_time_window ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_time_window: e.target.value }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div>
-                                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Stage</label>
-                                            <select value={String(formData.pipeline_stage_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, pipeline_stage_id: e.target.value || null }))} onBlur={() => { if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
-                                                <option value="">— None —</option>
-                                                {(() => {
-                                                    const sid = String(formData.pipeline_stage_id ?? "");
-                                                    const stageOpts: { id: string; name: string }[] = [];
-                                                    pipelines.forEach((p) => {
-                                                        stages.filter((s) => s.pipeline_id === p.id).sort((a, b) => a.position - b.position).forEach((s) => {
-                                                            stageOpts.push({ id: s.id, name: s.name });
-                                                        });
-                                                    });
-                                                    if (sid && !stageOpts.some((o) => o.id === sid)) {
-                                                        const nm = String((data as { _pipeline_stage_name?: string | null })?._pipeline_stage_name ?? "").trim();
-                                                        stageOpts.push({ id: sid, name: nm || `${sid.slice(0, 8)}…` });
-                                                    }
-                                                    return stageOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>);
-                                                })()}
-                                            </select>
+                                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
+                                            {statusDefsLoading ? (
+                                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                            ) : (
+                                                <select
+                                                    value={String(formData.status_key ?? "")}
+                                                    onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
+                                                    onBlur={() => {
+                                                        if (drawer.type === "opportunities" && nonJobFormDirty) saveEdit();
+                                                    }}
+                                                    disabled={!canMutate}
+                                                    className={INLINE_EDIT_INPUT_CLASS}
+                                                >
+                                                    <option value="">— None —</option>
+                                                    {statusDefsForDrawer
+                                                        .filter((s) => s.is_active)
+                                                        .sort((a, b) => a.sort_order - b.sort_order)
+                                                        .map((s) => (
+                                                            <option key={s.status_key} value={s.status_key}>
+                                                                {s.status_label ?? s.status_key}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            )}
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Vertical</label>
@@ -6068,10 +6123,32 @@ export default function AdminEntityDrawer() {
                                             <div className="space-y-3 pb-3">
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job start date (optional)</label><input type="datetime-local" value={String(formData.scheduled_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, scheduled_at: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" /></div>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Service frequency</label><select value={String(formData.service_frequency_key ?? "")} onChange={(e) => { const v = e.target.value; const opt = jobFrequencyOptions.find((f) => f.key === v); setFormData((f) => ({ ...f, service_frequency_key: v, is_recurring: opt?.is_recurring ?? false })); }} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{jobFrequencyOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</select></div>
-                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status</label><select value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{jobCatalogStatusOptions.map((s) => <option key={s.id} value={s.id}>{s.label ?? s.id}</option>)}</select></div>
+                                                <div>
+                                                    <label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label>
+                                                    {statusDefsLoading ? (
+                                                        <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                                    ) : (
+                                                        <select
+                                                            value={String(formData.status_key ?? "")}
+                                                            onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
+                                                            disabled={!canMutate}
+                                                            className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"
+                                                        >
+                                                            <option value="">— None —</option>
+                                                            {statusDefsForDrawer
+                                                                .filter((s) => s.is_active)
+                                                                .sort((a, b) => a.sort_order - b.sort_order)
+                                                                .map((s) => (
+                                                                    <option key={s.status_key} value={s.status_key}>
+                                                                        {s.status_label ?? s.status_key}
+                                                                    </option>
+                                                                ))}
+                                                        </select>
+                                                    )}
+                                                </div>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60" rows={2} /></div>
                                                 {drawer.id && drawer.id !== "new" && (
-                                                    <button type="button" onClick={async () => { const jobId = drawer.id; const custId = (formData.customer_id as string) || (data?.customer_id as string) || null; const locId = (formData.location_id as string) || (data?.location_id as string) || null; const vendorId = jobAssignedVendorId || (data?.assigned_vendor_id as string) || null; let schedule_status_id: string | null = null; try { const r = await fetch("/api/admin/schedule-statuses"); const j = await r.json().catch(() => ({})); const rows = (j.schedule_statuses ?? []) as { id: string }[]; schedule_status_id = rows[0]?.id ?? null; } catch { /* ignore */ } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId as string, customer_id: custId, location_id: locId || null, assigned_vendor_id: vendorId, schedule_status_id } }); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">New Schedule</button>
+                                                    <button type="button" onClick={async () => { const jobId = drawer.id; const custId = (formData.customer_id as string) || (data?.customer_id as string) || null; const locId = (formData.location_id as string) || (data?.location_id as string) || null; const vendorId = jobAssignedVendorId || (data?.assigned_vendor_id as string) || null; let status_key: string | null = null; try { const r = await fetch("/api/admin/status-options?entity_type=schedules"); const j = await r.json().catch(() => ({})); const opts = (j.options ?? []) as { value: string }[]; status_key = opts[0]?.value ?? null; } catch { /* ignore */ } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId as string, customer_id: custId, location_id: locId || null, assigned_vendor_id: vendorId, status_key } }); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">New Schedule</button>
                                                 )}
                                             </div>
                                         )}
@@ -6124,7 +6201,28 @@ export default function AdminEntityDrawer() {
                                             {(drawer.type === "jobs" && (data as { _create?: boolean })?._create) && (
                                                 <>
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">{customerSingular} (required)</label><select value={String(formData.customer_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, customer_id: e.target.value, primary_contact_id: "" }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">Select {customerSingular.toLowerCase()}</option>{jobCustomerOptions.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}</select></div>
-                                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Job status (required)</label><select value={String(formData.job_status_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, job_status_id: e.target.value || "" }))} className="w-full px-2 py-1.5 border rounded text-sm"><option value="">Select status</option>{jobCatalogStatusOptions.map((s) => <option key={s.id} value={s.id}>{s.label ?? s.id}</option>)}</select></div>
+                                                    <div>
+                                                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Status (required)</label>
+                                                        {statusDefsLoading ? (
+                                                            <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                                        ) : (
+                                                            <select
+                                                                value={String(formData.status_key ?? "")}
+                                                                onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
+                                                                className="w-full px-2 py-1.5 border rounded text-sm"
+                                                            >
+                                                                <option value="">Select status</option>
+                                                                {statusDefsForDrawer
+                                                                    .filter((s) => s.is_active)
+                                                                    .sort((a, b) => a.sort_order - b.sort_order)
+                                                                    .map((s) => (
+                                                                        <option key={s.status_key} value={s.status_key}>
+                                                                            {s.status_label ?? s.status_key}
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+                                                        )}
+                                                    </div>
                                                     <div>
                                                         <label className="block text-sm text-alloy-midnight/70 mb-0.5">Primary {contactSingular}</label>
                                                         <select
@@ -6146,7 +6244,7 @@ export default function AdminEntityDrawer() {
                                                     {(() => { const gross = Number(formData.gross_price_cents ?? 0); const token = typeof formData.discount_code_id === "string" ? formData.discount_code_id : ""; const selectedOpt = token ? jobDiscountOptions.find((o) => o.value === token) ?? null : null; const discountCents = selectedOpt ? computeJobDiscountOptionPreviewCents(selectedOpt, gross) : 0; const netCents = Math.max(0, gross - discountCents); return (<><p className="text-sm text-alloy-midnight/80"><strong>Discount amount:</strong> {discountCents > 0 ? `-${formatMoneyFromCents(discountCents)}` : formatMoneyFromCents(0)}</p><p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents(netCents)}</p></>); })()}
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Internal notes</label><textarea value={String(formData.internal_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, internal_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
                                                     <div className="flex gap-2 pt-1">
-                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.job_status_id as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const grossCents = Number(formData.gross_price_cents ?? 0); const discountToken = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null; const body: Record<string, unknown> = { customer_id: (formData.customer_id as string)?.trim(), job_status_id: (formData.job_status_id as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: grossCents || null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, opportunity_id: (formData.opportunity_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null, discount_code_id: discountToken }; const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
+                                                        <button type="button" disabled={jobCreateSaving || !(formData.customer_id as string)?.trim() || !(formData.status_key as string)?.trim()} onClick={async () => { setJobCreateSaving(true); setSaveError(null); try { const grossCents = Number(formData.gross_price_cents ?? 0); const discountToken = typeof formData.discount_code_id === "string" && formData.discount_code_id.trim() ? formData.discount_code_id.trim() : null; const body: Record<string, unknown> = { customer_id: (formData.customer_id as string)?.trim(), status_key: (formData.status_key as string)?.trim(), is_recurring: !!formData.is_recurring, service_frequency_key: (formData.service_frequency_key as string)?.trim() || null, gross_price_cents: grossCents || null, primary_contact_id: (formData.primary_contact_id as string)?.trim() || null, opportunity_id: (formData.opportunity_id as string)?.trim() || null, title: (formData.title as string)?.trim() || null, description: (formData.internal_notes as string)?.trim() || null, discount_code_id: discountToken }; const res = await fetch("/api/admin/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Create failed"); const newId = (json as { id?: string }).id; if (newId) { window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: newId } })); closeDrawer(); } } catch (e) { setSaveError((e as Error).message); } finally { setJobCreateSaving(false); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobCreateSaving ? "Creating…" : "Create"}</button>
                                                     </div>
                                                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                                                 </>
@@ -6310,18 +6408,29 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                             <div>
                                                 <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
-                                                <select
-                                                    value={String(formData.schedule_status_id ?? "")}
-                                                    onChange={(e) => setFormData((f) => ({ ...f, schedule_status_id: e.target.value || "" }))}
-                                                    onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }}
-                                                    disabled={!canMutate}
-                                                    className={INLINE_EDIT_INPUT_CLASS}
-                                                >
-                                                    <option value="">— None —</option>
-                                                    {scheduleCatalogStatusOptions.map((s) => (
-                                                        <option key={s.id} value={s.id}>{s.label ?? s.id}</option>
-                                                    ))}
-                                                </select>
+                                                {statusDefsLoading ? (
+                                                    <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                                ) : (
+                                                    <select
+                                                        value={String(formData.status_key ?? "")}
+                                                        onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
+                                                        onBlur={() => {
+                                                            if (drawer.type === "schedules" && nonJobFormDirty) saveEdit();
+                                                        }}
+                                                        disabled={!canMutate}
+                                                        className={INLINE_EDIT_INPUT_CLASS}
+                                                    >
+                                                        <option value="">— None —</option>
+                                                        {statusDefsForDrawer
+                                                            .filter((s) => s.is_active)
+                                                            .sort((a, b) => a.sort_order - b.sort_order)
+                                                            .map((s) => (
+                                                                <option key={s.status_key} value={s.status_key}>
+                                                                    {s.status_label ?? s.status_key}
+                                                                </option>
+                                                            ))}
+                                                    </select>
+                                                )}
                                             </div>
                                             </div>
                                     {(data.canceled_at as string) && (

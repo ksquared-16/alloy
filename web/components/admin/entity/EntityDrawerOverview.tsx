@@ -185,17 +185,14 @@ function renderFieldEditNode(
     "pipeline_stage_id",
     "vertical_id",
     "primary_person_id",
-    "vendor_status_id",
     "assigned_vendor_id",
     "location_id",
     "primary_contact_id",
     "customer_id",
     "opportunity_id",
-    "job_status_id",
-    "schedule_status_id",
     "discount_code_id",
   ]);
-  /** Reference selects must win over generic `status` hint so e.g. vendor_status_id is never driven by status_definitions. */
+  /** Reference selects (FK ids) win over generic `status` hint; workflow status uses status_key + statusDefs. */
   if (refOpts && refOpts.length > 0 && refSelectKeys.has(key)) {
     return (
       <select
@@ -305,31 +302,25 @@ export default function EntityDrawerOverview({
     const displayFallback =
       key === "status_key" && record._status_display != null
         ? record._status_display
-        : key === "vendor_status_id" && record._status_display != null
-          ? record._status_display
-          : key === "assigned_vendor_id" && record._vendor_name != null
-            ? record._vendor_name
-            : key === "pipeline_stage_id" && record._pipeline_stage_name != null
-              ? record._pipeline_stage_name
-              : key === "vertical_id" && record._vertical_name != null
-                ? record._vertical_name
-                : key === "location_id" && record._location_name != null
-                  ? record._location_name
-                  : key === "primary_person_id" && record._primary_person_name != null
-                    ? record._primary_person_name
-                    : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
-                      ? (record._primary_contact_name ?? record._contact_name)
-                      : key === "customer_id" && record._customer_name != null
-                        ? record._customer_name
-                        : key === "opportunity_id" && record._opportunity_name != null
-                          ? record._opportunity_name
-            : key === "job_status_id" && record._job_status_label != null
-              ? record._job_status_label
-              : key === "schedule_status_id" && record._schedule_status_label != null
-                ? record._schedule_status_label
-                : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
-                              ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
-                              : undefined;
+        : key === "assigned_vendor_id" && record._vendor_name != null
+          ? record._vendor_name
+          : key === "pipeline_stage_id" && record._pipeline_stage_name != null
+            ? record._pipeline_stage_name
+            : key === "vertical_id" && record._vertical_name != null
+              ? record._vertical_name
+              : key === "location_id" && record._location_name != null
+                ? record._location_name
+                : key === "primary_person_id" && record._primary_person_name != null
+                  ? record._primary_person_name
+                  : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
+                    ? (record._primary_contact_name ?? record._contact_name)
+                    : key === "customer_id" && record._customer_name != null
+                      ? record._customer_name
+                      : key === "opportunity_id" && record._opportunity_name != null
+                        ? record._opportunity_name
+                        : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
+                          ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
+                          : undefined;
     const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
     const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
     const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;

@@ -9,10 +9,10 @@ export type SchedulePrefill = {
     customer_id?: string | null;
     location_id?: string | null;
     assigned_vendor_id?: string | null;
-    /** Preferred: FK for new schedule rows; server derives status_key. */
-    schedule_status_id?: string | null;
-    /** @deprecated Use schedule_status_id; still accepted by POST for legacy callers. */
+    /** Preferred: canonical key from status_definitions (entity_type=schedules); server resolves schedule_status_id. */
     status_key?: string | null;
+    /** Legacy: FK only; prefer status_key. Still accepted by POST. */
+    schedule_status_id?: string | null;
 };
 
 /** When opening jobs with id "new", prefill opportunity_id, customer_id, primary_contact_id. */
