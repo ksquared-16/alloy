@@ -11,7 +11,11 @@ import {
     type JobPriceInput,
 } from "@/lib/admin/jobDisplayPrice";
 import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
-import { fetchEffectiveStatusDefinitions, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    fetchEffectiveStatusDefinitions,
+    inferDocumentStatusFromStored,
+    resolveStatusLabel,
+} from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "documents"] as const;
@@ -716,7 +720,20 @@ export async function GET(
             out._status_display = vOrgId
                 ? await resolveStatusLabel(supabase, vOrgId, "vendors", v.status_key ?? v.status ?? null)
                 : (v.status_key ?? v.status ?? null);
-            out._vendor_status_options = [];
+            if (vOrgId) {
+                try {
+                    const vDefs = await fetchEffectiveStatusDefinitions(supabase, vOrgId, "vendors", { activeOnly: true });
+                    out._vendor_status_options = vDefs.map((d) => ({
+                        id: d.id,
+                        key: d.status_key,
+                        label: (d.status_label?.trim() || d.status_key) as string,
+                    }));
+                } catch {
+                    out._vendor_status_options = [];
+                }
+            } else {
+                out._vendor_status_options = [];
+            }
 
             const directPersonId = v.primary_person_id ?? null;
             const primaryContactId = v.primary_contact_id ?? null;
@@ -873,8 +890,10 @@ export async function GET(
             out.document_type = n.document_type;
             out.uploaded_at = n.uploaded_at;
             out.status = n.status;
-            const sk = (row.status_key as string | null | undefined) ?? null;
-            out._status_display = await resolveStatusLabel(supabase, ctx.orgId, "documents", sk);
+            const docDefsForRow = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });
+            const docUi = inferDocumentStatusFromStored(docDefsForRow, n.status);
+            out.status_key = docUi.inferredKey;
+            out._status_display = docUi.display;
             out._ref = `DOC-${String(id).slice(-8)}`;
             const et = (row.entity_type as string | null)?.trim() ?? null;
             const eid = (row.entity_id as string | null)?.trim() ?? null;

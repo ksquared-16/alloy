@@ -94,6 +94,22 @@ export function AdminCollectPaymentModal({
   const [stripe, setStripe] = useState<Stripe | null>(null);
   const [cardEl, setCardEl] = useState<StripeCardElement | null>(null);
   const cardMountRef = useRef<HTMLDivElement>(null);
+  /** Prevents overlapping charges if the button is double-clicked before React re-renders. */
+  const paymentInFlightRef = useRef(false);
+
+  const runAfterPaymentSideEffects = useCallback(
+    (jobId: string, scheduleId: string | null) => {
+      queueMicrotask(() => {
+        console.log("[CollectPayment] onAfterRun start", { jobId: jobId.slice(0, 8), scheduleId: scheduleId?.slice(0, 8) ?? null });
+        try {
+          onAfterRun(jobId, scheduleId);
+        } finally {
+          console.log("[CollectPayment] onAfterRun end");
+        }
+      });
+    },
+    [onAfterRun]
+  );
 
   const hasSchedule = !!(context?.scheduleId && context.scheduleId.trim());
   const effectiveJobId = context?.jobId ?? "";
@@ -249,7 +265,20 @@ export function AdminCollectPaymentModal({
   const canSubmit = canSubmitSaved || canSubmitNew;
 
   const runPayment = async () => {
+    if (paymentInFlightRef.current) {
+      console.warn("[CollectPayment] ignored duplicate submit (in-flight)");
+      return;
+    }
     if (!effectiveJobId || !canSubmit) return;
+    paymentInFlightRef.current = true;
+    const traceId = crypto.randomUUID().slice(0, 8);
+    const afterScheduleId = target === "schedule" ? context?.scheduleId ?? null : null;
+    console.log("[CollectPayment] charge start", {
+      traceId,
+      jobId: effectiveJobId.slice(0, 8),
+      cardMode,
+      target,
+    });
     setSubmitting(true);
     setFeedback(null);
     try {
@@ -263,6 +292,7 @@ export function AdminCollectPaymentModal({
           const line = { type: "error" as const, message: pmErr?.message ?? "Could not read card" };
           setFeedback(line);
           onPaymentOutcome?.(line);
+          console.log("[CollectPayment] new card PM error, abort", { traceId });
           return;
         }
         paymentMethodId = paymentMethod.id;
@@ -285,12 +315,19 @@ export function AdminCollectPaymentModal({
       }
       body.idempotency_key = crypto.randomUUID();
 
+      console.log("[CollectPayment] request sent", { traceId });
       const res = await fetch("/api/admin/payments/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       let json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      console.log("[CollectPayment] response received", {
+        traceId,
+        httpStatus: res.status,
+        ok: json.ok,
+        requires_action: json.requires_action,
+      });
 
       if (json.requires_action === true && typeof json.client_secret === "string") {
         if (!stripe) {
@@ -300,7 +337,7 @@ export function AdminCollectPaymentModal({
           };
           setFeedback(line);
           onPaymentOutcome?.(line);
-          onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);
+          runAfterPaymentSideEffects(effectiveJobId, afterScheduleId);
           return;
         }
         const { error: cErr, paymentIntent } = await stripe.confirmCardPayment(json.client_secret as string);
@@ -308,7 +345,7 @@ export function AdminCollectPaymentModal({
           const line = { type: "error" as const, message: cErr.message ?? "Authentication failed" };
           setFeedback(line);
           onPaymentOutcome?.(line);
-          onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);
+          runAfterPaymentSideEffects(effectiveJobId, afterScheduleId);
           return;
         }
         if (paymentIntent?.status === "succeeded") {
@@ -318,7 +355,8 @@ export function AdminCollectPaymentModal({
           const line = { type: "success" as const, message: parts.join(" · ") };
           setFeedback(line);
           onPaymentOutcome?.(line);
-          onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);
+          console.log("[CollectPayment] 3DS success, scheduling refresh", { traceId });
+          runAfterPaymentSideEffects(effectiveJobId, afterScheduleId);
           return;
         } else {
           const line = {
@@ -327,7 +365,7 @@ export function AdminCollectPaymentModal({
           };
           setFeedback(line);
           onPaymentOutcome?.(line);
-          onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);
+          runAfterPaymentSideEffects(effectiveJobId, afterScheduleId);
           return;
         }
       }
@@ -336,7 +374,7 @@ export function AdminCollectPaymentModal({
         const msg = (typeof json.error === "string" && json.error) || "Request conflict";
         setFeedback({ type: "error", message: msg });
         onPaymentOutcome?.({ type: "error", message: msg });
-        onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);
+        runAfterPaymentSideEffects(effectiveJobId, afterScheduleId);
         return;
       }
 
@@ -344,13 +382,17 @@ export function AdminCollectPaymentModal({
       const line: { type: "success" | "error"; message: string } = { type: fb.ok ? "success" : "error", message: fb.message };
       setFeedback(line);
       onPaymentOutcome?.(line);
-      onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);
+      console.log("[CollectPayment] outcome set, scheduling refresh", { traceId, fbOk: fb.ok });
+      runAfterPaymentSideEffects(effectiveJobId, afterScheduleId);
     } catch (e) {
       const line = { type: "error" as const, message: (e as Error).message };
       setFeedback(line);
       onPaymentOutcome?.(line);
+      console.log("[CollectPayment] error", { traceId, message: line.message });
     } finally {
+      paymentInFlightRef.current = false;
       setSubmitting(false);
+      console.log("[CollectPayment] processing cleared", { traceId });
     }
   };
 

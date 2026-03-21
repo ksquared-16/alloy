@@ -83,6 +83,12 @@ async def admin_payments_run(
     if isinstance(raw_client_ik, str) and raw_client_ik.strip():
         client_idempotency_key = raw_client_ik.strip()[:512]
 
+    logger.info(
+        "admin_payments_run: code_path=partial_payments_v2 (multi-pay per job allowed) job_id_prefix=%s has_client_idempotency_key=%s",
+        job_id[:12],
+        bool(client_idempotency_key),
+    )
+
     pending_uuid = get_payment_status_id_by_key("pending")
     paid_uuid = get_payment_status_id_by_key("paid")
     failed_uuid = get_payment_status_id_by_key("failed")

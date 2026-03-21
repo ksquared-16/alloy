@@ -3948,8 +3948,19 @@ export default function AdminEntityDrawer() {
                 }
                 variant="default"
             />
-        ) : drawer.type === "vendors" && (data as { _status_display?: string | null })._status_display ? (
-            <StatusBadge label={String((data as { _status_display: string })._status_display)} variant="default" />
+        ) : drawer.type === "vendors" &&
+          ((data as { _status_display?: string | null })._status_display ||
+              (data as { _vendor_status_label?: string | null })._vendor_status_label ||
+              (data as { status_key?: string | null }).status_key) ? (
+            <StatusBadge
+                label={
+                    String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
+                    String((data as { _vendor_status_label?: string | null })._vendor_status_label ?? "").trim() ||
+                    getStatusLabel((data as { status_key?: string | null }).status_key) ||
+                    String((data as { status_key?: string | null }).status_key ?? "")
+                }
+                variant="default"
+            />
         ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (data as { status_key?: string }).status_key ? (
             <StatusBadge label={getStatusLabel((data as { status_key: string }).status_key) ?? (data as { status_key: string }).status_key} variant="default" />
         ) : null

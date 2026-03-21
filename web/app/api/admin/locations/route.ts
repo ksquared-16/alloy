@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
         .order("is_primary", { ascending: false })
         .order("label", { ascending: true });
 
+    // Treat NULL is_active as active (legacy rows); only exclude explicit false.
     if (!includeInactive) {
-        q = q.eq("is_active", true);
+        q = q.or("is_active.is.null,is_active.eq.true");
     }
 
     const { data: rows, error } = await q;

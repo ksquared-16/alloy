@@ -136,6 +136,33 @@ export async function resolveStatusLabel(
     return sk;
 }
 
+/**
+ * Documents table uses `status` (text) as the persisted workflow value — not `status_key`.
+ * Value may be a status_definitions key, a human label, or legacy free text.
+ */
+export function inferDocumentStatusFromStored(
+    defs: StatusDefinitionRow[],
+    stored: string | null | undefined
+): { display: string | null; inferredKey: string | null } {
+    if (stored == null || String(stored).trim() === "") return { display: null, inferredKey: null };
+    const s = String(stored).trim();
+    const byKey = defs.find((d) => d.status_key === s);
+    if (byKey) {
+        return {
+            display: (byKey.status_label?.trim() || byKey.status_key) as string,
+            inferredKey: byKey.status_key,
+        };
+    }
+    const byLabel = defs.find((d) => (d.status_label?.trim() ?? "") === s);
+    if (byLabel) {
+        return {
+            display: (byLabel.status_label?.trim() || byLabel.status_key) as string,
+            inferredKey: byLabel.status_key,
+        };
+    }
+    return { display: s, inferredKey: null };
+}
+
 export async function assertAllowedStatusKey(
     supabase: SupabaseClient,
     orgId: string,

@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
-import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 
 const ALLOWED_KEYS = [
     "status_key",
@@ -98,6 +98,12 @@ export async function PATCH(
             if (!chk.ok) {
                 return NextResponse.json({ error: chk.message }, { status: 400 });
             }
+            if (sk) {
+                const { data: vs } = await supabase.from("vendor_statuses").select("id").eq("key", sk).maybeSingle();
+                (updates as Record<string, unknown>).vendor_status_id = vs ? (vs as { id: string }).id : null;
+            } else {
+                (updates as Record<string, unknown>).vendor_status_id = null;
+            }
         }
 
         const { data, error } = await supabase
@@ -129,7 +135,15 @@ export async function PATCH(
             actor_user_id: auth.user.id,
             role: auth.role,
         });
-        return NextResponse.json(data);
+        const row = data as Record<string, unknown> & { status_key?: string | null; status?: string | null };
+        const skOut = row.status_key ?? row.status ?? null;
+        const statusDisplay =
+            orgId != null ? await resolveStatusLabel(supabase, orgId, "vendors", skOut) : skOut;
+        return NextResponse.json({
+            ...row,
+            _status_display: statusDisplay ?? skOut ?? null,
+            _vendor_status_label: statusDisplay ?? skOut ?? null,
+        });
     } catch (e: unknown) {
         console.error("[ADMIN_PATCH_VENDOR]", e);
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
