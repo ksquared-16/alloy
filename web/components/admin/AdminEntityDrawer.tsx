@@ -2435,6 +2435,13 @@ export default function AdminEntityDrawer() {
                         (locPayload as Record<string, unknown>)[d.field_key] = formData[d.field_key];
                     }
                 }
+                // PATCH: do not send null/empty location_type or location_type_id (status-only saves used to null NOT NULL location_type).
+                if (locPayload.location_type === null || locPayload.location_type === "") {
+                    delete locPayload.location_type;
+                }
+                if (locPayload.location_type_id === null || locPayload.location_type_id === "") {
+                    delete locPayload.location_type_id;
+                }
                 const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json.error as string) || "Save failed");
