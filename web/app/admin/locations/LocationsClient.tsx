@@ -32,6 +32,7 @@ export default function LocationsClient() {
     const singular = labels?.locations?.singular ?? "Location";
     const [locations, setLocations] = useState<LocationRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [listError, setListError] = useState<string | null>(null);
     const [includeInactive, setIncludeInactive] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
     const filterRef = useRef<HTMLDivElement>(null);
@@ -46,12 +47,21 @@ export default function LocationsClient() {
 
     const fetchLocations = useCallback(async () => {
         setLoading(true);
+        setListError(null);
         const params = new URLSearchParams();
         if (includeInactive) params.set("include_inactive", "true");
         try {
             const res = await fetch(`/api/admin/locations?${params}`);
             const json = await res.json();
-            if (res.ok) setLocations(json.locations ?? []);
+            if (res.ok) {
+                setLocations(json.locations ?? []);
+            } else {
+                setListError((json as { error?: string }).error ?? `Failed to load (${res.status})`);
+                setLocations([]);
+            }
+        } catch (e) {
+            setListError((e as Error).message);
+            setLocations([]);
         } finally {
             setLoading(false);
         }
@@ -147,6 +157,11 @@ export default function LocationsClient() {
                     </button>
                 }
             />
+            {listError && (
+                <div className="mt-3 rounded-lg border border-alloy-ember/40 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember" role="alert">
+                    {listError}
+                </div>
+            )}
             <div className="pt-4">
                 <DataTable
                     data={locations}

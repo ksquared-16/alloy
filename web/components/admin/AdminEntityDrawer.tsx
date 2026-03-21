@@ -2389,6 +2389,61 @@ export default function AdminEntityDrawer() {
         setSaving(true);
         setSaveError(null);
         try {
+            /** Locations: handle first so this path never shares payload/url logic with vendors or other entities. */
+            if (drawer.type === "locations") {
+                const locPayload: Record<string, unknown> = {};
+                const keys = ["label", "customer_id", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes", "status_key"] as const;
+                for (const k of keys) {
+                    if (formData[k] === undefined) continue;
+                    if (k === "customer_id") {
+                        const v = formData[k];
+                        locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
+                        continue;
+                    }
+                    if (k === "status_key") {
+                        const v = formData.status_key;
+                        locPayload.status_key = typeof v === "string" && v.trim() ? v.trim() : null;
+                        continue;
+                    }
+                    if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
+                        locPayload[k] = typeof formData[k] === "string" ? (formData[k] as string).trim() || null : null;
+                    } else if (k === "location_type_id") {
+                        const v = formData[k];
+                        locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
+                    } else if (k === "location_type") {
+                        locPayload[k] = typeof formData[k] === "string" && (formData[k] as string).trim() ? (formData[k] as string).trim() : null;
+                    } else {
+                        locPayload[k] = formData[k];
+                    }
+                }
+                if (drawer.id === "new") {
+                    const res = await fetch("/api/admin/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
+                    const json = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error((json.error as string) || "Create failed");
+                    const newId = (json as { id?: string }).id;
+                    if (newId) {
+                        window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }));
+                        openDrawer({ type: "locations", id: newId });
+                        router.refresh();
+                    }
+                    return;
+                }
+                delete locPayload.customer_id;
+                const locDefs = (data?._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
+                for (const d of locDefs) {
+                    if (!d.is_system && formData[d.field_key] !== undefined) {
+                        (locPayload as Record<string, unknown>)[d.field_key] = formData[d.field_key];
+                    }
+                }
+                const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((json.error as string) || "Save failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                router.refresh();
+                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: drawer.id } }));
+                return;
+            }
             if (drawer.type === "workflows") {
                 const wfPayload = {
                     name: formData.name ?? "",
@@ -2637,60 +2692,6 @@ export default function AdminEntityDrawer() {
                 if (payload.payout_percent === "") payload.payout_percent = null;
                 if (payload.payout_override_value === "") payload.payout_override_value = null;
             }
-            if (drawer.type === "locations") {
-                const locPayload: Record<string, unknown> = {};
-                const keys = ["label", "customer_id", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes", "status_key"] as const;
-                for (const k of keys) {
-                    if (formData[k] === undefined) continue;
-                    if (k === "customer_id") {
-                        const v = formData[k];
-                        locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
-                        continue;
-                    }
-                    if (k === "status_key") {
-                        const v = formData.status_key;
-                        locPayload.status_key = typeof v === "string" && v.trim() ? v.trim() : null;
-                        continue;
-                    }
-                    if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
-                        locPayload[k] = typeof formData[k] === "string" ? (formData[k] as string).trim() || null : null;
-                    } else if (k === "location_type_id") {
-                        const v = formData[k];
-                        locPayload[k] = (typeof v === "string" && (v as string).trim()) ? (v as string).trim() : null;
-                    } else if (k === "location_type") {
-                        locPayload[k] = typeof formData[k] === "string" && (formData[k] as string).trim() ? (formData[k] as string).trim() : null;
-                    } else {
-                        locPayload[k] = formData[k];
-                    }
-                }
-                if (drawer.id === "new") {
-                    const res = await fetch("/api/admin/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
-                    const json = await res.json().catch(() => ({}));
-                    if (!res.ok) throw new Error((json.error as string) || "Create failed");
-                    const newId = (json as { id?: string }).id;
-                    if (newId) {
-                        window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: newId } }));
-                        openDrawer({ type: "locations", id: newId });
-                        router.refresh();
-                    }
-                    return;
-                }
-                delete locPayload.customer_id;
-                const locDefs = (data?._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
-                for (const d of locDefs) {
-                    if (!d.is_system && formData[d.field_key] !== undefined) {
-                        (locPayload as Record<string, unknown>)[d.field_key] = formData[d.field_key];
-                    }
-                }
-                const res = await fetch(`/api/admin/locations/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
-                const json = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((json.error as string) || "Save failed");
-                setData((prev) => (prev ? { ...prev, ...json } : prev));
-                refetch();
-                router.refresh();
-                window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "locations", id: drawer.id } }));
-                return;
-            }
             if (drawer.type === "subscriptions") {
                 const status_key = typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null;
                 const res = await fetch(`/api/admin/subscriptions/${drawer.id}`, {
@@ -2736,7 +2737,7 @@ export default function AdminEntityDrawer() {
         } finally {
             setSaving(false);
         }
-    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router, jobDiscountOptions, data]);
+    }, [drawer.type, drawer.id, formData, workflowConditions, workflowActions, refetch, router, jobDiscountOptions, data, openDrawer]);
 
     const openJobLocationChange = useCallback(() => {
         setSetLocationEntity("job");

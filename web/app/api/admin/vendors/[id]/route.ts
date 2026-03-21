@@ -60,7 +60,11 @@ export async function PATCH(
             if (key === "primary_person_id") {
                 updates[key] = raw === "" || raw === null ? null : raw;
             } else if (key === "status_key") {
-                updates[key] = raw === "" || raw === null ? null : (typeof raw === "string" ? raw.trim() : raw);
+                // Empty string from full-form PATCH means "do not change status" (NOT NULL vendor_status_id must stay set).
+                if (raw === "" || raw === undefined || raw === null) {
+                    continue;
+                }
+                updates[key] = typeof raw === "string" ? raw.trim() : raw;
             } else if (key === "days_available" || key === "service_area_zip_codes") {
                 updates[key] = Array.isArray(raw) ? raw : null;
             } else if (key === "owns_supplies" || key === "w9_received" || key === "ach_verified" || key === "consent_contractor_agreement" || key === "consent_legal" || key === "consent_marketing") {
@@ -94,16 +98,36 @@ export async function PATCH(
 
         if (updates.status_key !== undefined) {
             const sk = updates.status_key as string | null;
+            if (sk == null || String(sk).trim() === "") {
+                return NextResponse.json(
+                    {
+                        error:
+                            "Vendor status cannot be cleared: vendor_status_id is required. Choose a status from the list.",
+                    },
+                    { status: 400 }
+                );
+            }
             const chk = await assertAllowedStatusKey(supabase, orgId!, "vendors", sk);
             if (!chk.ok) {
                 return NextResponse.json({ error: chk.message }, { status: 400 });
             }
-            if (sk) {
-                const { data: vs } = await supabase.from("vendor_statuses").select("id").eq("key", sk).maybeSingle();
-                (updates as Record<string, unknown>).vendor_status_id = vs ? (vs as { id: string }).id : null;
-            } else {
-                (updates as Record<string, unknown>).vendor_status_id = null;
+            const { data: vs, error: vsErr } = await supabase
+                .from("vendor_statuses")
+                .select("id, key")
+                .eq("key", sk)
+                .maybeSingle();
+            if (vsErr) {
+                return NextResponse.json({ error: `Could not resolve vendor_statuses: ${vsErr.message}` }, { status: 400 });
             }
+            if (!vs) {
+                return NextResponse.json(
+                    {
+                        error: `No vendor_statuses row matches status_key "${sk}". Add a vendor_statuses row with this key or align status_definitions with vendor_statuses.`,
+                    },
+                    { status: 400 }
+                );
+            }
+            (updates as Record<string, unknown>).vendor_status_id = (vs as { id: string }).id;
         }
 
         const { data, error } = await supabase

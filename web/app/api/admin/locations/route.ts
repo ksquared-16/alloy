@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
     const includeInactive = searchParams.get("include_inactive") === "true";
 
     const supabase = createAdminClient();
+    // Select * so environments without optional columns (e.g. status_key) still return rows; map defensively below.
     let q = supabase
         .from("locations")
-        .select("id, label, address1, city, state, postal_code, customer_id, is_primary, is_active, location_type, status_key, updated_at")
+        .select("*")
         .eq("org_id", ctx.orgId)
         .order("is_primary", { ascending: false })
         .order("label", { ascending: true });
@@ -34,21 +35,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const list = (rows ?? []) as {
-        id: string;
-        label?: string | null;
-        address1?: string | null;
-        city?: string | null;
-        state?: string | null;
-        postal_code?: string | null;
-        customer_id?: string | null;
-        is_primary?: boolean;
-        is_active?: boolean;
-        location_type?: string | null;
-        status_key?: string | null;
-        updated_at?: string | null;
-    }[];
-    const customerIds = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
+    const list = (rows ?? []) as Record<string, unknown>[];
+    const customerIds = [...new Set(list.map((r) => r.customer_id as string | null | undefined).filter(Boolean))] as string[];
     const { data: customersData } = customerIds.length
         ? await supabase.from("customers").select("id, name").in("id", customerIds)
         : { data: [] };
@@ -57,25 +45,30 @@ export async function GET(request: NextRequest) {
     const locDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "locations", { activeOnly: true });
     const locStatusLabels = displayLabelsFromDefinitions(locDefs);
 
-    const locations = list.map((r) => ({
-        id: r.id,
-        label: r.label ?? null,
-        address1: r.address1 ?? null,
-        city: r.city ?? null,
-        state: r.state ?? null,
-        postal_code: r.postal_code ?? null,
-        customer_id: r.customer_id ?? null,
-        is_primary: r.is_primary ?? false,
-        is_active: r.is_active !== false,
-        location_type: r.location_type ?? null,
-        updated_at: r.updated_at ?? null,
-        status_key: r.status_key ?? null,
-        _customer_name: r.customer_id ? (customerMap.get(r.customer_id) ?? null) : null,
-        _status_display:
-            r.status_key != null && String(r.status_key).trim() !== ""
-                ? (locStatusLabels.get(String(r.status_key).trim()) ?? String(r.status_key).trim())
-                : null,
-    }));
+    const locations = list.map((r) => {
+        const id = String(r.id ?? "");
+        const customer_id = (r.customer_id as string | null | undefined) ?? null;
+        const skRaw = r.status_key;
+        const sk =
+            skRaw != null && String(skRaw).trim() !== "" ? String(skRaw).trim() : null;
+        return {
+            id,
+            label: (r.label as string | null | undefined) ?? null,
+            address1: (r.address1 as string | null | undefined) ?? null,
+            city: (r.city as string | null | undefined) ?? null,
+            state: (r.state as string | null | undefined) ?? null,
+            postal_code: (r.postal_code as string | null | undefined) ?? null,
+            customer_id,
+            is_primary: !!(r.is_primary as boolean | undefined),
+            is_active: r.is_active !== false,
+            location_type: (r.location_type as string | null | undefined) ?? null,
+            updated_at: (r.updated_at as string | null | undefined) ?? null,
+            status_key: sk,
+            _customer_name: customer_id ? (customerMap.get(customer_id) ?? null) : null,
+            _status_display:
+                sk != null ? (locStatusLabels.get(sk) ?? sk) : null,
+        };
+    });
 
     return NextResponse.json({ locations });
 }
