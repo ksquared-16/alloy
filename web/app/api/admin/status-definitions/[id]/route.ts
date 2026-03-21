@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 
-const ALLOWED_PATCH_KEYS = ["status_label", "sort_order", "is_active"] as const;
+const ALLOWED_PATCH_KEYS = ["status_label", "sort_order", "is_active", "metadata"] as const;
 
 /** PATCH: update status_definition (label, sort_order, is_active only). Admin only. */
 export async function PATCH(
@@ -57,6 +58,10 @@ export async function PATCH(
         }
         if (key === "is_active") {
             updates[key] = !!body[key];
+            continue;
+        }
+        if (key === "metadata") {
+            updates[key] = normalizeStatusDefinitionMetadata(body[key]);
             continue;
         }
     }

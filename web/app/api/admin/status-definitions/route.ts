@@ -5,6 +5,7 @@ import {
     fetchEffectiveStatusDefinitions,
     fetchOrgStatusDefinitions,
 } from "@/lib/admin/statusDefinitionsResolve";
+import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 
 const STATUS_KEY_REGEX = /^[a-z0-9_]{2,32}$/;
 
@@ -112,7 +113,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    let body: { entity_type?: string; status_key?: string; status_label?: string; sort_order?: number; is_active?: boolean } = {};
+    let body: {
+        entity_type?: string;
+        status_key?: string;
+        status_label?: string;
+        sort_order?: number;
+        is_active?: boolean;
+        metadata?: unknown;
+    } = {};
     try {
         body = (await request.json()) as typeof body;
     } catch {
@@ -148,7 +156,7 @@ export async function POST(request: NextRequest) {
         sort_order,
         is_active,
         is_system: false,
-        metadata: null,
+        metadata: normalizeStatusDefinitionMetadata(body.metadata),
         industry_key: null as string | null,
     };
 

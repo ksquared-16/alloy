@@ -74,13 +74,10 @@ export default async function AdminSubscriptionsPage() {
             nextPreview = next.toISOString().slice(0, 10);
         }
         const sk = (s as { status_key?: string | null }).status_key ?? null;
-        const legacySt = (s as { status?: string }).status;
         const _status_display =
             sk != null && String(sk).trim() !== ""
                 ? (subStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
-                : legacySt != null && String(legacySt).trim() !== ""
-                  ? String(legacySt).trim()
-                  : null;
+                : null;
         return {
             ...s,
             status_key: sk,

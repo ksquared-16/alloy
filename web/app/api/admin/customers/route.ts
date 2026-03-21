@@ -124,9 +124,7 @@ export async function GET(request: NextRequest) {
         const _status_display =
             sk != null && String(sk).trim() !== ""
                 ? (customerStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
-                : r.status != null && String(r.status).trim() !== ""
-                  ? String(r.status).trim()
-                  : null;
+                : null;
         return {
             ...r,
             _status_display,

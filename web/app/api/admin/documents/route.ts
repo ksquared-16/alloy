@@ -174,9 +174,7 @@ export async function GET(request: NextRequest) {
         const _status_display =
             sk != null && String(sk).trim() !== ""
                 ? (docStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
-                : n.status != null && String(n.status).trim() !== ""
-                  ? String(n.status).trim()
-                  : null;
+                : null;
         return {
             ...n,
             status_key: sk,

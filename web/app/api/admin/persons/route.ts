@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list persons for org. Returns rows with _person_name, _customer_count, _compatibility_contacts_count, _compatibility_members_count, _updated. */
 export async function GET(request: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("persons")
-        .select("id, org_id, first_name, last_name, email, phone, created_at, updated_at")
+        .select("id, org_id, first_name, last_name, email, phone, status_key, created_at, updated_at")
         .eq("org_id", ctx.orgId)
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(limit);
@@ -27,8 +28,20 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const list = (rows ?? []) as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; created_at?: string | null; updated_at?: string | null }[];
+    const list = (rows ?? []) as {
+        id: string;
+        first_name?: string | null;
+        last_name?: string | null;
+        email?: string | null;
+        phone?: string | null;
+        status_key?: string | null;
+        created_at?: string | null;
+        updated_at?: string | null;
+    }[];
     const personIds = list.map((r) => r.id);
+
+    const personDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "persons", { activeOnly: true });
+    const personStatusLabels = displayLabelsFromDefinitions(personDefs);
 
     const [cpRes, contactCountRes, memberCountRes] = await Promise.all([
         personIds.length > 0
@@ -57,6 +70,8 @@ export async function GET(request: NextRequest) {
 
     const persons = list.map((r) => {
         const name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || null;
+        const sk = r.status_key != null && String(r.status_key).trim() !== "" ? String(r.status_key).trim() : null;
+        const _status_display = sk ? (personStatusLabels.get(sk) ?? sk) : null;
         return {
             ...r,
             _person_name: name,
@@ -64,6 +79,7 @@ export async function GET(request: NextRequest) {
             _compatibility_contacts_count: contactCountByPerson.get(r.id) ?? 0,
             _compatibility_members_count: memberCountByPerson.get(r.id) ?? 0,
             _updated: r.updated_at ?? r.created_at ?? null,
+            _status_display,
         };
     });
 

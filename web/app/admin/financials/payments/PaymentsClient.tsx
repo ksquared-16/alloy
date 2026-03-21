@@ -147,8 +147,13 @@ export default function PaymentsClient() {
                 );
             },
             _status_display: (_value: unknown, row: PaymentRow) => {
-                const label = statusKeyOptions.find((s) => s.status_key === row._status_display)?.status_label ?? row._status_display ?? "—";
-                return <StatusBadge label={label} variant={getStatusVariant(row._status_display ?? null)} />;
+                const sk = row.status_key ?? null;
+                const label =
+                    (sk && statusKeyOptions.find((s) => s.status_key === sk)?.status_label?.trim()) ||
+                    row._status_display ||
+                    sk ||
+                    "—";
+                return <StatusBadge label={label} variant={getStatusVariant(sk)} />;
             },
         });
     }, [openDrawer, statusKeyOptions]);

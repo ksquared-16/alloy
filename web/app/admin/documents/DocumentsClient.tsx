@@ -268,8 +268,8 @@ export default function DocumentsClient() {
                                         <tr key={r.id} className="border-b border-alloy-stone/20 align-top">
                                             <td className="py-2 pr-3 whitespace-nowrap">
                                                 <StatusBadge
-                                                    label={r._status_display ?? r.status ?? "—"}
-                                                    variant={getStatusVariant(r._status_display ?? r.status)}
+                                                    label={r._status_display ?? r.status_key ?? "—"}
+                                                    variant={getStatusVariant(r.status_key ?? null)}
                                                 />
                                             </td>
                                             <td className="py-2 pr-3 font-medium text-alloy-forge/90 max-w-[200px]">

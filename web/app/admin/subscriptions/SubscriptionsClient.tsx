@@ -53,8 +53,9 @@ export default function SubscriptionsClient({
             label: "Status",
             sortable: true,
             render: (_: unknown, row: SubscriptionRow) => {
-                const label = row._status_display ?? row.status ?? "—";
-                return <StatusBadge label={label} variant={getStatusVariant(label)} />;
+                const sk = row.status_key ?? null;
+                const label = row._status_display ?? sk ?? "—";
+                return <StatusBadge label={label} variant={getStatusVariant(sk)} />;
             },
         },
         { key: "created_at", label: "Created", sortable: true, render: (_: unknown, row: SubscriptionRow) => formatDateTime(row.created_at) },

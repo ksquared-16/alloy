@@ -93,8 +93,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
         const oid = v.org_id ?? null;
         const vLabels = oid ? vendorStatusLabelByOrg.get(oid) : null;
         const sk = v.status_key ?? null;
-        const _status_display =
-            sk && vLabels ? (vLabels.get(sk) ?? sk) : sk ?? (v.status ?? null);
+        const _status_display = sk ? (vLabels?.get(sk) ?? sk) : null;
         const _updated = v.updated_at ?? v.created_at ?? null;
         return {
             ...v,

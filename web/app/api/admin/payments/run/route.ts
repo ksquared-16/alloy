@@ -37,6 +37,10 @@ export async function POST(request: NextRequest) {
     payload.ad_hoc_charge_type = body.ad_hoc_charge_type.trim();
   }
   if (typeof body.use_new_card === "boolean") payload.use_new_card = body.use_new_card;
+  if (typeof body.payment_method_id === "string" && body.payment_method_id.trim()) {
+    payload.payment_method_id = body.payment_method_id.trim();
+  }
+  if (typeof body.save_payment_method === "boolean") payload.save_payment_method = body.save_payment_method;
 
   const backendUrl = `${BACKEND_URL.replace(/\/$/, "")}/admin/payments/run`;
   console.log("[PAYMENTS_RUN] env:", {

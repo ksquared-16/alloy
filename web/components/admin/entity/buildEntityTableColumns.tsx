@@ -51,9 +51,17 @@ function defaultRenderForHint<T>(
   switch (hint) {
     case "status":
       return (_value: unknown, row: T) => {
-        const v = getVal(row);
-        const label = v != null ? String(v) : null;
-        return <StatusBadge label={label} variant={getStatusVariant(label)} />;
+        const rec = row as Record<string, unknown>;
+        const displayRaw = rec._status_display;
+        const skRaw = rec.status_key;
+        const label =
+          displayRaw != null && String(displayRaw).trim() !== ""
+            ? String(displayRaw).trim()
+            : skRaw != null && String(skRaw).trim() !== ""
+              ? String(skRaw).trim()
+              : null;
+        const sk = skRaw != null && String(skRaw).trim() !== "" ? String(skRaw).trim() : null;
+        return <StatusBadge label={label} variant={getStatusVariant(sk)} />;
       };
     case "datetime":
       return (value: unknown) => (value != null && value !== "" ? formatDateTime(String(value)) : "—");

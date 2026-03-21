@@ -76,8 +76,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         const custOrg = (customer as { org_id?: string | null } | undefined)?.org_id ?? null;
         const oppLabels = custOrg ? oppStatusLabelByOrg.get(custOrg) : null;
         const sk = o.status_key ?? null;
-        const _status_display =
-            sk && oppLabels ? (oppLabels.get(sk) ?? sk) : sk ?? (o.status ?? null);
+        const _status_display = sk ? (oppLabels?.get(sk) ?? sk) : null;
         const _updated = (o as { updated_at?: string | null }).updated_at ?? o.created_at ?? null;
         const _quote_total_display = quoteTotalDisplay(o as { quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null });
         return {

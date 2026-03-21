@@ -158,6 +158,7 @@ export default function StatusesClient() {
                     status_label: modalLabel.trim() || null,
                     sort_order: modalSortOrder,
                     is_active: true,
+                    metadata: {},
                 }),
             });
             const json = await res.json().catch(() => ({}));

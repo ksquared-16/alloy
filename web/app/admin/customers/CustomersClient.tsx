@@ -6,7 +6,6 @@ import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
-import { StatusBadge } from "@/components/admin/StatusBadge";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
@@ -128,13 +127,7 @@ export default function CustomersClient() {
     setFilterOpen(false);
   };
 
-  const columns = useMemo(
-    () =>
-      buildEntityTableColumns<Customer>("customers", {
-        status_key: (_, row) => <StatusBadge label={row.status ?? row.status_key} />,
-      }),
-    []
-  );
+  const columns = useMemo(() => buildEntityTableColumns<Customer>("customers"), []);
 
   const filterTrigger = (
     <div className="relative" ref={filterRef}>

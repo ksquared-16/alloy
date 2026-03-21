@@ -107,9 +107,7 @@ export async function GET(request: NextRequest) {
         const _status_display =
             sk != null && String(sk).trim() !== ""
                 ? (contactStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
-                : (r.status as string | null) != null && String(r.status).trim() !== ""
-                  ? String(r.status).trim()
-                  : null;
+                : null;
         return { ...r, _name, _customer_name, _is_primary_contact, _updated, _status_display };
     });
 

@@ -1222,17 +1222,10 @@ export default function AdminEntityDrawer() {
 
     const openCollectPayment = useCallback(() => {
         if (drawer.type === "jobs" && drawer.id && drawer.id !== "new" && data && !(data as { _create?: boolean })._create) {
-            const d = data as {
-                title?: string | null;
-                display_total_cents?: number | null;
-                gross_price_cents?: number | null;
-                estimated_total_cents?: number | null;
-            };
-            const cents = d.display_total_cents ?? d.gross_price_cents ?? d.estimated_total_cents;
+            const d = data as { title?: string | null };
             setCollectPaymentContext({
                 jobId: drawer.id,
                 jobLabel: String(d.title ?? "").trim() || undefined,
-                suggestedAmountCents: typeof cents === "number" ? cents : null,
             });
             setCollectPaymentOpen(true);
             return;
@@ -1246,17 +1239,15 @@ export default function AdminEntityDrawer() {
             !(data as { _create?: boolean })._create
         ) {
             const d = data as { start_at?: string | null; _job_title?: string | null };
-            const net = scheduleFinancials?.computed?.net_cents;
             setCollectPaymentContext({
                 jobId: paymentParentJobId,
                 scheduleId: drawer.id,
                 scheduleLabel: d.start_at ? formatDateTime(d.start_at) : undefined,
                 jobLabel: String(d._job_title ?? "").trim() || undefined,
-                suggestedAmountCents: typeof net === "number" ? net : null,
             });
             setCollectPaymentOpen(true);
         }
-    }, [drawer.type, drawer.id, data, paymentParentJobId, scheduleFinancials]);
+    }, [drawer.type, drawer.id, data, paymentParentJobId]);
 
     useEffect(() => {
         if (!paymentToast) return;
