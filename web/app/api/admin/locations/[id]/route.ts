@@ -52,14 +52,20 @@ export async function PATCH(
 
     const supabase = createAdminClient();
 
+    // Use * for the preflight read so we do not fail when optional columns (e.g. status_key) are missing
+    // in some environments — a narrow select("..., status_key") makes PostgREST error and was surfaced as "Location not found".
     const { data: existing, error: fetchErr } = await supabase
         .from("locations")
-        .select("id, org_id, customer_id, status_key")
+        .select("*")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
-    if (fetchErr || !existing) {
+    if (fetchErr) {
+        console.error("[ADMIN_PATCH_LOCATION] load existing", fetchErr);
+        return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
+    if (!existing) {
         return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
 
