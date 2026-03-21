@@ -106,6 +106,22 @@ export async function fetchEffectiveStatusDefinitions(
     return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
 }
 
+/** Build a map from pre-fetched effective definitions (batch list enrichment). */
+export function displayLabelsFromDefinitions(defs: StatusDefinitionRow[]): Map<string, string> {
+    return new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]));
+}
+
+export function resolveDisplayFromLabelMap(
+    labelByKey: Map<string, string>,
+    statusKey: string | null | undefined,
+    legacyFallback?: string | null
+): string | null {
+    const sk = statusKey != null && String(statusKey).trim() !== "" ? String(statusKey).trim() : null;
+    if (sk) return labelByKey.get(sk) ?? sk;
+    if (legacyFallback != null && String(legacyFallback).trim() !== "") return String(legacyFallback).trim();
+    return null;
+}
+
 export async function resolveStatusLabel(
     supabase: SupabaseClient,
     orgId: string,

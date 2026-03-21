@@ -98,7 +98,7 @@ export default function JobsClient() {
   useEffect(() => {
     const onSaved = (e: Event) => {
       const d = (e as CustomEvent<{ type: string; id: string }>)?.detail;
-      if (d?.type === "jobs") fetchJobs();
+      if (d?.type === "jobs" || d?.type === "payments") fetchJobs();
     };
     window.addEventListener("admin-entity-saved", onSaved);
     return () => window.removeEventListener("admin-entity-saved", onSaved);

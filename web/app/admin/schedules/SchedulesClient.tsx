@@ -109,6 +109,15 @@ export default function SchedulesClient() {
   useEffect(() => {
     fetchSchedules();
   }, [fetchSchedules]);
+
+  useEffect(() => {
+    const onSaved = (e: Event) => {
+      const d = (e as CustomEvent<{ type: string }>)?.detail;
+      if (d?.type === "schedules" || d?.type === "jobs" || d?.type === "payments") fetchSchedules();
+    };
+    window.addEventListener("admin-entity-saved", onSaved);
+    return () => window.removeEventListener("admin-entity-saved", onSaved);
+  }, [fetchSchedules]);
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);

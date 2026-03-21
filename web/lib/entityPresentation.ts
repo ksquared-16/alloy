@@ -185,12 +185,12 @@ export interface EntityPresentationConfig {
 
 /** Registry: entity type -> full presentation config. */
 const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresentationConfig> = {
-  customers: {
+    customers: {
     entityType: "customers",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
-        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_primary_person_name", label: "Person", sortable: false, renderHint: "text" },
         { key: "_primary_contact_name", label: "Contact (compat)", sortable: false, renderHint: "text" },
         { key: "_customer_email", label: "Email", sortable: false, renderHint: "text" },
@@ -204,7 +204,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "payments", "documents"],
-      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -214,8 +214,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
+            { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "customer_type", label: "Customer Type", span: 1, renderHint: "text", editable: true },
             { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text", locked: true },
             { key: "_primary_person_name", label: "Primary Person", span: 1, renderHint: "link", locked: true, linkTarget: { idField: "_primary_person_id", entityType: "persons" } },
@@ -311,6 +311,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "locations",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "label", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "location_type", label: "Type", sortable: true, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
@@ -332,6 +333,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: false,
           gridCols: 2,
           fields: [
+            { key: "_status_display", label: "Status", span: 1, renderHint: "status", locked: true },
             { key: "label", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "location_type", label: "Type", span: 1, renderHint: "text" },
             { key: "address1", label: "Address", span: 2, renderHint: "text", editable: true },
@@ -376,9 +378,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "opportunities",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: false, renderHint: "status" },
         { key: "name", label: "Opportunity", sortable: true, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
-        { key: "_status_display", label: "Status", sortable: false, renderHint: "status" },
         { key: "_quote_total_display", label: "Quote Total", sortable: false, renderHint: "money" },
         { key: "job_date", label: "Job Date", sortable: true, renderHint: "date" },
         { key: "source", label: "Source", sortable: false, renderHint: "text" },
@@ -389,7 +391,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "documents"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -399,8 +401,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
+            { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "source", label: "Source", span: 1, renderHint: "text", editable: true },
             { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text", locked: true },
             { key: "assigned_to", label: "Assigned to", span: 1, renderHint: "text", editable: true },
@@ -481,10 +483,10 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "subscriptions",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_ref", label: "Ref", sortable: false, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
         { key: "service_type", label: "Service", sortable: false, renderHint: "text" },
-        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
         { key: "_scheduled_for", label: "Next", sortable: false, renderHint: "datetime" },
         { key: "_total_cents", label: "Total", sortable: false, renderHint: "money" },
       ],
@@ -492,7 +494,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity"],
-      headerFields: [{ key: "status_key", renderHint: "status" }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -502,8 +504,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: false,
           gridCols: 2,
           fields: [
+            { key: "_status_display", label: "Status", span: 1, renderHint: "status", locked: true },
             { key: "_ref", label: "Ref", span: 1, renderHint: "text" },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status" },
             { key: "service_type", label: "Service", span: 1, renderHint: "text" },
             { key: "frequency", label: "Frequency", span: 1, renderHint: "text" },
             { key: "_scheduled_for", label: "Scheduled for", span: 1, renderHint: "datetime" },
@@ -526,9 +528,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "jobs",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_job_label", label: "Job", sortable: true, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: true, renderHint: "link", locked: true },
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_next_schedule", label: "Next Visit", sortable: false, renderHint: "datetime" },
         { key: "_vendor_name", label: "Vendor", sortable: false, renderHint: "link" },
         { key: "_price_display", label: "Price", sortable: false, renderHint: "money" },
@@ -539,7 +541,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "documents", "financials"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -549,10 +551,10 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
+            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "title", label: "Title", span: 1, renderHint: "text", editable: true },
             { key: "service_key", label: "Service", span: 1, renderHint: "text", editable: true },
             { key: "job_type", label: "Job type", span: 1, renderHint: "text", editable: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "assigned_vendor_id", label: "Assigned vendor", span: 1, renderHint: "link", editable: true, linkTarget: { idField: "assigned_vendor_id", entityType: "vendors" } },
             { key: "is_recurring", label: "Recurring", span: 1, renderHint: "primary_yes_no", editable: true },
             { key: "service_frequency_key", label: "Frequency", span: 1, renderHint: "text", editable: true },
@@ -633,8 +635,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "schedules",
     table: {
       columns: [
-        { key: "start_at", label: "Date", sortable: true, renderHint: "datetime" },
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "start_at", label: "Date", sortable: true, renderHint: "datetime" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
         { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
         { key: "_job_title", label: "Job", sortable: false, renderHint: "link" },
@@ -645,7 +647,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "financials", "documents", "activity"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -655,9 +657,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: false,
           gridCols: 2,
           fields: [
+            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "start_at", label: "Start", span: 1, renderHint: "datetime", editable: true },
             { key: "end_at", label: "End", span: 1, renderHint: "datetime", editable: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "timezone", label: "Timezone", span: 1, renderHint: "text", editable: true },
             { key: "time_window", label: "Time window", span: 1, renderHint: "text" },
             { key: "service_type", label: "Service type", span: 1, renderHint: "text" },
@@ -682,11 +684,11 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "payments",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_payment_label", label: "Payment", sortable: false, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link", locked: true },
         { key: "_job_label", label: "Job", sortable: false, renderHint: "link" },
         { key: "_amount_display", label: "Amount", sortable: true, renderHint: "money", locked: true },
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "provider", label: "Provider", sortable: false, renderHint: "text" },
         { key: "paid_at", label: "Paid At", sortable: true, renderHint: "datetime" },
         { key: "_posted_yes_no", label: "Posted", sortable: false, renderHint: "primary_yes_no" },
@@ -696,7 +698,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "ledger"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -706,8 +708,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "_payment_label", label: "Payment", span: 1, renderHint: "text" },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
+            { key: "_payment_label", label: "Payment", span: 1, renderHint: "text" },
             { key: "amount_cents", label: "Amount", span: 1, renderHint: "money" },
             { key: "currency", label: "Currency", span: 1, renderHint: "text" },
             { key: "provider", label: "Provider", span: 1, renderHint: "text" },
@@ -751,7 +753,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "created_at", label: "Created", span: 1, renderHint: "datetime" },
             { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime" },
             { key: "org_id", label: "Org", span: 1, renderHint: "text" },
-            { key: "payment_status_id", label: "Status ID", span: 1, renderHint: "text" },
           ],
           locked: true,
         },
@@ -814,9 +815,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "service_plan_templates",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "plan_name", label: "Name", sortable: true, renderHint: "text" },
         { key: "plan_key", label: "Key", sortable: true, renderHint: "text" },
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_recurring_yes_no", label: "Recurring", sortable: true, renderHint: "primary_yes_no" },
         { key: "_recurrence_label", label: "Recurrence", sortable: false, renderHint: "text" },
         { key: "_active_yes_no", label: "Active", sortable: true, renderHint: "primary_yes_no" },
@@ -826,7 +827,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -836,9 +837,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
+            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "plan_name", label: "Name", span: 1, renderHint: "text", editable: true },
             { key: "plan_key", label: "Key", span: 1, renderHint: "text", editable: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "is_recurring", label: "Recurring", span: 1, renderHint: "primary_yes_no", editable: true },
             { key: "recurrence_unit", label: "Recurrence unit", span: 1, renderHint: "text", editable: true },
             { key: "recurrence_interval", label: "Recurrence interval", span: 1, renderHint: "text", editable: true },
@@ -869,6 +870,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "documents",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "name", label: "Name", sortable: true, renderHint: "text" },
         { key: "document_type", label: "Type", sortable: true, renderHint: "text" },
         { key: "_linked_record_type", label: "Linked record", sortable: false, renderHint: "text" },
@@ -879,7 +881,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity"],
-      headerFields: [{ key: "status_key", renderHint: "status" }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -889,9 +891,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: false,
           gridCols: 2,
           fields: [
+            { key: "_status_display", label: "Status", span: 1, renderHint: "status", locked: true },
             { key: "name", label: "Name", span: 2, renderHint: "text" },
             { key: "document_type", label: "Type", span: 1, renderHint: "text" },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status" },
             { key: "_uploaded_by", label: "Uploaded by", span: 1, renderHint: "text" },
             { key: "uploaded_at", label: "Uploaded at", span: 1, renderHint: "datetime" },
             { key: "_ai_extraction_status", label: "AI extraction", span: 1, renderHint: "text" },
@@ -910,9 +912,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "vendors",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "company_name", label: "Company", sortable: true, renderHint: "text", locked: true },
         { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_primary_person_name", label: "Person", sortable: false, renderHint: "text" },
         { key: "_vendor_email", label: "Email", sortable: false, renderHint: "text" },
         { key: "_vendor_phone", label: "Phone", sortable: false, renderHint: "phone" },
@@ -926,7 +928,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "financials", "activity", "documents"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -936,8 +938,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
+            { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "company_name", label: "Company name", span: 1, renderHint: "text", editable: true },
             { key: "primary_person_id", label: "Primary person", span: 1, renderHint: "link", editable: true, linkTarget: { idField: "primary_person_id", entityType: "persons" } },
             { key: "email", label: "Email", span: 1, renderHint: "text", editable: true },
@@ -1027,8 +1029,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "contacts",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_name", label: "Name", sortable: true, renderHint: "text", locked: true },
-        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "contact_type", label: "Contact Type", sortable: true, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
         { key: "_is_primary_contact", label: "Primary for (customer/vendor)", sortable: false, renderHint: "primary_yes_no" },
@@ -1040,7 +1042,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "documents"],
-      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -1050,11 +1052,11 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
+            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "first_name", label: "First name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "last_name", label: "Last name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "email", label: "Email", span: 1, renderHint: "text", editable: true },
             { key: "phone", label: "Phone", span: 1, renderHint: "phone", editable: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "contact_type", label: "Contact Type", span: 1, renderHint: "text", editable: true },
             { key: "company_name", label: "Company name", span: 1, renderHint: "text", editable: true },
             { key: "vendor_contact_role", label: "Vendor contact role", span: 1, renderHint: "text", editable: true },
@@ -1135,8 +1137,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "customer_members",
     table: {
       columns: [
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "display_name", label: "Name", sortable: true, renderHint: "text", locked: true },
-        { key: "status_key", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_relationship_label", label: "Relationship", sortable: false, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
         { key: "dob", label: "DOB", sortable: true, renderHint: "date" },
@@ -1148,7 +1150,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "documents"],
-      headerFields: [{ key: "status_key", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -1158,8 +1160,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "display_name", label: "Display name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
+            { key: "display_name", label: "Display name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "_relationship_label", label: "Relationship", span: 1, renderHint: "text", editable: false, locked: true },
             { key: "_customer_name", label: "Customer", span: 1, renderHint: "link", locked: true, linkTarget: { idField: "customer_id", entityType: "customers" } },
             { key: "first_name", label: "First name", span: 1, renderHint: "text", editable: true },
@@ -1213,8 +1215,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "persons",
     table: {
       columns: [
-        { key: "_person_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "_person_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "email", label: "Email", sortable: true, renderHint: "text" },
         { key: "phone", label: "Phone", sortable: true, renderHint: "phone" },
         { key: "_customer_count", label: "Customers", sortable: false, renderHint: "text" },
@@ -1224,7 +1226,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "documents"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [],
       layoutMode: 2,
       overviewSections: [
         {
@@ -1234,9 +1236,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
+            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
             { key: "first_name", label: "First name", span: 1, renderHint: "text", locked: true },
             { key: "last_name", label: "Last name", span: 1, renderHint: "text", locked: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
             { key: "email", label: "Email", span: 1, renderHint: "text", locked: true },
             { key: "phone", label: "Phone", span: 1, renderHint: "phone", locked: true },
             { key: "created_at", label: "Created", span: 1, renderHint: "datetime", locked: true },

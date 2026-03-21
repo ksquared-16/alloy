@@ -31,6 +31,37 @@ import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteCon
 import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from "@/lib/admin/jobDiscountSelection";
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 
+/** Parse proxy/backend JSON from POST /api/admin/payments/run for user-visible feedback. */
+function adminPaymentRunFeedback(json: Record<string, unknown>, httpOk: boolean): { ok: boolean; message: string } {
+    const status = typeof json.status === "string" ? json.status : null;
+    const amountCents = typeof json.amount_cents === "number" ? json.amount_cents : null;
+    const amt =
+        amountCents != null && Number.isFinite(amountCents) ? formatMoneyFromCents(amountCents) : null;
+    const succeeded = httpOk && json.ok === true;
+    if (succeeded) {
+        const parts = ["Payment succeeded"];
+        if (amt) parts.push(amt);
+        if (status) parts.push(`Processor: ${status}`);
+        return { ok: true, message: parts.join(" · ") };
+    }
+    const err =
+        (typeof json.error === "string" && json.error.trim()) ||
+        (typeof json.detail === "string" && json.detail.trim()) ||
+        "Payment failed";
+    const parts = [err];
+    if (amt) parts.push(`Amount: ${amt}`);
+    if (status) parts.push(`Processor: ${status}`);
+    return { ok: false, message: parts.join(" · ") };
+}
+
+function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
+    window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
+    window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "payments", id: "*" } }));
+    if (scheduleId) {
+        window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: scheduleId } }));
+    }
+}
+
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
 /** Launch: keep quote_total / discount fields visible; hide extra cents/subtotal noise (defs still exist in admin). */
@@ -1206,7 +1237,7 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (!paymentToast) return;
-        const t = setTimeout(() => setPaymentToast(null), 5000);
+        const t = setTimeout(() => setPaymentToast(null), 8000);
         return () => clearTimeout(t);
     }, [paymentToast]);
 
@@ -2726,10 +2757,90 @@ export default function AdminEntityDrawer() {
     const jobQuickActionsNode = isJobExistingView && drawer.id ? (
         <div className="flex flex-wrap gap-2 items-center">
             {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
-                <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("run"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Run payment failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{paymentActionLoading === "run" ? "…" : "Run Payment"}</button>
+                <button
+                    type="button"
+                    disabled={!!paymentActionLoading}
+                    onClick={async () => {
+                        const jobId = drawer.id as string;
+                        setPaymentActionLoading("run");
+                        setPaymentToast(null);
+                        try {
+                            const res = await fetch("/api/admin/payments/run", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ job_id: jobId }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                            if (res.status === 409) {
+                                setPaymentToast({
+                                    type: "error",
+                                    message: (typeof json.error === "string" && json.error) || "Job already has a paid payment",
+                                });
+                                await refetchJobPayments();
+                                refetch();
+                                router.refresh();
+                                dispatchAfterPaymentRun(jobId, null);
+                                return;
+                            }
+                            const fb = adminPaymentRunFeedback(json, res.ok);
+                            setPaymentToast({ type: fb.ok ? "success" : "error", message: fb.message });
+                            await refetchJobPayments();
+                            refetch();
+                            router.refresh();
+                            dispatchAfterPaymentRun(jobId, null);
+                        } catch (e) {
+                            setPaymentToast({ type: "error", message: (e as Error).message });
+                        } finally {
+                            setPaymentActionLoading(null);
+                        }
+                    }}
+                    className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                >
+                    {paymentActionLoading === "run" ? "Running…" : "Run Payment"}
+                </button>
             )}
             {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
-                <button type="button" disabled={!!paymentActionLoading} onClick={async () => { setPaymentActionLoading("retry"); setPaymentToast(null); try { const res = await fetch("/api/admin/payments/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: drawer.id }) }); const json = await res.json().catch(() => ({})); if (res.status === 409) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Job already has a paid payment" }); refetchJobPayments(); return; } if (!res.ok) { setPaymentToast({ type: "error", message: (json as { error?: string }).error ?? "Retry failed" }); return; } setPaymentToast({ type: "success", message: "Payment succeeded" }); refetchJobPayments(); refetch(); } catch (e) { setPaymentToast({ type: "error", message: (e as Error).message }); } finally { setPaymentActionLoading(null); } }} className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10 disabled:opacity-50">{paymentActionLoading === "retry" ? "…" : "Retry Failed"}</button>
+                <button
+                    type="button"
+                    disabled={!!paymentActionLoading}
+                    onClick={async () => {
+                        const jobId = drawer.id as string;
+                        setPaymentActionLoading("retry");
+                        setPaymentToast(null);
+                        try {
+                            const res = await fetch("/api/admin/payments/run", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ job_id: jobId }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+                            if (res.status === 409) {
+                                setPaymentToast({
+                                    type: "error",
+                                    message: (typeof json.error === "string" && json.error) || "Job already has a paid payment",
+                                });
+                                await refetchJobPayments();
+                                refetch();
+                                router.refresh();
+                                dispatchAfterPaymentRun(jobId, null);
+                                return;
+                            }
+                            const fb = adminPaymentRunFeedback(json, res.ok);
+                            setPaymentToast({ type: fb.ok ? "success" : "error", message: fb.message });
+                            await refetchJobPayments();
+                            refetch();
+                            router.refresh();
+                            dispatchAfterPaymentRun(jobId, null);
+                        } catch (e) {
+                            setPaymentToast({ type: "error", message: (e as Error).message });
+                        } finally {
+                            setPaymentActionLoading(null);
+                        }
+                    }}
+                    className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10 disabled:opacity-50"
+                >
+                    {paymentActionLoading === "retry" ? "Retrying…" : "Retry Failed"}
+                </button>
             )}
             <button type="button" disabled={!!jobActionLoading} onClick={async () => { if (!drawer.id) return; setJobActionLoading("mark_completed"); try { const res = await fetch(`/api/admin/jobs/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark_completed" }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => (prev ? { ...prev, ...json } : prev)); refetch(); router.refresh(); } catch (e) { console.error("Mark completed failed", e); } finally { setJobActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobActionLoading === "mark_completed" ? "…" : "Mark completed"}</button>
             {jobSchedules.length > 0 && !rescheduleForm && <button type="button" onClick={() => openReschedule(jobSchedules[0])} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Reschedule</button>}
@@ -2745,33 +2856,34 @@ export default function AdminEntityDrawer() {
                         type="button"
                         disabled={!!paymentActionLoading}
                         onClick={async () => {
+                            const jobId = paymentParentJobId;
+                            const scheduleId = drawer.id && drawer.id !== "new" ? drawer.id : null;
                             setPaymentActionLoading("run");
                             setPaymentToast(null);
                             try {
                                 const res = await fetch("/api/admin/payments/run", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ job_id: paymentParentJobId }),
+                                    body: JSON.stringify({ job_id: jobId }),
                                 });
-                                const json = await res.json().catch(() => ({}));
+                                const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
                                 if (res.status === 409) {
                                     setPaymentToast({
                                         type: "error",
-                                        message: (json as { error?: string }).error ?? "Job already has a paid payment",
+                                        message: (typeof json.error === "string" && json.error) || "Job already has a paid payment",
                                     });
-                                    refetchJobPayments();
+                                    await refetchJobPayments();
+                                    refetch();
+                                    router.refresh();
+                                    dispatchAfterPaymentRun(jobId, scheduleId);
                                     return;
                                 }
-                                if (!res.ok) {
-                                    setPaymentToast({
-                                        type: "error",
-                                        message: (json as { error?: string }).error ?? "Run payment failed",
-                                    });
-                                    return;
-                                }
-                                setPaymentToast({ type: "success", message: "Payment succeeded" });
-                                refetchJobPayments();
+                                const fb = adminPaymentRunFeedback(json, res.ok);
+                                setPaymentToast({ type: fb.ok ? "success" : "error", message: fb.message });
+                                await refetchJobPayments();
                                 refetch();
+                                router.refresh();
+                                dispatchAfterPaymentRun(jobId, scheduleId);
                             } catch (e) {
                                 setPaymentToast({ type: "error", message: (e as Error).message });
                             } finally {
@@ -2780,7 +2892,7 @@ export default function AdminEntityDrawer() {
                         }}
                         className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
                     >
-                        {paymentActionLoading === "run" ? "…" : "Run Payment"}
+                        {paymentActionLoading === "run" ? "Running…" : "Run Payment"}
                     </button>
                 )}
                 {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
@@ -2788,33 +2900,34 @@ export default function AdminEntityDrawer() {
                         type="button"
                         disabled={!!paymentActionLoading}
                         onClick={async () => {
+                            const jobId = paymentParentJobId;
+                            const scheduleId = drawer.id && drawer.id !== "new" ? drawer.id : null;
                             setPaymentActionLoading("retry");
                             setPaymentToast(null);
                             try {
                                 const res = await fetch("/api/admin/payments/run", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ job_id: paymentParentJobId }),
+                                    body: JSON.stringify({ job_id: jobId }),
                                 });
-                                const json = await res.json().catch(() => ({}));
+                                const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
                                 if (res.status === 409) {
                                     setPaymentToast({
                                         type: "error",
-                                        message: (json as { error?: string }).error ?? "Job already has a paid payment",
+                                        message: (typeof json.error === "string" && json.error) || "Job already has a paid payment",
                                     });
-                                    refetchJobPayments();
+                                    await refetchJobPayments();
+                                    refetch();
+                                    router.refresh();
+                                    dispatchAfterPaymentRun(jobId, scheduleId);
                                     return;
                                 }
-                                if (!res.ok) {
-                                    setPaymentToast({
-                                        type: "error",
-                                        message: (json as { error?: string }).error ?? "Retry failed",
-                                    });
-                                    return;
-                                }
-                                setPaymentToast({ type: "success", message: "Payment succeeded" });
-                                refetchJobPayments();
+                                const fb = adminPaymentRunFeedback(json, res.ok);
+                                setPaymentToast({ type: fb.ok ? "success" : "error", message: fb.message });
+                                await refetchJobPayments();
                                 refetch();
+                                router.refresh();
+                                dispatchAfterPaymentRun(jobId, scheduleId);
                             } catch (e) {
                                 setPaymentToast({ type: "error", message: (e as Error).message });
                             } finally {
@@ -2823,7 +2936,7 @@ export default function AdminEntityDrawer() {
                         }}
                         className="px-3 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded-md hover:bg-alloy-ember/10 disabled:opacity-50"
                     >
-                        {paymentActionLoading === "retry" ? "…" : "Retry Failed"}
+                        {paymentActionLoading === "retry" ? "Retrying…" : "Retry Failed"}
                     </button>
                 )}
             </div>
@@ -7031,6 +7144,8 @@ export default function AdminEntityDrawer() {
                                     created_at: string;
                                     customer_id: string;
                                     status: string;
+                                    status_key?: string | null;
+                                    _status_display?: string | null;
                                     start_date: string | null;
                                     _frequency_label: string | null;
                                     _customer_name: string | null;
@@ -7047,7 +7162,7 @@ export default function AdminEntityDrawer() {
                                                 <Field label="Customer" value={subData._customer_name ?? "—"} />
                                                 <DrawerLinkWithName label="Customer" id={subData.customer_id ?? null} type="customers" displayName={subData._customer_name} />
                                                 <Field label="Frequency" value={subData._frequency_label ?? "—"} />
-                                                <Field label="Status" value={subData.status} />
+                                                <Field label="Status" value={subData._status_display ?? subData.status ?? "—"} />
                                                 <Field label="Start date" value={subData.start_date ?? "—"} />
                                             </div>
                                         </details>

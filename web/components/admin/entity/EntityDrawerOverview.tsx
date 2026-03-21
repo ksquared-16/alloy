@@ -58,7 +58,11 @@ function formatFieldValue(
     case "status":
       return (
         <StatusBadge
-          label={getStatusLabel?.(String(value)) ?? String(value)}
+          label={
+            field.key === "_status_display"
+              ? String(value ?? "—")
+              : (getStatusLabel?.(String(value)) ?? String(value))
+          }
           variant="default"
         />
       );
@@ -300,7 +304,9 @@ export default function EntityDrawerOverview({
   const renderOverviewField = (field: EntityDrawerFieldConfig): ReactNode => {
     const key = field.key;
     const displayFallback =
-      key === "status_key" && record._status_display != null
+      key === "_status_display"
+        ? record._status_display
+        : key === "status_key" && record._status_display != null
         ? record._status_display
         : key === "assigned_vendor_id" && record._vendor_name != null
           ? record._vendor_name

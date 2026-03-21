@@ -19,8 +19,10 @@ export type LocationRow = {
     is_primary: boolean;
     is_active: boolean;
     location_type: string | null;
+    status_key?: string | null;
     updated_at: string | null;
     _customer_name: string | null;
+    _status_display?: string | null;
 };
 
 export default function LocationsClient() {
