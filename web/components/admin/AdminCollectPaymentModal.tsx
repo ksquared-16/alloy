@@ -283,6 +283,7 @@ export function AdminCollectPaymentModal({
         body.payment_method_id = paymentMethodId;
         body.save_payment_method = savePaymentMethod;
       }
+      body.idempotency_key = crypto.randomUUID();
 
       const res = await fetch("/api/admin/payments/run", {
         method: "POST",
@@ -332,7 +333,7 @@ export function AdminCollectPaymentModal({
       }
 
       if (res.status === 409) {
-        const msg = (typeof json.error === "string" && json.error) || "Job already has a paid payment";
+        const msg = (typeof json.error === "string" && json.error) || "Request conflict";
         setFeedback({ type: "error", message: msg });
         onPaymentOutcome?.({ type: "error", message: msg });
         onAfterRun(effectiveJobId, target === "schedule" ? context?.scheduleId ?? null : null);

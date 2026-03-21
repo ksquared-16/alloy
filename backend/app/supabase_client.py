@@ -1648,7 +1648,11 @@ def get_customer_by_id(customer_id: str) -> Optional[Dict]:
     headers = _get_headers()
     try:
         url = f"{base_url}/customers"
-        params = {"id": f"eq.{customer_id}", "select": "id,stripe_customer_id,default_payment_method_id", "limit": "1"}
+        params = {
+            "id": f"eq.{customer_id}",
+            "select": "id,stripe_customer_id,default_payment_method_id,payment_method_brand,payment_method_last4",
+            "limit": "1",
+        }
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         if not resp.ok:
             return None
@@ -1771,22 +1775,20 @@ def update_payment_by_id(
         raise RuntimeError("Supabase PATCH payments by id failed: %s" % e) from e
 
 
-def get_existing_paid_payment_for_job(job_id: str, paid_status_uuid: str) -> Optional[Dict]:
+def get_payment_row_by_provider_payment_id(provider_payment_id: str) -> Optional[Dict[str, Any]]:
     """
-    Return a paid payment for the job if one exists (payments joined to payment_statuses via paid_status_uuid).
-    Queries payments where job_id = job_id and payment_status_id = paid_status_uuid, limit 1.
-    Returns dict with id, provider_payment_id or None.
+    Return the payments row for a Stripe PaymentIntent id (provider_payment_id), or None.
+    Used when attaching a PI to a row hits the unique index (idempotent Stripe replay).
     """
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not paid_status_uuid:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not provider_payment_id:
         return None
     base_url = _get_base_url()
     headers = _get_headers()
     try:
         url = f"{base_url}/payments"
         params = {
-            "job_id": f"eq.{job_id}",
-            "payment_status_id": f"eq.{paid_status_uuid}",
-            "select": "id,provider_payment_id",
+            "provider_payment_id": f"eq.{provider_payment_id}",
+            "select": "id,amount_cents,payment_status_id,provider_payment_id,paid_at,metadata",
             "limit": "1",
         }
         resp = requests.get(url, headers=headers, params=params, timeout=10)
@@ -1797,7 +1799,42 @@ def get_existing_paid_payment_for_job(job_id: str, paid_status_uuid: str) -> Opt
             return data[0]
         return None
     except Exception as e:
-        logger.warning("get_existing_paid_payment_for_job: exception %s", e)
+        logger.warning("get_payment_row_by_provider_payment_id: exception %s", e)
+        return None
+
+
+def find_payment_by_job_client_idempotency_key(job_id: str, client_key: str) -> Optional[Dict[str, Any]]:
+    """
+    Latest payment row for the job whose metadata.client_idempotency_key matches client_key.
+    Used for HTTP-level idempotent replay (same client key → same outcome without a second charge).
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not job_id or not client_key:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payments"
+        params = {
+            "job_id": f"eq.{job_id}",
+            "select": "id,amount_cents,payment_status_id,provider_payment_id,paid_at,metadata",
+            "order": "created_at.desc",
+            "limit": "100",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if not isinstance(data, list):
+            return None
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            meta = row.get("metadata")
+            if isinstance(meta, dict) and meta.get("client_idempotency_key") == client_key:
+                return row
+        return None
+    except Exception as e:
+        logger.warning("find_payment_by_job_client_idempotency_key: exception %s", e)
         return None
 
 

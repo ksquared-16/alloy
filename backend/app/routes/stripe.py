@@ -35,7 +35,8 @@ from ..supabase_client import (
     get_opportunity_org_id,
     insert_payment,
     update_payment_by_id,
-    get_existing_paid_payment_for_job,
+    get_payment_row_by_provider_payment_id,
+    find_payment_by_job_client_idempotency_key,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -47,6 +48,12 @@ stripe.api_key = STRIPE_SECRET_KEY
 stripe_mode = "live" if STRIPE_SECRET_KEY.startswith("sk_live_") else "test" if STRIPE_SECRET_KEY.startswith("sk_test_") else "unknown"
 logger.info("STRIPE_MODE=%s (key prefix: %s)", stripe_mode, STRIPE_SECRET_KEY[:7] + "***" if STRIPE_SECRET_KEY else "None")
 
+
+def _is_supabase_unique_or_conflict(exc: BaseException) -> bool:
+    s = str(exc).lower()
+    return "23505" in s or "unique constraint" in s or "duplicate key" in s or "conflict" in s or " 409 " in s or s.startswith("409 ")
+
+
 router = APIRouter()
 
 
@@ -56,8 +63,10 @@ async def admin_payments_run(
 ):
     """
     Create a payment record and charge the customer's saved payment method via Stripe PaymentIntent.
-    Body: { "job_id": string, "amount_cents"?: number }
+    Body: { "job_id": string, "amount_cents"?: number, "idempotency_key"?: string (client-generated per charge intent) }
     If amount_cents omitted, uses job.estimated_total_cents or job.recurring_total_cents.
+    Multiple succeeded payments per job are allowed (partial pay). Duplicate Stripe PI ids are prevented by DB unique
+    index + webhook/admin updates keyed by provider_payment_id; client idempotency_key dedupes Stripe PI creation.
     All Stripe logic runs in backend; Next.js proxies to this route.
     """
     # Request-time Stripe init (same key as SetupIntent): set before any Stripe call
@@ -69,6 +78,11 @@ async def admin_payments_run(
     if not job_id:
         raise HTTPException(status_code=400, detail="job_id is required")
 
+    raw_client_ik = body.get("idempotency_key")
+    client_idempotency_key: Optional[str] = None
+    if isinstance(raw_client_ik, str) and raw_client_ik.strip():
+        client_idempotency_key = raw_client_ik.strip()[:512]
+
     pending_uuid = get_payment_status_id_by_key("pending")
     paid_uuid = get_payment_status_id_by_key("paid")
     failed_uuid = get_payment_status_id_by_key("failed")
@@ -76,18 +90,6 @@ async def admin_payments_run(
         raise HTTPException(
             status_code=500,
             detail="Could not resolve payment_statuses (pending/paid/failed). Check payment_statuses table.",
-        )
-
-    existing = get_existing_paid_payment_for_job(job_id, paid_uuid)
-    if existing:
-        return JSONResponse(
-            status_code=409,
-            content={
-                "ok": False,
-                "error": "Job already has a paid payment",
-                "existing_payment_id": existing.get("id"),
-                "provider_payment_id": existing.get("provider_payment_id"),
-            },
         )
 
     job = get_job_by_id(job_id)
@@ -118,13 +120,43 @@ async def admin_payments_run(
         )
     amount_cents = int(amount_cents)
 
+    if client_idempotency_key:
+        prior = find_payment_by_job_client_idempotency_key(job_id, client_idempotency_key)
+        if prior and prior.get("payment_status_id") == paid_uuid:
+            pi_prior = prior.get("provider_payment_id")
+            if isinstance(pi_prior, str) and pi_prior.startswith("pi_"):
+                ac = prior.get("amount_cents")
+                return {
+                    "ok": True,
+                    "payment_id": prior.get("id"),
+                    "provider_payment_id": pi_prior,
+                    "status": "succeeded",
+                    "amount_cents": int(ac) if isinstance(ac, (int, float)) and int(ac) > 0 else amount_cents,
+                    "idempotent_replay": True,
+                }
+
     org_id = job.get("org_id")
     if not org_id and job.get("opportunity_id"):
         org_id = get_opportunity_org_id(job["opportunity_id"])
     if not org_id:
         org_id = os.getenv("ALLOY_PUBLIC_ORG_ID")
 
-    metadata_insert = {"source": "payments_run", "requested_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    metadata_insert = {
+        "source": "payments_run",
+        "requested_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    pt = body.get("payment_target")
+    if isinstance(pt, str) and pt.strip():
+        metadata_insert["payment_target"] = pt.strip()
+    sid = body.get("schedule_id")
+    if isinstance(sid, str) and sid.strip():
+        metadata_insert["schedule_id"] = sid.strip()
+    ah = body.get("ad_hoc_charge_type")
+    if isinstance(ah, str) and ah.strip():
+        metadata_insert["ad_hoc_charge_type"] = ah.strip()
+    if client_idempotency_key:
+        metadata_insert["client_idempotency_key"] = client_idempotency_key
+
     payment_id = insert_payment(
         job_id=job_id,
         customer_id=customer_id,
@@ -136,9 +168,34 @@ async def admin_payments_run(
     if not payment_id:
         raise HTTPException(status_code=500, detail="Failed to create payment record")
 
+    payment_method_id_override = body.get("payment_method_id")
+    payment_method_id_override = payment_method_id_override if isinstance(payment_method_id_override, str) else None
+    if payment_method_id_override:
+        payment_method_id_override = payment_method_id_override.strip() or None
+    explicit_payment_method = bool(
+        payment_method_id_override and payment_method_id_override.startswith("pm_")
+    )
+    save_payment_method = body.get("save_payment_method") is True
+
     default_pm_id = customer.get("default_payment_method_id")
     payment_method_id = default_pm_id
-    if not payment_method_id:
+    if explicit_payment_method:
+        payment_method_id = payment_method_id_override
+        try:
+            stripe.PaymentMethod.attach(payment_method_id, customer=stripe_customer_id)
+        except stripe.error.InvalidRequestError as e:
+            err_s = str(e).lower()
+            if "already been attached" not in err_s and "already attached" not in err_s:
+                raise
+        if save_payment_method:
+            try:
+                stripe.Customer.modify(
+                    stripe_customer_id,
+                    invoice_settings={"default_payment_method": payment_method_id},
+                )
+            except Exception as e:
+                logger.warning("admin_payments_run: could not set default payment method %s", e)
+    elif not payment_method_id:
         try:
             pm_list = stripe.PaymentMethod.list(customer=stripe_customer_id, type="card", limit=1)
             payment_method_id = pm_list.data[0].id if pm_list.data else None
@@ -155,20 +212,34 @@ async def admin_payments_run(
             raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
         raise HTTPException(status_code=400, detail="No payment method found for customer")
 
+    pi_metadata = {
+        "job_id": job_id,
+        "customer_id": customer_id,
+        "payment_id": payment_id,
+    }
+    pi_kwargs: Dict[str, Any] = {
+        "amount": amount_cents,
+        "currency": "usd",
+        "customer": stripe_customer_id,
+        "payment_method": payment_method_id,
+        "metadata": pi_metadata,
+    }
+    if explicit_payment_method:
+        pi_kwargs["confirm"] = True
+        pi_kwargs["off_session"] = False
+    else:
+        pi_kwargs["confirm"] = True
+        pi_kwargs["off_session"] = True
+
+    stripe_idempotency_key = f"payments_run:{payment_id}"
+    if client_idempotency_key:
+        stripe_idempotency_key = hashlib.sha256(
+            f"admin_payments_run:{job_id}:{client_idempotency_key}".encode()
+        ).hexdigest()[:64]
+    pi_kwargs["idempotency_key"] = stripe_idempotency_key
+
     try:
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount_cents,
-            currency="usd",
-            customer=stripe_customer_id,
-            payment_method=payment_method_id,
-            confirm=True,
-            off_session=True,
-            metadata={
-                "job_id": job_id,
-                "customer_id": customer_id,
-                "payment_id": payment_id,
-            },
-        )
+        payment_intent = stripe.PaymentIntent.create(**pi_kwargs)
     except stripe.error.StripeError as e:
         err_msg = getattr(e, "user_message", None) or str(e)
         try:
@@ -179,68 +250,92 @@ async def admin_payments_run(
             logger.exception("admin_payments_run: Supabase update failed after Stripe error")
         raise HTTPException(status_code=500, detail=err_msg)
 
+    new_payment_id = payment_id
+    ledger_payment_id = payment_id
     try:
-        ok, n = update_payment_by_id(payment_id, provider_payment_id=payment_intent.id)
+        ok, n = update_payment_by_id(ledger_payment_id, provider_payment_id=payment_intent.id)
         if not ok or n < 1:
             raise HTTPException(status_code=500, detail="Payment update failed: could not set provider_payment_id (0 rows updated)")
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
+        if _is_supabase_unique_or_conflict(e):
+            existing_row = get_payment_row_by_provider_payment_id(payment_intent.id)
+            if existing_row and existing_row.get("id"):
+                try:
+                    update_payment_by_id(
+                        new_payment_id,
+                        payment_status_id=failed_uuid,
+                        metadata={
+                            "error": "superseded_duplicate_provider_payment_id",
+                            "canonical_payment_id": existing_row["id"],
+                        },
+                    )
+                except RuntimeError:
+                    logger.warning(
+                        "admin_payments_run: could not mark superseded row payment_id=%s",
+                        (new_payment_id[:8] + "***") if new_payment_id else "",
+                        exc_info=True,
+                    )
+                ledger_payment_id = existing_row["id"]
+            else:
+                raise HTTPException(status_code=500, detail="Payment update failed: %s" % e) from e
+        else:
+            raise HTTPException(status_code=500, detail="Payment update failed: %s" % e) from e
+
+    pi_amount = getattr(payment_intent, "amount", None)
+    response_amount_cents = int(pi_amount) if isinstance(pi_amount, int) and pi_amount > 0 else amount_cents
+    idempotent_pi_replay = ledger_payment_id != new_payment_id
 
     if payment_intent.status == "succeeded":
         paid_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         try:
-            ok, n = update_payment_by_id(payment_id, payment_status_id=paid_uuid, paid_at=paid_at)
+            ok, n = update_payment_by_id(ledger_payment_id, payment_status_id=paid_uuid, paid_at=paid_at)
             if not ok or n < 1:
                 raise HTTPException(status_code=500, detail="Payment update failed: could not set paid status (0 rows updated)")
         except RuntimeError as e:
             raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
-        return {
+        out: Dict[str, Any] = {
             "ok": True,
-            "payment_id": payment_id,
+            "payment_id": ledger_payment_id,
             "provider_payment_id": payment_intent.id,
             "status": "succeeded",
-            "amount_cents": amount_cents,
+            "amount_cents": response_amount_cents,
         }
+        if idempotent_pi_replay:
+            out["idempotent_replay"] = True
+        return out
 
     if payment_intent.status == "requires_action":
-        try:
-            ok, n = update_payment_by_id(
-                payment_id,
-                payment_status_id=failed_uuid,
-                metadata={"error": "Payment requires customer authentication (SCA)"},
-            )
-            if not ok or n < 1:
-                raise HTTPException(status_code=500, detail="Payment update failed: could not set failed status (0 rows updated)")
-        except RuntimeError as e:
-            raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
-        return JSONResponse(
-            status_code=400,
-            content={
-                "ok": False,
-                "payment_id": payment_id,
-                "provider_payment_id": payment_intent.id,
-                "error": "Payment requires customer authentication",
-                "status": "requires_action",
-            },
-        )
+        # Leave payment pending; client completes authentication via confirmCardPayment + webhook.
+        payload_ra: Dict[str, Any] = {
+            "ok": False,
+            "requires_action": True,
+            "payment_id": ledger_payment_id,
+            "provider_payment_id": payment_intent.id,
+            "client_secret": payment_intent.client_secret,
+            "error": "Payment requires customer authentication",
+            "status": "requires_action",
+        }
+        if idempotent_pi_replay:
+            payload_ra["idempotent_replay"] = True
+        return JSONResponse(status_code=200, content=payload_ra)
 
     err_msg = (payment_intent.last_payment_error or {}).get("message", payment_intent.status) if hasattr(payment_intent, "last_payment_error") else payment_intent.status
     try:
-        ok, n = update_payment_by_id(payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
+        ok, n = update_payment_by_id(ledger_payment_id, payment_status_id=failed_uuid, metadata={"error": err_msg})
         if not ok or n < 1:
             raise HTTPException(status_code=500, detail="Payment update failed: could not set failed status (0 rows updated)")
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
-    return JSONResponse(
-        status_code=400,
-        content={
-            "ok": False,
-            "payment_id": payment_id,
-            "provider_payment_id": payment_intent.id,
-            "error": err_msg or str(payment_intent.status),
-            "status": payment_intent.status,
-        },
-    )
+    payload_fail: Dict[str, Any] = {
+        "ok": False,
+        "payment_id": ledger_payment_id,
+        "provider_payment_id": payment_intent.id,
+        "error": err_msg or str(payment_intent.status),
+        "status": payment_intent.status,
+    }
+    if idempotent_pi_replay:
+        payload_fail["idempotent_replay"] = True
+    return JSONResponse(status_code=400, content=payload_fail)
 
 
 def record_payment_failure(ghl_contact_id: Optional[str], title: str, body: str) -> None:

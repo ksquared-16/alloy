@@ -10,7 +10,7 @@ const BACKEND_URL =
  * POST /api/admin/payments/run
  * Proxy to backend POST /admin/payments/run.
  * All Stripe PaymentIntent logic runs in the Python backend (single runtime).
- * Body: { job_id: string, amount_cents?: number, payment_target?, schedule_id?, ad_hoc_charge_type?, use_new_card? }
+ * Body: { job_id: string, amount_cents?: number, idempotency_key?, payment_target?, schedule_id?, ad_hoc_charge_type?, use_new_card? }
  * Extra keys are forwarded for future backend/ledger use; core charge path remains job_id (+ optional amount_cents).
  */
 export async function POST(request: NextRequest) {
@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
     payload.payment_method_id = body.payment_method_id.trim();
   }
   if (typeof body.save_payment_method === "boolean") payload.save_payment_method = body.save_payment_method;
+  if (typeof body.idempotency_key === "string" && body.idempotency_key.trim()) {
+    payload.idempotency_key = body.idempotency_key.trim();
+  }
 
   const backendUrl = `${BACKEND_URL.replace(/\/$/, "")}/admin/payments/run`;
   console.log("[PAYMENTS_RUN] env:", {
