@@ -5,7 +5,7 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
 const ALLOWED_KEYS = [
-    "name", "job_date", "job_time_window", "status", "status_key", "vertical_id", "quote_total", "notes", "pipeline_stage_id",
+    "name", "job_date", "job_time_window", "status", "vertical_id", "quote_total", "notes", "pipeline_stage_id",
     "source", "assigned_to", "lost_reason", "appointment_id",
     "quote_subtotal", "discount_amount", "discount_code",
     "external_source", "external_id",
@@ -40,18 +40,31 @@ export async function PATCH(
             }
             updates[key] = val;
         }
+        const supabase = createAdminClient();
         if (body.notes !== undefined) {
-            const supabase = createAdminClient();
             const { data: existing } = await supabase.from("opportunities").select("metadata").eq("id", id).single();
             const meta = (existing?.metadata as Record<string, unknown>) || {};
             updates.metadata = { ...meta, notes: body.notes === "" ? null : body.notes };
         }
 
+        if (updates.pipeline_stage_id !== undefined) {
+            const pid = updates.pipeline_stage_id as string | null;
+            if (pid) {
+                const { data: row } = await supabase
+                    .from("pipeline_stages")
+                    .select("key, stage_key, status_key")
+                    .eq("id", pid)
+                    .maybeSingle();
+                const r = row as { key?: string | null; stage_key?: string | null; status_key?: string | null } | null;
+                updates.status_key = r?.key ?? r?.stage_key ?? r?.status_key ?? null;
+            } else {
+                updates.status_key = null;
+            }
+        }
+
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
-
-        const supabase = createAdminClient();
         const { data: existing } = await supabase
             .from("opportunities")
             .select("org_id, status_key, customer_id, primary_contact_id")
@@ -72,7 +85,7 @@ export async function PATCH(
         if (orgId) {
             await upsertFieldValuesFromBody(supabase, orgId, "opportunity", id, body, ALLOWED_KEYS);
         }
-        if (updates.status_key !== undefined && orgId) {
+        if (updates.pipeline_stage_id !== undefined && orgId) {
             const newStatusKey = (updates.status_key as string) ?? null;
             const metadata: Record<string, unknown> = {};
             if (existingRow?.customer_id != null) metadata.customer_id = existingRow.customer_id;

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("schedules")
     .select(
-      "id, job_id, org_id, location_id, start_at, end_at, timezone, status_key, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
+      "id, job_id, org_id, location_id, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -75,6 +75,12 @@ export async function GET(request: NextRequest) {
     : { data: [] };
   const vendorMap = new Map((vendorRows ?? []).map((v) => [(v as { id: string }).id, (v as { name: string | null }).name ?? null]));
 
+  const scheduleStatusIds = [...new Set(list.map((s) => (s as { schedule_status_id?: string | null }).schedule_status_id).filter(Boolean))] as string[];
+  const { data: scheduleStatusRows } = scheduleStatusIds.length
+    ? await supabase.from("schedule_statuses").select("id, label").in("id", scheduleStatusIds)
+    : { data: [] as { id: string; label: string | null }[] };
+  const scheduleStatusLabelById = new Map((scheduleStatusRows ?? []).map((r) => [(r as { id: string }).id, (r as { label: string | null }).label ?? null]));
+
   const schedules = list.map((s) => {
     const job = (s as { job_id: string }).job_id ? jobMap.get((s as { job_id: string }).job_id) : undefined;
     const customerId = job ? (job as { customer_id?: string }).customer_id : null;
@@ -84,12 +90,18 @@ export async function GET(request: NextRequest) {
     const _assigned_vendor_name = vendorId ? vendorMap.get(vendorId) ?? null : null;
     const locId = (s as { location_id?: string | null }).location_id;
     const _location_label = locId ? locationMap.get(locId) ?? null : null;
+    const ssid = (s as { schedule_status_id?: string | null }).schedule_status_id;
+    const _schedule_status_label = ssid ? scheduleStatusLabelById.get(ssid) ?? null : null;
+    const sk = (s as { status_key?: string | null }).status_key;
+    const _status_display = _schedule_status_label ?? sk ?? null;
     return {
       ...s,
       _job_title: job ? (job as { title: string | null }).title ?? null : null,
       _customer_name: customerId ? customerMap.get(customerId) ?? null : null,
       _assigned_vendor_name,
       _location_label,
+      _schedule_status_label,
+      _status_display,
     };
   });
 
@@ -147,6 +159,16 @@ export async function POST(request: NextRequest) {
   }
 
   const metadata = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
+  const schedule_status_id =
+    typeof body.schedule_status_id === "string" && body.schedule_status_id.trim() ? body.schedule_status_id.trim() : null;
+  let derivedStatusKey: string | null = null;
+  if (schedule_status_id) {
+    const { data: ssRow } = await supabase.from("schedule_statuses").select("key").eq("id", schedule_status_id).maybeSingle();
+    derivedStatusKey = (ssRow as { key?: string | null } | null)?.key ?? null;
+    if (!derivedStatusKey) {
+      return NextResponse.json({ error: "Invalid schedule_status_id" }, { status: 400 });
+    }
+  }
   const row: Record<string, unknown> = {
     org_id: ctx.orgId,
     job_id,
@@ -157,7 +179,12 @@ export async function POST(request: NextRequest) {
   };
   if (location_id) row.location_id = location_id;
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
-  if (typeof body.status_key === "string" && body.status_key.trim()) row.status_key = body.status_key.trim();
+  if (schedule_status_id) {
+    row.schedule_status_id = schedule_status_id;
+    row.status_key = derivedStatusKey;
+  } else if (typeof body.status_key === "string" && body.status_key.trim()) {
+    row.status_key = body.status_key.trim();
+  }
 
   const durationMs = new Date(end_at).getTime() - new Date(start_at).getTime();
   const duration_minutes = Math.round(durationMs / 60000);

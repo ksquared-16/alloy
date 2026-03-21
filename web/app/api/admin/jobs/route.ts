@@ -85,9 +85,15 @@ export async function GET(request: NextRequest) {
     const summary = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
     return [l.id, summary];
   }));
-  /** job_status_id -> catalog `key` (for _status_display / status badge lookup vs status_definitions) */
+  /** job_status_id -> catalog row */
   const jobStatusKeyById = new Map(
     (statusRes.data ?? []).map((s) => [(s as { id: string }).id, (s as { key?: string | null }).key ?? null])
+  );
+  const jobStatusLabelById = new Map(
+    (statusRes.data ?? []).map((s) => [
+      (s as { id: string }).id,
+      (s as { label?: string | null }).label ?? (s as { key?: string | null }).key ?? null,
+    ])
   );
   const nextScheduleByJobId = new Map<string, string>();
   for (const s of nextSchedulesRes.data ?? []) {
@@ -119,7 +125,9 @@ export async function GET(request: NextRequest) {
       (jr.job_number_for_customer && String(jr.job_number_for_customer).trim()) ||
       (jr.id ? jr.id.slice(-6) : "—");
     const _status_display =
-      jr.status_key ?? (jr.job_status_id ? jobStatusKeyById.get(jr.job_status_id) ?? null : null);
+      (jr.job_status_id ? jobStatusLabelById.get(jr.job_status_id) ?? null : null) ??
+      jr.status_key ??
+      (jr.job_status_id ? jobStatusKeyById.get(jr.job_status_id) ?? null : null);
     const _next_schedule = nextScheduleByJobId.get(jr.id) ?? null;
     const _vendor_name = jr.assigned_vendor_id ? vendorLabelById.get(jr.assigned_vendor_id) ?? null : null;
     const display_total_cents = computeJobDisplayTotalCents(jr);
@@ -143,7 +151,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ jobs: result, total: count ?? result.length });
 }
 
-/** POST: create job. Admin only. customer_id required; status_key (from status_definitions?entity_type=jobs) required. org_id from context. */
+/** POST: create job. Admin only. customer_id and job_status_id required; status_key is derived from job_statuses. org_id from context. */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContext();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -158,7 +166,6 @@ export async function POST(request: NextRequest) {
     // ignore
   }
   const customer_id = typeof body.customer_id === "string" ? body.customer_id.trim() : null;
-  const status_key = typeof body.status_key === "string" ? body.status_key.trim() : null;
   const job_status_id = typeof body.job_status_id === "string" ? body.job_status_id.trim() : null;
   const is_recurring = body.is_recurring === true;
   const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
@@ -170,11 +177,16 @@ export async function POST(request: NextRequest) {
   if (!customer_id) {
     return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
   }
-  if (!status_key) {
-    return NextResponse.json({ error: "status_key is required (use status_definitions?entity_type=jobs)" }, { status: 400 });
+  if (!job_status_id) {
+    return NextResponse.json({ error: "job_status_id is required" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
+  const { data: jobStatusRow } = await supabase.from("job_statuses").select("key").eq("id", job_status_id).maybeSingle();
+  const status_key = (jobStatusRow as { key?: string | null } | null)?.key ?? null;
+  if (!status_key) {
+    return NextResponse.json({ error: "Invalid job_status_id" }, { status: 400 });
+  }
   const { data: customer } = await supabase
     .from("customers")
     .select("id, org_id")
@@ -239,7 +251,7 @@ export async function POST(request: NextRequest) {
     org_id: ctx.orgId,
     customer_id,
     status_key,
-    job_status_id: job_status_id || null,
+    job_status_id,
     is_recurring,
     service_frequency_key: service_frequency_key ?? null,
     gross_price_cents: gross_price_cents ?? null,

@@ -6,7 +6,7 @@ import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
-const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
+const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "schedule_status_id", "metadata"] as const;
 
 function isCompletedStatus(s: string | null | undefined): boolean {
     return String(s ?? "").trim().toLowerCase() === "completed";
@@ -93,16 +93,11 @@ export async function PATCH(
                 updates[key] = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
                 continue;
             }
+            if (key === "schedule_status_id") {
+                updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+                continue;
+            }
             updates[key] = body[key];
-        }
-        if (Object.keys(updates).length === 0) {
-            return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
-        }
-
-        const startAt = (updates.start_at as string) ?? body.start_at;
-        const endAt = (updates.end_at as string) ?? body.end_at;
-        if (startAt && endAt && new Date(endAt) <= new Date(startAt)) {
-            return NextResponse.json({ error: "end_at must be after start_at" }, { status: 400 });
         }
 
         const supabase = createAdminClient();
@@ -117,6 +112,26 @@ export async function PATCH(
         }
 
         const previousStatusKey = (schedule as { status_key?: string | null }).status_key;
+
+        if (updates.schedule_status_id !== undefined) {
+            const sid = updates.schedule_status_id as string | null;
+            if (sid) {
+                const { data: row } = await supabase.from("schedule_statuses").select("key").eq("id", sid).maybeSingle();
+                updates.status_key = (row as { key?: string | null } | null)?.key ?? previousStatusKey ?? null;
+            } else {
+                updates.status_key = null;
+            }
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
+        }
+
+        const startAt = (updates.start_at as string) ?? body.start_at;
+        const endAt = (updates.end_at as string) ?? body.end_at;
+        if (startAt && endAt && new Date(endAt) <= new Date(startAt)) {
+            return NextResponse.json({ error: "end_at must be after start_at" }, { status: 400 });
+        }
         const finalStart = (updates.start_at as string) ?? (schedule as { start_at?: string }).start_at;
         const finalEnd = (updates.end_at as string) ?? (schedule as { end_at?: string }).end_at;
         if (finalStart && finalEnd) {
@@ -177,7 +192,7 @@ export async function PATCH(
             }
         }
 
-        if (updates.status_key !== undefined) {
+        if (updates.schedule_status_id !== undefined) {
             const metadata: Record<string, unknown> = {};
             const jobId = (schedule as { job_id?: string }).job_id;
             const assignedVendorId = (schedule as { assigned_vendor_id?: string | null }).assigned_vendor_id;

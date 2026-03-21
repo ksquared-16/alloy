@@ -20,7 +20,6 @@ const ALLOWED_KEYS = [
     "job_type",
     "service_key",
     "job_status_id",
-    "status_key",
     "is_recurring",
     "assigned_vendor_id",
     "metadata",
@@ -260,6 +259,16 @@ export async function PATCH(
             updates[key] = body[key];
         }
 
+        if (updates.job_status_id !== undefined) {
+            const jid = updates.job_status_id as string | null;
+            if (jid) {
+                const { data: row } = await supabase.from("job_statuses").select("key").eq("id", jid).maybeSingle();
+                updates.status_key = (row as { key?: string | null } | null)?.key ?? null;
+            } else {
+                updates.status_key = null;
+            }
+        }
+
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
@@ -285,8 +294,8 @@ export async function PATCH(
 
         await upsertFieldValuesFromBody(supabase, ctx.orgId, "job", id, body, ALLOWED_KEYS);
 
-        const newStatusKey = updates.status_key !== undefined ? (updates.status_key as string | null) : oldStatusKey;
-        if (updates.status_key !== undefined) {
+        const newStatusKey = updates.job_status_id !== undefined ? (updates.status_key as string | null) : oldStatusKey;
+        if (updates.job_status_id !== undefined) {
             const metadata: Record<string, unknown> = {};
             if ((existingJob as { customer_id?: string | null } | null)?.customer_id != null) metadata.customer_id = (existingJob as { customer_id: string }).customer_id;
             if ((existingJob as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id != null) metadata.assigned_vendor_id = (existingJob as { assigned_vendor_id: string }).assigned_vendor_id;

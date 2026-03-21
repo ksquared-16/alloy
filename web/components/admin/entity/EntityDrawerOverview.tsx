@@ -192,6 +192,7 @@ function renderFieldEditNode(
     "customer_id",
     "opportunity_id",
     "job_status_id",
+    "schedule_status_id",
     "discount_code_id",
   ]);
   /** Reference selects must win over generic `status` hint so e.g. vendor_status_id is never driven by status_definitions. */
@@ -322,9 +323,11 @@ export default function EntityDrawerOverview({
                         ? record._customer_name
                         : key === "opportunity_id" && record._opportunity_name != null
                           ? record._opportunity_name
-                          : key === "job_status_id" && record._job_status_label != null
-                            ? record._job_status_label
-                            : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
+            : key === "job_status_id" && record._job_status_label != null
+              ? record._job_status_label
+              : key === "schedule_status_id" && record._schedule_status_label != null
+                ? record._schedule_status_label
+                : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
                               ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
                               : undefined;
     const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);

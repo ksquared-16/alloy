@@ -379,7 +379,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         { key: "name", label: "Opportunity", sortable: true, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
         { key: "_pipeline_stage_name", label: "Stage", sortable: false, renderHint: "text" },
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "_quote_total_display", label: "Quote Total", sortable: false, renderHint: "money" },
         { key: "job_date", label: "Job Date", sortable: true, renderHint: "date" },
         { key: "source", label: "Source", sortable: false, renderHint: "text" },
@@ -390,7 +389,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "activity", "documents"],
-      headerFields: [{ key: "_status_display", renderHint: "status", locked: true }],
+      headerFields: [{ key: "_pipeline_stage_name", renderHint: "text", locked: true }],
       layoutMode: 2,
       overviewSections: [
         {
@@ -401,8 +400,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           gridCols: 2,
           fields: [
             { key: "name", label: "Name", span: 1, renderHint: "text", editable: true, locked: true },
-            { key: "_pipeline_stage_name", label: "Stage", span: 1, renderHint: "text", locked: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
+            { key: "pipeline_stage_id", label: "Stage", span: 1, renderHint: "text", editable: true },
             { key: "source", label: "Source", span: 1, renderHint: "text", editable: true },
             { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text", locked: true },
             { key: "assigned_to", label: "Assigned to", span: 1, renderHint: "text", editable: true },
@@ -468,7 +466,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "updated_at", label: "Updated", span: 1, renderHint: "datetime", locked: true },
             { key: "org_id", label: "Org ID", span: 1, renderHint: "text", locked: true },
             { key: "pipeline_id", label: "Pipeline ID", span: 1, renderHint: "text", locked: true },
-            { key: "pipeline_stage_id", label: "Pipeline stage ID", span: 1, renderHint: "text", locked: true },
             { key: "_vertical_name", label: "Vertical", span: 1, renderHint: "text", locked: true },
             { key: "vertical_id", label: "Vertical ID", span: 1, renderHint: "text", locked: true },
             { key: "external_source", label: "External source", span: 1, renderHint: "text", editable: true },
@@ -555,18 +552,9 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "title", label: "Title", span: 1, renderHint: "text", editable: true },
             { key: "service_key", label: "Service", span: 1, renderHint: "text", editable: true },
             { key: "job_type", label: "Job type", span: 1, renderHint: "text", editable: true },
-            // Jobs use two status layers: `status_key` (status_definitions, workflow) and `job_status_id` (job_statuses catalog).
-            // Keep both editable until product deprecates one in favor of the other.
-            {
-              key: "status_key",
-              label: "Workflow status",
-              span: 1,
-              renderHint: "status",
-              editable: true,
-            },
             {
               key: "job_status_id",
-              label: "Job status (catalog)",
+              label: "Status",
               span: 1,
               renderHint: "text",
               editable: true,
@@ -652,7 +640,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "start_at", label: "Date", sortable: true, renderHint: "datetime" },
-        { key: "status_key", label: "Status", sortable: true, renderHint: "status" },
+        { key: "_status_display", label: "Status", sortable: true, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
         { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
         { key: "_job_title", label: "Job", sortable: false, renderHint: "link" },
@@ -663,7 +651,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     },
     drawer: {
       tabs: ["overview", "related", "financials", "documents", "activity"],
-      headerFields: [{ key: "status_key", renderHint: "status" }],
+      headerFields: [{ key: "_schedule_status_label", renderHint: "text" }],
       layoutMode: 2,
       overviewSections: [
         {
@@ -675,7 +663,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           fields: [
             { key: "start_at", label: "Start", span: 1, renderHint: "datetime", editable: true },
             { key: "end_at", label: "End", span: 1, renderHint: "datetime", editable: true },
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
+            { key: "schedule_status_id", label: "Status", span: 1, renderHint: "text", editable: true },
             { key: "timezone", label: "Timezone", span: 1, renderHint: "text", editable: true },
             { key: "time_window", label: "Time window", span: 1, renderHint: "text" },
             { key: "service_type", label: "Service type", span: 1, renderHint: "text" },

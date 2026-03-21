@@ -201,10 +201,7 @@ export async function GET(
             }
             out._job_status_label = jobStatusRow?.label ?? null;
             const persistedStatusKey = typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null;
-            /** Workflow key for badge + drawer: DB status_key, else job_statuses.key (list + form stay aligned). */
-            const effectiveWorkflowKey = persistedStatusKey ?? (jobStatusRow?.key ? String(jobStatusRow.key) : null);
-            out._status_display = effectiveWorkflowKey;
-            out.status_key = effectiveWorkflowKey;
+            out._status_display = out._job_status_label ?? persistedStatusKey ?? (jobStatusRow?.key ? String(jobStatusRow.key) : null);
             const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
             out._discount_amount_cents = normalizeJobDiscountAmountToCents(
                 (data as { discount_amount?: number | string | null }).discount_amount,
@@ -246,7 +243,6 @@ export async function GET(
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
-            out._status_display = opp.status_key ?? opp.status ?? null;
             if (opp.customer_id) {
                 const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).single();
                 out._customer_name = customer.data?.name ?? null;
@@ -307,7 +303,7 @@ export async function GET(
                 out._location_name = null;
                 out._location_id = null;
             }
-            out._status_display = (out._pipeline_stage_name as string) ?? opp.status_key ?? opp.status ?? null;
+            out._status_display = (out._pipeline_stage_name as string) ?? null;
             const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)
                 : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents)) ? Number(opp.estimated_price_cents) / 100
                 : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
@@ -573,6 +569,16 @@ export async function GET(
             const titleParts = [jobTitle, vertName, timePart].filter(Boolean) as string[];
             out._schedule_display_title = titleParts.length > 0 ? titleParts.join(" · ") : "Schedule";
 
+            const scheduleStatusId = (schedule as { schedule_status_id?: string | null }).schedule_status_id;
+            let scheduleStatusLabel: string | null = null;
+            if (scheduleStatusId) {
+                const { data: ss } = await supabase.from("schedule_statuses").select("label").eq("id", scheduleStatusId).maybeSingle();
+                scheduleStatusLabel = (ss as { label?: string | null } | null)?.label ?? null;
+            }
+            out._schedule_status_label = scheduleStatusLabel;
+            const schedStatusKey = (schedule as { status_key?: string | null }).status_key;
+            out._status_display = scheduleStatusLabel ?? schedStatusKey ?? null;
+
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             return NextResponse.json(out);
         }
@@ -795,8 +801,16 @@ export async function GET(
                 .eq("assigned_vendor_id", id)
                 .order("created_at", { ascending: false })
                 .limit(JOBS_LIMIT);
+            const vendorJobStatusIds = [...new Set((vendorJobs ?? []).map((j: { job_status_id?: string | null }) => j.job_status_id).filter(Boolean))] as string[];
+            const { data: vendorJobStatuses } = vendorJobStatusIds.length
+                ? await supabase.from("job_statuses").select("id, label").in("id", vendorJobStatusIds)
+                : { data: [] as { id: string; label: string | null }[] };
+            const vendorJobStatusLabelById = new Map((vendorJobStatuses ?? []).map((r) => [(r as { id: string }).id, (r as { label: string | null }).label ?? null]));
             out._vendor_jobs = (vendorJobs ?? []).map((row) => ({
                 ...row,
+                _job_status_label: (row as { job_status_id?: string | null }).job_status_id
+                    ? vendorJobStatusLabelById.get((row as { job_status_id: string }).job_status_id) ?? null
+                    : null,
                 display_total_cents: computeJobDisplayTotalCents(row as JobPriceInput),
             }));
             const jobIds = (vendorJobs ?? []).map((j: { id: string }) => j.id);

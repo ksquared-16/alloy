@@ -9,6 +9,9 @@ export type SchedulePrefill = {
     customer_id?: string | null;
     location_id?: string | null;
     assigned_vendor_id?: string | null;
+    /** Preferred: FK for new schedule rows; server derives status_key. */
+    schedule_status_id?: string | null;
+    /** @deprecated Use schedule_status_id; still accepted by POST for legacy callers. */
     status_key?: string | null;
 };
 

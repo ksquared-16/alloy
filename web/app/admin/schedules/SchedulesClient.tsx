@@ -6,7 +6,6 @@ import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import Drawer from "@/components/admin/Drawer";
-import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { Filter } from "lucide-react";
 
@@ -21,6 +20,7 @@ type ScheduleRow = {
   _customer_name?: string | null;
   _assigned_vendor_name?: string | null;
   _location_label?: string | null;
+  _status_display?: string | null;
 };
 
 type JobOption = { id: string; title: string | null };
@@ -280,7 +280,7 @@ export default function SchedulesClient() {
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._customer_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._location_label ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._assigned_vendor_name ?? "—"}</td>
-                      <td className="px-5 py-3.5"><StatusBadge label={s.canceled_at ? "Canceled" : "—"} variant="neutral" /></td>
+                      <td className="px-5 py-3.5 text-alloy-midnight/90">{s._status_display ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s.canceled_at ? "Yes" : "—"}</td>
                       <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
                         <span className="flex flex-wrap gap-1">
