@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { usePathname } from "next/navigation";
 import { neutral, derived } from "@/styles/tokens/colors";
 
 const CHAMBER_FRAME = `inset 0 0 0 1px ${derived.adminV2BoundaryAmberInset}`;
@@ -14,17 +15,55 @@ import SystemCanvas from "./canvas/SystemCanvas";
 import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
+import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
 
 function getDepartmentName(key: DepartmentKey): string {
   const dept = MOCK_DEPARTMENTS.find((d) => d.key === key);
   return dept?.name ?? key;
 }
 
+/**
+ * DEBUG: set false after verifying ambient paints in DevTools.
+ * Production tokens use ~3–7% alpha (see colors.ts); they are effectively invisible on neutral.background.
+ * This pass uses the same hues (#00a283 teal, #273f52 slate) at high alpha so the shell wrapper is unmistakable.
+ */
+const DEBUG_EXAGGERATE_WORKSPACE_AMBIENT = false;
+
+/** Production ambient (subtle) — re-enable when DEBUG_EXAGGERATE_WORKSPACE_AMBIENT is false */
+const workspaceContentAmbientStyleProduction: CSSProperties = {
+  backgroundColor: neutral.background,
+  /* Align with canvas field vocabulary; slightly stronger blooms so company-field specs read as one system */
+  backgroundImage: `
+    radial-gradient(ellipse 100% 64% at 50% -6%, ${derived.ambientLifeBloomCore} 0%, ${derived.ambientLifeBloomMid} 32%, transparent 54%),
+    radial-gradient(ellipse 72% 48% at 92% 16%, ${derived.ambientLifeBloomMid} 0%, ${derived.ambientLifeBloomEdge} 38%, transparent 48%),
+    linear-gradient(180deg, ${derived.canvasFieldWash} 0%, transparent 40%),
+    linear-gradient(180deg, transparent 52%, ${derived.canvasFieldDepth} 100%)
+  `,
+};
+
+/** Debug ambient — larger blooms + stronger field wash/depth, same vocabulary hues, no layout change */
+const workspaceContentAmbientStyleDebug: CSSProperties = {
+  backgroundColor: neutral.background,
+  backgroundImage: `
+    radial-gradient(ellipse 120% 85% at 50% 12%, rgba(0, 162, 131, 0.5) 0%, rgba(0, 162, 131, 0.12) 45%, transparent 72%),
+    radial-gradient(ellipse 95% 75% at 96% 8%, rgba(0, 162, 131, 0.42) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(39, 63, 82, 0.2) 0%, rgba(39, 63, 82, 0.06) 38%, transparent 62%),
+    linear-gradient(180deg, transparent 35%, rgba(39, 63, 82, 0.32) 100%)
+  `,
+};
+
+const workspaceContentAmbientStyle: CSSProperties = DEBUG_EXAGGERATE_WORKSPACE_AMBIENT
+  ? workspaceContentAmbientStyleDebug
+  : workspaceContentAmbientStyleProduction;
+
 export default function AdminV2Shell({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isWorkspaceV2Route = pathname === "/adminV2/workspace" || pathname.startsWith("/adminV2/workspace/");
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
   const [selectedDepartmentKey, setSelectedDepartmentKey] = useState<DepartmentKey | null>(null);
@@ -47,6 +86,35 @@ export default function AdminV2Shell({
       : { level: "department" as const, key: selectedDepartmentKey };
 
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
+
+  if (isWorkspaceV2Route) {
+    return (
+      <div
+        className="flex h-screen w-full overflow-hidden"
+        style={{ backgroundColor: neutral.background }}
+      >
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((c) => !c)}
+        />
+        <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
+          <TopNavBar />
+          <div
+            data-adminv2-workspace-ambient-root
+            className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
+            style={workspaceContentAmbientStyle}
+          >
+            <WorkspaceAmbientLayer />
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {children}
+            </div>
+          </div>
+          {/* Same system grammar as main /adminV2: persistent bottom AI command surface */}
+          <AICommandBar />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

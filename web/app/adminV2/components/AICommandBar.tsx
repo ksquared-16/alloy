@@ -7,6 +7,9 @@ const BAR_MAX_WIDTH = 720;
 export default function AICommandBar() {
   return (
     <footer
+      data-adminv2-ai-command-bar
+      role="contentinfo"
+      aria-label="AI command bar"
       className="flex justify-center items-center flex-shrink-0 min-h-[56px] py-2.5 px-4 border-t-2"
       style={{
         background: `linear-gradient(180deg, ${derived.adminV2AiBarPineWash} 0%, ${neutral.surface} 38%, ${neutral.surface} 100%)`,

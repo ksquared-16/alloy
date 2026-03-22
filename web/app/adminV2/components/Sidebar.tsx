@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { neutral, brand } from "@/styles/tokens/colors";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
 
@@ -29,11 +30,15 @@ export default function Sidebar({
         {collapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
       </button>
       {!collapsed && (
-        <div
-          className="px-3 py-2 text-sm"
-          style={{ color: neutral.textSecondary }}
-        >
-          Sidebar
+        <div className="px-3 py-2 text-sm flex flex-col gap-2" style={{ color: neutral.textSecondary }}>
+          <span>Sidebar</span>
+          <Link
+            href="/adminV2/workspace"
+            className="text-xs font-semibold hover:underline"
+            style={{ color: brand.primary }}
+          >
+            UI V2 workspace
+          </Link>
         </div>
       )}
     </aside>

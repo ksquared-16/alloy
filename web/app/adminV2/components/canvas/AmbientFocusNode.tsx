@@ -7,6 +7,10 @@ import {
   AMBIENT_FOCUS_MAX_DEPARTMENT,
   AMBIENT_FOCUS_MAX_MANAGER,
 } from "./ambientTiers";
+import {
+  COMPANY_FIELD_DRIFT_FULL,
+  COMPANY_FIELD_DRIFT_PERIMETER_START,
+} from "./companyFieldAmbient";
 
 export type AmbientFocusData = {
   intensity: number;
@@ -57,20 +61,6 @@ const COMPANY_DRIFT_EDGE2: { l: number; t: number }[] = [
   { l: 45, t: 1 }, { l: 55, t: 99 }, { l: 1, t: 38 }, { l: 99, t: 28 }, { l: 38, t: 99 },
   { l: 62, t: 98 }, { l: 20, t: 95 }, { l: 80, t: 94 }, { l: 4, t: 68 }, { l: 98, t: 82 },
   { l: 15, t: 50 }, { l: 85, t: 52 }, { l: 50, t: 15 }, { l: 48, t: 86 },
-];
-
-const COMPANY_FIELD_DRIFT: { l: number; t: number }[] = [
-  { l: 12, t: 18 }, { l: 88, t: 22 }, { l: 6, t: 52 }, { l: 94, t: 48 }, { l: 48, t: 8 },
-  { l: 52, t: 92 }, { l: 22, t: 72 }, { l: 78, t: 68 }, { l: 35, t: 38 }, { l: 65, t: 42 },
-  { l: 18, t: 88 }, { l: 82, t: 85 }, { l: 50, t: 50 }, { l: 8, t: 12 }, { l: 92, t: 14 },
-  { l: 44, t: 62 }, { l: 56, t: 58 }, { l: 30, t: 28 }, { l: 70, t: 32 }, { l: 14, t: 44 },
-  { l: 86, t: 40 }, { l: 40, t: 82 }, { l: 60, t: 78 },
-  { l: 4, t: 24 }, { l: 96, t: 30 }, { l: 24, t: 8 }, { l: 76, t: 6 }, { l: 10, t: 62 },
-  { l: 90, t: 58 }, { l: 42, t: 18 }, { l: 58, t: 14 }, { l: 16, t: 36 }, { l: 84, t: 34 },
-  { l: 32, t: 88 }, { l: 68, t: 90 }, { l: 50, t: 68 }, { l: 28, t: 52 }, { l: 72, t: 48 },
-  { l: 46, t: 42 }, { l: 54, t: 38 }, { l: 38, t: 72 }, { l: 62, t: 76 }, { l: 6, t: 78 },
-  { l: 94, t: 74 }, { l: 20, t: 14 }, { l: 80, t: 12 }, { l: 2, t: 46 }, { l: 98, t: 52 },
-  { l: 52, t: 28 }, { l: 48, t: 74 }, { l: 66, t: 22 }, { l: 34, t: 26 },
 ];
 
 const FOCUS_DRIFT: { l: number; t: number; sz?: 0 | 1 | 2 }[] = [
@@ -158,20 +148,6 @@ const HUB_AMBIENT_PERIM_START =
 const HUB_AMBIENT_PERIM_END =
   HUB_AMBIENT_PERIM_START + COMPANY_HUB_PERIMETER.length + COMPANY_HUB_CORRIDOR.length;
 
-const COMPANY_FIELD_EDGE: { l: number; t: number }[] = [
-  ...Array.from({ length: 14 }, (_, i) => ({ l: (i * 100) / 13, t: 1.2 })),
-  ...Array.from({ length: 14 }, (_, i) => ({ l: (i * 100) / 13, t: 98.8 })),
-  ...Array.from({ length: 12 }, (_, i) => ({ l: 1.2, t: 8 + (i * 84) / 11 })),
-  ...Array.from({ length: 12 }, (_, i) => ({ l: 98.8, t: 8 + (i * 84) / 11 })),
-];
-
-const COMPANY_FIELD_DRIFT_FULL = [
-  ...COMPANY_FIELD_DRIFT,
-  ...COMPANY_FIELD_DRIFT.map((p, i) => ({ l: (p.l + 19) % 100, t: (p.t + 23 + i) % 100 })),
-  ...COMPANY_FIELD_DRIFT.map((p, i) => ({ l: (p.l * 0.7 + 15) % 100, t: (p.t * 0.8 + 10) % 100 })),
-  ...COMPANY_FIELD_EDGE,
-];
-
 const FOCUS_PERIMETER_MICRO: { l: number; t: number }[] = (() => {
   const o: { l: number; t: number }[] = [];
   for (let i = 0; i < 28; i++) {
@@ -210,7 +186,7 @@ function AmbientFocusNodeComponent({ data }: NodeProps<AmbientFocusData>) {
           <span
             key={`cf-${idx}`}
             className={
-              idx >= COMPANY_FIELD_DRIFT_FULL.length - COMPANY_FIELD_EDGE.length
+              idx >= COMPANY_FIELD_DRIFT_PERIMETER_START
                 ? "adminv2-company-field-drift adminv2-company-field-drift-perimeter"
                 : "adminv2-company-field-drift"
             }
