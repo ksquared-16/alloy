@@ -43,6 +43,11 @@ export type WorkspaceAction =
       preserveContext?: boolean;
     }
   | {
+      /** Drill from company overview into a department workspace */
+      type: "company.open_department";
+      departmentKey: string;
+    }
+  | {
       type: "ai.assistant.submit";
       text: string;
       context?: Record<string, unknown>;

@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import { DepartmentWorkspace, WorkUnitWorkspace, RecordWorkspace } from "../components/workspace/shells";
+import { CompanyWorkspace, DepartmentWorkspace, WorkUnitWorkspace, RecordWorkspace } from "../components/workspace/shells";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
+import { toCompanyWorkspaceModel } from "@/lib/ui-v2/adapters/company-adapter";
 import { toDepartmentWorkspaceModel } from "@/lib/ui-v2/adapters/department-adapter";
 import { toWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/work-unit-adapter";
 import { toRecordWorkspaceModel } from "@/lib/ui-v2/adapters/record-adapter";
@@ -19,23 +20,38 @@ import {
   DEMO_CLEANING_CONTEXT_CONFIG,
   DEMO_CHILDCARE_CONTEXT_CONFIG,
   DEMO_INSURANCE_CONTEXT_CONFIG,
+  DEMO_COMPANY_CLEANING_CONTEXT_CONFIG,
 } from "@/lib/ui-v2/demo/context-demo-config";
+import { demoCleaningCompanyModelBase, demoCleaningCompanyContextRaw } from "@/lib/ui-v2/demo/company-demos";
 import { demoCleaningWorkUnitBase } from "@/lib/ui-v2/demo/work-unit-demo";
 import { demoRecordBase } from "@/lib/ui-v2/demo/record-demo";
 
-type DemoTab = "dept-cleaning" | "dept-childcare" | "dept-insurance" | "work-unit" | "record";
+type DemoTab = "company-cleaning" | "dept-cleaning" | "dept-childcare" | "dept-insurance" | "work-unit" | "record";
 
 /**
  * UI V2 workspace system demo — config-driven blocks, no vertical logic in components.
  * Actions log to console until mapped to API routes / workflow events.
  */
 export default function AdminV2WorkspaceDemoPage() {
-  const [tab, setTab] = useState<DemoTab>("dept-cleaning");
+  const [tab, setTab] = useState<DemoTab>("company-cleaning");
 
   const onAction = useCallback((action: WorkspaceAction) => {
     console.info("[ui-v2 workspace action]", action);
-    // Host app: switch on action.type and call router.push, fetch(), or workflow trigger
+    if (action.type === "company.open_department") {
+      // Demo: single department workspace — host maps keys to routes / tabs
+      setTab("dept-cleaning");
+    }
   }, []);
+
+  const companyCleaning = useMemo(
+    () =>
+      toCompanyWorkspaceModel({
+        model: { ...demoCleaningCompanyModelBase },
+        contextConfig: DEMO_COMPANY_CLEANING_CONTEXT_CONFIG,
+        contextRaw: demoCleaningCompanyContextRaw,
+      }),
+    []
+  );
 
   const departmentCleaning = useMemo(
     () =>
@@ -89,6 +105,7 @@ export default function AdminV2WorkspaceDemoPage() {
   );
 
   const tabs: { id: DemoTab; label: string }[] = [
+    { id: "company-cleaning", label: "Company · Cleaning" },
     { id: "dept-cleaning", label: "Department · Cleaning" },
     { id: "dept-childcare", label: "Department · Childcare" },
     { id: "dept-insurance", label: "Department · Insurance broker" },
@@ -123,7 +140,8 @@ export default function AdminV2WorkspaceDemoPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
+        {tab === "company-cleaning" && <CompanyWorkspace model={companyCleaning} onAction={onAction} />}
         {tab === "dept-cleaning" && <DepartmentWorkspace model={departmentCleaning} onAction={onAction} />}
         {tab === "dept-childcare" && <DepartmentWorkspace model={departmentChildcare} onAction={onAction} />}
         {tab === "dept-insurance" && <DepartmentWorkspace model={departmentInsurance} onAction={onAction} />}

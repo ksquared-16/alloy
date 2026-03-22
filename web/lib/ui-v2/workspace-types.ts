@@ -191,6 +191,35 @@ export type DepartmentWorkspaceModel = {
   contextRail: ContextBlockVm;
 };
 
+/** Company / org surface — departments are the primary drillable work objects (rollup counts). */
+export type CompanyDepartmentCardVm = {
+  id: string;
+  /** Stable key for navigation / analytics (e.g. operations) */
+  departmentKey: string;
+  label: string;
+  summaryLine?: string;
+  countBadge?: number;
+  rollupGroups: QueueRollupGroupVm[];
+};
+
+export type CompanyWorkspaceModel = {
+  workspaceLevel: "company";
+  organizationId: string;
+  organizationLabel: string;
+  /** Top deck label above headline (default UI: "Company focus") */
+  focusLabel?: string;
+  aiSummary?: AISummaryBandVm;
+  signals: SignalVm[];
+  kpis: KPIVm[];
+  /** Dominant operational departments (e.g. Operations, Revenue, Growth) */
+  primaryDepartments: CompanyDepartmentCardVm[];
+  /** Supporting departments — same drill pattern, lighter visual weight */
+  secondaryDepartments: CompanyDepartmentCardVm[];
+  workSummary?: WorkVm | null;
+  actionsRail: ActionsVm;
+  contextRail: ContextBlockVm;
+};
+
 export type WorkUnitWorkspaceModel = {
   workspaceLevel: "work_unit";
   workUnitId: string;
@@ -223,6 +252,19 @@ export type DepartmentWorkspaceSourcePayload = {
   primaryQueue?: unknown;
   secondaryQueue?: unknown;
   latentWorkObjectQueues?: unknown[];
+  workSummary?: unknown;
+  actions?: unknown;
+  context?: unknown;
+  aiSummary?: unknown;
+};
+
+export type CompanyWorkspaceSourcePayload = {
+  organizationId: string;
+  organizationLabel: string;
+  signals?: unknown[];
+  kpis?: unknown[];
+  primaryDepartments?: unknown[];
+  secondaryDepartments?: unknown[];
   workSummary?: unknown;
   actions?: unknown;
   context?: unknown;

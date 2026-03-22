@@ -8,7 +8,7 @@ type Props = {
   work: WorkVm;
   onAction: WorkspaceActionHandler;
   mode?: "full" | "summary";
-  surface?: "default" | "department";
+  surface?: "default" | "department" | "company";
 };
 
 function statusLabel(s: WorkflowRunStatusVm): string {
@@ -35,7 +35,7 @@ function workflowRunsForDisplay(work: WorkVm): WorkflowRunVm[] {
 
 export default function WorkBlock({ work, onAction, mode = "full", surface = "default" }: Props) {
   const showOpenExecution = mode === "full";
-  const deptWorkflows = surface === "department" && mode === "summary";
+  const deptWorkflows = (surface === "department" || surface === "company") && mode === "summary";
   const m = work.workflowMetrics;
   const runs = deptWorkflows ? workflowRunsForDisplay(work) : [];
 

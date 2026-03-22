@@ -105,7 +105,7 @@ export default function AdminV2Shell({
             style={workspaceContentAmbientStyle}
           >
             <WorkspaceAmbientLayer />
-            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
               {children}
             </div>
           </div>

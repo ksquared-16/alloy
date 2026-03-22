@@ -8,7 +8,7 @@ type Props = {
   model: ActionsVm;
   onAction: WorkspaceActionHandler;
   title?: string;
-  surface?: "default" | "department";
+  surface?: "default" | "department" | "company";
 };
 
 function actionButtonClass(a: PrimaryActionVm) {
@@ -75,7 +75,7 @@ function DepartmentSmartSuggestionsPanel({
 }
 
 export default function ActionsBlock({ model, onAction, title = "Actions", surface = "default" }: Props) {
-  if (surface === "department") {
+  if (surface === "department" || surface === "company") {
     const sys = model.systemActions;
     const quick = model.quickOperations;
     const smart = model.smartSuggestions;

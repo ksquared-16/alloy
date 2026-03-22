@@ -107,3 +107,67 @@ export const DEMO_INSURANCE_CONTEXT_CONFIG: ContextBlockConfig = {
     },
   ],
 };
+
+/** Home cleaning — org-level context (Command center · Context & support) */
+export const DEMO_COMPANY_CLEANING_CONTEXT_CONFIG: ContextBlockConfig = {
+  block: "context",
+  entity_type: "organization",
+  relationship_groups: [
+    {
+      key: "regions",
+      label: "Regions",
+      source: { relationship_type_keys: ["operating_region"], entity_type: "region" },
+      order: 1,
+      visibility: { levels: ["organization"] },
+      display: {
+        style: "list",
+        max_items: 6,
+        default_expanded: true,
+        preview_fields: ["name", "status"],
+      },
+      actions: ["open_record"],
+    },
+    {
+      key: "managers",
+      label: "Managers",
+      source: { relationship_type_keys: ["reports_to"], entity_type: "person" },
+      order: 2,
+      visibility: { levels: ["organization"] },
+      display: {
+        style: "compact_cards",
+        max_items: 5,
+        default_expanded: false,
+        preview_fields: ["name", "scope"],
+      },
+      actions: ["message", "open_record"],
+    },
+    {
+      key: "escalations",
+      label: "Open escalations",
+      source: { relationship_type_keys: ["escalation"], entity_type: "case" },
+      order: 3,
+      visibility: { levels: ["organization"] },
+      display: {
+        style: "list",
+        max_items: 4,
+        default_expanded: true,
+        preview_fields: ["title", "age"],
+      },
+      actions: ["open_record", "notify"],
+    },
+    {
+      key: "integrations",
+      label: "Active integrations",
+      source: { relationship_type_keys: ["integration"], entity_type: "integration" },
+      order: 4,
+      visibility: { levels: ["organization"] },
+      display: {
+        style: "list",
+        max_items: 5,
+        default_expanded: false,
+        preview_fields: ["name", "health"],
+      },
+      actions: ["open_record"],
+    },
+  ],
+};

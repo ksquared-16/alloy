@@ -15,14 +15,14 @@ type Props = {
   onAction: WorkspaceActionHandler;
   maxVisible?: number;
   /** Department workspace: elevated operational styling via workspace.css */
-  surface?: "default" | "department";
+  surface?: "default" | "department" | "company";
 };
 
 export default function SignalBlock({ signals, onAction, maxVisible = 5, surface = "default" }: Props) {
   const visible = signals.slice(0, maxVisible);
   if (visible.length === 0) return null;
 
-  if (surface === "department") {
+  if (surface === "department" || surface === "company") {
     return (
       <div className="adminv2-ws-signal-strip adminv2-ws-band-signals">
         <div className="adminv2-ws-signal-cards">
@@ -33,7 +33,7 @@ export default function SignalBlock({ signals, onAction, maxVisible = 5, surface
                   <div className="adminv2-ws-signal-label">Signal</div>
                   <div className="adminv2-ws-signal-title">{s.title}</div>
                   {s.description && <div className="adminv2-ws-signal-desc">{s.description}</div>}
-                  {s.aiExplanation?.trim() ? (
+                  {surface !== "company" && s.aiExplanation?.trim() ? (
                     <div className="adminv2-ws-signal-ai">{s.aiExplanation.trim()}</div>
                   ) : null}
                 </div>

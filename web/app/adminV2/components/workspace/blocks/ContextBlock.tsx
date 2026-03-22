@@ -8,7 +8,7 @@ import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 type Props = {
   model: ContextBlockVm;
   onAction: WorkspaceActionHandler;
-  surface?: "default" | "department";
+  surface?: "default" | "department" | "company";
 };
 
 function GroupSection({
@@ -18,11 +18,11 @@ function GroupSection({
 }: {
   group: ContextRelationshipGroupVm;
   onAction: WorkspaceActionHandler;
-  surface: "default" | "department";
+  surface: "default" | "department" | "company";
 }) {
   const [open, setOpen] = useState(group.expanded);
 
-  if (surface === "department") {
+  if (surface === "department" || surface === "company") {
     return (
       <div className="adminv2-ws-context-group">
         <button type="button" className="adminv2-ws-context-group-toggle" onClick={() => setOpen((o) => !o)}>
@@ -147,7 +147,7 @@ export default function ContextBlock({ model, onAction, surface = "default" }: P
     [model.groups]
   );
 
-  if (surface === "department") {
+  if (surface === "department" || surface === "company") {
     return (
       <div className="adminv2-ws-context-rail">
         {model.title && <div className="adminv2-ws-context-rail-kicker">{model.title}</div>}
@@ -156,7 +156,7 @@ export default function ContextBlock({ model, onAction, surface = "default" }: P
           <div className="adminv2-ws-context-rail-empty">No relationship groups in this view.</div>
         )}
         {sorted.map((g) => (
-          <GroupSection key={g.key} group={g} onAction={onAction} surface="department" />
+          <GroupSection key={g.key} group={g} onAction={onAction} surface={surface} />
         ))}
       </div>
     );
