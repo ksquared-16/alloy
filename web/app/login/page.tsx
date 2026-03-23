@@ -28,38 +28,52 @@ function LoginForm() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    console.log("🔥 CLICKED SIGN IN");
     setError(null);
     setIsLoading(true);
 
     try {
       const supabase = createClient();
+      console.log("🔥 BEFORE SUPABASE", {
+        clientEnv: {
+          urlOk: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+          keyOk: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+        },
+      });
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
+      console.log("🔥 AFTER SUPABASE", {
+        hasUser: Boolean(data?.user),
+        userId: data?.user?.id ?? null,
+        error: signInError
+          ? { message: signInError.message, name: signInError.name, status: signInError.status }
+          : null,
+      });
 
       if (signInError) {
         setError(signInError.message || "Failed to sign in. Please check your credentials.");
-        setIsLoading(false);
         return;
       }
 
       if (!data.user) {
         setError("Sign in failed. Please try again.");
-        setIsLoading(false);
         return;
       }
 
-      // Redirect to admin
       router.push("/admin");
       router.refresh();
-    } catch (err: any) {
-      // Handle configuration errors gracefully
-      if (err.message?.includes("NEXT_PUBLIC_SUPABASE")) {
+    } catch (err: unknown) {
+      console.error("🔥 SIGN IN CRASH", err);
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("NEXT_PUBLIC_SUPABASE")) {
         setError("Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
       } else {
-        setError(err.message || "An unexpected error occurred. Please try again.");
+        setError(message || "An unexpected error occurred. Please try again.");
       }
+    } finally {
+      console.log("🔥 SIGN IN FINALLY");
       setIsLoading(false);
     }
   };
