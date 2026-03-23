@@ -32,6 +32,12 @@ import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from 
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
+import {
+    computeJobPaymentSummary,
+    effectivePaymentRowStatusKey,
+    jobPaymentStatusKeyLabel,
+    type JobPaymentSummary,
+} from "@/lib/admin/jobPaymentSummary";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -544,11 +550,22 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (drawer.type === "schedules" && drawer.id === "new") setScheduleCreateForm({ start_at: "", end_at: "", timezone: "" });
     }, [drawer.type, drawer.id]);
-    const [jobPayments, setJobPayments] = useState<{ id: string; created_at: string; amount_cents: number; provider_payment_id: string | null; payment_status_id: string; payment_statuses: { key: string } | null }[]>([]);
+    type JobPaymentRowUi = {
+        id: string;
+        created_at: string;
+        amount_cents: number;
+        paid_at?: string | null;
+        provider_payment_id: string | null;
+        payment_status_id: string | null;
+        payment_statuses: { key: string; label?: string | null } | null;
+    };
+    const [jobPayments, setJobPayments] = useState<JobPaymentRowUi[]>([]);
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
+    const [jobPaymentSummaryFromApi, setJobPaymentSummaryFromApi] = useState<JobPaymentSummary | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
+    const [collectPaymentContextRefresh, setCollectPaymentContextRefresh] = useState(0);
     type JobPayoutSchedule = { schedule_id: string; assigned_vendor_id: string | null; status_key: string | null; scheduled_at: string | null; completed_at: string | null; occurrence_number: number | null; payout_percent: number | null; price_cents?: number; payout_cents?: number | null; alloy_fee_cents?: number | null };
     type JobPayoutResponse = {
         policy: { mode: string; type?: string; basis?: string | null; completed_status_key?: string | null; value?: number | null; tiers?: unknown[] | null };
@@ -1206,15 +1223,22 @@ export default function AdminEntityDrawer() {
         if (!paymentParentJobId) return;
         setJobPaymentsLoading(true);
         fetch(`/api/admin/jobs/${paymentParentJobId}/payments`)
-            .then((res) => (res.ok ? res.json() : { payments: [] }))
-            .then((json: { payments?: { id: string; created_at: string; amount_cents: number; provider_payment_id: string | null; payment_status_id: string; payment_statuses: { key: string } | null }[] }) => setJobPayments(json.payments ?? []))
-            .catch(() => setJobPayments([]))
+            .then((res) => (res.ok ? res.json() : { payments: [], payment_summary: undefined }))
+            .then((json: { payments?: JobPaymentRowUi[]; payment_summary?: JobPaymentSummary }) => {
+                setJobPayments(json.payments ?? []);
+                setJobPaymentSummaryFromApi(json.payment_summary ?? null);
+            })
+            .catch(() => {
+                setJobPayments([]);
+                setJobPaymentSummaryFromApi(null);
+            })
             .finally(() => setJobPaymentsLoading(false));
     }, [paymentParentJobId]);
 
     useEffect(() => {
         if (!paymentParentJobId) {
             setJobPayments([]);
+            setJobPaymentSummaryFromApi(null);
             return;
         }
         refetchJobPayments();
@@ -1254,6 +1278,19 @@ export default function AdminEntityDrawer() {
         const t = setTimeout(() => setPaymentToast(null), 8000);
         return () => clearTimeout(t);
     }, [paymentToast]);
+
+    /** Canonical job payment rollup for drawer + modal parent (API summary when present, else derive from rows). */
+    const jobPaymentSummaryEffective = useMemo(() => {
+        const d = data as { display_total_cents?: number | null } | undefined;
+        const origFromJob =
+            drawer.type === "jobs" &&
+            d?.display_total_cents != null &&
+            Number.isFinite(Number(d.display_total_cents))
+                ? Math.round(Number(d.display_total_cents))
+                : null;
+        const fallback = computeJobPaymentSummary(origFromJob, jobPayments);
+        return jobPaymentSummaryFromApi ?? fallback;
+    }, [jobPaymentSummaryFromApi, jobPayments, data, drawer.type]);
 
     useEffect(() => {
         if (drawer.type === "jobs" && data) {
@@ -2042,13 +2079,10 @@ export default function AdminEntityDrawer() {
             .catch(() => setJobPersonOptions([]));
     }, [drawer.type, formData.customer_id]);
 
-    useEffect(() => {
-        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
-            setJobPayout(null);
-            return;
-        }
+    const refetchJobPayout = useCallback(() => {
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return Promise.resolve();
         setJobPayoutLoading(true);
-        fetch(`/api/admin/jobs/${drawer.id}/payout`)
+        return fetch(`/api/admin/jobs/${drawer.id}/payout`)
             .then((r) => (r.ok ? r.json() : null))
             .then((j: JobPayoutResponse | null) => setJobPayout(j))
             .catch(() => setJobPayout(null))
@@ -2056,17 +2090,40 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
-        if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") {
-            setScheduleFinancials(null);
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") {
+            setJobPayout(null);
             return;
         }
+        void refetchJobPayout();
+    }, [drawer.type, drawer.id, refetchJobPayout]);
+
+    const refetchJobFinancials = useCallback(() => {
+        if (drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return Promise.resolve();
+        setJobFinancialsLoading(true);
+        return fetch(`/api/admin/financials/job/${drawer.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => setJobFinancials(j))
+            .catch(() => setJobFinancials(null))
+            .finally(() => setJobFinancialsLoading(false));
+    }, [drawer.type, drawer.id]);
+
+    const refetchScheduleFinancials = useCallback(() => {
+        if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") return Promise.resolve();
         setScheduleFinancialsLoading(true);
-        fetch(`/api/admin/financials/schedule/${drawer.id}`)
+        return fetch(`/api/admin/financials/schedule/${drawer.id}`)
             .then((r) => (r.ok ? r.json() : null))
             .then(setScheduleFinancials)
             .catch(() => setScheduleFinancials(null))
             .finally(() => setScheduleFinancialsLoading(false));
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") {
+            setScheduleFinancials(null);
+            return;
+        }
+        void refetchScheduleFinancials();
+    }, [drawer.type, drawer.id, refetchScheduleFinancials]);
 
     const refetchScheduleRelatedDocuments = useCallback(() => {
         if (drawer.type !== "schedules" || !drawer.id || drawer.id === "new") return;
@@ -2091,13 +2148,8 @@ export default function AdminEntityDrawer() {
             setJobFinancials(null);
             return;
         }
-        setJobFinancialsLoading(true);
-        fetch(`/api/admin/financials/job/${drawer.id}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then(setJobFinancials)
-            .catch(() => setJobFinancials(null))
-            .finally(() => setJobFinancialsLoading(false));
-    }, [drawer.type, drawer.id]);
+        void refetchJobFinancials();
+    }, [drawer.type, drawer.id, refetchJobFinancials]);
 
     useEffect(() => {
         if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
@@ -2832,29 +2884,33 @@ export default function AdminEntityDrawer() {
     const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
-    const paymentStatusLabel = jobPayments.some((p) => p.payment_statuses?.key === "paid")
-        ? "Paid"
-        : jobPayments.length === 0
-            ? "Unpaid"
-            : (jobPayments[0]?.payment_statuses?.key ?? "pending").charAt(0).toUpperCase() + (jobPayments[0]?.payment_statuses?.key ?? "pending").slice(1);
-    const paymentStatusVariant = jobPayments.some((p) => p.payment_statuses?.key === "paid") ? "success" : jobPayments[0]?.payment_statuses?.key === "failed" ? "warning" : "default";
+    const paymentStatusLabel = jobPaymentStatusKeyLabel(jobPaymentSummaryEffective.payment_status_key);
+    const paymentStatusVariant =
+        jobPaymentSummaryEffective.payment_status_key === "paid"
+            ? "success"
+            : jobPaymentSummaryEffective.payment_status_key === "failed"
+              ? "warning"
+              : "default";
+
+    const paidInFullKnown =
+        jobPaymentSummaryEffective.payment_status_key === "paid" &&
+        jobPaymentSummaryEffective.balance_due_cents !== null &&
+        jobPaymentSummaryEffective.balance_due_cents <= 0;
 
     const jobQuickActionsNode = isJobExistingView && drawer.id ? (
         <div className="flex flex-wrap gap-2 items-center">
-            {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
-                <button
-                    type="button"
-                    disabled={!canMutate}
-                    onClick={() => {
-                        setPaymentToast(null);
-                        openCollectPayment();
-                    }}
-                    className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                >
-                    Collect payment
-                </button>
-            )}
-            {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
+            <button
+                type="button"
+                disabled={!canMutate}
+                onClick={() => {
+                    setPaymentToast(null);
+                    openCollectPayment();
+                }}
+                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+            >
+                {paidInFullKnown ? "Add payment" : "Collect payment"}
+            </button>
+            {jobPaymentSummaryEffective.payment_status_key === "failed" && (
                 <button
                     type="button"
                     disabled={!canMutate}
@@ -2873,23 +2929,26 @@ export default function AdminEntityDrawer() {
     ) : null;
 
     const isScheduleExistingView = drawer.type === "schedules" && data && !(data as Record<string, unknown>)._create;
+    const schedulePaidInFullKnown =
+        jobPaymentSummaryEffective.payment_status_key === "paid" &&
+        jobPaymentSummaryEffective.balance_due_cents !== null &&
+        jobPaymentSummaryEffective.balance_due_cents <= 0;
+
     const schedulePaymentQuickActionsNode =
         isScheduleExistingView && paymentParentJobId ? (
             <div className="flex flex-wrap gap-2 items-center">
-                {!jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
-                    <button
-                        type="button"
-                        disabled={!canMutate}
-                        onClick={() => {
-                            setPaymentToast(null);
-                            openCollectPayment();
-                        }}
-                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                    >
-                        Collect payment
-                    </button>
-                )}
-                {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "failed" && (
+                <button
+                    type="button"
+                    disabled={!canMutate}
+                    onClick={() => {
+                        setPaymentToast(null);
+                        openCollectPayment();
+                    }}
+                    className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                >
+                    {schedulePaidInFullKnown ? "Add payment" : "Collect payment"}
+                </button>
+                {jobPaymentSummaryEffective.payment_status_key === "failed" && (
                     <button
                         type="button"
                         disabled={!canMutate}
@@ -2982,6 +3041,21 @@ export default function AdminEntityDrawer() {
         (hasFieldDefsForOverview ||
             (!!presentationConfig?.drawer?.overviewSections?.length &&
                 presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
+
+    const entityDrawerOverviewData = useMemo((): Record<string, unknown> => {
+        const base = (data ?? {}) as Record<string, unknown>;
+        if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
+            return base;
+        }
+        const summ = jobPaymentSummaryEffective;
+        return {
+            ...base,
+            _job_payment_original_cents: summ.original_amount_cents ?? undefined,
+            _job_payment_paid_cents: summ.paid_amount_cents,
+            _job_payment_balance_cents: summ.balance_due_cents ?? undefined,
+            _job_payment_status_label: jobPaymentStatusKeyLabel(summ.payment_status_key),
+        };
+    }, [drawer.type, data, jobPaymentSummaryEffective]);
 
     const overviewCustomContent = useMemo(() => {
         if (!data || !drawer.type) return {};
@@ -3728,7 +3802,8 @@ export default function AdminEntityDrawer() {
                     drawer.type === "jobs" &&
                     (fieldKey === "display_total_cents" ||
                         fieldKey === "_discount_amount_cents" ||
-                        f.field_key === "discount_amount");
+                        f.field_key === "discount_amount" ||
+                        fieldKey.startsWith("_job_payment_"));
                 return {
                     key: fieldKey,
                     label: f.label ?? f.field_key,
@@ -5198,11 +5273,44 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
                         <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Payments &amp; pricing</h3>
+                            <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-4">
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Job total (priced)</span>
+                                    <span className="font-medium">
+                                        {jobPaymentSummaryEffective.original_amount_cents != null
+                                            ? formatMoneyFromCents(jobPaymentSummaryEffective.original_amount_cents)
+                                            : "—"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Total paid</span>
+                                    <span className="font-medium">{formatMoneyFromCents(jobPaymentSummaryEffective.paid_amount_cents)}</span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Balance due</span>
+                                    <span className="font-medium">
+                                        {jobPaymentSummaryEffective.balance_due_cents != null
+                                            ? formatMoneyFromCents(jobPaymentSummaryEffective.balance_due_cents)
+                                            : "—"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Payment state</span>
+                                    <span className="font-medium">{jobPaymentStatusKeyLabel(jobPaymentSummaryEffective.payment_status_key)}</span>
+                                </div>
+                            </div>
                             {jobPayments.length > 0 ? (
                                 <ul className="space-y-2">
                                     {jobPayments.map((p) => (
                                         <li key={p.id} className="text-sm">
-                                            {formatMoneyFromCents(p.amount_cents)} — {(p.payment_statuses?.key ?? "pending")}
+                                            <span className="font-medium">{formatMoneyFromCents(p.amount_cents)}</span>
+                                            <span className="text-alloy-midnight/70"> — {p.payment_statuses?.key ?? effectivePaymentRowStatusKey(p)}</span>
+                                            {p.paid_at ? (
+                                                <span className="text-alloy-midnight/55"> · Paid {formatDateTime(p.paid_at)}</span>
+                                            ) : null}
+                                            {p.provider_payment_id ? (
+                                                <span className="block font-mono text-xs text-alloy-midnight/50 mt-0.5">{p.provider_payment_id}</span>
+                                            ) : null}
                                         </li>
                                     ))}
                                 </ul>
@@ -5216,15 +5324,41 @@ export default function AdminEntityDrawer() {
                             ) : (data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/60 mt-4">Could not load payout.</p> : null}
                             {!jobFinancialsLoading && jobFinancials && (
                                 <>
-                                    <h3 className={`${DRAWER_SECTION_HEADER_CLASS} mt-6`}>Ledger</h3>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
+                                    <h3 className={`${DRAWER_SECTION_HEADER_CLASS} mt-6`}>Ledger (general ledger)</h3>
+                                    <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
+                                        These totals sum <strong>gl_journal_lines</strong> for this job (mapped accounts only).{" "}
+                                        <strong>Posted journal entries</strong> counts <strong>schedule_completed</strong>{" "}
+                                        entries for this job&apos;s schedules — not individual Stripe charges.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80 mt-3">
                                         <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
                                         <span>Discounts (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_discount_debits)}</span>
                                         <span>Vendor payout (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payout_debits)}</span>
                                         <span>Cash (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_cash_debits)}</span>
                                         <span>Vendor payable (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payable_credits)}</span>
                                     </div>
-                                    <p className="text-xs text-alloy-midnight/60 mt-2">Posted journal entries: {jobFinancials.posted_entries_count}</p>
+                                    <p className="text-xs text-alloy-midnight/60 mt-2">Posted journal entries (schedule scope): {jobFinancials.posted_entries_count}</p>
+                                    {(() => {
+                                        const t = jobFinancials.totals;
+                                        const glSum =
+                                            (t.total_revenue_credits || 0) +
+                                            (t.total_discount_debits || 0) +
+                                            (t.total_vendor_payout_debits || 0) +
+                                            (t.total_cash_debits || 0) +
+                                            (t.total_vendor_payable_credits || 0);
+                                        const hasPaidMoney = jobPaymentSummaryEffective.paid_amount_cents > 0;
+                                        if (glSum === 0 && hasPaidMoney) {
+                                            return (
+                                                <p className="text-xs text-alloy-midnight/80 mt-2 max-w-xl rounded border border-amber-200/80 bg-amber-50/90 px-2.5 py-2 leading-relaxed">
+                                                    You have successful card charges above, but <strong>no GL lines on this job yet</strong>. That is expected
+                                                    here: payment success updates <strong>payments</strong> (and may set{" "}
+                                                    <span className="font-mono text-[11px]">posted_to_ledger_at</span> on the row); this screen does{" "}
+                                                    <strong>not</strong> yet show automatic cash/revenue journal entries from Stripe.
+                                                </p>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </>
                             )}
                         </div>
@@ -5625,7 +5759,7 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         <EntityDrawerOverview
                             entityType={presentationType}
-                            data={data as Record<string, unknown>}
+                            data={entityDrawerOverviewData}
                             customSectionContent={overviewCustomContent}
                             overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
                             selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
@@ -6501,18 +6635,23 @@ export default function AdminEntityDrawer() {
                                             <p className="text-sm text-alloy-midnight/60">Loading payments…</p>
                                         ) : (
                                             <>
+                                                <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-2 mb-2 text-xs space-y-1">
+                                                    <div className="flex justify-between gap-2">
+                                                        <span className="text-alloy-midnight/60">Total paid</span>
+                                                        <span>{formatMoneyFromCents(jobPaymentSummaryEffective.paid_amount_cents)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-2">
+                                                        <span className="text-alloy-midnight/60">Balance due</span>
+                                                        <span>
+                                                            {jobPaymentSummaryEffective.balance_due_cents != null
+                                                                ? formatMoneyFromCents(jobPaymentSummaryEffective.balance_due_cents)
+                                                                : "—"}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                                                    <span className="text-xs text-alloy-midnight/60">State:</span>
-                                                    <StatusBadge
-                                                        label={
-                                                            jobPayments.some((p) => p.payment_statuses?.key === "paid")
-                                                                ? "Paid"
-                                                                : jobPayments.length === 0
-                                                                    ? "Unpaid"
-                                                                    : (jobPayments[0]?.payment_statuses?.key ?? "pending").charAt(0).toUpperCase() + (jobPayments[0]?.payment_statuses?.key ?? "pending").slice(1)
-                                                        }
-                                                        variant={jobPayments.some((p) => p.payment_statuses?.key === "paid") ? "success" : jobPayments[0]?.payment_statuses?.key === "failed" ? "warning" : "default"}
-                                                    />
+                                                    <span className="text-xs text-alloy-midnight/60">Payment state:</span>
+                                                    <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
                                                 </div>
                                                 {jobPayments.length > 0 && (
                                                     <div className="mb-3">
@@ -6522,7 +6661,7 @@ export default function AdminEntityDrawer() {
                                                                 <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                                                     <span>{formatDateTime(p.created_at)}</span>
                                                                     <span>{formatMoneyFromCents(p.amount_cents)}</span>
-                                                                    <span className="text-alloy-midnight/70">{p.payment_statuses?.key ?? "—"}</span>
+                                                                    <span className="text-alloy-midnight/70">{p.payment_statuses?.key ?? effectivePaymentRowStatusKey(p)}</span>
                                                                     {p.provider_payment_id && <span className="font-mono text-xs text-alloy-midnight/60">{p.provider_payment_id}</span>}
                                                                 </li>
                                                             ))}
@@ -6530,12 +6669,12 @@ export default function AdminEntityDrawer() {
                                                     </div>
                                                 )}
                                                 <div className="flex flex-wrap gap-2">
-                                                    {jobPayments.length > 0 && jobPayments[0]?.payment_statuses?.key === "pending" && (
+                                                    {jobPayments.some((p) => effectivePaymentRowStatusKey(p) === "pending") && (
                                                         <button type="button" disabled title="Void Pending — coming soon" className="px-3 py-1.5 text-sm border border-[#e6e8ec] rounded-md text-alloy-midnight/50 cursor-not-allowed">
                                                             Void Pending
                                                         </button>
                                                     )}
-                                                    {jobPayments.some((p) => p.payment_statuses?.key === "paid") && (
+                                                    {jobPayments.some((p) => effectivePaymentRowStatusKey(p) === "paid") && (
                                                         <button type="button" disabled title="Refund — coming soon" className="px-3 py-1.5 text-sm border border-[#e6e8ec] rounded-md text-alloy-midnight/50 cursor-not-allowed">
                                                             Refund
                                                         </button>
@@ -7315,8 +7454,17 @@ export default function AdminEntityDrawer() {
                 onClose={() => setCollectPaymentOpen(false)}
                 context={collectPaymentContext}
                 disabled={!canMutate}
+                contextRefreshKey={collectPaymentContextRefresh}
                 onAfterRun={(jobId, scheduleId) => {
                     void refetchJobPayments();
+                    if (drawer.type === "jobs" && drawer.id === jobId) {
+                        void refetchJobFinancials();
+                        void refetchJobPayout();
+                    }
+                    if (drawer.type === "schedules" && paymentParentJobId === jobId) {
+                        void refetchScheduleFinancials();
+                    }
+                    setCollectPaymentContextRefresh((n) => n + 1);
                     refetch();
                     router.refresh();
                     dispatchAfterPaymentRun(jobId, scheduleId);

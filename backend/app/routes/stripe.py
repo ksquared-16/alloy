@@ -36,7 +36,6 @@ from ..supabase_client import (
     insert_payment,
     update_payment_by_id,
     get_payment_row_by_provider_payment_id,
-    find_payment_by_job_client_idempotency_key,
 )
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -66,7 +65,8 @@ async def admin_payments_run(
     Body: { "job_id": string, "amount_cents"?: number, "idempotency_key"?: string (client-generated per charge intent) }
     If amount_cents omitted, uses job.estimated_total_cents or job.recurring_total_cents.
     Multiple succeeded payments per job are allowed (partial pay). Duplicate Stripe PI ids are prevented by DB unique
-    index + webhook/admin updates keyed by provider_payment_id; client idempotency_key dedupes Stripe PI creation.
+    index + webhook/admin updates keyed by provider_payment_id. Stripe idempotency_key avoids duplicate PI creation
+    on network retries (same key → same PI); duplicate rows from retries are reconciled via provider_payment_id.
     All Stripe logic runs in backend; Next.js proxies to this route.
     """
     # Request-time Stripe init (same key as SetupIntent): set before any Stripe call
@@ -88,6 +88,7 @@ async def admin_payments_run(
         job_id[:12],
         bool(client_idempotency_key),
     )
+    print("admin_payments_run: code_path=partial_payments_v2")
 
     pending_uuid = get_payment_status_id_by_key("pending")
     paid_uuid = get_payment_status_id_by_key("paid")
@@ -125,21 +126,6 @@ async def admin_payments_run(
             detail="amount_cents required (or job must have estimated_total_cents/recurring_total_cents)",
         )
     amount_cents = int(amount_cents)
-
-    if client_idempotency_key:
-        prior = find_payment_by_job_client_idempotency_key(job_id, client_idempotency_key)
-        if prior and prior.get("payment_status_id") == paid_uuid:
-            pi_prior = prior.get("provider_payment_id")
-            if isinstance(pi_prior, str) and pi_prior.startswith("pi_"):
-                ac = prior.get("amount_cents")
-                return {
-                    "ok": True,
-                    "payment_id": prior.get("id"),
-                    "provider_payment_id": pi_prior,
-                    "status": "succeeded",
-                    "amount_cents": int(ac) if isinstance(ac, (int, float)) and int(ac) > 0 else amount_cents,
-                    "idempotent_replay": True,
-                }
 
     org_id = job.get("org_id")
     if not org_id and job.get("opportunity_id"):

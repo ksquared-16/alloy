@@ -123,6 +123,15 @@ export function getJobUnifiedPricingSection(): EntityDrawerSectionConfig {
           { key: "_discount_applied", label: "Discount applied", span: 1, renderHint: "primary_yes_no", editable: false },
         ],
       },
+      {
+        title: "Payment status (from payments)",
+        fields: [
+          { key: "_job_payment_original_cents", label: "Job total (priced)", span: 1, renderHint: "money", editable: false },
+          { key: "_job_payment_paid_cents", label: "Total paid", span: 1, renderHint: "money", editable: false },
+          { key: "_job_payment_balance_cents", label: "Balance due", span: 1, renderHint: "money", editable: false },
+          { key: "_job_payment_status_label", label: "Payment state", span: 1, renderHint: "text", editable: false },
+        ],
+      },
     ],
   };
 }

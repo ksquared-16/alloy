@@ -8,7 +8,7 @@ type Props = {
   model: ActionsVm;
   onAction: WorkspaceActionHandler;
   title?: string;
-  surface?: "default" | "department" | "company";
+  surface?: "default" | "department" | "company" | "work_unit" | "record";
 };
 
 function actionButtonClass(a: PrimaryActionVm) {
@@ -75,12 +75,17 @@ function DepartmentSmartSuggestionsPanel({
 }
 
 export default function ActionsBlock({ model, onAction, title = "Actions", surface = "default" }: Props) {
-  if (surface === "department" || surface === "company") {
+  if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     const sys = model.systemActions;
     const quick = model.quickOperations;
     const smart = model.smartSuggestions;
     const hasStructured =
       (sys?.length ?? 0) + (quick?.length ?? 0) + (smart?.length ?? 0) > 0;
+
+    const systemPanelTitle =
+      surface === "record" ? "Primary actions" : "System operations";
+    const quickPanelTitle =
+      surface === "record" ? "Operational actions" : "Quick operations";
 
     if (hasStructured) {
       const status = model.systemStatusLines?.filter((l) => l.trim()) ?? [];
@@ -97,7 +102,7 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
           ) : null}
           {sys && sys.length > 0 ? (
             <DepartmentActionPanel
-              sectionTitle="System operations"
+              sectionTitle={systemPanelTitle}
               actions={sys}
               onAction={onAction}
               listVariant="column"
@@ -105,7 +110,7 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
           ) : null}
           {quick && quick.length > 0 ? (
             <DepartmentActionPanel
-              sectionTitle="Quick operations"
+              sectionTitle={quickPanelTitle}
               actions={quick}
               onAction={onAction}
               listVariant="column"

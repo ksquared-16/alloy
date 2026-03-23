@@ -41,6 +41,9 @@ export default function AdminV2WorkspaceDemoPage() {
       // Demo: single department workspace — host maps keys to routes / tabs
       setTab("dept-cleaning");
     }
+    if (action.type === "queue.item.action" && action.actionId === "open_record") {
+      setTab("record");
+    }
   }, []);
 
   const companyCleaning = useMemo(
@@ -97,9 +100,9 @@ export default function AdminV2WorkspaceDemoPage() {
   const recordDemo = useMemo(
     () =>
       toRecordWorkspaceModel({
-        model: { ...demoRecordBase, context: { groups: [] } },
+        model: { ...demoRecordBase, contextRail: { groups: [] } },
         contextConfig: DEMO_CLEANING_CONTEXT_CONFIG,
-        contextRaw: { site_contacts: demoCleaningContextRaw.site_contacts ?? [] },
+        contextRaw: demoCleaningContextRaw,
       }),
     []
   );
@@ -109,8 +112,8 @@ export default function AdminV2WorkspaceDemoPage() {
     { id: "dept-cleaning", label: "Department · Cleaning" },
     { id: "dept-childcare", label: "Department · Childcare" },
     { id: "dept-insurance", label: "Department · Insurance broker" },
-    { id: "work-unit", label: "Work unit (scaffold)" },
-    { id: "record", label: "Record (scaffold)" },
+    { id: "work-unit", label: "Work unit · Unassigned jobs" },
+    { id: "record", label: "Record · Chen job" },
   ];
 
   return (

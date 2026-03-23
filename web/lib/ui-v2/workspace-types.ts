@@ -38,12 +38,41 @@ export type QueueItemQuickActionVm = {
   label: string;
 };
 
+/** Work-unit queue: wait row coloring (dot + text). */
+export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
+
 export type QueueItemVm = {
   id: string;
   title: string;
   subtitle?: string;
   aiPrioritization?: string;
   quickActions: QueueItemQuickActionVm[];
+  /**
+   * Work-unit lane: optional section heading — consecutive items with the same `groupLabel`
+   * render under one subheading (e.g. urgency bucket).
+   */
+  groupLabel?: string;
+  /**
+   * Work-unit lane: stable bucket id for grouping + counted headers (`queue.workUnitGroupHeaders`).
+   * Falls back to `groupLabel` when not set.
+   */
+  groupKey?: string;
+  /** Work-unit lane: revenue / job value (top-right, muted). Omit or empty → UI may show placeholder. */
+  valueLabel?: string;
+  /** Work-unit lane: complexity / requirement chips (bottom of row). */
+  tags?: string[];
+  /** Work-unit lane: wait row tone; defaults from `urgencyTier` when omitted. */
+  waitStatus?: QueueItemWaitStatusVm;
+  /** Work-unit lane: service window line */
+  windowLabel?: string;
+  /** Work-unit lane: route / cluster line */
+  routeLabel?: string;
+  /** Work-unit lane: duration fragment only — UI renders “{waitCompact} waiting”. */
+  waitCompact?: string;
+  /** Compact label chips / key-value rows for structured queue cards */
+  metaLines?: { label: string; value: string }[];
+  /** Visual emphasis for SLA / risk (queue card rail + badge tone) */
+  urgencyTier?: "critical" | "warning" | "standard";
 };
 
 /** Department throughput / attention lanes — grouped counts (not work-unit rows). */
@@ -76,6 +105,12 @@ export type QueueVm = {
   /** Optional one-line summary under the lane title */
   rollupSummary?: string;
   rollupExamples?: QueueRollupExampleVm[];
+  /** Work-unit lane: subtle sort / priority caption shown above the item list */
+  sortCaption?: string;
+  /**
+   * Work-unit lane: `groupKey` → header label (emoji optional). UI appends “ (count)”.
+   */
+  workUnitGroupHeaders?: Record<string, { emoji?: string; label: string }>;
 };
 
 export type WorkStepVm = {
@@ -223,24 +258,52 @@ export type CompanyWorkspaceModel = {
 export type WorkUnitWorkspaceModel = {
   workspaceLevel: "work_unit";
   workUnitId: string;
-  title: string;
-  stateLabel?: string;
+  /** Short breadcrumb / kicker above headline (e.g. department path into this lane) */
+  focusLabel?: string;
+  /** Stable lane key for analytics / routing */
+  laneKey?: string;
+  aiSummary?: AISummaryBandVm;
   signals: SignalVm[];
-  work: WorkVm;
-  contextPanel: ContextBlockVm;
-  actionsNearWork: ActionsVm;
-  aiAssistantPlaceholder?: string;
+  kpis: KPIVm[];
+  /** Dominant surface — structured queue of drillable records in this lane */
+  primaryQueue: QueueVm;
+  workSummary?: WorkVm | null;
+  actionsRail: ActionsVm;
+  contextRail: ContextBlockVm;
+};
+
+/** Record main column — grouped fields (not a single flat form). */
+export type RecordFieldRowVm = {
+  label: string;
+  value: string;
+};
+
+export type RecordSectionVm = {
+  id: string;
+  title: string;
+  rows: RecordFieldRowVm[];
+  /** Notes / activity / events — compact bullets under the section */
+  bullets?: string[];
 };
 
 export type RecordWorkspaceModel = {
   workspaceLevel: "record";
   recordId: string;
+  /** e.g. "Job" — short entity label */
   entityType: string;
+  /** Legacy display title; headline usually comes from `aiSummary` */
   title: string;
+  /** Breadcrumb into this record (e.g. lane / queue path) */
+  focusLabel?: string;
+  aiSummary?: AISummaryBandVm;
   signals: SignalVm[];
-  context: ContextBlockVm;
-  actions: ActionsVm;
-  linkedRecordsHint?: string;
+  /** Optional compact metrics — keep sparse at record level */
+  kpis?: KPIVm[];
+  /** Structured record body — overview, scheduling, customer, etc. */
+  recordSections: RecordSectionVm[];
+  workSummary?: WorkVm | null;
+  actionsRail: ActionsVm;
+  contextRail: ContextBlockVm;
 };
 
 /** Generic backend-ish payload adapters may accept (extensible). */

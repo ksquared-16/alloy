@@ -1,7 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import type { QueueVm } from "@/lib/ui-v2/workspace-types";
+import type { QueueItemVm, QueueItemWaitStatusVm, QueueVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 
 type Props = {
@@ -9,7 +10,7 @@ type Props = {
   onAction: WorkspaceActionHandler;
   /** Visual weight — primary queue is dominant in department view */
   variant?: "primary" | "secondary";
-  surface?: "default" | "department";
+  surface?: "default" | "department" | "work_unit";
 };
 
 function fireViewAll(queue: QueueVm, onAction: WorkspaceActionHandler) {
@@ -118,11 +119,219 @@ function DepartmentRollupLane({ queue, onAction, variant }: RollupLaneProps) {
   );
 }
 
+function workUnitSectionKey(item: QueueItemVm): string | undefined {
+  return item.groupKey?.trim() || item.groupLabel?.trim() || undefined;
+}
+
+function waitStatusFromTier(tier: QueueItemVm["urgencyTier"]): QueueItemWaitStatusVm {
+  switch (tier) {
+    case "critical":
+      return "breached";
+    case "warning":
+      return "approaching";
+    default:
+      return "safe";
+  }
+}
+
+/** Pull window / route / wait from legacy metaLines when structured fields absent */
+function workUnitRowFromMeta(item: QueueItemVm): {
+  windowLabel: string;
+  routeLabel: string;
+  waitCompact: string;
+} {
+  const rows = item.metaLines ?? [];
+  const by = (label: string) =>
+    rows.find((r) => r.label.toLowerCase() === label.toLowerCase())?.value?.trim() ?? "";
+  let waitRaw = by("Waiting") || by("Wait");
+  waitRaw = waitRaw.replace(/\s+waiting\s*$/i, "").trim();
+  return {
+    windowLabel: item.windowLabel?.trim() || by("Window"),
+    routeLabel: item.routeLabel?.trim() || by("Route"),
+    waitCompact: item.waitCompact?.trim() || waitRaw,
+  };
+}
+
+function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: WorkspaceActionHandler }) {
+  const groupCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of queue.items) {
+      const k = workUnitSectionKey(item);
+      if (!k) continue;
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [queue.items]);
+
+  let lastSectionKey: string | undefined;
+
+  return (
+    <section
+      className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-wu-queue-shell"
+      data-ws-queue-id={queue.id}
+      aria-label={queue.title}
+    >
+      <header className="adminv2-ws-queue-header">
+        <div className="adminv2-ws-queue-title-row">
+          <h3 className="adminv2-ws-queue-title">{queue.title}</h3>
+          {queue.countBadge != null ? (
+            <span className="adminv2-ws-wu-queue-count-badge" aria-label={`${queue.countBadge} in queue`}>
+              {queue.countBadge}
+            </span>
+          ) : null}
+        </div>
+      </header>
+      {queue.rollupSummary ? <p className="adminv2-ws-wu-queue-summary">{queue.rollupSummary}</p> : null}
+      {queue.sortCaption ? (
+        <p className="adminv2-ws-wu-queue-sort-caption" role="note">
+          {queue.sortCaption}
+        </p>
+      ) : null}
+      <ul className="adminv2-ws-queue-list adminv2-ws-wu-queue-list" role="list">
+        {queue.items.map((item) => {
+          const sectionKey = workUnitSectionKey(item);
+          const showGroup = sectionKey && sectionKey !== lastSectionKey;
+          if (sectionKey) lastSectionKey = sectionKey;
+
+          const tier = item.urgencyTier ?? "standard";
+          const metaDerived = workUnitRowFromMeta(item);
+          const windowLabel = metaDerived.windowLabel;
+          const routeLabel = metaDerived.routeLabel;
+          const waitCompact = metaDerived.waitCompact;
+          const waitStatus = item.waitStatus ?? waitStatusFromTier(item.urgencyTier);
+          const valueShown = item.valueLabel?.trim() ?? "";
+          const hasValue = Boolean(valueShown);
+          const tags = item.tags ?? [];
+
+          const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
+          const count = sectionKey ? (groupCounts.get(sectionKey) ?? 0) : 0;
+          const sectionTitle =
+            showGroup && sectionKey
+              ? headerCfg
+                ? `${headerCfg.emoji ? `${headerCfg.emoji} ` : ""}${headerCfg.label} (${count})`
+                : `${sectionKey} (${count})`
+              : null;
+
+          return (
+            <li key={item.id} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+              {sectionTitle ? (
+                <div
+                  className={`adminv2-ws-wu-queue-section-label${headerCfg ? " adminv2-ws-wu-queue-section-label--rich" : ""}`}
+                  role="presentation"
+                >
+                  {sectionTitle}
+                </div>
+              ) : null}
+              <div
+                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--tier-${tier}`}
+                data-ws-wu-urgency={tier}
+              >
+                <div className="adminv2-ws-wu-queue-card-top">
+                  <div className="adminv2-ws-wu-queue-card-titles">
+                    <div className="adminv2-ws-wu-queue-card-title">{item.title}</div>
+                  </div>
+                  <div className="adminv2-ws-wu-queue-card-top-right">
+                    {hasValue ? (
+                      <span className="adminv2-ws-wu-queue-value" aria-label="Job value">
+                        {valueShown}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="adminv2-ws-wu-queue-open-record"
+                      onClick={() =>
+                        onAction({
+                          type: "queue.item.action",
+                          queueId: queue.id,
+                          itemId: item.id,
+                          actionId: "open_record",
+                        })
+                      }
+                    >
+                      Open
+                    </button>
+                  </div>
+                </div>
+                {item.subtitle ? <div className="adminv2-ws-wu-queue-card-sub">{item.subtitle}</div> : null}
+                {(windowLabel || routeLabel) && (
+                  <div className="adminv2-ws-wu-queue-midline">
+                    <span className="adminv2-ws-wu-queue-midline-cell">
+                      {windowLabel ? (
+                        <>
+                          <span className="adminv2-ws-wu-queue-midline-k">Window</span>
+                          <span className="adminv2-ws-wu-queue-midline-v">{windowLabel}</span>
+                        </>
+                      ) : null}
+                    </span>
+                    <span className="adminv2-ws-wu-queue-midline-cell adminv2-ws-wu-queue-midline-cell--route">
+                      {routeLabel ? (
+                        <>
+                          <span className="adminv2-ws-wu-queue-midline-k">Route</span>
+                          <span className="adminv2-ws-wu-queue-midline-v">{routeLabel}</span>
+                        </>
+                      ) : null}
+                    </span>
+                  </div>
+                )}
+                {waitCompact ? (
+                  <div className="adminv2-ws-wu-queue-wait-row" data-ws-wu-wait={waitStatus}>
+                    <span className="adminv2-ws-wu-queue-wait-dot" aria-hidden />
+                    <span className="adminv2-ws-wu-queue-wait-text">
+                      <span className="adminv2-ws-wu-queue-wait-k">Waiting:</span>{" "}
+                      <span className={`adminv2-ws-wu-queue-wait-v adminv2-ws-wu-queue-wait-v--${waitStatus}`}>
+                        {waitCompact} waiting
+                      </span>
+                    </span>
+                  </div>
+                ) : null}
+                {tags.length > 0 ? (
+                  <div className="adminv2-ws-wu-queue-tags" aria-label="Job tags">
+                    {tags.map((t) => (
+                      <span key={`${item.id}-${t}`} className="adminv2-ws-wu-queue-tag">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {item.quickActions.length > 0 ? (
+                  <div className="adminv2-ws-wu-queue-actions">
+                    {item.quickActions.map((qa) => (
+                      <button
+                        key={qa.id}
+                        type="button"
+                        className="adminv2-ws-wu-queue-action-chip"
+                        onClick={() =>
+                          onAction({
+                            type: "queue.item.action",
+                            queueId: queue.id,
+                            itemId: item.id,
+                            actionId: qa.id,
+                          })
+                        }
+                      >
+                        {qa.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export default function QueueBlock({ queue, onAction, variant = "primary", surface = "default" }: Props) {
   const isPrimary = variant === "primary";
 
   if (surface === "department") {
     return <DepartmentRollupLane queue={queue} onAction={onAction} variant={variant} />;
+  }
+
+  if (surface === "work_unit") {
+    return <WorkUnitQueueLane queue={queue} onAction={onAction} />;
   }
 
   return (

@@ -8,7 +8,7 @@ import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 type Props = {
   model: ContextBlockVm;
   onAction: WorkspaceActionHandler;
-  surface?: "default" | "department" | "company";
+  surface?: "default" | "department" | "company" | "work_unit" | "record";
 };
 
 function GroupSection({
@@ -18,11 +18,11 @@ function GroupSection({
 }: {
   group: ContextRelationshipGroupVm;
   onAction: WorkspaceActionHandler;
-  surface: "default" | "department" | "company";
+  surface: "default" | "department" | "company" | "work_unit" | "record";
 }) {
   const [open, setOpen] = useState(group.expanded);
 
-  if (surface === "department" || surface === "company") {
+  if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     return (
       <div className="adminv2-ws-context-group">
         <button type="button" className="adminv2-ws-context-group-toggle" onClick={() => setOpen((o) => !o)}>
@@ -147,7 +147,7 @@ export default function ContextBlock({ model, onAction, surface = "default" }: P
     [model.groups]
   );
 
-  if (surface === "department" || surface === "company") {
+  if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     return (
       <div className="adminv2-ws-context-rail">
         {model.title && <div className="adminv2-ws-context-rail-kicker">{model.title}</div>}

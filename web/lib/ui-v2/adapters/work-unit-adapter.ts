@@ -11,9 +11,9 @@ export type ToWorkUnitWorkspaceModelInput = {
 
 export function toWorkUnitWorkspaceModel(input: ToWorkUnitWorkspaceModelInput): WorkUnitWorkspaceModel {
   const { model, contextConfig, contextRaw, role } = input;
-  let contextPanel = model.contextPanel;
+  let contextRail = model.contextRail;
   if (contextConfig && contextRaw) {
-    contextPanel = normalizeContextRelationshipGroups(contextConfig, contextRaw, {
+    contextRail = normalizeContextRelationshipGroups(contextConfig, contextRaw, {
       level: "work_unit",
       role,
     });
@@ -21,7 +21,7 @@ export function toWorkUnitWorkspaceModel(input: ToWorkUnitWorkspaceModelInput): 
   return {
     workspaceLevel: "work_unit",
     ...model,
-    contextPanel,
+    contextRail,
   };
 }
 

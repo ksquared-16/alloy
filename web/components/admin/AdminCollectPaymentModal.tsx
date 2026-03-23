@@ -70,6 +70,8 @@ export function AdminCollectPaymentModal({
   disabled,
   onAfterRun,
   onPaymentOutcome,
+  /** Increment after a successful charge so the modal refetches payment-collect-context while still open. */
+  contextRefreshKey,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -77,6 +79,7 @@ export function AdminCollectPaymentModal({
   disabled?: boolean;
   onAfterRun: (jobId: string, scheduleId: string | null) => void;
   onPaymentOutcome?: (outcome: { type: "success" | "error"; message: string }) => void;
+  contextRefreshKey?: number;
 }) {
   const [collect, setCollect] = useState<CollectApiResponse | null>(null);
   const [ctxLoading, setCtxLoading] = useState(false);
@@ -156,7 +159,7 @@ export function AdminCollectPaymentModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, context?.jobId, context?.scheduleId]);
+  }, [isOpen, context?.jobId, context?.scheduleId, contextRefreshKey]);
 
   useEffect(() => {
     if (!isOpen || !context) return;

@@ -14,15 +14,15 @@ type Props = {
   signals: SignalVm[];
   onAction: WorkspaceActionHandler;
   maxVisible?: number;
-  /** Department workspace: elevated operational styling via workspace.css */
-  surface?: "default" | "department" | "company";
+  /** Department / company / work unit: elevated operational styling via workspace.css */
+  surface?: "default" | "department" | "company" | "work_unit" | "record";
 };
 
 export default function SignalBlock({ signals, onAction, maxVisible = 5, surface = "default" }: Props) {
   const visible = signals.slice(0, maxVisible);
   if (visible.length === 0) return null;
 
-  if (surface === "department" || surface === "company") {
+  if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     return (
       <div className="adminv2-ws-signal-strip adminv2-ws-band-signals">
         <div className="adminv2-ws-signal-cards">
@@ -32,8 +32,11 @@ export default function SignalBlock({ signals, onAction, maxVisible = 5, surface
                 <div className="adminv2-ws-signal-card-main">
                   <div className="adminv2-ws-signal-label">Signal</div>
                   <div className="adminv2-ws-signal-title">{s.title}</div>
-                  {s.description && <div className="adminv2-ws-signal-desc">{s.description}</div>}
-                  {surface !== "company" && s.aiExplanation?.trim() ? (
+                  {s.description && surface !== "work_unit" && surface !== "record" ? (
+                    <div className="adminv2-ws-signal-desc">{s.description}</div>
+                  ) : null}
+                  {(surface === "department" || surface === "work_unit" || surface === "record") &&
+                  s.aiExplanation?.trim() ? (
                     <div className="adminv2-ws-signal-ai">{s.aiExplanation.trim()}</div>
                   ) : null}
                 </div>

@@ -111,5 +111,12 @@ export async function GET(
             total_vendor_payable_credits,
         },
         posted_entries_count: postedScheduleIds.size,
+        /** Explains scope for admin UI; Stripe payments do not populate these lines in the current app. */
+        ledger_meta: {
+            journal_lines_filter: "gl_journal_lines.org_id + job_id",
+            posted_entries_scope: "gl_journal_entries where source_type = schedule_completed and source_id in this job's schedule ids",
+            stripe_payments_note:
+                "Successful admin/Stripe payments update public.payments; they are not summed here unless matching GL lines exist.",
+        },
     });
 }

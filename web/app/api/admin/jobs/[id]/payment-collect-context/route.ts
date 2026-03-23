@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
+import { sumPaidAmountCents, type PaymentRowLike } from "@/lib/admin/jobPaymentSummary";
+import { fetchPaymentStatusKeyByIdMap } from "@/lib/admin/resolvePaymentStatusKeys";
 
 function formatCardBrand(brand: string | null | undefined): string {
     if (!brand || !String(brand).trim()) return "Card";
@@ -51,15 +53,37 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const j = job as JobPriceInput & { id: string; customer_id: string | null };
     const jobOriginalCents = computeJobDisplayTotalCents(j);
 
-    const { data: payRows } = await supabase.from("payments").select("amount_cents, paid_at").eq("job_id", jobId);
+    const { data: payRows } = await supabase
+        .from("payments")
+        .select("amount_cents, paid_at, status_key, payment_status_id")
+        .eq("job_id", jobId);
 
-    let paidCents = 0;
-    for (const p of payRows ?? []) {
-        const row = p as { amount_cents?: number; paid_at?: string | null };
-        if (row.paid_at != null && row.paid_at !== "" && typeof row.amount_cents === "number" && Number.isFinite(row.amount_cents)) {
-            paidCents += Math.max(0, Math.round(row.amount_cents));
-        }
-    }
+    const payStatusMap = await fetchPaymentStatusKeyByIdMap(
+        supabase,
+        (payRows ?? []).map((p) => (p as { payment_status_id?: string | null }).payment_status_id)
+    );
+    const rowsForSum: PaymentRowLike[] = (payRows ?? []).map((p) => {
+        const raw = p as {
+            amount_cents?: number;
+            paid_at?: string | null;
+            status_key?: string | null;
+            payment_status_id?: string | null;
+        };
+        const col =
+            raw.status_key != null && String(raw.status_key).trim() !== ""
+                ? String(raw.status_key).trim().toLowerCase()
+                : null;
+        const fk = raw.payment_status_id ? payStatusMap.get(raw.payment_status_id) : undefined;
+        const resolved = col ?? fk ?? null;
+        return {
+            amount_cents: raw.amount_cents,
+            paid_at: raw.paid_at ?? null,
+            status_key: resolved,
+            payment_statuses: resolved ? { key: resolved } : null,
+        };
+    });
+
+    const paidCents = sumPaidAmountCents(rowsForSum);
 
     const jobOriginalSafe = jobOriginalCents != null && jobOriginalCents > 0 ? jobOriginalCents : null;
     const basisForBalance = jobOriginalSafe ?? 0;

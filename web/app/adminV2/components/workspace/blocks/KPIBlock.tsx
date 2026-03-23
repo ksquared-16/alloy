@@ -7,7 +7,7 @@ type Props = {
   kpis: KPIVm[];
   /** Spec: 4–6 in top band max */
   maxVisible?: number;
-  surface?: "default" | "department" | "company";
+  surface?: "default" | "department" | "company" | "work_unit" | "record";
 };
 
 const KPI_DEPT_PER_RAIL = 3;
@@ -50,7 +50,7 @@ export default function KPIBlock({ kpis, maxVisible = 6, surface = "default" }: 
   const items = kpis.slice(0, maxVisible);
   if (items.length === 0) return null;
 
-  if (surface === "department" || surface === "company") {
+  if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     const business = items.filter((k) => (k.lane ?? "business") === "business").slice(0, KPI_DEPT_PER_RAIL);
     const ai = items.filter((k) => k.lane === "ai").slice(0, KPI_DEPT_PER_RAIL);
 

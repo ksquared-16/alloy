@@ -11,9 +11,9 @@ export type ToRecordWorkspaceModelInput = {
 
 export function toRecordWorkspaceModel(input: ToRecordWorkspaceModelInput): RecordWorkspaceModel {
   const { model, contextConfig, contextRaw, role } = input;
-  let context = model.context;
+  let contextRail = model.contextRail;
   if (contextConfig && contextRaw) {
-    context = normalizeContextRelationshipGroups(contextConfig, contextRaw, {
+    contextRail = normalizeContextRelationshipGroups(contextConfig, contextRaw, {
       level: "record",
       role,
     });
@@ -21,7 +21,7 @@ export function toRecordWorkspaceModel(input: ToRecordWorkspaceModelInput): Reco
   return {
     workspaceLevel: "record",
     ...model,
-    context,
+    contextRail,
   };
 }
 
