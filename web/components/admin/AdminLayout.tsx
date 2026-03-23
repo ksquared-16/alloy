@@ -205,13 +205,6 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels, loading: labelsLoading } = useEntityLabels();
 
-    if (verticalsLoading && labelsLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-admin-page p-6 text-alloy-midnight">
-                Loading context...
-            </div>
-        );
-    }
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
     const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
@@ -285,6 +278,15 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
         router.push("/login");
         router.refresh();
     };
+
+    const contextBooting = verticalsLoading && labelsLoading;
+    if (contextBooting) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-admin-page p-6 text-alloy-midnight">
+                Loading context...
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-admin-page flex flex-col">
