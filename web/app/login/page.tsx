@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent, Suspense } from "react";
+import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -13,75 +13,27 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const LOGIN_AUTO_ADMIN_ATTEMPTS_KEY = "alloy_login_auto_admin_attempts";
-
-  /** Temporary: redirect to /admin if client already has a user (guarded — avoids infinite loop when middleware has no cookies). */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const attempts = Number(sessionStorage.getItem(LOGIN_AUTO_ADMIN_ATTEMPTS_KEY) || "0");
-        if (attempts >= 2) {
-          console.warn(
-            "[login] skip auto-redirect: max attempts (middleware likely not seeing session cookies)"
-          );
-          return;
-        }
-        const supabase = createClient();
-        const { data } = await supabase.auth.getUser();
-        if (cancelled || !data?.user) return;
-        sessionStorage.setItem(LOGIN_AUTO_ADMIN_ATTEMPTS_KEY, String(attempts + 1));
-        console.log("[login] session present, auto-assign /admin", {
-          userId: data.user.id,
-          attempt: attempts + 1,
-        });
-        window.location.assign("/admin");
-      } catch (e) {
-        console.warn("[login] session probe failed", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Check for error query param
   const errorParam = searchParams?.get("error");
-  
-  // Only show config error if env vars are actually missing
+
   const hasClientEnvVars = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  
+
   const initialError =
     errorParam === "unauthorized"
       ? "You are not authorized to access the admin area."
       : errorParam === "config" && !hasClientEnvVars
-      ? "Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY."
-      : null;
+        ? "Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY."
+        : null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    console.log("🔥 CLICKED SIGN IN");
     setError(null);
     setIsLoading(true);
 
     try {
       const supabase = createClient();
-      console.log("🔥 BEFORE SUPABASE", {
-        clientEnv: {
-          urlOk: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
-          keyOk: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-        },
-      });
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
-      });
-      console.log("🔥 AFTER SUPABASE", {
-        hasUser: Boolean(data?.user),
-        userId: data?.user?.id ?? null,
-        error: signInError
-          ? { message: signInError.message, name: signInError.name, status: signInError.status }
-          : null,
       });
 
       if (signInError) {
@@ -94,22 +46,15 @@ function LoginForm() {
         return;
       }
 
-      try {
-        sessionStorage.removeItem(LOGIN_AUTO_ADMIN_ATTEMPTS_KEY);
-      } catch (_) {}
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log("[SupabaseBrowser DEBUG] after signIn getSession", {
+        hasSession: Boolean(sessionData.session),
+        userId: sessionData.session?.user?.id ?? null,
+      });
 
-      console.log('🔥 NAV immediately before router.push("/admin")');
       router.push("/admin");
-      console.log('🔥 NAV immediately after router.push("/admin") (sync return)');
-      console.log("🔥 NAV immediately before router.refresh()");
       router.refresh();
-      console.log("🔥 NAV immediately after router.refresh() (sync return)");
-      console.log(
-        "🔥 NAV hard assign /admin (replaces soft nav for middleware cookie sync — see staging notes)"
-      );
-      window.location.assign("/admin");
     } catch (err: unknown) {
-      console.error("🔥 SIGN IN CRASH", err);
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("NEXT_PUBLIC_SUPABASE")) {
         setError("Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -117,7 +62,6 @@ function LoginForm() {
         setError(message || "An unexpected error occurred. Please try again.");
       }
     } finally {
-      console.log("🔥 SIGN IN FINALLY");
       setIsLoading(false);
     }
   };
@@ -208,4 +152,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
