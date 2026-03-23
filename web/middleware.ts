@@ -86,6 +86,9 @@ export async function middleware(request: NextRequest) {
 
   // No session → login. Role check (admin/ops) runs in admin layout (profiles / user_roles / app_users).
   if (!user) {
+    console.warn("[MIDDLEWARE /admin] redirect → /login: no user (cookies missing or session not readable on this request)", {
+      path: request.nextUrl.pathname,
+    });
     const res = NextResponse.redirect(new URL("/login", request.url));
     res.headers.set("x-alloy-admin-mw", "redirect:/login");
     return res;

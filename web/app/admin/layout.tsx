@@ -17,6 +17,10 @@ export default async function AdminLayoutWrapper({
     const auth = await getAdminAuth();
 
     if (!auth?.user?.id || !auth.role) {
+        console.warn("[admin/layout] redirect → /unauthorized: getAdminAuth missing user or role", {
+            hasUserId: Boolean(auth?.user?.id),
+            role: auth?.role ?? null,
+        });
         redirect("/unauthorized");
     }
 

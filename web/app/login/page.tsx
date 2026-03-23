@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, useEffect, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -12,6 +12,38 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const LOGIN_AUTO_ADMIN_ATTEMPTS_KEY = "alloy_login_auto_admin_attempts";
+
+  /** Temporary: redirect to /admin if client already has a user (guarded — avoids infinite loop when middleware has no cookies). */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const attempts = Number(sessionStorage.getItem(LOGIN_AUTO_ADMIN_ATTEMPTS_KEY) || "0");
+        if (attempts >= 2) {
+          console.warn(
+            "[login] skip auto-redirect: max attempts (middleware likely not seeing session cookies)"
+          );
+          return;
+        }
+        const supabase = createClient();
+        const { data } = await supabase.auth.getUser();
+        if (cancelled || !data?.user) return;
+        sessionStorage.setItem(LOGIN_AUTO_ADMIN_ATTEMPTS_KEY, String(attempts + 1));
+        console.log("[login] session present, auto-assign /admin", {
+          userId: data.user.id,
+          attempt: attempts + 1,
+        });
+        window.location.assign("/admin");
+      } catch (e) {
+        console.warn("[login] session probe failed", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Check for error query param
   const errorParam = searchParams?.get("error");
@@ -62,8 +94,20 @@ function LoginForm() {
         return;
       }
 
+      try {
+        sessionStorage.removeItem(LOGIN_AUTO_ADMIN_ATTEMPTS_KEY);
+      } catch (_) {}
+
+      console.log('🔥 NAV immediately before router.push("/admin")');
       router.push("/admin");
+      console.log('🔥 NAV immediately after router.push("/admin") (sync return)');
+      console.log("🔥 NAV immediately before router.refresh()");
       router.refresh();
+      console.log("🔥 NAV immediately after router.refresh() (sync return)");
+      console.log(
+        "🔥 NAV hard assign /admin (replaces soft nav for middleware cookie sync — see staging notes)"
+      );
+      window.location.assign("/admin");
     } catch (err: unknown) {
       console.error("🔥 SIGN IN CRASH", err);
       const message = err instanceof Error ? err.message : String(err);
