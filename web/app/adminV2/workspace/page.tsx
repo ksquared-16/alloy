@@ -24,7 +24,7 @@ import {
 } from "@/lib/ui-v2/demo/context-demo-config";
 import { demoCleaningCompanyModelBase, demoCleaningCompanyContextRaw } from "@/lib/ui-v2/demo/company-demos";
 import { demoCleaningWorkUnitBase } from "@/lib/ui-v2/demo/work-unit-demo";
-import { demoRecordBase } from "@/lib/ui-v2/demo/record-demo";
+import { demoRecordBase, demoRecordContextRaw } from "@/lib/ui-v2/demo/record-demo";
 
 type DemoTab = "company-cleaning" | "dept-cleaning" | "dept-childcare" | "dept-insurance" | "work-unit" | "record";
 
@@ -102,7 +102,7 @@ export default function AdminV2WorkspaceDemoPage() {
       toRecordWorkspaceModel({
         model: { ...demoRecordBase, contextRail: { groups: [] } },
         contextConfig: DEMO_CLEANING_CONTEXT_CONFIG,
-        contextRaw: demoCleaningContextRaw,
+        contextRaw: { ...demoCleaningContextRaw, ...demoRecordContextRaw },
       }),
     []
   );

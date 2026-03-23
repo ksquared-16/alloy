@@ -6,6 +6,48 @@ export const DEMO_CLEANING_CONTEXT_CONFIG: ContextBlockConfig = {
   entity_type: "job",
   relationship_groups: [
     {
+      key: "record_customer",
+      label: "Customer account",
+      source: { relationship_type_keys: ["customer_account"], entity_type: "account" },
+      order: -3,
+      visibility: { levels: ["record"] },
+      display: {
+        style: "list",
+        max_items: 2,
+        default_expanded: true,
+        preview_fields: ["name", "account_ref"],
+      },
+      actions: ["open_record", "message"],
+    },
+    {
+      key: "record_route",
+      label: "Route cluster",
+      source: { relationship_type_keys: ["route_cluster"], entity_type: "route" },
+      order: -2,
+      visibility: { levels: ["record"] },
+      display: {
+        style: "list",
+        max_items: 2,
+        default_expanded: true,
+        preview_fields: ["name", "coverage"],
+      },
+      actions: ["open_record"],
+    },
+    {
+      key: "record_documents",
+      label: "Billing & documents",
+      source: { relationship_type_keys: ["invoice", "document"], entity_type: "document" },
+      order: -1,
+      visibility: { levels: ["record"] },
+      display: {
+        style: "list",
+        max_items: 3,
+        default_expanded: true,
+        preview_fields: ["name", "status"],
+      },
+      actions: ["open_record"],
+    },
+    {
       key: "site_contacts",
       label: "Site contacts",
       source: { relationship_type_keys: ["site_contact", "property_manager"], entity_type: "person" },

@@ -2244,23 +2244,39 @@
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding-right: 2px;
+  padding-bottom: 4px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 22px;
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section {
   margin: 0;
-  padding: 0;
+  padding: 0 0 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--d-surface) 40%, transparent) 0%,
+    transparent 100%
+  );
+  border-radius: 0;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+  background: none;
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-title {
-  margin: 0 0 6px;
-  font-size: 9px;
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--d-pine) 12%, var(--d-border));
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--d-muted) 88%, var(--d-pine));
+  color: color-mix(in srgb, var(--d-pine) 72%, var(--d-muted));
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-rows {
@@ -2299,6 +2315,27 @@
   font-size: 10px;
   line-height: 1.35;
   color: var(--d-muted);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-field-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--d-brand) 55%, var(--d-pine));
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--d-brand) 35%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-field-link:hover {
+  color: var(--d-brand);
+  text-decoration-color: color-mix(in srgb, var(--d-brand) 70%, transparent);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary,
@@ -3938,16 +3975,155 @@
   min-height: 22px;
   height: 22px;
   font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  padding: 0 4px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0 5px;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
-  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
-  color: color-mix(in srgb, var(--d-pine) 78%, var(--d-brand));
+  border: 1px solid color-mix(in srgb, var(--d-pine) 26%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 92%, var(--d-surface));
+  color: var(--d-pine);
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card .adminv2-ws-signal-actions button:hover {
-  border-color: color-mix(in srgb, var(--d-pine) 20%, var(--d-border));
-  background: color-mix(in srgb, #ffffff 88%, var(--d-panel-quiet));
+  border-color: color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 86%, var(--d-panel-quiet));
+  color: color-mix(in srgb, var(--d-brand) 28%, var(--d-pine));
+}
+
+/* Record — top KPI strip: stronger values, breached / risk reads first */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-kpi-label {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  opacity: 0.95;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-kpi-value {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-dept-v2-kpi-measurement-strip
+  .adminv2-ws-kpi-cell--tone-risk
+  .adminv2-ws-kpi-value {
+  color: #8c3300;
+  text-shadow: 0 0 0.5px color-mix(in srgb, #bc4300 35%, transparent);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-dept-v2-kpi-measurement-strip
+  .adminv2-ws-kpi-cell--tone-risk
+  .adminv2-ws-kpi-label {
+  color: color-mix(in srgb, #8c3300 55%, var(--d-muted));
+}
+
+/* Record — decision anchor + secondary system lines */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor {
+  margin: 0;
+  padding: 10px 11px 11px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #bc4300 24%, var(--d-border));
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, #ffffff 94%, var(--d-surface)) 0%,
+    color-mix(in srgb, #bc4300 5%, var(--d-surface)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 1px 2px rgba(39, 63, 82, 0.05);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor-row + .adminv2-ws-record-decision-anchor-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor-k {
+  flex-shrink: 0;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 35%, var(--d-pine));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor-v {
+  font-weight: 700;
+  text-align: right;
+  color: var(--d-pine);
+  min-width: 0;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-record-decision-anchor-row--risk
+  .adminv2-ws-record-decision-anchor-v {
+  color: #8c3300;
+  font-weight: 800;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-command-status--meta {
+  padding: 7px 9px 8px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--d-border) 75%, transparent);
+  background: color-mix(in srgb, var(--d-surface) 55%, transparent);
+  box-shadow: none;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--d-muted) 25%, var(--d-pine));
+  line-height: 1.4;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-command-status--meta .adminv2-ws-dept-command-status-line + .adminv2-ws-dept-command-status-line {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top-color: color-mix(in srgb, var(--d-border) 40%, transparent);
+}
+
+/* Record — linked entities in context rail */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-context-item--entity .adminv2-ws-context-item-entity-hit {
+  display: block;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 28%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 91%, var(--d-surface));
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-context-item--entity .adminv2-ws-context-item-entity-hit:hover {
+  border-color: color-mix(in srgb, var(--d-brand) 48%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 86%, var(--d-panel-quiet));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-context-item-entity-hit .adminv2-ws-context-item-line {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--d-brand) 22%, var(--d-pine));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-context-item-entity-hit .adminv2-ws-context-item-fields {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--d-muted);
 }

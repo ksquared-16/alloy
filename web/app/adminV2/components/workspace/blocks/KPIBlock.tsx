@@ -27,7 +27,15 @@ function KpiCells({ items, minCells = KPI_DEPT_PER_RAIL }: { items: KPIVm[]; min
   return (
     <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--dept-embedded">
       {shown.map((k) => (
-        <div key={k.id} className="adminv2-ws-kpi-cell">
+        <div
+          key={k.id}
+          className={[
+            "adminv2-ws-kpi-cell",
+            k.tone && k.tone !== "neutral" ? `adminv2-ws-kpi-cell--tone-${k.tone}` : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <span className="adminv2-ws-kpi-label">{k.label}</span>
           <span className="adminv2-ws-kpi-value">
             {k.value}

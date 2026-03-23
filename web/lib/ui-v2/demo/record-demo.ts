@@ -1,4 +1,33 @@
 import type { RecordWorkspaceModel } from "../workspace-types";
+import type { ContextRelationshipRawData } from "../adapters/context-adapter";
+
+/** Record-tab context slice — merged with department demo raw on the workspace page */
+export const demoRecordContextRaw: ContextRelationshipRawData = {
+  record_customer: [
+    {
+      id: "cust-chen",
+      name: "Chen household",
+      account_ref: "C-ARC-7712",
+      linked_entity: true,
+    },
+  ],
+  record_route: [
+    {
+      id: "route-b7",
+      name: "East · B7",
+      coverage: "6 jobs · tight AM window",
+      linked_entity: true,
+    },
+  ],
+  record_documents: [
+    {
+      id: "inv-884",
+      name: "Invoice INV-884",
+      status: "Sent · Net 15",
+      linked_entity: true,
+    },
+  ],
+};
 
 /**
  * Home cleaning — job record drilled from Operations → Unassigned jobs (Chen residence).
@@ -27,19 +56,19 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
       id: "rec-s2",
       severity: "warning",
       title: "2-person team required",
-      actions: [{ id: "view_req", label: "Reqs" }],
+      actions: [{ id: "view_req", label: "Review" }],
     },
     {
       id: "rec-s3",
       severity: "warning",
       title: "Route fit low for auto-assign",
-      actions: [{ id: "route_help", label: "Route" }],
+      actions: [{ id: "route_help", label: "Fix route" }],
     },
   ],
   kpis: [
-    { id: "rk1", label: "Wait", value: "2h 14m", lane: "business" },
-    { id: "rk2", label: "SLA", value: "Breached", lane: "business" },
-    { id: "rk3", label: "Route fit", value: "0.58", lane: "ai" },
+    { id: "rk1", label: "Wait", value: "2h 14m", lane: "business", tone: "risk" },
+    { id: "rk2", label: "SLA", value: "Breached", lane: "business", tone: "risk" },
+    { id: "rk3", label: "Route fit", value: "0.58", lane: "ai", tone: "risk" },
     { id: "rk4", label: "Confidence", value: "61", unit: "%", lane: "ai" },
   ],
   recordSections: [
@@ -58,7 +87,7 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
       rows: [
         { label: "Window", value: "10:00–12:00 (customer)" },
         { label: "Assigned", value: "—" },
-        { label: "Route cluster", value: "East · B7" },
+        { label: "Route cluster", value: "East · B7", linkId: "route-b7" },
         { label: "Suggested pair", value: "Torres B4 loop (optional)" },
       ],
     },
@@ -66,7 +95,7 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
       id: "customer",
       title: "Customer / location",
       rows: [
-        { label: "Customer", value: "Chen household" },
+        { label: "Customer", value: "Chen household", linkId: "cust-chen" },
         { label: "Address", value: "1842 Magnolia Ln" },
         { label: "Access", value: "Gate code on file" },
         { label: "Contact", value: "SMS preferred · +1 ***-***-4401" },
@@ -77,6 +106,7 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
       title: "Financial / value",
       rows: [
         { label: "Job value", value: "$180" },
+        { label: "Invoice", value: "INV-884 · Net 15", linkId: "inv-884" },
         { label: "Billing", value: "Recurring monthly" },
         { label: "Add-ons", value: "None" },
       ],
@@ -119,6 +149,11 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
   },
   actionsRail: {
     primaries: [],
+    recordDecisionAnchor: {
+      status: "Unassigned",
+      risk: "High · SLA breach",
+      nextAction: "Assign cleaner",
+    },
     systemActions: [
       { id: "assign_cleaner", label: "Assign cleaner", variant: "primary" },
       { id: "reschedule", label: "Reschedule", variant: "secondary" },

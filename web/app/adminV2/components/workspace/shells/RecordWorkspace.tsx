@@ -126,7 +126,11 @@ export default function RecordWorkspace({ model, onAction }: Props) {
                 data-ws-record-id={model.recordId}
               >
                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                  <RecordBodyBlock sections={model.recordSections} />
+                  <RecordBodyBlock
+                    recordId={model.recordId}
+                    sections={model.recordSections}
+                    onAction={onAction}
+                  />
                 </div>
               </div>
               <div

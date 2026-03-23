@@ -89,9 +89,39 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
 
     if (hasStructured) {
       const status = model.systemStatusLines?.filter((l) => l.trim()) ?? [];
+      const anchor = surface === "record" ? model.recordDecisionAnchor : undefined;
+      const hasAnchor =
+        surface === "record" &&
+        anchor &&
+        Boolean(anchor.status?.trim() || anchor.risk?.trim() || anchor.nextAction?.trim());
+      const statusFirst = surface !== "record" && status.length > 0;
+      const statusMetaEnd = surface === "record" && status.length > 0;
+
       return (
         <div className="adminv2-ws-dept-command-actions-stack">
-          {status.length > 0 ? (
+          {hasAnchor && anchor ? (
+            <div className="adminv2-ws-record-decision-anchor" aria-label="Record state">
+              {anchor.status?.trim() ? (
+                <div className="adminv2-ws-record-decision-anchor-row">
+                  <span className="adminv2-ws-record-decision-anchor-k">Status</span>
+                  <span className="adminv2-ws-record-decision-anchor-v">{anchor.status.trim()}</span>
+                </div>
+              ) : null}
+              {anchor.risk?.trim() ? (
+                <div className="adminv2-ws-record-decision-anchor-row adminv2-ws-record-decision-anchor-row--risk">
+                  <span className="adminv2-ws-record-decision-anchor-k">Risk</span>
+                  <span className="adminv2-ws-record-decision-anchor-v">{anchor.risk.trim()}</span>
+                </div>
+              ) : null}
+              {anchor.nextAction?.trim() ? (
+                <div className="adminv2-ws-record-decision-anchor-row">
+                  <span className="adminv2-ws-record-decision-anchor-k">Next action</span>
+                  <span className="adminv2-ws-record-decision-anchor-v">{anchor.nextAction.trim()}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {statusFirst ? (
             <div className="adminv2-ws-dept-command-status" aria-label="System status">
               {status.map((line, i) => (
                 <div key={`${i}-${line.slice(0, 24)}`} className="adminv2-ws-dept-command-status-line">
@@ -134,6 +164,18 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
                   </button>
                 ))}
               </div>
+            </div>
+          ) : null}
+          {statusMetaEnd ? (
+            <div
+              className="adminv2-ws-dept-command-status adminv2-ws-dept-command-status--meta"
+              aria-label="Record metadata"
+            >
+              {status.map((line, i) => (
+                <div key={`${i}-${line.slice(0, 24)}`} className="adminv2-ws-dept-command-status-line">
+                  {line}
+                </div>
+              ))}
             </div>
           ) : null}
         </div>

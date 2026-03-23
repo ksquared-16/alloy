@@ -31,36 +31,68 @@ function GroupSection({
         </button>
         {open && (
           <ul className="adminv2-ws-context-group-body">
-            {group.items.map((item) => (
-              <li key={item.id} className="adminv2-ws-context-item">
-                <div className="adminv2-ws-context-item-line">{item.previewLine}</div>
-                {Object.keys(item.fields).length > 0 && (
-                  <div className="adminv2-ws-context-item-fields">
-                    {Object.entries(item.fields)
-                      .map(([k, v]) => `${k}: ${v}`)
-                      .join(" · ")}
-                  </div>
-                )}
-                <div className="adminv2-ws-context-item-actions">
-                  {item.quickActions.map((qa) => (
+            {group.items.map((item) => {
+              const entityLink = surface === "record" && item.linkedEntity;
+              const openEntity = () =>
+                onAction({
+                  type: "context.group.action",
+                  groupKey: group.key,
+                  actionId: "open_record",
+                  targetId: item.id,
+                });
+              return (
+                <li
+                  key={item.id}
+                  className={`adminv2-ws-context-item${entityLink ? " adminv2-ws-context-item--entity" : ""}`}
+                >
+                  {entityLink ? (
                     <button
-                      key={qa.id}
                       type="button"
-                      onClick={() =>
-                        onAction({
-                          type: "context.group.action",
-                          groupKey: group.key,
-                          actionId: qa.id,
-                          targetId: item.id,
-                        })
-                      }
+                      className="adminv2-ws-context-item-entity-hit"
+                      onClick={openEntity}
                     >
-                      {qa.label}
+                      <span className="adminv2-ws-context-item-line">{item.previewLine}</span>
+                      {Object.keys(item.fields).length > 0 ? (
+                        <span className="adminv2-ws-context-item-fields">
+                          {Object.entries(item.fields)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(" · ")}
+                        </span>
+                      ) : null}
                     </button>
-                  ))}
-                </div>
-              </li>
-            ))}
+                  ) : (
+                    <>
+                      <div className="adminv2-ws-context-item-line">{item.previewLine}</div>
+                      {Object.keys(item.fields).length > 0 && (
+                        <div className="adminv2-ws-context-item-fields">
+                          {Object.entries(item.fields)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(" · ")}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="adminv2-ws-context-item-actions">
+                    {item.quickActions.map((qa) => (
+                      <button
+                        key={qa.id}
+                        type="button"
+                        onClick={() =>
+                          onAction({
+                            type: "context.group.action",
+                            groupKey: group.key,
+                            actionId: qa.id,
+                            targetId: item.id,
+                          })
+                        }
+                      >
+                        {qa.label}
+                      </button>
+                    ))}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

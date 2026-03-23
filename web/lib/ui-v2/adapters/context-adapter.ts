@@ -48,11 +48,13 @@ function itemToVm(
       .filter(Boolean)
       .join(" · ") || String(row.title ?? row.name ?? id);
 
+  const linkedRaw = row.linked_entity ?? row.linkedEntity;
   return {
     id,
     previewLine,
     fields,
     quickActions: actionIds.map((aid) => ({ id: aid, label: formatActionLabel(aid) })),
+    linkedEntity: linkedRaw === true || linkedRaw === "true",
   };
 }
 

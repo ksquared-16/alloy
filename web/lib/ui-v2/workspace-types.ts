@@ -30,6 +30,8 @@ export type KPIVm = {
   aiSummary?: string;
   /** Department top band: dual rail with AdminV2 KPIBand (default: business) */
   lane?: "business" | "ai";
+  /** Optional emphasis for compact record metrics (risk / positive) */
+  tone?: "neutral" | "risk" | "positive";
 };
 
 /** Queue row quick actions without requiring drill-down */
@@ -168,6 +170,15 @@ export type ActionsVm = {
   smartSuggestions?: PrimaryActionVm[];
   /** Console-style status (e.g. automation / queue load). Not a narrative feed. */
   systemStatusLines?: string[];
+  /**
+   * Record command rail — compact decision anchor above primary actions (status / risk / next step).
+   * Rendered only when `surface === "record"` in ActionsBlock.
+   */
+  recordDecisionAnchor?: {
+    status?: string;
+    risk?: string;
+    nextAction?: string;
+  };
 };
 
 /** Normalized relationship group for ContextBlock (after adapter). */
@@ -176,6 +187,8 @@ export type ContextRelationshipItemVm = {
   previewLine: string;
   fields: Record<string, string>;
   quickActions: QueueItemQuickActionVm[];
+  /** When true, record surface shows this row as a primary drillable system entity */
+  linkedEntity?: boolean;
 };
 
 export type ContextRelationshipGroupVm = {
@@ -276,6 +289,8 @@ export type WorkUnitWorkspaceModel = {
 export type RecordFieldRowVm = {
   label: string;
   value: string;
+  /** Stable id for `record.body.link` when the value is a related system object */
+  linkId?: string;
 };
 
 export type RecordSectionVm = {

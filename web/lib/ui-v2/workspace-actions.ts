@@ -31,6 +31,15 @@ export type WorkspaceAction =
       payload?: Record<string, unknown>;
     }
   | {
+      /** Drill from record body field to related entity (host resolves linkId) */
+      type: "record.body.link";
+      recordId: string;
+      sectionId: string;
+      rowLabel: string;
+      linkId: string;
+      payload?: Record<string, unknown>;
+    }
+  | {
       type: "work.action";
       workId: string;
       actionId: string;
