@@ -280,10 +280,33 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
     };
 
     const contextBooting = verticalsLoading && labelsLoading;
+
+    useEffect(() => {
+        console.log("[AdminLayout DEBUG]", {
+            verticalsLoading,
+            labelsLoading,
+            contextBooting,
+            verticalsCount: verticals.length,
+            labelKeysCount: Object.keys(labels).length,
+        });
+    }, [verticalsLoading, labelsLoading, contextBooting, verticals.length, labels]);
+
     if (contextBooting) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-admin-page p-6 text-alloy-midnight">
-                Loading context...
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-admin-page p-6 text-alloy-midnight">
+                <div
+                    className="w-full max-w-md rounded border border-amber-500/80 bg-amber-50 px-4 py-3 font-mono text-xs text-amber-950"
+                    data-debug="admin-layout-loading"
+                >
+                    <div className="mb-1 font-semibold text-amber-900">AdminLayout loading debug (remove me)</div>
+                    <div>verticalsLoading: {String(verticalsLoading)}</div>
+                    <div>labelsLoading: {String(labelsLoading)}</div>
+                    <div>contextBooting: {String(contextBooting)}</div>
+                    <div className="mt-2 text-[11px] text-amber-800">
+                        verticals: {verticals.length} · label keys: {Object.keys(labels).length}
+                    </div>
+                </div>
+                <div>Loading context...</div>
             </div>
         );
     }
