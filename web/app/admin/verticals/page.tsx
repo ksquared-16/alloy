@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import VerticalsClient from "./VerticalsClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function VerticalsPage() {
   const supabase = createAdminClient();
 

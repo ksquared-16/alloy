@@ -1,5 +1,7 @@
 import IndustriesDetailClient from "./IndustriesDetailClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminSystemIndustryDetailPage({
     params,
 }: {

@@ -7,6 +7,8 @@ import {
 } from "@/lib/admin/entityLabelsServer";
 import AdminLayout from "@/components/admin/AdminLayout";
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminLayoutWrapper({
     children,
 }: {

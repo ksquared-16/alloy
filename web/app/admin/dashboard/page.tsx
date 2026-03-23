@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ORG_ID_FINANCIALS, getFinancialSnapshot } from "@/lib/financials";
 import DashboardClient, { type DashboardData } from "./DashboardClient";
 
+export const dynamic = 'force-dynamic';
+
 async function getDashboardData(): Promise<DashboardData> {
     const supabase = createAdminClient();
     const now = new Date().toISOString();

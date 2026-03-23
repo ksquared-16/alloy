@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import MessagingClient from "./MessagingClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminMessagingPage() {
     const supabase = createAdminClient();
 

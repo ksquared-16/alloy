@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import WorkflowsClient from "./WorkflowsClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminWorkflowsPage() {
     const supabase = createAdminClient();
     const { data: workflows, error } = await supabase

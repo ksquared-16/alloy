@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 import JobDetailClient from "./JobDetailClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function Page({
     params,
 }: {

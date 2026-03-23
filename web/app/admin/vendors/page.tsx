@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import VendorsClient from "./VendorsClient";
 
+export const dynamic = 'force-dynamic';
+
 type SearchParams = { status_key?: string };
 
 type VendorRow = {

@@ -5,6 +5,8 @@ import SubscriptionsClient from "./SubscriptionsClient";
 import { addWeeks, addMonths } from "date-fns";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminSubscriptionsPage() {
     const ctx = await getAdminContext();
     if (!ctx.ok) {

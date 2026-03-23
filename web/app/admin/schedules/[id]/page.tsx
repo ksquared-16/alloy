@@ -3,6 +3,8 @@ import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import ScheduleDetailClient from "./ScheduleDetailClient";
 
+export const dynamic = 'force-dynamic';
+
 export default async function Page({
     params,
 }: {

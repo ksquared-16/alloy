@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import OpportunitiesClient from "./OpportunitiesClient";
 
+export const dynamic = 'force-dynamic';
+
 type SearchParams = { status_key?: string };
 
 function quoteTotalDisplay(opp: {
