@@ -1,7 +1,7 @@
 /**
- * Admin portal auth: role-based access using public.user_profiles.role.
- * This is the single source of truth for admin access — no email allowlist.
- * V1 roles: admin (full access), ops (read-only). All other roles (e.g. customer, contractor) are denied.
+ * Admin portal auth: role-based access (admin / ops).
+ * Resolved from user_profiles, then user_roles, then app_users — no email allowlist.
+ * V1 roles: admin (full access), ops (read-only). All other roles are denied.
  */
 
 import { NextResponse } from "next/server";
@@ -18,27 +18,67 @@ export interface AdminAuthResult {
 }
 
 /**
- * Get current user and their admin role from user_profiles.
- * Returns null if not logged in, or no profile, or role not in (admin, ops).
+ * Get current user and their admin role.
+ * Resolution order: user_profiles → user_roles (admin/ops + org) → app_users.
+ * Returns null if not logged in or no allowed role is found.
  */
 export async function getAdminAuth(): Promise<AdminAuthResult | null> {
     const supabase = await createClient();
     const {
         data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user?.id) return null;
 
     const admin = createAdminClient();
-    const { data: profile, error } = await admin
+
+    const { data: profile } = await admin
         .from("user_profiles")
         .select("role")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-    if (error || !profile || !ALLOWED_ROLES.includes(profile.role as AdminRole)) {
-        return null;
+    let role: string | null = null;
+    const pr = profile && typeof (profile as { role?: unknown }).role === "string" ? (profile as { role: string }).role : null;
+    if (pr && ALLOWED_ROLES.includes(pr as AdminRole)) {
+        role = pr;
     }
-    return { user, role: profile.role as string };
+
+    if (!role) {
+        const { data: urRows } = await admin.from("user_roles").select("role, org_id").eq("user_id", user.id);
+        const rows = Array.isArray(urRows) ? urRows : [];
+        const pick = rows.find(
+            (r) =>
+                r &&
+                typeof (r as { role?: string }).role === "string" &&
+                ALLOWED_ROLES.includes((r as { role: string }).role as AdminRole) &&
+                typeof (r as { org_id?: string }).org_id === "string" &&
+                (r as { org_id: string }).org_id.length > 0
+        ) as { role: string } | undefined;
+        if (pick?.role) {
+            role = pick.role;
+        }
+    }
+
+    if (!role) {
+        const { data: au } = await admin.from("app_users").select("role").eq("id", user.id).maybeSingle();
+        const ar =
+            au && typeof (au as { role?: unknown }).role === "string" ? (au as { role: string }).role : null;
+        if (ar && ALLOWED_ROLES.includes(ar as AdminRole)) {
+            role = ar;
+        }
+    }
+
+    if (!role) {
+        const { data: au2 } = await admin.from("app_users").select("role").eq("auth_user_id", user.id).maybeSingle();
+        const ar2 =
+            au2 && typeof (au2 as { role?: unknown }).role === "string" ? (au2 as { role: string }).role : null;
+        if (ar2 && ALLOWED_ROLES.includes(ar2 as AdminRole)) {
+            role = ar2;
+        }
+    }
+
+    if (!role) return null;
+    return { user, role };
 }
 
 /**

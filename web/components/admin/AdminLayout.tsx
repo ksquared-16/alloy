@@ -204,6 +204,14 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
     const sidebarScrollRef = useRef<HTMLElement | null>(null);
     const { verticals, selectedVerticalId, setSelectedVerticalId, loading: verticalsLoading } = useAdminVertical();
     const { labels, loading: labelsLoading } = useEntityLabels();
+
+    if (verticalsLoading && labelsLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-admin-page p-6 text-alloy-midnight">
+                Loading context...
+            </div>
+        );
+    }
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
     const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
     const [profileOpen, setProfileOpen] = useState(false);
@@ -446,12 +454,16 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
-    const { initialEntityLabels, ...rest } = props;
+    const { initialEntityLabels, userEmail, role, children } = props;
+    const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
+    const safeRole = typeof role === "string" ? role : "";
     return (
-        <AdminAuthProvider userEmail={props.userEmail} role={props.role}>
+        <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
             <AdminVerticalProvider>
                 <EntityLabelsProvider initialLabels={initialEntityLabels}>
-                    <AdminLayoutInner {...rest} />
+                    <AdminLayoutInner userEmail={safeEmail} role={safeRole}>
+                        {children}
+                    </AdminLayoutInner>
                 </EntityLabelsProvider>
             </AdminVerticalProvider>
         </AdminAuthProvider>

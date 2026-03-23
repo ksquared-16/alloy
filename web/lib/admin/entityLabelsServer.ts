@@ -16,8 +16,25 @@ export function entityLabelsMapFromEffective(
 
 export async function getAdminOrgIdForUser(userId: string): Promise<string | null> {
     const supabase = createAdminClient();
-    const { data } = await supabase.from("user_roles").select("org_id").eq("user_id", userId).limit(1).maybeSingle();
-    return (data as { org_id?: string } | null)?.org_id ?? null;
+    const { data: ur } = await supabase
+        .from("user_roles")
+        .select("org_id")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+    const fromRoles = (ur as { org_id?: string | null } | null)?.org_id ?? null;
+    if (fromRoles) return fromRoles;
+
+    const { data: au } = await supabase.from("app_users").select("org_id").eq("id", userId).maybeSingle();
+    const fromAppUser = (au as { org_id?: string | null } | null)?.org_id ?? null;
+    if (fromAppUser) return fromAppUser;
+
+    const { data: auAuth } = await supabase
+        .from("app_users")
+        .select("org_id")
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+    return (auAuth as { org_id?: string | null } | null)?.org_id ?? null;
 }
 
 /** Server-only: hydrated label map for admin shell (no raw entity_type flash on first paint). */

@@ -26,8 +26,10 @@ export function AdminAuthProvider({
     role: string;
     children: ReactNode;
 }) {
-    const canMutate = role === "admin";
-    const value: AdminAuthContextValue = { userEmail, role, canMutate };
+    const safeEmail = typeof userEmail === "string" ? userEmail : "Unknown";
+    const safeRole = typeof role === "string" ? role : "";
+    const canMutate = safeRole === "admin";
+    const value: AdminAuthContextValue = { userEmail: safeEmail, role: safeRole, canMutate };
     return (
         <AdminAuthContext.Provider value={value}>
             {children}
