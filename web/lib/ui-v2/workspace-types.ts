@@ -179,6 +179,13 @@ export type ActionsVm = {
     risk?: string;
     nextAction?: string;
   };
+  /**
+   * Record command rail — medium-emphasis actions (outline / compact buttons).
+   * When set on `surface === "record"`, replaces flat `quickOperations` for that tier.
+   */
+  recordSecondaryActions?: PrimaryActionVm[];
+  /** Record command rail — text-style / low-emphasis actions */
+  recordTertiaryActions?: PrimaryActionVm[];
 };
 
 /** Normalized relationship group for ContextBlock (after adapter). */
@@ -285,20 +292,73 @@ export type WorkUnitWorkspaceModel = {
   contextRail: ContextBlockVm;
 };
 
-/** Record main column — grouped fields (not a single flat form). */
-export type RecordFieldRowVm = {
-  label: string;
-  value: string;
-  /** Stable id for `record.body.link` when the value is a related system object */
+/**
+ * One compact operational line in the record body (inline, scannable — no label/value grid).
+ */
+export type RecordSectionLineVm = {
+  text: string;
+  /** Visual weight: primary = ids, times, routes, names; muted = secondary context */
+  tone?: "default" | "primary" | "muted";
+  /** When set, entire line is a drillable link (`record.body.link`) */
   linkId?: string;
+  /** Compact uppercase pill before text (e.g. INVOICE, WORK ORDER) — document / artifact rows */
+  typeBadge?: string;
+  /**
+   * Subtle row semantics for record body typography (scheduling vs financial vs document vs tags).
+   * Does not change layout — CSS only.
+   */
+  rowKind?: "default" | "schedule" | "financial" | "document" | "tag";
 };
 
 export type RecordSectionVm = {
   id: string;
   title: string;
-  rows: RecordFieldRowVm[];
+  lines: RecordSectionLineVm[];
   /** Notes / activity / events — compact bullets under the section */
   bullets?: string[];
+};
+
+/** Small contextual action in record body side column (not command rail). */
+export type RecordInteractionChipVm = {
+  id: string;
+  label: string;
+};
+
+/** Customer / contact context — right column of record body (communication, not primary actions). */
+export type RecordContactContextVm = {
+  name: string;
+  address?: string;
+  preferredContact?: string;
+  lastContactAt?: string;
+  contactActions: RecordInteractionChipVm[];
+};
+
+/** Linked or adjacent system objects — right column, compact rows. */
+export type RecordRelatedObjectVm = {
+  id: string;
+  /** e.g. "Route cluster", "Invoice", "Account" */
+  kind: string;
+  preview: string;
+  linkId?: string;
+};
+
+export type RecordRelatedPanelVm = {
+  items: RecordRelatedObjectVm[];
+};
+
+/** Recent events — right column, compact timeline (newest first). */
+export type RecordActivityPanelVm = {
+  events: string[];
+};
+
+/** Assignment / people context — right column of record body. */
+export type RecordAssignmentContextVm = {
+  /** Shown when assigned; omit or empty for unassigned */
+  assignedLabel?: string;
+  /** e.g. "No cleaner assigned" when `assignedLabel` is empty */
+  emptyAssignedHint?: string;
+  suggestedLabel?: string;
+  assignmentActions: RecordInteractionChipVm[];
 };
 
 export type RecordWorkspaceModel = {
@@ -314,8 +374,19 @@ export type RecordWorkspaceModel = {
   signals: SignalVm[];
   /** Optional compact metrics — keep sparse at record level */
   kpis?: KPIVm[];
-  /** Structured record body — overview, scheduling, customer, etc. */
+  /** Record body left column — core ops sections + compact inline lines. */
   recordSections: RecordSectionVm[];
+  /** Optional right column — customer / contact */
+  recordContactContext?: RecordContactContextVm | null;
+  /** Optional right column — related / connected records */
+  recordRelatedContext?: RecordRelatedPanelVm | null;
+  /** Optional right column — recent activity (not duplicated in left `recordSections`) */
+  recordActivityContext?: RecordActivityPanelVm | null;
+  /**
+   * Optional assignment / people context (e.g. for adapters or alternate layouts).
+   * Default record UI merges assignment into the scheduling section in the left column.
+   */
+  recordAssignmentContext?: RecordAssignmentContextVm | null;
   workSummary?: WorkVm | null;
   actionsRail: ActionsVm;
   contextRail: ContextBlockVm;

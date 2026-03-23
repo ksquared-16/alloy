@@ -55,17 +55,16 @@ function formatFieldValue(
       }
       return formatMoney(value as number | string | null | undefined, key);
     }
-    case "status":
-      return (
-        <StatusBadge
-          label={
-            field.key === "_status_display"
-              ? String(value ?? "—")
-              : (getStatusLabel?.(String(value)) ?? String(value))
-          }
-          variant="default"
-        />
-      );
+    case "status": {
+      const s = value != null && String(value).trim() !== "" ? String(value).trim() : "";
+      const label =
+        field.key === "_status_display"
+          ? s || "—"
+          : field.key === "status_key" && record && record._status_display != null && s === String(record.status_key ?? "").trim()
+            ? String(record._status_display)
+            : (getStatusLabel?.(s) ?? s) || "—";
+      return <StatusBadge label={label} variant="default" />;
+    }
     case "link":
       if (field.linkTarget && record && onOpenDrawer) {
         const id = record[field.linkTarget.idField];
@@ -308,8 +307,8 @@ export default function EntityDrawerOverview({
         ? record._status_display
         : key === "status_key" && record._status_display != null
         ? record._status_display
-        : key === "assigned_vendor_id" && record._vendor_name != null
-          ? record._vendor_name
+        : key === "assigned_vendor_id" && (record._vendor_name != null || record._assigned_vendor_name != null)
+          ? String(record._vendor_name ?? record._assigned_vendor_name)
           : key === "pipeline_stage_id" && record._pipeline_stage_name != null
             ? record._pipeline_stage_name
             : key === "vertical_id" && record._vertical_name != null
@@ -324,9 +323,13 @@ export default function EntityDrawerOverview({
                       ? record._customer_name
                       : key === "opportunity_id" && record._opportunity_name != null
                         ? record._opportunity_name
-                        : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
-                          ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
-                          : undefined;
+                        : key === "job_id" && record._job_title != null
+                          ? String(record._job_title)
+                          : key === "customer_subscription_id" && record._customer_subscription_label != null
+                            ? String(record._customer_subscription_label)
+                            : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
+                              ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
+                              : undefined;
     const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
     const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
     const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;

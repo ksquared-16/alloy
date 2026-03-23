@@ -17,6 +17,7 @@ import {
     resolveStatusLabel,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import { formatFrequencyLabel } from "@/lib/adminFormatters";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "documents"] as const;
 
@@ -199,7 +200,16 @@ export async function GET(
                 out._vertical_slug = null;
             }
             const orgIdJob = (data as { org_id?: string }).org_id;
-            const statusKey = (data as { status_key?: string | null }).status_key;
+            let statusKey = (data as { status_key?: string | null }).status_key;
+            const jobStatusFk = (data as { job_status_id?: string | null }).job_status_id;
+            if ((!statusKey || !String(statusKey).trim()) && jobStatusFk) {
+                const { data: jst } = await supabase.from("job_statuses").select("key").eq("id", jobStatusFk).maybeSingle();
+                const k = (jst as { key?: string | null } | null)?.key;
+                if (k && String(k).trim()) {
+                    statusKey = String(k).trim();
+                    out.status_key = statusKey;
+                }
+            }
             out._status_display = orgIdJob ? await resolveStatusLabel(supabase, orgIdJob, "jobs", statusKey) : (typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null);
             const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
             out._discount_amount_cents = normalizeJobDiscountAmountToCents(
@@ -564,11 +574,61 @@ export async function GET(
             const titleParts = [jobTitle, vertName, timePart].filter(Boolean) as string[];
             out._schedule_display_title = titleParts.length > 0 ? titleParts.join(" · ") : "Schedule";
 
-            const schedStatusKey = (schedule as { status_key?: string | null }).status_key;
+            let schedStatusKey = (schedule as { status_key?: string | null }).status_key;
+            const schedStatusFk = (schedule as { schedule_status_id?: string | null }).schedule_status_id;
+            if ((!schedStatusKey || !String(schedStatusKey).trim()) && schedStatusFk) {
+                const { data: sst } = await supabase
+                    .from("schedule_statuses")
+                    .select("key, label")
+                    .eq("id", schedStatusFk)
+                    .maybeSingle();
+                const row = sst as { key?: string | null; label?: string | null } | null;
+                if (row?.key && String(row.key).trim()) {
+                    schedStatusKey = String(row.key).trim();
+                    out.status_key = schedStatusKey;
+                }
+                if (row?.label && String(row.label).trim()) {
+                    out._schedule_status_label = String(row.label).trim();
+                }
+            }
             const schedOrgId = (schedule as { org_id?: string }).org_id;
             out._status_display = schedOrgId
                 ? await resolveStatusLabel(supabase, schedOrgId, "schedules", schedStatusKey)
                 : (typeof schedStatusKey === "string" && schedStatusKey.trim() ? schedStatusKey.trim() : null);
+
+            const jt = jobRef?.title?.trim() || null;
+            out._job_title = jt;
+            const subId = (schedule as { customer_subscription_id?: string | null }).customer_subscription_id;
+            if (subId) {
+                const { data: subRow } = await supabase
+                    .from("customer_subscriptions")
+                    .select("id, service_type, service_key, cadence, interval")
+                    .eq("id", subId)
+                    .maybeSingle();
+                const sr = subRow as {
+                    service_type?: string | null;
+                    service_key?: string | null;
+                    cadence?: string | null;
+                    interval?: number | null;
+                } | null;
+                if (sr) {
+                    const svc = (sr.service_type ?? sr.service_key ?? "").trim() || "Subscription";
+                    const freq = formatFrequencyLabel(sr.cadence ?? "month", sr.interval ?? 1);
+                    out._customer_subscription_label = `${svc} · ${freq}`;
+                } else {
+                    out._customer_subscription_label = `Subscription ${subId.slice(0, 8)}…`;
+                }
+            } else {
+                out._customer_subscription_label = null;
+            }
+
+            const vStub = out._vendor as { name?: string; id?: string } | null;
+            const jvStub = out._job_assigned_vendor as { name?: string; id?: string } | null;
+            out._assigned_vendor_name = vStub?.name ?? jvStub?.name ?? null;
+            const assignVid = (assignment as { vendor_id?: string } | null)?.vendor_id ?? null;
+            if (!(out.assigned_vendor_id as string | null | undefined) && assignVid) {
+                out.assigned_vendor_id = assignVid;
+            }
 
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             return NextResponse.json(out);

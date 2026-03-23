@@ -6,6 +6,7 @@ Admin endpoint for running payments (PaymentIntent create + confirm) lives here 
 import hashlib
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Optional
@@ -230,6 +231,23 @@ async def admin_payments_run(
         ).hexdigest()[:64]
     pi_kwargs["idempotency_key"] = stripe_idempotency_key
 
+    pm_source = (
+        "explicit_new_or_saved_pm"
+        if explicit_payment_method
+        else ("customer_default_pm" if default_pm_id else "stripe_list_first_card")
+    )
+    logger.info(
+        "admin_payments_run: stripe_pi_create_start payment_id=%s job_id=%s amount_cents=%s pm_source=%s pm_id_prefix=%s stripe_idem_prefix=%s off_session=%s client_idem=%s",
+        (payment_id[:10] + "…") if payment_id else "",
+        (job_id[:12] + "…") if job_id else "",
+        amount_cents,
+        pm_source,
+        (payment_method_id[:10] + "…") if payment_method_id else "",
+        (stripe_idempotency_key[:20] + "…") if stripe_idempotency_key else "",
+        pi_kwargs.get("off_session"),
+        bool(client_idempotency_key),
+    )
+    t0 = time.perf_counter()
     try:
         payment_intent = stripe.PaymentIntent.create(**pi_kwargs)
     except stripe.error.StripeError as e:
@@ -241,6 +259,14 @@ async def admin_payments_run(
         except RuntimeError:
             logger.exception("admin_payments_run: Supabase update failed after Stripe error")
         raise HTTPException(status_code=500, detail=err_msg)
+
+    logger.info(
+        "admin_payments_run: stripe_pi_create_done ms=%.0f payment_id=%s pi_status=%s pi_id_prefix=%s",
+        (time.perf_counter() - t0) * 1000,
+        (payment_id[:10] + "…") if payment_id else "",
+        getattr(payment_intent, "status", None),
+        (payment_intent.id[:12] + "…") if getattr(payment_intent, "id", None) else "",
+    )
 
     new_payment_id = payment_id
     ledger_payment_id = payment_id

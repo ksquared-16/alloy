@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
-import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/admin/postScheduleCompletion";
+import {
+    postScheduleCompletion,
+    isPostScheduleCompletionError,
+    isPostScheduleCompletionSkipped,
+} from "@/lib/admin/postScheduleCompletion";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
@@ -116,10 +120,15 @@ export async function PATCH(
         const previousStatusKey = (schedule as { status_key?: string | null }).status_key;
 
         if (updates.status_key !== undefined) {
-            const sk = updates.status_key as string | null;
-            const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "schedules", sk);
-            if (!chk.ok) {
-                return NextResponse.json({ error: chk.message }, { status: 400 });
+            const norm = (x: string | null | undefined) =>
+                x == null || String(x).trim() === "" ? null : String(x).trim();
+            const newSk = norm(updates.status_key as string | null);
+            const prevSk = norm(previousStatusKey);
+            if (newSk !== prevSk) {
+                const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "schedules", updates.status_key as string | null);
+                if (!chk.ok) {
+                    return NextResponse.json({ error: chk.message }, { status: 400 });
+                }
             }
         }
 
@@ -162,8 +171,10 @@ export async function PATCH(
                 orgId: ctx.orgId,
                 scheduleId: id,
             });
-            if ("code" in postResult) {
-                const err = postResult as PostScheduleCompletionError;
+            if (isPostScheduleCompletionSkipped(postResult)) {
+                console.info("[ADMIN_PATCH_SCHEDULE] GL post skipped (zero amount)", { scheduleId: id });
+            } else if (isPostScheduleCompletionError(postResult)) {
+                const err = postResult;
                 if (err.code === "schedule_not_completed") {
                     return NextResponse.json(
                         { error: "Schedule status is not completed; cannot post GL" },

@@ -44,7 +44,9 @@ type JobRow = {
     assigned_vendor_id: string | null;
 };
 
-export type PostScheduleCompletionResult = {
+/** GL posting result when journal lines were written. */
+export type PostScheduleCompletionPosted = {
+    skipped?: false;
     entry_id: string;
     schedule_id: string;
     gross_cents: number;
@@ -55,12 +57,33 @@ export type PostScheduleCompletionResult = {
     mapping_keys_used: string[];
 };
 
+/** No journal lines: all amounts zero — constraint-safe to skip posting. */
+export type PostScheduleCompletionSkipped = {
+    skipped: true;
+    schedule_id: string;
+    reason: "zero_amount";
+};
+
+export type PostScheduleCompletionResult = PostScheduleCompletionPosted | PostScheduleCompletionSkipped;
+
 export type PostScheduleCompletionError =
     | { code: "schedule_not_found" }
     | { code: "schedule_not_completed"; status_key: string | null }
     | { code: "job_not_found" }
     | { code: "missing_mappings"; keys: string[] }
     | { code: "entry_unbalanced"; total_debits: number; total_credits: number };
+
+export function isPostScheduleCompletionError(
+    r: PostScheduleCompletionResult | PostScheduleCompletionError
+): r is PostScheduleCompletionError {
+    return "code" in r;
+}
+
+export function isPostScheduleCompletionSkipped(
+    r: PostScheduleCompletionResult | PostScheduleCompletionError
+): r is PostScheduleCompletionSkipped {
+    return !("code" in r) && (r as PostScheduleCompletionSkipped).skipped === true;
+}
 
 /**
  * Compute occurrence number for this schedule among completed schedules for the job (ordered by start_at, created_at).
@@ -215,6 +238,79 @@ export async function postScheduleCompletion(params: {
         : new Date().toISOString().split("T")[0];
     const description = `Schedule completed: ${scheduleId}`;
 
+    type LineRow = { entry_id: string; org_id: string; job_id: string | null; schedule_id: string; customer_id: string | null; vendor_id: string | null; line_no: number; account_id: string; debit_cents: number; credit_cents: number; description?: string };
+    const customerId = (j.customer_id ?? null) as string | null;
+    const vendorId = (s.assigned_vendor_id ?? null) ?? (j.assigned_vendor_id ?? null) ?? null;
+    const stampBase = { org_id: orgId, job_id: jobId, schedule_id: scheduleId, customer_id: customerId, vendor_id: vendorId };
+
+    const draftLines: Omit<LineRow, "entry_id">[] = [];
+
+    draftLines.push({
+        ...stampBase,
+        line_no: 1,
+        account_id: mappingByKey.get("asset_cash_clearing")!,
+        debit_cents: netCents,
+        credit_cents: 0,
+        description: "Cash clearing (net)",
+    });
+
+    draftLines.push({
+        ...stampBase,
+        line_no: 2,
+        account_id: mappingByKey.get("revenue_service")!,
+        debit_cents: 0,
+        credit_cents: grossCents,
+        description: "Service revenue",
+    });
+
+    if (effectiveDiscountCents > 0) {
+        draftLines.push({
+            ...stampBase,
+            line_no: 3,
+            account_id: mappingByKey.get("contra_discounts")!,
+            debit_cents: effectiveDiscountCents,
+            credit_cents: 0,
+            description: "Discount (contra-revenue)",
+        });
+    }
+
+    draftLines.push({
+        ...stampBase,
+        line_no: draftLines.length + 1,
+        account_id: mappingByKey.get("expense_vendor_payouts")!,
+        debit_cents: payoutCents,
+        credit_cents: 0,
+        description: "Vendor payout expense",
+    });
+
+    draftLines.push({
+        ...stampBase,
+        line_no: draftLines.length + 1,
+        account_id: mappingByKey.get("liability_vendor_payable")!,
+        debit_cents: 0,
+        credit_cents: payoutCents,
+        description: "Vendor payable",
+    });
+
+    const nonzeroLines = draftLines.filter((l) => l.debit_cents > 0 || l.credit_cents > 0);
+    if (nonzeroLines.length === 0) {
+        return { skipped: true, schedule_id: scheduleId, reason: "zero_amount" };
+    }
+
+    let sumDr = 0;
+    let sumCr = 0;
+    for (const l of nonzeroLines) {
+        sumDr += l.debit_cents;
+        sumCr += l.credit_cents;
+    }
+    if (sumDr !== sumCr) {
+        return {
+            code: "entry_unbalanced",
+            total_debits: sumDr,
+            total_credits: sumCr,
+        };
+    }
+
     const { data: existingEntry } = await supabase
         .from("gl_journal_entries")
         .select("id")
@@ -274,67 +370,16 @@ export async function postScheduleCompletion(params: {
         .eq("org_id", orgId)
         .eq("entry_id", entryId);
 
-    const customerId = (j.customer_id ?? null) as string | null;
-    const vendorId = scheduleVendorId ?? (j.assigned_vendor_id ?? null) ?? null;
-
-    type LineRow = { entry_id: string; org_id: string; job_id: string | null; schedule_id: string; customer_id: string | null; vendor_id: string | null; line_no: number; account_id: string; debit_cents: number; credit_cents: number; description?: string };
     const stamp = { entry_id: entryId, org_id: orgId, job_id: jobId, schedule_id: scheduleId, customer_id: customerId, vendor_id: vendorId };
-
-    const lines: LineRow[] = [];
-
-    // Line 1: DR asset_cash_clearing = net_cents
-    lines.push({
+    const linesWithNo: LineRow[] = nonzeroLines.map((l, i) => ({
         ...stamp,
-        line_no: 1,
-        account_id: mappingByKey.get("asset_cash_clearing")!,
-        debit_cents: netCents,
-        credit_cents: 0,
-        description: "Cash clearing (net)",
-    });
+        line_no: i + 1,
+        account_id: l.account_id,
+        debit_cents: l.debit_cents,
+        credit_cents: l.credit_cents,
+        description: l.description,
+    }));
 
-    // Line 2: CR revenue_service = gross_cents
-    lines.push({
-        ...stamp,
-        line_no: 2,
-        account_id: mappingByKey.get("revenue_service")!,
-        debit_cents: 0,
-        credit_cents: grossCents,
-        description: "Service revenue",
-    });
-
-    // Line 3: DR contra_discounts = effective_discount_cents (skip if 0)
-    if (effectiveDiscountCents > 0) {
-        lines.push({
-            ...stamp,
-            line_no: 3,
-            account_id: mappingByKey.get("contra_discounts")!,
-            debit_cents: effectiveDiscountCents,
-            credit_cents: 0,
-            description: "Discount (contra-revenue)",
-        });
-    }
-
-    // Line 4: DR expense_vendor_payouts = payout_cents
-    lines.push({
-        ...stamp,
-        line_no: lines.length + 1,
-        account_id: mappingByKey.get("expense_vendor_payouts")!,
-        debit_cents: payoutCents,
-        credit_cents: 0,
-        description: "Vendor payout expense",
-    });
-
-    // Line 5: CR liability_vendor_payable = payout_cents
-    lines.push({
-        ...stamp,
-        line_no: lines.length + 1,
-        account_id: mappingByKey.get("liability_vendor_payable")!,
-        debit_cents: 0,
-        credit_cents: payoutCents,
-        description: "Vendor payable",
-    });
-
-    const linesWithNo = lines.map((l, i) => ({ ...l, line_no: i + 1 }));
     const { error: linesErr } = await supabase.from("gl_journal_lines").insert(linesWithNo);
     if (linesErr) throw linesErr;
 

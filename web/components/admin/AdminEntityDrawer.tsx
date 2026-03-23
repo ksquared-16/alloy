@@ -9,7 +9,16 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
-import { formatMoneyFromCents, formatMoneyFromDollars, formatDate, formatDateTime, formatPhoneUS, formatPayoutPercent, personDisplayName } from "@/lib/adminFormatters";
+import {
+    formatMoneyFromCents,
+    formatMoneyFromDollars,
+    formatDate,
+    formatDateTime,
+    formatPhoneUS,
+    formatPayoutPercent,
+    personDisplayName,
+    formatScheduleDrawerHeaderTitle,
+} from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -2988,7 +2997,15 @@ export default function AdminEntityDrawer() {
                             : drawer.type === "schedules"
                                 ? (data as { _create?: boolean })._create
                                     ? `New ${scheduleSingular}`
-                                    : `${scheduleSingular}: ${String((data as { _schedule_display_title?: string })._schedule_display_title ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`
+                                    : (() => {
+                                          const compact = formatScheduleDrawerHeaderTitle(
+                                              (data as { start_at?: string }).start_at,
+                                              (data as { timezone?: string | null }).timezone
+                                          );
+                                          return compact.trim()
+                                              ? `${scheduleSingular}: ${compact}`
+                                              : `${scheduleSingular}: ${String((data as { _schedule_display_title?: string })._schedule_display_title ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`;
+                                      })()
                                 : drawer.type === "locations"
                                     ? (data as { _create?: boolean })._create
                                         ? "New Location"
@@ -3772,6 +3789,20 @@ export default function AdminEntityDrawer() {
                 }
                 if (fieldKey === "opportunity_id") {
                     return { renderHint: "link", linkTarget: { idField: "opportunity_id", entityType: "opportunities" } };
+                }
+                if (fieldKey === "assigned_vendor_id") {
+                    return { renderHint: "link", linkTarget: { idField: "assigned_vendor_id", entityType: "vendors" } };
+                }
+            }
+            if (drawer.type === "schedules") {
+                if (fieldKey === "job_id") {
+                    return { renderHint: "link", linkTarget: { idField: "job_id", entityType: "jobs" } };
+                }
+                if (fieldKey === "location_id") {
+                    return { renderHint: "link", linkTarget: { idField: "location_id", entityType: "locations" } };
+                }
+                if (fieldKey === "customer_subscription_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_subscription_id", entityType: "subscriptions" } };
                 }
                 if (fieldKey === "assigned_vendor_id") {
                     return { renderHint: "link", linkTarget: { idField: "assigned_vendor_id", entityType: "vendors" } };

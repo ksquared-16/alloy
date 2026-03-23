@@ -124,11 +124,18 @@ export async function GET(
     const _discount_amount_cents = normalizeJobDiscountAmountToCents(jPrice.discount_amount, grossBasis);
     const display_total_cents = computeJobDisplayTotalCents(jPrice);
 
-    const sk = j.status_key as string | null | undefined;
+    let sk = j.status_key as string | null | undefined;
+    const jobStatusFk = j.job_status_id as string | null | undefined;
+    if ((!sk || !String(sk).trim()) && jobStatusFk) {
+        const { data: jst } = await supabase.from("job_statuses").select("key").eq("id", jobStatusFk).maybeSingle();
+        const k = (jst as { key?: string | null } | null)?.key;
+        if (k && String(k).trim()) sk = String(k).trim();
+    }
     const _status_display = sk ? await resolveStatusLabel(supabase, ctx.orgId, "jobs", sk) : null;
 
     return NextResponse.json({
         ...j,
+        status_key: sk ?? (j.status_key as string | null) ?? null,
         _customer_name,
         _assigned_vendor_name,
         _primary_person_name,
@@ -158,6 +165,18 @@ export async function PATCH(
     try {
         const body = (await request.json()) as Record<string, unknown>;
         const supabase = createAdminClient();
+
+        const { data: existingJob, error: existingErr } = await supabase
+            .from("jobs")
+            .select("status_key, customer_id, assigned_vendor_id")
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (existingErr || !existingJob) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        const oldStatusKey = (existingJob as { status_key?: string | null }).status_key ?? null;
+
         const updates: Record<string, unknown> = {};
 
         const action = body.action as string | undefined;
@@ -185,11 +204,6 @@ export async function PATCH(
                     } catch (_) {
                         // log and continue
                     }
-                }
-                const { data: jobAfter } = await supabase.from("jobs").select("*").eq("id", id).eq("org_id", ctx.orgId).single();
-                if (jobAfter && Object.keys(updates).length === 0) {
-                    logAdminAudit({ entity: "jobs", id, changed_fields: ["action:" + action], actor_user_id: ctx.userId, role: ctx.role });
-                    return NextResponse.json(jobAfter);
                 }
             }
         }
@@ -270,24 +284,21 @@ export async function PATCH(
         }
 
         if (updates.status_key !== undefined) {
-            const sk = updates.status_key as string | null;
-            const check = await assertAllowedStatusKey(supabase, ctx.orgId, "jobs", sk);
-            if (!check.ok) {
-                return NextResponse.json({ error: check.message }, { status: 400 });
+            const norm = (x: string | null | undefined) =>
+                x == null || String(x).trim() === "" ? null : String(x).trim();
+            const newSk = norm(updates.status_key as string | null);
+            const prevSk = norm(oldStatusKey);
+            if (newSk !== prevSk) {
+                const check = await assertAllowedStatusKey(supabase, ctx.orgId, "jobs", updates.status_key as string | null);
+                if (!check.ok) {
+                    return NextResponse.json({ error: check.message }, { status: 400 });
+                }
             }
         }
 
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
-
-        const { data: existingJob } = await supabase
-            .from("jobs")
-            .select("status_key, customer_id, assigned_vendor_id")
-            .eq("id", id)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
-        const oldStatusKey = (existingJob as { status_key?: string | null } | null)?.status_key ?? null;
 
         const { data, error } = await supabase
             .from("jobs")

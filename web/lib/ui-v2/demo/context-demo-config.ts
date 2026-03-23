@@ -34,20 +34,6 @@ export const DEMO_CLEANING_CONTEXT_CONFIG: ContextBlockConfig = {
       actions: ["open_record"],
     },
     {
-      key: "record_documents",
-      label: "Billing & documents",
-      source: { relationship_type_keys: ["invoice", "document"], entity_type: "document" },
-      order: -1,
-      visibility: { levels: ["record"] },
-      display: {
-        style: "list",
-        max_items: 3,
-        default_expanded: true,
-        preview_fields: ["name", "status"],
-      },
-      actions: ["open_record"],
-    },
-    {
       key: "site_contacts",
       label: "Site contacts",
       source: { relationship_type_keys: ["site_contact", "property_manager"], entity_type: "person" },

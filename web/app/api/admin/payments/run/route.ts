@@ -29,6 +29,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "job_id is required" }, { status: 400 });
   }
 
+  const t0 = Date.now();
+  console.log("[PAYMENTS_RUN] start", {
+    jobId: jobId.slice(0, 12),
+    has_amount: typeof body.amount_cents === "number",
+    payment_target: typeof body.payment_target === "string" ? body.payment_target : undefined,
+    has_schedule: typeof body.schedule_id === "string",
+    use_new_card: body.use_new_card === true,
+    has_pm_id: typeof body.payment_method_id === "string",
+    has_client_idempotency: typeof body.idempotency_key === "string" && String(body.idempotency_key).trim().length > 0,
+  });
+
   const payload: Record<string, unknown> = { job_id: jobId };
   if (typeof body.amount_cents === "number") payload.amount_cents = body.amount_cents;
   if (typeof body.payment_target === "string" && body.payment_target.trim()) payload.payment_target = body.payment_target.trim();
@@ -59,7 +70,11 @@ export async function POST(request: NextRequest) {
   });
 
   const responseText = await res.text();
-  console.log("[PAYMENTS_RUN] backend response status:", res.status, "text (truncated):", responseText.slice(0, 500));
+  console.log("[PAYMENTS_RUN] backend response", {
+    ms: Date.now() - t0,
+    status: res.status,
+    textTruncated: responseText.slice(0, 500),
+  });
   const data = responseText ? (() => { try { return JSON.parse(responseText); } catch { return {}; } })() : {};
   return NextResponse.json(data, { status: res.status });
 }

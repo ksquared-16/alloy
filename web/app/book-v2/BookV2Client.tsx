@@ -49,6 +49,24 @@ interface DiscountData {
     discount_program_name?: string | null;
 }
 
+/**
+ * Pre-promo first-visit total (base clean + add-ons). Matches quote-refine `estimated_price` when present.
+ * Used for validate-promo, opportunity-discount, and confirm so discounts align with the line items the customer sees.
+ */
+function getFirstVisitGrossSubtotal(quote: QuoteResponse | null | undefined): number {
+    if (!quote) return 0;
+    const addonsSum =
+        (typeof quote.addons_total === "number" && !Number.isNaN(quote.addons_total) ? quote.addons_total : null) ??
+        (Array.isArray(quote.addons) ? quote.addons.reduce((s, a) => s + (a.price ?? 0), 0) : 0);
+    if (typeof quote.estimated_price === "number" && quote.estimated_price > 0) {
+        return quote.estimated_price;
+    }
+    if (typeof quote.first_clean_price === "number" && quote.first_clean_price > 0) {
+        return quote.first_clean_price + addonsSum;
+    }
+    return 0;
+}
+
 type BookingStep = "quote_start" | "refine_quote" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
 
 const QUOTE_STORAGE_KEYS = [
@@ -764,12 +782,7 @@ export default function BookV2Client() {
             return;
         }
 
-        const subtotal =
-            typeof quote.first_clean_price === "number" && quote.first_clean_price > 0
-                ? quote.first_clean_price
-                : typeof quote.estimated_price === "number" && quote.estimated_price > 0
-                    ? quote.estimated_price
-                    : 0;
+        const subtotal = getFirstVisitGrossSubtotal(quote);
         if (subtotal <= 0) return;
 
         if (prefillCheck.campaign !== "firstfree4x60") return;
@@ -1473,12 +1486,7 @@ export default function BookV2Client() {
         }
 
         try {
-            const quoteSubtotal =
-                (typeof quote.first_clean_price === "number" && quote.first_clean_price > 0)
-                    ? quote.first_clean_price
-                    : (typeof quote.estimated_price === "number" && quote.estimated_price > 0)
-                        ? quote.estimated_price
-                        : 0;
+            const quoteSubtotal = getFirstVisitGrossSubtotal(quote);
 
             if (quoteSubtotal === 0) {
                 setDiscountError("Quote price not available");
@@ -1646,13 +1654,8 @@ export default function BookV2Client() {
                     `[BOOK_V2_PERF] client phase=submit_preflight_ok duration_ms=${Math.round(performance.now() - perfSubmitT0)} booking_attempt_id=${attemptId}`
                 );
             }
-            // Get quote subtotal
-            const quoteSubtotal =
-                (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0)
-                    ? quote.first_clean_price
-                    : (typeof quote?.estimated_price === "number" && quote.estimated_price > 0)
-                        ? quote.estimated_price
-                        : 0;
+            // Get quote subtotal (first visit incl. add-ons — must match validate-promo / schedule price)
+            const quoteSubtotal = getFirstVisitGrossSubtotal(quote);
 
             // Get contact info from prefill
             const prefill = sessionStorage.getItem("alloy_booking_prefill") ||
@@ -2489,22 +2492,15 @@ export default function BookV2Client() {
                                         First Cleaning
                                     </p>
                                     {(() => {
-                                        const basePrice =
-                                            (typeof quote?.first_clean_price === "number" &&
-                                                quote.first_clean_price > 0
-                                                ? quote.first_clean_price
-                                                : typeof quote?.estimated_price === "number" &&
-                                                    quote.estimated_price > 0
-                                                    ? quote.estimated_price
-                                                    : null);
+                                        const grossFirstVisit = getFirstVisitGrossSubtotal(quote);
 
-                                        if (basePrice == null || basePrice <= 0) {
+                                        if (grossFirstVisit <= 0) {
                                             return (
                                                 <p className="text-sm text-alloy-midnight/70">Calculating…</p>
                                             );
                                         }
 
-                                        const displayPrice = discountData?.quote_total ?? basePrice;
+                                        const displayPrice = discountData?.quote_total ?? grossFirstVisit;
                                         const showDiscount = discountData && discountData.discount_amount > 0;
 
                                         return (
@@ -2512,7 +2508,7 @@ export default function BookV2Client() {
                                                 {showDiscount && (
                                                     <div className="mb-1">
                                                         <span className="text-sm text-alloy-midnight/60 line-through">
-                                                            ${basePrice.toFixed(2)}
+                                                            ${grossFirstVisit.toFixed(2)}
                                                         </span>
                                                         <span className="text-xs text-green-600 ml-2 font-semibold">
                                                             -${discountData.discount_amount.toFixed(2)}
@@ -2877,15 +2873,9 @@ export default function BookV2Client() {
                                 <>
                                     {/* Payment summary: this job total + scheduled date/time */}
                                     {(() => {
-                                        const basePrice =
-                                            (typeof quote?.first_clean_price === "number" && quote.first_clean_price > 0
-                                                ? quote.first_clean_price
-                                                : typeof quote?.estimated_price === "number" && quote.estimated_price > 0
-                                                    ? quote.estimated_price
-                                                    : null);
-                                        const firstVisitTotal = basePrice != null && basePrice > 0
-                                            ? (discountData?.quote_total ?? basePrice)
-                                            : null;
+                                        const grossFirstVisit = getFirstVisitGrossSubtotal(quote);
+                                        const firstVisitTotal =
+                                            grossFirstVisit > 0 ? (discountData?.quote_total ?? grossFirstVisit) : null;
                                         return (
                                             <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg border border-alloy-stone/20 space-y-2">
                                                 <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">

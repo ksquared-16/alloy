@@ -31,12 +31,21 @@ export type WorkspaceAction =
       payload?: Record<string, unknown>;
     }
   | {
-      /** Drill from record body field to related entity (host resolves linkId) */
+      /** Drill from record body line to related entity (host resolves linkId) */
       type: "record.body.link";
       recordId: string;
       sectionId: string;
-      rowLabel: string;
       linkId: string;
+      /** Optional snippet for analytics / logging */
+      linePreview?: string;
+      payload?: Record<string, unknown>;
+    }
+  | {
+      /** Record body side column — contextual chips (Call / Assign); host maps to comms / team UI */
+      type: "record.interaction";
+      recordId: string;
+      panel: "contact" | "assignment";
+      actionId: string;
       payload?: Record<string, unknown>;
     }
   | {

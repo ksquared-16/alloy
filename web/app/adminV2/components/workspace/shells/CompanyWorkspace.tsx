@@ -16,6 +16,7 @@ type Props = {
 const companyRootStyle: CSSProperties = {
   backgroundColor: "transparent",
   color: neutral.textPrimary,
+  ["--d-text-primary" as string]: neutral.textPrimary,
   ["--d-page-bg" as string]: neutral.background,
   ["--d-border" as string]: derived.border,
   ["--d-muted" as string]: derived.textSecondary,

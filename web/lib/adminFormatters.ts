@@ -147,3 +147,47 @@ export function personDisplayName(o: {
     const parts = [o.first_name, o.last_name].filter(Boolean).map((s) => String(s).trim());
     return parts.length ? parts.join(" ") : "—";
 }
+
+/**
+ * Schedule drawer title: `4/30/26 · 430p` / `4/30/26 · 8a` using schedule timezone when provided.
+ */
+export function formatScheduleDrawerHeaderTitle(iso: string | null | undefined, timeZone?: string | null): string {
+    if (iso == null || String(iso).trim() === "") return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const tz = timeZone && String(timeZone).trim() ? String(timeZone).trim() : undefined;
+    const dateParts = new Intl.DateTimeFormat("en-US", {
+        month: "numeric",
+        day: "numeric",
+        year: "2-digit",
+        timeZone: tz,
+    }).formatToParts(d);
+    const month = dateParts.find((p) => p.type === "month")?.value ?? "";
+    const day = dateParts.find((p) => p.type === "day")?.value ?? "";
+    const year = dateParts.find((p) => p.type === "year")?.value ?? "";
+    const dateStr = `${month}/${day}/${year}`;
+
+    const tp = new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "numeric",
+        hour12: true,
+        timeZone: tz,
+    }).formatToParts(d);
+    const hourRaw = tp.find((p) => p.type === "hour")?.value ?? "12";
+    const minRaw = tp.find((p) => p.type === "minute")?.value ?? "00";
+    const dayPeriod = (tp.find((p) => p.type === "dayPeriod")?.value ?? "am").toLowerCase();
+    const isPm = dayPeriod.startsWith("p");
+    let hour12 = parseInt(hourRaw, 10);
+    if (Number.isNaN(hour12)) hour12 = 12;
+    if (hour12 === 0) hour12 = 12;
+    const minNum = parseInt(minRaw, 10);
+    const suffix = isPm ? "p" : "a";
+    let timeCompact: string;
+    if (!Number.isNaN(minNum) && minNum === 0) {
+        timeCompact = `${hour12}${suffix}`;
+    } else {
+        const mm = Number.isNaN(minNum) ? "00" : String(minNum).padStart(2, "0");
+        timeCompact = `${hour12}${mm}${suffix}`;
+    }
+    return `${dateStr} · ${timeCompact}`;
+}

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { postScheduleCompletion, type PostScheduleCompletionError } from "@/lib/admin/postScheduleCompletion";
-
-function isPostError(result: { entry_id?: string; code?: string }): result is PostScheduleCompletionError {
-    return !("entry_id" in result && result.entry_id);
-}
+import {
+    postScheduleCompletion,
+    isPostScheduleCompletionError,
+    isPostScheduleCompletionSkipped,
+} from "@/lib/admin/postScheduleCompletion";
 
 /**
  * POST: Post GL journal entry for a completed schedule (idempotent).
@@ -37,7 +37,7 @@ export async function POST(
         scheduleId,
     });
 
-    if (isPostError(result)) {
+    if (isPostScheduleCompletionError(result)) {
         if (result.code === "schedule_not_found") {
             return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
         }
@@ -66,6 +66,15 @@ export async function POST(
                 { status: 500 }
             );
         }
+    }
+
+    if (isPostScheduleCompletionSkipped(result)) {
+        return NextResponse.json({
+            ok: true,
+            skipped: true,
+            reason: result.reason,
+            schedule_id: result.schedule_id,
+        });
     }
 
     return NextResponse.json(result);

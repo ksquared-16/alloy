@@ -64,6 +64,14 @@
   --ws-dept-operational-row-min-height: clamp(360px, 44vh, 620px);
 }
 
+/*
+ * Major workspace block rhythm (16px) — spacing lives on the follower only.
+ * Inside `.adminv2-ws-dept-v2-primary-column`, use the `> * + *` rule; this class is for manual use elsewhere.
+ */
+.adminv2-ws-section-spacing {
+  margin-top: var(--ws-dept-section-gap, 16px);
+}
+
 /* Centered column — not full-bleed canvas */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-contain,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-contain,
@@ -100,9 +108,40 @@
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-primary-column {
   display: flex;
   flex-direction: column;
-  gap: var(--ws-dept-section-gap);
+  gap: 0;
   min-width: 0;
   min-height: 0;
+}
+
+/* One 16px step between major sections — margin-top on followers only (no gap + margin stack) */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-primary-column > :first-child,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column > :first-child,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-primary-column > :first-child,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-primary-column > :first-child {
+  margin-top: 0;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-primary-column > * + *,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column > * + *,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-primary-column > * + *,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-primary-column > * + * {
+  margin-top: var(--ws-dept-section-gap);
+}
+
+/* Section blocks do not contribute bottom margin — only the next sibling’s margin-top defines rhythm */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-primary-column > *,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column > *,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-primary-column > *,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-primary-column > * {
+  margin-bottom: 0;
+}
+
+/* If `.adminv2-ws-section-spacing` is on the first block, do not double with other rules */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-primary-column > :first-child.adminv2-ws-section-spacing,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column > :first-child.adminv2-ws-section-spacing,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-primary-column > :first-child.adminv2-ws-section-spacing,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-primary-column > :first-child.adminv2-ws-section-spacing {
+  margin-top: 0;
 }
 
 /* Control deck — unified light surface: headline → signals → KPI measurement */
@@ -290,8 +329,8 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-briefing-trigger:hover,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-briefing-trigger:hover,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-briefing-trigger:hover {
-  border-color: color-mix(in srgb, var(--d-pine) 35%, var(--d-border));
-  color: var(--d-pine);
+  border-color: color-mix(in srgb, var(--d-brand) 38%, var(--d-border));
+  color: var(--d-brand);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-briefing-trigger-icon,
@@ -408,6 +447,7 @@
   font-size: 10px;
   font-weight: 700;
   line-height: 1.14;
+  color: var(--d-text-primary, inherit);
   margin-bottom: 1px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1278,7 +1318,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--d-muted) 88%, transparent);
+  color: color-mix(in srgb, var(--d-muted) 72%, var(--d-text-primary, #273f52));
   border-bottom: 1px solid color-mix(in srgb, var(--d-border) 75%, transparent);
   background: color-mix(in srgb, #ffffff 88%, var(--d-panel-quiet));
 }
@@ -1326,7 +1366,7 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-run-name,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-run-name {
   font-weight: 600;
-  color: var(--d-pine);
+  color: var(--d-text-primary, var(--d-pine));
   min-width: 0;
 }
 
@@ -1369,7 +1409,7 @@
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-run-timing {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-  color: var(--d-muted);
+  color: color-mix(in srgb, var(--d-muted) 78%, var(--d-text-primary, #273f52));
   min-width: 0;
 }
 
@@ -2230,7 +2270,7 @@
   padding-bottom: 4px;
 }
 
-/* Record workspace — main column body (sections + definition list) */
+/* Record workspace — body: core column ± interaction column */
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-root {
   flex: 1 1 auto;
   min-height: 0;
@@ -2238,48 +2278,154 @@
   flex-direction: column;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-scroll {
-  flex: 1 1 auto;
+/* Tighter chrome; height follows content — avoids empty vertical gap below body */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-root.adminv2-ws-dept-qsec {
+  padding: 4px 8px 3px;
+  flex: 0 1 auto;
   min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-right: 2px;
-  padding-bottom: 4px;
+}
+
+/*
+ * Record-only: remove “floating” dead space above Automation & workflows.
+ * Shared operational row min-height + default grid stretch grows the pine card while the qsec stays short;
+ * department/WU queues fill that space — record body does not, so we hug content like a compact panel.
+ */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-operational-row {
+  min-height: 0;
+  align-items: start;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-operational-row > .adminv2-ws-dept-v2-lane {
+  align-self: start;
+}
+
+/* Core (left) vs context (right) — intentional ~58/42 split, min width so right feels substantial */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.28fr) minmax(232px, 1fr);
+  gap: 7px;
+  min-height: 0;
+  flex: 0 1 auto;
+  align-items: start;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-split-main {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  padding-top: 0;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section {
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-split-aside {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-context-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
   margin: 0;
-  padding: 0 0 18px;
-  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--d-surface) 40%, transparent) 0%,
-    transparent 100%
-  );
-  border-radius: 0;
+  padding: 0;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section:last-child {
-  padding-bottom: 0;
-  border-bottom: none;
-  background: none;
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-panel {
+  margin: 0;
+  padding: 7px 9px 8px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--d-border) 78%, transparent);
+  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 1px 1px rgba(39, 63, 82, 0.035);
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-title {
-  margin: 0 0 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--d-pine) 12%, var(--d-border));
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-panel-title {
+  margin: 0 0 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 48%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-primary {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.32;
+  color: var(--d-text-primary, var(--d-pine));
+  word-break: break-word;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-line {
+  margin: 0 0 3px;
   font-size: 10px;
+  font-weight: 600;
+  line-height: 1.34;
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 88%, var(--d-muted));
+  word-break: break-word;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-muted {
+  margin: 0 0 3px;
+  font-size: 10px;
+  font-weight: 600;
+  font-style: italic;
+  color: color-mix(in srgb, var(--d-muted) 45%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-meta {
+  margin: 0 0 6px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 58%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-chip {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--d-border);
+  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
+  color: var(--d-brand);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-chip:hover {
+  border-color: color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
+  background: color-mix(in srgb, var(--d-brand) 6%, #ffffff);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-panel--context-soft {
+  padding: 6px 8px 7px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-panel--context-soft .adminv2-ws-record-interaction-panel-title {
+  font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--d-pine) 72%, var(--d-muted));
+  color: color-mix(in srgb, var(--d-muted) 52%, var(--d-text-primary, var(--d-pine)));
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-rows {
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-list {
+  list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
@@ -2287,37 +2433,30 @@
   gap: 4px;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-row {
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-row {
   display: grid;
-  grid-template-columns: minmax(5.5rem, 32%) minmax(0, 1fr);
-  gap: 8px 12px;
+  grid-template-columns: minmax(4.2rem, 34%) minmax(0, 1fr);
+  gap: 6px 8px;
   align-items: baseline;
   font-size: 10px;
-  line-height: 1.28;
+  line-height: 1.32;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-row dt {
-  margin: 0;
-  font-weight: 700;
-  color: var(--d-muted);
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-kind {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 50%, var(--d-text-primary, var(--d-pine)));
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-row dd {
-  margin: 0;
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-value {
+  min-width: 0;
   font-weight: 600;
-  color: var(--d-pine);
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 90%, var(--d-muted));
   word-break: break-word;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-bullets {
-  margin: 4px 0 0;
-  padding-left: 1.1em;
-  font-size: 10px;
-  line-height: 1.35;
-  color: var(--d-muted);
-}
-
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-field-link {
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-link {
   display: inline;
   margin: 0;
   padding: 0;
@@ -2325,17 +2464,284 @@
   background: none;
   font: inherit;
   font-weight: 700;
-  color: color-mix(in srgb, var(--d-brand) 55%, var(--d-pine));
+  color: var(--d-brand);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--d-brand) 35%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--d-brand) 40%, transparent);
   text-underline-offset: 2px;
   cursor: pointer;
   text-align: left;
 }
 
-[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-field-link:hover {
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-link:hover {
   color: var(--d-brand);
-  text-decoration-color: color-mix(in srgb, var(--d-brand) 70%, transparent);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-panel--activity {
+  padding-bottom: 6px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 8px;
+  border-left: 2px solid color-mix(in srgb, var(--d-border) 70%, var(--d-pine));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-activity-item {
+  position: relative;
+  margin: 0 0 5px;
+  padding: 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.36;
+  color: color-mix(in srgb, var(--d-muted) 52%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-activity-item:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-scroll {
+  /* flex-grow off: avoids stretching when ancestors still have extra height — keeps body tight to workflows */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section {
+  margin: 0;
+  padding: 0 0 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 42%, transparent);
+  background: transparent;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-title {
+  margin: 0 0 4px;
+  padding: 0;
+  border: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 42%, var(--d-text-primary, var(--d-pine)));
+}
+
+/* Pine as light accent on priority headings only — body lines stay midnight */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--priority .adminv2-ws-record-section-title {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 78%, var(--d-pine));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--support .adminv2-ws-record-section-title {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--d-muted) 50%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-lines {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line {
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.38;
+  letter-spacing: -0.015em;
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 90%, var(--d-muted));
+  word-break: break-word;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--support .adminv2-ws-record-line {
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 86%, var(--d-muted));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--primary {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--d-text-primary, var(--d-pine));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--priority .adminv2-ws-record-line--primary {
+  font-size: 12px;
+  letter-spacing: -0.022em;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--muted {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--d-muted) 40%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--support .adminv2-ws-record-line--muted {
+  font-size: 9.5px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-bullets {
+  margin: 3px 0 0;
+  padding-left: 1em;
+  font-size: 10px;
+  line-height: 1.34;
+  color: color-mix(in srgb, var(--d-muted) 42%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-bullets li {
+  margin: 1px 0;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-inline-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: inherit;
+  color: var(--d-brand);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--d-brand) 38%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--primary .adminv2-ws-record-inline-link {
+  font-weight: 800;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-inline-link:hover {
+  color: var(--d-brand);
+  text-decoration-color: color-mix(in srgb, var(--d-brand) 65%, transparent);
+}
+
+/* Record body — compact type badge + row semantics (no layout grid changes) */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--has-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  row-gap: 0;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line-core {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-type-badge {
+  flex: 0 0 auto;
+  display: inline-block;
+  margin: 0;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 85%, var(--d-muted));
+  background: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 5%, var(--d-surface));
+  border: 1px solid color-mix(in srgb, var(--d-border) 78%, var(--d-text-primary, var(--d-pine)));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--financial .adminv2-ws-record-section-title {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--documents .adminv2-ws-record-type-badge {
+  background: color-mix(in srgb, var(--d-brand) 12%, var(--d-surface));
+  border-color: color-mix(in srgb, var(--d-brand) 32%, var(--d-border));
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 40%, var(--d-brand));
+}
+
+/* Scheduling / assignment — inset accent, no width change */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--schedule {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--d-brand) 30%, transparent);
+}
+
+/* Financial — tabular alignment cue */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--financial {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.018em;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-record-line--financial:not(.adminv2-ws-record-line--muted):not(.adminv2-ws-record-line--primary) {
+  font-weight: 700;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--support .adminv2-ws-record-line--financial {
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 88%, var(--d-muted));
+}
+
+/* Tags — distinct from facts / docs */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--tag {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 72%, var(--d-muted));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section--support .adminv2-ws-record-line--tag {
+  font-size: 10px;
+}
+
+/* Document rows — slight object surface + stronger open affordance */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--document {
+  margin: 0 -2px;
+  padding: 1px 2px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--document:hover {
+  background: color-mix(in srgb, var(--d-brand) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--d-brand) 28%, var(--d-border));
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-inline-link--document {
+  color: var(--d-brand);
+  font-weight: 800;
+  text-decoration-thickness: 1.25px;
+  text-underline-offset: 2px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-line--primary .adminv2-ws-record-inline-link--document {
+  font-weight: 800;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-inline-link--document:hover {
+  text-decoration-thickness: 1.5px;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary,
@@ -2414,6 +2820,7 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-qsec--primary .adminv2-ws-queue-title,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-qsec--primary .adminv2-ws-queue-title {
   font-size: 14px;
+  color: var(--d-text-primary, inherit);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-title,
@@ -2592,6 +2999,7 @@
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.01em;
+  color: var(--d-text-primary, inherit);
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -2616,7 +3024,7 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-queue-row-sub,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-queue-row-sub {
   font-size: 9px;
-  color: var(--d-muted);
+  color: color-mix(in srgb, var(--d-muted) 68%, var(--d-text-primary, #273f52));
   line-height: 1.15;
 }
 
@@ -2882,7 +3290,7 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-actions-rail-overflow-btn:hover,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-overflow-btn:hover,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-actions-rail-overflow-btn:hover {
-  color: var(--d-pine);
+  color: color-mix(in srgb, var(--d-brand) 88%, #000);
   text-decoration: underline;
 }
 
@@ -2897,7 +3305,7 @@
   border-radius: 5px;
   border: 1px solid color-mix(in srgb, var(--d-brand) 48%, var(--d-border));
   background: color-mix(in srgb, var(--d-brand) 6%, #f8fafb);
-  color: color-mix(in srgb, var(--d-brand) 6%, var(--d-pine));
+  color: var(--d-brand);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.3;
@@ -3016,7 +3424,7 @@
   padding: 3px 0;
   border: none;
   background: none;
-  color: var(--d-pine);
+  color: var(--d-brand);
   cursor: pointer;
   text-align: left;
 }
@@ -3268,8 +3676,15 @@
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  /* Clear step from control deck — grid is unlabeled primary surface */
-  margin-top: 10px;
+  margin-top: 0;
+}
+
+/* Clear step from control deck → department grid (explicit rhythm when deck is present) */
+[data-ws-surface="company"].adminv2-ws-company-v2
+  .adminv2-ws-dept-v2-primary-column
+  > .adminv2-ws-dept-v2-control-deck
+  + .adminv2-ws-company-v2-main {
+  margin-top: calc(var(--ws-dept-section-gap) + 8px);
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-v2-dept-grid {
@@ -3396,7 +3811,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
-  color: color-mix(in srgb, #273f52 92%, var(--d-muted));
+  color: var(--d-text-primary, inherit);
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile-badge {
@@ -3449,7 +3864,7 @@
   font-size: 10px;
   font-weight: 500;
   line-height: 1.3;
-  color: color-mix(in srgb, var(--d-muted) 88%, transparent);
+  color: color-mix(in srgb, var(--d-muted) 52%, var(--d-text-primary, #273f52));
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile-signals {
@@ -3482,7 +3897,7 @@
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  color: color-mix(in srgb, var(--d-brand) 35%, var(--d-pine));
+  color: color-mix(in srgb, var(--d-brand) 78%, var(--d-text-primary, #273f52));
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile-empty {
@@ -3594,7 +4009,7 @@
   font-size: 10px;
   font-weight: 500;
   line-height: 1.35;
-  color: var(--d-muted);
+  color: color-mix(in srgb, var(--d-muted) 62%, var(--d-text-primary, #273f52));
   max-width: 52em;
 }
 
@@ -3604,7 +4019,7 @@
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: color-mix(in srgb, var(--d-muted) 92%, var(--d-pine));
+  color: color-mix(in srgb, var(--d-muted) 76%, var(--d-text-primary, #273f52));
   line-height: 1.25;
 }
 
@@ -3627,7 +4042,7 @@
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--d-muted) 88%, var(--d-pine));
+  color: color-mix(in srgb, var(--d-muted) 78%, var(--d-text-primary, #273f52));
   margin: 4px 2px 0;
 }
 
@@ -3636,7 +4051,7 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: none;
-  color: color-mix(in srgb, var(--d-pine) 72%, var(--d-muted));
+  color: color-mix(in srgb, var(--d-muted) 58%, var(--d-text-primary, #273f52));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card {
@@ -3679,7 +4094,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.18;
-  color: var(--d-pine);
+  color: var(--d-text-primary, inherit);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-top-right {
@@ -3695,7 +4110,7 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
-  color: color-mix(in srgb, var(--d-muted) 82%, var(--d-pine));
+  color: color-mix(in srgb, var(--d-text-primary, #273f52) 82%, var(--d-muted));
   white-space: nowrap;
   max-width: 6.75rem;
   overflow: hidden;
@@ -3706,7 +4121,7 @@
   margin-top: 2px;
   font-size: 10px;
   font-weight: 500;
-  color: var(--d-muted);
+  color: color-mix(in srgb, var(--d-muted) 72%, var(--d-text-primary, #273f52));
   line-height: 1.28;
 }
 
@@ -3721,14 +4136,14 @@
   border-radius: 4px;
   border: 1px solid color-mix(in srgb, var(--d-border) 96%, transparent);
   background: transparent;
-  color: color-mix(in srgb, var(--d-muted) 62%, var(--d-pine));
+  color: var(--d-brand);
   cursor: pointer;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-open-record:hover {
-  border-color: color-mix(in srgb, var(--d-muted) 28%, var(--d-border));
-  color: color-mix(in srgb, var(--d-pine) 58%, var(--d-muted));
-  background: color-mix(in srgb, #ffffff 55%, transparent);
+  border-color: color-mix(in srgb, var(--d-brand) 32%, var(--d-border));
+  color: color-mix(in srgb, var(--d-brand) 88%, #102a44);
+  background: color-mix(in srgb, var(--d-brand) 6%, var(--d-surface));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-midline {
@@ -3758,7 +4173,7 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-midline-v {
   font-size: 10px;
   font-weight: 600;
-  color: var(--d-pine);
+  color: var(--d-text-primary, inherit);
   font-variant-numeric: tabular-nums;
   line-height: 1.22;
 }
@@ -3895,14 +4310,15 @@
   font-weight: 700;
   padding: 3px 7px;
   border-radius: 5px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--d-brand) 32%, var(--d-border));
   background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
-  color: color-mix(in srgb, var(--d-brand) 42%, var(--d-pine));
+  color: var(--d-brand);
   cursor: pointer;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip:hover {
-  border-color: color-mix(in srgb, var(--d-pine) 22%, var(--d-border));
+  border-color: color-mix(in srgb, var(--d-brand) 48%, var(--d-border));
+  background: color-mix(in srgb, var(--d-brand) 7%, #ffffff);
 }
 
 /* Work unit — compact signal strip (1–2 word actions, fixed rail, no secondary copy) */
@@ -3937,14 +4353,15 @@
   letter-spacing: 0.03em;
   padding: 0 4px;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
-  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
-  color: color-mix(in srgb, var(--d-pine) 78%, var(--d-brand));
+  border: 1px solid color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
+  background: var(--d-brand);
+  color: var(--d-surface);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-signal-card .adminv2-ws-signal-actions button:hover {
-  border-color: color-mix(in srgb, var(--d-pine) 20%, var(--d-border));
-  background: color-mix(in srgb, #ffffff 88%, var(--d-panel-quiet));
+  border-color: var(--d-brand);
+  background: color-mix(in srgb, var(--d-brand) 90%, #000);
+  filter: brightness(1.02);
 }
 
 /* Record — same compact signal strip density as work unit */
@@ -3979,15 +4396,24 @@
   letter-spacing: 0.04em;
   padding: 0 5px;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-pine) 26%, var(--d-border));
-  background: color-mix(in srgb, #ffffff 92%, var(--d-surface));
-  color: var(--d-pine);
+  border: 1px solid color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
+  background: var(--d-brand);
+  color: var(--d-surface);
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card .adminv2-ws-signal-actions button:hover {
-  border-color: color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
-  background: color-mix(in srgb, #ffffff 86%, var(--d-panel-quiet));
-  color: color-mix(in srgb, var(--d-brand) 28%, var(--d-pine));
+  border-color: var(--d-brand);
+  background: color-mix(in srgb, var(--d-brand) 90%, #000);
+  filter: brightness(1.02);
+}
+
+/* Record — top deck: inherit shared department token balance; keep AI line weight */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-ai-awareness {
+  font-weight: 800;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card .adminv2-ws-signal-title {
+  font-weight: 800;
 }
 
 /* Record — top KPI strip: stronger values, breached / risk reads first */
@@ -4039,8 +4465,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  font-size: 9px;
-  line-height: 1.35;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor-row + .adminv2-ws-record-decision-anchor-row {
@@ -4089,6 +4515,133 @@
   margin-top: 3px;
   padding-top: 3px;
   border-top-color: color-mix(in srgb, var(--d-border) 40%, transparent);
+}
+
+/* Record command rail — shorter stack, tiered actions */
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-command-actions-stack {
+  gap: 5px;
+  margin: 0 0 8px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-actions-rail--dept-panel {
+  padding: 8px 9px 9px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-actions-rail-title {
+  margin-bottom: 5px;
+  padding-bottom: 4px;
+  font-size: 8px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-actions-rail--record-primary-tier
+  .adminv2-ws-actions-rail-list--column {
+  gap: 5px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-actions-rail--record-primary-tier
+  .adminv2-ws-actions-rail-list--column
+  .adminv2-ws-actions-rail-primary {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-secondary-tier {
+  padding: 6px 8px 7px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-secondary-tier .adminv2-ws-actions-rail-title {
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  font-size: 7px;
+  letter-spacing: 0.11em;
+  opacity: 0.92;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-secondary-tier .adminv2-ws-actions-rail-list--column {
+  gap: 4px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-record-secondary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  border-radius: 6px;
+  border: 1px solid var(--d-border);
+  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
+  color: var(--d-brand);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-record-secondary-btn:hover {
+  border-color: color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
+  background: color-mix(in srgb, var(--d-brand) 6%, #ffffff);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-tertiary-tier {
+  padding: 4px 8px 5px;
+  border-top: none;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--d-surface) 35%, transparent);
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-list--tertiary {
+  gap: 2px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-record-tertiary-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 3px 2px;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-brand));
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 3px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-record-tertiary-link:hover {
+  color: var(--d-brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-ai-panel {
+  padding: 6px 8px 7px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-ai-panel .adminv2-ws-actions-rail-title {
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-ai-panel .adminv2-ws-actions-rail-list--column {
+  gap: 4px;
+}
+
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail--record-ai-panel .adminv2-ws-actions-rail-suggestion {
+  padding: 5px 8px;
+  font-size: 10px;
+  min-height: 0;
 }
 
 /* Record — linked entities in context rail */

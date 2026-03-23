@@ -110,12 +110,12 @@ export default function JobDetailClient({
         setAssignLoading(true);
         setAssignError(null);
         try {
-            const res = await fetch(`/api/admin/jobs/${jobId}`, {
-                method: "PATCH",
+            const res = await fetch(`/api/admin/jobs/${jobId}/assign-vendor`, {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: "assign_vendor",
-                    assigned_vendor_id: assignVendorId || null,
+                    vendor_id: assignVendorId || null,
+                    apply_to_future_schedules: false,
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -125,7 +125,9 @@ export default function JobDetailClient({
             }
             const v = vendors.find((x) => x.id === assignVendorId);
             const assignLabel = (v?.label?.trim() || v?.name?.trim()) ?? null;
-            setJob((prev) => ({ ...prev, ...data, _assigned_vendor_name: assignLabel }));
+            const vid = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
+            setJob((prev) => ({ ...prev, assigned_vendor_id: vid, _assigned_vendor_name: assignLabel }));
+            void refetchJob();
             setAssignDrawerOpen(false);
         } finally {
             setAssignLoading(false);

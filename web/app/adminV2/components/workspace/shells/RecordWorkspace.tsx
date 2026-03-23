@@ -4,7 +4,15 @@ import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { RecordWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, WorkBlock, ContextBlock, ActionsBlock, RecordBodyBlock } from "../blocks";
+import {
+  SignalBlock,
+  KPIBlock,
+  WorkBlock,
+  ContextBlock,
+  ActionsBlock,
+  RecordBodyBlock,
+  RecordInteractionPanels,
+} from "../blocks";
 import "../workspace.css";
 
 type Props = {
@@ -16,6 +24,8 @@ type Props = {
 const recordRootStyle: CSSProperties = {
   backgroundColor: "transparent",
   color: neutral.textPrimary,
+  /** Body copy hierarchy — midnight primary, not pine-tinted paragraphs */
+  ["--d-text-primary" as string]: neutral.textPrimary,
   ["--d-page-bg" as string]: neutral.background,
   ["--d-border" as string]: derived.border,
   ["--d-muted" as string]: derived.textSecondary,
@@ -43,7 +53,7 @@ const recordRootStyle: CSSProperties = {
 
 /**
  * Record — final drill level: same shell grammar (control deck, optional compact KPIs, primary column, workflows, command rail).
- * Main surface is grouped sections, not a flat CRM form. No inline AI form.
+ * Main surface: left = core record (what it is); right = contact, related objects, recent activity. No inline AI form.
  */
 export default function RecordWorkspace({ model, onAction }: Props) {
   const briefParagraphs =
@@ -60,6 +70,11 @@ export default function RecordWorkspace({ model, onAction }: Props) {
   const hasTopStack = hasBrief || hasSignals || hasAwareness;
   const hasControlDeck = hasTopStack || hasKpis;
   const focusKicker = model.focusLabel?.trim() || model.entityType || "Record";
+  const hasInteractionColumn = Boolean(
+    model.recordContactContext ||
+      (model.recordRelatedContext?.items && model.recordRelatedContext.items.length > 0) ||
+      (model.recordActivityContext?.events && model.recordActivityContext.events.length > 0)
+  );
 
   return (
     <div
@@ -126,11 +141,37 @@ export default function RecordWorkspace({ model, onAction }: Props) {
                 data-ws-record-id={model.recordId}
               >
                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                  <RecordBodyBlock
-                    recordId={model.recordId}
-                    sections={model.recordSections}
-                    onAction={onAction}
-                  />
+                  <div className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-record-body-root">
+                    {hasInteractionColumn ? (
+                      <div className="adminv2-ws-record-body-split">
+                        <div className="adminv2-ws-record-body-split-main">
+                          <RecordBodyBlock
+                            recordId={model.recordId}
+                            sections={model.recordSections}
+                            onAction={onAction}
+                          />
+                        </div>
+                        <aside
+                          className="adminv2-ws-record-body-split-aside"
+                          aria-label="Communication, related records, and recent activity"
+                        >
+                          <RecordInteractionPanels
+                            recordId={model.recordId}
+                            contact={model.recordContactContext}
+                            related={model.recordRelatedContext}
+                            activity={model.recordActivityContext}
+                            onAction={onAction}
+                          />
+                        </aside>
+                      </div>
+                    ) : (
+                      <RecordBodyBlock
+                        recordId={model.recordId}
+                        sections={model.recordSections}
+                        onAction={onAction}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
               <div

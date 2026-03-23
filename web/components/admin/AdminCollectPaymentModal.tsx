@@ -316,9 +316,16 @@ export function AdminCollectPaymentModal({
         body.payment_method_id = paymentMethodId;
         body.save_payment_method = savePaymentMethod;
       }
-      body.idempotency_key = crypto.randomUUID();
+      const idempotencyKey = crypto.randomUUID();
+      body.idempotency_key = idempotencyKey;
 
-      console.log("[CollectPayment] request sent", { traceId });
+      console.log("[CollectPayment] request sent", {
+        traceId,
+        idempotencyKey: idempotencyKey.slice(0, 8) + "…",
+        cardMode,
+        target,
+        amount_cents: body.amount_cents,
+      });
       const res = await fetch("/api/admin/payments/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

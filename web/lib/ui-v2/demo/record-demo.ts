@@ -19,14 +19,6 @@ export const demoRecordContextRaw: ContextRelationshipRawData = {
       linked_entity: true,
     },
   ],
-  record_documents: [
-    {
-      id: "inv-884",
-      name: "Invoice INV-884",
-      status: "Sent · Net 15",
-      linked_entity: true,
-    },
-  ],
 };
 
 /**
@@ -41,7 +33,7 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
     headline: "Chen residence · standard clean",
     aiAwarenessLine: "Assignment SLA breached · route fit low · window closing 12:00.",
     bodyParagraphs: [
-      "Standard clean on east cluster B7; unassigned 2h+; customer prefers morning completion.",
+      "Unassigned 2h+; customer prefers morning completion. Details in body sections below.",
     ],
     emphasisPhrases: ["SLA breached", "B7"],
   },
@@ -75,61 +67,100 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
     {
       id: "overview",
       title: "Overview",
-      rows: [
-        { label: "Job", value: "#7712 · standard clean" },
-        { label: "Status", value: "Unassigned · east cluster" },
-        { label: "Priority", value: "High · SLA risk" },
+      lines: [
+        {
+          text: "#7712 · Unassigned · High priority",
+          tone: "primary",
+        },
+        {
+          text: "Standard clean · eco-only products",
+          tone: "muted",
+        },
       ],
     },
     {
       id: "scheduling",
       title: "Scheduling / assignment",
-      rows: [
-        { label: "Window", value: "10:00–12:00 (customer)" },
-        { label: "Assigned", value: "—" },
-        { label: "Route cluster", value: "East · B7", linkId: "route-b7" },
-        { label: "Suggested pair", value: "Torres B4 loop (optional)" },
-      ],
-    },
-    {
-      id: "customer",
-      title: "Customer / location",
-      rows: [
-        { label: "Customer", value: "Chen household", linkId: "cust-chen" },
-        { label: "Address", value: "1842 Magnolia Ln" },
-        { label: "Access", value: "Gate code on file" },
-        { label: "Contact", value: "SMS preferred · +1 ***-***-4401" },
+      lines: [
+        {
+          text: "10:00–12:00 · East B7 · Torres B4 loop",
+          tone: "primary",
+          linkId: "route-b7",
+          rowKind: "schedule",
+        },
+        { text: "Cleaner: unassigned", tone: "muted", rowKind: "schedule" },
+        { text: "Suggested assign: Torres B4 loop · eco kit", tone: "default", rowKind: "schedule" },
       ],
     },
     {
       id: "financial",
       title: "Financial / value",
-      rows: [
-        { label: "Job value", value: "$180" },
-        { label: "Invoice", value: "INV-884 · Net 15", linkId: "inv-884" },
-        { label: "Billing", value: "Recurring monthly" },
-        { label: "Add-ons", value: "None" },
+      lines: [
+        { text: "$180 · job value", tone: "primary", rowKind: "financial" },
+        {
+          text: "Recurring monthly · no add-ons",
+          tone: "muted",
+          rowKind: "financial",
+        },
+      ],
+    },
+    {
+      id: "billing_documents",
+      title: "Billing & documents",
+      lines: [
+        {
+          typeBadge: "INVOICE",
+          text: "INV-884 · Sent · Net 15",
+          tone: "primary",
+          linkId: "inv-884",
+          rowKind: "document",
+        },
+        {
+          typeBadge: "WORK ORDER",
+          text: "WO-INT-7712 · signed intake on file",
+          tone: "default",
+          linkId: "wo-intake-7712",
+          rowKind: "document",
+        },
+        { text: "Billing · recurring · current · no holds", tone: "muted" },
       ],
     },
     {
       id: "requirements",
       title: "Requirements / tags",
-      rows: [
-        { label: "Tags", value: "Standard · recurring · high priority" },
-        { label: "Special", value: "Eco products only" },
-      ],
-    },
-    {
-      id: "notes",
-      title: "Notes / recent activity",
-      rows: [],
-      bullets: [
-        "09:18 — Auto-assign held (route fit 0.58)",
-        "08:55 — Customer confirmed 10:00 window",
-        "Yesterday — Recurring series renewed",
+      lines: [
+        {
+          text: "Standard · recurring · high priority · eco products only",
+          tone: "default",
+          rowKind: "tag",
+        },
       ],
     },
   ],
+  recordRelatedContext: {
+    items: [
+      { id: "rel-route", kind: "Route cluster", preview: "East · B7", linkId: "route-b7" },
+      { id: "rel-acct", kind: "Household", preview: "C-ARC-7712", linkId: "cust-chen" },
+    ],
+  },
+  recordActivityContext: {
+    events: [
+      "09:18 — Auto-assign held (route fit 0.58)",
+      "08:55 — Confirmed 10:00 window (SMS)",
+      "Yesterday — Recurring series renewed",
+    ],
+  },
+  recordContactContext: {
+    name: "Chen household",
+    address: "1842 Magnolia Ln",
+    preferredContact: "SMS preferred · +1 ***-***-4401",
+    lastContactAt: "08:55 · see Recent activity",
+    contactActions: [
+      { id: "call", label: "Call" },
+      { id: "text", label: "Text" },
+      { id: "email", label: "Email" },
+    ],
+  },
   workSummary: {
     id: "wk-rec-7712",
     title: "Record automation",
@@ -156,17 +187,19 @@ export const demoRecordBase: Omit<RecordWorkspaceModel, "workspaceLevel" | "cont
     },
     systemActions: [
       { id: "assign_cleaner", label: "Assign cleaner", variant: "primary" },
-      { id: "reschedule", label: "Reschedule", variant: "secondary" },
-      { id: "contact_customer", label: "Contact customer", variant: "secondary" },
+      { id: "reschedule", label: "Reschedule", variant: "primary" },
+      { id: "contact_customer", label: "Contact customer", variant: "primary" },
     ],
-    quickOperations: [
+    recordSecondaryActions: [
       { id: "reassign", label: "Reassign", variant: "secondary" },
-      { id: "escalate", label: "Escalate", variant: "secondary" },
       { id: "add_note", label: "Add note", variant: "secondary" },
-      { id: "hold_job", label: "Hold job", variant: "secondary" },
-      { id: "cancel_job", label: "Cancel job", variant: "secondary" },
-      { id: "export_record", label: "Export record", variant: "secondary" },
-      { id: "execute_workflow", label: "Run workflow", variant: "secondary" },
+      { id: "escalate", label: "Escalate", variant: "secondary" },
+    ],
+    recordTertiaryActions: [
+      { id: "hold_job", label: "Hold job" },
+      { id: "cancel_job", label: "Cancel job" },
+      { id: "export_record", label: "Export record" },
+      { id: "execute_workflow", label: "Run workflow" },
     ],
     smartSuggestions: [
       { id: "ai_best_cleaner", label: "Recommend cleaner" },
