@@ -109,22 +109,37 @@ export function EntityLabelsProvider({
     const [loading, setLoading] = useState(() => !seeded);
 
     const refreshEntityLabels = useCallback(async () => {
+        console.log("[EntityLabels DEBUG] fetch start", { path: "/api/admin/entity-labels" });
         try {
             const res = await fetch("/api/admin/entity-labels");
+            console.log("[EntityLabels DEBUG] fetch settled", { ok: res.ok, status: res.status });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) return;
+            if (!res.ok) {
+                console.warn("[EntityLabels DEBUG] fetch failure (non-OK)", { status: res.status, json });
+                return;
+            }
             const effective = (json as { effective?: { entity_type: string; singular: string | null; plural: string | null }[] }).effective ?? [];
             const map = buildMap(effective);
             setLabels(map);
             saveToCache(effective);
-        } catch (_) {
+            console.log("[EntityLabels DEBUG] fetch success", { effectiveCount: effective.length, mapKeys: Object.keys(map).length });
+        } catch (e) {
+            console.warn("[EntityLabels DEBUG] fetch failure (throw)", e);
             // keep previous labels on error
         } finally {
             setLoading(false);
+            console.log("[EntityLabels DEBUG] fetch finished → loading false", {
+                path: "/api/admin/entity-labels",
+            });
         }
     }, []);
 
     useEffect(() => {
+        console.log("[EntityLabels DEBUG] loading state changed", { loading });
+    }, [loading]);
+
+    useEffect(() => {
+        console.log("[EntityLabels DEBUG] bootstrap effect", { seeded });
         if (seeded) {
             void refreshEntityLabels();
             return;
@@ -133,6 +148,7 @@ export function EntityLabelsProvider({
         if (Object.keys(cached ?? {}).length > 0) {
             setLabels(cached!);
             setLoading(false);
+            console.log("[EntityLabels DEBUG] applied session cache, refresh in background");
             void refreshEntityLabels();
             return;
         }
