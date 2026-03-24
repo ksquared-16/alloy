@@ -55,7 +55,23 @@ export async function ensureCustomerAddressLocation(
     return rowA1 === a1 && rowCity === cityNorm;
   });
   if (match) {
-    return (match as { id: string }).id;
+    const existingId = (match as { id: string }).id;
+    const patch: Record<string, unknown> = {};
+    if (access_method_id !== undefined) patch.access_method_id = access_method_id;
+    if (access_code !== undefined) {
+      patch.access_code = access_code != null && String(access_code).trim() !== "" ? String(access_code).trim() : null;
+    }
+    if (has_pets === true || has_pets === false) patch.has_pets = has_pets;
+    if (access_notes !== undefined) {
+      patch.access_notes = access_notes != null && String(access_notes).trim() !== "" ? String(access_notes).trim() : null;
+    }
+    if (Object.keys(patch).length > 0) {
+      const { error: patchErr } = await supabase.from("locations").update(patch).eq("id", existingId);
+      if (patchErr) {
+        console.error("[BOOKING_LOCATIONS] ensureCustomerAddressLocation dedupe patch failed", patchErr);
+      }
+    }
+    return existingId;
   }
 
   // Is this the first address location for this customer? (then is_primary = true)

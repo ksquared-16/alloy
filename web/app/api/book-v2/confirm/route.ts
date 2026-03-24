@@ -13,6 +13,8 @@ import {
     BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
     BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
 } from "@/lib/book-v2/bookingConstants";
+import { resolveBookingJobStatus } from "@/lib/book-v2/resolveBookingJobStatus";
+import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { persistBookingPaymentMethod, resolveStripePaymentMethodId } from "@/lib/book-v2/persistBookingPaymentMethod";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
@@ -1719,6 +1721,20 @@ export async function POST(request: NextRequest) {
         }
         bookV2PerfLog("canonical_location", tCanonicalLoc, booking_attempt_id ?? null);
 
+        const bookingOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        const resolvedJobSt = await resolveBookingJobStatus(supabase, bookingOrgId, [
+            BOOKING_CONFIRM_JOB_STATUS_KEY,
+            "scheduled",
+        ]);
+        const bookingJobStatusId = resolvedJobSt?.id ?? BOOKING_CONFIRM_JOB_STATUS_ID;
+        const bookingJobStatusKey = resolvedJobSt?.key ?? BOOKING_CONFIRM_JOB_STATUS_KEY;
+        const resolvedSchedSt = await resolveScheduleStatusRowByKey(supabase, BOOKING_CONFIRM_SCHEDULE_STATUS_KEY);
+        const bookingScheduleStatusId = resolvedSchedSt?.id ?? BOOKING_CONFIRM_SCHEDULE_STATUS_ID;
+        const bookingScheduleStatusKey = resolvedSchedSt?.key ?? BOOKING_CONFIRM_SCHEDULE_STATUS_KEY;
+        console.log(
+            `[BOOK_V2_CONFIRM] status_resolution job_status_id=${bookingJobStatusId} job_status_key=${bookingJobStatusKey} schedule_status_id=${bookingScheduleStatusId} schedule_status_key=${bookingScheduleStatusKey} booking_attempt_id=${booking_attempt_id ?? "none"}`
+        );
+
         // Step 5: Create or update job
         // Reuse only if existing job has same booking_attempt_id (idempotent retry). Otherwise create new.
         const tJobSchedBlock = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -1767,8 +1783,8 @@ export async function POST(request: NextRequest) {
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
-                job_status_id: BOOKING_CONFIRM_JOB_STATUS_ID,
-                status_key: BOOKING_CONFIRM_JOB_STATUS_KEY,
+                job_status_id: bookingJobStatusId,
+                status_key: bookingJobStatusKey,
                 ...(locationId != null && { location_id: locationId }),
                 metadata: {
                     ...jobMeta,
@@ -1825,8 +1841,8 @@ export async function POST(request: NextRequest) {
                 ...(personIdFromQuote && { primary_person_id: personIdFromQuote }),
                 ...(contactId != null && { primary_contact_id: contactId }),
                 vertical_id: verticalId,
-                job_status_id: BOOKING_CONFIRM_JOB_STATUS_ID,
-                status_key: BOOKING_CONFIRM_JOB_STATUS_KEY,
+                job_status_id: bookingJobStatusId,
+                status_key: bookingJobStatusKey,
                 ...(locationId != null && { location_id: locationId }),
                 title: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 description: `Scheduled cleaning service`,
@@ -2105,6 +2121,11 @@ export async function POST(request: NextRequest) {
                         .single();
                     if (!subErr && newSub?.id) customerSubscriptionId = newSub.id;
                 }
+            } else {
+                console.warn(
+                    "[BOOK_V2_CONFIRM] is_recurring but service_frequency_key has no cadence mapping; customer_subscription_id will be null (next schedule generation will not run)",
+                    { service_frequency_key, booking_attempt_id: booking_attempt_id ?? null, customerId }
+                );
             }
         }
 
@@ -2148,8 +2169,8 @@ export async function POST(request: NextRequest) {
                 end_at: slot_end,
                 duration_minutes: 120,
                 timezone,
-                schedule_status_id: BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
-                status_key: BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
+                schedule_status_id: bookingScheduleStatusId,
+                status_key: bookingScheduleStatusKey,
                 metadata: { ...existingScheduleMeta, booking_attempt_id: booking_attempt_id ?? undefined },
             };
             if (schedulePriceCents != null) updatePayload.price_cents = schedulePriceCents;
@@ -2179,8 +2200,8 @@ export async function POST(request: NextRequest) {
                 end_at: slot_end,
                 duration_minutes: 120,
                 timezone,
-                schedule_status_id: BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
-                status_key: BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
+                schedule_status_id: bookingScheduleStatusId,
+                status_key: bookingScheduleStatusKey,
                 ...(schedulePriceCents != null && { price_cents: schedulePriceCents }),
                 ...(locationId != null && { location_id: locationId }),
                 metadata: { booking_attempt_id: booking_attempt_id ?? undefined },

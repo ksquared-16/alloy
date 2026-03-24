@@ -144,6 +144,9 @@ function formatFieldValue(
     case "text":
     case "custom":
     default:
+      if (presentationEntityType === "locations" && key === "access_method_id" && record?._access_method_label != null && String(record._access_method_label).trim() !== "") {
+        return String(record._access_method_label).trim();
+      }
       if (key === "payout_percent") return formatPayoutPercent(value as number | null | undefined);
       if (presentationEntityType === "schedules" && record) {
         const sched = scheduleOverviewRelationshipReadLabel(record, key);

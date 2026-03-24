@@ -1,5 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** Resolve an active schedule_statuses row by canonical key (global table, no org). */
+export async function resolveScheduleStatusRowByKey(
+    supabase: SupabaseClient,
+    statusKey: string
+): Promise<{ id: string; key: string } | null> {
+    const k = String(statusKey ?? "").trim();
+    if (!k) return null;
+    const { data, error } = await supabase
+        .from("schedule_statuses")
+        .select("id, key")
+        .eq("key", k)
+        .eq("is_active", true)
+        .maybeSingle();
+    if (error || !data) return null;
+    const row = data as { id?: string; key?: string | null };
+    if (!row.id || !row.key || !String(row.key).trim()) return null;
+    return { id: row.id, key: String(row.key).trim() };
+}
+
 export async function fetchScheduleStatusKeyByFk(
     supabase: SupabaseClient,
     scheduleStatusIds: (string | null | undefined)[]

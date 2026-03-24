@@ -2,6 +2,7 @@ import { addWeeks, addMonths } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 type LastScheduleRow = {
     job_id: string;
@@ -141,6 +142,7 @@ export async function generateNextSubscriptionSchedule(
     }
 
     const scheduleOrgId = (sub as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+    const defaultSchedStatus = await resolveScheduleStatusRowByKey(supabase, "scheduled");
     const insertPayload: Record<string, unknown> = {
         org_id: scheduleOrgId,
         job_id: jobId,
@@ -151,6 +153,12 @@ export async function generateNextSubscriptionSchedule(
         customer_subscription_id: subscriptionId,
         subscription_sequence: nextSequence,
     };
+    if (defaultSchedStatus) {
+        insertPayload.schedule_status_id = defaultSchedStatus.id;
+        insertPayload.status_key = defaultSchedStatus.key;
+    } else {
+        console.warn("[GENERATE_NEXT_SUBSCRIPTION_SCHEDULE] no active schedule_statuses row for key=scheduled; insert leaves status unset");
+    }
     if (locationId) insertPayload.location_id = locationId;
     if (priceCents != null) insertPayload.price_cents = priceCents;
     if (assignedVendorId) insertPayload.assigned_vendor_id = assignedVendorId;

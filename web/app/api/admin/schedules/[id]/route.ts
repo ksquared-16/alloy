@@ -11,11 +11,17 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { generateNextSubscriptionSchedule } from "@/lib/admin/generateNextSubscriptionSchedule";
+import {
+    effectiveScheduleStatusKey,
+    fetchScheduleStatusKeyByFk,
+    resolveScheduleStatusRowByKey,
+} from "@/lib/admin/scheduleEffectiveStatusKey";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
 function isCompletedStatus(s: string | null | undefined): boolean {
-    return String(s ?? "").trim().toLowerCase() === "completed";
+    const k = String(s ?? "").trim().toLowerCase();
+    return k === "completed" || k === "complete" || k === "done";
 }
 
 /** GET: single schedule by id, org-scoped. Returns schedule + _job_title, _customer_name, _assigned_vendor_name. */
@@ -99,6 +105,12 @@ export async function PATCH(
                 updates[key] = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
                 continue;
             }
+            if (key === "status") {
+                if (body.status_key !== undefined) continue;
+                const v = body.status;
+                updates.status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
+                continue;
+            }
             if (key === "status_key") {
                 const v = body[key];
                 updates.status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
@@ -110,7 +122,7 @@ export async function PATCH(
         const supabase = createAdminClient();
         const { data: schedule, error: fetchErr } = await supabase
             .from("schedules")
-            .select("job_id, start_at, end_at, status_key, assigned_vendor_id")
+            .select("job_id, start_at, end_at, status_key, schedule_status_id, assigned_vendor_id, customer_subscription_id")
             .eq("id", id)
             .eq("org_id", ctx.orgId)
             .single();
@@ -119,10 +131,10 @@ export async function PATCH(
         }
 
         const previousStatusKey = (schedule as { status_key?: string | null }).status_key;
+        const norm = (x: string | null | undefined) =>
+            x == null || String(x).trim() === "" ? null : String(x).trim();
 
         if (updates.status_key !== undefined) {
-            const norm = (x: string | null | undefined) =>
-                x == null || String(x).trim() === "" ? null : String(x).trim();
             const newSk = norm(updates.status_key as string | null);
             const prevSk = norm(previousStatusKey);
             if (newSk !== prevSk) {
@@ -131,7 +143,29 @@ export async function PATCH(
                     return NextResponse.json({ error: chk.message }, { status: 400 });
                 }
             }
+            if (newSk) {
+                const row = await resolveScheduleStatusRowByKey(supabase, newSk);
+                if (row) updates.schedule_status_id = row.id;
+                else
+                    console.warn("[ADMIN_PATCH_SCHEDULE] status_key has no matching schedule_statuses row", {
+                        scheduleId: id,
+                        status_key: newSk,
+                    });
+            } else {
+                updates.schedule_status_id = null;
+            }
         }
+
+        const keyByFkPrev = await fetchScheduleStatusKeyByFk(supabase, [
+            (schedule as { schedule_status_id?: string | null }).schedule_status_id,
+        ]);
+        const previousEffective = effectiveScheduleStatusKey(
+            {
+                status_key: (schedule as { status_key?: string | null }).status_key,
+                schedule_status_id: (schedule as { schedule_status_id?: string | null }).schedule_status_id,
+            },
+            keyByFkPrev
+        );
 
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
@@ -163,17 +197,48 @@ export async function PATCH(
 
         await upsertFieldValuesFromBody(supabase, ctx.orgId, "schedule", id, body, ALLOWED_KEYS);
 
-        const newStatusKey = updates.status_key !== undefined ? (updates.status_key as string | null) : previousStatusKey;
-        const transitionedToCompleted =
-            !isCompletedStatus(previousStatusKey) && isCompletedStatus(newStatusKey);
+        const keyByFkPost = await fetchScheduleStatusKeyByFk(supabase, [
+            (data as { schedule_status_id?: string | null }).schedule_status_id,
+        ]);
+        const newEffective = effectiveScheduleStatusKey(
+            {
+                status_key: (data as { status_key?: string | null }).status_key,
+                schedule_status_id: (data as { schedule_status_id?: string | null }).schedule_status_id,
+            },
+            keyByFkPost
+        );
+        const transitionedToCompleted = !isCompletedStatus(previousEffective) && isCompletedStatus(newEffective);
+        const subscriptionIdAfter = (data as { customer_subscription_id?: string | null }).customer_subscription_id ?? null;
+
+        if (isCompletedStatus(newEffective)) {
+            console.info("[ADMIN_PATCH_SCHEDULE] completion_path", {
+                scheduleId: id,
+                previousStatusRaw: previousStatusKey ?? null,
+                previousStatusEffective: previousEffective ?? null,
+                newStatusRaw: (data as { status_key?: string | null }).status_key ?? null,
+                newStatusEffective: newEffective ?? null,
+                transitionedIntoCompleted: transitionedToCompleted,
+                customer_subscription_id: subscriptionIdAfter,
+            });
+        }
+
         if (transitionedToCompleted) {
-            const subscriptionId = (data as { customer_subscription_id?: string | null }).customer_subscription_id ?? null;
-            if (subscriptionId) {
-                const gen = await generateNextSubscriptionSchedule(supabase, subscriptionId);
+            if (!subscriptionIdAfter) {
+                console.info("[ADMIN_PATCH_SCHEDULE] generateNextSubscriptionSchedule skipped: no customer_subscription_id", {
+                    scheduleId: id,
+                });
+            } else {
+                const gen = await generateNextSubscriptionSchedule(supabase, subscriptionIdAfter);
+                console.info("[ADMIN_PATCH_SCHEDULE] generateNextSubscriptionSchedule", {
+                    scheduleId: id,
+                    subscriptionId: subscriptionIdAfter,
+                    ok: gen.ok,
+                    ...(gen.ok ? { created_schedule_id: gen.schedule_id, duplicate: gen.duplicate } : { error: gen.error, code: gen.code }),
+                });
                 if (!gen.ok) {
                     console.error("[ADMIN_PATCH_SCHEDULE] generate next subscription schedule failed", {
                         scheduleId: id,
-                        subscriptionId,
+                        subscriptionId: subscriptionIdAfter,
                         error: gen.error,
                         code: gen.code,
                     });
@@ -229,8 +294,8 @@ export async function PATCH(
                 orgId: ctx.orgId,
                 entityType: "schedules",
                 entityId: id,
-                oldStatusKey: previousStatusKey ?? null,
-                newStatusKey: (newStatusKey ?? null) as string | null,
+                oldStatusKey: previousEffective ?? null,
+                newStatusKey: (newEffective ?? null) as string | null,
                 metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
             });
         }

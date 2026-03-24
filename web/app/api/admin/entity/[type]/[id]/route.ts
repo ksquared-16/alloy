@@ -321,6 +321,37 @@ export async function GET(
                 discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
                 discount_code: (data as { discount_code?: string | null }).discount_code ?? null,
             });
+            out._service_home_type_label = null;
+            out._service_sqft_band_label = null;
+            out._service_square_footage = null;
+            out._service_square_footage_display = null;
+            out._service_bedrooms = null;
+            out._service_bathrooms = null;
+            const { data: cjdJob } = await supabase.from("cleaning_job_details").select("*").eq("job_id", id).maybeSingle();
+            const jd = cjdJob as {
+                home_type_id?: string | null;
+                sqft_band_id?: string | null;
+                square_footage?: number | null;
+                bedrooms?: number | null;
+                bathrooms?: number | null;
+            } | null;
+            if (jd) {
+                out._service_bedrooms = jd.bedrooms ?? null;
+                out._service_bathrooms = jd.bathrooms ?? null;
+                out._service_square_footage = jd.square_footage ?? null;
+                if (jd.home_type_id) {
+                    const { data: ht } = await supabase.from("home_types").select("label").eq("id", jd.home_type_id).maybeSingle();
+                    out._service_home_type_label = (ht as { label?: string } | null)?.label ?? null;
+                }
+                if (jd.sqft_band_id) {
+                    const { data: sb } = await supabase.from("sqft_bands").select("label").eq("id", jd.sqft_band_id).maybeSingle();
+                    out._service_sqft_band_label = (sb as { label?: string } | null)?.label ?? null;
+                }
+                const bandLabel = out._service_sqft_band_label != null ? String(out._service_sqft_band_label).trim() : "";
+                const sq = jd.square_footage;
+                out._service_square_footage_display =
+                    bandLabel || (sq != null && Number.isFinite(Number(sq)) ? `${sq} sq ft` : null);
+            }
             const jobDprogId = (data as { discount_program_id?: string | null }).discount_program_id ?? null;
             if (jobDprogId) {
                 const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", jobDprogId).maybeSingle();
@@ -882,6 +913,37 @@ export async function GET(
             const assignVid = (assignment as { vendor_id?: string } | null)?.vendor_id ?? null;
             if (!(out.assigned_vendor_id as string | null | undefined) && assignVid) {
                 out.assigned_vendor_id = assignVid;
+            }
+
+            out._service_home_type_label = null;
+            out._service_square_footage_display = null;
+            out._service_bedrooms = null;
+            out._service_bathrooms = null;
+            if (jobId) {
+                const { data: cjdSched } = await supabase.from("cleaning_job_details").select("*").eq("job_id", jobId).maybeSingle();
+                const sd = cjdSched as {
+                    home_type_id?: string | null;
+                    sqft_band_id?: string | null;
+                    square_footage?: number | null;
+                    bedrooms?: number | null;
+                    bathrooms?: number | null;
+                } | null;
+                if (sd) {
+                    out._service_bedrooms = sd.bedrooms ?? null;
+                    out._service_bathrooms = sd.bathrooms ?? null;
+                    if (sd.home_type_id) {
+                        const { data: ht } = await supabase.from("home_types").select("label").eq("id", sd.home_type_id).maybeSingle();
+                        out._service_home_type_label = (ht as { label?: string } | null)?.label ?? null;
+                    }
+                    let bandLabel = "";
+                    if (sd.sqft_band_id) {
+                        const { data: sb } = await supabase.from("sqft_bands").select("label").eq("id", sd.sqft_band_id).maybeSingle();
+                        bandLabel = String((sb as { label?: string } | null)?.label ?? "").trim();
+                    }
+                    const sq = sd.square_footage;
+                    out._service_square_footage_display =
+                        bandLabel || (sq != null && Number.isFinite(Number(sq)) ? `${sq} sq ft` : null);
+                }
             }
 
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
