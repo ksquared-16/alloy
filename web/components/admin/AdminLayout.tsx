@@ -6,12 +6,14 @@ import { createClient } from "@/lib/supabaseClient";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
     Briefcase,
+    Building2,
     Calendar,
     ChevronDown,
     ChevronRight,
     DollarSign,
     FileText,
     GitBranch,
+    LayoutDashboard,
     LayoutGrid,
     Mail,
     MapPin,
@@ -47,16 +49,8 @@ function isNestedNavItem(item: NavItem): item is { label: string; subItems: NavL
 type IconComponent = React.ComponentType<{ className?: string }>;
 const iconClassSidebar = "h-4 w-4 shrink-0 text-alloy-midnight/70";
 
+/** Six-section IA: see docs/SYSTEM_IMPLEMENTATION_PLAN_V1.md (URLs unchanged). */
 const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
-    {
-        label: "Directory",
-        icon: Users,
-        items: [
-            { href: "/admin/people", label: "People", entityType: "persons" },
-            { href: "/admin/customers", label: "Customers", entityType: "customers" },
-            { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
-        ],
-    },
     {
         label: "Operations",
         icon: Briefcase,
@@ -64,22 +58,41 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/opportunities", label: "Opportunities", entityType: "opportunities" },
             { href: "/admin/jobs", label: "Jobs", entityType: "jobs" },
             { href: "/admin/schedules", label: "Schedules", entityType: "schedules" },
-            { href: "/admin/documents", label: "Documents", entityType: "documents" },
-            { href: "/admin/locations", label: "Locations", entityType: "locations" },
             {
-                label: "Workflows",
+                label: "Messages",
                 subItems: [
-                    { href: "/admin/workflows", label: "Builder" },
-                    { href: "/admin/workflow-events", label: "Events" },
-                    { href: "/admin/workflow-runs", label: "Runs" },
+                    { href: "/admin/messaging", label: "Messages", entityType: "messages" },
+                    { href: "/admin/messages-outbox", label: "Outbox" },
                 ],
             },
-            { href: "/admin/messaging", label: "Messages", entityType: "messages" },
-            {
-                label: "Settings",
-                subItems: [{ href: "/admin/operations/recurrence", label: "Recurrence" }],
-            },
         ],
+    },
+    {
+        label: "Records",
+        icon: Users,
+        items: [
+            { href: "/admin/people", label: "People", entityType: "persons" },
+            { href: "/admin/customers", label: "Customers", entityType: "customers" },
+            { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
+            { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
+            { href: "/admin/customer-members", label: "Customer members", entityType: "customer_members" },
+            { href: "/admin/locations", label: "Locations", entityType: "locations" },
+            { href: "/admin/contractors", label: "Contractors" },
+        ],
+    },
+    {
+        label: "Workflows",
+        icon: GitBranch,
+        items: [
+            { href: "/admin/workflows", label: "Builder" },
+            { href: "/admin/workflow-events", label: "Events" },
+            { href: "/admin/workflow-runs", label: "Runs" },
+        ],
+    },
+    {
+        label: "Documents",
+        icon: FileText,
+        items: [{ href: "/admin/documents", label: "Documents", entityType: "documents" }],
     },
     {
         label: "Financials",
@@ -88,41 +101,66 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
-            { href: "/admin/discount-redemptions", label: "Discount Redemptions" },
+            { href: "/admin/discounts", label: "Discounts" },
+            { href: "/admin/discount-redemptions", label: "Discount redemptions" },
             { href: "/admin/financials/pricing", label: "Pricing" },
+            { href: "/admin/subscriptions", label: "Subscriptions" },
+            { href: "/admin/financials/accounts", label: "Accounts" },
+            { href: "/admin/system/payouts", label: "Payouts" },
+            {
+                label: "Billing & catalog",
+                subItems: [
+                    { href: "/admin/financials/service-offerings", label: "Service offerings" },
+                    { href: "/admin/financials/plan-templates", label: "Plan templates" },
+                    { href: "/admin/financials/add-ons", label: "Add-ons" },
+                    { href: "/admin/financials/settings/subscription", label: "Subscription billing" },
+                    { href: "/admin/financials", label: "Overview" },
+                ],
+            },
         ],
     },
     {
         label: "System",
         icon: Settings,
         items: [
-            { href: "/admin/system/access-control", label: "Access Control" },
-            { href: "/admin/system/verticals-industries", label: "Verticals / Industries" },
-            { href: "/admin/system/entity-labels", label: "Entity Labels" },
+            { href: "/admin/system", label: "Overview" },
+            { href: "/admin/system/access-control", label: "Access control" },
+            { href: "/admin/users", label: "Users" },
+            { href: "/admin/system/roles", label: "Roles" },
+            { href: "/admin/system/verticals-industries", label: "Verticals / industries" },
+            { href: "/admin/system/entity-labels", label: "Entity labels" },
             { href: "/admin/system/statuses", label: "Statuses" },
+            { href: "/admin/operations/recurrence", label: "Recurrence" },
             {
-                label: "Directory Settings",
+                label: "Custom fields",
                 subItems: [
-                    { href: "/admin/system/customer-person-roles", label: "Person Roles" },
-                    { href: "/admin/system/person-fields", label: "Person Fields" },
-                    { href: "/admin/system/location-fields", label: "Location Fields" },
-                    { href: "/admin/system/person-relationship-types", label: "Relationships" },
-                    { href: "/admin/system/db-relationships", label: "DB Relationships" },
-                    { href: "/admin/system/customer-fields", label: "Customer Fields" },
-                    { href: "/admin/system/job-fields", label: "Job Fields" },
-                    { href: "/admin/system/opportunity-fields", label: "Opportunity Fields" },
-                    { href: "/admin/system/vendor-fields", label: "Vendor Fields" },
-                    { href: "/admin/system/schedule-fields", label: "Schedule Fields" },
-                    { href: "/admin/system/document-fields", label: "Document Fields" },
+                    { href: "/admin/system/person-fields", label: "Person fields" },
+                    { href: "/admin/system/location-fields", label: "Location fields" },
+                    { href: "/admin/system/customer-fields", label: "Customer fields" },
+                    { href: "/admin/system/job-fields", label: "Job fields" },
+                    { href: "/admin/system/opportunity-fields", label: "Opportunity fields" },
+                    { href: "/admin/system/vendor-fields", label: "Vendor fields" },
+                    { href: "/admin/system/schedule-fields", label: "Schedule fields" },
+                    { href: "/admin/system/document-fields", label: "Document fields" },
                 ],
             },
-            { href: "/admin/system/payouts", label: "Payouts" },
+            {
+                label: "Relationships",
+                subItems: [
+                    { href: "/admin/system/customer-person-roles", label: "Customer person roles" },
+                    { href: "/admin/system/person-relationship-types", label: "Person relationship types" },
+                    { href: "/admin/system/db-relationships", label: "DB relationships" },
+                ],
+            },
         ],
     },
 ];
 
-function getLinkIcon(href: string, label: string, nestedLabel?: string): IconComponent | null {
+function getLinkIcon(href: string, _label: string, nestedLabel?: string): IconComponent | null {
     const map: Record<string, IconComponent> = {
+        "/admin": LayoutDashboard,
+        "/admin/dashboard": LayoutDashboard,
+        "/admin/system": Settings,
         "/admin/opportunities": LayoutGrid,
         "/admin/jobs": Briefcase,
         "/admin/schedules": Calendar,
@@ -135,10 +173,12 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/financials/payments": DollarSign,
         "/admin/subscriptions": Receipt,
         "/admin/financials/pricing": Tag,
+        "/admin/discounts": Tag,
         "/admin/financials/service-offerings": Tag,
         "/admin/financials/plan-templates": Tag,
         "/admin/financials/add-ons": Tag,
         "/admin/discount-redemptions": Tag,
+        "/admin/financials/accounts": Building2,
         "/admin/operations/recurrence": Repeat,
         "/admin/system/access-control": Shield,
         "/admin/system/verticals-industries": LayoutGrid,
@@ -150,17 +190,30 @@ function getLinkIcon(href: string, label: string, nestedLabel?: string): IconCom
         "/admin/customer-members": Users,
         "/admin/customers": Users,
         "/admin/vendors": Users,
+        "/admin/contractors": Briefcase,
+        "/admin/users": Users,
+        "/admin/system/roles": Shield,
+        "/admin/workflows": GitBranch,
+        "/admin/workflow-events": GitBranch,
+        "/admin/workflow-runs": GitBranch,
     };
     if (map[href]) return map[href];
-    if (nestedLabel === "Directory") return Users;
-    if (nestedLabel === "Workflows") return GitBranch;
-    if (nestedLabel === "Settings") return Settings;
-    if (nestedLabel === "Directory Settings") return Tag;
+    if (nestedLabel === "Messages") return MessageSquare;
+    if (nestedLabel === "Billing & catalog") return Tag;
+    if (nestedLabel === "Custom fields") return Tag;
+    if (nestedLabel === "Relationships") return Users;
     return null;
 }
 
 function getInitialCollapsed(): Record<string, boolean> {
-    const defaults = { Directory: false, Operations: false, Financials: true, System: true };
+    const defaults: Record<string, boolean> = {
+        Operations: false,
+        Records: false,
+        Workflows: false,
+        Documents: false,
+        Financials: true,
+        System: true,
+    };
     if (typeof window === "undefined") {
         return defaults;
     }
@@ -204,7 +257,12 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
     const { labels, loading: labelsLoading } = useEntityLabels();
 
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
-    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({ "Operations::Workflows": true, "Operations::Settings": true, "Financials::Settings": true });
+    const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({
+        "Operations::Messages": true,
+        "Financials::Billing & catalog": true,
+        "System::Custom fields": true,
+        "System::Relationships": true,
+    });
     const [profileOpen, setProfileOpen] = useState(false);
     const [verticalOpen, setVerticalOpen] = useState(false);
 
@@ -218,16 +276,45 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
         if (group && collapsed[group.label]) {
             setCollapsed((prev) => ({ ...prev, [group.label]: false }));
         }
-        const workflowPaths = ["/admin/workflows", "/admin/workflow-events", "/admin/workflow-runs"];
-        if (workflowPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev["Operations::Workflows"] === false ? prev : { ...prev, "Operations::Workflows": false }));
+        const messagePaths = ["/admin/messaging", "/admin/messages-outbox"];
+        if (messagePaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev["Operations::Messages"] === false ? prev : { ...prev, "Operations::Messages": false }));
         }
-        if (pathname === "/admin/operations/recurrence") {
-            setNestedCollapsed((prev) => (prev["Operations::Settings"] === false ? prev : { ...prev, "Operations::Settings": false }));
+        const customFieldPaths = [
+            "/admin/system/person-fields",
+            "/admin/system/location-fields",
+            "/admin/system/customer-fields",
+            "/admin/system/job-fields",
+            "/admin/system/opportunity-fields",
+            "/admin/system/vendor-fields",
+            "/admin/system/schedule-fields",
+            "/admin/system/document-fields",
+        ];
+        if (customFieldPaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev["System::Custom fields"] === false ? prev : { ...prev, "System::Custom fields": false }));
         }
-        const directorySettingsPaths = ["/admin/system/customer-person-roles", "/admin/system/person-relationship-types", "/admin/system/db-relationships"];
-        if (directorySettingsPaths.includes(pathname)) {
-            setNestedCollapsed((prev) => (prev["System::Directory Settings"] === false ? prev : { ...prev, "System::Directory Settings": false }));
+        const relationshipPaths = [
+            "/admin/system/customer-person-roles",
+            "/admin/system/person-relationship-types",
+            "/admin/system/db-relationships",
+        ];
+        if (relationshipPaths.includes(pathname)) {
+            setNestedCollapsed((prev) => (prev["System::Relationships"] === false ? prev : { ...prev, "System::Relationships": false }));
+        }
+        const billingCatalogPaths = [
+            "/admin/financials/service-offerings",
+            "/admin/financials/plan-templates",
+            "/admin/financials/add-ons",
+            "/admin/financials/settings/subscription",
+            "/admin/financials",
+        ];
+        if (billingCatalogPaths.includes(pathname)) {
+            setNestedCollapsed((prev) =>
+                prev["Financials::Billing & catalog"] === false ? prev : { ...prev, "Financials::Billing & catalog": false }
+            );
+        }
+        if (pathname.startsWith("/admin/system/")) {
+            setCollapsed((prev) => (prev.System === false ? prev : { ...prev, System: false }));
         }
     }, [pathname]);
 
@@ -357,6 +444,23 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
                         className="flex-1 overflow-y-auto overflow-x-hidden p-4"
                         aria-label="Admin navigation"
                     >
+                        <div className="mb-3">
+                            <Link
+                                href="/admin/dashboard"
+                                className={`flex items-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                                    pathname === "/admin/dashboard"
+                                        ? "bg-alloy-pine/8 text-alloy-pine border-l-2 border-alloy-pine"
+                                        : "text-alloy-midnight hover:bg-alloy-pine/5"
+                                }`}
+                            >
+                                <LayoutDashboard
+                                    className={
+                                        pathname === "/admin/dashboard" ? "h-4 w-4 shrink-0 text-alloy-pine" : iconClassSidebar
+                                    }
+                                />
+                                Dashboard
+                            </Link>
+                        </div>
                         {navGroups.map((group) => {
                             const GroupIcon = group.icon;
                             const isCollapsed = collapsed[group.label] ?? true;

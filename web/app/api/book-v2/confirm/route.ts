@@ -64,6 +64,84 @@ function isIdempotentDiscountRetry(
     );
 }
 
+function normConfirmEmail(v: unknown): string {
+    return String(v ?? "").trim().toLowerCase();
+}
+
+function normConfirmPhoneDigits(v: unknown): string {
+    return String(v ?? "").replace(/\D/g, "");
+}
+
+function normConfirmNamePart(v: unknown): string {
+    return String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+type ConfirmIdentityRow = {
+    email?: string | null;
+    phone?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+};
+
+/**
+ * True when the person/contact row linked to the quote matches what the user submitted.
+ * If the browser sends stale person_id/opportunity_id after the user edits name/email/phone,
+ * this returns false so confirm falls back to resolve_or_create_contact_and_customer.
+ */
+function identityRowMatchesSubmission(row: ConfirmIdentityRow, submitted: { email: string; phone: string; first: string; last: string }): boolean {
+    const se = normConfirmEmail(submitted.email);
+    const re = normConfirmEmail(row.email);
+    if (se && re && se !== re) return false;
+    if (re && !se) return false;
+
+    const sp = normConfirmPhoneDigits(submitted.phone);
+    const rp = normConfirmPhoneDigits(row.phone);
+    if (sp.length >= 10 && rp.length >= 10 && sp.slice(-10) !== rp.slice(-10)) return false;
+    if (rp.length >= 10 && sp.length < 10) return false;
+
+    const sf = normConfirmNamePart(submitted.first);
+    const sl = normConfirmNamePart(submitted.last);
+    const rf = normConfirmNamePart(row.first_name);
+    const rl = normConfirmNamePart(row.last_name);
+    if (sf && sl && rf && rl && (sf !== rf || sl !== rl)) return false;
+
+    return true;
+}
+
+async function quoteLinkedIdentityMatchesSubmission(
+    supabase: Supabase,
+    params: {
+        person_id: string | null | undefined;
+        contact_id: string | null | undefined;
+        contact_email: unknown;
+        contact_phone: unknown;
+        contact_first_name: unknown;
+        contact_last_name: unknown;
+    }
+): Promise<boolean> {
+    const { person_id, contact_id, contact_email, contact_phone, contact_first_name, contact_last_name } = params;
+    const submitted = {
+        email: String(contact_email ?? "").trim(),
+        phone: String(contact_phone ?? "").trim(),
+        first: String(contact_first_name ?? "").trim(),
+        last: String(contact_last_name ?? "").trim(),
+    };
+
+    let row: ConfirmIdentityRow | null = null;
+    if (person_id && typeof person_id === "string") {
+        const { data: p } = await supabase.from("persons").select("email, phone, first_name, last_name").eq("id", person_id).maybeSingle();
+        row = (p as ConfirmIdentityRow | null) ?? null;
+    } else if (contact_id && typeof contact_id === "string") {
+        const { data: c } = await supabase.from("contacts").select("email, phone, first_name, last_name").eq("id", contact_id).maybeSingle();
+        row = (c as ConfirmIdentityRow | null) ?? null;
+    } else {
+        return true;
+    }
+
+    if (!row) return false;
+    return identityRowMatchesSubmission(row, submitted);
+}
+
 /** Returns a NextResponse to send if the customer already redeemed this promo, or null if OK. */
 async function assertNoPriorDiscountRedemption(
     supabase: Supabase,
@@ -659,14 +737,19 @@ export async function POST(request: NextRequest) {
             quote_input,
             quote_output,
             booking_attempt_id = bookingAttemptId,
-            opportunity_id: opportunity_id_from_quote,
-            contact_id: contact_id_from_quote,
-            person_id: person_id_from_quote,
-            customer_id: customer_id_from_quote,
             stripe_payment_method_id: stripe_pm_body,
             stripe_setup_intent_id: stripe_si_body,
             payment_method_id: payment_method_id_body,
         } = body;
+
+        let opportunity_id_from_quote =
+            typeof body.opportunity_id === "string" && body.opportunity_id.trim() ? body.opportunity_id.trim() : null;
+        let contact_id_from_quote =
+            typeof body.contact_id === "string" && body.contact_id.trim() ? body.contact_id.trim() : null;
+        let person_id_from_quote =
+            typeof body.person_id === "string" && body.person_id.trim() ? body.person_id.trim() : null;
+        let customer_id_from_quote =
+            typeof body.customer_id === "string" && body.customer_id.trim() ? body.customer_id.trim() : null;
 
         const stripe_payment_method_id =
             (typeof stripe_pm_body === "string" && stripe_pm_body.trim().startsWith("pm_") ? stripe_pm_body.trim() : null) ??
@@ -757,6 +840,26 @@ export async function POST(request: NextRequest) {
         const supabase = createServiceRoleClient();
         const confirmRouteT0 = typeof performance !== "undefined" ? performance.now() : Date.now();
         bookV2PerfLog("confirm_route_entry", confirmRouteT0, booking_attempt_id ?? null);
+
+        if (opportunity_id_from_quote && (person_id_from_quote || contact_id_from_quote)) {
+            const linkedOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
+                person_id: person_id_from_quote,
+                contact_id: person_id_from_quote ? undefined : contact_id_from_quote,
+                contact_email,
+                contact_phone,
+                contact_first_name,
+                contact_last_name,
+            });
+            if (!linkedOk) {
+                console.warn(
+                    "[BOOK_V2_CONFIRM] Dropping quote opportunity/person/contact/customer ids — submission does not match linked identity"
+                );
+                opportunity_id_from_quote = null;
+                person_id_from_quote = null;
+                contact_id_from_quote = null;
+                customer_id_from_quote = null;
+            }
+        }
 
         const useQuoteIds =
             !!(opportunity_id_from_quote && (person_id_from_quote || contact_id_from_quote));

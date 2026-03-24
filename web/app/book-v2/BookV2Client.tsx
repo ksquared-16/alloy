@@ -78,12 +78,44 @@ const QUOTE_STORAGE_KEYS = [
     "alloy_opportunity_id",
 ] as const;
 
+const BOOKING_IDENTITY_SIG_KEY = "alloy_booking_identity_sig";
+
 const BOOKING_IDENTITY_KEYS = [
     "alloy_person_id",
     "alloy_contact_id",
     "alloy_customer_id",
     "alloy_opportunity_id",
+    BOOKING_IDENTITY_SIG_KEY,
 ] as const;
+
+/** Canonical snapshot of the identity used when quote IDs were last written (must align with server confirm checks). */
+function bookingIdentitySignatureString(identity: {
+    email?: string | null;
+    phone?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+}): string {
+    const e = String(identity.email ?? "").trim().toLowerCase();
+    const rawP = String(identity.phone ?? "").replace(/\D/g, "");
+    const p = rawP.length >= 10 ? rawP.slice(-10) : rawP;
+    const f = String(identity.first_name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    const l = String(identity.last_name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    return JSON.stringify({ e, p, f, l });
+}
+
+function persistBookingIdentitySnapshot(identity: {
+    email?: string | null;
+    phone?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+}): void {
+    if (typeof window === "undefined") return;
+    try {
+        localStorage.setItem(BOOKING_IDENTITY_SIG_KEY, bookingIdentitySignatureString(identity));
+    } catch {
+        // ignore
+    }
+}
 
 /** Clear only booking identity keys so a new quote-start cannot reuse stale person/contact/customer/opportunity ids. */
 function clearBookingIdentityKeys(): void {
@@ -299,6 +331,12 @@ async function maybeCreateLeadFromPrefill(params: {
                 if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
                 if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+                persistBookingIdentitySnapshot({
+                    email: params.email,
+                    phone: params.phone,
+                    first_name: params.first_name,
+                    last_name: params.last_name,
+                });
             } catch (e) {
                 console.warn("[QUOTE_START_PREFILL] localStorage set failed", e);
             }
@@ -1254,6 +1292,12 @@ export default function BookV2Client() {
                 if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
                 if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+                persistBookingIdentitySnapshot({
+                    email: email?.trim(),
+                    phone: phone?.trim(),
+                    first_name: first_name.trim(),
+                    last_name: last_name.trim(),
+                });
             } catch (e) {
                 console.warn("localStorage set failed:", e);
             }
@@ -1407,6 +1451,19 @@ export default function BookV2Client() {
                     // ignore
                 }
             }
+            const identityForSig = {
+                email,
+                phone,
+                first_name: (resolvedFirstName ?? (prefillData.first_name as string))?.trim() || "",
+                last_name: (resolvedLastName ?? (prefillData.last_name as string))?.trim() || "",
+            };
+            if (typeof window !== "undefined") {
+                const storedSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
+                const curSig = bookingIdentitySignatureString(identityForSig);
+                if (storedSig && storedSig !== curSig) {
+                    clearBookingIdentityKeys();
+                }
+            }
             const hasIds = typeof window !== "undefined" &&
                 (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
             if (!hasIds) {
@@ -1434,6 +1491,7 @@ export default function BookV2Client() {
                         if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
                         if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                         if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+                        persistBookingIdentitySnapshot(identityForSig);
                     } catch {
                         // ignore
                     }
@@ -1464,6 +1522,14 @@ export default function BookV2Client() {
             }
             setResolvedEmail(email);
             setResolvedPhone(phone);
+            if (typeof window !== "undefined") {
+                persistBookingIdentitySnapshot({
+                    email,
+                    phone,
+                    first_name: identityForSig.first_name,
+                    last_name: identityForSig.last_name,
+                });
+            }
         } catch (err) {
             console.error("Payment identity save failed:", err);
             setPaymentIdentityError("Something went wrong. Please try again.");
@@ -1669,6 +1735,19 @@ export default function BookV2Client() {
                 }
             }
 
+            if (typeof window !== "undefined") {
+                const curSig = bookingIdentitySignatureString({
+                    email: resolvedEmail || prefillData.email,
+                    phone: resolvedPhone || prefillData.phone,
+                    first_name: resolvedFirstName || prefillData.first_name,
+                    last_name: resolvedLastName || prefillData.last_name,
+                });
+                const prevSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
+                if (prevSig && prevSig !== curSig) {
+                    clearBookingIdentityKeys();
+                }
+            }
+
             // Step 0 (person-first): If we have person_id but no contact_id/customer_id, ensure customer + compat contact for payment/Stripe
             let setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
             let setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
@@ -1689,6 +1768,12 @@ export default function BookV2Client() {
                         try {
                             localStorage.setItem("alloy_contact_id", ensureData.contact_id);
                             localStorage.setItem("alloy_customer_id", ensureData.customer_id);
+                            persistBookingIdentitySnapshot({
+                                email: resolvedEmail || prefillData.email,
+                                phone: resolvedPhone || prefillData.phone,
+                                first_name: resolvedFirstName || prefillData.first_name,
+                                last_name: resolvedLastName || prefillData.last_name,
+                            });
                         } catch {
                             // ignore
                         }
@@ -1920,6 +2005,7 @@ export default function BookV2Client() {
             if (!bookingResponse.ok || result.ok === false) {
                 if (bookingResponse.status === 409 && result.error === "QUOTE_ID_MISMATCH") {
                     clearQuoteStorage();
+                    clearBookingIdentityKeys();
                     setQuoteRefreshMessage("We refreshed your quote — please confirm it again.");
                     setCurrentStep("refine_quote");
                     setPaymentError(null);
