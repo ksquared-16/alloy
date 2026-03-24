@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
@@ -49,9 +51,16 @@ export async function PATCH(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
+        const ctx = await getAdminContext();
+        if (!ctx.ok) return adminContextFailureResponse(ctx);
         const body = await request.json();
         const auth = await getAdminAuth();
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const supabase = createAdminClient();
+        if (!(await assertRowOrg(supabase, "vendors", id, ctx.orgId)).ok) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
 
         const updates: Record<string, unknown> = {};
         for (const key of ALLOWED_KEYS) {
@@ -82,12 +91,11 @@ export async function PATCH(
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
-        const supabase = createAdminClient();
-
         const { data: existing } = await supabase
             .from("vendors")
             .select("org_id, status_key")
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .maybeSingle();
         const existingRow = existing as { org_id?: string; status_key?: string | null } | null;
         if (!existingRow) {
@@ -111,11 +119,7 @@ export async function PATCH(
             if (!chk.ok) {
                 return NextResponse.json({ error: chk.message }, { status: 400 });
             }
-            const { data: vs, error: vsErr } = await supabase
-                .from("vendor_statuses")
-                .select("id, key")
-                .eq("key", sk)
-                .maybeSingle();
+            const { data: vs, error: vsErr } = await supabase.from("vendor_statuses").select("id, key").eq("key", sk).maybeSingle();
             if (vsErr) {
                 return NextResponse.json({ error: `Could not resolve vendor_statuses: ${vsErr.message}` }, { status: 400 });
             }
@@ -134,6 +138,7 @@ export async function PATCH(
             .from("vendors")
             .update(updates)
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .select()
             .single();
 

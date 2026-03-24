@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 
 /** GET: vendors that can be assigned to this job (org + job vertical + approved). */
-export async function GET(
-    _request: Request,
-    context: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
     const auth = await getAdminAuth();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: jobId } = await context.params;
@@ -21,18 +21,16 @@ export async function GET(
         .from("jobs")
         .select("id, vertical_id, org_id")
         .eq("id", jobId)
+        .eq("org_id", ctx.orgId)
         .single();
     if (jErr || !job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    const orgId = (job as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+    const orgId = (job as { org_id?: string | null }).org_id;
     const verticalId = (job as { vertical_id?: string } | null)?.vertical_id ?? null;
     if (!orgId) return NextResponse.json({ vendors: [] });
     if (!verticalId) return NextResponse.json({ vendors: [] });
 
-    const { data: vvRows } = await supabase
-        .from("vendor_verticals")
-        .select("vendor_id")
-        .eq("vertical_id", verticalId);
+    const { data: vvRows } = await supabase.from("vendor_verticals").select("vendor_id").eq("vertical_id", verticalId);
     const vendorIds = ((vvRows ?? []) as { vendor_id: string }[]).map((r) => r.vendor_id);
     if (vendorIds.length === 0) return NextResponse.json({ vendors: [] });
 

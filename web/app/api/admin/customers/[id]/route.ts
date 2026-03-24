@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
@@ -17,9 +19,16 @@ export async function PATCH(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
+        const ctx = await getAdminContext();
+        if (!ctx.ok) return adminContextFailureResponse(ctx);
         const body = await request.json();
         const auth = await getAdminAuth();
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const supabase = createAdminClient();
+        if (!(await assertRowOrg(supabase, "customers", id, ctx.orgId)).ok) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
 
         const updates: Record<string, unknown> = {};
         for (const key of ALLOWED_KEYS) {
@@ -30,11 +39,11 @@ export async function PATCH(
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
-        const supabase = createAdminClient();
         const { data: existing } = await supabase
             .from("customers")
             .select("org_id, status_key, primary_contact_id")
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .maybeSingle();
         const existingRow = existing as { org_id?: string; status_key?: string | null; primary_contact_id?: string | null } | null;
         const oldStatusKey = existingRow?.status_key ?? null;
@@ -49,6 +58,7 @@ export async function PATCH(
             .from("customers")
             .update(updates)
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .select()
             .single();
 

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. When copy_assignment is false, workflow(s) with event_type "schedule_created" may create assignment from job default. */
-export async function POST(
-    request: NextRequest,
-    context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
     const auth = await getAdminAuth();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: oldScheduleId } = await context.params;
@@ -27,16 +27,17 @@ export async function POST(
         .from("schedules")
         .select("id, job_id, timezone, duration_minutes, org_id")
         .eq("id", oldScheduleId)
+        .eq("org_id", ctx.orgId)
         .single();
     if (fetchErr || !oldSchedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
 
+    const orgId = (oldSchedule as { org_id: string }).org_id;
     const jobId = (oldSchedule as { job_id?: string }).job_id;
     if (!jobId) return NextResponse.json({ error: "Schedule has no job_id" }, { status: 400 });
 
     const durationMs = new Date(endAt).getTime() - new Date(startAt).getTime();
     const durationMinutes = Math.round(durationMs / 60000) || (oldSchedule as { duration_minutes?: number }).duration_minutes || 120;
     const timezone = body.timezone != null ? String(body.timezone).trim() : ((oldSchedule as { timezone?: string }).timezone ?? "UTC");
-    const orgId = (oldSchedule as { org_id?: string }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
     const { data: newSchedule, error: insErr } = await supabase
         .from("schedules")
@@ -60,10 +61,10 @@ export async function POST(
             .from("assignments")
             .select("vendor_id, assignment_status_id")
             .eq("schedule_id", oldScheduleId)
+            .eq("org_id", ctx.orgId)
             .maybeSingle();
         if (oldAssignment) {
             const now = new Date().toISOString();
-            if (!orgId) return NextResponse.json({ error: "Could not resolve org_id for assignment" }, { status: 400 });
             await supabase.from("assignments").insert({
                 schedule_id: newId,
                 job_id: jobId,
@@ -74,17 +75,16 @@ export async function POST(
             });
         }
     } else {
-        const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).single();
+        const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).eq("org_id", ctx.orgId).single();
         const job = jobRow ?? null;
-        const orgIdForWf = (oldSchedule as { org_id?: string }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
         let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "schedule_created").eq("entity_type", "schedule");
-        if (orgIdForWf) wq = wq.or(`org_id.eq.${orgIdForWf},org_id.is.null`);
+        wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
         const { data: wfs } = await wq;
-        const { data: newScheduleRow } = await supabase.from("schedules").select("*").eq("id", newId).single();
+        const { data: newScheduleRow } = await supabase.from("schedules").select("*").eq("id", newId).eq("org_id", ctx.orgId).single();
         const eventPayload: Record<string, unknown> = {
             event_type: "schedule_created",
             occurred_at: new Date().toISOString(),
-            org_id: orgIdForWf,
+            org_id: ctx.orgId,
             schedule_id: newId,
             job_id: jobId,
             job,
@@ -94,7 +94,7 @@ export async function POST(
         let eventId: string | null = null;
         try {
             eventId = await emitEvent({
-                org_id: orgIdForWf ?? orgId ?? null,
+                org_id: ctx.orgId,
                 event_type: "schedule_created",
                 entity_type: "schedule",
                 entity_id: newId ?? ((eventPayload as Record<string, unknown>)?.schedule as { id?: string } | undefined)?.id ?? null,
@@ -110,7 +110,7 @@ export async function POST(
             try {
                 await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
                     event_id: eventId,
-                    org_id: orgIdForWf ?? orgId ?? null,
+                    org_id: ctx.orgId,
                 });
             } catch (_) {}
         }

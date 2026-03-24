@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 
 export type WorkflowRunRow = {
     id: string;
@@ -19,15 +20,13 @@ export type WorkflowRunRow = {
     has_failed_action?: boolean;
 };
 
-/** GET: list workflow_runs for current org. Enriches with workflow name and event_type/entity_type/entity_id from workflow_events. */
+/** GET: list workflow_runs for caller org. Enriches with workflow name and event_type/entity_type/entity_id from workflow_events. */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-
-    const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-    if (!orgId) {
-        return NextResponse.json({ error: "ALLOY_PUBLIC_ORG_ID not set" }, { status: 500 });
-    }
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const orgId = ctx.orgId;
 
     const { searchParams } = new URL(request.url);
     const list = searchParams.get("list");
@@ -37,6 +36,7 @@ export async function GET(request: NextRequest) {
         const { data, error } = await supabase
             .from("workflows")
             .select("id, name")
+            .eq("org_id", orgId)
             .order("name", { ascending: true });
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         const workflows = (data ?? []).map((w) => ({ id: (w as { id: string }).id, name: (w as { name: string | null }).name ?? "—" }));
@@ -105,11 +105,26 @@ export async function GET(request: NextRequest) {
     if (fromIso) q = q.gte("started_at", fromIso);
     if (eventIdsForType && eventIdsForType.length > 0) q = q.in("event_id", eventIdsForType);
 
-    async function enrichRuns(rows: { id: string; workflow_id: string; event_id: string | null; status: string; error: string | null; started_at: string; completed_at: string | null; event_payload: unknown }[]) {
+    async function enrichRuns(
+        rows: {
+            id: string;
+            workflow_id: string;
+            event_id: string | null;
+            status: string;
+            error: string | null;
+            started_at: string;
+            completed_at: string | null;
+            event_payload: unknown;
+        }[]
+    ) {
         const wfIds = [...new Set(rows.map((r) => r.workflow_id).filter(Boolean))];
         const evIds = [...new Set(rows.map((r) => r.event_id).filter(Boolean))] as string[];
-        const { data: wfData } = wfIds.length ? await supabase.from("workflows").select("id, name").in("id", wfIds) : { data: [] };
-        const { data: evData } = evIds.length ? await supabase.from("workflow_events").select("id, event_type, entity_type, entity_id").in("id", evIds) : { data: [] };
+        const { data: wfData } = wfIds.length
+            ? await supabase.from("workflows").select("id, name").eq("org_id", orgId).in("id", wfIds)
+            : { data: [] };
+        const { data: evData } = evIds.length
+            ? await supabase.from("workflow_events").select("id, event_type, entity_type, entity_id").eq("org_id", orgId).in("id", evIds)
+            : { data: [] };
         const wfMap = new Map((wfData ?? []).map((w) => [(w as { id: string }).id, (w as { name: string | null }).name ?? null]));
         const evMap = new Map((evData ?? []).map((e) => [(e as { id: string }).id, e as { event_type: string | null; entity_type: string | null; entity_id: string | null }]));
         const runIds = rows.map((r) => r.id);
@@ -118,6 +133,7 @@ export async function GET(request: NextRequest) {
             const { data: failedRows } = await supabase
                 .from("workflow_action_runs")
                 .select("workflow_run_id")
+                .eq("org_id", orgId)
                 .in("workflow_run_id", runIds)
                 .eq("status", "failed");
             runIdsWithFailedAction = new Set((failedRows ?? []).map((r) => (r as { workflow_run_id: string }).workflow_run_id));
@@ -142,7 +158,16 @@ export async function GET(request: NextRequest) {
     if (search) {
         const { data: rows, error } = await q.limit(1000);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        const raw = (rows ?? []) as { id: string; workflow_id: string; event_id: string | null; status: string; error: string | null; started_at: string; completed_at: string | null; event_payload: unknown }[];
+        const raw = (rows ?? []) as {
+            id: string;
+            workflow_id: string;
+            event_id: string | null;
+            status: string;
+            error: string | null;
+            started_at: string;
+            completed_at: string | null;
+            event_payload: unknown;
+        }[];
         const enriched = await enrichRuns(raw);
         const searchLower = search.toLowerCase();
         const filtered = enriched.filter(
@@ -158,7 +183,16 @@ export async function GET(request: NextRequest) {
 
     const { data: rows, error, count } = await q.range(offset, offset + limit - 1);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const raw = (rows ?? []) as { id: string; workflow_id: string; event_id: string | null; status: string; error: string | null; started_at: string; completed_at: string | null; event_payload: unknown }[];
+    const raw = (rows ?? []) as {
+        id: string;
+        workflow_id: string;
+        event_id: string | null;
+        status: string;
+        error: string | null;
+        started_at: string;
+        completed_at: string | null;
+        event_payload: unknown;
+    }[];
     const runs = await enrichRuns(raw);
     return NextResponse.json({
         runs,

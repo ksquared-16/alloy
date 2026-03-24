@@ -180,11 +180,8 @@ export async function persistBookingPaymentMethod(
     stripe_payment_method_id: stripePaymentMethodId,
     is_default: true,
   };
-  const { ok: insertOk } = await tryInsertPaymentMethodRow(supabase, [
-    { ...base, payment_method_brand: brand, payment_method_last4: last4 },
-    { ...base, brand, last4 },
-    { ...base },
-  ]);
+  /** DB columns are `brand` and `last4` only — avoid a failing insert on legacy `payment_method_*` names (extra round-trip + PostgREST schema noise). */
+  const { ok: insertOk } = await tryInsertPaymentMethodRow(supabase, [{ ...base, brand, last4 }]);
 
   const elapsed = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
   console.log(

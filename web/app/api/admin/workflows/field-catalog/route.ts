@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 
 export type FieldCatalogEntry = {
@@ -57,6 +58,8 @@ const VENDOR_RELATIONSHIP_FIELDS: FieldCatalogEntry[] = [
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
     const auth = await getAdminAuth();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

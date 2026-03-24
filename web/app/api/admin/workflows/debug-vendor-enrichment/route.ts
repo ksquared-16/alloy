@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 
 /**
@@ -17,6 +19,8 @@ export async function GET(request: NextRequest) {
 
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
     const auth = await getAdminAuth();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -27,11 +31,15 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    if (!(await assertRowOrg(supabase, "vendors", vendorId, ctx.orgId)).ok) {
+        return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
+    }
 
     const { data: vendor, error: vendorErr } = await supabase
         .from("vendors")
         .select("*")
         .eq("id", vendorId)
+        .eq("org_id", ctx.orgId)
         .maybeSingle();
     if (vendorErr) {
         return NextResponse.json({ error: vendorErr.message }, { status: 500 });

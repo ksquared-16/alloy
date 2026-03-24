@@ -17,8 +17,8 @@
 
 | File | Table may imply | Actual |
 |------|-----------------|--------|
-| `vendors/[id]/documents/signed-url/route.ts` | “No auth helper” | Uses **`getAdminAuth()`**; still **no org / vendor ownership check** before `createServiceRoleClient()` signed URL — treat as **HIGH** (cross-org if id/path guessed). |
-| `payments/run/route.ts` | “No auth” | Uses **`requireAdmin()`** and proxies to Python backend — **org/job scoping depends on backend**; not fully verifiable from this repo alone. |
+| `vendors/[id]/documents/signed-url/route.ts` | “No auth helper” | **Batch 3:** `getAdminContext` + vendor `org_id` match before storage signed URL. |
+| `payments/run/route.ts` | “No auth” | **Batch 3:** `getAdminContext` + asserts org-owned **`jobs`** row before proxy; **charge/ledger** org enforcement still **Python backend** (see `docs/ADMIN_API_REMEDIATION_BATCH_3.md`). |
 
 ---
 
@@ -42,7 +42,7 @@
 **Highest-risk themes**
 
 1. **Unauthenticated GET** on workflow and pipeline list/detail/child resources — full database read via service role.
-2. **Financial snapshot/statements** — no auth + hardcoded `ORG_ID_FINANCIALS` in `web/lib/financials.ts`.
+2. **Financial snapshot/statements** — **Batch 1** authenticated API routes; **Batch 3** admin dashboard SSR uses **`getAdminContext().orgId`** for `getFinancialSnapshot` (constant `ORG_ID_FINANCIALS` in `web/lib/financials.ts` is legacy / scripts only).
 3. **`GET /api/admin/payments`** — session required via `requireAdminOrOps`, but query does **not** filter by caller org → **cross-org payment listing**.
 4. **`requireAdminOrOps` + UUID PATCH** on customers, opportunities, vendors, payments, etc. — loads row by `id` only, **never compares** `row.org_id` to the caller’s org from `user_roles`.
 5. **`ALLOY_PUBLIC_ORG_ID`** in workflow-events / workflow-runs (and mixed into some schedule/job routes) — **wrong tenant** when env is single-org but users are multi-org.
@@ -61,7 +61,7 @@ Columns:
 - **Elevated client** — uses service role (or other elevated Supabase client).
 - **getAdminContext?** — file imports/calls `getAdminContext` (yes/no at file level).
 - **Org reads / Org writes** — **yes** = explicit membership scoping observed (heuristic); **no** = missing or unauthenticated; **partial** = ambiguous or IDOR-prone; **n/a** = write not applicable to route.
-- **Remediation** — Batch 1 P0 fixes where applied; **—** = not part of Batch 1 (see `docs/ADMIN_API_REMEDIATION_BATCH_1.md`).
+- **Remediation** — **Batch 1** / **Batch 2** / **Batch 3** fixes where applied; **—** = not yet remediated in those batches (see `docs/ADMIN_API_REMEDIATION_BATCH_1.md`, `docs/ADMIN_API_REMEDIATION_BATCH_2.md`, `docs/ADMIN_API_REMEDIATION_BATCH_3.md`).
 
 | Route | File | Elevated client | getAdminContext? | Org reads | Org writes | Risk | Notes | Recommended fix | Remediation |
 |-------|------|:---------------:|:----------------:|:---------:|:----------:|:----:|-------|-----------------|-------------|
@@ -81,12 +81,12 @@ Columns:
 | `/api/admin/customer-options` | `app/api/admin/customer-options/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/customer-person-role-types/[id]` | `app/api/admin/customer-person-role-types/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/customer-person-role-types` | `app/api/admin/customer-person-role-types/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/customers/[id]` | `app/api/admin/customers/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH by id; no compare row.org_id to caller org | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/customers/[id]` | `app/api/admin/customers/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH by id; no compare row.org_id to caller org | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/customers` | `app/api/admin/customers/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/db-relationships` | `app/api/admin/db-relationships/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/deletion-eligibility` | `app/api/admin/deletion-eligibility/route.ts` | no | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/discount-code-options` | `app/api/admin/discount-code-options/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
-| `/api/admin/discount-redemptions` | `app/api/admin/discount-redemptions/route.ts` | yes | no | no | n/a | **HIGH** | List all redemptions; scope via customers.org_id | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/discount-redemptions` | `app/api/admin/discount-redemptions/route.ts` | yes | no | no | n/a | **HIGH** | List all redemptions; scope via customers.org_id | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/discounts/[id]` | `app/api/admin/discounts/[id]/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/discounts` | `app/api/admin/discounts/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/document-field-definitions/[id]` | `app/api/admin/document-field-definitions/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
@@ -97,7 +97,7 @@ Columns:
 | `/api/admin/documents` | `app/api/admin/documents/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/documents/upload` | `app/api/admin/documents/upload/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/entity-labels` | `app/api/admin/entity-labels/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/entity/[type]/[id]` | `app/api/admin/entity/[type]/[id]/route.ts` | yes | yes | partial | partial | **HIGH** | GET/PATCH mix: early paths fetch by id without session; review whole file | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/entity/[type]/[id]` | `app/api/admin/entity/[type]/[id]/route.ts` | yes | yes | yes | n/a | **LOW** | GET only: `getAdminContext` before reads; tenant types use `org_id` filters / `assertDiscountRedemptionInOrg`; global types documented in-route (`addons` → `pricing_addons`, joined catalogs) | Maintain pattern on future methods | **Batch 3** — remediated (GET) |
 | `/api/admin/field-definitions/[id]` | `app/api/admin/field-definitions/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/field-definitions` | `app/api/admin/field-definitions/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/financials/accounts/[id]` | `app/api/admin/financials/accounts/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
@@ -113,7 +113,7 @@ Columns:
 | `/api/admin/industries/[id]` | `app/api/admin/industries/[id]/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/industries` | `app/api/admin/industries/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/job-statuses` | `app/api/admin/job-statuses/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
-| `/api/admin/jobs/[id]/apply-vendor-to-upcoming` | `app/api/admin/jobs/[id]/apply-vendor-to-upcoming/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/jobs/[id]/apply-vendor-to-upcoming` | `app/api/admin/jobs/[id]/apply-vendor-to-upcoming/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; job + schedule ownership; vendor list scoped to org | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/jobs/[id]/archive` | `app/api/admin/jobs/[id]/archive/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/jobs/[id]/assign-vendor` | `app/api/admin/jobs/[id]/assign-vendor/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/jobs/[id]/location` | `app/api/admin/jobs/[id]/location/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
@@ -122,27 +122,27 @@ Columns:
 | `/api/admin/jobs/[id]/payout` | `app/api/admin/jobs/[id]/payout/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/jobs/[id]` | `app/api/admin/jobs/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/jobs/[id]/unarchive` | `app/api/admin/jobs/[id]/unarchive/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/jobs/[id]/vendors-for-assign` | `app/api/admin/jobs/[id]/vendors-for-assign/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/jobs/[id]/vendors-for-assign` | `app/api/admin/jobs/[id]/vendors-for-assign/route.ts` | yes | yes | yes | n/a | **LOW** | `getAdminContext`; `assertRowOrg(jobs)`; vendors `.eq("org_id", ctx.orgId)` | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/jobs` | `app/api/admin/jobs/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/location-options` | `app/api/admin/location-options/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/location-types` | `app/api/admin/location-types/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/locations/[id]` | `app/api/admin/locations/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/locations` | `app/api/admin/locations/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/opportunities/[id]` | `app/api/admin/opportunities/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH IDOR pattern | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/opportunities/[id]` | `app/api/admin/opportunities/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH IDOR pattern | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/opportunity-options` | `app/api/admin/opportunity-options/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/org-settings` | `app/api/admin/org-settings/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/org/industry` | `app/api/admin/org/industry/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
-| `/api/admin/payments/[id]` | `app/api/admin/payments/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH payment by id without caller org check | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/payments` | `app/api/admin/payments/route.ts` | yes | no | no | n/a | **CRITICAL** | Authenticated list but missing .eq(org_id, ctx.orgId) on payments | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | — |
-| `/api/admin/payments/run` | `app/api/admin/payments/run/route.ts` | no | no | partial | partial | **HIGH** | `requireAdmin` + backend proxy — org enforcement **backend-dependent** | Confirm Python API scopes by org; add `getAdminContext` guard if needed | — |
+| `/api/admin/payments/[id]` | `app/api/admin/payments/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH payment by id without caller org check | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
+| `/api/admin/payments` | `app/api/admin/payments/route.ts` | yes | no | no | n/a | **CRITICAL** | Authenticated list but missing .eq(org_id, ctx.orgId) on payments | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 2** — remediated |
+| `/api/admin/payments/run` | `app/api/admin/payments/run/route.ts` | yes | yes | partial | partial | **MEDIUM** | `getAdminContext` + org-owned **job** asserted before Python proxy; settlement org **not fully verifiable** in-repo | Confirm Python admin API scopes charges by org | **Batch 3** — partial (see Batch 3 doc) |
 | `/api/admin/person-options` | `app/api/admin/person-options/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/person-relationship-type-settings/[id]` | `app/api/admin/person-relationship-type-settings/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/person-relationship-type-settings` | `app/api/admin/person-relationship-type-settings/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/persons/[id]` | `app/api/admin/persons/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/persons` | `app/api/admin/persons/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/pipeline-stages/[id]` | `app/api/admin/pipeline-stages/[id]/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/pipeline-stages/[id]` | `app/api/admin/pipeline-stages/[id]/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/pipeline-stages` | `app/api/admin/pipeline-stages/route.ts` | yes | no | no | partial | **CRITICAL** | GET unauthenticated | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
-| `/api/admin/pipelines/[id]` | `app/api/admin/pipelines/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH/DELETE pipeline by id without org ownership | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/pipelines/[id]` | `app/api/admin/pipelines/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH/DELETE pipeline by id without org ownership | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/pipelines` | `app/api/admin/pipelines/route.ts` | yes | no | no | partial | **CRITICAL** | GET unauthenticated; POST inserts body without org guard | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
 | `/api/admin/pricing-dimension-values/[id]` | `app/api/admin/pricing-dimension-values/[id]/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/pricing-dimension-values` | `app/api/admin/pricing-dimension-values/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
@@ -163,16 +163,16 @@ Columns:
 | `/api/admin/rbac/roles` | `app/api/admin/rbac/roles/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/related/[entity]/[id]` | `app/api/admin/related/[entity]/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/schedule-statuses` | `app/api/admin/schedule-statuses/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
-| `/api/admin/schedules/[id]/assign` | `app/api/admin/schedules/[id]/assign/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/schedules/[id]/assignment` | `app/api/admin/schedules/[id]/assignment/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/schedules/[id]/assign` | `app/api/admin/schedules/[id]/assign/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; schedule/job org; vendor pick lists scoped | Maintain pattern; add tests | **Batch 3** — remediated |
+| `/api/admin/schedules/[id]/assignment` | `app/api/admin/schedules/[id]/assignment/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; schedule + assignment scoped to org | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/schedules/[id]/cancel` | `app/api/admin/schedules/[id]/cancel/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/schedules/[id]/location` | `app/api/admin/schedules/[id]/location/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/schedules/[id]/post-completion` | `app/api/admin/schedules/[id]/post-completion/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/schedules/[id]/post-customer-payment` | `app/api/admin/schedules/[id]/post-customer-payment/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/schedules/[id]/post-vendor-payout` | `app/api/admin/schedules/[id]/post-vendor-payout/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
-| `/api/admin/schedules/[id]/reschedule` | `app/api/admin/schedules/[id]/reschedule/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/schedules/[id]/reschedule` | `app/api/admin/schedules/[id]/reschedule/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; schedule ownership before side effects | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/schedules/[id]` | `app/api/admin/schedules/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/schedules/[id]/vendors-for-assign` | `app/api/admin/schedules/[id]/vendors-for-assign/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/schedules/[id]/vendors-for-assign` | `app/api/admin/schedules/[id]/vendors-for-assign/route.ts` | yes | yes | yes | n/a | **LOW** | `getAdminContext`; `assertRowOrg(schedules)`; vendors org-scoped | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/schedules` | `app/api/admin/schedules/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/send-password-reset` | `app/api/admin/send-password-reset/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/service-frequency-options` | `app/api/admin/service-frequency-options/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
@@ -183,32 +183,32 @@ Columns:
 | `/api/admin/status-definitions/[id]` | `app/api/admin/status-definitions/[id]/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/status-definitions` | `app/api/admin/status-definitions/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/status-options` | `app/api/admin/status-options/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
-| `/api/admin/subscriptions/[id]/generate-next` | `app/api/admin/subscriptions/[id]/generate-next/route.ts` | yes | no | partial | partial | **HIGH** | No verify subscription belongs to caller org | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/subscriptions/[id]/generate-next` | `app/api/admin/subscriptions/[id]/generate-next/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; `assertRowOrg(customer_subscriptions)` before generate | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/subscriptions/[id]` | `app/api/admin/subscriptions/[id]/route.ts` | yes | yes | partial | partial | **MEDIUM** | getAdminContext; confirm all queries/joins scoped | Line-by-line verify org predicates on every path | — |
 | `/api/admin/users/[userId]/remove` | `app/api/admin/users/[userId]/remove/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/users/[userId]/role` | `app/api/admin/users/[userId]/role/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/users` | `app/api/admin/users/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/vendor-options` | `app/api/admin/vendor-options/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/vendor-statuses` | `app/api/admin/vendor-statuses/route.ts` | yes | no | partial | partial | **HIGH** | Global reference table read — **low leak risk**; listed HIGH only for “no ctx” pattern | Confirm intentional global catalog; else scope | — |
-| `/api/admin/vendors/[id]/contacts/[contactId]` | `app/api/admin/vendors/[id]/contacts/[contactId]/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/vendors/[id]/contacts/available` | `app/api/admin/vendors/[id]/contacts/available/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/vendors/[id]/contacts` | `app/api/admin/vendors/[id]/contacts/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/vendors/[id]/documents/signed-url` | `app/api/admin/vendors/[id]/documents/signed-url/route.ts` | yes | no | partial | partial | **HIGH** | `getAdminAuth` + service storage; **no vendor/org ownership check** | Resolve vendor org vs `getAdminContext().orgId` before signing | — |
+| `/api/admin/vendors/[id]/contacts/[contactId]` | `app/api/admin/vendors/[id]/contacts/[contactId]/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; vendor + contact org checks | Maintain pattern; add tests | **Batch 3** — remediated |
+| `/api/admin/vendors/[id]/contacts/available` | `app/api/admin/vendors/[id]/contacts/available/route.ts` | yes | yes | yes | n/a | **LOW** | `getAdminContext`; vendor org; contact candidates org-scoped | Maintain pattern; add tests | **Batch 3** — remediated |
+| `/api/admin/vendors/[id]/contacts` | `app/api/admin/vendors/[id]/contacts/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; vendor org; link contact in same org | Maintain pattern; add tests | **Batch 3** — remediated |
+| `/api/admin/vendors/[id]/documents/signed-url` | `app/api/admin/vendors/[id]/documents/signed-url/route.ts` | yes | yes | yes | n/a | **LOW** | `getAdminContext`; vendor + document path org match before signed URL | Maintain pattern; add tests | **Batch 3** — remediated |
 | `/api/admin/vendors/[id]/payout-policy` | `app/api/admin/vendors/[id]/payout-policy/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
 | `/api/admin/vendors/[id]/payout` | `app/api/admin/vendors/[id]/payout/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/vendors/[id]` | `app/api/admin/vendors/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH IDOR pattern | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/vendors/[id]` | `app/api/admin/vendors/[id]/route.ts` | yes | no | partial | partial | **HIGH** | PATCH IDOR pattern | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/vendors` | `app/api/admin/vendors/route.ts` | yes | yes | yes | yes | **LOW** | Typical ctx.orgId / orgId + org_id filters | Maintain pattern; add tests | — |
-| `/api/admin/verticals/[id]` | `app/api/admin/verticals/[id]/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/verticals/[id]` | `app/api/admin/verticals/[id]/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | **Batch 2** — remediated |
 | `/api/admin/verticals` | `app/api/admin/verticals/route.ts` | yes | no | no | partial | **CRITICAL** | GET unauthenticated | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
-| `/api/admin/workflow-events` | `app/api/admin/workflow-events/route.ts` | yes | no | partial | partial | **HIGH** | Uses `ALLOY_PUBLIC_ORG_ID` not user org | Use `getAdminContext().orgId` | — |
-| `/api/admin/workflow-runs/[runId]/action-runs` | `app/api/admin/workflow-runs/[runId]/action-runs/route.ts` | yes | no | partial | partial | **HIGH** | Uses `ALLOY_PUBLIC_ORG_ID` not user org | Use `getAdminContext().orgId` | — |
-| `/api/admin/workflow-runs` | `app/api/admin/workflow-runs/route.ts` | yes | no | partial | partial | **HIGH** | Uses `ALLOY_PUBLIC_ORG_ID` not user org | Use `getAdminContext().orgId` | — |
+| `/api/admin/workflow-events` | `app/api/admin/workflow-events/route.ts` | yes | no | partial | partial | **HIGH** | Uses `ALLOY_PUBLIC_ORG_ID` not user org | Use `getAdminContext().orgId` | **Batch 2** — remediated |
+| `/api/admin/workflow-runs/[runId]/action-runs` | `app/api/admin/workflow-runs/[runId]/action-runs/route.ts` | yes | no | partial | partial | **HIGH** | Uses `ALLOY_PUBLIC_ORG_ID` not user org | Use `getAdminContext().orgId` | **Batch 2** — remediated |
+| `/api/admin/workflow-runs` | `app/api/admin/workflow-runs/route.ts` | yes | no | partial | partial | **HIGH** | Uses `ALLOY_PUBLIC_ORG_ID` not user org | Use `getAdminContext().orgId` | **Batch 2** — remediated |
 | `/api/admin/workflows/[id]/actions` | `app/api/admin/workflows/[id]/actions/route.ts` | yes | no | no | no | **CRITICAL** | GET unauthenticated | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
 | `/api/admin/workflows/[id]/conditions` | `app/api/admin/workflows/[id]/conditions/route.ts` | yes | no | no | no | **CRITICAL** | GET unauthenticated | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
 | `/api/admin/workflows/[id]` | `app/api/admin/workflows/[id]/route.ts` | yes | no | no | no | **CRITICAL** | GET unauthenticated | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
-| `/api/admin/workflows/[id]/run` | `app/api/admin/workflows/[id]/run/route.ts` | yes | no | partial | partial | **HIGH** | POST runs workflow by id without org check | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/workflows/debug-vendor-enrichment` | `app/api/admin/workflows/debug-vendor-enrichment/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
-| `/api/admin/workflows/field-catalog` | `app/api/admin/workflows/field-catalog/route.ts` | yes | no | partial | partial | **HIGH** | Auth without membership org helper — IDOR / cross-org list risk | Add getAdminContext; verify resource org; replace env-based org; fix IDOR | — |
+| `/api/admin/workflows/[id]/run` | `app/api/admin/workflows/[id]/run/route.ts` | yes | yes | yes | yes | **LOW** | `getAdminContext`; workflow org (no env-org fallback) before run | Maintain pattern; add tests | **Batch 3** — remediated |
+| `/api/admin/workflows/debug-vendor-enrichment` | `app/api/admin/workflows/debug-vendor-enrichment/route.ts` | yes | yes | partial | n/a | **MEDIUM** | `getAdminContext`; vendor must belong to caller org for debug payload | Maintain pattern | **Batch 3** — remediated |
+| `/api/admin/workflows/field-catalog` | `app/api/admin/workflows/field-catalog/route.ts` | yes | yes | yes | n/a | **LOW** | `getAdminContext`; catalog built from org-visible metadata | Maintain pattern | **Batch 3** — remediated |
 | `/api/admin/workflows` | `app/api/admin/workflows/route.ts` | yes | no | no | partial | **CRITICAL** | GET unauthenticated; POST inserts client body (set org_id server-side) | Add session check + getAdminContext; scope all queries/mutations by ctx.orgId | **Batch 1** — remediated |
 
 ---
@@ -256,11 +256,15 @@ Pattern: `select ... .eq("id", id)` then `update ... .eq("id", id)` without comp
 
 ### E. `entity/[type]/[id]` mega-route
 
-- `web/app/api/admin/entity/[type]/[id]/route.ts` — large GET with branches; **early** paths load entities by `id` only (e.g. jobs) **before** any `getAdminContext` usage on that path. Treat as **HIGH** until audited branch-by-branch.
+- **Batch 3:** `GET` runs **`getAdminContext`** first; tenant drawer types filter by **`org_id`** (or `assertDiscountRedemptionInOrg` for **discount_redemptions**). **`addons`** resolves **`pricing_addons`** (vertical catalog, no row `org_id`) — documented in-route.
 
 ### F. Subscription generate-next
 
-- `POST .../subscriptions/[id]/generate-next` — runs against any `subscriptionId` with service client; no check that subscription `org_id` matches caller.
+- **Batch 3:** `POST .../subscriptions/[id]/generate-next` asserts **`customer_subscriptions`** row in caller org before side effects.
+
+### G. Admin dashboard SSR (non-API)
+
+- **Batch 3:** `web/app/admin/dashboard/page.tsx` uses **`getAdminContext`** (redirect if missing) and scopes aggregate queries + **`getFinancialSnapshot(supabase, ctx.orgId)`** — no **`ORG_ID_FINANCIALS`** for dashboard data.
 
 ---
 
@@ -282,10 +286,10 @@ Pattern: `select ... .eq("id", id)` then `update ... .eq("id", id)` without comp
 4. **Add ownership check** helper: `assertRowOrg(supabase, table, id, ctx.orgId)` and use in every `requireAdminOrOps` PATCH/DELETE by id.
 5. **Workflow POST/create:** force `org_id: ctx.orgId` server-side; reject body `org_id` mismatch.
 6. **`pricing/matrix`:** define product rule — if rows are global, document; if per-tenant, add org/vertical scoping consistent with business model.
-7. **`entity/[type]/[id]`:** refactor so **no** query runs before auth + org verification on sensitive types.
-8. **Subscriptions generate-next:** verify `customer_subscriptions.org_id === ctx.orgId` before side effects.
-9. **Vendor document signed URL:** verify vendor `org_id` before `createSignedUrl`.
-10. **Backend proxy (`payments/run`):** confirm Python admin API enforces org (outside this repo).
+7. **`entity/[type]/[id]`:** **Batch 3 (GET)** — `getAdminContext` first; org-scoped selects per type.
+8. **Subscriptions generate-next:** **Batch 3** — org ownership asserted.
+9. **Vendor document signed URL:** **Batch 3** — vendor + storage path org checks.
+10. **Backend proxy (`payments/run`):** **Batch 3** asserts org-owned job in Next layer; **still** confirm Python admin API enforces org for charges/ledger (outside this repo).
 
 ---
 

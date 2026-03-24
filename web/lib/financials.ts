@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Financials / GL helpers.
- * Prefer `getAdminContext().orgId` in admin API routes; this constant remains for
- * server-rendered pages that do not yet resolve org from session (e.g. dashboard).
+ * Prefer `getAdminContext().orgId` in admin API routes and SSR pages.
+ * Kept for ad-hoc scripts or legacy call sites that still hard-code a demo org.
  */
 export const ORG_ID_FINANCIALS = "7803388d-cdee-4afb-89cf-23a137f39423";
 

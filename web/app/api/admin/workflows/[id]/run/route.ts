@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
@@ -10,6 +12,8 @@ export async function POST(
 ) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id: workflowId } = await context.params;
     if (!workflowId) return NextResponse.json({ error: "Missing workflow id" }, { status: 400 });
 
@@ -20,6 +24,9 @@ export async function POST(
             : {};
 
         const supabase = createAdminClient();
+        if (!(await assertRowOrg(supabase, "workflows", workflowId, ctx.orgId)).ok) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
         const result = await executeWorkflowRun(supabase, workflowId, eventPayload);
 
         if (result.status === "failed") {

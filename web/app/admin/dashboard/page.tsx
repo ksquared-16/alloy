@@ -1,10 +1,12 @@
+import { redirect } from "next/navigation";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ORG_ID_FINANCIALS, getFinancialSnapshot } from "@/lib/financials";
+import { getFinancialSnapshot } from "@/lib/financials";
 import DashboardClient, { type DashboardData } from "./DashboardClient";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-async function getDashboardData(): Promise<DashboardData> {
+async function getDashboardData(orgId: string): Promise<DashboardData> {
     const supabase = createAdminClient();
     const now = new Date().toISOString();
     const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -21,21 +23,45 @@ async function getDashboardData(): Promise<DashboardData> {
         failedRunsRes,
         outboxFailuresRes,
     ] = await Promise.all([
-        supabase.from("jobs").select("id, assigned_vendor_id"),
-        supabase.from("opportunities").select("id, status, status_key"),
-        supabase.from("vendors").select("id, status_key"),
-        supabase.from("schedules").select("id, job_id, start_at, end_at").is("canceled_at", null).gte("start_at", now).lte("start_at", in7Days).order("start_at", { ascending: true }).limit(50),
+        supabase.from("jobs").select("id, assigned_vendor_id").eq("org_id", orgId),
+        supabase.from("opportunities").select("id, status, status_key").eq("org_id", orgId),
+        supabase.from("vendors").select("id, status_key").eq("org_id", orgId),
+        supabase
+            .from("schedules")
+            .select("id, job_id, start_at, end_at")
+            .eq("org_id", orgId)
+            .is("canceled_at", null)
+            .gte("start_at", now)
+            .lte("start_at", in7Days)
+            .order("start_at", { ascending: true })
+            .limit(50),
         (async () => {
-            const u = await supabase.from("schedules").select("id").is("canceled_at", null).gte("start_at", now).lte("start_at", in7Days).limit(500);
+            const u = await supabase
+                .from("schedules")
+                .select("id")
+                .eq("org_id", orgId)
+                .is("canceled_at", null)
+                .gte("start_at", now)
+                .lte("start_at", in7Days)
+                .limit(500);
             const ids = (u.data ?? []).map((s) => s.id);
             if (ids.length === 0) return { data: [] as { schedule_id: string; assignment_status_id: string }[] };
-            return supabase.from("assignments").select("schedule_id, assignment_status_id").in("schedule_id", ids);
+            return supabase.from("assignments").select("schedule_id, assignment_status_id").eq("org_id", orgId).in("schedule_id", ids);
         })(),
         supabase.from("assignment_statuses").select("id, key"),
-        supabase.from("schedules").select("id", { count: "exact", head: true }).not("canceled_at", "is", null),
-        supabase.from("schedules").select("id", { count: "exact", head: true }).is("canceled_at", null).gte("start_at", now),
-        supabase.from("workflow_runs").select("id", { count: "exact", head: true }).eq("status", "failed"),
-        supabase.from("messages_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
+        supabase
+            .from("schedules")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .not("canceled_at", "is", null),
+        supabase
+            .from("schedules")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .is("canceled_at", null)
+            .gte("start_at", now),
+        supabase.from("workflow_runs").select("id", { count: "exact", head: true }).eq("status", "failed").eq("org_id", orgId),
+        supabase.from("messages_outbox").select("id", { count: "exact", head: true }).eq("status", "failed").eq("org_id", orgId),
     ]);
 
     const jobs = jobsRes.data ?? [];
@@ -85,16 +111,37 @@ async function getDashboardData(): Promise<DashboardData> {
     });
 
     const jobIdsUpcoming = [...new Set(upcomingSchedules.map((s) => (s as { job_id: string }).job_id).filter(Boolean))] as string[];
-    const { data: jobsUpcoming } = jobIdsUpcoming.length ? await supabase.from("jobs").select("id, title").in("id", jobIdsUpcoming) : { data: [] };
-    const { data: assignmentsUpcoming } = upcomingSchedules.length ? await supabase.from("assignments").select("schedule_id, assignment_status_id").in("schedule_id", upcomingSchedules.map((s) => s.id)) : { data: [] };
-    const { data: statusUpcoming } = assignmentsUpcoming?.length ? await supabase.from("assignment_statuses").select("id, key").in("id", [...new Set((assignmentsUpcoming ?? []).map((a) => (a as { assignment_status_id?: string }).assignment_status_id).filter(Boolean))]) : { data: [] };
+    const { data: jobsUpcoming } = jobIdsUpcoming.length
+        ? await supabase.from("jobs").select("id, title").in("id", jobIdsUpcoming).eq("org_id", orgId)
+        : { data: [] };
+    const { data: assignmentsUpcoming } = upcomingSchedules.length
+        ? await supabase
+              .from("assignments")
+              .select("schedule_id, assignment_status_id")
+              .eq("org_id", orgId)
+              .in(
+                  "schedule_id",
+                  upcomingSchedules.map((s) => s.id)
+              )
+        : { data: [] };
+    const { data: statusUpcoming } = assignmentsUpcoming?.length
+        ? await supabase
+              .from("assignment_statuses")
+              .select("id, key")
+              .in("id", [...new Set((assignmentsUpcoming ?? []).map((a) => (a as { assignment_status_id?: string }).assignment_status_id).filter(Boolean))])
+        : { data: [] };
     const jobMap = new Map((jobsUpcoming ?? []).map((j) => [j.id, j]));
-    const assignMap = new Map((assignmentsUpcoming ?? []).map((a) => [(a as { schedule_id: string }).schedule_id, a as { assignment_status_id: string }]));
+    const assignMap = new Map(
+        (assignmentsUpcoming ?? []).map((a) => [(a as { schedule_id: string }).schedule_id, a as { assignment_status_id: string }])
+    );
     const statusKeyMap = new Map((statusUpcoming ?? []).map((s) => [(s as { id: string }).id, (s as { key: string }).key]));
 
-    const customerIds = jobIdsUpcoming.length ? (await supabase.from("jobs").select("id, customer_id").in("id", jobIdsUpcoming)).data ?? [] : [];
+    const customerIds =
+        jobIdsUpcoming.length ? (await supabase.from("jobs").select("id, customer_id").in("id", jobIdsUpcoming).eq("org_id", orgId)).data ?? [] : [];
     const custIds = [...new Set(customerIds.map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
-    const { data: customersUpcoming } = custIds.length ? await supabase.from("customers").select("id, name").in("id", custIds) : { data: [] };
+    const { data: customersUpcoming } = custIds.length
+        ? await supabase.from("customers").select("id, name").in("id", custIds).eq("org_id", orgId)
+        : { data: [] };
     const customerMap = new Map((customersUpcoming ?? []).map((c) => [c.id, c]));
     const jobToCustomer = new Map(customerIds.map((j) => [(j as { id: string }).id, (j as { customer_id?: string }).customer_id]));
 
@@ -116,7 +163,7 @@ async function getDashboardData(): Promise<DashboardData> {
 
     let financialSnapshot = null;
     try {
-        financialSnapshot = await getFinancialSnapshot(supabase, ORG_ID_FINANCIALS);
+        financialSnapshot = await getFinancialSnapshot(supabase, orgId);
     } catch (e) {
         console.error("Dashboard financial snapshot:", e);
     }
@@ -138,6 +185,12 @@ async function getDashboardData(): Promise<DashboardData> {
 }
 
 export default async function AdminDashboardPage() {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        if (ctx.status === 401) redirect("/login");
+        redirect("/admin");
+    }
+
     let data: DashboardData = {
         jobs: { total: 0, withDefaultVendor: 0 },
         opportunities: { total: 0, booked: 0, notBooked: 0, byStage: {} },
@@ -148,7 +201,7 @@ export default async function AdminDashboardPage() {
         financialSnapshot: null,
     };
     try {
-        data = await getDashboardData();
+        data = await getDashboardData(ctx.orgId);
     } catch (e) {
         console.error("Admin dashboard data:", e);
     }

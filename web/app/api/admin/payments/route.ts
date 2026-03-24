@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 export type PaymentListItem = {
@@ -29,6 +31,8 @@ export type PaymentListItem = {
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { searchParams } = new URL(request.url);
     const statusKey = searchParams.get("status");
@@ -40,12 +44,18 @@ export async function GET(request: NextRequest) {
     const offset = Number(searchParams.get("offset")) || 0;
 
     const supabase = createAdminClient();
+    if (jobId) {
+        const jobOk = await assertRowOrg(supabase, "jobs", jobId, ctx.orgId);
+        if (!jobOk.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     let q = supabase
         .from("payments")
         .select(
             "id, created_at, updated_at, amount_cents, provider_payment_id, payment_status_id, job_id, customer_id, org_id, status_key, paid_at, posted_to_ledger_at, provider",
             { count: "exact" }
         )
+        .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -65,20 +75,20 @@ export async function GET(request: NextRequest) {
     const jobIds = [...new Set(list.map((r) => (r as { job_id?: string }).job_id).filter(Boolean))] as string[];
 
     const [custRes, jobRes] = await Promise.all([
-        customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] },
-        jobIds.length ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer").in("id", jobIds) : { data: [] },
+        customerIds.length
+            ? supabase.from("customers").select("id, name").eq("org_id", ctx.orgId).in("id", customerIds)
+            : { data: [] },
+        jobIds.length
+            ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer").eq("org_id", ctx.orgId).in("id", jobIds)
+            : { data: [] },
     ]);
 
     const customerMap = new Map((custRes.data ?? []).map((c) => [(c as { id: string }).id, (c as { name?: string | null }).name ?? null]));
 
-    const orgIds = [...new Set(list.map((r) => (r as { org_id?: string | null }).org_id).filter(Boolean))] as string[];
-    const paymentStatusLabelByOrg = new Map<string, Map<string, string>>();
-    for (const oid of orgIds) {
-        const defs = await fetchEffectiveStatusDefinitions(supabase, oid, "payments", { activeOnly: true });
-        paymentStatusLabelByOrg.set(
-            oid,
-            new Map(defs.map((d) => [d.status_key, (d.status_label?.trim() || d.status_key) as string]))
-        );
+    const paymentStatusLabelByOrg = new Map<string, string>();
+    const defs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "payments", { activeOnly: true });
+    for (const d of defs) {
+        paymentStatusLabelByOrg.set(d.status_key, (d.status_label?.trim() || d.status_key) as string);
     }
     const jobLabelMap = new Map((jobRes.data ?? []).map((j) => {
         const row = j as { id: string; title?: string | null; service_key?: string | null; job_number_for_customer?: string | null };
@@ -88,10 +98,10 @@ export async function GET(request: NextRequest) {
 
     let payments: PaymentListItem[] = list.map((r) => {
         const statusKeyVal = (r as { status_key?: string | null }).status_key ?? null;
-        const orgId = (r as { org_id?: string | null }).org_id ?? null;
-        const labelMap = orgId ? paymentStatusLabelByOrg.get(orgId) : null;
         const _status_display =
-            statusKeyVal && labelMap ? (labelMap.get(statusKeyVal) ?? statusKeyVal) : statusKeyVal ?? null;
+            statusKeyVal && paymentStatusLabelByOrg.size
+                ? (paymentStatusLabelByOrg.get(statusKeyVal) ?? statusKeyVal)
+                : statusKeyVal ?? null;
         const statusObj: { key: string; label?: string | null } | null =
             statusKeyVal != null ? { key: statusKeyVal, label: _status_display } : null;
         const _payment_label = (r as { provider_payment_id?: string | null }).provider_payment_id?.trim() || `Payment #${(r as { id: string }).id.slice(-6)}`;

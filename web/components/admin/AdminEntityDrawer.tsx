@@ -3965,6 +3965,9 @@ export default function AdminEntityDrawer() {
                 ) {
                     baseHint = "money";
                 }
+                if (drawer.type === "schedules" && (fieldKey === "price_cents" || fieldKey.endsWith("_cents"))) {
+                    baseHint = "money";
+                }
                 const jobReadonlyMoney =
                     drawer.type === "jobs" &&
                     (fieldKey === "display_total_cents" ||

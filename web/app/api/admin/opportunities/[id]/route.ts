@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
@@ -35,15 +37,22 @@ export async function PATCH(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
+        const ctx = await getAdminContext();
+        if (!ctx.ok) return adminContextFailureResponse(ctx);
         const body = (await request.json()) as Record<string, unknown>;
         const auth = await getAdminAuth();
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const supabase = createAdminClient();
+        if (!(await assertRowOrg(supabase, "opportunities", id, ctx.orgId)).ok) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+
         const { data: existing } = await supabase
             .from("opportunities")
             .select("org_id, status_key, customer_id, primary_contact_id")
             .eq("id", id)
+            .eq("org_id", ctx.orgId)
             .maybeSingle();
         const existingRow = existing as {
             org_id?: string;
@@ -88,7 +97,12 @@ export async function PATCH(
             updates[key] = val;
         }
         if (body.notes !== undefined) {
-            const { data: metaRow } = await supabase.from("opportunities").select("metadata").eq("id", id).single();
+            const { data: metaRow } = await supabase
+                .from("opportunities")
+                .select("metadata")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .single();
             const meta = (metaRow?.metadata as Record<string, unknown>) || {};
             updates.metadata = { ...meta, notes: body.notes === "" ? null : body.notes };
         }
@@ -106,7 +120,13 @@ export async function PATCH(
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
-        const { data, error } = await supabase.from("opportunities").update(updates).eq("id", id).select().single();
+        const { data, error } = await supabase
+            .from("opportunities")
+            .update(updates)
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .select()
+            .single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         await upsertFieldValuesFromBody(supabase, orgId, "opportunity", id, body, ALLOWED_KEYS);

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { requireAdmin } from "@/lib/adminAuth";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,8 @@ const BACKEND_URL =
 export async function POST(request: NextRequest) {
   const forbidden = await requireAdmin();
   if (forbidden) return forbidden;
+  const ctx = await getAdminContext();
+  if (!ctx.ok) return adminContextFailureResponse(ctx);
 
   let body: Record<string, unknown>;
   try {
@@ -27,6 +32,11 @@ export async function POST(request: NextRequest) {
   const jobId = body.job_id;
   if (!jobId || typeof jobId !== "string") {
     return NextResponse.json({ error: "job_id is required" }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+  if (!(await assertRowOrg(supabase, "jobs", jobId, ctx.orgId)).ok) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
   const t0 = Date.now();

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth } from "@/lib/adminAuth";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 
 const BUCKET = "vendor_documents";
@@ -10,10 +12,8 @@ export async function GET(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const auth = await getAdminAuth();
-    if (!auth) {
-        return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id } = await context.params;
     if (!id) {
@@ -31,6 +31,10 @@ export async function GET(
     }
 
     try {
+        const adminSb = createAdminClient();
+        if (!(await assertRowOrg(adminSb, "vendors", id, ctx.orgId)).ok) {
+            return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+        }
         const supabase = createServiceRoleClient();
         const { data, error } = await supabase.storage
             .from(BUCKET)

@@ -72,7 +72,6 @@ export async function generateNextSubscriptionSchedule(
         jobId = lastSchedule.job_id;
         nextSequence = (lastSchedule.subscription_sequence ?? 0) + 1;
         locationId = lastSchedule.location_id ?? null;
-        priceCents = lastSchedule.price_cents ?? null;
         assignedVendorId = lastSchedule.assigned_vendor_id ?? null;
     } else {
         const startDate = (sub as { start_date?: string | null }).start_date;
@@ -102,6 +101,22 @@ export async function generateNextSubscriptionSchedule(
         }
         jobId = firstJob.id;
         nextSequence = 1;
+    }
+
+    const { data: jobRow } = await supabase
+        .from("jobs")
+        .select("id, assigned_vendor_id, recurring_total_cents, gross_price_cents")
+        .eq("id", jobId)
+        .maybeSingle();
+    const recurringTotalCents =
+        jobRow?.recurring_total_cents != null && Number.isFinite(Number(jobRow.recurring_total_cents))
+            ? Math.round(Number(jobRow.recurring_total_cents))
+            : null;
+
+    if (lastSchedule) {
+        const followUpVisit = nextSequence >= 2;
+        const useRecurring = followUpVisit && recurringTotalCents != null && recurringTotalCents > 0;
+        priceCents = useRecurring ? recurringTotalCents : lastSchedule.price_cents ?? null;
     }
 
     const nextStartIso = nextStart.toISOString();
@@ -144,7 +159,6 @@ export async function generateNextSubscriptionSchedule(
     }
 
     const newScheduleId = (newSchedule as { id: string }).id;
-    const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", jobId).single();
     const { data: newScheduleRow } = await supabase.from("schedules").select("*").eq("id", newScheduleId).single();
     const orgIdForWf = scheduleOrgId ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
     let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "schedule_created").eq("entity_type", "schedule");
@@ -156,7 +170,7 @@ export async function generateNextSubscriptionSchedule(
         org_id: orgIdForWf,
         schedule_id: newScheduleId,
         job_id: jobId,
-        job: jobRow ?? null,
+        job: jobRow ? { id: jobRow.id, assigned_vendor_id: jobRow.assigned_vendor_id ?? null } : null,
         schedule: newScheduleRow ?? { id: newScheduleId, job_id: jobId },
     };
     const occurredAt = ((eventPayload as Record<string, unknown>)?.occurred_at as string) ?? new Date().toISOString();

@@ -1947,27 +1947,25 @@ export default function BookV2Client() {
             setCurrentStep("confirmed");
             resetBookingAttemptId();
 
-            // Track InitiateCheckout when booking is confirmed
-            trackMetaEvent("InitiateCheckout", {
-                vertical: "cleaning",
-                flow: "book",
+            // Analytics + storage cleanup after paint — do not delay showing the confirmation step
+            queueMicrotask(() => {
+                trackMetaEvent("InitiateCheckout", {
+                    vertical: "cleaning",
+                    flow: "book",
+                });
+                const finalTotal = discountData?.quote_total || quoteSubtotal;
+                trackMetaEvent("Purchase", {
+                    vertical: "cleaning",
+                    flow: "book",
+                    value: finalTotal,
+                    currency: "USD",
+                });
+                try {
+                    localStorage.removeItem("alloy_book_v2_service_details");
+                } catch {
+                    /* ignore */
+                }
             });
-
-            // Track Purchase/CompleteRegistration when payment is saved and booking is complete
-            const finalTotal = discountData?.quote_total || quoteSubtotal;
-            trackMetaEvent("Purchase", {
-                vertical: "cleaning",
-                flow: "book",
-                value: finalTotal,
-                currency: "USD",
-            });
-
-            // Clear service details from storage
-            try {
-                localStorage.removeItem("alloy_book_v2_service_details");
-            } catch (e) {
-                // Ignore
-            }
         } catch (err: any) {
             console.error("Payment/booking failed:", err);
             const msg = err.message || "Failed to complete booking. Please try again.";

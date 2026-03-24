@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 
 export type WorkflowActionRunRow = {
     id: string;
@@ -16,18 +17,12 @@ export type WorkflowActionRunRow = {
     outputs: Record<string, unknown>;
 };
 
-/** GET: list workflow_action_runs for a given workflow run. */
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ runId: string }> }
-) {
+/** GET: list workflow_action_runs for a given workflow run (caller org). */
+export async function GET(request: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-
-    const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-    if (!orgId) {
-        return NextResponse.json({ error: "ALLOY_PUBLIC_ORG_ID not set" }, { status: 500 });
-    }
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { runId } = await params;
     if (!runId) {
@@ -40,7 +35,7 @@ export async function GET(
         .from("workflow_runs")
         .select("id")
         .eq("id", runId)
-        .eq("org_id", orgId)
+        .eq("org_id", ctx.orgId)
         .maybeSingle();
 
     if (!runRow) {
@@ -51,6 +46,7 @@ export async function GET(
         .from("workflow_action_runs")
         .select("id, workflow_run_id, action_order, action_type, status, error, meta, started_at, completed_at, inputs, outputs")
         .eq("workflow_run_id", runId)
+        .eq("org_id", ctx.orgId)
         .order("action_order", { ascending: true })
         .order("started_at", { ascending: true });
 

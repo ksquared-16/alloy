@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
 import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
@@ -20,22 +21,58 @@ import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 
+/**
+ * Drawer entity org model:
+ * - **Tenant-scoped** (primary row has `org_id` or access is verified via FKs): jobs, opportunities, contacts, customers, schedules, locations, workflows, vendors, subscriptions, documents, payments, customer_members, persons, service_offerings, service_plan_templates, discount_redemptions (no `org_id` on row — allowed when any linked customer/job/opportunity/contact is in the caller org).
+ * - **Global / catalog** (no org on primary table): `verticals`, `discount_codes`, `assignment_statuses`, `job_statuses`, `location_types` (read in joins only). **`addons`** maps to `pricing_addons` (vertical-scoped, no `org_id`); any authenticated admin may open a row by id.
+ */
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "documents"] as const;
+
+async function assertDiscountRedemptionInOrg(
+    supabase: ReturnType<typeof createAdminClient>,
+    redemptionId: string,
+    orgId: string
+): Promise<{ ok: true; row: Record<string, unknown> } | { ok: false }> {
+    const { data, error } = await supabase.from("discount_redemptions").select("*").eq("id", redemptionId).maybeSingle();
+    if (error || !data) return { ok: false };
+    const r = data as {
+        customer_id?: string | null;
+        job_id?: string | null;
+        opportunity_id?: string | null;
+        contact_id?: string | null;
+    };
+    const paths: Promise<{ ok: boolean }>[] = [];
+    if (r.customer_id) paths.push(assertRowOrg(supabase, "customers", r.customer_id, orgId));
+    if (r.job_id) paths.push(assertRowOrg(supabase, "jobs", r.job_id, orgId));
+    if (r.opportunity_id) paths.push(assertRowOrg(supabase, "opportunities", r.opportunity_id, orgId));
+    if (r.contact_id) paths.push(assertRowOrg(supabase, "contacts", r.contact_id, orgId));
+    if (paths.length === 0) return { ok: false };
+    const results = await Promise.all(paths);
+    if (!results.some((x) => x.ok)) return { ok: false };
+    return { ok: true, row: data as Record<string, unknown> };
+}
 
 async function hydrateVendorDisplayStub(
     supabase: ReturnType<typeof createAdminClient>,
-    vendorId: string
+    vendorId: string,
+    orgId: string
 ): Promise<{ id: string; name: string } | null> {
     const { data: row } = await supabase
         .from("vendors")
         .select("id, name, company_name, email, phone, primary_person_id")
         .eq("id", vendorId)
+        .eq("org_id", orgId)
         .maybeSingle();
     if (!row) return null;
     const r = row as VendorRowForLabel;
     let person: { first_name?: string | null; last_name?: string | null } | null = null;
     if (r.primary_person_id) {
-        const { data: p } = await supabase.from("persons").select("first_name, last_name").eq("id", r.primary_person_id).maybeSingle();
+        const { data: p } = await supabase
+            .from("persons")
+            .select("first_name, last_name")
+            .eq("id", r.primary_person_id)
+            .eq("org_id", orgId)
+            .maybeSingle();
         person = p;
     }
     return vendorRowToDisplayStub(r, person);
@@ -115,17 +152,26 @@ export async function GET(
     }
 
     try {
+        const ctx = await getAdminContext();
+        if (!ctx.ok) return adminContextFailureResponse(ctx);
+        const orgId = ctx.orgId;
+
         const supabase = createAdminClient();
 
         if (type === "jobs") {
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
-            const { data, error } = await supabase.from("jobs").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("jobs").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...data };
             if ((data as { opportunity_id?: string }).opportunity_id) {
-                const opp = await supabase.from("opportunities").select("name").eq("id", (data as { opportunity_id: string }).opportunity_id).single();
+                const opp = await supabase
+                    .from("opportunities")
+                    .select("name")
+                    .eq("id", (data as { opportunity_id: string }).opportunity_id)
+                    .eq("org_id", orgId)
+                    .single();
                 out._opportunity_name = opp.data?.name ?? null;
             } else {
                 out._opportunity_name = null;
@@ -133,17 +179,32 @@ export async function GET(
             const jobPrimaryPersonId = (data as { primary_person_id?: string | null }).primary_person_id;
             const jobPrimaryContactId = (data as { primary_contact_id?: string }).primary_contact_id;
             if (jobPrimaryPersonId) {
-                const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", jobPrimaryPersonId).maybeSingle();
+                const { data: person } = await supabase
+                    .from("persons")
+                    .select("id, first_name, last_name")
+                    .eq("id", jobPrimaryPersonId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
                 out._primary_person_id = p?.id ?? null;
                 out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
                 out._contact_name = out._primary_person_name;
             } else if (jobPrimaryContactId) {
-                const contact = await supabase.from("contacts").select("first_name, last_name, person_id").eq("id", jobPrimaryContactId).single();
+                const contact = await supabase
+                    .from("contacts")
+                    .select("first_name, last_name, person_id")
+                    .eq("id", jobPrimaryContactId)
+                    .eq("org_id", orgId)
+                    .single();
                 const c = contact.data as { first_name?: string | null; last_name?: string | null; person_id?: string | null } | null;
                 out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
                 if (c?.person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", c.person_id).maybeSingle();
+                    const { data: person } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name")
+                        .eq("id", c.person_id)
+                        .eq("org_id", orgId)
+                        .maybeSingle();
                     const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
                     out._primary_person_id = p?.id ?? null;
                     out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
@@ -160,14 +221,19 @@ export async function GET(
                 out.primary_person_id = out._primary_person_id;
             }
             if ((data as { customer_id?: string }).customer_id) {
-                const customer = await supabase.from("customers").select("name").eq("id", (data as { customer_id: string }).customer_id).single();
+                const customer = await supabase
+                    .from("customers")
+                    .select("name")
+                    .eq("id", (data as { customer_id: string }).customer_id)
+                    .eq("org_id", orgId)
+                    .single();
                 out._customer_name = customer.data?.name ?? null;
             } else {
                 out._customer_name = null;
             }
             const assignedVendorId = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id;
             if (assignedVendorId) {
-                const stub = await hydrateVendorDisplayStub(supabase, assignedVendorId);
+                const stub = await hydrateVendorDisplayStub(supabase, assignedVendorId, orgId);
                 out._assigned_vendor = stub;
                 out._vendor_name = stub?.name ?? null;
             } else {
@@ -176,7 +242,12 @@ export async function GET(
             }
             const jobLocationId = (data as { location_id?: string | null }).location_id;
             if (jobLocationId) {
-                const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", jobLocationId).maybeSingle();
+                const { data: loc } = await supabase
+                    .from("locations")
+                    .select("id, label, address1, city, state, postal_code")
+                    .eq("id", jobLocationId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 if (loc) {
                     const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
                     const label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
@@ -233,6 +304,7 @@ export async function GET(
                 .from("schedules")
                 .select("start_at")
                 .eq("job_id", id)
+                .eq("org_id", orgId)
                 .is("canceled_at", null)
                 .gte("start_at", new Date().toISOString())
                 .order("start_at", { ascending: true })
@@ -259,12 +331,12 @@ export async function GET(
             return NextResponse.json(out);
         }
         if (type === "opportunities") {
-            const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
             if (opp.customer_id) {
-                const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).single();
+                const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).eq("org_id", orgId).single();
                 out._customer_name = customer.data?.name ?? null;
             } else {
                 out._customer_name = null;
@@ -273,20 +345,35 @@ export async function GET(
             const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
                 p ? ((p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null) : null;
             if (opp.primary_person_id) {
-                const { data: person } = await supabase.from("persons").select("id, first_name, last_name, full_name").eq("id", opp.primary_person_id).maybeSingle();
+                const { data: person } = await supabase
+                    .from("persons")
+                    .select("id, first_name, last_name, full_name")
+                    .eq("id", opp.primary_person_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
                 out._primary_person_id = p?.id ?? null;
                 out._primary_person_name = personDisplayName(p);
                 out._contact_name = out._primary_person_name;
                 out._primary_contact_name = out._primary_person_name;
             } else if (opp.primary_contact_id) {
-                const contact = await supabase.from("contacts").select("first_name, last_name, person_id").eq("id", opp.primary_contact_id).single();
+                const contact = await supabase
+                    .from("contacts")
+                    .select("first_name, last_name, person_id")
+                    .eq("id", opp.primary_contact_id)
+                    .eq("org_id", orgId)
+                    .single();
                 const c = contact.data;
                 const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
                 out._contact_name = name;
                 out._primary_contact_name = name;
                 if (c && (c as { person_id?: string | null }).person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name, full_name").eq("id", (c as { person_id: string }).person_id).maybeSingle();
+                    const { data: person } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name, full_name")
+                        .eq("id", (c as { person_id: string }).person_id)
+                        .eq("org_id", orgId)
+                        .maybeSingle();
                     const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
                     out._primary_person_id = p?.id ?? null;
                     out._primary_person_name = personDisplayName(p);
@@ -331,7 +418,12 @@ export async function GET(
                 out._vertical_name = null;
             }
             if (opp.location_id) {
-                const loc = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", opp.location_id).maybeSingle();
+                const loc = await supabase
+                    .from("locations")
+                    .select("id, label, address1, city, state, postal_code")
+                    .eq("id", opp.location_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null } | null;
                 const locLabel = l ? l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null : null;
                 out._location_name = locLabel;
@@ -402,14 +494,19 @@ export async function GET(
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
-            const { data, error } = await supabase.from("contacts").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("contacts").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const contact = data as { customer_id?: string | null; vendor_id?: string | null; person_id?: string | null };
             let _person: Record<string, unknown> | null = null;
             let _person_id: string | null = null;
             let _person_name: string | null = null;
             if (contact.person_id) {
-                const { data: personRow } = await supabase.from("persons").select("id, first_name, last_name, full_name, email, phone, created_at, updated_at").eq("id", contact.person_id).maybeSingle();
+                const { data: personRow } = await supabase
+                    .from("persons")
+                    .select("id, first_name, last_name, full_name, email, phone, created_at, updated_at")
+                    .eq("id", contact.person_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 if (personRow) {
                     _person = personRow as Record<string, unknown>;
                     _person_id = (personRow as { id: string }).id;
@@ -420,16 +517,16 @@ export async function GET(
             let _linked_customer_name: string | null = null;
             let _linked_vendor_name: string | null = null;
             if (contact.customer_id) {
-                const { data: cust } = await supabase.from("customers").select("name").eq("id", contact.customer_id).maybeSingle();
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", contact.customer_id).eq("org_id", orgId).maybeSingle();
                 _linked_customer_name = (cust as { name?: string | null } | null)?.name ?? null;
             }
             if (contact.vendor_id) {
-                const { data: vend } = await supabase.from("vendors").select("name").eq("id", contact.vendor_id).maybeSingle();
+                const { data: vend } = await supabase.from("vendors").select("name").eq("id", contact.vendor_id).eq("org_id", orgId).maybeSingle();
                 _linked_vendor_name = (vend as { name?: string | null } | null)?.name ?? null;
             }
             const [custPrimary, vendPrimary] = await Promise.all([
-                supabase.from("customers").select("id").eq("primary_contact_id", id).limit(1).maybeSingle(),
-                supabase.from("vendors").select("id").eq("primary_contact_id", id).limit(1).maybeSingle(),
+                supabase.from("customers").select("id").eq("primary_contact_id", id).eq("org_id", orgId).limit(1).maybeSingle(),
+                supabase.from("vendors").select("id").eq("primary_contact_id", id).eq("org_id", orgId).limit(1).maybeSingle(),
             ]);
             const pc: string[] = [];
             if (custPrimary.data) pc.push("Customer");
@@ -441,6 +538,7 @@ export async function GET(
                     .from("vendors")
                     .select("id, name, vendor_status_id, created_at")
                     .eq("id", contact.vendor_id)
+                    .eq("org_id", orgId)
                     .single();
                 if (vendor) _contact_vendor = { id: vendor.id, name: vendor.name ?? null, vendor_status_id: vendor.vendor_status_id ?? null, created_at: vendor.created_at };
             }
@@ -456,22 +554,31 @@ export async function GET(
             });
         }
         if (type === "customers") {
-            const { data, error } = await supabase.from("customers").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("customers").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...data };
-            const orgId = (data as { org_id?: string }).org_id;
             const primaryContactId = (data as { primary_contact_id?: string | null }).primary_contact_id;
             const verticalId = (data as { vertical_id?: string | null }).vertical_id;
             const metadata = (data as { metadata?: Record<string, unknown> | null }).metadata;
             if (primaryContactId) {
-                const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, person_id").eq("id", primaryContactId).maybeSingle();
+                const { data: contact } = await supabase
+                    .from("contacts")
+                    .select("id, first_name, last_name, email, phone, person_id")
+                    .eq("id", primaryContactId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 out._primary_contact = contact ?? null;
                 const c = contact as ContactRow | null;
                 out._primary_contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
                 out._primary_contact_email = c?.email ?? null;
                 out._primary_contact_phone = c?.phone ?? null;
                 if (c?.person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", c.person_id).maybeSingle();
+                    const { data: person } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name, email, phone")
+                        .eq("id", c.person_id)
+                        .eq("org_id", orgId)
+                        .maybeSingle();
                     const p = person as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null } | null;
                     out._primary_person_id = p?.id ?? null;
                     out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
@@ -513,23 +620,27 @@ export async function GET(
                 .limit(1)
                 .maybeSingle();
             out._primary_location = primaryLoc ?? null;
-            if (orgId) {
+            {
                 const [
                     { count: contactsCount },
                     { count: oppCount },
                     { count: jobsCount },
                     { count: locsCount },
                 ] = await Promise.all([
-                    supabase.from("contacts").select("id", { count: "exact", head: true }).eq("customer_id", id),
-                    supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("customer_id", id),
-                    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("customer_id", id),
+                    supabase.from("contacts").select("id", { count: "exact", head: true }).eq("customer_id", id).eq("org_id", orgId),
+                    supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("customer_id", id).eq("org_id", orgId),
+                    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("customer_id", id).eq("org_id", orgId),
                     supabase.from("locations").select("id", { count: "exact", head: true }).eq("customer_id", id).eq("org_id", orgId),
                 ]);
-                const { data: jobRows } = await supabase.from("jobs").select("id").eq("customer_id", id);
+                const { data: jobRows } = await supabase.from("jobs").select("id").eq("customer_id", id).eq("org_id", orgId);
                 const jobIds = (jobRows ?? []).map((j: { id: string }) => j.id);
                 let schedulesCount = 0;
                 if (jobIds.length > 0) {
-                    const { count } = await supabase.from("schedules").select("id", { count: "exact", head: true }).in("job_id", jobIds);
+                    const { count } = await supabase
+                        .from("schedules")
+                        .select("id", { count: "exact", head: true })
+                        .in("job_id", jobIds)
+                        .eq("org_id", orgId);
                     schedulesCount = count ?? 0;
                 }
                 out._counts = {
@@ -539,8 +650,6 @@ export async function GET(
                     schedules: schedulesCount,
                     locations: locsCount ?? 0,
                 };
-            } else {
-                out._counts = { contacts: 0, opportunities: 0, jobs: 0, schedules: 0, locations: 0 };
             }
             await attachFieldDefinitionsAndValues(supabase, out, "customers", id);
             return NextResponse.json(out);
@@ -549,33 +658,58 @@ export async function GET(
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
-            const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).single();
+            const { data: schedule, error } = await supabase.from("schedules").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !schedule) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...schedule };
             const scheduleLocationId = (schedule as { location_id?: string | null }).location_id;
             const jobId = (schedule as { job_id?: string }).job_id;
             if (jobId) {
-                const { data: job } = await supabase.from("jobs").select("id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id").eq("id", jobId).single();
+                const { data: job } = await supabase
+                    .from("jobs")
+                    .select("id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id")
+                    .eq("id", jobId)
+                    .eq("org_id", orgId)
+                    .single();
                 out._job = job ?? null;
                 if (job) {
                     if ((job as { customer_id?: string }).customer_id) {
-                        const { data: cust } = await supabase.from("customers").select("id, name").eq("id", (job as { customer_id: string }).customer_id).single();
+                        const { data: cust } = await supabase
+                            .from("customers")
+                            .select("id, name")
+                            .eq("id", (job as { customer_id: string }).customer_id)
+                            .eq("org_id", orgId)
+                            .single();
                         out._customer = cust ?? null;
                     } else out._customer = null;
                     const jobPrimaryPersonId = (job as { primary_person_id?: string | null }).primary_person_id;
                     const jobPrimaryContactId = (job as { primary_contact_id?: string }).primary_contact_id;
                     if (jobPrimaryPersonId) {
-                        const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", jobPrimaryPersonId).maybeSingle();
+                        const { data: person } = await supabase
+                            .from("persons")
+                            .select("id, first_name, last_name, email, phone")
+                            .eq("id", jobPrimaryPersonId)
+                            .eq("org_id", orgId)
+                            .maybeSingle();
                         const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
                         out._primary_person_id = p?.id ?? null;
                         out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
                         out._contact = p ? { id: p.id, first_name: p.first_name, last_name: p.last_name, email: (person as { email?: string | null }).email, phone: (person as { phone?: string | null }).phone, person_id: p.id } : null;
                     } else if (jobPrimaryContactId) {
-                        const { data: contact } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, person_id").eq("id", jobPrimaryContactId).single();
+                        const { data: contact } = await supabase
+                            .from("contacts")
+                            .select("id, first_name, last_name, email, phone, person_id")
+                            .eq("id", jobPrimaryContactId)
+                            .eq("org_id", orgId)
+                            .single();
                         out._contact = contact ?? null;
                         const contactWithPerson = contact as { person_id?: string | null } | null;
                         if (contactWithPerson?.person_id) {
-                            const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", contactWithPerson.person_id).maybeSingle();
+                            const { data: person } = await supabase
+                                .from("persons")
+                                .select("id, first_name, last_name")
+                                .eq("id", contactWithPerson.person_id)
+                                .eq("org_id", orgId)
+                                .maybeSingle();
                             const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
                             out._primary_person_id = p?.id ?? null;
                             out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
@@ -589,7 +723,12 @@ export async function GET(
                         out._primary_person_name = null;
                     }
                     if ((job as { opportunity_id?: string }).opportunity_id) {
-                        const { data: opp } = await supabase.from("opportunities").select("id, name").eq("id", (job as { opportunity_id: string }).opportunity_id).single();
+                        const { data: opp } = await supabase
+                            .from("opportunities")
+                            .select("id, name")
+                            .eq("id", (job as { opportunity_id: string }).opportunity_id)
+                            .eq("org_id", orgId)
+                            .single();
                         out._opportunity = opp ?? null;
                     } else out._opportunity = null;
                     if ((job as { vertical_id?: string }).vertical_id) {
@@ -600,10 +739,15 @@ export async function GET(
             } else {
                 out._job = null; out._customer = null; out._contact = null; out._opportunity = null; out._vertical = null;
             }
-            const { data: assignment } = await supabase.from("assignments").select("id, schedule_id, job_id, vendor_id, assignment_status_id, created_at").eq("schedule_id", id).maybeSingle();
+            const { data: assignment } = await supabase
+                .from("assignments")
+                .select("id, schedule_id, job_id, vendor_id, assignment_status_id, created_at")
+                .eq("schedule_id", id)
+                .eq("org_id", orgId)
+                .maybeSingle();
             out._assignment = assignment ?? null;
             if (assignment) {
-                out._vendor = await hydrateVendorDisplayStub(supabase, (assignment as { vendor_id: string }).vendor_id);
+                out._vendor = await hydrateVendorDisplayStub(supabase, (assignment as { vendor_id: string }).vendor_id, orgId);
                 const statusId = (assignment as { assignment_status_id?: string }).assignment_status_id;
                 if (statusId) {
                     const { data: st } = await supabase.from("assignment_statuses").select("id, key, label").eq("id", statusId).single();
@@ -616,7 +760,7 @@ export async function GET(
                 const job = out._job as { assigned_vendor_id?: string | null } | null;
                 const jobVendorId = job?.assigned_vendor_id ?? null;
                 if (jobVendorId) {
-                    out._job_assigned_vendor = await hydrateVendorDisplayStub(supabase, jobVendorId);
+                    out._job_assigned_vendor = await hydrateVendorDisplayStub(supabase, jobVendorId, orgId);
                 } else {
                     out._job_assigned_vendor = null;
                 }
@@ -626,7 +770,12 @@ export async function GET(
             const effectiveLocationId = scheduleLocationId ?? (out._job as { location_id?: string | null } | null)?.location_id ?? null;
             out._location_id = effectiveLocationId ?? null;
             if (effectiveLocationId) {
-                const { data: loc } = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", effectiveLocationId).maybeSingle();
+                const { data: loc } = await supabase
+                    .from("locations")
+                    .select("id, label, address1, city, state, postal_code")
+                    .eq("id", effectiveLocationId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 if (loc) {
                     const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
                     out._location_label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
@@ -688,6 +837,7 @@ export async function GET(
                     .from("customer_subscriptions")
                     .select("id, customer_id, vertical_id, cadence, interval")
                     .eq("id", subId)
+                    .eq("org_id", orgId)
                     .maybeSingle();
                 const sr = subRow as {
                     customer_id?: string;
@@ -698,7 +848,7 @@ export async function GET(
                 if (sr?.customer_id) {
                     const freq = formatFrequencyLabel(sr.cadence ?? "month", Math.max(1, Number(sr.interval) || 1));
                     const parts: string[] = [];
-                    const { data: custRow } = await supabase.from("customers").select("name").eq("id", sr.customer_id).maybeSingle();
+                    const { data: custRow } = await supabase.from("customers").select("name").eq("id", sr.customer_id).eq("org_id", orgId).maybeSingle();
                     const custName = (custRow as { name?: string | null } | null)?.name?.trim();
                     if (custName) parts.push(custName);
                     if (sr.vertical_id) {
@@ -720,7 +870,7 @@ export async function GET(
             let assignedVendorName = vStub?.name ?? jvStub?.name ?? null;
             const scheduleRowVendorId = (schedule as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
             if (!assignedVendorName && scheduleRowVendorId) {
-                const rowStub = await hydrateVendorDisplayStub(supabase, scheduleRowVendorId);
+                const rowStub = await hydrateVendorDisplayStub(supabase, scheduleRowVendorId, orgId);
                 assignedVendorName = rowStub?.name ?? null;
             }
             out._assigned_vendor_name = assignedVendorName;
@@ -733,22 +883,18 @@ export async function GET(
             return NextResponse.json(out);
         }
         if (type === "locations") {
-            const ctx = await getAdminContext();
-            if (!ctx.ok) {
-                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
-            }
             const { data: location, error } = await supabase
                 .from("locations")
                 .select("*")
                 .eq("id", id)
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .single();
             if (error || !location) {
                 return NextResponse.json(error?.code === "PGRST116" ? "Not found" : error?.message ?? "Not found", { status: 404 });
             }
             const out: Record<string, unknown> = { ...location };
             const locSk = (location as { status_key?: string | null }).status_key;
-            out._status_display = ctx.orgId ? await resolveStatusLabel(supabase, ctx.orgId, "locations", locSk) : (locSk ?? null);
+            out._status_display = await resolveStatusLabel(supabase, orgId, "locations", locSk);
             const locationTypeId = (location as { location_type_id?: string | null }).location_type_id;
             if (locationTypeId) {
                 const { data: typeRow } = await supabase.from("location_types").select("label").eq("id", locationTypeId).maybeSingle();
@@ -758,7 +904,7 @@ export async function GET(
             }
             const customerId = (location as { customer_id: string }).customer_id;
             if (customerId) {
-                const { data: cust } = await supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle();
+                const { data: cust } = await supabase.from("customers").select("id, name").eq("id", customerId).eq("org_id", orgId).maybeSingle();
                 out._customer = cust ?? null;
                 out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
             } else {
@@ -769,7 +915,7 @@ export async function GET(
                 .from("person_locations")
                 .select("person_id, is_primary, relationship_type")
                 .eq("location_id", id)
-                .eq("org_id", ctx.orgId);
+                .eq("org_id", orgId);
             const plList = plRows ?? [];
             const personIdsFromPl = [...new Set(plList.map((r: { person_id: string }) => r.person_id))];
             const { data: personRowsForLoc } =
@@ -777,7 +923,7 @@ export async function GET(
                     ? await supabase
                           .from("persons")
                           .select("id, first_name, last_name, full_name, email")
-                          .eq("org_id", ctx.orgId)
+                          .eq("org_id", orgId)
                           .in("id", personIdsFromPl)
                     : { data: [] as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null; email?: string | null }[] };
             const personNameById = new Map(
@@ -800,9 +946,15 @@ export async function GET(
             return NextResponse.json(out);
         }
         if (type === "discount_redemptions") {
-            const { data, error } = await supabase.from("discount_redemptions").select("*").eq("id", id).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const redemption = data as Record<string, unknown> & { discount_code_id: string; customer_id?: string | null; contact_id?: string | null; opportunity_id?: string | null; job_id?: string | null };
+            const dr = await assertDiscountRedemptionInOrg(supabase, id, orgId);
+            if (!dr.ok) return NextResponse.json("Not found", { status: 404 });
+            const redemption = dr.row as Record<string, unknown> & {
+                discount_code_id: string;
+                customer_id?: string | null;
+                contact_id?: string | null;
+                opportunity_id?: string | null;
+                job_id?: string | null;
+            };
             const out: Record<string, unknown> = { ...redemption };
             const codeId = redemption.discount_code_id;
             if (codeId) {
@@ -818,15 +970,25 @@ export async function GET(
                 out._code = null; out._discount_type = null; out._discount_value = null;
             }
             if (redemption.customer_id) {
-                const { data: cust } = await supabase.from("customers").select("name").eq("id", redemption.customer_id).maybeSingle();
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", redemption.customer_id).eq("org_id", orgId).maybeSingle();
                 out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
             } else out._customer_name = null;
             if (redemption.contact_id) {
-                const { data: contact } = await supabase.from("contacts").select("first_name, last_name, person_id").eq("id", redemption.contact_id).maybeSingle();
+                const { data: contact } = await supabase
+                    .from("contacts")
+                    .select("first_name, last_name, person_id")
+                    .eq("id", redemption.contact_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const ct = contact as { first_name?: string | null; last_name?: string | null; person_id?: string | null } | null;
                 out._contact_name = ct ? [ct.first_name, ct.last_name].filter(Boolean).join(" ") || null : null;
                 if (ct?.person_id) {
-                    const { data: person } = await supabase.from("persons").select("id, first_name, last_name").eq("id", ct.person_id).maybeSingle();
+                    const { data: person } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name")
+                        .eq("id", ct.person_id)
+                        .eq("org_id", orgId)
+                        .maybeSingle();
                     const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
                     out._person_id = p?.id ?? null;
                     out._person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
@@ -840,11 +1002,21 @@ export async function GET(
                 out._person_name = null;
             }
             if (redemption.opportunity_id) {
-                const { data: opp } = await supabase.from("opportunities").select("name").eq("id", redemption.opportunity_id).maybeSingle();
+                const { data: opp } = await supabase
+                    .from("opportunities")
+                    .select("name")
+                    .eq("id", redemption.opportunity_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 out._opportunity_name = (opp as { name?: string | null } | null)?.name ?? null;
             } else out._opportunity_name = null;
             if (redemption.job_id) {
-                const { data: job } = await supabase.from("jobs").select("id, title, service_key, job_number_for_customer").eq("id", redemption.job_id).maybeSingle();
+                const { data: job } = await supabase
+                    .from("jobs")
+                    .select("id, title, service_key, job_number_for_customer")
+                    .eq("id", redemption.job_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
                 out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(redemption.job_id as string).slice(-6)}`) : null;
             } else out._job_label = null;
@@ -854,7 +1026,7 @@ export async function GET(
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
-            const { data: wf, error: wErr } = await supabase.from("workflows").select("*").eq("id", id).single();
+            const { data: wf, error: wErr } = await supabase.from("workflows").select("*").eq("id", id).eq("org_id", orgId).single();
             if (wErr || !wf) return NextResponse.json(wErr?.message || "Not found", { status: wErr?.code === "PGRST116" ? 404 : 500 });
             const { data: cond } = await supabase.from("workflow_conditions").select("*").eq("workflow_id", id);
             const { data: acts } = await supabase.from("workflow_actions").select("*").eq("workflow_id", id).order("action_order", { ascending: true });
@@ -865,7 +1037,7 @@ export async function GET(
             });
         }
         if (type === "vendors") {
-            const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).single();
+            const { data: vendor, error: vErr } = await supabase.from("vendors").select("*").eq("id", id).eq("org_id", orgId).single();
             if (vErr || !vendor) return NextResponse.json(vErr?.message || "Not found", { status: vErr?.code === "PGRST116" ? 404 : 500 });
             const v = vendor as Record<string, unknown> & {
                 status_key?: string | null;
@@ -874,7 +1046,7 @@ export async function GET(
                 primary_person_id?: string | null;
             };
             const out: Record<string, unknown> = { ...vendor };
-            const vOrgId = (vendor as { org_id?: string }).org_id;
+            const vOrgId = orgId;
             out._vendor_status_label = null;
             out._status_display = vOrgId
                 ? await resolveStatusLabel(supabase, vOrgId, "vendors", v.status_key ?? v.status ?? null)
@@ -905,6 +1077,7 @@ export async function GET(
                     .from("persons")
                     .select("id, first_name, last_name")
                     .eq("id", directPersonId)
+                    .eq("org_id", orgId)
                     .maybeSingle();
                 personLite = (pDirect as PersonLite) ?? null;
             }
@@ -914,6 +1087,7 @@ export async function GET(
                     .from("contacts")
                     .select("id, first_name, last_name, email, phone, person_id")
                     .eq("id", primaryContactId)
+                    .eq("org_id", orgId)
                     .single();
                 const c = pc as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null } | null;
                 out._primary_contact = pc;
@@ -925,6 +1099,7 @@ export async function GET(
                         .from("persons")
                         .select("id, first_name, last_name")
                         .eq("id", c.person_id)
+                        .eq("org_id", orgId)
                         .maybeSingle();
                     personLite = (pFromContact as PersonLite) ?? null;
                 }
@@ -946,7 +1121,8 @@ export async function GET(
             const { data: jobsCountRows } = await supabase
                 .from("jobs")
                 .select("id")
-                .eq("assigned_vendor_id", id);
+                .eq("assigned_vendor_id", id)
+                .eq("org_id", orgId);
             out._jobs_count = (jobsCountRows ?? []).length;
 
             const JOBS_LIMIT = 25;
@@ -956,6 +1132,7 @@ export async function GET(
                     "id, created_at, title, scheduled_at, status_key, job_status_id, gross_price_cents, recurring_total_cents, opportunity_id, assigned_vendor_id, estimated_total_cents, discount_amount, discounted"
                 )
                 .eq("assigned_vendor_id", id)
+                .eq("org_id", orgId)
                 .order("created_at", { ascending: false })
                 .limit(JOBS_LIMIT);
             let jobStatusLabelByKey = new Map<string, string>();
@@ -982,6 +1159,7 @@ export async function GET(
                     .from("schedules")
                     .select("id, job_id, start_at, end_at, timezone")
                     .in("job_id", jobIds)
+                    .eq("org_id", orgId)
                     .order("start_at", { ascending: false })
                 : { data: [] as unknown[] };
             out._vendor_schedules = vendorSchedules ?? [];
@@ -990,7 +1168,7 @@ export async function GET(
             return NextResponse.json(out);
         }
         if (type === "subscriptions") {
-            const { data: sub, error: subErr } = await supabase.from("customer_subscriptions").select("*").eq("id", id).single();
+            const { data: sub, error: subErr } = await supabase.from("customer_subscriptions").select("*").eq("id", id).eq("org_id", orgId).single();
             if (subErr || !sub) return NextResponse.json(subErr?.message || "Not found", { status: subErr?.code === "PGRST116" ? 404 : 500 });
             const out: Record<string, unknown> = { ...sub };
             const cadence = (sub as { cadence?: string }).cadence ?? "month";
@@ -1000,20 +1178,19 @@ export async function GET(
             out._cadence = cadence;
             out._interval = interval;
             const customerId = (sub as { customer_id?: string }).customer_id;
-            let subOrgId: string | null = null;
             if (customerId) {
-                const { data: cust } = await supabase.from("customers").select("name, org_id").eq("id", customerId).single();
-                out._customer_name = cust?.name ?? null;
-                subOrgId = (cust as { org_id?: string } | null)?.org_id ?? null;
+                const { data: cust } = await supabase.from("customers").select("name, org_id").eq("id", customerId).eq("org_id", orgId).maybeSingle();
+                out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._customer_name = null;
             }
             const subSk = (sub as { status_key?: string | null }).status_key ?? null;
-            out._status_display = subOrgId
-                ? await resolveStatusLabel(supabase, subOrgId, "subscriptions", subSk)
-                : subSk ?? (sub as { status?: string | null }).status ?? null;
+            out._status_display = await resolveStatusLabel(supabase, orgId, "subscriptions", subSk);
             const { data: scheds } = await supabase
                 .from("schedules")
                 .select("id, job_id, start_at, end_at, timezone, subscription_sequence, rescheduled_from_schedule_id, canceled_at, canceled_by, cancel_reason")
                 .eq("customer_subscription_id", id)
+                .eq("org_id", orgId)
                 .order("subscription_sequence", { ascending: true });
             out._schedules = scheds ?? [];
             out._ref = `SUB-${String(id).slice(-8)}`;
@@ -1026,7 +1203,7 @@ export async function GET(
                 null;
             const subPcId = (sub as { primary_contact_id?: string | null }).primary_contact_id ?? null;
             if (subPcId) {
-                const { data: sct } = await supabase.from("contacts").select("first_name, last_name").eq("id", subPcId).maybeSingle();
+                const { data: sct } = await supabase.from("contacts").select("first_name, last_name").eq("id", subPcId).eq("org_id", orgId).maybeSingle();
                 const sc = sct as { first_name?: string | null; last_name?: string | null } | null;
                 out._primary_contact_name = sc ? [sc.first_name, sc.last_name].filter(Boolean).join(" ").trim() || null : null;
             } else {
@@ -1043,15 +1220,11 @@ export async function GET(
         }
 
         if (type === "documents") {
-            const ctx = await getAdminContext();
-            if (!ctx.ok) {
-                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
-            }
             const { data: doc, error: docErr } = await supabase
                 .from("documents")
                 .select("*")
                 .eq("id", id)
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .maybeSingle();
             if (docErr || !doc) {
                 return NextResponse.json(docErr?.message || "Not found", { status: docErr?.code === "PGRST116" ? 404 : 500 });
@@ -1064,7 +1237,7 @@ export async function GET(
             out.document_type = n.document_type;
             out.uploaded_at = n.uploaded_at;
             out.status = n.status;
-            const docDefsForRow = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });
+            const docDefsForRow = await fetchEffectiveStatusDefinitions(supabase, orgId, "documents", { activeOnly: true });
             const docUi = inferDocumentStatusFromStored(docDefsForRow, n.status);
             out.status_key = docUi.inferredKey;
             out._status_display = docUi.display;
@@ -1076,29 +1249,29 @@ export async function GET(
                 const labelKey = `${et}:${eid}`;
                 const labelMap = new Map<string, string>();
                 if (et === "customer") {
-                    const { data: c } = await supabase.from("customers").select("id, name").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    const { data: c } = await supabase.from("customers").select("id, name").eq("id", eid).eq("org_id", orgId).maybeSingle();
                     if (c) labelMap.set(labelKey, (c as { name?: string | null }).name?.trim() || `Customer ${eid.slice(0, 8)}…`);
                 } else if (et === "vendor") {
-                    const { data: v } = await supabase.from("vendors").select("id, name").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    const { data: v } = await supabase.from("vendors").select("id, name").eq("id", eid).eq("org_id", orgId).maybeSingle();
                     if (v) labelMap.set(labelKey, (v as { name?: string | null }).name?.trim() || `Vendor ${eid.slice(0, 8)}…`);
                 } else if (et === "job") {
-                    const { data: j } = await supabase.from("jobs").select("id, title").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    const { data: j } = await supabase.from("jobs").select("id, title").eq("id", eid).eq("org_id", orgId).maybeSingle();
                     if (j) labelMap.set(labelKey, (j as { title?: string | null }).title?.trim() || `Job ${eid.slice(0, 8)}…`);
                 } else if (et === "schedule") {
-                    const { data: s } = await supabase.from("schedules").select("id, start_at").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    const { data: s } = await supabase.from("schedules").select("id, start_at").eq("id", eid).eq("org_id", orgId).maybeSingle();
                     if (s) {
                         const st = (s as { start_at?: string | null }).start_at;
                         labelMap.set(labelKey, st ? `Visit ${new Date(st).toLocaleString()}` : `Schedule ${eid.slice(0, 8)}…`);
                     }
                 } else if (et === "opportunity") {
-                    const { data: o } = await supabase.from("opportunities").select("id, name").eq("id", eid).eq("org_id", ctx.orgId).maybeSingle();
+                    const { data: o } = await supabase.from("opportunities").select("id, name").eq("id", eid).eq("org_id", orgId).maybeSingle();
                     if (o) labelMap.set(labelKey, (o as { name?: string | null }).name?.trim() || `Opportunity ${eid.slice(0, 8)}…`);
                 } else if (et === "contact") {
                     const { data: c } = await supabase
                         .from("contacts")
                         .select("id, first_name, last_name, email")
                         .eq("id", eid)
-                        .eq("org_id", ctx.orgId)
+                        .eq("org_id", orgId)
                         .maybeSingle();
                     if (c) {
                         const cr = c as { first_name?: string | null; last_name?: string | null; email?: string | null };
@@ -1110,7 +1283,7 @@ export async function GET(
                         .from("persons")
                         .select("id, first_name, last_name, email, full_name")
                         .eq("id", eid)
-                        .eq("org_id", ctx.orgId)
+                        .eq("org_id", orgId)
                         .maybeSingle();
                     if (p) {
                         const pr = p as {
@@ -1138,44 +1311,34 @@ export async function GET(
         }
 
         if (type === "payments") {
-            const { data, error } = await supabase.from("payments").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("payments").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const payment = data as Record<string, unknown> & { customer_id?: string | null; job_id?: string | null; status_key?: string | null; payment_status_id?: string | null; provider_payment_id?: string | null };
             const out: Record<string, unknown> = { ...payment };
             out._payment_label = (payment.provider_payment_id && String(payment.provider_payment_id).trim()) ? payment.provider_payment_id : `Payment #${(payment.id as string).slice(-6)}`;
             if (payment.customer_id) {
-                const { data: cust } = await supabase.from("customers").select("name").eq("id", payment.customer_id).maybeSingle();
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", payment.customer_id).eq("org_id", orgId).maybeSingle();
                 out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
             } else {
                 out._customer_name = null;
             }
             if (payment.job_id) {
-                const { data: job } = await supabase.from("jobs").select("id, title, service_key, job_number_for_customer").eq("id", payment.job_id).maybeSingle();
+                const { data: job } = await supabase
+                    .from("jobs")
+                    .select("id, title, service_key, job_number_for_customer")
+                    .eq("id", payment.job_id)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
                 out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(payment.job_id as string).slice(-6)}`) : null;
             } else {
                 out._job_label = null;
             }
-            let payOrgId: string | null = null;
-            if (payment.job_id) {
-                const { data: j } = await supabase.from("jobs").select("org_id").eq("id", payment.job_id).maybeSingle();
-                payOrgId = (j as { org_id?: string } | null)?.org_id ?? null;
-            }
-            if (!payOrgId && payment.customer_id) {
-                const { data: c } = await supabase.from("customers").select("org_id").eq("id", payment.customer_id).maybeSingle();
-                payOrgId = (c as { org_id?: string } | null)?.org_id ?? null;
-            }
             const paySk = payment.status_key ?? null;
-            out._status_display = payOrgId
-                ? await resolveStatusLabel(supabase, payOrgId, "payments", paySk)
-                : paySk ?? null;
+            out._status_display = await resolveStatusLabel(supabase, orgId, "payments", paySk);
             return NextResponse.json(out);
         }
         if (type === "customer_members") {
-            const ctx = await getAdminContext();
-            if (!ctx.ok) {
-                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
-            }
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
@@ -1183,7 +1346,7 @@ export async function GET(
                 .from("customer_members")
                 .select("*")
                 .eq("id", id)
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .maybeSingle();
             if (rowErr || !row) {
                 return NextResponse.json(rowErr?.code === "PGRST116" ? "Not found" : rowErr?.message ?? "Not found", { status: 404 });
@@ -1191,7 +1354,12 @@ export async function GET(
             const out: Record<string, unknown> = { ...row };
             const personId = (row as { person_id?: string | null }).person_id ?? null;
             if (personId) {
-                const { data: personRow } = await supabase.from("persons").select("id, first_name, last_name, email, phone, created_at, updated_at").eq("id", personId).maybeSingle();
+                const { data: personRow } = await supabase
+                    .from("persons")
+                    .select("id, first_name, last_name, email, phone, created_at, updated_at")
+                    .eq("id", personId)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
                 if (personRow) {
                     out._person = personRow as Record<string, unknown>;
                     out._person_id = (personRow as { id: string }).id;
@@ -1209,7 +1377,7 @@ export async function GET(
             }
             const customerId = (row as { customer_id: string }).customer_id;
             if (customerId) {
-                const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+                const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).eq("org_id", orgId).maybeSingle();
                 out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
             } else {
                 out._customer_name = null;
@@ -1219,7 +1387,7 @@ export async function GET(
                 const { data: relRow } = await supabase
                     .from("customer_member_relationship_types")
                     .select("label")
-                    .eq("org_id", ctx.orgId)
+                    .eq("org_id", orgId)
                     .eq("key", relationshipKey)
                     .maybeSingle();
                 out._relationship_label = (relRow as { label?: string | null } | null)?.label ?? relationshipKey;
@@ -1243,11 +1411,11 @@ export async function GET(
             const { data: linkRows } = await supabase
                 .from("customer_member_contacts")
                 .select("id, contact_id, role_key, is_active, contact:contacts(id, first_name, last_name, email, phone)")
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .eq("customer_member_id", id);
             const roleKeys = [...new Set((linkRows ?? []).map((l: Record<string, unknown>) => l.role_key as string).filter(Boolean))];
             const { data: roleRows } = roleKeys.length
-                ? await supabase.from("customer_member_contact_roles").select("role_key, label").eq("org_id", ctx.orgId).in("role_key", roleKeys)
+                ? await supabase.from("customer_member_contact_roles").select("role_key, label").eq("org_id", orgId).in("role_key", roleKeys)
                 : { data: [] as { role_key: string; label: string | null }[] };
             const roleLabelMap = new Map((roleRows ?? []).map((r: { role_key: string; label: string | null }) => [r.role_key, r.label ?? r.role_key]));
             out._linked_contacts = (linkRows ?? []).map((l: Record<string, unknown>) => {
@@ -1267,10 +1435,6 @@ export async function GET(
         }
 
         if (type === "persons") {
-            const ctx = await getAdminContext();
-            if (!ctx.ok) {
-                return NextResponse.json(ctx.status === 401 ? "Unauthorized" : "Forbidden", { status: ctx.status });
-            }
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
@@ -1278,7 +1442,7 @@ export async function GET(
                 .from("persons")
                 .select("*")
                 .eq("id", id)
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .maybeSingle();
             if (personErr || !personRow) {
                 return NextResponse.json(personErr?.code === "PGRST116" ? "Not found" : personErr?.message ?? "Not found", { status: 404 });
@@ -1290,18 +1454,22 @@ export async function GET(
                 [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
                 null;
             const psk = (personRow as { status_key?: string | null }).status_key ?? null;
-            out._status_display = ctx.orgId ? await resolveStatusLabel(supabase, ctx.orgId, "persons", psk) : psk;
+            out._status_display = await resolveStatusLabel(supabase, orgId, "persons", psk);
 
             const { data: cpRows } = await supabase
                 .from("customer_persons")
                 .select("id, customer_id, person_id, role, created_at")
                 .eq("person_id", id)
-                .eq("org_id", ctx.orgId);
+                .eq("org_id", orgId);
             const customerIds = [...new Set((cpRows ?? []).map((r: { customer_id: string }) => r.customer_id))];
             const roleKeys = [...new Set((cpRows ?? []).map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
             const [customerRowsRes, roleTypesRes] = await Promise.all([
-                customerIds.length > 0 ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] as { id: string; name: string | null }[] },
-                roleKeys.length > 0 ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys) : { data: [] as { key: string; label: string | null }[] },
+                customerIds.length > 0
+                    ? supabase.from("customers").select("id, name").in("id", customerIds).eq("org_id", orgId)
+                    : { data: [] as { id: string; name: string | null }[] },
+                roleKeys.length > 0
+                    ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", orgId).in("key", roleKeys)
+                    : { data: [] as { key: string; label: string | null }[] },
             ]);
             const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
             const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
@@ -1314,15 +1482,16 @@ export async function GET(
             const { data: relRows } = await supabase
                 .from("person_relationships")
                 .select("id, from_person_id, to_person_id, relationship_type, created_at")
+                .eq("org_id", orgId)
                 .or(`from_person_id.eq.${id},to_person_id.eq.${id}`);
             const relTypeKeys = [...new Set((relRows ?? []).map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
             const { data: relTypeRows } = relTypeKeys.length > 0
-                ? await supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", ctx.orgId).in("key", relTypeKeys)
+                ? await supabase.from("person_relationship_type_settings").select("key, label").eq("org_id", orgId).in("key", relTypeKeys)
                 : { data: [] as { key: string; label: string | null }[] };
             const relTypeLabelMap = new Map((relTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
             const otherPersonIds = [...new Set((relRows ?? []).flatMap((r: { from_person_id: string; to_person_id: string }) => (r.from_person_id === id ? [r.to_person_id] : [r.from_person_id])))];
             const { data: otherPersons } = otherPersonIds.length > 0
-                ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds)
+                ? await supabase.from("persons").select("id, first_name, last_name").in("id", otherPersonIds).eq("org_id", orgId)
                 : { data: [] as { id: string; first_name?: string | null; last_name?: string | null }[] };
             const personNameMap = new Map((otherPersons ?? []).map((p: { id: string; first_name?: string | null; last_name?: string | null }) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null]));
             out._person_relationships = (relRows ?? []).map((r: { id: string; from_person_id: string; to_person_id: string; relationship_type?: string | null; created_at?: string }) => ({
@@ -1333,8 +1502,18 @@ export async function GET(
             }));
 
             const PERSON_LIMIT = 25;
-            const { data: contactRows } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, customer_id").eq("person_id", id).eq("org_id", ctx.orgId).limit(PERSON_LIMIT);
-            const { data: memberRows } = await supabase.from("customer_members").select("id, display_name, relationship, customer_id").eq("person_id", id).eq("org_id", ctx.orgId).limit(PERSON_LIMIT);
+            const { data: contactRows } = await supabase
+                .from("contacts")
+                .select("id, first_name, last_name, email, phone, customer_id")
+                .eq("person_id", id)
+                .eq("org_id", orgId)
+                .limit(PERSON_LIMIT);
+            const { data: memberRows } = await supabase
+                .from("customer_members")
+                .select("id, display_name, relationship, customer_id")
+                .eq("person_id", id)
+                .eq("org_id", orgId)
+                .limit(PERSON_LIMIT);
             out._compatibility_contacts = contactRows ?? [];
             out._compatibility_members = memberRows ?? [];
 
@@ -1342,7 +1521,7 @@ export async function GET(
                 .from("person_locations")
                 .select("location_id, is_primary, relationship_type")
                 .eq("person_id", id)
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .limit(PERSON_LIMIT);
             const locLinkList = plLocRows ?? [];
             const locIdsFromPl = [...new Set(locLinkList.map((r: { location_id: string }) => r.location_id))];
@@ -1351,7 +1530,7 @@ export async function GET(
                     ? await supabase
                           .from("locations")
                           .select("id, label, postal_code, city, address1")
-                          .eq("org_id", ctx.orgId)
+                          .eq("org_id", orgId)
                           .in("id", locIdsFromPl)
                     : { data: [] as { id: string; label?: string | null; postal_code?: string | null; city?: string | null; address1?: string | null }[] };
             const locLabelById = new Map(
@@ -1374,7 +1553,7 @@ export async function GET(
                 .from("opportunities")
                 .select("id, name, status_key, job_date, quote_total, created_at")
                 .eq("primary_person_id", id)
-                .eq("org_id", ctx.orgId)
+                .eq("org_id", orgId)
                 .order("created_at", { ascending: false })
                 .limit(PERSON_LIMIT);
             out._linked_opportunities = oppRows ?? [];
@@ -1384,7 +1563,7 @@ export async function GET(
         }
 
         if (type === "service_offerings") {
-            const { data, error } = await supabase.from("service_offerings").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("service_offerings").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const row = data as Record<string, unknown> & { vertical_id?: string | null };
             const out: Record<string, unknown> = { ...row };
@@ -1399,7 +1578,7 @@ export async function GET(
         }
 
         if (type === "service_plan_templates") {
-            const { data, error } = await supabase.from("service_plan_templates").select("*").eq("id", id).single();
+            const { data, error } = await supabase.from("service_plan_templates").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const row = data as Record<string, unknown> & { recurrence_unit?: string | null; recurrence_interval?: number | null };
             const out: Record<string, unknown> = { ...row };

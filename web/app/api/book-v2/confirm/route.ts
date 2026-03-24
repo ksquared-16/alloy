@@ -553,18 +553,19 @@ async function ensureCustomerForContactInConfirm(
  */
 function normalizeFrequencyKey(frequencyLabel: string | null | undefined): string {
     if (!frequencyLabel) return "one_time";
-    
+
     const normalized = frequencyLabel.toLowerCase().trim();
-    
+
     // Map common frequency labels to canonical keys
     if (normalized.includes("one-time") || normalized.includes("one time") || normalized === "one-time") {
         return "one_time";
     }
-    if (normalized.includes("weekly") || normalized === "weekly") {
-        return "weekly";
-    }
+    // MUST run before generic "weekly": "bi-weekly".includes("weekly") is true
     if (normalized.includes("bi-weekly") || normalized.includes("biweekly") || normalized.includes("every 2 weeks")) {
         return "biweekly";
+    }
+    if (normalized === "weekly" || normalized.includes("weekly")) {
+        return "weekly";
     }
     if (normalized.includes("monthly") || normalized === "monthly") {
         return "monthly";
@@ -572,8 +573,7 @@ function normalizeFrequencyKey(frequencyLabel: string | null | undefined): strin
     if (normalized.includes("quarterly") || normalized === "quarterly") {
         return "quarterly";
     }
-    
-    // Default fallback
+
     return "one_time";
 }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 
 export type WorkflowEventRow = {
     id: string;
@@ -13,17 +14,15 @@ export type WorkflowEventRow = {
     created_at?: string | null;
 };
 
-/** GET: list workflow_events for current org. Query: event_type, search, range=24h|7d|30d, page, limit.
+/** GET: list workflow_events for caller org. Query: event_type, search, range=24h|7d|30d, page, limit.
  *  Use ?list=event_types to return distinct event_type values for the org (for filter dropdown).
  */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-
-    const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-    if (!orgId) {
-        return NextResponse.json({ error: "ALLOY_PUBLIC_ORG_ID not set" }, { status: 500 });
-    }
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const orgId = ctx.orgId;
 
     const { searchParams } = new URL(request.url);
     const list = searchParams.get("list");

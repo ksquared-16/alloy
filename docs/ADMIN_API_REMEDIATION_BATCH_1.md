@@ -35,9 +35,8 @@
 - **`pipelines` / `pipeline_stages` with `org_id` null:** excluded from org-scoped lists and cannot be targeted by `assertRowOrg` (legacy rows may disappear from UI until backfilled).
 - **`ORG_ID_FINANCIALS`:** still used by **`web/app/admin/dashboard/page.tsx`** (SSR) — not part of Batch 1; dashboard org should be aligned in a later pass.
 
-## Deferred to Batch 2 (suggested)
+## Follow-up
 
-- `GET/POST/PATCH/DELETE` on **`/api/admin/pipelines/[id]`**, **`/api/admin/pipeline-stages/[id]`**, **`/api/admin/verticals/[id]`** (IDOR-style by id).
-- **`/api/admin/workflows/[id]/run`**, **`workflow-events`**, **`workflow-runs`**, **`ALLOY_PUBLIC_ORG_ID`** usage.
-- **`GET /api/admin/payments`** (cross-org list), **`discount-redemptions`**, entity **`PATCH` IDOR** routes, **`/api/admin/entity/[type]/[id]`** mixed auth paths.
-- **Financial dashboard** SSR: replace `ORG_ID_FINANCIALS` with session org when that page is wired to tenant context.
+Batch 2 remediation is documented in **`docs/ADMIN_API_REMEDIATION_BATCH_2.md`** (payments, workflow env-org routes, pipeline/vertical id routes, discount redemptions, PATCH IDOR on customers/opportunities/vendors/payments).
+
+Remaining deferred items from the original Batch 1 list (e.g. **`workflows/[id]/run`**, **`entity/[type]/[id]`**, dashboard financials) are tracked toward **Batch 3** in that doc.
