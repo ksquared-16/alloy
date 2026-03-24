@@ -342,8 +342,26 @@ export async function GET(
                 out._location_id = null;
             }
             const oppOrgId = (opp as { org_id?: string }).org_id;
-            const oppSk = opp.status_key ?? null;
-            out._status_display = oppOrgId ? await resolveStatusLabel(supabase, oppOrgId, "opportunities", oppSk) : (oppSk ?? null);
+            const oppLegacyStatus = (opp as { status?: string | null }).status;
+            const oppSkRaw =
+                opp.status_key != null && String(opp.status_key).trim() !== ""
+                    ? String(opp.status_key).trim()
+                    : oppLegacyStatus != null && String(oppLegacyStatus).trim() !== ""
+                      ? String(oppLegacyStatus).trim()
+                      : null;
+            let oppStatusDisplay: string | null = null;
+            if (oppOrgId && oppSkRaw) {
+                const defs = await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true });
+                const ci = defs.find((d) => d.status_key.toLowerCase() === oppSkRaw.toLowerCase());
+                if (ci?.status_label != null && String(ci.status_label).trim() !== "") {
+                    oppStatusDisplay = String(ci.status_label).trim();
+                } else {
+                    oppStatusDisplay = await resolveStatusLabel(supabase, oppOrgId, "opportunities", oppSkRaw);
+                }
+            } else {
+                oppStatusDisplay = oppSkRaw;
+            }
+            out._status_display = oppStatusDisplay;
             const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)
                 : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents)) ? Number(opp.estimated_price_cents) / 100
                 : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
@@ -640,19 +658,28 @@ export async function GET(
             if (subId) {
                 const { data: subRow } = await supabase
                     .from("customer_subscriptions")
-                    .select("id, service_type, service_key, cadence, interval")
+                    .select("id, customer_id, vertical_id, cadence, interval")
                     .eq("id", subId)
                     .maybeSingle();
                 const sr = subRow as {
-                    service_type?: string | null;
-                    service_key?: string | null;
+                    customer_id?: string;
+                    vertical_id?: string | null;
                     cadence?: string | null;
                     interval?: number | null;
                 } | null;
-                if (sr) {
-                    const svc = (sr.service_type ?? sr.service_key ?? "").trim() || "Subscription";
-                    const freq = formatFrequencyLabel(sr.cadence ?? "month", sr.interval ?? 1);
-                    out._customer_subscription_label = `${svc} · ${freq}`;
+                if (sr?.customer_id) {
+                    const freq = formatFrequencyLabel(sr.cadence ?? "month", Math.max(1, Number(sr.interval) || 1));
+                    const parts: string[] = [];
+                    const { data: custRow } = await supabase.from("customers").select("name").eq("id", sr.customer_id).maybeSingle();
+                    const custName = (custRow as { name?: string | null } | null)?.name?.trim();
+                    if (custName) parts.push(custName);
+                    if (sr.vertical_id) {
+                        const { data: vertRow } = await supabase.from("verticals").select("name").eq("id", sr.vertical_id).maybeSingle();
+                        const vertName = (vertRow as { name?: string | null } | null)?.name?.trim();
+                        if (vertName) parts.push(vertName);
+                    }
+                    parts.push(freq);
+                    out._customer_subscription_label = parts.join(" · ");
                 } else {
                     out._customer_subscription_label = `Subscription ${subId.slice(0, 8)}…`;
                 }
@@ -662,7 +689,13 @@ export async function GET(
 
             const vStub = out._vendor as { name?: string; id?: string } | null;
             const jvStub = out._job_assigned_vendor as { name?: string; id?: string } | null;
-            out._assigned_vendor_name = vStub?.name ?? jvStub?.name ?? null;
+            let assignedVendorName = vStub?.name ?? jvStub?.name ?? null;
+            const scheduleRowVendorId = (schedule as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
+            if (!assignedVendorName && scheduleRowVendorId) {
+                const rowStub = await hydrateVendorDisplayStub(supabase, scheduleRowVendorId);
+                assignedVendorName = rowStub?.name ?? null;
+            }
+            out._assigned_vendor_name = assignedVendorName;
             const assignVid = (assignment as { vendor_id?: string } | null)?.vendor_id ?? null;
             if (!(out.assigned_vendor_id as string | null | undefined) && assignVid) {
                 out.assigned_vendor_id = assignVid;

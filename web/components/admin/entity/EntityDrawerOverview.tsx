@@ -1,12 +1,18 @@
 "use client";
 
 import { ReactNode } from "react";
-import { getEntityPresentation, type EntityPresentationType, type EntityDrawerFieldConfig, type EntityDrawerSectionConfig } from "@/lib/entityPresentation";
+import {
+  getEntityPresentation,
+  type EntityPresentationType,
+  type EntityDrawerFieldConfig,
+  type EntityDrawerSectionConfig,
+} from "@/lib/entityPresentation";
 import { formatDate, formatDateTime, formatMoney, formatMoneyFromCents, formatPhoneUS, formatPayoutPercent, RECURRENCE_UNIT_OPTIONS } from "@/lib/adminFormatters";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
 import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
+import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
 
 const INLINE_EDIT_INPUT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
 const INLINE_EDIT_SELECT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none disabled:opacity-60";
@@ -38,7 +44,8 @@ function formatFieldValue(
   field: EntityDrawerFieldConfig,
   getStatusLabel?: (key: string) => string | null,
   record?: Record<string, unknown> | null,
-  onOpenDrawer?: (entityType: string, id: string) => void
+  onOpenDrawer?: (entityType: string, id: string) => void,
+  presentationEntityType?: EntityPresentationType
 ): ReactNode {
   if (value === null || value === undefined) return null;
   const hint = field.renderHint ?? "text";
@@ -57,6 +64,13 @@ function formatFieldValue(
       return formatMoney(value as number | string | null | undefined, key);
     }
     case "status": {
+      const fromApi =
+        record && record._status_display != null && String(record._status_display).trim() !== ""
+          ? String(record._status_display).trim()
+          : null;
+      if (fromApi) {
+        return <StatusBadge label={fromApi} variant="default" />;
+      }
       const s = value != null && String(value).trim() !== "" ? String(value).trim() : "";
       const label =
         field.key === "_status_display"
@@ -71,12 +85,27 @@ function formatFieldValue(
         const idField = field.linkTarget.idField;
         const id = record[idField];
         if (id != null && String(id).trim() !== "") {
-          const labelFromRecord = resolveOverviewRelationshipLabel(record, field.key, { linkIdField: idField });
+          let labelFromRecord: string | null = null;
+          if (presentationEntityType === "schedules") {
+            const sched = scheduleOverviewRelationshipReadLabel(record, field.key);
+            if (sched !== undefined) {
+              labelFromRecord = sched === "" ? null : sched;
+            }
+            if (labelFromRecord == null && idField !== field.key) {
+              const schedById = scheduleOverviewRelationshipReadLabel(record, idField);
+              if (schedById !== undefined) {
+                labelFromRecord = schedById === "" ? null : schedById;
+              }
+            }
+          }
+          if (labelFromRecord == null) {
+            labelFromRecord = resolveOverviewRelationshipLabel(record, field.key, { linkIdField: idField });
+          }
           const uuidLike = isUuidLike(value);
           const displayText =
             labelFromRecord ??
             (!uuidLike && value != null && String(value).trim() !== "" ? String(value) : null) ??
-            String(id).slice(0, 8) + "…";
+            "—";
           return (
             <button
               type="button"
@@ -95,6 +124,12 @@ function formatFieldValue(
     case "custom":
     default:
       if (key === "payout_percent") return formatPayoutPercent(value as number | null | undefined);
+      if (presentationEntityType === "schedules" && record) {
+        const sched = scheduleOverviewRelationshipReadLabel(record, key);
+        if (sched !== undefined) {
+          return sched === "" ? "—" : sched;
+        }
+      }
       if (record && isUuidLike(value)) {
         const rel = resolveOverviewRelationshipLabel(record, key);
         if (rel) return rel;
@@ -314,7 +349,15 @@ export default function EntityDrawerOverview({
 
   const renderOverviewField = (field: EntityDrawerFieldConfig): ReactNode => {
     const key = field.key;
-    let displayFallback: unknown =
+    let displayFallback: unknown = undefined;
+    if (entityType === "schedules") {
+      const schedExplicit = scheduleOverviewRelationshipReadLabel(record, key);
+      if (schedExplicit !== undefined) {
+        displayFallback = schedExplicit === "" ? "—" : schedExplicit;
+      }
+    }
+    if (displayFallback === undefined) {
+      displayFallback =
       key === "_status_display"
         ? record._status_display
         : key === "status_key" && record._status_display != null
@@ -356,6 +399,7 @@ export default function EntityDrawerOverview({
                                       : key === "_primary_person_name" && record._primary_person_name != null
                                         ? String(record._primary_person_name)
                                         : undefined;
+    }
     if (displayFallback === undefined) {
       const resolved = resolveOverviewRelationshipLabel(record, key);
       if (resolved != null) displayFallback = resolved;
@@ -363,7 +407,7 @@ export default function EntityDrawerOverview({
     const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
     const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
     const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;
-    let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer);
+    let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer, entityType);
     if (!showFieldEdit && (displayValue === null || displayValue === undefined || displayValue === "")) {
       displayValue = "—";
     }
