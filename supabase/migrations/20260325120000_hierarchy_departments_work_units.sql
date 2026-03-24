@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS "public"."work_units" (
     "updated_at" timestamp with time zone,
     CONSTRAINT "work_units_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "work_units_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE RESTRICT,
-    CONSTRAINT "work_units_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE CASCADE,
+    CONSTRAINT "work_units_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE RESTRICT,
     CONSTRAINT "uq_work_units_department_key" UNIQUE ("department_id", "key"),
     CONSTRAINT "work_units_key_nonempty" CHECK (("btrim"("key") <> ''::"text")),
     CONSTRAINT "work_units_name_nonempty" CHECK (("btrim"("name") <> ''::"text"))
@@ -145,12 +145,10 @@ CREATE POLICY "work_units_delete_same_org" ON "public"."work_units" FOR DELETE T
 CREATE POLICY "service role full access work_units" ON "public"."work_units" TO "service_role" USING (true) WITH CHECK (true);
 
 -- ---------------------------------------------------------------------------
--- Grants (match pattern used for other org-scoped app tables)
+-- Grants: no anon (tenant data; RLS uses authenticated + current_org_id)
 -- ---------------------------------------------------------------------------
-GRANT ALL ON TABLE "public"."departments" TO "anon";
 GRANT ALL ON TABLE "public"."departments" TO "authenticated";
 GRANT ALL ON TABLE "public"."departments" TO "service_role";
 
-GRANT ALL ON TABLE "public"."work_units" TO "anon";
 GRANT ALL ON TABLE "public"."work_units" TO "authenticated";
 GRANT ALL ON TABLE "public"."work_units" TO "service_role";

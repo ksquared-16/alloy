@@ -356,7 +356,7 @@ function LinkedRow({
     );
 }
 
-/** Job drawer: Relationships collapsible section (Customer, Primary contact, Location, Opportunity, Default vendor). */
+/** Job drawer: Relationships collapsible section (Customer, Primary contact, Location, Opportunity, Work unit, Default vendor). */
 function JobDrawerRelationshipsSection(props: {
     formData: Record<string, unknown>;
     setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
@@ -367,6 +367,7 @@ function JobDrawerRelationshipsSection(props: {
     jobContactOptions: { id: string; label: string }[];
     primaryContactDisabled: boolean;
     jobLocationOptions: { id: string; label: string }[];
+    jobWorkUnitOptions: { id: string; label: string }[];
     jobOpportunityOptions: { id: string; label: string }[];
     jobVendorOptions: AdminVendorSelectOption[];
     jobAssignedVendorId: string | null;
@@ -455,6 +456,23 @@ function JobDrawerRelationshipsSection(props: {
                             </select>
                             {String(p.formData.opportunity_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "opportunities", id: String(p.formData.opportunity_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
                         </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Work unit</label>
+                        <p className="text-xs text-alloy-midnight/50 mb-1">Optional hierarchy queue (department · work unit).</p>
+                        <select
+                            value={String(p.formData.work_unit_id ?? "")}
+                            onChange={(e) => p.setFormData((f) => ({ ...f, work_unit_id: e.target.value || null }))}
+                            disabled={!p.canMutate}
+                            className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"
+                        >
+                            <option value="">Unassigned</option>
+                            {p.jobWorkUnitOptions.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             )}
@@ -552,6 +570,7 @@ export default function AdminEntityDrawer() {
     const [jobAssignedVendorId, setJobAssignedVendorId] = useState<string | null>(null);
     const [applyVendorToUpcoming, setApplyVendorToUpcoming] = useState(false);
     const [jobLocationOptions, setJobLocationOptions] = useState<{ id: string; label: string }[]>([]);
+    const [jobWorkUnitOptions, setJobWorkUnitOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobOpportunityOptions, setJobOpportunityOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobPersonOptions, setJobPersonOptions] = useState<{ id: string; label: string }[]>([]);
     const [jobExpandedSections, setJobExpandedSections] = useState<{ relationships: boolean; financials: boolean; scheduling: boolean; ledger: boolean }>({ relationships: true, financials: false, scheduling: false, ledger: false });
@@ -599,8 +618,35 @@ export default function AdminEntityDrawer() {
     const [scheduleRelatedDocuments, setScheduleRelatedDocuments] = useState<JobRelatedPayload["documents"]>([]);
     const [scheduleRelatedDocumentsLoading, setScheduleRelatedDocumentsLoading] = useState(false);
     const [jobFinancials, setJobFinancials] = useState<{
-        job: { id: string; customer_id: string | null; assigned_vendor_id: string | null; gross_price_cents: number | null; discount_code: string | null; discount_amount: number | string | null };
-        schedules: { id: string; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null; posted: boolean }[];
+        job: {
+            id: string;
+            customer_id: string | null;
+            assigned_vendor_id: string | null;
+            gross_price_cents: number | null;
+            estimated_total_cents?: number | null;
+            recurring_total_cents?: number | null;
+            discounted?: boolean | null;
+            discount_code: string | null;
+            discount_amount: number | string | null;
+            is_recurring?: boolean | null;
+            service_frequency_key?: string | null;
+        };
+        booking_economics?: {
+            first_visit_gross_cents: number | null;
+            discount_cents: number | null;
+            first_visit_net_cents: number | null;
+            recurring_visit_cents: number | null;
+        };
+        schedules: {
+            id: string;
+            status_key: string | null;
+            start_at: string | null;
+            assigned_vendor_id: string | null;
+            price_cents: number | null;
+            subscription_sequence?: number | null;
+            visit_kind?: "first" | "recurring";
+            posted: boolean;
+        }[];
         totals: { total_revenue_credits: number; total_discount_debits: number; total_vendor_payout_debits: number; total_cash_debits: number; total_vendor_payable_credits: number };
         posted_entries_count: number;
     } | null>(null);
@@ -1967,7 +2013,7 @@ export default function AdminEntityDrawer() {
             .catch(() => setJobDiscountOptions([]));
     }, [drawer.type, (data as { _vertical_slug?: string | null } | null)?._vertical_slug]);
 
-    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "discount_code_id", "assigned_vendor_id"] as const;
+    const JOB_FORM_KEYS = ["title", "service_key", "job_type", "description", "scheduled_at", "completed_at", "service_frequency_key", "is_recurring", "status_key", "internal_notes", "gross_price_cents", "discount_amount", "primary_contact_id", "customer_id", "opportunity_id", "location_id", "work_unit_id", "discount_code_id", "assigned_vendor_id"] as const;
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id) {
             setVendorPayout(null);
@@ -2078,6 +2124,52 @@ export default function AdminEntityDrawer() {
             .then((j: { locations?: { id: string; label: string }[] }) => setJobLocationOptions(j.locations ?? []))
             .catch(() => setJobLocationOptions([]));
     }, [drawer.type]);
+
+    useEffect(() => {
+        if (drawer.type !== "jobs") {
+            setJobWorkUnitOptions([]);
+            return;
+        }
+        let cancelled = false;
+        Promise.all([fetch("/api/admin/departments"), fetch("/api/admin/work-units")])
+            .then(async ([dRes, wRes]) => {
+                if (!dRes.ok || !wRes.ok) {
+                    if (!cancelled) setJobWorkUnitOptions([]);
+                    return;
+                }
+                const dj = (await dRes.json().catch(() => ({}))) as { items?: { id: string; name: string | null; sort_order: number }[] };
+                const wj = (await wRes.json().catch(() => ({}))) as {
+                    items?: { id: string; name: string | null; department_id: string; sort_order: number }[];
+                };
+                const depts = [...(dj.items ?? [])].sort(
+                    (a, b) => a.sort_order - b.sort_order || String(a.name ?? "").localeCompare(String(b.name ?? ""))
+                );
+                const deptIndex = new Map(depts.map((d, i) => [d.id, i]));
+                const deptName = new Map(depts.map((d) => [d.id, d.name ?? "Department"]));
+                const wus = [...(wj.items ?? [])].sort((a, b) => {
+                    const da = deptIndex.get(a.department_id) ?? 999;
+                    const db = deptIndex.get(b.department_id) ?? 999;
+                    if (da !== db) return da - db;
+                    return a.sort_order - b.sort_order || String(a.name ?? "").localeCompare(String(b.name ?? ""));
+                });
+                let opts = wus.map((wu) => ({
+                    id: wu.id,
+                    label: `${deptName.get(wu.department_id) ?? "Department"} · ${wu.name ?? wu.id}`,
+                }));
+                const wuid = data?.work_unit_id ? String(data.work_unit_id) : "";
+                const wuLbl = String((data as { _work_unit_label?: string | null } | null)?._work_unit_label ?? "").trim();
+                if (wuid && !opts.some((o) => o.id === wuid)) {
+                    opts = [...opts, { id: wuid, label: wuLbl || `${wuid.slice(0, 8)}…` }];
+                }
+                if (!cancelled) setJobWorkUnitOptions(opts);
+            })
+            .catch(() => {
+                if (!cancelled) setJobWorkUnitOptions([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, data?.id, data?.work_unit_id, (data as { _work_unit_label?: string | null } | null)?._work_unit_label]);
 
     useEffect(() => {
         if (drawer.type !== "jobs") {
@@ -2238,6 +2330,7 @@ export default function AdminEntityDrawer() {
                     ? `code:${(data as { discount_code_id: string }).discount_code_id}`
                     : ""),
             assigned_vendor_id: (data.assigned_vendor_id as string) ?? "",
+            work_unit_id: (data.work_unit_id as string) ?? "",
         };
         const jobDefs = (data._field_definitions as { field_key: string; is_system: boolean }[] | undefined) ?? [];
         for (const d of jobDefs) { if (!d.is_system) (snapshot as Record<string, unknown>)[d.field_key] = (data as Record<string, unknown>)[d.field_key] ?? ""; }
@@ -2781,6 +2874,7 @@ export default function AdminEntityDrawer() {
                 if (payload.customer_id === "") payload.customer_id = null;
                 if (payload.opportunity_id === "") payload.opportunity_id = null;
                 if (payload.location_id === "") payload.location_id = null;
+                if (payload.work_unit_id === "" || payload.work_unit_id === undefined) payload.work_unit_id = null;
                 if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
                 delete payload.job_status_id;
                 for (const tk of ["scheduled_at", "completed_at"] as const) {
@@ -4198,6 +4292,14 @@ export default function AdminEntityDrawer() {
                 discountOpts = [...discountOpts, { value: selTok, label: lbl }];
             }
             out.discount_code_id = discountOpts;
+
+            const wuOpts = jobWorkUnitOptions.map((o) => ({ value: o.id, label: o.label }));
+            const wuid = String(d.work_unit_id ?? "").trim();
+            if (wuid && !wuOpts.some((o) => o.value === wuid)) {
+                const wl = String(d._work_unit_label ?? "").trim();
+                wuOpts.push({ value: wuid, label: wl || `${wuid.slice(0, 8)}…` });
+            }
+            out.work_unit_id = wuOpts;
         }
         if (drawer.type === "vendors" && overviewData) {
             const d = overviewData as {
@@ -4229,6 +4331,7 @@ export default function AdminEntityDrawer() {
         jobContactOptions,
         jobOpportunityOptions,
         jobDiscountOptions,
+        jobWorkUnitOptions,
     ]);
 
     if (!drawer.type || !drawer.id) return null;
@@ -5553,6 +5656,41 @@ export default function AdminEntityDrawer() {
                             ) : (data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/60 mt-4">Could not load payout.</p> : null}
                             {!jobFinancialsLoading && jobFinancials && (
                                 <>
+                                    {jobFinancials.booking_economics && (
+                                        <div className="mt-4 rounded border border-alloy-stone/25 bg-alloy-stone/5 px-3 py-3 space-y-2">
+                                            <h3 className={`${DRAWER_SECTION_HEADER_CLASS}`}>Booking pricing</h3>
+                                            <p className="text-xs text-alloy-midnight/60 max-w-xl leading-relaxed">
+                                                From the job row: gross / discount / net first visit, and recurring visit amount when the job is recurring.
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80 mt-2">
+                                                <span>First visit (gross)</span>
+                                                <span>
+                                                    {jobFinancials.booking_economics.first_visit_gross_cents != null
+                                                        ? formatMoneyFromCents(jobFinancials.booking_economics.first_visit_gross_cents)
+                                                        : "—"}
+                                                </span>
+                                                <span>One-time discount</span>
+                                                <span>
+                                                    {jobFinancials.booking_economics.discount_cents != null &&
+                                                    jobFinancials.booking_economics.discount_cents > 0
+                                                        ? `-${formatMoneyFromCents(jobFinancials.booking_economics.discount_cents)}`
+                                                        : "—"}
+                                                </span>
+                                                <span>First visit (net)</span>
+                                                <span>
+                                                    {jobFinancials.booking_economics.first_visit_net_cents != null
+                                                        ? formatMoneyFromCents(jobFinancials.booking_economics.first_visit_net_cents)
+                                                        : "—"}
+                                                </span>
+                                                <span>Recurring visit</span>
+                                                <span>
+                                                    {jobFinancials.booking_economics.recurring_visit_cents != null
+                                                        ? formatMoneyFromCents(jobFinancials.booking_economics.recurring_visit_cents)
+                                                        : "—"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                     <h3 className={`${DRAWER_SECTION_HEADER_CLASS} mt-6`}>Ledger (general ledger)</h3>
                                     <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
                                         These totals sum <strong>gl_journal_lines</strong> for this job (mapped accounts only).{" "}
@@ -5573,6 +5711,7 @@ export default function AdminEntityDrawer() {
                                                 <thead>
                                                     <tr className="border-b text-left text-alloy-midnight/70">
                                                         <th className="py-1 pr-2">Visit (start)</th>
+                                                        <th className="py-1 pr-2">Visit</th>
                                                         <th className="py-1 pr-2">Status</th>
                                                         <th className="py-1 pr-2">Price</th>
                                                         <th className="py-1 pr-2">GL posted</th>
@@ -5582,6 +5721,13 @@ export default function AdminEntityDrawer() {
                                                     {jobFinancials.schedules.map((s) => (
                                                         <tr key={s.id} className="border-b border-alloy-stone/10">
                                                             <td className="py-1 pr-2">{s.start_at ? formatDateTime(s.start_at) : "—"}</td>
+                                                            <td className="py-1 pr-2">
+                                                                {s.visit_kind === "recurring"
+                                                                    ? "Recurring"
+                                                                    : s.visit_kind === "first"
+                                                                      ? "First"
+                                                                      : "—"}
+                                                            </td>
                                                             <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
                                                             <td className="py-1 pr-2">
                                                                 {s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}
@@ -6642,6 +6788,7 @@ export default function AdminEntityDrawer() {
                                         jobContactOptions={jobContactOptions}
                                         primaryContactDisabled={primaryContactDisabled}
                                         jobLocationOptions={jobLocationOptions}
+                                        jobWorkUnitOptions={jobWorkUnitOptions}
                                         jobOpportunityOptions={jobOpportunityOptions}
                                         jobVendorOptions={jobVendorsForAssign}
                                         jobAssignedVendorId={jobAssignedVendorId}
@@ -6730,6 +6877,38 @@ export default function AdminEntityDrawer() {
                                                 {jobFinancialsLoading && <p className="text-sm text-alloy-midnight/60">Loading…</p>}
                                                 {!jobFinancialsLoading && jobFinancials && (
                                                     <>
+                                                        {jobFinancials.booking_economics && (
+                                                            <div className="rounded border border-alloy-stone/25 bg-alloy-stone/5 px-3 py-3 space-y-2 mb-3">
+                                                                <p className="text-xs font-semibold uppercase tracking-wider text-[#59678b]">Booking pricing</p>
+                                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
+                                                                    <span>First visit (gross)</span>
+                                                                    <span>
+                                                                        {jobFinancials.booking_economics.first_visit_gross_cents != null
+                                                                            ? formatMoneyFromCents(jobFinancials.booking_economics.first_visit_gross_cents)
+                                                                            : "—"}
+                                                                    </span>
+                                                                    <span>One-time discount</span>
+                                                                    <span>
+                                                                        {jobFinancials.booking_economics.discount_cents != null &&
+                                                                        jobFinancials.booking_economics.discount_cents > 0
+                                                                            ? `-${formatMoneyFromCents(jobFinancials.booking_economics.discount_cents)}`
+                                                                            : "—"}
+                                                                    </span>
+                                                                    <span>First visit (net)</span>
+                                                                    <span>
+                                                                        {jobFinancials.booking_economics.first_visit_net_cents != null
+                                                                            ? formatMoneyFromCents(jobFinancials.booking_economics.first_visit_net_cents)
+                                                                            : "—"}
+                                                                    </span>
+                                                                    <span>Recurring visit</span>
+                                                                    <span>
+                                                                        {jobFinancials.booking_economics.recurring_visit_cents != null
+                                                                            ? formatMoneyFromCents(jobFinancials.booking_economics.recurring_visit_cents)
+                                                                            : "—"}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
                                                             <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
                                                             <span>Discounts (debits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_discount_debits)}</span>
@@ -6741,11 +6920,30 @@ export default function AdminEntityDrawer() {
                                                         {jobFinancials.schedules.length > 0 && (
                                                             <div className="overflow-x-auto">
                                                                 <table className="w-full text-sm border border-alloy-stone/20">
-                                                                    <thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Start</th><th className="py-1 pr-2">Status</th><th className="py-1 pr-2">{vendorSingular}</th><th className="py-1 pr-2">Posted?</th></tr></thead>
+                                                                    <thead>
+                                                                        <tr className="border-b text-left text-alloy-midnight/70">
+                                                                            <th className="py-1 pr-2">Start</th>
+                                                                            <th className="py-1 pr-2">Visit</th>
+                                                                            <th className="py-1 pr-2">Price</th>
+                                                                            <th className="py-1 pr-2">Status</th>
+                                                                            <th className="py-1 pr-2">{vendorSingular}</th>
+                                                                            <th className="py-1 pr-2">Posted?</th>
+                                                                        </tr>
+                                                                    </thead>
                                                                     <tbody>
                                                                         {jobFinancials.schedules.map((s) => (
                                                                             <tr key={s.id} className="border-b border-alloy-stone/10">
                                                                                 <td className="py-1 pr-2">{s.start_at ? formatDateTime(s.start_at) : "—"}</td>
+                                                                                <td className="py-1 pr-2">
+                                                                                    {s.visit_kind === "recurring"
+                                                                                        ? "Recurring"
+                                                                                        : s.visit_kind === "first"
+                                                                                          ? "First"
+                                                                                          : "—"}
+                                                                                </td>
+                                                                                <td className="py-1 pr-2">
+                                                                                    {s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}
+                                                                                </td>
                                                                                 <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
                                                                                 <td className="py-1 pr-2">{s.assigned_vendor_id ? `${String(s.assigned_vendor_id).slice(0, 8)}…` : "—"}</td>
                                                                                 <td className="py-1 pr-2">{s.posted ? "Yes" : "No"}</td>

@@ -12,7 +12,10 @@ import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 type JobRecord = Record<string, unknown> & {
     _customer_name?: string | null;
     _assigned_vendor_name?: string | null;
+    _work_unit_label?: string | null;
 };
+
+type WorkUnitOpt = { id: string; label: string };
 
 type ScheduleRow = {
     id: string;
@@ -70,6 +73,9 @@ export default function JobDetailClient({
     const [cancelTarget, setCancelTarget] = useState<ScheduleRow | null>(null);
     const [cancelReason, setCancelReason] = useState("");
     const [cancelLoading, setCancelLoading] = useState(false);
+    const [workUnitOptions, setWorkUnitOptions] = useState<WorkUnitOpt[]>([]);
+    const [workUnitSaving, setWorkUnitSaving] = useState(false);
+    const [workUnitError, setWorkUnitError] = useState<string | null>(null);
 
     const isAdmin = role === "admin";
 
@@ -87,6 +93,70 @@ export default function JobDetailClient({
             if (res.ok) setVendors(json.vendors ?? []);
         })();
     }, [isAdmin, jobId]);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        let cancelled = false;
+        Promise.all([fetch("/api/admin/departments"), fetch("/api/admin/work-units")])
+            .then(async ([dRes, wRes]) => {
+                if (!dRes.ok || !wRes.ok) {
+                    if (!cancelled) setWorkUnitOptions([]);
+                    return;
+                }
+                const dj = (await dRes.json().catch(() => ({}))) as { items?: { id: string; name: string | null; sort_order: number }[] };
+                const wj = (await wRes.json().catch(() => ({}))) as {
+                    items?: { id: string; name: string | null; department_id: string; sort_order: number }[];
+                };
+                const depts = [...(dj.items ?? [])].sort(
+                    (a, b) => a.sort_order - b.sort_order || String(a.name ?? "").localeCompare(String(b.name ?? ""))
+                );
+                const deptIndex = new Map(depts.map((d, i) => [d.id, i]));
+                const deptName = new Map(depts.map((d) => [d.id, d.name ?? "Department"]));
+                const wus = [...(wj.items ?? [])].sort((a, b) => {
+                    const da = deptIndex.get(a.department_id) ?? 999;
+                    const db = deptIndex.get(b.department_id) ?? 999;
+                    if (da !== db) return da - db;
+                    return a.sort_order - b.sort_order || String(a.name ?? "").localeCompare(String(b.name ?? ""));
+                });
+                let opts = wus.map((wu) => ({
+                    id: wu.id,
+                    label: `${deptName.get(wu.department_id) ?? "Department"} · ${wu.name ?? wu.id}`,
+                }));
+                const wuid = job.work_unit_id ? String(job.work_unit_id) : "";
+                const wuLbl = String(job._work_unit_label ?? "").trim();
+                if (wuid && !opts.some((o) => o.id === wuid)) {
+                    opts = [...opts, { id: wuid, label: wuLbl || `${wuid.slice(0, 8)}…` }];
+                }
+                if (!cancelled) setWorkUnitOptions(opts);
+            })
+            .catch(() => {
+                if (!cancelled) setWorkUnitOptions([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [isAdmin, jobId, job.work_unit_id, job._work_unit_label]);
+
+    const handleWorkUnitChange = async (next: string) => {
+        if (!isAdmin) return;
+        setWorkUnitSaving(true);
+        setWorkUnitError(null);
+        try {
+            const res = await fetch(`/api/admin/jobs/${jobId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ work_unit_id: next.trim() ? next.trim() : null }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setWorkUnitError((data as { error?: string }).error ?? "Update failed");
+                return;
+            }
+            setJob((prev) => ({ ...prev, ...data }));
+        } finally {
+            setWorkUnitSaving(false);
+        }
+    };
 
     useEffect(() => {
         if (tab !== "related") return;
@@ -310,6 +380,34 @@ export default function JobDetailClient({
                                 <p className="font-medium">
                                     {((job.metadata as Record<string, unknown>)?.internal_notes as string) ?? "—"}
                                 </p>
+                            </div>
+                            <div className="sm:col-span-2">
+                                <span className="text-alloy-midnight/60">Work unit</span>
+                                {isAdmin ? (
+                                    <div className="mt-1 max-w-md space-y-1">
+                                        <select
+                                            className="w-full border border-alloy-stone/40 rounded-md px-2 py-1.5 text-sm"
+                                            value={String(job.work_unit_id ?? "")}
+                                            disabled={workUnitSaving}
+                                            onChange={(e) => void handleWorkUnitChange(e.target.value)}
+                                        >
+                                            <option value="">Unassigned</option>
+                                            {workUnitOptions.map((o) => (
+                                                <option key={o.id} value={o.id}>
+                                                    {o.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {workUnitError ? <p className="text-sm text-red-600">{workUnitError}</p> : null}
+                                        {workUnitSaving ? (
+                                            <p className="text-xs text-alloy-midnight/50">Saving…</p>
+                                        ) : null}
+                                    </div>
+                                ) : (
+                                    <p className="font-medium mt-0.5">
+                                        {String(job._work_unit_label ?? "").trim() || "Unassigned"}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         {(scheduledAt || completedAt) && (

@@ -271,6 +271,7 @@ function renderFieldEditNode(
     "job_id",
     "customer_subscription_id",
     "discount_code_id",
+    "work_unit_id",
   ]);
   /** Reference selects (FK ids) win over generic `status` hint; workflow status uses status_key + statusDefs. */
   if (refOpts && refOpts.length > 0 && refSelectKeys.has(key)) {
@@ -400,6 +401,8 @@ export default function EntityDrawerOverview({
         ? record._status_display
         : key === "assigned_vendor_id" && (record._vendor_name != null || record._assigned_vendor_name != null)
           ? String(record._vendor_name ?? record._assigned_vendor_name)
+          : key === "work_unit_id" && record._work_unit_label != null
+            ? String(record._work_unit_label)
           : key === "pipeline_stage_id" && record._pipeline_stage_name != null
             ? record._pipeline_stage_name
             : key === "pipeline_id" && record._pipeline_name != null

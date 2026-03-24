@@ -3,7 +3,7 @@
 **Companion migration:** `supabase/migrations/20260325120000_hierarchy_departments_work_units.sql`  
 **Product context:** [System structure v1](./SYSTEM_STRUCTURE_V1.md), [System implementation plan v1](./SYSTEM_IMPLEMENTATION_PLAN_V1.md).
 
-This document records the **first schema slice** for **Organization → Department → Work unit → Record**. It is **additive only**: new tables and a **nullable** `jobs.work_unit_id`. No `NOT NULL` enforcement on jobs yet, no backfill in this migration, no admin UI in this pass.
+This document records the **first schema slice** for **Organization → Department → Work unit → Record**. It is **additive only**: new tables and a **nullable** `jobs.work_unit_id`. No `NOT NULL` enforcement on jobs yet, no backfill in this migration. **Admin V1** adds minimal CRUD for departments and work units under `/admin/system/*`; job assignment and workspace runtime wiring are separate passes.
 
 ---
 
@@ -32,7 +32,7 @@ This document records the **first schema slice** for **Organization → Departme
 |--------|------|--------|
 | `id` | `uuid` PK | |
 | `org_id` | `uuid` NOT NULL | FK → `orgs(id)` **ON DELETE RESTRICT**; denormalized copy of `departments.org_id` |
-| `department_id` | `uuid` NOT NULL | FK → `departments(id)` **ON DELETE CASCADE** |
+| `department_id` | `uuid` NOT NULL | FK → `departments(id)` **ON DELETE RESTRICT** |
 | `key` | `text` NOT NULL | Stable within department; **UNIQUE (`department_id`, `key`)** |
 | `name` / `description` | | Same intent as departments |
 | `sort_order` / `is_active` | | Same pattern |
@@ -85,7 +85,7 @@ This document records the **first schema slice** for **Organization → Departme
 
 **`service_role`:** Broad allow policies (mirrors existing “service role full access …” pattern) so `createAdminClient()` continues to work; **admin routes must still scope by `getAdminContext().orgId`**.
 
-**`anon`:** GRANTs exist for consistency with other tables; RLS blocks without a session.
+**`anon`:** No table-level GRANTs on `departments` / `work_units` (only `authenticated` and `service_role`), so anonymous clients cannot target these relations at all.
 
 **Deferred:** Role-specific policies (e.g. ops-only mutate departments); `current_org_id()` session setup for non-standard clients; realtime / publication.
 
@@ -96,7 +96,7 @@ This document records the **first schema slice** for **Organization → Departme
 | Risk | Mitigation |
 |------|------------|
 | **Large `jobs` table** | `ADD COLUMN` nullable is cheap; partial index build is conditional on non-null rows only. |
-| **CASCADE delete department** | Removes `work_units` for that department; `jobs.work_unit_id` **SET NULL** via FK on `work_units` delete. **Product** should treat department delete as a major action (UI confirmations later). |
+| **Delete department with work units** | FK **RESTRICT** blocks the delete until work units are removed or moved; admin API should surface counts / 409. Deleting a work unit still sets `jobs.work_unit_id` **NULL** via FK on `work_units` delete. |
 | **Orphan `org_id` on `work_units`** | RLS prevents visible inconsistent rows if department linkage is wrong; service role could still insert bad data—**API validation** required. |
 | **Job / work unit org mismatch** | Not DB-enforced yet; document and fix in a follow-up migration or trigger. |
 
@@ -132,7 +132,7 @@ supabase db push
 # or apply migration via your CI/CD pipeline
 ```
 
-**Do not** consider this migration applied until it has run in each environment; TypeScript types and admin UI remain unchanged in this pass.
+**Do not** consider this migration applied until it has run in each environment. After apply, regenerate Supabase types if your workflow requires them. Minimal **Admin V1** CRUD for departments and work units lives under `/admin/system/departments` and `/admin/system/work-units` (org-scoped APIs; no full runtime / job assignment in that pass).
 
 ---
 

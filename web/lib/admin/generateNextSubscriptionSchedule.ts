@@ -70,7 +70,12 @@ export async function generateNextSubscriptionSchedule(
         timezone = lastSchedule.timezone ?? "UTC";
         durationMinutes = lastSchedule.duration_minutes ?? 120;
         jobId = lastSchedule.job_id;
-        nextSequence = (lastSchedule.subscription_sequence ?? 0) + 1;
+        // Treat null subscription_sequence as 1 (first visit) so the next row is sequence 2+ and gets recurring pricing.
+        const prevSeq =
+            lastSchedule.subscription_sequence != null && lastSchedule.subscription_sequence > 0
+                ? lastSchedule.subscription_sequence
+                : 1;
+        nextSequence = prevSeq + 1;
         locationId = lastSchedule.location_id ?? null;
         assignedVendorId = lastSchedule.assigned_vendor_id ?? null;
     } else {
@@ -113,10 +118,11 @@ export async function generateNextSubscriptionSchedule(
             ? Math.round(Number(jobRow.recurring_total_cents))
             : null;
 
-    if (lastSchedule) {
-        const followUpVisit = nextSequence >= 2;
-        const useRecurring = followUpVisit && recurringTotalCents != null && recurringTotalCents > 0;
-        priceCents = useRecurring ? recurringTotalCents : lastSchedule.price_cents ?? null;
+    // Any schedule created here is a follow-up to an existing occurrence (generate-next), not the book-v2 first visit.
+    if (lastSchedule && recurringTotalCents != null && recurringTotalCents > 0) {
+        priceCents = recurringTotalCents;
+    } else if (lastSchedule) {
+        priceCents = lastSchedule.price_cents ?? null;
     }
 
     const nextStartIso = nextStart.toISOString();

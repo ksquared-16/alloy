@@ -5,6 +5,7 @@ import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/l
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
 import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
@@ -16,13 +17,50 @@ export async function GET(request: NextRequest) {
   const includeArchived = searchParams.get("include_archived") === "true";
   const statusKey = (searchParams.get("status_key") ?? "").trim();
   const assignedVendorId = (searchParams.get("assigned_vendor_id") ?? "").trim();
+  const workUnitIdParam = (searchParams.get("work_unit_id") ?? "").trim();
+  const departmentIdParam = (searchParams.get("department_id") ?? "").trim();
+  const unassignedWorkUnit = searchParams.get("unassigned_work_unit") === "true";
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
+
+  /** When set, restrict jobs to these work_unit ids (department filter). */
+  let departmentWorkUnitIds: string[] | null = null;
+
+  if (unassignedWorkUnit) {
+    // mutually exclusive with work_unit_id / department_id (enforced on client)
+  } else if (workUnitIdParam) {
+    const wuOk = await assertRowOrg(supabase, "work_units", workUnitIdParam, ctx.orgId);
+    if (!wuOk.ok) {
+      return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
+    }
+  } else if (departmentIdParam) {
+    const depOk = await assertRowOrg(supabase, "departments", departmentIdParam, ctx.orgId);
+    if (!depOk.ok) {
+      return NextResponse.json({ error: "Department not found" }, { status: 404 });
+    }
+    const { data: wuInDept, error: wuInDeptErr } = await supabase
+      .from("work_units")
+      .select("id")
+      .eq("org_id", ctx.orgId)
+      .eq("department_id", departmentIdParam);
+    if (wuInDeptErr) {
+      if ((wuInDeptErr as { code?: string }).code === "42P01") {
+        return NextResponse.json({ jobs: [], total: 0 });
+      }
+      return NextResponse.json({ error: wuInDeptErr.message }, { status: 500 });
+    }
+    const deptWuIds = (wuInDept ?? []).map((r) => (r as { id: string }).id);
+    if (deptWuIds.length === 0) {
+      return NextResponse.json({ jobs: [], total: 0 });
+    }
+    departmentWorkUnitIds = deptWuIds;
+  }
+
   let q = supabase
     .from("jobs")
     .select(
-      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
+      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, work_unit_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)
@@ -37,6 +75,13 @@ export async function GET(request: NextRequest) {
   }
   if (assignedVendorId) {
     q = q.eq("assigned_vendor_id", assignedVendorId);
+  }
+  if (unassignedWorkUnit) {
+    q = q.is("work_unit_id", null);
+  } else if (workUnitIdParam) {
+    q = q.eq("work_unit_id", workUnitIdParam);
+  } else if (departmentWorkUnitIds) {
+    q = q.in("work_unit_id", departmentWorkUnitIds);
   }
 
   if (search) {
@@ -53,6 +98,9 @@ export async function GET(request: NextRequest) {
   const customerIds = [...new Set(jobs.map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
   const vendorIds = [...new Set(jobs.map((j) => (j as { assigned_vendor_id?: string }).assigned_vendor_id).filter(Boolean))] as string[];
   const locationIds = [...new Set(jobs.map((j) => (j as { location_id?: string }).location_id).filter(Boolean))] as string[];
+  const workUnitIds = [
+    ...new Set(jobs.map((j) => (j as { work_unit_id?: string | null }).work_unit_id).filter(Boolean)),
+  ] as string[];
   let jobStatusLabelByKey = new Map<string, string>();
   try {
     const defs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "jobs", { activeOnly: true });
@@ -97,6 +145,32 @@ export async function GET(request: NextRequest) {
     if (!nextScheduleByJobId.has(row.job_id)) nextScheduleByJobId.set(row.job_id, row.start_at);
   }
 
+  type WuRow = { id: string; name: string | null; department_id: string };
+  let workUnitById = new Map<string, WuRow>();
+  let deptNameById = new Map<string, string | null>();
+  if (workUnitIds.length > 0) {
+    const { data: wuData, error: wuErr } = await supabase
+      .from("work_units")
+      .select("id, name, department_id")
+      .in("id", workUnitIds)
+      .eq("org_id", ctx.orgId);
+    if (!wuErr && wuData) {
+      const wuRows = wuData as WuRow[];
+      workUnitById = new Map(wuRows.map((w) => [w.id, w]));
+      const deptIds = [...new Set(wuRows.map((w) => w.department_id))];
+      if (deptIds.length > 0) {
+        const { data: depData } = await supabase
+          .from("departments")
+          .select("id, name")
+          .in("id", deptIds)
+          .eq("org_id", ctx.orgId);
+        deptNameById = new Map(
+          (depData ?? []).map((d) => [(d as { id: string }).id, (d as { name: string | null }).name ?? null])
+        );
+      }
+    }
+  }
+
   const result = jobs.map((j) => {
     const jr = j as {
       id: string;
@@ -114,7 +188,19 @@ export async function GET(request: NextRequest) {
       customer_id?: string | null;
       assigned_vendor_id?: string | null;
       location_id?: string | null;
+      work_unit_id?: string | null;
     };
+    const wuid = jr.work_unit_id ?? null;
+    let _work_unit_label: string | null = null;
+    if (wuid) {
+      const wu = workUnitById.get(wuid);
+      if (wu) {
+        const dname = deptNameById.get(wu.department_id) ?? null;
+        const uname = wu.name ?? null;
+        _work_unit_label =
+          dname && uname ? `${dname} · ${uname}` : (uname ?? dname ?? null);
+      }
+    }
     const _job_label =
       (jr.title && String(jr.title).trim()) ||
       (jr.service_key && String(jr.service_key).trim()) ||
@@ -133,6 +219,7 @@ export async function GET(request: NextRequest) {
       _assigned_vendor_name: _vendor_name,
       _vendor_name,
       _location_label: jr.location_id ? locationMap.get(jr.location_id) ?? null : null,
+      _work_unit_label,
       _job_label,
       _status_display,
       _next_schedule,

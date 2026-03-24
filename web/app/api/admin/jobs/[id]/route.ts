@@ -14,6 +14,7 @@ import {
     type JobPriceInput,
 } from "@/lib/admin/jobDisplayPrice";
 import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 
 const ALLOWED_KEYS = [
     "title",
@@ -133,7 +134,7 @@ export async function GET(
     }
     const _status_display = sk ? await resolveStatusLabel(supabase, ctx.orgId, "jobs", sk) : null;
 
-    return NextResponse.json({
+    const payload = {
         ...j,
         status_key: sk ?? (j.status_key as string | null) ?? null,
         _customer_name,
@@ -146,7 +147,9 @@ export async function GET(
         display_total_cents,
         _price_display: display_total_cents != null ? display_total_cents / 100 : null,
         _status_display,
-    });
+    };
+    const withWu = await attachJobWorkUnitDisplay(supabase, ctx.orgId, payload as Record<string, unknown>);
+    return NextResponse.json(withWu);
 }
 
 export async function PATCH(
@@ -247,6 +250,30 @@ export async function PATCH(
 
         const JOB_TIMESTAMPTZ_KEYS = ["scheduled_at", "completed_at"] as const;
 
+        if (body.work_unit_id !== undefined) {
+            const raw = body.work_unit_id;
+            if (raw === "" || raw == null) {
+                updates.work_unit_id = null;
+            } else if (typeof raw === "string" && raw.trim()) {
+                const wuId = raw.trim();
+                const { data: wuRow, error: wuErr } = await supabase
+                    .from("work_units")
+                    .select("id")
+                    .eq("id", wuId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (wuErr || !wuRow) {
+                    return NextResponse.json(
+                        { error: "Work unit not found in this organization" },
+                        { status: 400 }
+                    );
+                }
+                updates.work_unit_id = wuId;
+            } else {
+                return NextResponse.json({ error: "Invalid work_unit_id" }, { status: 400 });
+            }
+        }
+
         for (const key of ALLOWED_KEYS) {
             if (body[key] === undefined) continue;
             if (key === "discount_code_id" || key === "discount_code" || key === "discount_amount" || key === "discounted") continue; // handled above
@@ -311,7 +338,10 @@ export async function PATCH(
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        await upsertFieldValuesFromBody(supabase, ctx.orgId, "job", id, body, ALLOWED_KEYS);
+        await upsertFieldValuesFromBody(supabase, ctx.orgId, "job", id, body, [
+            ...ALLOWED_KEYS,
+            "work_unit_id",
+        ]);
 
         const newStatusKey =
             updates.status_key !== undefined ? (updates.status_key as string | null) : oldStatusKey;
@@ -337,7 +367,8 @@ export async function PATCH(
             actor_user_id: ctx.userId,
             role: ctx.role,
         });
-        return NextResponse.json(data);
+        const out = await attachJobWorkUnitDisplay(supabase, ctx.orgId, data as Record<string, unknown>);
+        return NextResponse.json(out);
     } catch (e: unknown) {
         console.error("[ADMIN_PATCH_JOB]", e);
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });

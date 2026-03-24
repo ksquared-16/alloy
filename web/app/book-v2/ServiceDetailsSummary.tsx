@@ -53,6 +53,12 @@ export default function ServiceDetailsSummary({
                         </span>
                     </div>
 
+                    {details.has_pets && (
+                        <p className="text-sm text-alloy-midnight/70">
+                            <strong className="text-alloy-midnight">Pets:</strong> Yes
+                        </p>
+                    )}
+
                     {/* Access Method */}
                     <div>
                         <p className="text-sm text-alloy-midnight/70">

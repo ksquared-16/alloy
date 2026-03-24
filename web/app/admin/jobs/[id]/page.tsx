@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 import JobDetailClient from "./JobDetailClient";
 
 export const dynamic = 'force-dynamic';
@@ -66,7 +67,8 @@ export default async function Page({
     const sk = j.status_key as string | null | undefined;
     const _status_display = sk ? await resolveStatusLabel(supabase, ctx.orgId, "jobs", sk) : null;
 
-    const initialJob = { ...j, _customer_name, _assigned_vendor_name, _primary_person_name, _primary_contact_name, _status_display };
+    const baseJob = { ...j, _customer_name, _assigned_vendor_name, _primary_person_name, _primary_contact_name, _status_display };
+    const initialJob = await attachJobWorkUnitDisplay(supabase, ctx.orgId, baseJob as Record<string, unknown>);
 
     return (
         <JobDetailClient

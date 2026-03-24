@@ -33,6 +33,8 @@ export type JobRow = {
   _assigned_vendor_name?: string | null;
   _vendor_name?: string | null;
   _location_label?: string | null;
+  work_unit_id?: string | null;
+  _work_unit_label?: string | null;
   _job_label?: string | null;
   _status_display?: string | null;
   _next_schedule?: string | null;
@@ -54,6 +56,13 @@ export default function JobsClient() {
   const [searchApplied, setSearchApplied] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [statusKeyFilter, setStatusKeyFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  /** "" = all, "unassigned" = no work unit, else work unit uuid */
+  const [workUnitFilter, setWorkUnitFilter] = useState<"" | "unassigned" | string>("");
+  const [departmentOptions, setDepartmentOptions] = useState<{ id: string; name: string }[]>([]);
+  const [workUnitOptionsAll, setWorkUnitOptionsAll] = useState<{ id: string; label: string; department_id: string }[]>(
+    []
+  );
   const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -64,6 +73,56 @@ export default function JobsClient() {
       .then((r) => r.ok ? r.json() : { statuses: [] })
       .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
   }, []);
+
+  useEffect(() => {
+    Promise.all([fetch("/api/admin/departments"), fetch("/api/admin/work-units")])
+      .then(async ([dRes, wRes]) => {
+        if (!dRes.ok || !wRes.ok) {
+          setDepartmentOptions([]);
+          setWorkUnitOptionsAll([]);
+          return;
+        }
+        const dj = (await dRes.json().catch(() => ({}))) as { items?: { id: string; name: string | null; sort_order: number }[] };
+        const wj = (await wRes.json().catch(() => ({}))) as {
+          items?: { id: string; name: string | null; department_id: string; sort_order: number }[];
+        };
+        const depts = [...(dj.items ?? [])].sort(
+          (a, b) => a.sort_order - b.sort_order || String(a.name ?? "").localeCompare(String(b.name ?? ""))
+        );
+        setDepartmentOptions(depts.map((d) => ({ id: d.id, name: d.name ?? "Department" })));
+        const deptIndex = new Map(depts.map((d, i) => [d.id, i]));
+        const deptName = new Map(depts.map((d) => [d.id, d.name ?? "Department"]));
+        const wus = [...(wj.items ?? [])].sort((a, b) => {
+          const da = deptIndex.get(a.department_id) ?? 999;
+          const db = deptIndex.get(b.department_id) ?? 999;
+          if (da !== db) return da - db;
+          return a.sort_order - b.sort_order || String(a.name ?? "").localeCompare(String(b.name ?? ""));
+        });
+        setWorkUnitOptionsAll(
+          wus.map((wu) => ({
+            id: wu.id,
+            department_id: wu.department_id,
+            label: `${deptName.get(wu.department_id) ?? "Department"} · ${wu.name ?? wu.id}`,
+          }))
+        );
+      })
+      .catch(() => {
+        setDepartmentOptions([]);
+        setWorkUnitOptionsAll([]);
+      });
+  }, []);
+
+  const workUnitOptionsFiltered = useMemo(() => {
+    if (!departmentFilter) return workUnitOptionsAll;
+    return workUnitOptionsAll.filter((o) => o.department_id === departmentFilter);
+  }, [departmentFilter, workUnitOptionsAll]);
+
+  useEffect(() => {
+    if (workUnitFilter === "" || workUnitFilter === "unassigned") return;
+    if (!workUnitOptionsFiltered.some((o) => o.id === workUnitFilter)) {
+      setWorkUnitFilter("");
+    }
+  }, [departmentFilter, workUnitFilter, workUnitOptionsFiltered]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -81,6 +140,13 @@ export default function JobsClient() {
     if (searchApplied) params.set("search", searchApplied);
     if (includeArchived) params.set("include_archived", "true");
     if (statusKeyFilter) params.set("status_key", statusKeyFilter);
+    if (workUnitFilter === "unassigned") {
+      params.set("unassigned_work_unit", "true");
+    } else if (workUnitFilter) {
+      params.set("work_unit_id", workUnitFilter);
+    } else if (departmentFilter) {
+      params.set("department_id", departmentFilter);
+    }
     try {
       const res = await fetch(`/api/admin/jobs?${params}`);
       const json = await res.json();
@@ -88,7 +154,7 @@ export default function JobsClient() {
     } finally {
       setLoading(false);
     }
-  }, [searchApplied, includeArchived, statusKeyFilter]);
+  }, [searchApplied, includeArchived, statusKeyFilter, departmentFilter, workUnitFilter]);
 
   useEffect(() => {
     fetchJobs();
@@ -133,10 +199,12 @@ export default function JobsClient() {
     setSearch("");
     setSearchApplied("");
     setStatusKeyFilter("");
+    setDepartmentFilter("");
+    setWorkUnitFilter("");
     setFilterOpen(false);
   };
 
-  const hasActiveFilters = searchApplied || statusKeyFilter;
+  const hasActiveFilters = searchApplied || statusKeyFilter || departmentFilter || workUnitFilter;
 
   const columns = useMemo(() => {
     const base = buildEntityTableColumns<JobRow>("jobs", {
@@ -226,6 +294,40 @@ export default function JobsClient() {
                 <option value="">All</option>
                 {statusOptions.map((s) => (
                   <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">Department</label>
+              <select
+                value={departmentFilter}
+                onChange={(e) => {
+                  setDepartmentFilter(e.target.value);
+                  setWorkUnitFilter("");
+                }}
+                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+              >
+                <option value="">All</option>
+                {departmentOptions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">Work unit</label>
+              <select
+                value={workUnitFilter}
+                onChange={(e) => setWorkUnitFilter((e.target.value || "") as "" | "unassigned" | string)}
+                className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20"
+              >
+                <option value="">All</option>
+                <option value="unassigned">Unassigned</option>
+                {workUnitOptionsFiltered.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
             </div>

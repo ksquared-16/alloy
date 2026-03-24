@@ -1,21 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-import { getFieldDefinitionMeta, upsertTypedFieldValue } from "@/lib/bookV2/fieldValueUpsert";
-
-const ACCESS_METHOD_LABELS: Record<string, string> = {
-  home: "I will be home",
-  code: "Door/Garage Code",
-  key: "Hidden Key",
-  building: "Building / Front Desk",
-};
-
-function composeAccessNotes(accessMethod: string, accessNote: string | null | undefined): string | null {
-  const label = ACCESS_METHOD_LABELS[accessMethod] ?? accessMethod;
-  if (accessMethod === "home") return label;
-  const n = accessNote?.trim();
-  if (!n) return label;
-  return `${label}: ${n}`;
-}
+import { splitBookV2LocationAccess } from "@/lib/book-v2/bookingCanonicalMaps";
+import { resolveAccessMethodIdByUiKey } from "@/lib/book-v2/resolveBookV2CatalogIds";
 
 export type ServiceDetailsBody = {
   opportunity_id: string;
@@ -29,11 +15,12 @@ export type ServiceDetailsBody = {
   access_method: string;
   access_note?: string | null;
   additional_notes?: string | null;
+  has_pets?: boolean | string | number | null;
 };
 
 /**
  * POST /api/book-v2/service-details
- * Persists property / access details to the opportunity's linked location (system columns + configurable field_values).
+ * Persists address + access on the opportunity's linked location. Home/property facts are saved on cleaning_job_details at confirm.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -48,8 +35,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, message: "address and city are required" }, { status: 400 });
     }
     const accessMethod = (body.access_method ?? "home").trim() || "home";
+    const hasPets =
+      body.has_pets === true || body.has_pets === "true" || body.has_pets === 1
+        ? true
+        : body.has_pets === false || body.has_pets === "false" || body.has_pets === 0
+          ? false
+          : null;
+    const { access_code: locAccessCode, access_notes: locAccessNotes } = splitBookV2LocationAccess({
+      access_method: accessMethod,
+      access_note: body.access_note,
+      additional_notes: body.additional_notes,
+    });
 
     const supabase = createServiceRoleClient();
+    const accessMethodId = await resolveAccessMethodIdByUiKey(supabase, accessMethod);
     const { data: opp, error: oppErr } = await supabase
       .from("opportunities")
       .select("id, org_id, location_id, metadata")
@@ -71,46 +70,23 @@ export async function POST(request: NextRequest) {
 
     const state = body.state != null ? String(body.state).trim() || null : null;
     const postal = body.postal_code != null ? String(body.postal_code).trim() || null : null;
-    const accessNotes = composeAccessNotes(accessMethod, body.access_note);
+    const locUpdate: Record<string, unknown> = {
+      address1: address,
+      city,
+      state,
+      postal_code: postal,
+      access_method_id: accessMethodId,
+      access_notes: locAccessNotes,
+      access_code: locAccessCode,
+      updated_at: new Date().toISOString(),
+    };
+    if (hasPets === true || hasPets === false) locUpdate.has_pets = hasPets;
 
-    const { error: locErr } = await supabase
-      .from("locations")
-      .update({
-        address1: address,
-        city,
-        state,
-        postal_code: postal,
-        access_notes: accessNotes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", locationId)
-      .eq("org_id", orgId);
+    const { error: locErr } = await supabase.from("locations").update(locUpdate).eq("id", locationId).eq("org_id", orgId);
 
     if (locErr) {
       console.error("[BOOK_V2_SERVICE_DETAILS] location update failed", locErr.message);
       return NextResponse.json({ ok: false, message: "Failed to update location" }, { status: 500 });
-    }
-
-    const optionalWrites: { key: string; value: unknown }[] = [
-      { key: "home_type", value: body.home_type },
-      { key: "bedrooms", value: body.bedrooms },
-      { key: "bathrooms", value: body.bathrooms },
-      { key: "access_method", value: accessMethod },
-      { key: "additional_notes", value: body.additional_notes },
-    ];
-
-    for (const { key, value } of optionalWrites) {
-      if (value === undefined || value === null || value === "") continue;
-      const def = await getFieldDefinitionMeta(supabase, orgId, "location", key);
-      if (!def) continue;
-      await upsertTypedFieldValue(
-        supabase,
-        orgId,
-        "location",
-        locationId,
-        def,
-        typeof value === "boolean" ? (value ? "true" : "false") : String(value).trim()
-      );
     }
 
     const meta = ((opp as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
@@ -131,6 +107,7 @@ export async function POST(request: NextRequest) {
             access_method: accessMethod,
             access_note: body.access_note ?? null,
             additional_notes: body.additional_notes ?? null,
+            has_pets: hasPets,
           },
         },
         updated_at: new Date().toISOString(),

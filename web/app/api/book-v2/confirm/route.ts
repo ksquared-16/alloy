@@ -2,6 +2,9 @@ import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
+import { parseRoomCount, quoteSquareFootageToBandKey, splitBookV2LocationAccess, squareFootageMidpointForBandKey } from "@/lib/book-v2/bookingCanonicalMaps";
+import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel, resolveSqftBandIdByKey } from "@/lib/book-v2/resolveBookV2CatalogIds";
+import { upsertCleaningJobDetailsFromBookV2 } from "@/lib/book-v2/upsertCleaningJobDetails";
 import {
     BOOKED_PIPELINE_STAGE_ID,
     BOOKING_CONFIRM_JOB_STATUS_ID,
@@ -731,6 +734,7 @@ export async function POST(request: NextRequest) {
             access_method,
             access_note,
             additional_notes,
+            has_pets: has_pets_body,
             frequency_label = "One-time",
             first_clean_price,
             recurring_price,
@@ -779,6 +783,20 @@ export async function POST(request: NextRequest) {
         const recurringCents = is_recurring && typeof recurring_price === "number" && recurring_price > 0
             ? Math.round(recurring_price * 100)
             : null;
+        const quoteSubtotalCentsForJob =
+            quote_subtotal != null && Number.isFinite(Number(quote_subtotal)) ? Math.round(Number(quote_subtotal) * 100) : null;
+        const quoteTotalCentsForJob =
+            quote_total != null && Number.isFinite(Number(quote_total)) ? Math.round(Number(quote_total) * 100) : null;
+        /** Net amount for first visit (post-discount when quote_total is discounted). */
+        const netFirstVisitCents = quoteTotalCentsForJob ?? firstCleanCents ?? quoteSubtotalCentsForJob;
+        /** List / subtotal before one-time promo (for job.gross_price_cents + admin display). */
+        const grossFirstVisitCents = quoteSubtotalCentsForJob ?? firstCleanCents ?? quoteTotalCentsForJob;
+        const hasPetsResolved =
+            has_pets_body === true || has_pets_body === "true" || has_pets_body === 1
+                ? true
+                : has_pets_body === false || has_pets_body === "false" || has_pets_body === 0
+                  ? false
+                  : null;
         console.log(
             "[BOOK_V2_CONFIRM_START] booking_attempt_id=%s email=%s phone=%s slot_start=%s slot_end=%s frequency_label=%s service_frequency_key=%s discount_code_id=%s discount_program_id=%s discount_code=%s discount_amount=%s",
             booking_attempt_id ?? "None",
@@ -1322,24 +1340,37 @@ export async function POST(request: NextRequest) {
         if (!contactResolved) {
             const emailPresent = !!(contact_email?.trim());
             const phonePresent = !!(contact_phone?.trim());
-            if (process.env.NODE_ENV !== "production" || process.env.VERCEL_ENV === "preview") {
-                console.warn("[BOOK_V2_CONFIRM] Resolver fallback: missing fields", {
-                    booking_attempt_id: booking_attempt_id ?? null,
-                    contact_id_provided: !!contact_id_from_quote,
-                    email_present: emailPresent,
-                    phone_present: phonePresent,
-                });
-            }
             const emailForResolver = contact_email?.trim() ?? "";
             const phoneForResolver = contact_phone?.trim() ?? "";
             const digits = phoneForResolver.replace(/\D/g, "");
-            const normalizedPhone = digits.length === 10 ? "+1" + digits : digits.length === 11 && digits.startsWith("1") ? "+" + digits : phoneForResolver.startsWith("+") ? "+" + digits : phoneForResolver ? "+" + digits : "";
+            const normalizedPhone =
+                digits.length === 10
+                    ? "+1" + digits
+                    : digits.length === 11 && digits.startsWith("1")
+                      ? "+" + digits
+                      : phoneForResolver.startsWith("+")
+                        ? "+" + digits
+                        : phoneForResolver
+                          ? "+" + digits
+                          : "";
+            const phoneForResolverArg = normalizedPhone || phoneForResolver;
+            const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+            console.log("[BOOK_V2_CONFIRM] Resolver fallback entry", {
+                booking_attempt_id: booking_attempt_id ?? null,
+                email_present: emailPresent,
+                phone_present: phonePresent,
+                email_len: emailForResolver.length,
+                phone_raw_digits_len: digits.length,
+                phone_normalized_non_empty: !!phoneForResolverArg.trim(),
+                org_id_configured: !!publicOrgId,
+                contact_id_from_quote_cleared: !contact_id_from_quote,
+            });
             try {
                 const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
                     first_name: contact_first_name,
                     last_name: contact_last_name,
                     email: emailForResolver,
-                    phone: normalizedPhone || phoneForResolver,
+                    phone: phoneForResolverArg,
                     postal_code: undefined,
                     timezone: timezone,
                     address: address,
@@ -1347,18 +1378,27 @@ export async function POST(request: NextRequest) {
                     state: undefined,
                     vertical_key: "cleaning",
                     vertical_id: verticalIdElse,
-                    org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
+                    org_id: publicOrgId,
+                    booking_attempt_id: booking_attempt_id ?? null,
                 });
 
                 contactId = resolverResult.contact_id;
                 customerId = resolverResult.customer_id;
 
                 console.log(
-                    `[BOOK_V2_CONFIRM] Contact/Customer resolved booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
+                    `[BOOK_V2_CONFIRM] Resolver fallback success booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
                 );
             } catch (error: unknown) {
                 const errMsg = error instanceof Error ? error.message : String(error);
-                console.error("[BOOK_V2_CONFIRM] Failed to resolve contact/customer booking_attempt_id=", booking_attempt_id, "error=", errMsg, "missing_contact_id=", !contact_id_from_quote, "missing_email=", !emailPresent, "missing_phone=", !phonePresent);
+                const errStack = error instanceof Error ? error.stack : undefined;
+                console.error("[BOOK_V2_CONFIRM] Resolver fallback failed", {
+                    booking_attempt_id: booking_attempt_id ?? null,
+                    error_message: errMsg,
+                    error_stack: errStack,
+                    email_present: emailPresent,
+                    phone_present: phonePresent,
+                    phone_raw_digits_len: digits.length,
+                });
                 return NextResponse.json(
                     { ok: false, message: `Could not resolve or create contact; check email and phone. ${errMsg}`, booking_attempt_id: booking_attempt_id ?? null },
                     { status: 500 }
@@ -1608,6 +1648,13 @@ export async function POST(request: NextRequest) {
         if (address && !locationPostalCode) {
             console.warn("[BOOK_V2_CONFIRM] postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null, opportunity_id: opportunityId });
         }
+        const accessMethodUi = String(access_method ?? "home").trim() || "home";
+        const { access_code: locationAccessCode, access_notes: locationAccessNotes } = splitBookV2LocationAccess({
+            access_method: accessMethodUi,
+            access_note,
+            additional_notes,
+        });
+        const accessMethodIdForLocation = await resolveAccessMethodIdByUiKey(supabase, accessMethodUi);
         let locationId: string | null = null;
         const tCanonicalLoc = typeof performance !== "undefined" ? performance.now() : Date.now();
         try {
@@ -1620,6 +1667,10 @@ export async function POST(request: NextRequest) {
                 city: city ?? null,
                 state: locationState,
                 postal_code: locationPostalCode,
+                access_method_id: accessMethodIdForLocation,
+                access_code: locationAccessCode,
+                has_pets: hasPetsResolved,
+                access_notes: locationAccessNotes,
             });
         } catch (locErr) {
             console.warn("[BOOK_V2_CONFIRM] ensureCanonicalBookingLocation failed", locErr);
@@ -1652,7 +1703,6 @@ export async function POST(request: NextRequest) {
                 : null;
 
         let jobId: string;
-        const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
 
         if (existingJob) {
             jobId = existingJob.id;
@@ -1683,7 +1733,6 @@ export async function POST(request: NextRequest) {
                     booking_attempt_id: booking_attempt_id ?? undefined,
                     frequency_label: frequency_label ?? undefined,
                     service_frequency_key: service_frequency_key,
-                    home_type: home_type ?? null,
                 },
             };
             if (discount_program_id != null || discount_code_id != null) {
@@ -1699,14 +1748,13 @@ export async function POST(request: NextRequest) {
                 jobUpdatePayload.vertical_id = verticalId;
             }
 
-            // Pricing: first clean only for estimated_total_cents; recurring_total_cents when recurring
-            const effectiveFirstCleanCents = firstCleanCents ?? quoteTotalCents;
-            if (effectiveFirstCleanCents != null) {
+            // Pricing: estimated_total_cents = net first visit; gross_price_cents = pre-discount subtotal when available
+            if (netFirstVisitCents != null) {
                 if (!existingJobData?.estimated_total_cents) {
-                    jobUpdatePayload.estimated_total_cents = effectiveFirstCleanCents;
+                    jobUpdatePayload.estimated_total_cents = netFirstVisitCents;
                 }
                 if (!existingJobData?.gross_price_cents) {
-                    jobUpdatePayload.gross_price_cents = effectiveFirstCleanCents;
+                    jobUpdatePayload.gross_price_cents = grossFirstVisitCents ?? netFirstVisitCents;
                 }
             }
             jobUpdatePayload.recurring_total_cents = is_recurring ? recurringCents : null;
@@ -1728,8 +1776,6 @@ export async function POST(request: NextRequest) {
             }
         } else {
             // Create new job
-            const quoteTotalCents = quote_total ? Math.round(quote_total * 100) : null;
-            const effectiveFirstCleanCents = firstCleanCents ?? quoteTotalCents;
             const jobPayload: Record<string, any> = {
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 opportunity_id: opportunityId,
@@ -1746,9 +1792,9 @@ export async function POST(request: NextRequest) {
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
-                estimated_total_cents: effectiveFirstCleanCents,
+                estimated_total_cents: netFirstVisitCents ?? null,
                 recurring_total_cents: is_recurring ? recurringCents : null,
-                ...(effectiveFirstCleanCents != null && { gross_price_cents: effectiveFirstCleanCents }),
+                ...(netFirstVisitCents != null && { gross_price_cents: grossFirstVisitCents ?? netFirstVisitCents }),
                 ...((discount_program_id != null || discount_code_id != null) && {
                     discounted: true,
                     ...(discount_program_id != null && { discount_program_id }),
@@ -1767,12 +1813,6 @@ export async function POST(request: NextRequest) {
                     quote_total,
                     address: address || null,
                     city: city || null,
-                    home_type: home_type ?? null,
-                    bedrooms: bedrooms || null,
-                    bathrooms: bathrooms || null,
-                    access_method: access_method || null,
-                    access_note: access_note || null,
-                    additional_notes: additional_notes || null,
                 },
             };
 
@@ -1802,6 +1842,25 @@ export async function POST(request: NextRequest) {
                 { status: 500 }
             );
         }
+
+        const quoteInputForDetails =
+            quote_input != null && typeof quote_input === "object" ? (quote_input as Record<string, unknown>) : {};
+        const sqftBucketRaw =
+            typeof quoteInputForDetails.square_footage === "string"
+                ? quoteInputForDetails.square_footage
+                : quoteInputForDetails.square_footage != null
+                  ? String(quoteInputForDetails.square_footage)
+                  : null;
+        const sqftBandKey = quoteSquareFootageToBandKey(sqftBucketRaw);
+        const sqftBandIdResolved = sqftBandKey ? await resolveSqftBandIdByKey(supabase, sqftBandKey) : null;
+        const homeTypeIdResolved = await resolveHomeTypeIdByLabel(supabase, home_type);
+        await upsertCleaningJobDetailsFromBookV2(supabase, jobId, {
+            home_type_id: homeTypeIdResolved,
+            sqft_band_id: sqftBandIdResolved,
+            square_footage: squareFootageMidpointForBandKey(sqftBandKey),
+            bedrooms: parseRoomCount(bedrooms),
+            bathrooms: parseRoomCount(bathrooms),
+        });
 
         // Step 5b: Persist discount redemption immediately after job creation
         if (discount_code_id || discount_program_id) {
@@ -2007,14 +2066,8 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        /** Net price in cents for this visit (financials + admin use schedule.price_cents when set). */
-        const schedulePriceCents =
-            quote_total != null && Number.isFinite(Number(quote_total))
-                ? Math.round(Number(quote_total) * 100)
-                : firstCleanCents ??
-                  (quote_subtotal != null && Number.isFinite(Number(quote_subtotal))
-                      ? Math.round(Number(quote_subtotal) * 100)
-                      : null);
+        /** First schedule: net first-visit amount (matches jobs.estimated_total_cents when set from quote). */
+        const schedulePriceCents = netFirstVisitCents;
 
         // Step 6: Create schedule
         // Reuse only if same start_at, end_at, timezone AND metadata.booking_attempt_id === booking_attempt_id. Otherwise create new row.

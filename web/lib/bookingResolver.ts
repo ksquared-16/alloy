@@ -62,6 +62,20 @@ function normalizePhone(phone: string): string {
  * @param params - Contact and customer data
  * @returns Contact and customer IDs with resolution paths
  */
+function redactEmailForLog(email: string): string {
+  const e = email.trim().toLowerCase();
+  if (!e) return "(empty)";
+  const at = e.indexOf("@");
+  if (at <= 0) return "***";
+  return `${e.slice(0, 2)}***@${e.slice(at + 1)}`;
+}
+
+function phoneTailForLog(phoneDigits: string): string {
+  if (!phoneDigits) return "(none)";
+  const t = phoneDigits.slice(-4);
+  return t.length === 4 ? `…${t}` : "(short)";
+}
+
 export async function resolve_or_create_contact_and_customer(
   supabase: SupabaseClient,
   params: {
@@ -79,6 +93,8 @@ export async function resolve_or_create_contact_and_customer(
     vertical_id?: string | null;
     /** Org for inserts; when omitted, uses process.env.ALLOY_PUBLIC_ORG_ID (public flows) */
     org_id?: string | null;
+    /** Correlates resolver logs with book-v2 confirm attempts */
+    booking_attempt_id?: string | null;
   }
 ): Promise<ContactCustomerResult> {
   const {
@@ -94,12 +110,25 @@ export async function resolve_or_create_contact_and_customer(
     vertical_key = "cleaning",
     vertical_id: verticalIdParam,
     org_id: orgIdParam,
+    booking_attempt_id: bookingAttemptId,
   } = params;
   const orgId = orgIdParam ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
 
   // Normalize inputs
   const normalizedEmail = normalizeEmail(email);
   const normalizedPhone = normalizePhone(phone);
+
+  const logPrefix = `[BOOKING_RESOLVER] booking_attempt_id=${bookingAttemptId ?? "none"}`;
+  console.log(
+    `${logPrefix} start email_norm=${redactEmailForLog(normalizedEmail)} phone_e164_tail=${phoneTailForLog(normalizedPhone.replace(/\D/g, ""))} org_id_set=${orgId != null} first_last_set=${!!(first_name?.trim() && last_name?.trim())}`
+  );
+
+  if (orgId == null) {
+    console.error(
+      `${logPrefix} abort missing org_id (set ALLOY_PUBLIC_ORG_ID or pass org_id); cannot insert contacts.customers (org_id NOT NULL)`
+    );
+    throw new Error("Missing org_id for contact/customer creation (server configuration)");
+  }
 
   let contactId: string;
   let customerId: string;
@@ -118,30 +147,36 @@ export async function resolve_or_create_contact_and_customer(
       .limit(1)
       .maybeSingle();
 
+    if (emailError) {
+      console.warn(`${logPrefix} email lookup error code=${emailError.code ?? "?"} message=${emailError.message}`);
+    }
     if (!emailError && emailContact) {
       existingContact = emailContact;
       resolutionPath = "found_by_email";
-      console.log(
-        `[BOOKING_RESOLVER] Found contact by email: contact_id=${emailContact.id} email=${normalizedEmail.substring(0, 3)}***`
-      );
+      console.log(`${logPrefix} matched existing contact by email contact_id=${emailContact.id}`);
+    } else if (normalizedEmail) {
+      console.log(`${logPrefix} no contact match by email`);
     }
   }
 
-    // Priority 2: Search by phone (exact match) if email didn't find
-    if (!existingContact && normalizedPhone) {
-      const { data: phoneContact, error: phoneError } = await supabase
-        .from("contacts")
-        .select("id, first_name, last_name, email, phone, customer_id, timezone, address_line1, city, state, postal_code, address_source, metadata")
-        .eq("phone", normalizedPhone)
-        .limit(1)
-        .maybeSingle();
+  // Priority 2: Search by phone (exact match on E.164) if email didn't find
+  if (!existingContact && normalizedPhone) {
+    const { data: phoneContact, error: phoneError } = await supabase
+      .from("contacts")
+      .select("id, first_name, last_name, email, phone, customer_id, timezone, address_line1, city, state, postal_code, address_source, metadata")
+      .eq("phone", normalizedPhone)
+      .limit(1)
+      .maybeSingle();
 
+    if (phoneError) {
+      console.warn(`${logPrefix} phone lookup error code=${phoneError.code ?? "?"} message=${phoneError.message}`);
+    }
     if (!phoneError && phoneContact) {
       existingContact = phoneContact;
       resolutionPath = "found_by_phone";
-      console.log(
-        `[BOOKING_RESOLVER] Found contact by phone: contact_id=${phoneContact.id} phone=${normalizedPhone.substring(0, 4)}***`
-      );
+      console.log(`${logPrefix} matched existing contact by phone contact_id=${phoneContact.id}`);
+    } else {
+      console.log(`${logPrefix} no contact match by phone (searched ${phoneTailForLog(normalizedPhone.replace(/\D/g, ""))})`);
     }
   }
 
@@ -280,6 +315,7 @@ export async function resolve_or_create_contact_and_customer(
       );
     } else {
       // Contact exists but no customer - create and link
+      console.log(`${logPrefix} existing contact has no customer; createAndLinkCustomer contact_id=${contactId}`);
       customerId = await createAndLinkCustomer(supabase, contactId, {
         first_name: existingContact.first_name || first_name,
         last_name: existingContact.last_name || last_name,
@@ -287,19 +323,20 @@ export async function resolve_or_create_contact_and_customer(
         phone: normalizedPhone,
         vertical_id: verticalIdParam ?? undefined,
         org_id: orgId,
+        booking_attempt_id: bookingAttemptId ?? null,
       });
       customerResolutionPath = "created_for_existing_contact";
     }
   } else {
     // Step 3: Create new contact
     const contactPayload: Record<string, any> = {
-      email: normalizedEmail,
-      phone: normalizedPhone,
+      email: normalizedEmail || null,
+      phone: normalizedPhone || null,
       first_name: first_name || null,
       last_name: last_name || null,
       contact_type: "lead",
+      org_id: orgId,
     };
-    if (orgId != null) contactPayload.org_id = orgId;
 
     if (timezone) {
       contactPayload.timezone = timezone;
@@ -317,6 +354,7 @@ export async function resolve_or_create_contact_and_customer(
       contactPayload.postal_code = postal_code;
     }
 
+    console.log(`${logPrefix} inserting new contact (no existing match)`);
     const { data: newContact, error: contactError } = await supabase
       .from("contacts")
       .insert(contactPayload)
@@ -326,47 +364,59 @@ export async function resolve_or_create_contact_and_customer(
     if (contactError) {
       // Handle uniqueness conflict (idempotency)
       if (contactError.code === "23505" || contactError.message?.includes("duplicate") || contactError.message?.includes("unique")) {
-        console.log(`[BOOKING_RESOLVER] Contact insert conflict, re-selecting...`);
-        // Re-select by email or phone
+        console.log(`${logPrefix} contact insert conflict (23505/unique); re-selecting by email then phone`);
+        let conflictContact: { id: string; customer_id?: string | null } | null = null;
         if (normalizedEmail) {
-          const { data: conflictContact } = await supabase
+          const { data: byEmail } = await supabase
             .from("contacts")
             .select("id, customer_id")
             .ilike("email", normalizedEmail)
             .limit(1)
             .maybeSingle();
-          if (conflictContact) {
-            contactId = conflictContact.id;
-            resolutionPath = "created_conflict_recovered";
-            if (conflictContact.customer_id) {
-              customerId = conflictContact.customer_id;
-              customerResolutionPath = "reused_from_contact";
-            } else {
-              customerId = await createAndLinkCustomer(supabase, contactId, {
-                first_name,
-                last_name,
-                email: normalizedEmail,
-                phone: normalizedPhone,
-                vertical_id: verticalIdParam ?? undefined,
-                org_id: orgId,
-              });
-              customerResolutionPath = "created_for_new_contact";
-            }
+          conflictContact = byEmail ?? null;
+        }
+        if (!conflictContact && normalizedPhone) {
+          const { data: byPhone } = await supabase
+            .from("contacts")
+            .select("id, customer_id")
+            .eq("phone", normalizedPhone)
+            .limit(1)
+            .maybeSingle();
+          conflictContact = byPhone ?? null;
+        }
+        if (conflictContact) {
+          contactId = conflictContact.id;
+          resolutionPath = "created_conflict_recovered";
+          if (conflictContact.customer_id) {
+            customerId = conflictContact.customer_id;
+            customerResolutionPath = "reused_from_contact";
+            console.log(`${logPrefix} conflict recovered: reuse contact+customer contact_id=${contactId} customer_id=${customerId}`);
           } else {
-            throw new Error(`Contact conflict but re-select failed: ${contactError.message}`);
+            console.log(`${logPrefix} conflict recovered: contact exists without customer; creating customer contact_id=${contactId}`);
+            customerId = await createAndLinkCustomer(supabase, contactId, {
+              first_name,
+              last_name,
+              email: normalizedEmail,
+              phone: normalizedPhone,
+              vertical_id: verticalIdParam ?? undefined,
+              org_id: orgId,
+              booking_attempt_id: bookingAttemptId ?? null,
+            });
+            customerResolutionPath = "created_for_new_contact";
           }
         } else {
-          throw new Error(`Contact conflict but no email to re-select: ${contactError.message}`);
+          console.error(`${logPrefix} contact insert conflict but re-select by email/phone found nothing`, contactError);
+          throw new Error(`Contact conflict but re-select failed: ${contactError.message}`);
         }
       } else {
+        console.error(`${logPrefix} contact insert failed code=${contactError.code} message=${contactError.message}`, contactError);
         throw new Error(`Failed to create contact: ${contactError.message}`);
       }
     } else if (newContact) {
       contactId = newContact.id;
       resolutionPath = "created_new";
-      console.log(`[BOOKING_RESOLVER] Created new contact: contact_id=${contactId}`);
+      console.log(`${logPrefix} created new contact contact_id=${contactId}; creating customer`);
 
-      // Create customer and link
       customerId = await createAndLinkCustomer(supabase, contactId, {
         first_name,
         last_name,
@@ -374,6 +424,7 @@ export async function resolve_or_create_contact_and_customer(
         phone: normalizedPhone,
         vertical_id: verticalIdParam ?? undefined,
         org_id: orgId,
+        booking_attempt_id: bookingAttemptId ?? null,
       });
       customerResolutionPath = "created_for_new_contact";
     } else {
@@ -449,9 +500,11 @@ async function createAndLinkCustomer(
     phone: string;
     vertical_id?: string | null;
     org_id?: string | null;
+    booking_attempt_id?: string | null;
   }
 ): Promise<string> {
-  const { first_name, last_name, email, phone, vertical_id, org_id } = params;
+  const { first_name, last_name, email, phone, vertical_id, org_id, booking_attempt_id: attemptId } = params;
+  const logPrefix = `[BOOKING_RESOLVER] booking_attempt_id=${attemptId ?? "none"}`;
 
   // Determine customer name with safe fallback
   let customerName: string;
@@ -467,11 +520,16 @@ async function createAndLinkCustomer(
     customerName = "New Customer";
   }
 
-  const customerPayload: Record<string, any> = {
+  // Schema note: `customers` has no top-level email/phone columns in Alloy; mirror book-v2 confirm (metadata only).
+  const customerPayload: Record<string, unknown> = {
     name: customerName,
-    primary_contact_id: contactId, // Set linkage immediately
-    email: email || null,
-    phone: phone || null,
+    primary_contact_id: contactId,
+    status: "active",
+    metadata: {
+      source: "booking-resolver",
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+    },
   };
   if (vertical_id) {
     customerPayload.vertical_id = vertical_id;
@@ -480,6 +538,7 @@ async function createAndLinkCustomer(
     customerPayload.org_id = org_id;
   }
 
+  console.log(`${logPrefix} customers.insert primary_contact_id=${contactId} name_set=${!!customerName}`);
   const { data: newCustomer, error: customerError } = await supabase
     .from("customers")
     .insert(customerPayload)
@@ -489,8 +548,7 @@ async function createAndLinkCustomer(
   if (customerError) {
     // Handle uniqueness conflict (idempotency)
     if (customerError.code === "23505" || customerError.message?.includes("duplicate") || customerError.message?.includes("unique")) {
-      console.log(`[BOOKING_RESOLVER] Customer insert conflict, re-selecting...`);
-      // Try to find by primary_contact_id
+      console.log(`${logPrefix} customer insert conflict; re-select by primary_contact_id=${contactId}`);
       const { data: conflictCustomer } = await supabase
         .from("customers")
         .select("id")
@@ -498,17 +556,15 @@ async function createAndLinkCustomer(
         .limit(1)
         .maybeSingle();
       if (conflictCustomer) {
-        console.log(`[BOOKING_RESOLVER] Reused customer from conflict: customer_id=${conflictCustomer.id}`);
-        // Link contact to customer
-        await supabase
-          .from("contacts")
-          .update({ customer_id: conflictCustomer.id })
-          .eq("id", contactId);
+        console.log(`${logPrefix} reused customer after conflict customer_id=${conflictCustomer.id}`);
+        await supabase.from("contacts").update({ customer_id: conflictCustomer.id }).eq("id", contactId);
         return conflictCustomer.id;
       } else {
+        console.error(`${logPrefix} customer 23505 but no row for primary_contact_id`, customerError);
         throw new Error(`Customer conflict but re-select failed: ${customerError.message}`);
       }
     } else {
+      console.error(`${logPrefix} customers.insert failed code=${customerError.code} message=${customerError.message}`, customerError);
       throw new Error(`Failed to create customer: ${customerError.message}`);
     }
   }
@@ -518,19 +574,14 @@ async function createAndLinkCustomer(
   }
 
   const customerId = newCustomer.id;
-  console.log(`[BOOKING_RESOLVER] Created new customer: customer_id=${customerId} primary_contact_id=${contactId}`);
+  console.log(`${logPrefix} created new customer customer_id=${customerId} primary_contact_id=${contactId}`);
 
-  // Link contact to customer
-  const { error: linkError } = await supabase
-    .from("contacts")
-    .update({ customer_id: customerId })
-    .eq("id", contactId);
+  const { error: linkError } = await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
 
   if (linkError) {
-    console.error(`[BOOKING_RESOLVER] Failed to link contact to customer: ${linkError.message}`);
-    // Continue - customer.primary_contact_id is already set
+    console.error(`${logPrefix} failed to set contacts.customer_id code=${linkError.code} message=${linkError.message}`);
   } else {
-    console.log(`[BOOKING_RESOLVER] Linked contact to customer: contact_id=${contactId} customer_id=${customerId}`);
+    console.log(`${logPrefix} linked contact to customer contact_id=${contactId} customer_id=${customerId}`);
   }
 
   return customerId;

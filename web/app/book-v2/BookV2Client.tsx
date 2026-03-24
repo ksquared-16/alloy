@@ -1401,6 +1401,7 @@ export default function BookV2Client() {
                         access_method: serviceDetails.access_method,
                         access_note: serviceDetails.access_note?.trim() || null,
                         additional_notes: serviceDetails.additional_notes?.trim() || null,
+                        has_pets: serviceDetails.has_pets,
                     }),
                 });
                 const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
@@ -1941,6 +1942,7 @@ export default function BookV2Client() {
                 access_method: serviceDetails.access_method,
                 access_note: serviceDetails.access_note,
                 additional_notes: serviceDetails.additional_notes,
+                has_pets: serviceDetails.has_pets,
                 frequency_label: quote?.frequency_label || "One-time",
                 first_clean_price: typeof quote?.first_clean_price === "number" ? quote.first_clean_price : undefined,
                 recurring_price: typeof quote?.recurring_price === "number" ? quote.recurring_price : undefined,

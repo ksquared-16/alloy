@@ -15,6 +15,7 @@ import {
     GitBranch,
     LayoutDashboard,
     LayoutGrid,
+    Layers,
     Mail,
     MapPin,
     MessageSquare,
@@ -74,10 +75,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/people", label: "People", entityType: "persons" },
             { href: "/admin/customers", label: "Customers", entityType: "customers" },
             { href: "/admin/vendors", label: "Vendors", entityType: "vendors" },
-            { href: "/admin/contacts", label: "Contacts", entityType: "contacts" },
-            { href: "/admin/customer-members", label: "Customer members", entityType: "customer_members" },
             { href: "/admin/locations", label: "Locations", entityType: "locations" },
-            { href: "/admin/contractors", label: "Contractors" },
         ],
     },
     {
@@ -101,22 +99,27 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/financials/payments", label: "Payments", entityType: "payments" },
             { href: "/admin/financials/ledger", label: "Ledger" },
             { href: "/admin/financials/statements", label: "Statements" },
-            { href: "/admin/discounts", label: "Discounts" },
-            { href: "/admin/discount-redemptions", label: "Discount redemptions" },
-            { href: "/admin/financials/pricing", label: "Pricing" },
-            { href: "/admin/subscriptions", label: "Subscriptions" },
-            { href: "/admin/financials/accounts", label: "Accounts" },
-            { href: "/admin/system/payouts", label: "Payouts" },
             {
-                label: "Billing & catalog",
+                label: "Pricing & catalog",
                 subItems: [
+                    { href: "/admin/financials/pricing", label: "Pricing" },
                     { href: "/admin/financials/service-offerings", label: "Service offerings" },
                     { href: "/admin/financials/plan-templates", label: "Plan templates" },
                     { href: "/admin/financials/add-ons", label: "Add-ons" },
                     { href: "/admin/financials/settings/subscription", label: "Subscription billing" },
-                    { href: "/admin/financials", label: "Overview" },
+                    { href: "/admin/financials/accounts", label: "Accounts" },
+                    { href: "/admin/financials", label: "Financials overview" },
                 ],
             },
+            {
+                label: "Discounts",
+                subItems: [
+                    { href: "/admin/discounts", label: "Discount programs" },
+                    { href: "/admin/discount-redemptions", label: "Redemptions" },
+                ],
+            },
+            { href: "/admin/subscriptions", label: "Subscriptions" },
+            { href: "/admin/system/payouts", label: "Payouts" },
         ],
     },
     {
@@ -131,6 +134,8 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
             { href: "/admin/system/entity-labels", label: "Entity labels" },
             { href: "/admin/system/statuses", label: "Statuses" },
             { href: "/admin/operations/recurrence", label: "Recurrence" },
+            { href: "/admin/system/departments", label: "Departments" },
+            { href: "/admin/system/work-units", label: "Work units" },
             {
                 label: "Custom fields",
                 subItems: [
@@ -184,6 +189,8 @@ function getLinkIcon(href: string, _label: string, nestedLabel?: string): IconCo
         "/admin/system/verticals-industries": LayoutGrid,
         "/admin/system/entity-labels": Tag,
         "/admin/system/statuses": Tag,
+        "/admin/system/departments": Layers,
+        "/admin/system/work-units": Layers,
         "/admin/system/payouts": DollarSign,
         "/admin/people": Users,
         "/admin/contacts": Users,
@@ -199,7 +206,8 @@ function getLinkIcon(href: string, _label: string, nestedLabel?: string): IconCo
     };
     if (map[href]) return map[href];
     if (nestedLabel === "Messages") return MessageSquare;
-    if (nestedLabel === "Billing & catalog") return Tag;
+    if (nestedLabel === "Pricing & catalog") return Tag;
+    if (nestedLabel === "Discounts") return Tag;
     if (nestedLabel === "Custom fields") return Tag;
     if (nestedLabel === "Relationships") return Users;
     return null;
@@ -259,7 +267,8 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>(getInitialCollapsed);
     const [nestedCollapsed, setNestedCollapsed] = useState<Record<string, boolean>>({
         "Operations::Messages": true,
-        "Financials::Billing & catalog": true,
+        "Financials::Pricing & catalog": true,
+        "Financials::Discounts": true,
         "System::Custom fields": true,
         "System::Relationships": true,
     });
@@ -301,16 +310,23 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
         if (relationshipPaths.includes(pathname)) {
             setNestedCollapsed((prev) => (prev["System::Relationships"] === false ? prev : { ...prev, "System::Relationships": false }));
         }
-        const billingCatalogPaths = [
+        const pricingCatalogPaths = [
+            "/admin/financials/pricing",
             "/admin/financials/service-offerings",
             "/admin/financials/plan-templates",
             "/admin/financials/add-ons",
             "/admin/financials/settings/subscription",
+            "/admin/financials/accounts",
             "/admin/financials",
         ];
-        if (billingCatalogPaths.includes(pathname)) {
+        if (pricingCatalogPaths.includes(pathname)) {
             setNestedCollapsed((prev) =>
-                prev["Financials::Billing & catalog"] === false ? prev : { ...prev, "Financials::Billing & catalog": false }
+                prev["Financials::Pricing & catalog"] === false ? prev : { ...prev, "Financials::Pricing & catalog": false }
+            );
+        }
+        if (pathname === "/admin/discounts" || pathname === "/admin/discount-redemptions") {
+            setNestedCollapsed((prev) =>
+                prev["Financials::Discounts"] === false ? prev : { ...prev, "Financials::Discounts": false }
             );
         }
         if (pathname.startsWith("/admin/system/")) {

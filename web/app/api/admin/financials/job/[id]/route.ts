@@ -25,7 +25,9 @@ export async function GET(
 
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
-        .select("id, customer_id, assigned_vendor_id, gross_price_cents, discount_code, discount_amount")
+        .select(
+            "id, customer_id, assigned_vendor_id, gross_price_cents, estimated_total_cents, recurring_total_cents, discounted, discount_code, discount_amount, is_recurring, service_frequency_key"
+        )
         .eq("id", jobId)
         .eq("org_id", orgId)
         .maybeSingle();
@@ -34,7 +36,7 @@ export async function GET(
 
     const { data: scheduleRows } = await supabase
         .from("schedules")
-        .select("id, status_key, schedule_status_id, start_at, assigned_vendor_id, price_cents")
+        .select("id, status_key, schedule_status_id, start_at, assigned_vendor_id, price_cents, subscription_sequence")
         .eq("org_id", orgId)
         .eq("job_id", jobId)
         .order("start_at", { ascending: true, nullsFirst: false });
@@ -46,6 +48,7 @@ export async function GET(
         start_at: string | null;
         assigned_vendor_id: string | null;
         price_cents: number | null;
+        subscription_sequence: number | null;
     }[];
     const statusKeyByFk = await fetchScheduleStatusKeyByFk(
         supabase,
@@ -67,6 +70,9 @@ export async function GET(
         start_at: s.start_at,
         assigned_vendor_id: s.assigned_vendor_id,
         price_cents: s.price_cents,
+        subscription_sequence: s.subscription_sequence,
+        visit_kind:
+            s.subscription_sequence == null || s.subscription_sequence <= 1 ? ("first" as const) : ("recurring" as const),
         posted: postedScheduleIds.has(s.id),
     }));
 
@@ -105,14 +111,46 @@ export async function GET(
         else if (key === "liability_vendor_payable") total_vendor_payable_credits += credit;
     }
 
+    const j = job as {
+        id: string;
+        customer_id: string | null;
+        assigned_vendor_id: string | null;
+        gross_price_cents: number | null;
+        estimated_total_cents: number | null;
+        recurring_total_cents: number | null;
+        discounted: boolean | null;
+        discount_code: string | null;
+        discount_amount: number | string | null;
+        is_recurring: boolean | null;
+        service_frequency_key: string | null;
+    };
+    const gross = j.gross_price_cents != null ? Number(j.gross_price_cents) : null;
+    const disc =
+        j.discount_amount != null && String(j.discount_amount).trim() !== ""
+            ? Math.round(Number(j.discount_amount))
+            : null;
+    const netFirst = j.estimated_total_cents != null ? Number(j.estimated_total_cents) : null;
+    const recurring = j.recurring_total_cents != null ? Number(j.recurring_total_cents) : null;
+
     return NextResponse.json({
         job: {
-            id: (job as { id: string }).id,
-            customer_id: (job as { customer_id: string | null }).customer_id,
-            assigned_vendor_id: (job as { assigned_vendor_id: string | null }).assigned_vendor_id,
-            gross_price_cents: (job as { gross_price_cents: number | null }).gross_price_cents,
-            discount_code: (job as { discount_code: string | null }).discount_code,
-            discount_amount: (job as { discount_amount: number | string | null }).discount_amount,
+            id: j.id,
+            customer_id: j.customer_id,
+            assigned_vendor_id: j.assigned_vendor_id,
+            gross_price_cents: j.gross_price_cents,
+            estimated_total_cents: j.estimated_total_cents,
+            recurring_total_cents: j.recurring_total_cents,
+            discounted: j.discounted,
+            discount_code: j.discount_code,
+            discount_amount: j.discount_amount,
+            is_recurring: j.is_recurring,
+            service_frequency_key: j.service_frequency_key,
+        },
+        booking_economics: {
+            first_visit_gross_cents: gross,
+            discount_cents: disc,
+            first_visit_net_cents: netFirst ?? (gross != null && disc != null ? Math.max(0, gross - disc) : netFirst),
+            recurring_visit_cents: recurring,
         },
         schedules: schedulesWithPosted,
         totals: {

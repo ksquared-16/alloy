@@ -20,6 +20,7 @@ import {
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
+import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 
 /**
  * Drawer entity org model:
@@ -327,6 +328,10 @@ export async function GET(
             } else {
                 out._discount_program_label = null;
             }
+            const withWu = await attachJobWorkUnitDisplay(supabase, orgId, out);
+            out._work_unit_name = withWu._work_unit_name;
+            out._work_unit_department_name = withWu._work_unit_department_name;
+            out._work_unit_label = withWu._work_unit_label;
             await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
             return NextResponse.json(out);
         }

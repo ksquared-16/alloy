@@ -11,6 +11,7 @@ export interface ServiceDetails {
     access_method: "home" | "code" | "key" | "building";
     access_note: string;
     additional_notes: string;
+    has_pets: boolean;
 }
 
 interface ServiceDetailsFormProps {
@@ -33,6 +34,7 @@ export default function ServiceDetailsForm({
         access_method: initialData?.access_method || "home",
         access_note: initialData?.access_note || "",
         additional_notes: initialData?.additional_notes || "",
+        has_pets: initialData?.has_pets ?? false,
     });
 
     // Load from localStorage on mount
@@ -41,7 +43,7 @@ export default function ServiceDetailsForm({
             const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) {
                 const parsed = JSON.parse(stored);
-                setFormData((prev) => ({ ...prev, ...parsed }));
+                setFormData((prev) => ({ ...prev, ...parsed, has_pets: parsed.has_pets === true }));
             }
         } catch (e) {
             console.warn("Failed to load service details from storage:", e);
@@ -227,6 +229,19 @@ export default function ServiceDetailsForm({
                         />
                     </div>
                 )}
+
+                <div className="flex items-center gap-2">
+                    <input
+                        id="book-v2-has-pets"
+                        type="checkbox"
+                        checked={formData.has_pets}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, has_pets: e.target.checked }))}
+                        className="h-4 w-4 rounded border-alloy-stone/40 text-alloy-juniper focus:ring-alloy-juniper/70"
+                    />
+                    <label htmlFor="book-v2-has-pets" className="text-sm font-medium text-alloy-midnight">
+                        Pets at this address
+                    </label>
+                </div>
 
                 {/* Additional Notes */}
                 <div>

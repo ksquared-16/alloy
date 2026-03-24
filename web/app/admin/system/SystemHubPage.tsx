@@ -13,6 +13,24 @@ const sections: HubSection[] = [
         ],
     },
     {
+        title: "Additional record types",
+        description:
+            "These lists are not in the main sidebar. Day-to-day work usually flows through People, Customers, and Vendors.",
+        links: [
+            { href: "/admin/contacts", label: "Contacts" },
+            { href: "/admin/customer-members", label: "Customer members" },
+            { href: "/admin/contractors", label: "Contractors" },
+        ],
+    },
+    {
+        title: "Hierarchy",
+        description: "Departments and work units (org structure before job assignment).",
+        links: [
+            { href: "/admin/system/departments", label: "Departments" },
+            { href: "/admin/system/work-units", label: "Work units" },
+        ],
+    },
+    {
         title: "Industry / vertical",
         links: [{ href: "/admin/system/verticals-industries", label: "Verticals / industries" }],
     },
