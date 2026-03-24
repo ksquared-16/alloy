@@ -118,11 +118,13 @@ export async function generateNextSubscriptionSchedule(
             ? Math.round(Number(jobRow.recurring_total_cents))
             : null;
 
-    // Any schedule created here is a follow-up to an existing occurrence (generate-next), not the book-v2 first visit.
-    if (lastSchedule && recurringTotalCents != null && recurringTotalCents > 0) {
-        priceCents = recurringTotalCents;
-    } else if (lastSchedule) {
-        priceCents = lastSchedule.price_cents ?? null;
+    // Follow-up visits must use jobs.recurring_total_cents — never copy seq-1 price_cents (often net / promo first visit).
+    if (lastSchedule) {
+        if (recurringTotalCents != null && Number.isFinite(recurringTotalCents) && recurringTotalCents >= 0) {
+            priceCents = Math.round(recurringTotalCents);
+        } else {
+            priceCents = null;
+        }
     }
 
     const nextStartIso = nextStart.toISOString();

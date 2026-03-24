@@ -947,6 +947,62 @@ export async function GET(
                 is_primary: !!row.is_primary,
                 relationship_type: row.relationship_type ?? null,
             }));
+
+            const accessMethodId = (location as { access_method_id?: string | null }).access_method_id;
+            if (accessMethodId) {
+                const { data: amRow } = await supabase.from("access_methods").select("label").eq("id", accessMethodId).maybeSingle();
+                out._access_method_label = (amRow as { label?: string } | null)?.label ?? null;
+            } else {
+                out._access_method_label = null;
+            }
+
+            out._service_home_type_label = null;
+            out._service_sqft_band_label = null;
+            out._service_square_footage = null;
+            out._service_square_footage_display = null;
+            out._service_bedrooms = null;
+            out._service_bathrooms = null;
+            out._service_details_job_id = null;
+
+            const { data: latestJob } = await supabase
+                .from("jobs")
+                .select("id")
+                .eq("location_id", id)
+                .eq("org_id", orgId)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            const latestJobId = (latestJob as { id?: string } | null)?.id ?? null;
+            if (latestJobId) {
+                const { data: cjd } = await supabase.from("cleaning_job_details").select("*").eq("job_id", latestJobId).maybeSingle();
+                const details = cjd as {
+                    home_type_id?: string | null;
+                    sqft_band_id?: string | null;
+                    square_footage?: number | null;
+                    bedrooms?: number | null;
+                    bathrooms?: number | null;
+                } | null;
+                if (details) {
+                    out._service_details_job_id = latestJobId;
+                    out._service_bedrooms = details.bedrooms ?? null;
+                    out._service_bathrooms = details.bathrooms ?? null;
+                    out._service_square_footage = details.square_footage ?? null;
+                    if (details.home_type_id) {
+                        const { data: ht } = await supabase.from("home_types").select("label").eq("id", details.home_type_id).maybeSingle();
+                        out._service_home_type_label = (ht as { label?: string } | null)?.label ?? null;
+                    }
+                    if (details.sqft_band_id) {
+                        const { data: sb } = await supabase.from("sqft_bands").select("label").eq("id", details.sqft_band_id).maybeSingle();
+                        out._service_sqft_band_label = (sb as { label?: string } | null)?.label ?? null;
+                    }
+                    const bandLabel = out._service_sqft_band_label != null ? String(out._service_sqft_band_label).trim() : "";
+                    const sq = details.square_footage;
+                    out._service_square_footage_display =
+                        bandLabel ||
+                        (sq != null && Number.isFinite(Number(sq)) ? `${sq} sq ft` : null);
+                }
+            }
+
             await attachFieldDefinitionsAndValues(supabase, out, "locations", id);
             return NextResponse.json(out);
         }

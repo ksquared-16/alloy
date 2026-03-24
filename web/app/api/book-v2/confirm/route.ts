@@ -780,9 +780,20 @@ export async function POST(request: NextRequest) {
         const firstCleanCents = typeof first_clean_price === "number" && first_clean_price > 0
             ? Math.round(first_clean_price * 100)
             : null;
-        const recurringCents = is_recurring && typeof recurring_price === "number" && recurring_price > 0
-            ? Math.round(recurring_price * 100)
-            : null;
+        const quoteOutForRecurring =
+            quote_output != null && typeof quote_output === "object" ? (quote_output as Record<string, unknown>) : null;
+        const recurringPriceNumeric =
+            typeof recurring_price === "number" && recurring_price > 0
+                ? recurring_price
+                : quoteOutForRecurring != null &&
+                    typeof quoteOutForRecurring.recurring_price === "number" &&
+                    Number(quoteOutForRecurring.recurring_price) > 0
+                  ? Number(quoteOutForRecurring.recurring_price)
+                  : null;
+        const recurringCents =
+            is_recurring && recurringPriceNumeric != null && recurringPriceNumeric > 0
+                ? Math.round(recurringPriceNumeric * 100)
+                : null;
         const quoteSubtotalCentsForJob =
             quote_subtotal != null && Number.isFinite(Number(quote_subtotal)) ? Math.round(Number(quote_subtotal) * 100) : null;
         const quoteTotalCentsForJob =
@@ -1250,6 +1261,40 @@ export async function POST(request: NextRequest) {
             }
             console.log(`[BOOK_V2_CONFIRM] Reused quote opportunity opportunity_id=${opportunityId} set to Booked`);
         } else {
+        // Browser may send person/contact ids without a usable opportunity (or after partial clears). Validate against submission before trusting them.
+        if (contact_id_from_quote || person_id_from_quote) {
+            let orphanOk = true;
+            if (person_id_from_quote) {
+                orphanOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
+                    person_id: person_id_from_quote,
+                    contact_id: undefined,
+                    contact_email,
+                    contact_phone,
+                    contact_first_name,
+                    contact_last_name,
+                });
+            }
+            if (orphanOk && contact_id_from_quote) {
+                orphanOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
+                    person_id: undefined,
+                    contact_id: contact_id_from_quote,
+                    contact_email,
+                    contact_phone,
+                    contact_first_name,
+                    contact_last_name,
+                });
+            }
+            if (!orphanOk) {
+                console.warn(
+                    "[BOOK_V2_CONFIRM] else_branch: dropping orphan contact/person ids (identity mismatch vs submission); resolver path"
+                );
+                contact_id_from_quote = null;
+                person_id_from_quote = null;
+                customer_id_from_quote = null;
+                personIdFromQuote = null;
+            }
+        }
+
         // Parse dates
         const slotStartDate = new Date(slot_start);
         const slotEndDate = new Date(slot_end);

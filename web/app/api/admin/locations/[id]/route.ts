@@ -19,6 +19,8 @@ const ALLOWED_KEYS = [
     "postal_code",
     "country",
     "access_method_id",
+    "access_code",
+    "has_pets",
     "access_notes",
     "metadata",
     "status_key",
@@ -77,8 +79,15 @@ export async function PATCH(
             updates[key] = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
             continue;
         }
-        if (key === "access_method_id" || key === "access_notes") {
+        if (key === "access_method_id" || key === "access_notes" || key === "access_code") {
             updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+            continue;
+        }
+        if (key === "has_pets") {
+            const v = body.has_pets;
+            if (v === true || v === "true" || v === 1) updates.has_pets = true;
+            else if (v === false || v === "false" || v === 0) updates.has_pets = false;
+            else updates.has_pets = null;
             continue;
         }
         if (

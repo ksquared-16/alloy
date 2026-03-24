@@ -294,8 +294,34 @@ async function maybeCreateLeadFromPrefill(params: {
 
     if (typeof window === "undefined") return;
     try {
-        if (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id")) {
-            return;
+        const hasStoredIds = !!(
+            localStorage.getItem("alloy_opportunity_id") ||
+            localStorage.getItem("alloy_person_id") ||
+            localStorage.getItem("alloy_contact_id") ||
+            localStorage.getItem("alloy_customer_id")
+        );
+        if (hasStoredIds) {
+            let prevSig: string | null = null;
+            try {
+                prevSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
+            } catch {
+                prevSig = null;
+            }
+            const curSig = bookingIdentitySignatureString({
+                email: params.email,
+                phone: params.phone,
+                first_name: params.first_name,
+                last_name: params.last_name,
+            });
+            if (prevSig === curSig) {
+                console.log("[BOOK_V2_IDENTITY] maybeCreateLeadFromPrefill: reusing stored quote ids (signature match)");
+                return;
+            }
+            console.log("[BOOK_V2_CAMPAIGN] maybeCreateLeadFromPrefill: clearing stale booking keys", {
+                reason: prevSig ? "signature_mismatch" : "missing_signature_with_stored_ids",
+                had_prev_sig: !!prevSig,
+            });
+            clearBookingIdentityKeys();
         }
         if (sessionStorage.getItem(PREFILL_ATTEMPTED_KEY)) {
             return;
@@ -626,6 +652,37 @@ export default function BookV2Client() {
         setIdentityHydrated(true);
     }, [debug, searchParams]);
 
+    /** Campaign + prefill: log identity vs stored quote ids (diagnostics). Clearing is handled by maybeCreateLeadFromPrefill / payment submit. */
+    useEffect(() => {
+        if (!mounted || debug || !campaignFirstFree4x60 || typeof window === "undefined") return;
+        let hasStoredIds = false;
+        let prevSig: string | null = null;
+        try {
+            hasStoredIds = !!(
+                localStorage.getItem("alloy_opportunity_id") ||
+                localStorage.getItem("alloy_person_id") ||
+                localStorage.getItem("alloy_contact_id") ||
+                localStorage.getItem("alloy_customer_id")
+            );
+            prevSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
+        } catch {
+            // ignore
+        }
+        const curSig = bookingIdentitySignatureString({
+            email: resolvedEmail,
+            phone: resolvedPhone,
+            first_name: resolvedFirstName,
+            last_name: resolvedLastName,
+        });
+        console.log("[BOOK_V2_CAMPAIGN] identity_snapshot", {
+            has_stored_quote_ids: hasStoredIds,
+            has_prev_sig: !!prevSig,
+            sig_matches_resolved: prevSig === curSig,
+            resolved_email_present: !!String(resolvedEmail ?? "").trim(),
+            resolved_phone_present: !!String(resolvedPhone ?? "").trim(),
+        });
+    }, [mounted, debug, campaignFirstFree4x60, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName]);
+
     // Prefill quote-start form with resolved email/phone/name when they become available
     useEffect(() => {
         if (resolvedEmail || resolvedPhone || resolvedFirstName || resolvedLastName) {
@@ -906,6 +963,11 @@ export default function BookV2Client() {
                 }
                 const oppId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
                 if (oppId && (programId || legacyId)) {
+                    console.log("[BOOK_V2_CAMPAIGN] opportunity-discount: posting", {
+                        opportunity_id_prefix: oppId.slice(0, 8),
+                        has_program_id: !!programId,
+                        has_legacy_code_id: !!legacyId,
+                    });
                     try {
                         await fetch("/api/book-v2/opportunity-discount", {
                             method: "POST",
@@ -1462,6 +1524,18 @@ export default function BookV2Client() {
                 const storedSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
                 const curSig = bookingIdentitySignatureString(identityForSig);
                 if (storedSig && storedSig !== curSig) {
+                    console.log("[BOOK_V2_IDENTITY] payment_identity_continue: clearing booking keys (signature mismatch)");
+                    clearBookingIdentityKeys();
+                }
+                const sigAfter = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
+                const hasAnyStoredId = !!(
+                    localStorage.getItem("alloy_opportunity_id") ||
+                    localStorage.getItem("alloy_person_id") ||
+                    localStorage.getItem("alloy_contact_id") ||
+                    localStorage.getItem("alloy_customer_id")
+                );
+                if (!sigAfter && hasAnyStoredId) {
+                    console.log("[BOOK_V2_IDENTITY] payment_identity_continue: clearing booking keys (stored ids without identity snapshot)");
                     clearBookingIdentityKeys();
                 }
             }
@@ -1745,6 +1819,18 @@ export default function BookV2Client() {
                 });
                 const prevSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
                 if (prevSig && prevSig !== curSig) {
+                    console.log("[BOOK_V2_IDENTITY] payment_submit: clearing booking keys (signature mismatch)");
+                    clearBookingIdentityKeys();
+                }
+                const sigAfter = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
+                const hasAnyStoredId = !!(
+                    localStorage.getItem("alloy_opportunity_id") ||
+                    localStorage.getItem("alloy_person_id") ||
+                    localStorage.getItem("alloy_contact_id") ||
+                    localStorage.getItem("alloy_customer_id")
+                );
+                if (!sigAfter && hasAnyStoredId) {
+                    console.log("[BOOK_V2_IDENTITY] payment_submit: clearing booking keys (stored ids without identity snapshot)");
                     clearBookingIdentityKeys();
                 }
             }

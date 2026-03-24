@@ -10,6 +10,9 @@ import {
 // Unknown /admin paths redirect to dashboard instead of 404.
 const ADMIN_PATH_PREFIXES = [
     "/admin",
+    /** Next-gen admin UI (App Router) — must be allowlisted or middleware redirects to /admin/dashboard */
+    "/adminV2",
+    "/adminv2",
     "/admin/dashboard",
     "/admin/opportunities",
     "/admin/jobs",
