@@ -3,6 +3,7 @@
  * Use in admin API routes that need org_id and role.
  */
 
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabaseServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -81,4 +82,10 @@ export async function getAdminContext(): Promise<AdminContextResult> {
         console.error("[getAdminContext] unexpected:", e);
         return { ok: false, status: 403 };
     }
+}
+
+/** JSON error for `getAdminContext` failure (401 / 403). */
+export function adminContextFailureResponse(failure: AdminContextFailure): NextResponse {
+    const message = failure.status === 401 ? "Unauthorized" : "Forbidden";
+    return NextResponse.json({ error: message }, { status: failure.status });
 }

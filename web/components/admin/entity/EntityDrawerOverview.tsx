@@ -13,6 +13,10 @@ import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
 import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
 import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
+import {
+  opportunityOverviewRelationshipReadLabel,
+  opportunityOverviewStatusBadgeLabel,
+} from "@/lib/admin/opportunityOverviewLabels";
 
 const INLINE_EDIT_INPUT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
 const INLINE_EDIT_SELECT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none disabled:opacity-60";
@@ -64,6 +68,12 @@ function formatFieldValue(
       return formatMoney(value as number | string | null | undefined, key);
     }
     case "status": {
+      if (presentationEntityType === "opportunities" && record) {
+        const oppLine = opportunityOverviewStatusBadgeLabel(record);
+        if (oppLine) {
+          return <StatusBadge label={oppLine} variant="default" />;
+        }
+      }
       const fromApi =
         record && record._status_display != null && String(record._status_display).trim() !== ""
           ? String(record._status_display).trim()
@@ -97,6 +107,17 @@ function formatFieldValue(
                 labelFromRecord = schedById === "" ? null : schedById;
               }
             }
+          } else if (presentationEntityType === "opportunities") {
+            const ol = opportunityOverviewRelationshipReadLabel(record, field.key);
+            if (ol !== undefined) {
+              labelFromRecord = ol === "" ? null : ol;
+            }
+            if (labelFromRecord == null && idField !== field.key) {
+              const ol2 = opportunityOverviewRelationshipReadLabel(record, idField);
+              if (ol2 !== undefined) {
+                labelFromRecord = ol2 === "" ? null : ol2;
+              }
+            }
           }
           if (labelFromRecord == null) {
             labelFromRecord = resolveOverviewRelationshipLabel(record, field.key, { linkIdField: idField });
@@ -128,6 +149,12 @@ function formatFieldValue(
         const sched = scheduleOverviewRelationshipReadLabel(record, key);
         if (sched !== undefined) {
           return sched === "" ? "—" : sched;
+        }
+      }
+      if (presentationEntityType === "opportunities" && record) {
+        const ol = opportunityOverviewRelationshipReadLabel(record, key);
+        if (ol !== undefined) {
+          return ol === "" ? "—" : ol;
         }
       }
       if (record && isUuidLike(value)) {
@@ -238,8 +265,11 @@ function renderFieldEditNode(
     "assigned_vendor_id",
     "location_id",
     "primary_contact_id",
+    "contact_id",
     "customer_id",
     "opportunity_id",
+    "job_id",
+    "customer_subscription_id",
     "discount_code_id",
   ]);
   /** Reference selects (FK ids) win over generic `status` hint; workflow status uses status_key + statusDefs. */
@@ -354,6 +384,12 @@ export default function EntityDrawerOverview({
       const schedExplicit = scheduleOverviewRelationshipReadLabel(record, key);
       if (schedExplicit !== undefined) {
         displayFallback = schedExplicit === "" ? "—" : schedExplicit;
+      }
+    }
+    if (displayFallback === undefined && entityType === "opportunities") {
+      const oppExplicit = opportunityOverviewRelationshipReadLabel(record, key);
+      if (oppExplicit !== undefined) {
+        displayFallback = oppExplicit === "" ? "—" : oppExplicit;
       }
     }
     if (displayFallback === undefined) {

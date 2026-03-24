@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { ORG_ID_FINANCIALS } from "@/lib/financials";
+import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { balanceCentsForAccountType } from "@/lib/financials";
 import type { GlAccountType } from "@/lib/financials";
 
@@ -16,8 +16,10 @@ type EntryRow = { id: string; entry_date: string };
  * P&L: start/end required. Balance Sheet: as_of required.
  */
 export async function GET(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
     const supabase = createAdminClient();
-    const orgId = ORG_ID_FINANCIALS;
+    const orgId = ctx.orgId;
     const { searchParams } = request.nextUrl;
     const period = searchParams.get("period") || "pl";
     const start = searchParams.get("start") || "";

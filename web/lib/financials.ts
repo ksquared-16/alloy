@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Financials / GL helpers and org context.
- * TODO(v2): Replace with real org from admin context/session.
+ * Financials / GL helpers.
+ * Prefer `getAdminContext().orgId` in admin API routes; this constant remains for
+ * server-rendered pages that do not yet resolve org from session (e.g. dashboard).
  */
 export const ORG_ID_FINANCIALS = "7803388d-cdee-4afb-89cf-23a137f39423";
 

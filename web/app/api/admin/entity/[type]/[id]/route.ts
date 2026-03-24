@@ -18,6 +18,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
+import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 
 const ENTITY_TYPES = ["jobs", "opportunities", "contacts", "customers", "customer_members", "persons", "schedules", "discount_redemptions", "workflows", "vendors", "subscriptions", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "documents"] as const;
 
@@ -349,6 +350,10 @@ export async function GET(
                     : oppLegacyStatus != null && String(oppLegacyStatus).trim() !== ""
                       ? String(oppLegacyStatus).trim()
                       : null;
+            const stageLabel =
+                out._pipeline_stage_name != null && String(out._pipeline_stage_name).trim() !== ""
+                    ? String(out._pipeline_stage_name).trim()
+                    : null;
             let oppStatusDisplay: string | null = null;
             if (oppOrgId && oppSkRaw) {
                 const defs = await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true });
@@ -360,6 +365,29 @@ export async function GET(
                 }
             } else {
                 oppStatusDisplay = oppSkRaw;
+            }
+            if (
+                oppPipelineStageId &&
+                oppSkRaw &&
+                String(oppSkRaw) === String(oppPipelineStageId) &&
+                stageLabel
+            ) {
+                oppStatusDisplay = stageLabel;
+            } else if (oppStatusDisplay != null && isUuidLike(String(oppStatusDisplay))) {
+                if (stageLabel) {
+                    oppStatusDisplay = stageLabel;
+                } else if (isUuidLike(oppSkRaw)) {
+                    const { data: stRow } = await supabase
+                        .from("pipeline_stages")
+                        .select("name")
+                        .eq("id", oppSkRaw)
+                        .maybeSingle();
+                    const nm = (stRow as { name?: string | null } | null)?.name;
+                    if (nm != null && String(nm).trim() !== "") oppStatusDisplay = String(nm).trim();
+                }
+            }
+            if ((oppStatusDisplay == null || String(oppStatusDisplay).trim() === "") && stageLabel) {
+                oppStatusDisplay = stageLabel;
             }
             out._status_display = oppStatusDisplay;
             const qt = opp.quote_total != null && !Number.isNaN(Number(opp.quote_total)) ? Number(opp.quote_total)

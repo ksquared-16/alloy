@@ -38,6 +38,7 @@ import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
 import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from "@/lib/admin/jobDiscountSelection";
+import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOverviewLabels";
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
@@ -504,6 +505,8 @@ export default function AdminEntityDrawer() {
     const [oppVerticalOptions, setOppVerticalOptions] = useState<{ id: string; name: string }[]>([]);
     /** Opportunity drawer: labeled selects for relationship field_keys from field_definitions. */
     const [oppRefFieldSelectOptions, setOppRefFieldSelectOptions] = useState<Record<string, { value: string; label: string }[]>>({});
+    /** Pipeline stages for opportunity `pipeline_stage_id` overview select (full list + immediate label). */
+    const [oppPipelineStageOptions, setOppPipelineStageOptions] = useState<{ value: string; label: string }[]>([]);
     const [workflowConditions, setWorkflowConditions] = useState<{ target_entity?: string; field_path: string; operator: string; value: string }[]>([]);
     const [workflowActions, setWorkflowActions] = useState<{ action_type: string; target_entity?: string; payload?: Record<string, unknown> }[]>([]);
     const [runModalOpen, setRunModalOpen] = useState(false);
@@ -1089,6 +1092,36 @@ export default function AdminEntityDrawer() {
                 if (!cancelled) setOppRefFieldSelectOptions({});
             }
         })();
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, data]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !data || (data as { _create?: boolean })._create || drawer.id === "new") {
+            setOppPipelineStageOptions([]);
+            return;
+        }
+        const pipelineId = (data as { pipeline_id?: string | null }).pipeline_id;
+        if (!pipelineId || typeof pipelineId !== "string" || !pipelineId.trim()) {
+            setOppPipelineStageOptions([]);
+            return;
+        }
+        let cancelled = false;
+        fetch(`/api/admin/pipeline-stages?pipeline_id=${encodeURIComponent(pipelineId.trim())}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((rows: { id: string; name?: string | null }[]) => {
+                if (cancelled) return;
+                setOppPipelineStageOptions(
+                    (Array.isArray(rows) ? rows : []).map((s) => ({
+                        value: s.id,
+                        label: (s.name && String(s.name).trim()) || `${s.id.slice(0, 8)}…`,
+                    }))
+                );
+            })
+            .catch(() => {
+                if (!cancelled) setOppPipelineStageOptions([]);
+            });
         return () => {
             cancelled = true;
         };
@@ -2995,71 +3028,81 @@ export default function AdminEntityDrawer() {
             </div>
         ) : null;
 
-    const title: React.ReactNode = data
+    const dataMatchesDrawer =
+        !data ||
+        !drawer.id ||
+        drawer.id === "new" ||
+        (data as { id?: string }).id == null ||
+        String((data as { id: string }).id) === String(drawer.id);
+    const overviewData = dataMatchesDrawer ? data : null;
+    const showDrawerBodyLoading =
+        !!drawer.id && drawer.id !== "new" && (loading || (data != null && !dataMatchesDrawer));
+
+    const title: React.ReactNode = overviewData
         ? drawer.type === "contacts"
-            ? (data as { _create?: boolean })._create
+            ? (overviewData as { _create?: boolean })._create
                 ? `New ${contactSingular}`
-                : `${contactSingular}: ${[data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "")}`
+                : `${contactSingular}: ${[overviewData.first_name, overviewData.last_name].filter(Boolean).join(" ") || (drawer.id ?? "")}`
             : drawer.type === "customers"
-                ? (data as { _create?: boolean })._create
+                ? (overviewData as { _create?: boolean })._create
                     ? `New ${customerSingular}`
-                    : `${customerSingular}: ${(data.name as string) || (drawer.id ?? "")}`
+                    : `${customerSingular}: ${(overviewData.name as string) || (drawer.id ?? "")}`
                 : drawer.type === "customer_members"
-                    ? (data as { _create?: boolean })._create
+                    ? (overviewData as { _create?: boolean })._create
                         ? `New ${memberSingular}`
-                        : `${memberSingular}: ${(data.display_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "")}`
+                        : `${memberSingular}: ${(overviewData.display_name as string) || [overviewData.first_name, overviewData.last_name].filter(Boolean).join(" ") || (drawer.id ?? "")}`
                     : drawer.type === "opportunities"
-                        ? (data as { _create?: boolean })._create
+                        ? (overviewData as { _create?: boolean })._create
                             ? `New ${opportunitySingular}`
-                            : `${opportunitySingular}: ${(data.name as string) || (drawer.id ?? "")}`
+                            : `${opportunitySingular}: ${(overviewData.name as string) || (drawer.id ?? "")}`
                         : drawer.type === "jobs"
-                            ? (data as { _create?: boolean })._create
+                            ? (overviewData as { _create?: boolean })._create
                                 ? `New ${jobSingular}`
-                                : `${(data._customer_name as string) || (data.title as string) || "Job"} · ${((data.title as string) || "Cleaning").trim() || "Cleaning"}`
+                                : `${(overviewData._customer_name as string) || (overviewData.title as string) || "Job"} · ${((overviewData.title as string) || "Cleaning").trim() || "Cleaning"}`
                             : drawer.type === "schedules"
-                                ? (data as { _create?: boolean })._create
+                                ? (overviewData as { _create?: boolean })._create
                                     ? `New ${scheduleSingular}`
                                     : (() => {
                                           const compact = formatScheduleDrawerHeaderTitle(
-                                              (data as { start_at?: string }).start_at,
-                                              (data as { timezone?: string | null }).timezone
+                                              (overviewData as { start_at?: string }).start_at,
+                                              (overviewData as { timezone?: string | null }).timezone
                                           );
                                           return compact.trim()
                                               ? `${scheduleSingular}: ${compact}`
-                                              : `${scheduleSingular}: ${String((data as { _schedule_display_title?: string })._schedule_display_title ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`;
+                                              : `${scheduleSingular}: ${String((overviewData as { _schedule_display_title?: string })._schedule_display_title ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`;
                                       })()
                                 : drawer.type === "locations"
-                                    ? (data as { _create?: boolean })._create
+                                    ? (overviewData as { _create?: boolean })._create
                                         ? "New Location"
-                                        : `Location: ${(data.label as string) || (data.address1 as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                        : `Location: ${(overviewData.label as string) || (overviewData.address1 as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                     : drawer.type === "discount_redemptions"
-                                        ? `Redemption: ${(data._code as string) || "Discount"}${(data._customer_name as string) ? ` · ${data._customer_name}` : ""}`
+                                        ? `Redemption: ${(overviewData._code as string) || "Discount"}${(overviewData._customer_name as string) ? ` · ${overviewData._customer_name}` : ""}`
                                         : drawer.type === "workflows"
-                                            ? (data as { _create?: boolean })._create
+                                            ? (overviewData as { _create?: boolean })._create
                                                 ? `New ${workflowSingular}`
-                                                : `${workflowSingular}: ${(data.name as string) || (drawer.id ?? "")}`
+                                                : `${workflowSingular}: ${(overviewData.name as string) || (drawer.id ?? "")}`
                                             : drawer.type === "vendors"
-                                                ? (data as { _create?: boolean })._create
+                                                ? (overviewData as { _create?: boolean })._create
                                                     ? `New ${vendorSingular}`
-                                                    : `${vendorSingular}: ${String((data.company_name as string) ?? "").trim() || (data.name as string) || (drawer.id ?? "")}`
+                                                    : `${vendorSingular}: ${String((overviewData.company_name as string) ?? "").trim() || (overviewData.name as string) || (drawer.id ?? "")}`
                                                 : drawer.type === "payments"
-                                                    ? `Payment: ${(data._payment_label as string) || ("Payment #" + (drawer.id ?? "").slice(-6))}`
+                                                    ? `Payment: ${(overviewData._payment_label as string) || ("Payment #" + (drawer.id ?? "").slice(-6))}`
                                                     : drawer.type === "service_offerings"
-                                                        ? `Offering: ${(data.offering_name as string) || (data.offering_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                        ? `Offering: ${(overviewData.offering_name as string) || (overviewData.offering_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                         : drawer.type === "service_plan_templates"
-                                                            ? `Plan: ${(data.plan_name as string) || (data.plan_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                            ? `Plan: ${(overviewData.plan_name as string) || (overviewData.plan_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                             : drawer.type === "addons"
-                                                                ? `Add-on: ${(data.addon_name as string) || (data.addon_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                                ? `Add-on: ${(overviewData.addon_name as string) || (overviewData.addon_key as string) || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                                 : drawer.type === "persons"
-                                                                ? (data as { _create?: boolean })._create
+                                                                ? (overviewData as { _create?: boolean })._create
                                                                     ? "New Person"
-                                                                    : `Person: ${(data._person_name as string) || [data.first_name, data.last_name].filter(Boolean).join(" ") || (drawer.id ?? "").slice(0, 8) + "…"}`
+                                                                    : `Person: ${(overviewData._person_name as string) || [overviewData.first_name, overviewData.last_name].filter(Boolean).join(" ") || (drawer.id ?? "").slice(0, 8) + "…"}`
                                                 : drawer.type === "documents"
-                                                    ? `Document: ${String((data as { name?: string | null }).name ?? "").trim() || String((data as { original_filename?: string | null }).original_filename ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`
+                                                    ? `Document: ${String((overviewData as { name?: string | null }).name ?? "").trim() || String((overviewData as { original_filename?: string | null }).original_filename ?? "").trim() || `${(drawer.id ?? "").slice(0, 8)}…`}`
                                                     : drawer.type === "subscriptions"
-                                                        ? `${subscriptionSingular}: ${(data._customer_name as string) || `${(drawer.id ?? "").slice(0, 8)}…`}`
+                                                        ? `${subscriptionSingular}: ${(overviewData._customer_name as string) || `${(drawer.id ?? "").slice(0, 8)}…`}`
                                                     : "Details"
-        : loading
+        : showDrawerBodyLoading || loading
             ? "Loading…"
             : "Details";
 
@@ -3070,20 +3113,20 @@ export default function AdminEntityDrawer() {
     const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", payments: "Payments", documents: "Documents", ledger: "Ledger" };
 
     const hasFieldDefsForOverview = useMemo(() => {
-        if (!data || (data as { _create?: boolean })._create) return false;
-        const defs = (data._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
+        const defs = (overviewData._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
         return defs.some((d) => d.is_visible_in_drawer !== false);
-    }, [data]);
+    }, [overviewData]);
     const useConfigDrivenOverview =
         !!presentationType &&
-        !(data as { _create?: boolean })?._create &&
+        !(overviewData as { _create?: boolean })?._create &&
         (hasFieldDefsForOverview ||
             (!!presentationConfig?.drawer?.overviewSections?.length &&
                 presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
 
     const entityDrawerOverviewData = useMemo((): Record<string, unknown> => {
-        const base = (data ?? {}) as Record<string, unknown>;
-        if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
+        const base = (overviewData ?? {}) as Record<string, unknown>;
+        if (drawer.type !== "jobs" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return base;
         }
         const summ = jobPaymentSummaryEffective;
@@ -3094,11 +3137,11 @@ export default function AdminEntityDrawer() {
             _job_payment_balance_cents: summ.balance_due_cents ?? undefined,
             _job_payment_status_label: jobPaymentStatusKeyLabel(summ.payment_status_key),
         };
-    }, [drawer.type, data, jobPaymentSummaryEffective]);
+    }, [drawer.type, overviewData, jobPaymentSummaryEffective]);
 
     const overviewCustomContent = useMemo(() => {
-        if (!data || !drawer.type) return {};
-        const d = data as Record<string, unknown>;
+        if (!overviewData || !drawer.type) return {};
+        const d = overviewData as Record<string, unknown>;
         if (drawer.type === "contacts") {
             const customerId = d.customer_id as string | null | undefined;
             const vendorId = d.vendor_id as string | null | undefined;
@@ -3717,11 +3760,11 @@ export default function AdminEntityDrawer() {
             };
         }
         return {};
-    }, [drawer.type, drawer.id, data, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing, refetch]);
+    }, [drawer.type, drawer.id, overviewData, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing, refetch]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
-        if (!data || (data as { _create?: boolean })._create) return [];
-        const defs = (data._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return [];
+        const defs = (overviewData._field_definitions as { field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_visible_in_drawer: boolean }[] | undefined) ?? [];
         let visible = defs.filter((d) => d.is_visible_in_drawer !== false);
         if (drawer.type === "vendors") {
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
@@ -3772,7 +3815,7 @@ export default function AdminEntityDrawer() {
             visible = visible.filter((d) => !jobOverviewBillingFieldKeys.has(d.field_key));
         }
         if (visible.length === 0) {
-            if (!(drawer.type === "jobs" && data && !(data as { _create?: boolean })._create)) {
+            if (!(drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create)) {
                 return [];
             }
         }
@@ -3802,7 +3845,7 @@ export default function AdminEntityDrawer() {
                 if (fieldKey === "location_id") {
                     return { renderHint: "link", linkTarget: { idField: "location_id", entityType: "locations" } };
                 }
-                if (fieldKey === "primary_contact_id") {
+                if (fieldKey === "primary_contact_id" || fieldKey === "contact_id") {
                     return { renderHint: "link", linkTarget: { idField: "primary_contact_id", entityType: "contacts" } };
                 }
                 if (fieldKey === "customer_id") {
@@ -3940,7 +3983,7 @@ export default function AdminEntityDrawer() {
         }));
         const keys = new Set(fromDefs.map((s) => s.key));
         const append: EntityDrawerSectionConfig[] = [];
-        if (drawer.type === "persons" && data && !(data as { _create?: boolean })._create && !keys.has("relationships")) {
+        if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create && !keys.has("relationships")) {
             append.push({
                 key: "relationships",
                 title: "Relationships",
@@ -3950,8 +3993,8 @@ export default function AdminEntityDrawer() {
                 fields: [],
             });
         }
-        if (drawer.type === "locations" && data && !(data as { _create?: boolean })._create) {
-            const loc = data as { customer_id?: string | null };
+        if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const loc = overviewData as { customer_id?: string | null };
             if (!keys.has("customer") && loc.customer_id) {
                 append.push({ key: "customer", title: "Customer", defaultExpanded: false, collapsible: true, gridCols: 1 as const, fields: [] });
             }
@@ -3967,7 +4010,7 @@ export default function AdminEntityDrawer() {
             }
         }
         let result: EntityDrawerSectionConfig[] = [...fromDefs, ...append];
-        if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create) {
+        if (drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const jobSectionRank: Record<string, number> = {
                 job_details: 0,
                 customer_location: 1,
@@ -4011,12 +4054,12 @@ export default function AdminEntityDrawer() {
             }
         }
         return presentationType ? mergeUnifiedStatusIntoConfigOverview(presentationType, result) : result;
-    }, [drawer.type, data, presentationType]);
+    }, [drawer.type, overviewData, presentationType]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
         const out: Record<string, { value: string; label: string }[]> = {};
-        if (drawer.type === "opportunities" && data) {
-            const d = data as Record<string, unknown>;
+        if (drawer.type === "opportunities" && overviewData) {
+            const d = overviewData as Record<string, unknown>;
             const vertOpts = [...oppVerticalOptions.map((v) => ({ value: v.id, label: v.name }))];
             const vid = String(d.vertical_id ?? "");
             if (vid && !vertOpts.some((o) => o.value === vid)) {
@@ -4024,10 +4067,63 @@ export default function AdminEntityDrawer() {
                 vertOpts.push({ value: vid, label: nm || `${vid.slice(0, 8)}…` });
             }
             out.vertical_id = vertOpts;
-            Object.assign(out, oppRefFieldSelectOptions);
+            const custId = String(d.customer_id ?? "").trim();
+            out.customer_id =
+                oppRefFieldSelectOptions.customer_id && oppRefFieldSelectOptions.customer_id.length > 0
+                    ? oppRefFieldSelectOptions.customer_id
+                    : custId
+                      ? [{ value: custId, label: String(d._customer_name ?? "").trim() || "—" }]
+                      : [];
+            const locId = String(d.location_id ?? "").trim();
+            out.location_id =
+                oppRefFieldSelectOptions.location_id && oppRefFieldSelectOptions.location_id.length > 0
+                    ? oppRefFieldSelectOptions.location_id
+                    : locId
+                      ? [{ value: locId, label: String(d._location_label ?? d._location_name ?? "").trim() || "—" }]
+                      : [];
+            const ppid = String(d.primary_person_id ?? "").trim();
+            out.primary_person_id =
+                oppRefFieldSelectOptions.primary_person_id && oppRefFieldSelectOptions.primary_person_id.length > 0
+                    ? oppRefFieldSelectOptions.primary_person_id
+                    : ppid
+                      ? [{ value: ppid, label: String(d._primary_person_name ?? "").trim() || "—" }]
+                      : [];
+            const pcid = String(d.primary_contact_id ?? "").trim();
+            out.primary_contact_id =
+                oppRefFieldSelectOptions.primary_contact_id && oppRefFieldSelectOptions.primary_contact_id.length > 0
+                    ? oppRefFieldSelectOptions.primary_contact_id
+                    : pcid
+                      ? [{ value: pcid, label: String(d._primary_contact_name ?? d._contact_name ?? "").trim() || "—" }]
+                      : [];
+            const psid = String(d.pipeline_stage_id ?? "").trim();
+            out.pipeline_stage_id =
+                oppPipelineStageOptions.length > 0
+                    ? oppPipelineStageOptions
+                    : psid
+                      ? [{ value: psid, label: String(d._pipeline_stage_name ?? d._stage_name ?? "").trim() || "—" }]
+                      : [];
         }
-        if (drawer.type === "jobs" && data) {
-            const d = data as Record<string, unknown>;
+        if (drawer.type === "schedules" && overviewData) {
+            const d = overviewData as Record<string, unknown>;
+            const jid = String(d.job_id ?? "").trim();
+            if (jid) {
+                out.job_id = [{ value: jid, label: String(d._job_title ?? "").trim() || "—" }];
+            }
+            const lid = String(d.location_id ?? d._location_id ?? "").trim();
+            if (lid) {
+                out.location_id = [{ value: lid, label: String(d._location_label ?? d._location_name ?? "").trim() || "—" }];
+            }
+            const av = String(d.assigned_vendor_id ?? "").trim();
+            if (av) {
+                out.assigned_vendor_id = [{ value: av, label: String(d._assigned_vendor_name ?? d._vendor_name ?? "").trim() || "—" }];
+            }
+            const sub = String(d.customer_subscription_id ?? "").trim();
+            if (sub) {
+                out.customer_subscription_id = [{ value: sub, label: String(d._customer_subscription_label ?? "").trim() || "—" }];
+            }
+        }
+        if (drawer.type === "jobs" && overviewData) {
+            const d = overviewData as Record<string, unknown>;
             const custOpts = jobCustomerOptions.map((c) => ({ value: c.id, label: c.name ?? c.id }));
             const custId = String(d.customer_id ?? "");
             if (custId && !custOpts.some((o) => o.value === custId)) {
@@ -4072,9 +4168,9 @@ export default function AdminEntityDrawer() {
                 value: v.id,
                 label: v.label ?? formatVendorOptionLabel({ id: v.id, name: v.name }),
             }));
-            const aid = String((data as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? "");
+            const aid = String((overviewData as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? "");
             if (aid && !vendorOpts.some((o) => o.value === aid)) {
-                const nm = String((data as { _assigned_vendor_name?: string | null })._assigned_vendor_name ?? "").trim();
+                const nm = String((overviewData as { _assigned_vendor_name?: string | null })._assigned_vendor_name ?? "").trim();
                 vendorOpts.push({
                     value: aid,
                     label: nm || formatVendorOptionLabel({ id: aid }),
@@ -4083,7 +4179,7 @@ export default function AdminEntityDrawer() {
             out.assigned_vendor_id = vendorOpts;
 
             const discOpts = jobDiscountOptions.map((o) => ({ value: o.value, label: o.label }));
-            const dJob = data as {
+            const dJob = overviewData as {
                 _discount_selection?: string | null;
                 discount_code?: string | null;
                 _discount_label?: string | null;
@@ -4100,8 +4196,8 @@ export default function AdminEntityDrawer() {
             }
             out.discount_code_id = discountOpts;
         }
-        if (drawer.type === "vendors" && data) {
-            const d = data as {
+        if (drawer.type === "vendors" && overviewData) {
+            const d = overviewData as {
                 _vendor_status_options?: { id: string; key: string; label: string | null }[];
                 vendor_status_id?: string | null;
                 _vendor_status_label?: string | null;
@@ -4118,9 +4214,10 @@ export default function AdminEntityDrawer() {
         return out;
     }, [
         drawer.type,
-        data,
+        overviewData,
         oppVerticalOptions,
         oppRefFieldSelectOptions,
+        oppPipelineStageOptions,
         jobVendorsForAssign,
         vendorPrimaryPersonOptions,
         jobCustomerOptions,
@@ -4133,47 +4230,48 @@ export default function AdminEntityDrawer() {
 
     if (!drawer.type || !drawer.id) return null;
 
-    const drawerStatusBadge = data && !loading && !(data as { _create?: boolean })?._create ? (
+    const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
             <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
         ) : drawer.type === "opportunities" &&
-          ((data as { _status_display?: string | null })._status_display || (data as { status_key?: string }).status_key) ? (
+          (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
+              (overviewData as { status_key?: string }).status_key) ? (
             <StatusBadge
                 label={
-                    String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
-                    getStatusLabel((data as { status_key?: string }).status_key) ||
-                    String((data as { status_key?: string }).status_key ?? "")
+                    opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
+                    getStatusLabel((overviewData as { status_key?: string }).status_key) ||
+                    String((overviewData as { status_key?: string }).status_key ?? "")
                 }
                 variant="default"
             />
         ) : drawer.type === "schedules" &&
-          ((data as { _status_display?: string | null })._status_display ||
-              (data as { _schedule_status_label?: string | null })._schedule_status_label ||
-              (data as { status_key?: string }).status_key) ? (
+          ((overviewData as { _status_display?: string | null })._status_display ||
+              (overviewData as { _schedule_status_label?: string | null })._schedule_status_label ||
+              (overviewData as { status_key?: string }).status_key) ? (
             <StatusBadge
                 label={
-                    String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
-                    String((data as { _schedule_status_label?: string | null })._schedule_status_label ?? "").trim() ||
-                    getStatusLabel((data as { status_key?: string }).status_key) ||
-                    String((data as { status_key?: string }).status_key ?? "")
+                    String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                    String((overviewData as { _schedule_status_label?: string | null })._schedule_status_label ?? "").trim() ||
+                    getStatusLabel((overviewData as { status_key?: string }).status_key) ||
+                    String((overviewData as { status_key?: string }).status_key ?? "")
                 }
                 variant="default"
             />
         ) : drawer.type === "vendors" &&
-          ((data as { _status_display?: string | null })._status_display ||
-              (data as { _vendor_status_label?: string | null })._vendor_status_label ||
-              (data as { status_key?: string | null }).status_key) ? (
+          ((overviewData as { _status_display?: string | null })._status_display ||
+              (overviewData as { _vendor_status_label?: string | null })._vendor_status_label ||
+              (overviewData as { status_key?: string | null }).status_key) ? (
             <StatusBadge
                 label={
-                    String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
-                    String((data as { _vendor_status_label?: string | null })._vendor_status_label ?? "").trim() ||
-                    getStatusLabel((data as { status_key?: string | null }).status_key) ||
-                    String((data as { status_key?: string | null }).status_key ?? "")
+                    String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                    String((overviewData as { _vendor_status_label?: string | null })._vendor_status_label ?? "").trim() ||
+                    getStatusLabel((overviewData as { status_key?: string | null }).status_key) ||
+                    String((overviewData as { status_key?: string | null }).status_key ?? "")
                 }
                 variant="default"
             />
-        ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (data as { status_key?: string }).status_key ? (
-            <StatusBadge label={getStatusLabel((data as { status_key: string }).status_key) ?? (data as { status_key: string }).status_key} variant="default" />
+        ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (overviewData as { status_key?: string }).status_key ? (
+            <StatusBadge label={getStatusLabel((overviewData as { status_key: string }).status_key) ?? (overviewData as { status_key: string }).status_key} variant="default" />
         ) : null
     ) : null;
 
@@ -4184,7 +4282,7 @@ export default function AdminEntityDrawer() {
                     ← Back to {getEntityLabel(labels, previousDrawer.type, "singular")}
                 </button>
             )}
-            {data && !loading && canEditInDrawer(drawer.type) && (
+            {overviewData && !loading && canEditInDrawer(drawer.type) && (
                 <>
             {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
             {drawer.type === "schedules" && isScheduleExistingView && schedulePaymentQuickActionsNode}
@@ -4248,7 +4346,7 @@ export default function AdminEntityDrawer() {
                 </div>
     );
 
-    const drawerHeaderExtra = data && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) && !(data as { _create?: boolean })?._create ? (
+    const drawerHeaderExtra = overviewData && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) && !(overviewData as { _create?: boolean })?._create ? (
         <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
             {tabList.map((tab) => (
                 <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
@@ -4269,9 +4367,9 @@ export default function AdminEntityDrawer() {
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
         >
-            {loading && <p className="text-alloy-midnight/60">Loading…</p>}
+            {showDrawerBodyLoading && <p className="text-alloy-midnight/60">Loading…</p>}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
-            {data && !loading && (
+            {data && !loading && dataMatchesDrawer && (
                 <div className="space-y-6">
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                     {((drawer.type === "contacts" || drawer.type === "customer_members") && (data as { _person_id?: string | null })?._person_id) && (
