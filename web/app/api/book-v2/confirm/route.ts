@@ -1386,19 +1386,8 @@ export async function POST(request: NextRequest) {
             const emailPresent = !!(contact_email?.trim());
             const phonePresent = !!(contact_phone?.trim());
             const emailForResolver = contact_email?.trim() ?? "";
-            const phoneForResolver = contact_phone?.trim() ?? "";
-            const digits = phoneForResolver.replace(/\D/g, "");
-            const normalizedPhone =
-                digits.length === 10
-                    ? "+1" + digits
-                    : digits.length === 11 && digits.startsWith("1")
-                      ? "+" + digits
-                      : phoneForResolver.startsWith("+")
-                        ? "+" + digits
-                        : phoneForResolver
-                          ? "+" + digits
-                          : "";
-            const phoneForResolverArg = normalizedPhone || phoneForResolver;
+            const phoneRawForResolver = contact_phone?.trim() ?? "";
+            const digits = phoneRawForResolver.replace(/\D/g, "");
             const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
             console.log("[BOOK_V2_CONFIRM] Resolver fallback entry", {
                 booking_attempt_id: booking_attempt_id ?? null,
@@ -1406,16 +1395,16 @@ export async function POST(request: NextRequest) {
                 phone_present: phonePresent,
                 email_len: emailForResolver.length,
                 phone_raw_digits_len: digits.length,
-                phone_normalized_non_empty: !!phoneForResolverArg.trim(),
                 org_id_configured: !!publicOrgId,
                 contact_id_from_quote_cleared: !contact_id_from_quote,
+                resolver_phone_path: "raw_to_bookingResolver_normalize",
             });
             try {
                 const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
                     first_name: contact_first_name,
                     last_name: contact_last_name,
                     email: emailForResolver,
-                    phone: phoneForResolverArg,
+                    phone: phoneRawForResolver,
                     postal_code: undefined,
                     timezone: timezone,
                     address: address,
@@ -1436,16 +1425,24 @@ export async function POST(request: NextRequest) {
             } catch (error: unknown) {
                 const errMsg = error instanceof Error ? error.message : String(error);
                 const errStack = error instanceof Error ? error.stack : undefined;
+                const pgCodeMatch = errMsg.match(/\(pg:\s*([^)]+)\)/);
                 console.error("[BOOK_V2_CONFIRM] Resolver fallback failed", {
                     booking_attempt_id: booking_attempt_id ?? null,
                     error_message: errMsg,
                     error_stack: errStack,
+                    pg_code: pgCodeMatch ? pgCodeMatch[1] : null,
                     email_present: emailPresent,
                     phone_present: phonePresent,
                     phone_raw_digits_len: digits.length,
+                    hint: "grep server logs for [BOOKING_RESOLVER] booking_attempt_id=" + String(booking_attempt_id ?? ""),
                 });
                 return NextResponse.json(
-                    { ok: false, message: `Could not resolve or create contact; check email and phone. ${errMsg}`, booking_attempt_id: booking_attempt_id ?? null },
+                    {
+                        ok: false,
+                        message: `Could not resolve or create contact. ${errMsg}`,
+                        booking_attempt_id: booking_attempt_id ?? null,
+                        ...(pgCodeMatch && { error_code: pgCodeMatch[1] }),
+                    },
                     { status: 500 }
                 );
             }
