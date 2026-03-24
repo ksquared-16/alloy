@@ -77,6 +77,20 @@ def normalize_phone(phone: Optional[str]) -> Optional[str]:
     # Otherwise, prefix with +
     return "+" + digits
 
+
+def _effective_public_org_id(explicit: Optional[str] = None) -> Optional[str]:
+    """
+    Org id for public booking flows (contacts / customers require org_id NOT NULL).
+    explicit: optional override (e.g. from API request); else ALLOY_PUBLIC_ORG_ID env.
+    """
+    if explicit is not None and isinstance(explicit, str) and explicit.strip():
+        return explicit.strip()
+    v = os.getenv("ALLOY_PUBLIC_ORG_ID")
+    if v is not None and str(v).strip():
+        return str(v).strip()
+    return None
+
+
 def find_contact_by_email(email: str) -> Optional[Dict]:
     """Find contact by email (case-insensitive)."""
     base_url = _get_base_url()
@@ -159,6 +173,7 @@ def resolve_or_create_contact_and_customer(
     contact_id: Optional[str] = None,
     customer_id: Optional[str] = None,
     booking_attempt_id: Optional[str] = None,
+    public_org_id: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str], str]:
     """
     Resolve or create Supabase contact and ensure customer exists (idempotent).
@@ -176,7 +191,11 @@ def resolve_or_create_contact_and_customer(
        contacts.customer_id and customers.primary_contact_id.
     5. Return (supa_contact_id, supa_customer_id, resolution_path).
 
-    resolution_path: "quote_id" | "found_by_email" | "found_by_phone" | "created" | "missing" | "contact_no_customer"
+    resolution_path: "quote_id" | "found_by_email" | "found_by_phone" | "created" | "missing" | "contact_no_customer" | "missing_org"
+
+    public_org_id:
+        Optional UUID string for org scoping. When set, used before ALLOY_PUBLIC_ORG_ID env.
+        Required for any contact or customer INSERT (NOT NULL in DB).
 
     Returns:
         (contact_id, customer_id, resolution_path); (None, None, "missing") if no email/phone.
@@ -184,6 +203,13 @@ def resolve_or_create_contact_and_customer(
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         logger.warning("resolve_or_create_contact_and_customer: Supabase not configured")
         return None, None, "missing"
+
+    effective_org_id = _effective_public_org_id(public_org_id)
+    logger.info(
+        "resolve_or_create_contact_and_customer: org_context booking_attempt_id=%s effective_org_id_present=%s",
+        booking_attempt_id or "None",
+        effective_org_id is not None,
+    )
 
     # Quote-ID shortcut: use existing contact when contact_id provided. If contact has no customer, create one (Pass 1 lifecycle).
     if contact_id and contact_id.strip():
@@ -215,9 +241,13 @@ def resolve_or_create_contact_and_customer(
                 "primary_contact_id": cid,
                 "status": "active",
             }
-            org_id = os.getenv("ALLOY_PUBLIC_ORG_ID") or None
-            if org_id:
-                customer_payload["org_id"] = org_id
+            if not effective_org_id:
+                logger.error(
+                    "resolve_or_create_contact_and_customer: missing org_id for customer insert (set ALLOY_PUBLIC_ORG_ID or pass public_org_id) booking_attempt_id=%s",
+                    booking_attempt_id or "None",
+                )
+                return None, None, "missing_org"
+            customer_payload["org_id"] = effective_org_id
             customer_payload = _normalize_uuid_fields(customer_payload)
             try:
                 create_resp = requests.post(f"{_get_base_url()}/customers", headers=_get_headers(), json=customer_payload, timeout=30)
@@ -261,6 +291,13 @@ def resolve_or_create_contact_and_customer(
         existing_customer_id = contact_row.get("customer_id")
         if existing_customer_id:
             return contact_id, existing_customer_id, resolution_path
+        if not effective_org_id:
+            logger.error(
+                "resolve_or_create_contact_and_customer: missing org_id for customer insert booking_attempt_id=%s contact_id=%s",
+                booking_attempt_id or "None",
+                (contact_id[:8] + "***") if contact_id and len(str(contact_id)) > 8 else contact_id,
+            )
+            return contact_id, None, "missing_org"
         first_name = contact_row.get("first_name", "") or ""
         last_name = contact_row.get("last_name", "") or ""
         customer_name = (first_name + " " + last_name).strip() if (first_name or last_name) else name
@@ -270,10 +307,8 @@ def resolve_or_create_contact_and_customer(
             "name": customer_name,
             "primary_contact_id": contact_id,
             "status": "active",
+            "org_id": effective_org_id,
         }
-        org_id = os.getenv("ALLOY_PUBLIC_ORG_ID") or None
-        if org_id:
-            customer_payload["org_id"] = org_id
         customer_payload = _normalize_uuid_fields(customer_payload)
         try:
             create_resp = requests.post(f"{base_url}/customers", headers=headers, json=customer_payload, timeout=30)
@@ -348,9 +383,16 @@ def resolve_or_create_contact_and_customer(
         contact_payload["email"] = normalized_email
     if normalized_phone:
         contact_payload["phone"] = normalized_phone
-    org_id = os.getenv("ALLOY_PUBLIC_ORG_ID") or None
-    if org_id:
-        contact_payload["org_id"] = org_id
+    if not effective_org_id:
+        logger.error(
+            "resolve_or_create_contact_and_customer: missing org_id for contact insert booking_attempt_id=%s payload_keys=%s",
+            booking_attempt_id or "None",
+            list(contact_payload.keys()),
+        )
+        return None, None, "missing_org"
+    contact_payload["org_id"] = effective_org_id
+    contact_payload["contact_type"] = contact_payload.get("contact_type") or "lead"
+    contact_payload["status"] = contact_payload.get("status") or "active"
     contact_payload = _normalize_uuid_fields(contact_payload)
     try:
         create_contact_resp = requests.post(f"{base_url}/contacts", headers=headers, json=contact_payload, timeout=30)

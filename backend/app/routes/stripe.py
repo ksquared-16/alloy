@@ -640,6 +640,16 @@ async def create_setup_intent(request: Request):
     booking_attempt_id = body.get("booking_attempt_id")
     contact_id_from_quote = body.get("contact_id")
     customer_id_from_quote = body.get("customer_id")
+    raw_org = body.get("org_id")
+    public_org_id = str(raw_org).strip() if raw_org is not None and str(raw_org).strip() else None
+    env_org_set = bool(os.getenv("ALLOY_PUBLIC_ORG_ID", "").strip())
+
+    logger.info(
+        "create_setup_intent: resolver_entry booking_attempt_id=%s org_id_from_body=%s org_id_from_env=%s",
+        booking_attempt_id or "None",
+        bool(public_org_id),
+        env_org_set,
+    )
 
     # Require either (contact_id from quote) or (phone and email)
     has_quote_ids = bool(contact_id_from_quote and str(contact_id_from_quote).strip())
@@ -678,7 +688,22 @@ async def create_setup_intent(request: Request):
         contact_id=contact_id_from_quote.strip() if isinstance(contact_id_from_quote, str) and contact_id_from_quote.strip() else None,
         customer_id=customer_id_from_quote.strip() if isinstance(customer_id_from_quote, str) and customer_id_from_quote.strip() else None,
         booking_attempt_id=booking_attempt_id,
+        public_org_id=public_org_id,
     )
+
+    if resolution_path == "missing_org":
+        logger.error(
+            "create_setup_intent: missing_org cannot insert contact/customer booking_attempt_id=%s "
+            "(configure ALLOY_PUBLIC_ORG_ID on this API service or pass org_id in JSON body)",
+            booking_attempt_id or "None",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Server configuration error: public org id is not set. "
+                "Set ALLOY_PUBLIC_ORG_ID on the booking API service, or pass org_id in the setup-intent request body."
+            ),
+        )
 
     if resolution_path == "contact_no_customer":
         logger.warning("create_setup_intent: contact has no linked customer booking_attempt_id=%s contact_id=%s", booking_attempt_id or "None", contact_id_from_quote[:8] + "***" if contact_id_from_quote and len(contact_id_from_quote) > 8 else contact_id_from_quote)
