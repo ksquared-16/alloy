@@ -27,7 +27,7 @@ import {
 } from "@/lib/workflowVocab";
 import {
     getEntityPresentation,
-    getJobUnifiedPricingSection,
+    getJobOverviewBillingSummarySection,
     toPresentationType,
     type DrawerTabKey,
     type EntityDrawerSectionConfig,
@@ -2161,6 +2161,20 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id, refetchJobFinancials]);
 
     useEffect(() => {
+        const onScheduleSavedRefreshJob = (ev: Event) => {
+            const e = ev as CustomEvent<{ type?: string; job_id?: string }>;
+            if (e.detail?.type !== "schedules" || !e.detail.job_id) return;
+            if (drawer.type !== "jobs" || drawer.id !== e.detail.job_id) return;
+            void refetchJobFinancials();
+            void refetchJobPayout();
+            void refetchJobRelatedData();
+            void refetchJobPayments();
+        };
+        window.addEventListener("admin-entity-saved", onScheduleSavedRefreshJob);
+        return () => window.removeEventListener("admin-entity-saved", onScheduleSavedRefreshJob);
+    }, [drawer.type, drawer.id, refetchJobFinancials, refetchJobPayout, refetchJobRelatedData, refetchJobPayments]);
+
+    useEffect(() => {
         if (drawer.type !== "jobs" || !data || (data as { _create?: boolean })._create) {
             setInitialJobFormData(null);
             return;
@@ -2796,6 +2810,14 @@ export default function AdminEntityDrawer() {
             setData((prev) => (prev ? { ...prev, ...json } : prev));
             refetch();
             router.refresh();
+            if (drawer.type === "schedules" && drawer.id) {
+                const jid = (json as { job_id?: string | null }).job_id;
+                window.dispatchEvent(
+                    new CustomEvent("admin-entity-saved", {
+                        detail: { type: "schedules", id: drawer.id, job_id: jid && String(jid).trim() ? String(jid).trim() : undefined },
+                    })
+                );
+            }
             if (drawer.type === "jobs" && drawer.id) {
                 window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: drawer.id } }));
                 setInitialJobFormData(JOB_FORM_KEYS.reduce((acc, k) => ({ ...acc, [k]: formData[k] }), {} as Record<string, unknown>));
@@ -3708,7 +3730,6 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities") {
             visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
-            visible = visible.filter((d) => d.field_key !== "pipeline_stage_id");
         }
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => d.field_key !== "primary_contact_id");
@@ -3735,8 +3756,20 @@ export default function AdminEntityDrawer() {
             "contractor_split_bps",
             "alloy_split_bps",
         ]);
+        /** Shown only in Overview "Billing summary" block — omit from field_definitions grid to avoid duplicates. */
+        const jobOverviewBillingFieldKeys = new Set([
+            "display_total_cents",
+            "recurring_total_cents",
+            "service_frequency_key",
+            "is_recurring",
+            "_job_payment_paid_cents",
+            "_job_payment_balance_cents",
+            "_job_payment_status_label",
+            "_job_payment_original_cents",
+        ]);
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => !jobDrawerPricingFieldKeys.has(d.field_key));
+            visible = visible.filter((d) => !jobOverviewBillingFieldKeys.has(d.field_key));
         }
         if (visible.length === 0) {
             if (!(drawer.type === "jobs" && data && !(data as { _create?: boolean })._create)) {
@@ -3774,6 +3807,66 @@ export default function AdminEntityDrawer() {
                 }
                 if (fieldKey === "customer_id") {
                     return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                return null;
+            }
+            if (drawer.type === "contacts") {
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                if (fieldKey === "vendor_id") {
+                    return { renderHint: "link", linkTarget: { idField: "vendor_id", entityType: "vendors" } };
+                }
+                if (fieldKey === "person_id") {
+                    return { renderHint: "link", linkTarget: { idField: "person_id", entityType: "persons" } };
+                }
+                return null;
+            }
+            if (drawer.type === "locations") {
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                return null;
+            }
+            if (drawer.type === "vendors") {
+                if (fieldKey === "primary_contact_id") {
+                    return { renderHint: "link", linkTarget: { idField: "primary_contact_id", entityType: "contacts" } };
+                }
+                if (fieldKey === "primary_person_id") {
+                    return { renderHint: "link", linkTarget: { idField: "primary_person_id", entityType: "persons" } };
+                }
+                return null;
+            }
+            if (drawer.type === "customer_members") {
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                if (fieldKey === "person_id") {
+                    return { renderHint: "link", linkTarget: { idField: "person_id", entityType: "persons" } };
+                }
+                return null;
+            }
+            if (drawer.type === "subscriptions") {
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                if (fieldKey === "primary_contact_id") {
+                    return { renderHint: "link", linkTarget: { idField: "primary_contact_id", entityType: "contacts" } };
+                }
+                return null;
+            }
+            if (drawer.type === "discount_redemptions") {
+                if (fieldKey === "customer_id") {
+                    return { renderHint: "link", linkTarget: { idField: "customer_id", entityType: "customers" } };
+                }
+                if (fieldKey === "contact_id") {
+                    return { renderHint: "link", linkTarget: { idField: "contact_id", entityType: "contacts" } };
+                }
+                if (fieldKey === "opportunity_id") {
+                    return { renderHint: "link", linkTarget: { idField: "opportunity_id", entityType: "opportunities" } };
+                }
+                if (fieldKey === "job_id") {
+                    return { renderHint: "link", linkTarget: { idField: "job_id", entityType: "jobs" } };
                 }
                 return null;
             }
@@ -3884,20 +3977,24 @@ export default function AdminEntityDrawer() {
                 record_info: 5,
             };
             const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
-            const unifiedPricing = getJobUnifiedPricingSection();
+            const overviewBilling = getJobOverviewBillingSummarySection();
             if (fromDefs.length === 0 && append.length === 0) {
                 const base = (getEntityPresentation("jobs").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
-                result = base.map((s) => (s.key === "pricing" ? unifiedPricing : s));
+                result = base.map((s) => (s.key === "pricing" ? overviewBilling : s));
             } else {
                 result = result
                     .filter((s) => s.key !== "discount" && s.key !== "job_pricing_summary")
                     .map((s) => ({
                         ...s,
-                        fields: s.fields.filter((f) => !jobDrawerPricingFieldKeys.has(f.key)),
+                        fields: s.fields.filter(
+                            (f) => !jobDrawerPricingFieldKeys.has(f.key) && !jobOverviewBillingFieldKeys.has(f.key)
+                        ),
                         subsections: s.subsections
                             ?.map((sub) => ({
                                 ...sub,
-                                fields: sub.fields.filter((f) => !jobDrawerPricingFieldKeys.has(f.key)),
+                                fields: sub.fields.filter(
+                                    (f) => !jobDrawerPricingFieldKeys.has(f.key) && !jobOverviewBillingFieldKeys.has(f.key)
+                                ),
                             }))
                             .filter((sub) => sub.fields.length > 0),
                     }))
@@ -3909,7 +4006,7 @@ export default function AdminEntityDrawer() {
                 const withoutPricing = result.filter((s) => s.key !== "pricing");
                 const notesIdx = withoutPricing.findIndex((s) => s.key === "notes");
                 const insertAt = notesIdx >= 0 ? notesIdx : withoutPricing.length;
-                result = [...withoutPricing.slice(0, insertAt), unifiedPricing, ...withoutPricing.slice(insertAt)];
+                result = [...withoutPricing.slice(0, insertAt), overviewBilling, ...withoutPricing.slice(insertAt)];
                 result.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
             }
         }
@@ -5369,6 +5466,37 @@ export default function AdminEntityDrawer() {
                                         <span>Vendor payable (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_vendor_payable_credits)}</span>
                                     </div>
                                     <p className="text-xs text-alloy-midnight/60 mt-2">Posted journal entries (schedule scope): {jobFinancials.posted_entries_count}</p>
+                                    {jobFinancials.schedules.length > 0 ? (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <table className="w-full text-sm border border-alloy-stone/20">
+                                                <thead>
+                                                    <tr className="border-b text-left text-alloy-midnight/70">
+                                                        <th className="py-1 pr-2">Visit (start)</th>
+                                                        <th className="py-1 pr-2">Status</th>
+                                                        <th className="py-1 pr-2">Price</th>
+                                                        <th className="py-1 pr-2">GL posted</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {jobFinancials.schedules.map((s) => (
+                                                        <tr key={s.id} className="border-b border-alloy-stone/10">
+                                                            <td className="py-1 pr-2">{s.start_at ? formatDateTime(s.start_at) : "—"}</td>
+                                                            <td className="py-1 pr-2">{s.status_key ?? "—"}</td>
+                                                            <td className="py-1 pr-2">
+                                                                {s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}
+                                                            </td>
+                                                            <td className="py-1 pr-2">{s.posted ? "Yes" : "No"}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
+                                                Billing model here: job-level payments (above) roll up all <span className="font-mono text-[11px]">payments</span>{" "}
+                                                rows; this table is per schedule with <span className="font-mono text-[11px]">schedule_completed</span> GL
+                                                entries when visits are completed and amounts post.
+                                            </p>
+                                        </div>
+                                    ) : null}
                                     {(() => {
                                         const t = jobFinancials.totals;
                                         const glSum =

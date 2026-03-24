@@ -194,10 +194,13 @@ export async function GET(
             }
             const verticalId = (data as { vertical_id?: string | null }).vertical_id;
             if (verticalId) {
-                const { data: vert } = await supabase.from("verticals").select("slug").eq("id", verticalId).maybeSingle();
-                out._vertical_slug = (vert as { slug?: string | null } | null)?.slug ?? null;
+                const { data: vert } = await supabase.from("verticals").select("slug, name").eq("id", verticalId).maybeSingle();
+                const vr = vert as { slug?: string | null; name?: string | null } | null;
+                out._vertical_slug = vr?.slug ?? null;
+                out._vertical_name = vr?.name ?? null;
             } else {
                 out._vertical_slug = null;
+                out._vertical_name = null;
             }
             const orgIdJob = (data as { org_id?: string }).org_id;
             let statusKey = (data as { status_key?: string | null }).status_key;
@@ -244,6 +247,13 @@ export async function GET(
                 discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
                 discount_code: (data as { discount_code?: string | null }).discount_code ?? null,
             });
+            const jobDprogId = (data as { discount_program_id?: string | null }).discount_program_id ?? null;
+            if (jobDprogId) {
+                const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", jobDprogId).maybeSingle();
+                out._discount_program_label = (dpr as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._discount_program_label = null;
+            }
             await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
             return NextResponse.json(out);
         }
@@ -289,8 +299,30 @@ export async function GET(
                 out._primary_person_id = null;
                 out._primary_person_name = null;
             }
-            out._stage_name = null;
-            out._pipeline_stage_name = null;
+            const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
+            if (oppPipelineStageId) {
+                const { data: stRow } = await supabase.from("pipeline_stages").select("name").eq("id", oppPipelineStageId).maybeSingle();
+                const stName = (stRow as { name?: string | null } | null)?.name ?? null;
+                out._pipeline_stage_name = stName;
+                out._stage_name = stName;
+            } else {
+                out._pipeline_stage_name = null;
+                out._stage_name = null;
+            }
+            const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
+            if (oppPipelineId) {
+                const { data: plRow } = await supabase.from("pipelines").select("name").eq("id", oppPipelineId).maybeSingle();
+                out._pipeline_name = (plRow as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._pipeline_name = null;
+            }
+            const oppDprogId = (opp as { discount_program_id?: string | null }).discount_program_id ?? null;
+            if (oppDprogId) {
+                const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", oppDprogId).maybeSingle();
+                out._discount_program_label = (dpr as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._discount_program_label = null;
+            }
             if (opp.vertical_id) {
                 const { data: vert } = await supabase.from("verticals").select("name").eq("id", opp.vertical_id).maybeSingle();
                 out._vertical_name = (vert as { name?: string | null } | null)?.name ?? null;
@@ -300,10 +332,13 @@ export async function GET(
             if (opp.location_id) {
                 const loc = await supabase.from("locations").select("id, label, address1, city, state, postal_code").eq("id", opp.location_id).maybeSingle();
                 const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null } | null;
-                out._location_name = l ? (l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null) : null;
+                const locLabel = l ? l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null : null;
+                out._location_name = locLabel;
+                out._location_label = locLabel;
                 out._location_id = opp.location_id;
             } else {
                 out._location_name = null;
+                out._location_label = null;
                 out._location_id = null;
             }
             const oppOrgId = (opp as { org_id?: string }).org_id;
@@ -549,13 +584,16 @@ export async function GET(
                 if (loc) {
                     const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
                     out._location_label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
+                    out._location_name = out._location_label;
                     out._location = loc;
                 } else {
                     out._location_label = null;
+                    out._location_name = null;
                     out._location = null;
                 }
             } else {
                 out._location_label = null;
+                out._location_name = null;
                 out._location = null;
             }
             const sched = schedule as { start_at?: string | null; end_at?: string | null };
@@ -925,6 +963,21 @@ export async function GET(
                 (sub as { service_type?: string | null }).service_type ??
                 (sub as { service_key?: string | null }).service_key ??
                 null;
+            const subPcId = (sub as { primary_contact_id?: string | null }).primary_contact_id ?? null;
+            if (subPcId) {
+                const { data: sct } = await supabase.from("contacts").select("first_name, last_name").eq("id", subPcId).maybeSingle();
+                const sc = sct as { first_name?: string | null; last_name?: string | null } | null;
+                out._primary_contact_name = sc ? [sc.first_name, sc.last_name].filter(Boolean).join(" ").trim() || null : null;
+            } else {
+                out._primary_contact_name = null;
+            }
+            const subVertId = (sub as { vertical_id?: string | null }).vertical_id ?? null;
+            if (subVertId) {
+                const { data: sv } = await supabase.from("verticals").select("name").eq("id", subVertId).maybeSingle();
+                out._vertical_name = (sv as { name?: string | null } | null)?.name ?? null;
+            } else {
+                out._vertical_name = null;
+            }
             return NextResponse.json(out);
         }
 

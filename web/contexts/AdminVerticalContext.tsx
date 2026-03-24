@@ -31,32 +31,12 @@ export function AdminVerticalProvider({ children }: { children: ReactNode }) {
     const [selectedVerticalId, setSelectedVerticalIdState] = useState<string | null>(null);
 
     useEffect(() => {
-        console.log("[AdminVertical DEBUG] fetch start", { path: "/api/admin/verticals" });
         fetch("/api/admin/verticals")
-            .then((res) => {
-                console.log("[AdminVertical DEBUG] fetch settled", { ok: res.ok, status: res.status });
-                return res.ok ? res.json() : [];
-            })
-            .then((data: Vertical[]) => {
-                const list = Array.isArray(data) ? data : [];
-                setVerticals(list);
-                console.log("[AdminVertical DEBUG] fetch success", { count: list.length });
-            })
-            .catch((e) => {
-                console.warn("[AdminVertical DEBUG] fetch failure", e);
-                setVerticals([]);
-            })
-            .finally(() => {
-                setLoading(false);
-                console.log("[AdminVertical DEBUG] fetch finished → loading false", {
-                    path: "/api/admin/verticals",
-                });
-            });
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data: Vertical[]) => setVerticals(Array.isArray(data) ? data : []))
+            .catch(() => setVerticals([]))
+            .finally(() => setLoading(false));
     }, []);
-
-    useEffect(() => {
-        console.log("[AdminVertical DEBUG] loading state changed", { loading });
-    }, [loading]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;

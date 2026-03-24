@@ -6,8 +6,6 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 
-let authDebugListenerAttached = false;
-
 export function createClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -18,17 +16,5 @@ export function createClient() {
         );
     }
 
-    const client = createBrowserClient(supabaseUrl, supabaseAnonKey);
-
-    if (typeof window !== "undefined" && !authDebugListenerAttached) {
-        authDebugListenerAttached = true;
-        client.auth.onAuthStateChange((event, session) => {
-            console.log("[SupabaseBrowser DEBUG] onAuthStateChange", event, {
-                hasSession: Boolean(session),
-                userId: session?.user?.id ?? null,
-            });
-        });
-    }
-
-    return client;
+    return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }

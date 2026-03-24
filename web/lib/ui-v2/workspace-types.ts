@@ -100,6 +100,10 @@ export type QueueVm = {
   viewAllActionId?: string;
   viewAllLabel?: string;
   /**
+   * Department rollup drill: passed in `queue.item.action` payload as `workUnitKey` when the lane opens a work-unit view.
+   */
+  drillWorkUnitKey?: string;
+  /**
    * Department surface: when present, lane renders as rollup groups (counts + descriptors),
    * not as item rows. Drill to work-unit list via `viewAllActionId`.
    */
@@ -113,6 +117,11 @@ export type QueueVm = {
    * Work-unit lane: `groupKey` → header label (emoji optional). UI appends “ (count)”.
    */
   workUnitGroupHeaders?: Record<string, { emoji?: string; label: string }>;
+  /**
+   * Work-unit lane: column headers for the two-cell midline (defaults: Window / Route).
+   * Use industry-native labels (e.g. Expiry · Binder for renewals).
+   */
+  workUnitMidlineKeys?: { left?: string; right?: string };
 };
 
 export type WorkStepVm = {
@@ -160,13 +169,16 @@ export type PrimaryActionVm = {
 
 export type ActionsVm = {
   primaries: PrimaryActionVm[];
+  /** Lower-priority actions; rendered in the collapsed “More actions” section (below AI suggestions). */
   overflow?: PrimaryActionVm[];
   /**
    * Department command rail — structured control panel. When any of these are set,
-   * the department surface renders System / Quick / Smart sections instead of a single primaries list.
+   * the surface renders primary card + operational card + AI + more (instead of a flat primaries list).
    */
   systemActions?: PrimaryActionVm[];
+  /** Operational actions card — row-style actions below primary solids (with any demoted systemActions[2+]). */
   quickOperations?: PrimaryActionVm[];
+  /** AI suggestions — separate light section below the operational card (not merged into one list). */
   smartSuggestions?: PrimaryActionVm[];
   /** Console-style status (e.g. automation / queue load). Not a narrative feed. */
   systemStatusLines?: string[];
@@ -180,11 +192,14 @@ export type ActionsVm = {
     nextAction?: string;
   };
   /**
-   * Record command rail — medium-emphasis actions (outline / compact buttons).
+   * Record command rail — operational card rows (user-driven actions).
    * When set on `surface === "record"`, replaces flat `quickOperations` for that tier.
    */
   recordSecondaryActions?: PrimaryActionVm[];
-  /** Record command rail — text-style / low-emphasis actions */
+  /**
+   * Record command rail — lower-priority actions in the collapsed “More actions” section
+   * (below AI suggestions), not inside the operational card.
+   */
   recordTertiaryActions?: PrimaryActionVm[];
 };
 
@@ -243,6 +258,10 @@ export type DepartmentWorkspaceModel = {
   latentWorkObjectQueues?: QueueVm[];
   workSummary?: WorkVm | null;
   actionsRail: ActionsVm;
+  /**
+   * Relationship groups — **not rendered** in the department workspace shell for now (keeps work surface clear).
+   * Adapters may still populate for future use; see docs/WORKSPACE_SYSTEM_V1.md.
+   */
   contextRail: ContextBlockVm;
 };
 
@@ -272,7 +291,17 @@ export type CompanyWorkspaceModel = {
   secondaryDepartments: CompanyDepartmentCardVm[];
   workSummary?: WorkVm | null;
   actionsRail: ActionsVm;
+  /**
+   * Relationship groups — **not rendered** in the company workspace shell for now.
+   * Adapters may still populate for future use; see docs/WORKSPACE_SYSTEM_V1.md.
+   */
   contextRail: ContextBlockVm;
+};
+
+/** Compact operator strip above the work-unit queue — one status line + one recommended action line. */
+export type WorkUnitLaneInterpretationVm = {
+  laneStatusLine: string;
+  recommendedActionLine: string;
 };
 
 export type WorkUnitWorkspaceModel = {
@@ -283,20 +312,31 @@ export type WorkUnitWorkspaceModel = {
   /** Stable lane key for analytics / routing */
   laneKey?: string;
   aiSummary?: AISummaryBandVm;
+  /**
+   * Light decision layer above the queue — why the lane matters and what to do next.
+   * Optional for backward compatibility; demo and rich lanes should populate.
+   */
+  laneInterpretation?: WorkUnitLaneInterpretationVm | null;
   signals: SignalVm[];
   kpis: KPIVm[];
   /** Dominant surface — structured queue of drillable records in this lane */
   primaryQueue: QueueVm;
   workSummary?: WorkVm | null;
   actionsRail: ActionsVm;
+  /**
+   * Relationship groups — **not rendered** in the work unit workspace shell for now.
+   * Adapters may still populate for future use; see docs/WORKSPACE_SYSTEM_V1.md.
+   */
   contextRail: ContextBlockVm;
 };
 
 /**
- * One compact operational line in the record body (inline, scannable — no label/value grid).
+ * One line in the record body. With `fieldLabel`, renders as a compact label/value row (object-control scan).
  */
 export type RecordSectionLineVm = {
   text: string;
+  /** When set, row renders as a definition-style field (label + value) instead of a prose line */
+  fieldLabel?: string;
   /** Visual weight: primary = ids, times, routes, names; muted = secondary context */
   tone?: "default" | "primary" | "muted";
   /** When set, entire line is a drillable link (`record.body.link`) */
@@ -310,12 +350,17 @@ export type RecordSectionLineVm = {
   rowKind?: "default" | "schedule" | "financial" | "document" | "tag";
 };
 
+/** Record body band — groups sections under State / Connections / History in the record shell. */
+export type RecordBodyBandId = "state" | "connections" | "history";
+
 export type RecordSectionVm = {
   id: string;
   title: string;
   lines: RecordSectionLineVm[];
   /** Notes / activity / events — compact bullets under the section */
   bullets?: string[];
+  /** When set, section renders under the matching body band (default: state). */
+  bodyBand?: RecordBodyBandId;
 };
 
 /** Small contextual action in record body side column (not command rail). */
@@ -378,9 +423,14 @@ export type RecordWorkspaceModel = {
   recordSections: RecordSectionVm[];
   /** Optional right column — customer / contact */
   recordContactContext?: RecordContactContextVm | null;
-  /** Optional right column — related / connected records */
+  /**
+   * Optional quick related list. Prefer normalizing into `contextRail` for the single **Related entities**
+   * aside card (Record workspace) to avoid duplicate “Related” + “Related entities” UI.
+   */
   recordRelatedContext?: RecordRelatedPanelVm | null;
-  /** Optional right column — recent activity (not duplicated in left `recordSections`) */
+  /**
+   * Recent activity lines — rendered at the **top of the workflows panel** on Record (not in the body aside).
+   */
   recordActivityContext?: RecordActivityPanelVm | null;
   /**
    * Optional assignment / people context (e.g. for adapters or alternate layouts).
@@ -389,6 +439,10 @@ export type RecordWorkspaceModel = {
   recordAssignmentContext?: RecordAssignmentContextVm | null;
   workSummary?: WorkVm | null;
   actionsRail: ActionsVm;
+  /**
+   * Relationship / linked-entity groups for **main column** context on Record (embedded next to contact / related / activity).
+   * Not shown in the right command rail — see docs/WORKSPACE_SYSTEM_V1.md.
+   */
   contextRail: ContextBlockVm;
 };
 

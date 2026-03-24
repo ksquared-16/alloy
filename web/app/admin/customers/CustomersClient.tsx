@@ -4,7 +4,6 @@ import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
@@ -45,8 +44,7 @@ export interface Customer {
 type StatusOption = { status_key: string; status_label: string | null };
 
 export default function CustomersClient() {
-  const { openDrawer } = useAdminDrawer();
-  const { openPreview, preview } = useAdminPreview();
+  const { openDrawer, drawer } = useAdminDrawer();
   const { selectedVerticalId } = useAdminVertical();
   const { labels } = useEntityLabels();
   const searchParams = useSearchParams();
@@ -215,11 +213,10 @@ export default function CustomersClient() {
             data={data}
             columns={columns}
             filters={[]}
-            onRowClick={(row, e) => {
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              openPreview({ type: "customers", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
+            onRowClick={(row) => {
+              openDrawer({ type: "customers", id: row.id });
             }}
-            highlightedRowId={preview?.type === "customers" ? preview.id : null}
+            highlightedRowId={drawer.type === "customers" ? drawer.id : null}
           />
         )}
       </div>

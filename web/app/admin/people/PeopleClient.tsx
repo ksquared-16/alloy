@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DataTable from "@/components/admin/DataTable";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { formatDateTime } from "@/lib/adminFormatters";
@@ -26,8 +25,7 @@ type PersonRow = {
 };
 
 export default function PeopleClient() {
-    const { openDrawer } = useAdminDrawer();
-    const { openPreview, preview } = useAdminPreview();
+    const { openDrawer, drawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
     const [persons, setPersons] = useState<PersonRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -151,11 +149,10 @@ export default function PeopleClient() {
                         data={filteredData}
                         columns={columns}
                         filters={[]}
-                        onRowClick={(row, e) => {
-                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                          openPreview({ type: "persons", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
+                        onRowClick={(row) => {
+                          openDrawer({ type: "persons", id: row.id });
                         }}
-                        highlightedRowId={preview?.type === "persons" ? preview.id : null}
+                        highlightedRowId={drawer.type === "persons" ? drawer.id : null}
                       />
                 )}
             </div>

@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { DepartmentWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ContextBlock, ActionsBlock } from "../blocks";
+import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
 import "../workspace.css";
 
 type Props = {
@@ -158,10 +158,9 @@ export default function DepartmentWorkspace({ model, onAction }: Props) {
             <aside
               className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
               data-adminv2-workspace-command-rail
-              aria-label="Command center and context"
+              aria-label="Decisions and actions"
             >
               <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="department" />
-              <ContextBlock model={model.contextRail} onAction={onAction} surface="department" />
             </aside>
           </div>
         </div>

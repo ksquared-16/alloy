@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ContextBlock, ActionsBlock } from "../blocks";
+import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
 import "../workspace.css";
 
 type Props = {
@@ -60,6 +60,11 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
   const hasTopStack = hasBrief || hasSignals || hasAwareness;
   const hasControlDeck = hasTopStack || hasKpis;
   const focusKicker = model.focusLabel?.trim() || "Work unit";
+
+  const li = model.laneInterpretation;
+  const statusLine = li?.laneStatusLine?.trim() ?? "";
+  const recLine = li?.recommendedActionLine?.trim() ?? "";
+  const hasLaneStrip = Boolean(statusLine || recLine);
 
   return (
     <div
@@ -126,6 +131,22 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
                 data-ws-lane-drill-queue={model.primaryQueue.id}
               >
                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
+                  {hasLaneStrip ? (
+                    <div className="adminv2-ws-wu-lane-strip" aria-label="Lane status">
+                      {statusLine ? (
+                        <p className="adminv2-ws-wu-lane-strip-line">
+                          <span className="adminv2-ws-wu-lane-strip-k">Lane status</span>
+                          {statusLine}
+                        </p>
+                      ) : null}
+                      {recLine ? (
+                        <p className="adminv2-ws-wu-lane-strip-line">
+                          <span className="adminv2-ws-wu-lane-strip-k">Recommended</span>
+                          {recLine}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <QueueBlock queue={model.primaryQueue} onAction={onAction} variant="primary" surface="work_unit" />
                 </div>
               </div>
@@ -144,10 +165,9 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
             <aside
               className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
               data-adminv2-workspace-command-rail
-              aria-label="Command center and context"
+              aria-label="Decisions and actions"
             >
               <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="work_unit" />
-              <ContextBlock model={model.contextRail} onAction={onAction} surface="work_unit" />
             </aside>
           </div>
         </div>

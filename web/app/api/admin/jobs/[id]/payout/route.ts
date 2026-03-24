@@ -8,10 +8,12 @@ import {
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
 import { normalizeJobDiscountAmountToCents } from "@/lib/admin/jobDisplayPrice";
+import { effectiveScheduleStatusKey, fetchScheduleStatusKeyByFk } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 type ScheduleRow = {
     id: string;
     status_key: string | null;
+    schedule_status_id?: string | null;
     start_at: string | null;
     created_at?: string | null;
     assigned_vendor_id?: string | null;
@@ -62,7 +64,7 @@ export async function GET(
 
     const { data: scheduleRows, error: schedErr } = await supabase
         .from("schedules")
-        .select("id, status_key, start_at, created_at, assigned_vendor_id, price_cents")
+        .select("id, status_key, schedule_status_id, start_at, created_at, assigned_vendor_id, price_cents")
         .eq("org_id", ctx.orgId)
         .eq("job_id", jobId)
         .order("start_at", { ascending: true, nullsFirst: false });
@@ -70,6 +72,10 @@ export async function GET(
     if (schedErr) return NextResponse.json({ error: schedErr.message }, { status: 500 });
 
     const rows = (scheduleRows ?? []) as ScheduleRow[];
+    const statusKeyByFk = await fetchScheduleStatusKeyByFk(
+        supabase,
+        rows.map((r) => r.schedule_status_id)
+    );
     const ordered = [...rows].sort((a, b) => {
         const ta = a.start_at ?? a.created_at ?? "";
         const tb = b.start_at ?? b.created_at ?? "";
@@ -99,7 +105,8 @@ export async function GET(
         const { policy } = resolveVendorPayoutPolicy({ orgSettings, vendor });
         const completedStatusKey = policy.completed_status_key ?? "completed";
         const completedStatusKeyNorm = String(completedStatusKey).trim().toLowerCase();
-        const rowStatusNorm = String(row.status_key ?? "").trim().toLowerCase();
+        const effectiveKey = effectiveScheduleStatusKey(row, statusKeyByFk);
+        const rowStatusNorm = String(effectiveKey ?? "").trim().toLowerCase();
         const isCompleted = rowStatusNorm === completedStatusKeyNorm;
 
         const basis =
@@ -130,7 +137,7 @@ export async function GET(
         return {
             schedule_id: row.id,
             assigned_vendor_id: scheduleVendorId,
-            status_key: row.status_key ?? null,
+            status_key: effectiveKey ?? row.status_key ?? null,
             scheduled_at: row.start_at ?? null,
             completed_at: null as string | null,
             occurrence_number: occurrenceNumber,
@@ -158,15 +165,18 @@ export async function GET(
     let completedOccurrencesForCurrentVendor = 0;
     if (jobPolicy.mode === "tiered" && jobAssignedVendorId) {
         if (jobBasis === basisJob) {
-            completedOccurrencesForCurrentVendor = ordered.filter(
-                (r) => String(r.status_key ?? "").trim().toLowerCase() === completedStatusKeyNorm
-            ).length;
+            completedOccurrencesForCurrentVendor = ordered.filter((r) => {
+                const eff = effectiveScheduleStatusKey(r, statusKeyByFk);
+                return String(eff ?? r.status_key ?? "").trim().toLowerCase() === completedStatusKeyNorm;
+            }).length;
         } else {
-            completedOccurrencesForCurrentVendor = ordered.filter(
-                (r) =>
-                    String(r.status_key ?? "").trim().toLowerCase() === completedStatusKeyNorm &&
+            completedOccurrencesForCurrentVendor = ordered.filter((r) => {
+                const eff = effectiveScheduleStatusKey(r, statusKeyByFk);
+                return (
+                    String(eff ?? r.status_key ?? "").trim().toLowerCase() === completedStatusKeyNorm &&
                     (r.assigned_vendor_id ?? null) === jobAssignedVendorId
-            ).length;
+                );
+            }).length;
         }
     }
 
@@ -180,7 +190,8 @@ export async function GET(
         const effective_price_cents = row
             ? (row.price_cents ?? jobNetCents)
             : 0;
-        const rowStatusNorm = String(row?.status_key ?? "").trim().toLowerCase();
+        const rowEff = row ? effectiveScheduleStatusKey(row, statusKeyByFk) : null;
+        const rowStatusNorm = String(rowEff ?? row?.status_key ?? "").trim().toLowerCase();
         const isCompleted = rowStatusNorm === completedStatusKeyNorm;
         const payoutPercent = s.payout_percent;
         const payout_cents =

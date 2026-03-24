@@ -46,12 +46,6 @@ function LoginForm() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log("[SupabaseBrowser DEBUG] after signIn getSession", {
-        hasSession: Boolean(sessionData.session),
-        userId: sessionData.session?.user?.id ?? null,
-      });
-
       router.push("/admin");
       router.refresh();
     } catch (err: unknown) {

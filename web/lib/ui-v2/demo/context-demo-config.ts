@@ -38,7 +38,8 @@ export const DEMO_CLEANING_CONTEXT_CONFIG: ContextBlockConfig = {
       label: "Site contacts",
       source: { relationship_type_keys: ["site_contact", "property_manager"], entity_type: "person" },
       order: 1,
-      visibility: { levels: ["department", "work_unit", "record"] },
+      /** Record aside: customer + route/account only — not site contacts. */
+      visibility: { levels: ["department", "work_unit"] },
       display: {
         style: "list",
         max_items: 4,
@@ -136,7 +137,7 @@ export const DEMO_INSURANCE_CONTEXT_CONFIG: ContextBlockConfig = {
   ],
 };
 
-/** Home cleaning — org-level context (Command center · Context & support) */
+/** Home cleaning — org-level context (primary column when embedded) */
 export const DEMO_COMPANY_CLEANING_CONTEXT_CONFIG: ContextBlockConfig = {
   block: "context",
   entity_type: "organization",

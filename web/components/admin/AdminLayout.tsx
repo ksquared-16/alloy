@@ -25,9 +25,7 @@ import {
 } from "lucide-react";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
-import { AdminPreviewProvider } from "@/contexts/AdminPreviewContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
-import RecordPreviewPanel from "@/components/admin/RecordPreviewPanel";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
 import {
     EntityLabelsProvider,
@@ -183,49 +181,11 @@ function getInitials(email: string): string {
     return (part.slice(0, 2) || "?").toUpperCase();
 }
 
-export type AdminDebugBootstrap = {
-    authUserId: string;
-    authRole: string;
-    orgId: string;
-    initialLabelKeyCount: number;
-    labelsServerLoadOk: boolean;
-};
-
 interface AdminLayoutProps {
     children: ReactNode;
     userEmail: string;
     role: string;
     initialEntityLabels?: EntityLabelsMap;
-    /** Temporary: server-passed bootstrap diagnostics */
-    adminDebugBootstrap?: AdminDebugBootstrap;
-}
-
-function AdminBootstrapDebugStrip(props: {
-    bootstrap?: AdminDebugBootstrap;
-    verticalsLoading: boolean;
-    labelsLoading: boolean;
-    contextBooting: boolean;
-}) {
-    const b = props.bootstrap;
-    return (
-        <div
-            className="fixed bottom-0 left-0 right-0 z-[100] border-t border-violet-500/80 bg-violet-950/95 px-3 py-2 font-mono text-[10px] leading-tight text-violet-100 shadow-lg"
-            data-debug="admin-bootstrap-strip"
-        >
-            <div className="font-semibold text-violet-300 mb-0.5">Admin bootstrap debug (remove me)</div>
-            <div className="grid gap-0.5 sm:grid-cols-2 lg:grid-cols-3">
-                <div>authUserId: {b?.authUserId ?? "—"}</div>
-                <div>authRole: {b?.authRole ?? "—"}</div>
-                <div className="break-all">orgId: {b?.orgId ?? "—"}</div>
-                <div>server initialLabelKeys: {b != null ? String(b.initialLabelKeyCount) : "—"}</div>
-                <div>server labelsLoadOk: {b != null ? String(b.labelsServerLoadOk) : "—"}</div>
-                <div>labelsLoaded (client !loading): {String(!props.labelsLoading)}</div>
-                <div>verticalsLoading: {String(props.verticalsLoading)}</div>
-                <div>labelsLoading: {String(props.labelsLoading)}</div>
-                <div>contextBooting: {String(props.contextBooting)}</div>
-            </div>
-        </div>
-    );
 }
 
 function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boolean): string {
@@ -236,12 +196,7 @@ function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boo
     return link.label;
 }
 
-function AdminLayoutInner({
-    children,
-    userEmail,
-    role,
-    adminDebugBootstrap,
-}: Omit<AdminLayoutProps, "initialEntityLabels">) {
+function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, "initialEntityLabels">) {
     const pathname = usePathname();
     const router = useRouter();
     const sidebarScrollRef = useRef<HTMLElement | null>(null);
@@ -324,38 +279,16 @@ function AdminLayoutInner({
 
     const contextBooting = verticalsLoading && labelsLoading;
 
-    useEffect(() => {
-        console.log("[AdminLayout DEBUG]", {
-            verticalsLoading,
-            labelsLoading,
-            contextBooting,
-            verticalsCount: verticals.length,
-            labelKeysCount: Object.keys(labels).length,
-        });
-    }, [verticalsLoading, labelsLoading, contextBooting, verticals.length, labels]);
-
     if (contextBooting) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-admin-page p-6 pb-24 text-alloy-midnight">
-                <div className="text-sm">Loading context...</div>
-                <AdminBootstrapDebugStrip
-                    bootstrap={adminDebugBootstrap}
-                    verticalsLoading={verticalsLoading}
-                    labelsLoading={labelsLoading}
-                    contextBooting={contextBooting}
-                />
+            <div className="min-h-screen flex items-center justify-center bg-admin-page p-6 text-alloy-midnight">
+                Loading context...
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-admin-page flex flex-col pb-24">
-            <AdminBootstrapDebugStrip
-                bootstrap={adminDebugBootstrap}
-                verticalsLoading={verticalsLoading}
-                labelsLoading={labelsLoading}
-                contextBooting={contextBooting}
-            />
+        <div className="min-h-screen bg-admin-page flex flex-col">
             {/* Full-width Alloy Blue top bar: logo left, vertical + avatar right */}
             <header className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-3 bg-alloy-blue border-b border-[var(--color-admin-topbar-divider)]">
                 <Link href="/admin" className="flex items-center gap-3 py-1" aria-label="Home">
@@ -508,11 +441,8 @@ function AdminLayoutInner({
                 <main className="flex-1 overflow-auto flex flex-col bg-admin-page">
                     <div className="p-8 flex-1">
                         <AdminDrawerProvider>
-                            <AdminPreviewProvider>
-                                {children}
-                                <RecordPreviewPanel />
-                                <AdminEntityDrawer />
-                            </AdminPreviewProvider>
+                            {children}
+                            <AdminEntityDrawer />
                         </AdminDrawerProvider>
                     </div>
                 </main>
@@ -522,18 +452,14 @@ function AdminLayoutInner({
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
-    const { initialEntityLabels, userEmail, role, children, adminDebugBootstrap } = props;
+    const { initialEntityLabels, userEmail, role, children } = props;
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeRole = typeof role === "string" ? role : "";
     return (
         <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
             <AdminVerticalProvider>
                 <EntityLabelsProvider initialLabels={initialEntityLabels}>
-                    <AdminLayoutInner
-                        userEmail={safeEmail}
-                        role={safeRole}
-                        adminDebugBootstrap={adminDebugBootstrap}
-                    >
+                    <AdminLayoutInner userEmail={safeEmail} role={safeRole}>
                         {children}
                     </AdminLayoutInner>
                 </EntityLabelsProvider>

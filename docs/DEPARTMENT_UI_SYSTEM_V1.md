@@ -2,6 +2,8 @@
 
 Internal product + design + system reference. Describes the **Department** surface as implemented for AdminV2 / UI V2 workspaces. Use this to extend **Org → Work Unit → Record** views without drifting layout, meaning, or visual grammar.
 
+**Shared column contract (all levels):** see [Workspace system — v1](./WORKSPACE_SYSTEM_V1.md) (left = context/state, right = actions; Record is the reference for rail without generic context).
+
 ---
 
 ## 1. Overview
@@ -51,7 +53,7 @@ Department is the **middle layer**: dense enough to run the day, abstract enough
 - **Clear separation of concerns**  
   - **Context** — narrative focus + signals + KPIs (left primary column, top).  
   - **Work** — throughput + attention rollups (primary column, middle).  
-  - **Execution** — command center (right rail).  
+  - **Execution** — command rail (**actions only**); cross-cutting relationship panels for department are **deferred** (see [Workspace system v1](./WORKSPACE_SYSTEM_V1.md)).  
   - **Execution visibility** — workflows (primary column, bottom).
 
 ---

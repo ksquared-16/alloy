@@ -90,18 +90,6 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    if (pathname.startsWith("/admin")) {
-        const allNames = request.cookies.getAll().map((c) => c.name);
-        const sbNames = allNames.filter((n) => n.startsWith("sb-"));
-        console.log("[MIDDLEWARE DEBUG]", {
-            path: pathname,
-            sbCookieNames: sbNames,
-            cookieNameCount: allNames.length,
-            hasUser: Boolean(user),
-            userId: user?.id ?? null,
-        });
-    }
-
     if (!pathname.startsWith("/admin")) {
         return response;
     }
@@ -113,10 +101,6 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!user) {
-        console.warn(
-            "[MIDDLEWARE /admin] redirect → /login: no user (cookies missing or session not readable on this request)",
-            { path: pathname }
-        );
         const res = NextResponse.redirect(new URL("/login", request.url));
         res.headers.set("x-alloy-admin-mw", "redirect:/login");
         return res;

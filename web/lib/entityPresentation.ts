@@ -136,6 +136,41 @@ export function getJobUnifiedPricingSection(): EntityDrawerSectionConfig {
   };
 }
 
+/**
+ * Job **Overview** billing block: plan hint + priced total + payment rollup only.
+ * Per-visit detail belongs on Related / Financials / schedule records; full line-item pricing stays on the Financials tab and inline job sections.
+ */
+export function getJobOverviewBillingSummarySection(): EntityDrawerSectionConfig {
+  return {
+    key: "pricing",
+    title: "Billing summary",
+    defaultExpanded: false,
+    collapsible: true,
+    gridCols: 2,
+    fields: [],
+    locked: true,
+    subsections: [
+      {
+        title: "Plan",
+        fields: [
+          { key: "service_frequency_key", label: "Service frequency", span: 1, renderHint: "text", editable: false },
+          { key: "is_recurring", label: "Recurring job", span: 1, renderHint: "primary_yes_no", editable: false },
+        ],
+      },
+      {
+        title: "Totals & payment status",
+        fields: [
+          { key: "display_total_cents", label: "Job total (priced)", span: 1, renderHint: "money", editable: false },
+          { key: "recurring_total_cents", label: "Recurring total", span: 1, renderHint: "money", editable: false },
+          { key: "_job_payment_paid_cents", label: "Total paid", span: 1, renderHint: "money", editable: false },
+          { key: "_job_payment_balance_cents", label: "Balance due", span: 1, renderHint: "money", editable: false },
+          { key: "_job_payment_status_label", label: "Payment state", span: 1, renderHint: "text", editable: false },
+        ],
+      },
+    ],
+  };
+}
+
 /** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
 export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "payments" | "documents" | "ledger";
 
@@ -598,7 +633,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           ],
           locked: true,
         },
-        getJobUnifiedPricingSection(),
+        getJobOverviewBillingSummarySection(),
         {
           key: "notes",
           title: "Notes",

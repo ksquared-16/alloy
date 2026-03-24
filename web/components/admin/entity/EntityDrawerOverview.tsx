@@ -6,6 +6,7 @@ import { formatDate, formatDateTime, formatMoney, formatMoneyFromCents, formatPh
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
+import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
 
 const INLINE_EDIT_INPUT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
 const INLINE_EDIT_SELECT = "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none disabled:opacity-60";
@@ -67,15 +68,22 @@ function formatFieldValue(
     }
     case "link":
       if (field.linkTarget && record && onOpenDrawer) {
-        const id = record[field.linkTarget.idField];
+        const idField = field.linkTarget.idField;
+        const id = record[idField];
         if (id != null && String(id).trim() !== "") {
+          const labelFromRecord = resolveOverviewRelationshipLabel(record, field.key, { linkIdField: idField });
+          const uuidLike = isUuidLike(value);
+          const displayText =
+            labelFromRecord ??
+            (!uuidLike && value != null && String(value).trim() !== "" ? String(value) : null) ??
+            String(id).slice(0, 8) + "…";
           return (
             <button
               type="button"
               onClick={() => onOpenDrawer(field.linkTarget!.entityType, String(id))}
               className="text-alloy-blue hover:underline text-left"
             >
-              {String(value)}
+              {displayText}
             </button>
           );
         }
@@ -87,6 +95,10 @@ function formatFieldValue(
     case "custom":
     default:
       if (key === "payout_percent") return formatPayoutPercent(value as number | null | undefined);
+      if (record && isUuidLike(value)) {
+        const rel = resolveOverviewRelationshipLabel(record, key);
+        if (rel) return rel;
+      }
       return String(value);
   }
 }
@@ -302,7 +314,7 @@ export default function EntityDrawerOverview({
 
   const renderOverviewField = (field: EntityDrawerFieldConfig): ReactNode => {
     const key = field.key;
-    const displayFallback =
+    let displayFallback: unknown =
       key === "_status_display"
         ? record._status_display
         : key === "status_key" && record._status_display != null
@@ -311,25 +323,43 @@ export default function EntityDrawerOverview({
           ? String(record._vendor_name ?? record._assigned_vendor_name)
           : key === "pipeline_stage_id" && record._pipeline_stage_name != null
             ? record._pipeline_stage_name
-            : key === "vertical_id" && record._vertical_name != null
-              ? record._vertical_name
-              : key === "location_id" && record._location_name != null
-                ? record._location_name
-                : key === "primary_person_id" && record._primary_person_name != null
-                  ? record._primary_person_name
-                  : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
-                    ? (record._primary_contact_name ?? record._contact_name)
-                    : key === "customer_id" && record._customer_name != null
-                      ? record._customer_name
-                      : key === "opportunity_id" && record._opportunity_name != null
-                        ? record._opportunity_name
-                        : key === "job_id" && record._job_title != null
-                          ? String(record._job_title)
-                          : key === "customer_subscription_id" && record._customer_subscription_label != null
-                            ? String(record._customer_subscription_label)
-                            : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
-                              ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
-                              : undefined;
+            : key === "pipeline_id" && record._pipeline_name != null
+              ? record._pipeline_name
+              : key === "discount_program_id" && record._discount_program_label != null
+                ? record._discount_program_label
+              : key === "vertical_id" && record._vertical_name != null
+                ? record._vertical_name
+                : key === "location_id" && (record._location_label != null || record._location_name != null)
+                  ? String(record._location_label ?? record._location_name)
+                  : key === "primary_person_id" && record._primary_person_name != null
+                    ? record._primary_person_name
+                    : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)
+                      ? (record._primary_contact_name ?? record._contact_name)
+                      : key === "contact_id" && (record._primary_contact_name != null || record._contact_name != null)
+                        ? (record._primary_contact_name ?? record._contact_name)
+                      : key === "customer_id" && record._customer_name != null
+                        ? record._customer_name
+                        : key === "opportunity_id" && record._opportunity_name != null
+                          ? record._opportunity_name
+                          : key === "job_id" && (record._job_title != null || record._job_label != null)
+                            ? String(record._job_title ?? record._job_label)
+                            : key === "customer_subscription_id" && record._customer_subscription_label != null
+                              ? String(record._customer_subscription_label)
+                              : key === "discount_code_id" && (record.discount_code != null || record._discount_label != null)
+                                ? String(record.discount_code ?? record._discount_label ?? "").trim() || undefined
+                                : key === "_customer_name" && record._customer_name != null
+                                  ? String(record._customer_name)
+                                  : key === "_location_name" && (record._location_name != null || record._location_label != null)
+                                    ? String(record._location_name ?? record._location_label)
+                                    : key === "_opportunity_name" && record._opportunity_name != null
+                                      ? String(record._opportunity_name)
+                                      : key === "_primary_person_name" && record._primary_person_name != null
+                                        ? String(record._primary_person_name)
+                                        : undefined;
+    if (displayFallback === undefined) {
+      const resolved = resolveOverviewRelationshipLabel(record, key);
+      if (resolved != null) displayFallback = resolved;
+    }
     const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
     const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
     const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;

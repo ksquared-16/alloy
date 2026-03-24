@@ -9,7 +9,38 @@ type Props = {
   onAction: WorkspaceActionHandler;
   mode?: "full" | "summary";
   surface?: "default" | "department" | "company" | "work_unit" | "record";
+  /** Record summary only — compact strip at top of workflows panel (automation-adjacent timeline). */
+  recordRecentActivity?: string[];
+  /** When false, activity list has no inner “Recent activity” label (parent band provides hierarchy). */
+  recordActivityShowKicker?: boolean;
 };
+
+/** Record-only: compact activity timeline above the workflows table. */
+export function RecordWorkflowActivityLead({
+  events,
+  showKicker = true,
+}: {
+  events: string[];
+  /** When false, list only (e.g. under a parent “History” band heading). */
+  showKicker?: boolean;
+}) {
+  const lines = events.filter((e) => e.trim());
+  if (lines.length === 0) return null;
+  return (
+    <div className="adminv2-ws-record-workflow-activity-lead" aria-label="Recent activity">
+      {showKicker ? (
+        <div className="adminv2-ws-record-workflow-activity-lead-kicker">Recent activity</div>
+      ) : null}
+      <ul className="adminv2-ws-record-workflow-activity-lead-list" role="list">
+        {lines.slice(0, 4).map((line, i) => (
+          <li key={`rec-act-${i}`} className="adminv2-ws-record-workflow-activity-lead-item">
+            {line}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function statusLabel(s: WorkflowRunStatusVm): string {
   switch (s) {
@@ -33,7 +64,14 @@ function workflowRunsForDisplay(work: WorkVm): WorkflowRunVm[] {
   }));
 }
 
-export default function WorkBlock({ work, onAction, mode = "full", surface = "default" }: Props) {
+export default function WorkBlock({
+  work,
+  onAction,
+  mode = "full",
+  surface = "default",
+  recordRecentActivity,
+  recordActivityShowKicker = true,
+}: Props) {
   const showOpenExecution = mode === "full";
   const deptWorkflows =
     (surface === "department" ||
@@ -143,9 +181,15 @@ export default function WorkBlock({ work, onAction, mode = "full", surface = "de
     </>
   );
 
+  const recordActivityLead =
+    surface === "record" && recordRecentActivity && recordRecentActivity.length > 0 ? (
+      <RecordWorkflowActivityLead events={recordRecentActivity} showKicker={recordActivityShowKicker} />
+    ) : null;
+
   if (deptWorkflows) {
     return (
       <div className="adminv2-ws-dept-workflows-panel">
+        {recordActivityLead}
         <div className="adminv2-ws-dept-workflows-toolbar">
           <div className="adminv2-ws-dept-workflows-toolbar-zone adminv2-ws-dept-workflows-toolbar-zone--left">
             <span className="adminv2-ws-dept-workflows-toolbar-kicker">Automation &amp; workflows</span>

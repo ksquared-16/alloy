@@ -9,6 +9,11 @@ type Props = {
   model: ContextBlockVm;
   onAction: WorkspaceActionHandler;
   surface?: "default" | "department" | "company" | "work_unit" | "record";
+  /**
+   * `rail` — legacy command column (avoid for workspace shells; prefer `embedded`).
+   * `embedded` — primary/main column: entity-linked groups only, no “Context & support” kicker; nothing if no groups.
+   */
+  layout?: "rail" | "embedded";
 };
 
 function GroupSection({
@@ -173,13 +178,58 @@ function GroupSection({
  * Relationship-aware context: renders normalized groups only.
  * Config → view model happens in adapters (normalizeContextRelationshipGroups).
  */
-export default function ContextBlock({ model, onAction, surface = "default" }: Props) {
+export default function ContextBlock({
+  model,
+  onAction,
+  surface = "default",
+  layout = "rail",
+}: Props) {
   const sorted = useMemo(
     () => [...model.groups].sort((a, b) => a.order - b.order),
     [model.groups]
   );
 
   if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
+    if (layout === "embedded") {
+      if (sorted.length === 0) return null;
+      const defaultKicker =
+        surface === "record"
+          ? "Related entities"
+          : surface === "company"
+            ? "Organization context"
+            : surface === "department"
+              ? "Department context"
+              : "Lane context";
+      const kicker = model.title?.trim() || defaultKicker;
+      const isRecordAside = surface === "record";
+      return (
+        <div
+          className={[
+            "adminv2-ws-context-embedded",
+            isRecordAside
+              ? "adminv2-ws-context-embedded--record-aside adminv2-ws-record-interaction-panel adminv2-ws-record-interaction-panel--context-soft"
+              : "adminv2-ws-context-embedded--primary",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label={kicker}
+        >
+          <h3
+            className={
+              isRecordAside
+                ? "adminv2-ws-record-interaction-panel-title"
+                : "adminv2-ws-context-embedded-title"
+            }
+          >
+            {kicker}
+          </h3>
+          {sorted.map((g) => (
+            <GroupSection key={g.key} group={g} onAction={onAction} surface={surface} />
+          ))}
+        </div>
+      );
+    }
+
     return (
       <div className="adminv2-ws-context-rail">
         {model.title && <div className="adminv2-ws-context-rail-kicker">{model.title}</div>}

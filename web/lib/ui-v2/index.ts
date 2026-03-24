@@ -9,3 +9,4 @@ export * from "./demo/department-demos";
 export * from "./demo/context-demo-config";
 export * from "./demo/work-unit-demo";
 export * from "./demo/record-demo";
+export * from "./demo/industry-workspace-registry";

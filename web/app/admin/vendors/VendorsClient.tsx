@@ -6,7 +6,6 @@ import DataTable from "@/components/admin/DataTable";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
 import { formatPayoutPercent } from "@/lib/adminFormatters";
 import { Filter } from "lucide-react";
@@ -52,8 +51,7 @@ export default function VendorsClient({
     initialData,
     error,
 }: VendorsClientProps) {
-    const { openDrawer } = useAdminDrawer();
-    const { openPreview, preview } = useAdminPreview();
+    const { openDrawer, drawer } = useAdminDrawer();
     const { labels } = useEntityLabels();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -209,11 +207,10 @@ export default function VendorsClient({
                     filters={[]}
                     searchable={false}
                     hideToolbar
-                    onRowClick={(row, e) => {
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      openPreview({ type: "vendors", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
+                    onRowClick={(row) => {
+                      openDrawer({ type: "vendors", id: row.id });
                     }}
-                    highlightedRowId={preview?.type === "vendors" ? preview.id : null}
+                    highlightedRowId={drawer.type === "vendors" ? drawer.id : null}
                   />
             </div>
         </div>

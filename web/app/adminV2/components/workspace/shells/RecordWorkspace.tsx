@@ -2,12 +2,13 @@
 
 import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import type { RecordWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import type { RecordSectionVm, RecordWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import {
   SignalBlock,
   KPIBlock,
   WorkBlock,
+  RecordWorkflowActivityLead,
   ContextBlock,
   ActionsBlock,
   RecordBodyBlock,
@@ -51,9 +52,22 @@ const recordRootStyle: CSSProperties = {
   ["--d-card-shadow" as string]: derived.cardShadow,
 };
 
+function partitionRecordSections(sections: RecordSectionVm[]) {
+  const state: RecordSectionVm[] = [];
+  const connections: RecordSectionVm[] = [];
+  const history: RecordSectionVm[] = [];
+  for (const s of sections) {
+    const b = s.bodyBand ?? "state";
+    if (b === "connections") connections.push(s);
+    else if (b === "history") history.push(s);
+    else state.push(s);
+  }
+  return { state, connections, history };
+}
+
 /**
- * Record — final drill level: same shell grammar (control deck, optional compact KPIs, primary column, workflows, command rail).
- * Main surface: left = core record (what it is); right = contact, related objects, recent activity. No inline AI form.
+ * Record — final drill level: shared workspace pattern (see docs/WORKSPACE_SYSTEM_V1.md).
+ * Left = understanding (body + entity/interaction context). Right = actions only (command rail).
  */
 export default function RecordWorkspace({ model, onAction }: Props) {
   const briefParagraphs =
@@ -70,11 +84,14 @@ export default function RecordWorkspace({ model, onAction }: Props) {
   const hasTopStack = hasBrief || hasSignals || hasAwareness;
   const hasControlDeck = hasTopStack || hasKpis;
   const focusKicker = model.focusLabel?.trim() || model.entityType || "Record";
-  const hasInteractionColumn = Boolean(
-    model.recordContactContext ||
-      (model.recordRelatedContext?.items && model.recordRelatedContext.items.length > 0) ||
-      (model.recordActivityContext?.events && model.recordActivityContext.events.length > 0)
-  );
+  const hasContextGroups = (model.contextRail?.groups?.length ?? 0) > 0;
+  const activityEvents = model.recordActivityContext?.events?.filter((e) => e.trim()) ?? [];
+  const { state: stateSections, connections: connectionsSections, history: historySections } =
+    partitionRecordSections(model.recordSections);
+  const showConnectionsBand =
+    Boolean(model.recordContactContext) || hasContextGroups || connectionsSections.length > 0;
+  const showHistoryBand =
+    historySections.length > 0 || activityEvents.length > 0 || Boolean(model.workSummary);
 
   return (
     <div
@@ -142,35 +159,90 @@ export default function RecordWorkspace({ model, onAction }: Props) {
               >
                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
                   <div className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-record-body-root">
-                    {hasInteractionColumn ? (
-                      <div className="adminv2-ws-record-body-split">
-                        <div className="adminv2-ws-record-body-split-main">
-                          <RecordBodyBlock
-                            recordId={model.recordId}
-                            sections={model.recordSections}
-                            onAction={onAction}
-                          />
+                    <div className="adminv2-ws-record-body-bands" aria-label="Record body">
+                      {stateSections.length > 0 ? (
+                        <div className="adminv2-ws-record-band adminv2-ws-record-band--state">
+                          <div className="adminv2-ws-record-band-label" id="record-band-state">
+                            State
+                          </div>
+                          <div className="adminv2-ws-record-band-body" aria-labelledby="record-band-state">
+                            <RecordBodyBlock
+                              recordId={model.recordId}
+                              sections={stateSections}
+                              onAction={onAction}
+                              density="band"
+                            />
+                          </div>
                         </div>
-                        <aside
-                          className="adminv2-ws-record-body-split-aside"
-                          aria-label="Communication, related records, and recent activity"
-                        >
-                          <RecordInteractionPanels
-                            recordId={model.recordId}
-                            contact={model.recordContactContext}
-                            related={model.recordRelatedContext}
-                            activity={model.recordActivityContext}
-                            onAction={onAction}
-                          />
-                        </aside>
-                      </div>
-                    ) : (
-                      <RecordBodyBlock
-                        recordId={model.recordId}
-                        sections={model.recordSections}
-                        onAction={onAction}
-                      />
-                    )}
+                      ) : null}
+                      {showConnectionsBand ? (
+                        <div className="adminv2-ws-record-band adminv2-ws-record-band--connections">
+                          <div className="adminv2-ws-record-band-label" id="record-band-connections">
+                            Connections
+                          </div>
+                          <div
+                            className="adminv2-ws-record-band-body adminv2-ws-record-band-body--connections"
+                            aria-labelledby="record-band-connections"
+                          >
+                            <RecordBodyBlock
+                              recordId={model.recordId}
+                              sections={connectionsSections}
+                              onAction={onAction}
+                              density="band"
+                            />
+                            <div className="adminv2-ws-record-connections-stack">
+                              {model.recordContactContext ? (
+                                <RecordInteractionPanels
+                                  recordId={model.recordId}
+                                  contact={model.recordContactContext}
+                                  onAction={onAction}
+                                />
+                              ) : null}
+                              {hasContextGroups ? (
+                                <ContextBlock
+                                  model={model.contextRail}
+                                  onAction={onAction}
+                                  surface="record"
+                                  layout="embedded"
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      {showHistoryBand ? (
+                        <div className="adminv2-ws-record-band adminv2-ws-record-band--history">
+                          <div className="adminv2-ws-record-band-label" id="record-band-history">
+                            History
+                          </div>
+                          <div
+                            className="adminv2-ws-record-band-body adminv2-ws-record-band-body--history"
+                            aria-labelledby="record-band-history"
+                          >
+                            <RecordBodyBlock
+                              recordId={model.recordId}
+                              sections={historySections}
+                              onAction={onAction}
+                              density="band"
+                            />
+                            {model.workSummary ? (
+                              <WorkBlock
+                                work={model.workSummary}
+                                onAction={onAction}
+                                mode="summary"
+                                surface="record"
+                                recordRecentActivity={activityEvents}
+                                recordActivityShowKicker={false}
+                              />
+                            ) : activityEvents.length > 0 ? (
+                              <div className="adminv2-ws-dept-workflows-panel adminv2-ws-record-history-activity-only">
+                                <RecordWorkflowActivityLead events={activityEvents} showKicker={false} />
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -179,20 +251,14 @@ export default function RecordWorkspace({ model, onAction }: Props) {
                 aria-hidden
               />
             </div>
-            {model.workSummary ? (
-              <div className="adminv2-ws-dept-v2-workflows-strip">
-                <WorkBlock work={model.workSummary} onAction={onAction} mode="summary" surface="record" />
-              </div>
-            ) : null}
           </div>
           <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
             <aside
               className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
               data-adminv2-workspace-command-rail
-              aria-label="Command center and context"
+              aria-label="Decisions and actions"
             >
               <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="record" />
-              <ContextBlock model={model.contextRail} onAction={onAction} surface="record" />
             </aside>
           </div>
         </div>

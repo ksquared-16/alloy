@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { useAdminPreview } from "@/contexts/AdminPreviewContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import DataTable from "@/components/admin/DataTable";
@@ -43,8 +42,7 @@ export type JobRow = {
 };
 
 export default function JobsClient() {
-  const { openDrawer } = useAdminDrawer();
-  const { openPreview, preview } = useAdminPreview();
+  const { openDrawer, drawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
   const plural = labels?.jobs?.plural ?? "Jobs";
   const singular = labels?.jobs?.singular ?? "Job";
@@ -267,11 +265,10 @@ export default function JobsClient() {
         searchable={false}
         hideToolbar
         loading={loading}
-        onRowClick={(row, e) => {
-          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          openPreview({ type: "jobs", id: row.id, anchor: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }, clickPosition: { x: e.clientX, y: e.clientY } });
+        onRowClick={(row) => {
+          openDrawer({ type: "jobs", id: row.id });
         }}
-        highlightedRowId={preview?.type === "jobs" ? preview.id : null}
+        highlightedRowId={drawer.type === "jobs" ? drawer.id : null}
       />
       </div>
     </>

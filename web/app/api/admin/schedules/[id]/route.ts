@@ -10,6 +10,7 @@ import {
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import { generateNextSubscriptionSchedule } from "@/lib/admin/generateNextSubscriptionSchedule";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
@@ -166,6 +167,19 @@ export async function PATCH(
         const transitionedToCompleted =
             !isCompletedStatus(previousStatusKey) && isCompletedStatus(newStatusKey);
         if (transitionedToCompleted) {
+            const subscriptionId = (data as { customer_subscription_id?: string | null }).customer_subscription_id ?? null;
+            if (subscriptionId) {
+                const gen = await generateNextSubscriptionSchedule(supabase, subscriptionId);
+                if (!gen.ok) {
+                    console.error("[ADMIN_PATCH_SCHEDULE] generate next subscription schedule failed", {
+                        scheduleId: id,
+                        subscriptionId,
+                        error: gen.error,
+                        code: gen.code,
+                    });
+                }
+            }
+
             const postResult = await postScheduleCompletion({
                 supabase,
                 orgId: ctx.orgId,

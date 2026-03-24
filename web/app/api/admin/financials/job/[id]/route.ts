@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { effectiveScheduleStatusKey, fetchScheduleStatusKeyByFk } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +34,23 @@ export async function GET(
 
     const { data: scheduleRows } = await supabase
         .from("schedules")
-        .select("id, status_key, start_at, assigned_vendor_id, price_cents")
+        .select("id, status_key, schedule_status_id, start_at, assigned_vendor_id, price_cents")
         .eq("org_id", orgId)
         .eq("job_id", jobId)
         .order("start_at", { ascending: true, nullsFirst: false });
 
-    const schedules = (scheduleRows ?? []) as { id: string; status_key: string | null; start_at: string | null; assigned_vendor_id: string | null; price_cents: number | null }[];
+    const schedules = (scheduleRows ?? []) as {
+        id: string;
+        status_key: string | null;
+        schedule_status_id: string | null;
+        start_at: string | null;
+        assigned_vendor_id: string | null;
+        price_cents: number | null;
+    }[];
+    const statusKeyByFk = await fetchScheduleStatusKeyByFk(
+        supabase,
+        schedules.map((s) => s.schedule_status_id)
+    );
 
     const { data: entriesForJob } = await supabase
         .from("gl_journal_entries")
@@ -51,7 +63,7 @@ export async function GET(
 
     const schedulesWithPosted = schedules.map((s) => ({
         id: s.id,
-        status_key: s.status_key,
+        status_key: effectiveScheduleStatusKey(s, statusKeyByFk) ?? s.status_key,
         start_at: s.start_at,
         assigned_vendor_id: s.assigned_vendor_id,
         price_cents: s.price_cents,
