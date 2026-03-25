@@ -189,6 +189,14 @@ function resolvePath(eventPayload: Record<string, unknown>, path: string | null 
     return v != null && v !== "" ? String(v) : null;
 }
 
+/** Log-safe phone tail (Twilio SID is logged by the outbox worker, not here). */
+function maskPhoneForLog(phone: string | null | undefined): string {
+    if (phone == null || String(phone).trim() === "") return "(empty)";
+    const d = String(phone).replace(/\D/g, "");
+    if (d.length < 4) return "(redacted)";
+    return `…${d.slice(-4)}`;
+}
+
 /** Single resolved recipient for send_message (contact_id and/or to_phone/to_email). */
 type ResolvedRecipient = { contact_id?: string | null; to_phone?: string | null; to_email?: string | null };
 
@@ -633,6 +641,22 @@ export async function executeWorkflowRun(
     }
 
     const isEventDriven = options?.event_id != null && String(options.event_id).trim() !== "";
+    /** Many emitters put entity_type on the workflow_events row but omit it on the nested payload; validation requires it. */
+    if (isEventDriven) {
+        const pe = normalizeEntityType((payload.entity_type as string) ?? null);
+        if (!pe) {
+            const wfEt = normalizeEntityType((workflow as { entity_type?: string | null }).entity_type ?? null);
+            if (wfEt) {
+                (payload as Record<string, unknown>).entity_type = wfEt;
+                console.log("[WORKFLOW_RUN] patched_missing_payload_entity_type", {
+                    workflow_id: workflowId,
+                    event_id: options?.event_id ?? null,
+                    entity_type: wfEt,
+                });
+            }
+        }
+    }
+
     const skipReason = validateWorkflowEventMatch(
         workflow as { entity_type?: string | null; event_type?: string | null },
         payload as Record<string, unknown>,
@@ -640,6 +664,15 @@ export async function executeWorkflowRun(
     );
 
     if (skipReason) {
+        console.log("[WORKFLOW_RUN] trigger_skip", {
+            workflow_id: workflowId,
+            event_id: options?.event_id ?? null,
+            skip_reason: skipReason,
+            payload_event_type: payload.event_type ?? null,
+            payload_entity_type: payload.entity_type ?? null,
+            workflow_entity_type: (workflow as { entity_type?: string | null }).entity_type ?? null,
+            workflow_event_type: (workflow as { event_type?: string | null }).event_type ?? null,
+        });
         if (!isEventDriven && skipReason === "entity_type_mismatch") {
             throw new Error("VALIDATION:entity_type_mismatch: Workflow entity type does not match payload entity type.");
         }
@@ -690,20 +723,47 @@ export async function executeWorkflowRun(
         throw new Error(runInsertErr.message);
     }
 
+    console.log("[WORKFLOW_RUN] run_started", {
+        workflow_id: workflowId,
+        workflow_run_id: runId,
+        event_id: options?.event_id ?? null,
+        event_type: payload.event_type ?? null,
+        entity_type: payload.entity_type ?? null,
+        org_id: payload.org_id ?? null,
+    });
+
     const { data: conditions } = await supabase
         .from("workflow_conditions")
         .select("target_entity, field_path, field, operator, value, value_jsonb, enabled")
         .eq("workflow_id", workflowId);
 
-    const allPass = (conditions ?? []).every((c: ConditionRow) => {
+    const conditionRows = conditions ?? [];
+    const conditionEval = conditionRows.map((c: ConditionRow) => {
         try {
-            return evaluateCondition(payload, defaultEntityType, c);
-        } catch {
-            return false;
+            const actual = getConditionActual(payload, defaultEntityType, c);
+            const pass = evaluateCondition(payload, defaultEntityType, c);
+            return { c, pass, actual };
+        } catch (err) {
+            return { c, pass: false, actual: undefined as unknown, evalError: err instanceof Error ? err.message : String(err) };
         }
     });
+    const allPass = conditionEval.every((r) => r.pass);
 
     if (!allPass) {
+        const failed = conditionEval.filter((r) => !r.pass);
+        console.log("[WORKFLOW_RUN] conditions_not_met", {
+            workflow_id: workflowId,
+            workflow_run_id: runId,
+            default_entity_type: defaultEntityType,
+            failed: failed.map((r) => ({
+                target_entity: r.c.target_entity,
+                field_path: r.c.field_path ?? r.c.field,
+                operator: r.c.operator,
+                expected: r.c.value_jsonb !== undefined && r.c.value_jsonb !== null ? r.c.value_jsonb : r.c.value,
+                actual: r.actual,
+                eval_error: "evalError" in r ? r.evalError : undefined,
+            })),
+        });
         const runPayloadWithReason = {
             ...payload,
             metadata: { ...((payload.metadata as Record<string, unknown>) ?? {}), skip_reason: "conditions_not_met" as const },
@@ -804,6 +864,15 @@ export async function executeWorkflowRun(
                         error: null,
                     });
                     if (msgErr) throw new Error(`create_message: ${msgErr.message}`);
+                    console.log("[WORKFLOW_RUN] create_message_queued", {
+                        workflow_id: workflowId,
+                        workflow_run_id: runId,
+                        action_order: action.action_order,
+                        channel,
+                        to_value_tail: maskPhoneForLog(toValue),
+                        contact_id: contactId,
+                        job_id: jobId,
+                    });
                     actionOutputs = { queued: true };
                     actionCompleted = true;
                     break;
@@ -855,9 +924,25 @@ export async function executeWorkflowRun(
                         if (outErr) {
                             if (String(outErr).includes("duplicate")) {
                                 logs.push(`send_message: skipped duplicate dedupe_key=${dedupeKey}`);
+                                console.log("[WORKFLOW_RUN] send_message_outbox_duplicate", {
+                                    workflow_id: workflowId,
+                                    workflow_run_id: runId,
+                                    dedupe_key: dedupeKey,
+                                });
                             } else {
                                 throw new Error(`send_message outbox: ${outErr.message}`);
                             }
+                        } else {
+                            console.log("[WORKFLOW_RUN] messages_outbox_queued", {
+                                workflow_id: workflowId,
+                                workflow_run_id: runId,
+                                action_order: action.action_order,
+                                channel,
+                                to_phone_tail: maskPhoneForLog(toPhone),
+                                to_email_set: !!(toEmail && String(toEmail).trim()),
+                                contact_id: filled.contact_id ?? null,
+                                note: "SMS delivery/Twilio runs in outbox worker; no SID at insert time",
+                            });
                         }
                     }
                     logs.push(`send_message: queued ${deduped.length} recipient(s)`);
@@ -1089,9 +1174,6 @@ export async function executeWorkflowRun(
                         expires_in_minutes: expiresInMinutes,
                         metadata: (pl.metadata != null && typeof pl.metadata === "object" ? pl.metadata : null) as Record<string, unknown> | null,
                     });
-                    if (process.env.NODE_ENV !== "production") {
-                        console.log("[create_action_link] result", result);
-                    }
                     let token: string | null = null;
                     if (typeof result === "string") {
                         token = result;
@@ -1103,6 +1185,13 @@ export async function executeWorkflowRun(
                             token = (obj.data as { token: string }).token;
                         }
                     }
+                    console.log("[WORKFLOW_RUN] create_action_link_result", {
+                        workflow_id: workflowId,
+                        workflow_run_id: runId,
+                        action_order: action.action_order,
+                        output_key: outputKey,
+                        token_resolved: !!token,
+                    });
                     if (token) {
                         const baseUrl =
                             (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||

@@ -325,6 +325,9 @@ async function runDeferredBookingEffects(params: {
 
         const eventPayload: Record<string, unknown> = {
             event_type: "booking_confirmed",
+            /** Required for event-driven workflow validation (normalizeEntityType → jobs). */
+            entity_type: "job",
+            entity_id: jobId,
             occurred_at: new Date().toISOString(),
             org_id: orgIdForWorkflows,
             booked_stage_id: BOOKED_PIPELINE_STAGE_ID,
@@ -335,6 +338,22 @@ async function runDeferredBookingEffects(params: {
             opportunity: oppRow ?? null,
             schedule: normalizedSchedule,
         };
+
+        const j = jobRow as { status_key?: unknown; id?: string } | null;
+        const s = normalizedSchedule as { status_key?: unknown; id?: string };
+        console.log("[BOOK_V2_CONFIRM_EVENT_PAYLOAD]", {
+            booking_attempt_id,
+            job_id: jobId,
+            schedule_id: scheduleId,
+            event_type: "booking_confirmed",
+            entity_type: eventPayload.entity_type,
+            job_status_key: j?.status_key ?? null,
+            schedule_status_key: s?.status_key ?? null,
+            has_person: !!personRow,
+            person_phone_set: !!(personRow && String((personRow as { phone?: string }).phone ?? "").trim()),
+            has_contact: !!contactRow,
+            contact_phone_set: !!(contactRow && String((contactRow as { phone?: string }).phone ?? "").trim()),
+        });
 
         const tEmit = typeof performance !== "undefined" ? performance.now() : Date.now();
         let eventId: string | null = null;

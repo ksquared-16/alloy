@@ -112,8 +112,9 @@ function isDrawerFieldValueBlank(v: unknown): boolean {
     return false;
 }
 
-/** Custom defs that mirror canonical location / job / schedule API fields; hide when custom is blank and hydrated canonical exists. */
+/** Custom defs that mirror canonical location / job / schedule API fields; hide when hydrated canonical should win (incl. non-blank UUID defs that duplicate native columns). */
 const LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL = new Set([
+    "access_method_id",
     "gate_code",
     "home_type",
     "square_footage",
@@ -133,12 +134,13 @@ const JOB_OR_SCHEDULE_SERVICE_SHADOW_DEF_KEYS = new Set([
 
 function locationCustomDefShadowedByCanonical(fieldKey: string, record: Record<string, unknown>): boolean {
     if (!LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL.has(fieldKey)) return false;
-    if (!isDrawerFieldValueBlank(record[fieldKey])) return false;
     switch (fieldKey) {
+        case "access_method_id":
+            return !!String(record._access_method_label ?? "").trim();
         case "gate_code":
-            return (
-                !isDrawerFieldValueBlank(record.access_code) || !!String(record._access_method_label ?? "").trim()
-            );
+            if (!isDrawerFieldValueBlank(record.access_code)) return true;
+            if (!isDrawerFieldValueBlank(record[fieldKey])) return false;
+            return !!String(record._access_method_label ?? "").trim();
         case "home_type":
             return !!String(record._service_home_type_label ?? "").trim();
         case "square_footage":
@@ -160,7 +162,6 @@ function locationCustomDefShadowedByCanonical(fieldKey: string, record: Record<s
 
 function jobOrScheduleServiceDefShadowedByCanonical(fieldKey: string, record: Record<string, unknown>): boolean {
     if (!JOB_OR_SCHEDULE_SERVICE_SHADOW_DEF_KEYS.has(fieldKey)) return false;
-    if (!isDrawerFieldValueBlank(record[fieldKey])) return false;
     switch (fieldKey) {
         case "gate_code":
             return false;

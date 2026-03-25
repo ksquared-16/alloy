@@ -51,9 +51,18 @@ function formatFieldValue(
   onOpenDrawer?: (entityType: string, id: string) => void,
   presentationEntityType?: EntityPresentationType
 ): ReactNode {
-  if (value === null || value === undefined) return null;
   const hint = field.renderHint ?? "text";
   const key = field.key;
+  if (hint === "status" && presentationEntityType === "opportunities" && record) {
+    const oppLine = opportunityOverviewStatusBadgeLabel(record);
+    if (oppLine) {
+      return <StatusBadge label={oppLine} variant="default" />;
+    }
+  }
+  if (hint === "status" && record && record._status_display != null && String(record._status_display).trim() !== "") {
+    return <StatusBadge label={String(record._status_display).trim()} variant="default" />;
+  }
+  if (value === null || value === undefined) return null;
   if (hint === "phone") return formatPhoneUS(value as string | null | undefined);
   switch (hint) {
     case "date":
@@ -68,12 +77,6 @@ function formatFieldValue(
       return formatMoney(value as number | string | null | undefined, key);
     }
     case "status": {
-      if (presentationEntityType === "opportunities" && record) {
-        const oppLine = opportunityOverviewStatusBadgeLabel(record);
-        if (oppLine) {
-          return <StatusBadge label={oppLine} variant="default" />;
-        }
-      }
       const fromApi =
         record && record._status_display != null && String(record._status_display).trim() !== ""
           ? String(record._status_display).trim()
@@ -144,8 +147,19 @@ function formatFieldValue(
     case "text":
     case "custom":
     default:
-      if (presentationEntityType === "locations" && key === "access_method_id" && record?._access_method_label != null && String(record._access_method_label).trim() !== "") {
-        return String(record._access_method_label).trim();
+      if (presentationEntityType === "locations" && record) {
+        const accessLabel =
+          record._access_method_label != null && String(record._access_method_label).trim() !== ""
+            ? String(record._access_method_label).trim()
+            : null;
+        if (
+          accessLabel &&
+          (key === "access_method_id" ||
+            key === "access_method" ||
+            (typeof key === "string" && key.toLowerCase().includes("access_method")))
+        ) {
+          return accessLabel;
+        }
       }
       if (key === "payout_percent") return formatPayoutPercent(value as number | null | undefined);
       if (presentationEntityType === "schedules" && record) {
@@ -166,6 +180,41 @@ function formatFieldValue(
       }
       return String(value);
   }
+}
+
+/**
+ * When custom field_definitions reuse legacy keys (gate_code, home_type, …), prefer hydrated API columns / _service_* so blank or duplicate defs never beat canonical values.
+ */
+function canonicalReadFallbackForShadowedField(
+  entityType: EntityPresentationType,
+  fieldKey: string,
+  record: Record<string, unknown>
+): unknown {
+  if (entityType === "locations") {
+    if (fieldKey === "gate_code" && record.access_code != null && String(record.access_code).trim() !== "") {
+      return String(record.access_code).trim();
+    }
+    if (fieldKey === "pets" && typeof record.has_pets === "boolean") {
+      return record.has_pets;
+    }
+  }
+  if (entityType === "locations" || entityType === "jobs" || entityType === "schedules") {
+    if (fieldKey === "home_type" && String(record._service_home_type_label ?? "").trim() !== "") {
+      return String(record._service_home_type_label).trim();
+    }
+    if (fieldKey === "square_footage" && String(record._service_square_footage_display ?? "").trim() !== "") {
+      return String(record._service_square_footage_display).trim();
+    }
+    const br = record._service_bedrooms;
+    if (fieldKey === "bedrooms" && br != null && br !== "" && !Number.isNaN(Number(br))) {
+      return br;
+    }
+    const bt = record._service_bathrooms;
+    if (fieldKey === "bathrooms" && bt != null && bt !== "" && !Number.isNaN(Number(bt))) {
+      return bt;
+    }
+  }
+  return undefined;
 }
 
 function makeKeydownHandlers(
@@ -447,6 +496,10 @@ export default function EntityDrawerOverview({
                                         : undefined;
     }
     if (displayFallback === undefined) {
+      const canon = canonicalReadFallbackForShadowedField(entityType, key, record);
+      if (canon !== undefined) displayFallback = canon;
+    }
+    if (displayFallback === undefined) {
       const resolved = resolveOverviewRelationshipLabel(record, key);
       if (resolved != null) displayFallback = resolved;
     }
@@ -484,6 +537,12 @@ export default function EntityDrawerOverview({
 
   return (
     <div className="space-y-0 pt-5" data-entity-drawer-overview>
+      <div
+        className="mb-2 rounded border border-amber-400/90 bg-amber-50 px-2 py-1 text-[11px] font-mono text-amber-950"
+        data-alloy-drawer-canonical-marker-v3="1"
+      >
+        DRAWER CANONICAL HYDRATE v3 · {entityType}
+      </div>
       {sections.map((section: EntityDrawerSectionConfig) => {
         const hasSubsections = (section.subsections?.length ?? 0) > 0;
         const hasTopFields = section.fields && section.fields.length > 0;
@@ -511,9 +570,16 @@ export default function EntityDrawerOverview({
 
         if (!hasFields && !customContent) return null;
 
+        const canonPropertySection =
+          section.key === "property_service" || section.key === "__schedule_property_service";
+
         return (
           <EntityDrawerSection key={section.key} config={section}>
-            {children}
+            {canonPropertySection ? (
+              <div data-alloy-canonical-property-service-v3={entityType}>{children}</div>
+            ) : (
+              children
+            )}
           </EntityDrawerSection>
         );
       })}
