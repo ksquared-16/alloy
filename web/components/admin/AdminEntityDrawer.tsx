@@ -105,6 +105,84 @@ function mergeConfiguredFieldFormValues(
     }
 }
 
+function isDrawerFieldValueBlank(v: unknown): boolean {
+    if (v === undefined || v === null) return true;
+    if (typeof v === "string") return v.trim() === "";
+    if (typeof v === "number") return Number.isNaN(v);
+    return false;
+}
+
+/** Custom defs that mirror canonical location / job / schedule API fields; hide when custom is blank and hydrated canonical exists. */
+const LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL = new Set([
+    "gate_code",
+    "home_type",
+    "square_footage",
+    "bedrooms",
+    "bathrooms",
+    "pets",
+]);
+
+const JOB_OR_SCHEDULE_SERVICE_SHADOW_DEF_KEYS = new Set([
+    "gate_code",
+    "home_type",
+    "square_footage",
+    "bedrooms",
+    "bathrooms",
+    "pets",
+]);
+
+function locationCustomDefShadowedByCanonical(fieldKey: string, record: Record<string, unknown>): boolean {
+    if (!LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL.has(fieldKey)) return false;
+    if (!isDrawerFieldValueBlank(record[fieldKey])) return false;
+    switch (fieldKey) {
+        case "gate_code":
+            return (
+                !isDrawerFieldValueBlank(record.access_code) || !!String(record._access_method_label ?? "").trim()
+            );
+        case "home_type":
+            return !!String(record._service_home_type_label ?? "").trim();
+        case "square_footage":
+            return !!String(record._service_square_footage_display ?? "").trim();
+        case "bedrooms": {
+            const n = record._service_bedrooms;
+            return n != null && n !== "" && !Number.isNaN(Number(n));
+        }
+        case "bathrooms": {
+            const n = record._service_bathrooms;
+            return n != null && n !== "" && !Number.isNaN(Number(n));
+        }
+        case "pets":
+            return typeof record.has_pets === "boolean";
+        default:
+            return false;
+    }
+}
+
+function jobOrScheduleServiceDefShadowedByCanonical(fieldKey: string, record: Record<string, unknown>): boolean {
+    if (!JOB_OR_SCHEDULE_SERVICE_SHADOW_DEF_KEYS.has(fieldKey)) return false;
+    if (!isDrawerFieldValueBlank(record[fieldKey])) return false;
+    switch (fieldKey) {
+        case "gate_code":
+            return false;
+        case "home_type":
+            return !!String(record._service_home_type_label ?? "").trim();
+        case "square_footage":
+            return !!String(record._service_square_footage_display ?? "").trim();
+        case "bedrooms": {
+            const n = record._service_bedrooms;
+            return n != null && n !== "" && !Number.isNaN(Number(n));
+        }
+        case "bathrooms": {
+            const n = record._service_bathrooms;
+            return n != null && n !== "" && !Number.isNaN(Number(n));
+        }
+        case "pets":
+            return false;
+        default:
+            return false;
+    }
+}
+
 const EDITABLE_TYPES = ["opportunities", "jobs", "contacts", "customers", "customer_members", "schedules", "workflows", "vendors", "locations", "payments", "service_offerings", "service_plan_templates", "addons", "persons", "subscriptions", "documents"] as const;
 
 type VendorFormData = {
@@ -1941,6 +2019,11 @@ export default function AdminEntityDrawer() {
                 status_key: (locData.status_key as string) ?? "",
             };
             mergeConfiguredFieldFormValues(locBase, locData, (data._field_definitions as FieldDefRow[] | undefined) ?? []);
+            for (const k of LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL) {
+                if (locationCustomDefShadowedByCanonical(k, locData)) {
+                    delete locBase[k];
+                }
+            }
             setFormData(locBase);
         } else if (drawer.type === "customer_members") {
             const rel = (data.relationship as string) ?? "";
@@ -3581,6 +3664,7 @@ export default function AdminEntityDrawer() {
                 }[]) ?? []
             )
                 .filter((d) => !d.is_system && d.is_visible_in_drawer !== false)
+                .filter((d) => !locationCustomDefShadowedByCanonical(d.field_key, data as Record<string, unknown>))
                 .sort((a, b) => a.sort_order - b.sort_order);
             const locRec = data as Record<string, unknown>;
             const customerId = locRec.customer_id as string | null | undefined;
@@ -3877,6 +3961,21 @@ export default function AdminEntityDrawer() {
             visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
             visible = visible.filter((d) => d.field_key !== "schedule_status_id");
         }
+        if (drawer.type === "locations" && overviewData) {
+            visible = visible.filter(
+                (d) => !locationCustomDefShadowedByCanonical(d.field_key, overviewData as Record<string, unknown>)
+            );
+        }
+        if (drawer.type === "jobs" && overviewData) {
+            visible = visible.filter(
+                (d) => !jobOrScheduleServiceDefShadowedByCanonical(d.field_key, overviewData as Record<string, unknown>)
+            );
+        }
+        if (drawer.type === "schedules" && overviewData) {
+            visible = visible.filter(
+                (d) => !jobOrScheduleServiceDefShadowedByCanonical(d.field_key, overviewData as Record<string, unknown>)
+            );
+        }
         /** Unified Pricing section owns these; strip from field_definitions-driven sections to avoid duplicates. */
         const jobDrawerPricingFieldKeys = new Set([
             "estimated_total_cents",
@@ -3909,7 +4008,11 @@ export default function AdminEntityDrawer() {
             visible = visible.filter((d) => !jobOverviewBillingFieldKeys.has(d.field_key));
         }
         if (visible.length === 0) {
-            if (!(drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create)) {
+            const presentationFallback =
+                overviewData &&
+                !(overviewData as { _create?: boolean })._create &&
+                (drawer.type === "jobs" || drawer.type === "locations" || drawer.type === "schedules");
+            if (!presentationFallback) {
                 return [];
             }
         }
@@ -4078,7 +4181,42 @@ export default function AdminEntityDrawer() {
                 };
             }),
         }));
-        const keys = new Set(fromDefs.map((s) => s.key));
+        let sectionBlocks: EntityDrawerSectionConfig[] = fromDefs;
+
+        if (drawer.type === "locations") {
+            const locCanon = (getEntityPresentation("locations").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+            sectionBlocks = [...locCanon, ...fromDefs];
+        }
+
+        if (drawer.type === "schedules") {
+            const schedPres = (getEntityPresentation("schedules").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+            if (fromDefs.length === 0) {
+                sectionBlocks = [...schedPres];
+            } else {
+                const ov = schedPres.find((s) => s.key === "overview");
+                const ps = schedPres.find((s) => s.key === "property_service");
+                const prefix: EntityDrawerSectionConfig[] = [];
+                if (ov && !sectionBlocks.some((s) => s.key === "overview" || s.key === "__schedule_visit_property")) {
+                    prefix.push({ ...ov, key: "__schedule_visit_property", title: "Visit & timing" });
+                }
+                if (ps && !sectionBlocks.some((s) => s.key === "property_service" || s.key === "__schedule_property_service")) {
+                    prefix.push({ ...ps, key: "__schedule_property_service", title: "Property / service details" });
+                }
+                if (prefix.length) sectionBlocks = [...prefix, ...sectionBlocks];
+            }
+        }
+
+        if (drawer.type === "jobs" && fromDefs.length > 0) {
+            const jobPres = (getEntityPresentation("jobs").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
+            const ps = jobPres.find((s) => s.key === "property_service");
+            if (ps && !sectionBlocks.some((s) => s.key === "property_service")) {
+                const ji = sectionBlocks.findIndex((s) => s.key === "job_details");
+                const insertAt = ji >= 0 ? ji + 1 : 0;
+                sectionBlocks = [...sectionBlocks.slice(0, insertAt), ps, ...sectionBlocks.slice(insertAt)];
+            }
+        }
+
+        const keys = new Set(sectionBlocks.map((s) => s.key));
         const append: EntityDrawerSectionConfig[] = [];
         if (drawer.type === "persons" && overviewData && !(overviewData as { _create?: boolean })._create && !keys.has("relationships")) {
             append.push({
@@ -4106,15 +4244,16 @@ export default function AdminEntityDrawer() {
                 });
             }
         }
-        let result: EntityDrawerSectionConfig[] = [...fromDefs, ...append];
+        let result: EntityDrawerSectionConfig[] = [...sectionBlocks, ...append];
         if (drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const jobSectionRank: Record<string, number> = {
                 job_details: 0,
-                customer_location: 1,
-                scheduling: 2,
-                pricing: 3,
-                notes: 4,
-                record_info: 5,
+                property_service: 1,
+                customer_location: 2,
+                scheduling: 3,
+                pricing: 4,
+                notes: 5,
+                record_info: 6,
             };
             const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
             const overviewBilling = getJobOverviewBillingSummarySection();

@@ -94,11 +94,12 @@ export function mergeUnifiedStatusIntoConfigOverview(
     const jobSectionRank: Record<string, number> = {
       __unified_status: -1,
       job_details: 0,
-      customer_location: 1,
-      scheduling: 2,
-      pricing: 3,
-      notes: 4,
-      record_info: 5,
+      property_service: 1,
+      customer_location: 2,
+      scheduling: 3,
+      pricing: 4,
+      notes: 5,
+      record_info: 6,
     };
     const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
     result = [...result].sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
