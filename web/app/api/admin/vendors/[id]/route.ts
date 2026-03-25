@@ -6,6 +6,7 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { resolveVendorStatusById, resolveVendorStatusByKey } from "@/lib/vendors/vendorStatusSync";
 
 const ALLOWED_KEYS = [
     "status_key",
@@ -34,6 +35,7 @@ const ALLOWED_KEYS = [
     "consent_marketing",
     "payout_override_type",
     "payout_override_value",
+    "vendor_status_id",
 ] as const;
 
 function toNull(v: unknown): unknown {
@@ -74,6 +76,11 @@ export async function PATCH(
                     continue;
                 }
                 updates[key] = typeof raw === "string" ? raw.trim() : raw;
+            } else if (key === "vendor_status_id") {
+                if (raw === "" || raw === undefined || raw === null) {
+                    continue;
+                }
+                updates[key] = typeof raw === "string" ? raw.trim() : raw;
             } else if (key === "days_available" || key === "service_area_zip_codes") {
                 updates[key] = Array.isArray(raw) ? raw : null;
             } else if (key === "owns_supplies" || key === "w9_received" || key === "ach_verified" || key === "consent_contractor_agreement" || key === "consent_legal" || key === "consent_marketing") {
@@ -104,7 +111,36 @@ export async function PATCH(
         const oldStatusKey = existingRow.status_key ?? null;
         const orgId = existingRow.org_id;
 
-        if (updates.status_key !== undefined) {
+        const hasStatusKey = updates.status_key !== undefined;
+        const hasVendorStatusId = updates.vendor_status_id !== undefined;
+
+        if (hasStatusKey && hasVendorStatusId) {
+            const sk = updates.status_key as string;
+            if (sk == null || String(sk).trim() === "") {
+                return NextResponse.json(
+                    {
+                        error:
+                            "Vendor status cannot be cleared: vendor_status_id is required. Choose a status from the list.",
+                    },
+                    { status: 400 }
+                );
+            }
+            const byKey = await resolveVendorStatusByKey(supabase, sk);
+            const byId = await resolveVendorStatusById(supabase, updates.vendor_status_id as string);
+            if (!byKey || !byId || byKey.vendor_status_id !== byId.vendor_status_id) {
+                return NextResponse.json(
+                    { error: "status_key and vendor_status_id refer to different vendor statuses." },
+                    { status: 400 }
+                );
+            }
+            const chk = await assertAllowedStatusKey(supabase, orgId!, "vendors", byKey.status_key);
+            if (!chk.ok) {
+                return NextResponse.json({ error: chk.message }, { status: 400 });
+            }
+            (updates as Record<string, unknown>).vendor_status_id = byKey.vendor_status_id;
+            (updates as Record<string, unknown>).status_key = byKey.status_key;
+            (updates as Record<string, unknown>).status = byKey.status;
+        } else if (hasStatusKey) {
             const sk = updates.status_key as string | null;
             if (sk == null || String(sk).trim() === "") {
                 return NextResponse.json(
@@ -119,11 +155,8 @@ export async function PATCH(
             if (!chk.ok) {
                 return NextResponse.json({ error: chk.message }, { status: 400 });
             }
-            const { data: vs, error: vsErr } = await supabase.from("vendor_statuses").select("id, key").eq("key", sk).maybeSingle();
-            if (vsErr) {
-                return NextResponse.json({ error: `Could not resolve vendor_statuses: ${vsErr.message}` }, { status: 400 });
-            }
-            if (!vs) {
+            const aligned = await resolveVendorStatusByKey(supabase, sk);
+            if (!aligned) {
                 return NextResponse.json(
                     {
                         error: `No vendor_statuses row matches status_key "${sk}". Add a vendor_statuses row with this key or align status_definitions with vendor_statuses.`,
@@ -131,7 +164,21 @@ export async function PATCH(
                     { status: 400 }
                 );
             }
-            (updates as Record<string, unknown>).vendor_status_id = (vs as { id: string }).id;
+            (updates as Record<string, unknown>).vendor_status_id = aligned.vendor_status_id;
+            (updates as Record<string, unknown>).status_key = aligned.status_key;
+            (updates as Record<string, unknown>).status = aligned.status;
+        } else if (hasVendorStatusId) {
+            const aligned = await resolveVendorStatusById(supabase, updates.vendor_status_id as string);
+            if (!aligned) {
+                return NextResponse.json({ error: "Invalid vendor_status_id (no matching vendor_statuses row)." }, { status: 400 });
+            }
+            const chk = await assertAllowedStatusKey(supabase, orgId!, "vendors", aligned.status_key);
+            if (!chk.ok) {
+                return NextResponse.json({ error: chk.message }, { status: 400 });
+            }
+            (updates as Record<string, unknown>).vendor_status_id = aligned.vendor_status_id;
+            (updates as Record<string, unknown>).status_key = aligned.status_key;
+            (updates as Record<string, unknown>).status = aligned.status;
         }
 
         const { data, error } = await supabase
