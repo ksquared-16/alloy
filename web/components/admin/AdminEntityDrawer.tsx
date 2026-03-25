@@ -3664,7 +3664,7 @@ export default function AdminEntityDrawer() {
                     sort_order: number;
                 }[]) ?? []
             )
-                .filter((d) => !d.is_system && d.is_visible_in_drawer !== false)
+                .filter((d) => d.is_visible_in_drawer !== false)
                 .filter((d) => !locationCustomDefShadowedByCanonical(d.field_key, data as Record<string, unknown>))
                 .sort((a, b) => a.sort_order - b.sort_order);
             const locRec = data as Record<string, unknown>;
@@ -3678,6 +3678,100 @@ export default function AdminEntityDrawer() {
                     relationship_type?: string | null;
                 }[]) ?? [];
             const locSubheading = "text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50 mb-2";
+            const customPropertyGrid =
+                locDefs.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+                        {locDefs.map((f) => {
+                            const drec = data as Record<string, unknown>;
+                            const mergedVal =
+                                isEditing && canMutate
+                                    ? (formData[f.field_key] !== undefined && formData[f.field_key] !== ""
+                                          ? formData[f.field_key]
+                                          : drec[f.field_key])
+                                    : drec[f.field_key];
+                            const raw = mergedVal ?? "";
+                            const str = raw === true || raw === false ? (raw ? "Yes" : "No") : String(raw ?? "");
+                            const edit = isEditing && canMutate;
+                            return (
+                                <div key={f.field_key}>
+                                    <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">
+                                        {f.label ?? f.field_key}
+                                    </label>
+                                    {edit ? (
+                                        f.field_type === "boolean" ? (
+                                            <select
+                                                value={String(formData[f.field_key] ?? drec[f.field_key] ?? "")}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({ ...prev, [f.field_key]: e.target.value }))
+                                                }
+                                                onBlur={() => {
+                                                    if (nonJobFormDirty) saveEdit();
+                                                }}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            >
+                                                <option value="">—</option>
+                                                <option value="true">Yes</option>
+                                                <option value="false">No</option>
+                                            </select>
+                                        ) : f.field_type === "number" ? (
+                                            <input
+                                                type="number"
+                                                value={
+                                                    formData[f.field_key] != null && formData[f.field_key] !== ""
+                                                        ? String(formData[f.field_key])
+                                                        : drec[f.field_key] != null && drec[f.field_key] !== ""
+                                                          ? String(drec[f.field_key])
+                                                          : ""
+                                                }
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        [f.field_key]: e.target.value,
+                                                    }))
+                                                }
+                                                onBlur={() => {
+                                                    if (nonJobFormDirty) saveEdit();
+                                                }}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            />
+                                        ) : f.field_type === "date" || f.field_type === "datetime" ? (
+                                            <input
+                                                type={f.field_type === "date" ? "date" : "datetime-local"}
+                                                value={String(formData[f.field_key] ?? drec[f.field_key] ?? "").slice(0, 16)}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        [f.field_key]: e.target.value,
+                                                    }))
+                                                }
+                                                onBlur={() => {
+                                                    if (nonJobFormDirty) saveEdit();
+                                                }}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            />
+                                        ) : (
+                                            <input
+                                                value={String(formData[f.field_key] ?? drec[f.field_key] ?? "")}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        [f.field_key]: e.target.value,
+                                                    }))
+                                                }
+                                                onBlur={() => {
+                                                    if (nonJobFormDirty) saveEdit();
+                                                }}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            />
+                                        )
+                                    ) : (
+                                        <span className="text-sm text-alloy-midnight/90">{str || "—"}</span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : null;
             return {
                 customer: customerId ? (
                     <div className="py-1">
@@ -3719,105 +3813,7 @@ export default function AdminEntityDrawer() {
                         )}
                     </div>
                 ),
-                custom_property_fields: (
-                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-                        {locDefs.length === 0 ? (
-                            <p className="text-sm text-alloy-midnight/60 md:col-span-2">
-                                No custom location fields. Add them under System → Directory Settings → Location Fields.
-                            </p>
-                        ) : (
-                            locDefs.map((f) => {
-                                const drec = data as Record<string, unknown>;
-                                const mergedVal =
-                                    isEditing && canMutate
-                                        ? (formData[f.field_key] !== undefined && formData[f.field_key] !== ""
-                                              ? formData[f.field_key]
-                                              : drec[f.field_key])
-                                        : drec[f.field_key];
-                                const raw = mergedVal ?? "";
-                                const str = raw === true || raw === false ? (raw ? "Yes" : "No") : String(raw ?? "");
-                                const edit = isEditing && canMutate;
-                                return (
-                                    <div key={f.field_key}>
-                                        <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">
-                                            {f.label ?? f.field_key}
-                                        </label>
-                                        {edit ? (
-                                            f.field_type === "boolean" ? (
-                                                <select
-                                                    value={String(formData[f.field_key] ?? drec[f.field_key] ?? "")}
-                                                    onChange={(e) =>
-                                                        setFormData((prev) => ({ ...prev, [f.field_key]: e.target.value }))
-                                                    }
-                                                    onBlur={() => {
-                                                        if (nonJobFormDirty) saveEdit();
-                                                    }}
-                                                    className={INLINE_EDIT_INPUT_CLASS}
-                                                >
-                                                    <option value="">—</option>
-                                                    <option value="true">Yes</option>
-                                                    <option value="false">No</option>
-                                                </select>
-                                            ) : f.field_type === "number" ? (
-                                                <input
-                                                    type="number"
-                                                    value={
-                                                        formData[f.field_key] != null && formData[f.field_key] !== ""
-                                                            ? String(formData[f.field_key])
-                                                            : drec[f.field_key] != null && drec[f.field_key] !== ""
-                                                              ? String(drec[f.field_key])
-                                                              : ""
-                                                    }
-                                                    onChange={(e) =>
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            [f.field_key]: e.target.value,
-                                                        }))
-                                                    }
-                                                    onBlur={() => {
-                                                        if (nonJobFormDirty) saveEdit();
-                                                    }}
-                                                    className={INLINE_EDIT_INPUT_CLASS}
-                                                />
-                                            ) : f.field_type === "date" || f.field_type === "datetime" ? (
-                                                <input
-                                                    type={f.field_type === "date" ? "date" : "datetime-local"}
-                                                    value={String(formData[f.field_key] ?? drec[f.field_key] ?? "").slice(0, 16)}
-                                                    onChange={(e) =>
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            [f.field_key]: e.target.value,
-                                                        }))
-                                                    }
-                                                    onBlur={() => {
-                                                        if (nonJobFormDirty) saveEdit();
-                                                    }}
-                                                    className={INLINE_EDIT_INPUT_CLASS}
-                                                />
-                                            ) : (
-                                                <input
-                                                    value={String(formData[f.field_key] ?? drec[f.field_key] ?? "")}
-                                                    onChange={(e) =>
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            [f.field_key]: e.target.value,
-                                                        }))
-                                                    }
-                                                    onBlur={() => {
-                                                        if (nonJobFormDirty) saveEdit();
-                                                    }}
-                                                    className={INLINE_EDIT_INPUT_CLASS}
-                                                />
-                                            )
-                                        ) : (
-                                            <span className="text-sm text-alloy-midnight/90">{str || "—"}</span>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-                ),
+                ...(customPropertyGrid ? { custom_property_fields: customPropertyGrid } : {}),
             };
         }
         if (drawer.type === "vendors" && drawer.id && drawer.id !== "new") {
@@ -4185,8 +4181,9 @@ export default function AdminEntityDrawer() {
         let sectionBlocks: EntityDrawerSectionConfig[] = fromDefs;
 
         if (drawer.type === "locations") {
+            /** Canonical sections only; custom defs render once via `overviewCustomContent.custom_property_fields` (not duplicated as config-driven rows). */
             const locCanon = (getEntityPresentation("locations").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
-            sectionBlocks = [...locCanon, ...fromDefs];
+            sectionBlocks = [...locCanon];
         }
 
         if (drawer.type === "schedules") {
@@ -4290,7 +4287,19 @@ export default function AdminEntityDrawer() {
                 result.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
             }
         }
-        return presentationType ? mergeUnifiedStatusIntoConfigOverview(presentationType, result) : result;
+        let overviewSections = presentationType ? mergeUnifiedStatusIntoConfigOverview(presentationType, result) : result;
+        if (drawer.type === "schedules" && overviewSections.length > 0) {
+            const schedRank = (k: string): number => {
+                if (k === "__unified_status") return -1;
+                if (k === "overview" || k === "__schedule_visit_property") return 0;
+                if (k === "property_service" || k === "__schedule_property_service") return 1;
+                return 50;
+            };
+            overviewSections = [...overviewSections].sort(
+                (a, b) => schedRank(a.key) - schedRank(b.key) || a.key.localeCompare(b.key)
+            );
+        }
+        return overviewSections;
     }, [drawer.type, overviewData, presentationType]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {

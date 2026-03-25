@@ -195,7 +195,7 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-white border-b border-alloy-stone/25 px-5 sm:px-6 py-4 flex items-center justify-between z-10 shrink-0 rounded-t-[1.375rem]">
-          <h2 className="text-lg sm:text-xl font-bold text-alloy-pine tracking-tight">Offer terms</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-alloy-pine tracking-tight">Terms of service</h2>
           <button
             type="button"
             onClick={onClose}

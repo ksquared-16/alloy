@@ -23,6 +23,12 @@ const INLINE_EDIT_SELECT = "w-full rounded border border-admin-border bg-white p
 
 export type StatusDefOption = { status_key: string; status_label?: string | null; is_active?: boolean; sort_order?: number };
 
+function isNoiseStatusToken(s: string | null | undefined): boolean {
+  if (s == null) return true;
+  const t = String(s).trim().toLowerCase();
+  return t === "" || t === "none" || t === "null" || t === "undefined";
+}
+
 interface EntityDrawerOverviewProps {
   entityType: EntityPresentationType;
   data: Record<string, unknown> | null;
@@ -53,15 +59,38 @@ function formatFieldValue(
 ): ReactNode {
   const hint = field.renderHint ?? "text";
   const key = field.key;
-  if (hint === "status" && presentationEntityType === "opportunities" && record) {
-    const oppLine = opportunityOverviewStatusBadgeLabel(record);
-    if (oppLine) {
-      return <StatusBadge label={oppLine} variant="default" />;
+  if (hint === "status") {
+    if (presentationEntityType === "opportunities" && record) {
+      const oppLine = opportunityOverviewStatusBadgeLabel(record);
+      if (oppLine) {
+        return <StatusBadge label={oppLine} variant="default" />;
+      }
     }
+    const dispRaw = record?._status_display != null ? String(record._status_display).trim() : "";
+    if (dispRaw && !isNoiseStatusToken(dispRaw)) {
+      return <StatusBadge label={dispRaw} variant="default" />;
+    }
+    const fromValue = value != null && String(value).trim() !== "" ? String(value).trim() : "";
+    const fromRecord = record?.status_key != null ? String(record.status_key).trim() : "";
+    const rawKey = !isNoiseStatusToken(fromValue) ? fromValue : !isNoiseStatusToken(fromRecord) ? fromRecord : "";
+
+    if (presentationEntityType === "locations") {
+      const defLabel = rawKey ? (getStatusLabel?.(rawKey) ?? rawKey) : "";
+      const label = !isNoiseStatusToken(defLabel) ? defLabel : "Active";
+      return <StatusBadge label={label} variant="default" />;
+    }
+    if (presentationEntityType === "schedules") {
+      const defLabel = rawKey ? (getStatusLabel?.(rawKey) ?? rawKey) : "";
+      const label = !isNoiseStatusToken(defLabel) ? defLabel : "—";
+      return <StatusBadge label={label} variant="default" />;
+    }
+
+    const s = rawKey;
+    const label = (getStatusLabel?.(s) ?? s) || "—";
+    const clean = isNoiseStatusToken(label) ? "—" : label;
+    return <StatusBadge label={clean} variant="default" />;
   }
-  if (hint === "status" && record && record._status_display != null && String(record._status_display).trim() !== "") {
-    return <StatusBadge label={String(record._status_display).trim()} variant="default" />;
-  }
+
   if (value === null || value === undefined) return null;
   if (hint === "phone") return formatPhoneUS(value as string | null | undefined);
   switch (hint) {
@@ -75,23 +104,6 @@ function formatFieldValue(
         return `-${formatMoneyFromCents(n)}`;
       }
       return formatMoney(value as number | string | null | undefined, key);
-    }
-    case "status": {
-      const fromApi =
-        record && record._status_display != null && String(record._status_display).trim() !== ""
-          ? String(record._status_display).trim()
-          : null;
-      if (fromApi) {
-        return <StatusBadge label={fromApi} variant="default" />;
-      }
-      const s = value != null && String(value).trim() !== "" ? String(value).trim() : "";
-      const label =
-        field.key === "_status_display"
-          ? s || "—"
-          : field.key === "status_key" && record && record._status_display != null && s === String(record.status_key ?? "").trim()
-            ? String(record._status_display)
-            : (getStatusLabel?.(s) ?? s) || "—";
-      return <StatusBadge label={label} variant="default" />;
     }
     case "link":
       if (field.linkTarget && record && onOpenDrawer) {
@@ -537,12 +549,6 @@ export default function EntityDrawerOverview({
 
   return (
     <div className="space-y-0 pt-5" data-entity-drawer-overview>
-      <div
-        className="mb-2 rounded border border-amber-400/90 bg-amber-50 px-2 py-1 text-[11px] font-mono text-amber-950"
-        data-alloy-drawer-canonical-marker-v3="1"
-      >
-        DRAWER CANONICAL HYDRATE v3 · {entityType}
-      </div>
       {sections.map((section: EntityDrawerSectionConfig) => {
         const hasSubsections = (section.subsections?.length ?? 0) > 0;
         const hasTopFields = section.fields && section.fields.length > 0;
@@ -570,16 +576,9 @@ export default function EntityDrawerOverview({
 
         if (!hasFields && !customContent) return null;
 
-        const canonPropertySection =
-          section.key === "property_service" || section.key === "__schedule_property_service";
-
         return (
           <EntityDrawerSection key={section.key} config={section}>
-            {canonPropertySection ? (
-              <div data-alloy-canonical-property-service-v3={entityType}>{children}</div>
-            ) : (
-              children
-            )}
+            {children}
           </EntityDrawerSection>
         );
       })}
