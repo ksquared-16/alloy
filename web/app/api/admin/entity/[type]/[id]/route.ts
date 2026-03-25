@@ -91,6 +91,16 @@ const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
 
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
 
+/** True if the entity row already has a value we should not replace with an empty custom field_values overlay. */
+function hasMeaningfulNativeFieldValue(v: unknown): boolean {
+    if (v === undefined) return false;
+    if (v === null) return false;
+    if (typeof v === "boolean") return true;
+    if (typeof v === "number") return !Number.isNaN(v);
+    if (typeof v === "string") return v.trim() !== "";
+    return true;
+}
+
 async function attachFieldDefinitionsAndValues(
     supabase: ReturnType<typeof createAdminClient>,
     out: Record<string, unknown>,
@@ -138,7 +148,18 @@ async function attachFieldDefinitionsAndValues(
     for (const d of fieldDefs) {
         if (!d.is_system) {
             const row = rowByDefId.get(d.id);
-            (out as Record<string, unknown>)[d.field_key] = displayFromFieldValueRow(d.field_type, row ?? null);
+            const before = out[d.field_key];
+            if (row) {
+                const applied = displayFromFieldValueRow(d.field_type, row);
+                const appliedEmpty = applied === "" || (typeof applied === "string" && applied.trim() === "");
+                if (!appliedEmpty) {
+                    (out as Record<string, unknown>)[d.field_key] = applied;
+                } else if (!hasMeaningfulNativeFieldValue(before)) {
+                    (out as Record<string, unknown>)[d.field_key] = applied;
+                }
+            } else if (!hasMeaningfulNativeFieldValue(before) && !(d.field_key in out)) {
+                (out as Record<string, unknown>)[d.field_key] = "";
+            }
         }
     }
 }

@@ -416,6 +416,10 @@ export default function EntityDrawerOverview({
                 ? record._vertical_name
                 : key === "location_id" && (record._location_label != null || record._location_name != null)
                   ? String(record._location_label ?? record._location_name)
+                  : key === "access_method_id" &&
+                      record._access_method_label != null &&
+                      String(record._access_method_label).trim() !== ""
+                    ? String(record._access_method_label).trim()
                   : key === "primary_person_id" && record._primary_person_name != null
                     ? record._primary_person_name
                     : key === "primary_contact_id" && (record._primary_contact_name != null || record._contact_name != null)

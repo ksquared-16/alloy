@@ -1461,8 +1461,8 @@ export async function POST(request: NextRequest) {
             if (redemptionMid) return redemptionMid;
         }
 
-        // Step 3: Use vertical_id we already fetched (else branch)
-        const verticalId = verticalIdElse;
+        // Step 3: Assign outer verticalId (must not use `const` here — that shadowed `let verticalId` and left it unset after this branch, skipping recurring subscription creation)
+        verticalId = verticalIdElse;
 
         // Step 4: Find or create opportunity
         // Prefer: (1) idempotent retry same booking_attempt_id, (2) reuse recent "Quote Started" + web_quote for this contact (last 30 min), (3) create new.
@@ -2086,15 +2086,39 @@ export async function POST(request: NextRequest) {
 
         // Step 5c: If recurring, ensure customer_subscriptions row (cadence+interval) and get subscription id for schedule linkage
         let customerSubscriptionId: string | null = null;
-        if (is_recurring && verticalId) {
+        if (is_recurring) {
+            console.log(
+                `[BOOK_V2_CONFIRM] recurring_booking_detected service_frequency_key=${service_frequency_key} verticalId=${verticalId ?? "missing"} customer_id=${customerId} booking_attempt_id=${booking_attempt_id ?? "none"}`
+            );
             const cadenceInterval = getCadenceIntervalFromServiceFrequencyKey(service_frequency_key);
-            if (cadenceInterval) {
+            const orgIdSub = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+            if (!verticalId) {
+                console.warn("[BOOK_V2_CONFIRM] recurring booking but verticalId missing; cannot create customer_subscriptions", {
+                    service_frequency_key,
+                    booking_attempt_id: booking_attempt_id ?? null,
+                    customerId,
+                });
+            } else if (!cadenceInterval) {
+                console.warn(
+                    "[BOOK_V2_CONFIRM] is_recurring but service_frequency_key has no cadence mapping; customer_subscription_id will be null (next schedule generation will not run)",
+                    { service_frequency_key, booking_attempt_id: booking_attempt_id ?? null, customerId }
+                );
+            } else if (!orgIdSub) {
+                console.warn("[BOOK_V2_CONFIRM] recurring booking but ALLOY_PUBLIC_ORG_ID unset; cannot insert customer_subscriptions", {
+                    booking_attempt_id: booking_attempt_id ?? null,
+                    customerId,
+                });
+            } else {
                 const { cadence, interval } = cadenceInterval;
-                const orgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+                const slotParsed = slot_start ? new Date(slot_start) : null;
+                const startDate =
+                    slotParsed && !Number.isNaN(slotParsed.getTime())
+                        ? slotParsed.toISOString().slice(0, 10)
+                        : new Date().toISOString().slice(0, 10);
                 const { data: existingSub } = await supabase
                     .from("customer_subscriptions")
                     .select("id")
-                    .eq("org_id", orgId)
+                    .eq("org_id", orgIdSub)
                     .eq("customer_id", customerId)
                     .eq("vertical_id", verticalId)
                     .eq("cadence", cadence)
@@ -2103,12 +2127,14 @@ export async function POST(request: NextRequest) {
                     .maybeSingle();
                 if (existingSub?.id) {
                     customerSubscriptionId = existingSub.id;
+                    console.log(
+                        `[BOOK_V2_CONFIRM] subscription_reuse recurring=true service_frequency_key=${service_frequency_key} cadence=${cadence} interval=${interval} customer_subscription_id=${customerSubscriptionId} customer_id=${customerId} booking_attempt_id=${booking_attempt_id ?? "none"}`
+                    );
                 } else {
-                    const startDate = slot_start ? new Date(slot_start).toISOString().slice(0, 10) : null;
                     const { data: newSub, error: subErr } = await supabase
                         .from("customer_subscriptions")
                         .insert({
-                            org_id: orgId,
+                            org_id: orgIdSub,
                             customer_id: customerId,
                             ...(contactId != null && { primary_contact_id: contactId }),
                             vertical_id: verticalId,
@@ -2119,13 +2145,24 @@ export async function POST(request: NextRequest) {
                         })
                         .select("id")
                         .single();
-                    if (!subErr && newSub?.id) customerSubscriptionId = newSub.id;
+                    if (subErr) {
+                        console.error("[BOOK_V2_CONFIRM] customer_subscriptions insert failed", {
+                            message: subErr.message,
+                            code: subErr.code,
+                            service_frequency_key,
+                            cadence,
+                            interval,
+                            customerId,
+                            verticalId,
+                            booking_attempt_id: booking_attempt_id ?? null,
+                        });
+                    } else if (newSub?.id) {
+                        customerSubscriptionId = newSub.id;
+                        console.log(
+                            `[BOOK_V2_CONFIRM] subscription_created recurring=true service_frequency_key=${service_frequency_key} cadence=${cadence} interval=${interval} customer_subscription_id=${customerSubscriptionId} customer_id=${customerId} booking_attempt_id=${booking_attempt_id ?? "none"}`
+                        );
+                    }
                 }
-            } else {
-                console.warn(
-                    "[BOOK_V2_CONFIRM] is_recurring but service_frequency_key has no cadence mapping; customer_subscription_id will be null (next schedule generation will not run)",
-                    { service_frequency_key, booking_attempt_id: booking_attempt_id ?? null, customerId }
-                );
             }
         }
 
@@ -2178,6 +2215,9 @@ export async function POST(request: NextRequest) {
             if (customerSubscriptionId && !(existingSchedule as { customer_subscription_id?: string | null }).customer_subscription_id) {
                 updatePayload.customer_subscription_id = customerSubscriptionId;
                 updatePayload.subscription_sequence = 1;
+                console.log(
+                    `[BOOK_V2_CONFIRM] schedule_subscription_link schedule_id=${scheduleId} customer_subscription_id=${customerSubscriptionId} subscription_sequence=1 booking_attempt_id=${booking_attempt_id ?? "none"}`
+                );
             }
             const { error: scheduleUpdateError } = await supabase
                 .from("schedules")
@@ -2209,6 +2249,9 @@ export async function POST(request: NextRequest) {
             if (customerSubscriptionId) {
                 scheduleInsert.customer_subscription_id = customerSubscriptionId;
                 scheduleInsert.subscription_sequence = 1;
+                console.log(
+                    `[BOOK_V2_CONFIRM] schedule_subscription_link schedule=new_insert customer_subscription_id=${customerSubscriptionId} subscription_sequence=1 booking_attempt_id=${booking_attempt_id ?? "none"}`
+                );
             }
             const { data: newSchedule, error: scheduleError } = await supabase
                 .from("schedules")
