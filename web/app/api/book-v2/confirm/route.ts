@@ -17,6 +17,7 @@ import { resolveBookingJobStatus } from "@/lib/book-v2/resolveBookingJobStatus";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { persistBookingPaymentMethod, resolveStripePaymentMethodId } from "@/lib/book-v2/persistBookingPaymentMethod";
 import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/bookingConfirmationSms";
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -285,7 +286,7 @@ async function runDeferredBookingEffects(params: {
         }
 
         const tHydrate = typeof performance !== "undefined" ? performance.now() : Date.now();
-        const [jobRes, oppRes, customerRes, scheduleRes, contactRes, personRes] = await Promise.all([
+        const [jobRes, oppRes, customerRes, scheduleRes, contactRes, personRes, cjdRes] = await Promise.all([
             supa.from("jobs").select("*").eq("id", jobId).single(),
             supa.from("opportunities").select("*").eq("id", opportunityId).single(),
             supa.from("customers").select("*").eq("id", customerId).single(),
@@ -294,6 +295,7 @@ async function runDeferredBookingEffects(params: {
             personIdFromQuote
                 ? supa.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle()
                 : Promise.resolve({ data: null as null }),
+            supa.from("cleaning_job_details").select("bedrooms, bathrooms, square_footage").eq("job_id", jobId).maybeSingle(),
         ]);
         bookV2PerfLog("deferred_payload_hydrate_parallel", tHydrate, booking_attempt_id);
 
@@ -347,6 +349,21 @@ async function runDeferredBookingEffects(params: {
         });
         const startIsoForSms = (schedForSms.start_at as string | undefined) ?? slot_start;
         eventPayload.formatted_start_at = formatBookingStartForSms(startIsoForSms, smsTz);
+
+        const cjdRow = (cjdRes as { data: { bedrooms?: number | null; bathrooms?: number | null; square_footage?: number | null } | null })
+            .data;
+        const jobForPrice = jobRow as { gross_price_cents?: number | null; estimated_total_cents?: number | null } | null;
+        const priceCents = jobForPrice?.gross_price_cents ?? jobForPrice?.estimated_total_cents ?? null;
+        eventPayload.booking_price =
+            priceCents != null && typeof priceCents === "number" && !Number.isNaN(priceCents) ? formatMoneyFromCents(priceCents) : "";
+        eventPayload.booking_bedrooms =
+            cjdRow != null && cjdRow.bedrooms != null && !Number.isNaN(Number(cjdRow.bedrooms)) ? String(cjdRow.bedrooms) : "";
+        eventPayload.booking_bathrooms =
+            cjdRow != null && cjdRow.bathrooms != null && !Number.isNaN(Number(cjdRow.bathrooms)) ? String(cjdRow.bathrooms) : "";
+        eventPayload.booking_square_footage =
+            cjdRow != null && cjdRow.square_footage != null && !Number.isNaN(Number(cjdRow.square_footage))
+                ? String(cjdRow.square_footage)
+                : "";
 
         const j = jobRow as { status_key?: unknown; id?: string } | null;
         const s = normalizedSchedule as { status_key?: unknown; id?: string };

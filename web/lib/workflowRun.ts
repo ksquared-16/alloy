@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { createActionLink, buildShortActionLinkUrl } from "@/lib/actionLinks";
+import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 import { getByPath, renderTemplate } from "@/lib/workflowTemplate";
 
@@ -280,6 +281,66 @@ type RecipientSpec = {
     match_job_zip?: boolean;
 };
 
+type VendorRowForOfferSms = {
+    id: string;
+    primary_contact_id?: string | null;
+    primary_person_id?: string | null;
+    phone?: string | null;
+    service_area_zip_codes?: string[] | null;
+};
+
+/**
+ * Active eligible vendors may have SMS via primary_contact_id, vendors.phone, or primary_person.phone (no contact row).
+ */
+async function appendEligibleVendorRecipients(
+    supabase: SupabaseClient,
+    list: VendorRowForOfferSms[],
+    max: number,
+    seen: Set<string>,
+    out: ResolvedRecipient[],
+    logPrefix: string,
+    logs: string[]
+): Promise<number> {
+    const slice = list.slice(0, max);
+    const personIds = [...new Set(slice.map((v) => v.primary_person_id).filter(Boolean))] as string[];
+    const phoneByPersonId = new Map<string, string | null>();
+    if (personIds.length > 0) {
+        const { data: persons } = await supabase.from("persons").select("id, phone").in("id", personIds);
+        for (const p of persons ?? []) {
+            const row = p as { id: string; phone?: string | null };
+            phoneByPersonId.set(row.id, row.phone ?? null);
+        }
+    }
+    let n = 0;
+    for (const v of slice) {
+        if (v.primary_contact_id) {
+            const key = `c:${v.primary_contact_id}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                out.push({ contact_id: v.primary_contact_id });
+                n++;
+            }
+            continue;
+        }
+        const direct = v.phone != null ? String(v.phone).trim() : "";
+        const fromPerson =
+            v.primary_person_id != null ? phoneByPersonId.get(v.primary_person_id) : undefined;
+        const raw = direct || (fromPerson != null ? String(fromPerson).trim() : "");
+        if (!raw) {
+            logs.push(`${logPrefix}: vendor ${String(v.id).slice(0, 8)}… has no contact, vendor.phone, or person phone; skipping`);
+            continue;
+        }
+        const norm = normalizePhoneForSms(raw);
+        if (!norm) continue;
+        const pkey = `p:${norm}`;
+        if (seen.has(pkey)) continue;
+        seen.add(pkey);
+        out.push({ to_phone: norm });
+        n++;
+    }
+    return n;
+}
+
 async function recipientsFromQueuedWorkflowMessages(
     supabase: SupabaseClient,
     workflowRunId: string,
@@ -489,13 +550,13 @@ async function resolveRecipients(
 
             let vendorsQuery = supabase
                 .from("vendors")
-                .select("id, primary_contact_id, service_area_zip_codes")
+                .select("id, primary_contact_id, primary_person_id, phone, service_area_zip_codes")
                 .eq("org_id", orgId)
                 .in("id", Array.from(vendorIdSet))
                 .limit(500);
             vendorsQuery = vendorsQuery.eq("vendor_status_id", statusId);
             const { data: vendorRows } = await vendorsQuery;
-            let list = (vendorRows ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
+            let list = (vendorRows ?? []) as VendorRowForOfferSms[];
 
             const jobZip = matchJobZip ? getJobZip(payload) : null;
             if (matchJobZip && jobZip) {
@@ -508,18 +569,8 @@ async function resolveRecipients(
                 logs.push("vendors_query: match_job_zip true but no job zip in payload; using vertical-only");
             }
 
-            const contactIds: string[] = [];
-            for (const v of list.slice(0, max)) {
-                if (v.primary_contact_id) {
-                    const key = `c:${v.primary_contact_id}`;
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        contactIds.push(v.primary_contact_id);
-                        out.push({ contact_id: v.primary_contact_id });
-                    }
-                }
-            }
-            logs.push(`vendors_query: resolved count=${contactIds.length}`);
+            const nVq = await appendEligibleVendorRecipients(supabase, list, max, seen, out, "vendors_query", logs);
+            logs.push(`vendors_query: resolved count=${nVq}`);
             continue;
         }
 
@@ -572,13 +623,13 @@ async function resolveRecipients(
             }
             let vendorsQuery = supabase
                 .from("vendors")
-                .select("id, primary_contact_id, service_area_zip_codes")
+                .select("id, primary_contact_id, primary_person_id, phone, service_area_zip_codes")
                 .eq("org_id", orgId)
                 .in("id", Array.from(vendorIdSet))
                 .eq("vendor_status_id", activeStatusId)
                 .limit(500);
             const { data: activeVendors } = await vendorsQuery;
-            let list = (activeVendors ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
+            let list = (activeVendors ?? []) as VendorRowForOfferSms[];
             if (jobZip) {
                 list = list.filter((v) => {
                     const zips = v.service_area_zip_codes;
@@ -586,21 +637,9 @@ async function resolveRecipients(
                     return zips.some((z) => String(z).replace(/\D/g, "").slice(0, 5) === jobZip);
                 });
             }
-            const contactIds: string[] = [];
-            for (const v of list.slice(0, max)) {
-                if (v.primary_contact_id) {
-                    const key = `c:${v.primary_contact_id}`;
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        contactIds.push(v.primary_contact_id);
-                    }
-                }
-            }
-            for (const cid of contactIds) {
-                out.push({ contact_id: cid });
-            }
-            console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: contactIds.length });
-            logs.push(`job_qualified_vendors: resolved count=${contactIds.length}`);
+            const nJq = await appendEligibleVendorRecipients(supabase, list, max, seen, out, "job_qualified_vendors", logs);
+            console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: nJq });
+            logs.push(`job_qualified_vendors: resolved count=${nJq}`);
             continue;
         }
 
@@ -1061,7 +1100,37 @@ export async function executeWorkflowRun(
                         last_workflow_message_id: (payload as { _last_workflow_message_id?: string })._last_workflow_message_id ?? null,
                     });
 
-                    let resolved = await resolveRecipients(supabase, payload, recipients, logs, channel);
+                    const recipientSpecs = Array.isArray(recipients) ? recipients : [];
+                    const onlyVendorPayloadPaths =
+                        recipientSpecs.length > 0 &&
+                        recipientSpecs.every((spec) => {
+                            const src = (spec.source ?? "payload").toLowerCase();
+                            const path = typeof spec.path === "string" ? spec.path.trim().toLowerCase() : "";
+                            return src === "payload" && path.startsWith("vendor.");
+                        });
+
+                    let resolved = await resolveRecipients(supabase, payload, recipientSpecs, logs, channel);
+                    if (
+                        resolved.length === 0 &&
+                        channel.toLowerCase() === "sms" &&
+                        String(payload.event_type ?? "") === "booking_confirmed" &&
+                        (recipientSpecs.length === 0 || onlyVendorPayloadPaths)
+                    ) {
+                        logs.push(
+                            "send_message: booking_confirmed vendor SMS — no recipients from payload; resolving job_qualified_vendors (active, vertical/zip rules)"
+                        );
+                        const jqMax =
+                            typeof pl.job_qualified_vendor_max === "number" && pl.job_qualified_vendor_max > 0
+                                ? Math.min(500, pl.job_qualified_vendor_max)
+                                : 25;
+                        resolved = await resolveRecipients(
+                            supabase,
+                            payload,
+                            [{ source: "resolver", type: "job_qualified_vendors", max: jqMax }],
+                            logs,
+                            channel
+                        );
+                    }
                     if (resolved.length === 0) {
                         const preferredId = (payload as { _last_workflow_message_id?: string | null })._last_workflow_message_id ?? null;
                         logs.push(
@@ -1422,13 +1491,9 @@ export async function executeWorkflowRun(
                         token_resolved: !!token,
                     });
                     if (token && result?.short_code) {
-                        const baseUrl =
-                            (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||
-                            (typeof process !== "undefined" && process.env?.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+                        const origin = getPublicAppOrigin();
                         const shortUrl = buildShortActionLinkUrl(result.short_code);
-                        const actionLinkUrl =
-                            shortUrl ||
-                            (baseUrl ? `${String(baseUrl).replace(/\/$/, "")}/action/${token}` : `/action/${token}`);
+                        const actionLinkUrl = shortUrl || (origin ? `${origin}/action/${token}` : `/action/${token}`);
                         (payload as Record<string, unknown>)[outputKey] = actionLinkUrl;
                         logs.push(`create_action_link: set ${outputKey}`);
                         actionOutputs = { output_key: outputKey };

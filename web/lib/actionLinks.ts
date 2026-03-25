@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 
 const SHORT_CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
 
@@ -14,12 +15,9 @@ function randomShortCode(length = 8): string {
 
 /** Public path for SMS (uses short_code when present). */
 export function buildShortActionLinkUrl(shortCode: string): string {
-    const base =
-        (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||
-        (typeof process !== "undefined" && process.env?.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
     const code = String(shortCode ?? "").trim();
     if (!code) return "";
-    const root = base ? String(base).replace(/\/$/, "") : "";
+    const root = getPublicAppOrigin();
     return root ? `${root}/a/${code}` : `/a/${code}`;
 }
 

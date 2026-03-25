@@ -50,6 +50,11 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "opportunity.job_date", label: "opportunity.job_date" },
         { value: "opportunity.job_time_window", label: "opportunity.job_time_window" },
         { value: "opportunity.pipeline_stage_id", label: "opportunity.pipeline_stage_id" },
+        { value: "formatted_start_at", label: "formatted_start_at (booking_confirmed SMS)" },
+        { value: "booking_price", label: "booking_price (USD string)" },
+        { value: "booking_bedrooms", label: "booking_bedrooms" },
+        { value: "booking_bathrooms", label: "booking_bathrooms" },
+        { value: "booking_square_footage", label: "booking_square_footage" },
     ],
     opportunity: [
         { value: "opportunity.id", label: "opportunity.id" },
