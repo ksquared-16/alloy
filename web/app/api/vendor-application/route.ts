@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
-
-const BUCKET = "vendor_documents";
+import { ORG_DOCUMENTS_STORAGE_BUCKET } from "@/lib/storage/orgDocumentsBucket";
 
 function getStr(form: FormData, key: string): string {
   const v = form.get(key);
@@ -201,7 +200,13 @@ export async function POST(request: NextRequest) {
     const insuranceBuf = Buffer.from(await proof_of_insurance.arrayBuffer());
     const driversBuf = Buffer.from(await drivers_license.arrayBuffer());
 
-    const { error: up1 } = await supabase.storage.from(BUCKET).upload(insurancePath, insuranceBuf, {
+    console.log("[VENDOR_APPLICATION] storage_upload_start", {
+      bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
+      storagePath: insurancePath,
+      fileType: "proof_of_insurance",
+      mimeType: contentType(proof_of_insurance),
+    });
+    const { error: up1 } = await supabase.storage.from(ORG_DOCUMENTS_STORAGE_BUCKET).upload(insurancePath, insuranceBuf, {
       contentType: contentType(proof_of_insurance),
       upsert: false,
     });
@@ -210,7 +215,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Failed to upload proof of insurance" }, { status: 400 });
     }
 
-    const { error: up2 } = await supabase.storage.from(BUCKET).upload(driversPath, driversBuf, {
+    console.log("[VENDOR_APPLICATION] storage_upload_start", {
+      bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
+      storagePath: driversPath,
+      fileType: "drivers_license",
+      mimeType: contentType(drivers_license),
+    });
+    const { error: up2 } = await supabase.storage.from(ORG_DOCUMENTS_STORAGE_BUCKET).upload(driversPath, driversBuf, {
       contentType: contentType(drivers_license),
       upsert: false,
     });
@@ -232,13 +243,13 @@ export async function POST(request: NextRequest) {
       original_filename: insuranceFilename,
       mime_type: contentType(proof_of_insurance),
       byte_size: insuranceBuf.length,
-      bucket: BUCKET,
+      bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
       storage_path: insurancePath,
       status: "uploaded",
     });
     if (doc1Err) {
       console.error("[VENDOR_APPLICATION] documents insert (insurance) failed:", doc1Err.message);
-      await supabase.storage.from(BUCKET).remove([insurancePath, driversPath]).catch(() => {});
+      await supabase.storage.from(ORG_DOCUMENTS_STORAGE_BUCKET).remove([insurancePath, driversPath]).catch(() => {});
       return NextResponse.json({ ok: false, error: "Failed to save document records" }, { status: 500 });
     }
 
@@ -251,14 +262,14 @@ export async function POST(request: NextRequest) {
       original_filename: driversFilename,
       mime_type: contentType(drivers_license),
       byte_size: driversBuf.length,
-      bucket: BUCKET,
+      bucket: ORG_DOCUMENTS_STORAGE_BUCKET,
       storage_path: driversPath,
       status: "uploaded",
     });
     if (doc2Err) {
       console.error("[VENDOR_APPLICATION] documents insert (drivers_license) failed:", doc2Err.message);
       await supabase.from("documents").delete().eq("org_id", orgId).eq("storage_path", insurancePath);
-      await supabase.storage.from(BUCKET).remove([insurancePath, driversPath]).catch(() => {});
+      await supabase.storage.from(ORG_DOCUMENTS_STORAGE_BUCKET).remove([insurancePath, driversPath]).catch(() => {});
       return NextResponse.json({ ok: false, error: "Failed to save document records" }, { status: 500 });
     }
 

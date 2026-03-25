@@ -3,8 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-
-const BUCKET = "vendor_documents";
+import { ORG_DOCUMENTS_STORAGE_BUCKET } from "@/lib/storage/orgDocumentsBucket";
 const EXPIRES_IN = 60 * 10; // 10 minutes
 
 /** GET: return a signed URL for a vendor document. Query: path=<storage object path>. Path must start with vendors/${id}/ */
@@ -37,7 +36,7 @@ export async function GET(
         }
         const supabase = createServiceRoleClient();
         const { data, error } = await supabase.storage
-            .from(BUCKET)
+            .from(ORG_DOCUMENTS_STORAGE_BUCKET)
             .createSignedUrl(path, EXPIRES_IN);
 
         if (error) {
