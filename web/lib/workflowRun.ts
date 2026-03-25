@@ -197,14 +197,75 @@ function maskPhoneForLog(phone: string | null | undefined): string {
     return `…${d.slice(-4)}`;
 }
 
+function isProbableUuid(s: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+/** E.164-ish for SMS: preserve leading +, default US +1 for 10-digit national. */
+function normalizePhoneForSms(raw: string): string {
+    const t = String(raw).trim();
+    if (!t) return t;
+    if (t.startsWith("+")) return t;
+    const digits = t.replace(/\D/g, "");
+    if (digits.length === 10) return `+1${digits}`;
+    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+    if (digits.length >= 10) return `+${digits}`;
+    return t;
+}
+
+function digitCount(s: string): number {
+    return String(s).replace(/\D/g, "").length;
+}
+
+/**
+ * Backend (Render) consumes queued rows in public.messages — not messages_outbox.
+ * POST with INTERNAL_CRON_TOKEN to process the queue after workflows enqueue SMS.
+ */
+async function triggerInternalMessagesProcess(logs: string[]): Promise<void> {
+    const url = (process.env.INTERNAL_MESSAGES_PROCESS_URL ?? "").trim();
+    const token = (process.env.INTERNAL_CRON_TOKEN ?? "").trim();
+    if (!url || !token) {
+        logs.push(
+            "send_message: INTERNAL_MESSAGES_PROCESS_URL or INTERNAL_CRON_TOKEN unset — SMS rows stay queued until backend POST /internal/messages/process runs (see backend/README_MESSAGES_SENDER.md)"
+        );
+        console.warn("[WORKFLOW_RUN] send_message: messages_process_env_missing");
+        return;
+    }
+    try {
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-cron-token": token,
+            },
+            body: JSON.stringify({ limit: 25 }),
+        });
+        const text = await res.text().catch(() => "");
+        logs.push(`send_message: messages_process_trigger status=${res.status} body=${text.slice(0, 240)}`);
+        console.log("[WORKFLOW_RUN] send_message: messages_process_trigger", { status: res.status });
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logs.push(`send_message: messages_process_trigger_error ${msg}`);
+        console.error("[WORKFLOW_RUN] send_message: messages_process_trigger_error", e);
+    }
+}
+
 /** Single resolved recipient for send_message (contact_id and/or to_phone/to_email). */
-type ResolvedRecipient = { contact_id?: string | null; to_phone?: string | null; to_email?: string | null };
+type ResolvedRecipient = {
+    contact_id?: string | null;
+    to_phone?: string | null;
+    to_email?: string | null;
+    /** Delivery is the existing public.messages row (Python sender); skip messages_outbox for this recipient. */
+    useExistingQueuedMessageId?: string | null;
+};
 
 /** Recipient spec from send_message payload.recipients[]. */
 type RecipientSpec = {
     type?: string;
     source?: string;
     path?: string;
+    /** How to interpret payload path value: contact UUID vs phone vs email (default auto). */
+    value_kind?: string | null;
     vendor_id_path?: string;
     role_in?: string[];
     max?: number;
@@ -218,30 +279,110 @@ type RecipientSpec = {
     match_job_zip?: boolean;
 };
 
+async function recipientsFromQueuedWorkflowMessages(
+    supabase: SupabaseClient,
+    workflowRunId: string,
+    channel: string,
+    logs: string[],
+    preferredMessageId?: string | null
+): Promise<ResolvedRecipient[]> {
+    const ch = channel.toLowerCase();
+    let q = supabase
+        .from("messages")
+        .select("id, to_value, contact_id, body")
+        .eq("workflow_run_id", workflowRunId)
+        .eq("direction", "outbound")
+        .eq("status", "queued")
+        .eq("channel", ch)
+        .order("created_at", { ascending: false });
+    if (preferredMessageId && String(preferredMessageId).trim()) {
+        q = q.eq("id", String(preferredMessageId).trim());
+    }
+    const { data, error } = await q.limit(preferredMessageId ? 1 : 10);
+    if (error) {
+        logs.push(`send_message: fetch queued messages failed: ${error.message}`);
+        return [];
+    }
+    const rows = (data ?? []) as { id: string; to_value: string | null; contact_id: string | null }[];
+    const out: ResolvedRecipient[] = [];
+    for (const row of rows) {
+        const tv = row.to_value != null ? String(row.to_value).trim() : "";
+        if (!tv) continue;
+        if (ch === "sms") {
+            out.push({
+                contact_id: row.contact_id ?? null,
+                to_phone: normalizePhoneForSms(tv),
+                useExistingQueuedMessageId: row.id,
+            });
+            logs.push(
+                `send_message: recipient from queued messages row id=${row.id} to_value=${maskPhoneForLog(tv)} (delivery via public.messages queue, not messages_outbox)`
+            );
+            break;
+        }
+        if (ch === "email") {
+            out.push({
+                contact_id: row.contact_id ?? null,
+                to_email: tv,
+                useExistingQueuedMessageId: row.id,
+            });
+            logs.push(`send_message: recipient from queued messages row id=${row.id} (email redacted)`);
+            break;
+        }
+    }
+    if (out.length === 0) {
+        logs.push(
+            "send_message: no matching queued outbound messages row for this workflow_run_id (after create_message?)"
+        );
+    }
+    return out;
+}
+
 async function resolveRecipients(
     supabase: SupabaseClient,
     payload: Record<string, unknown>,
     recipients: RecipientSpec[],
-    logs: string[]
+    logs: string[],
+    sendChannel: string
 ): Promise<ResolvedRecipient[]> {
     const out: ResolvedRecipient[] = [];
     const seen = new Set<string>();
+    const ch = sendChannel.toLowerCase();
 
     for (const r of recipients ?? []) {
         const source = (r.source ?? "payload").toLowerCase();
         const type = (r.type ?? "").toLowerCase();
 
         if (source === "payload" && r.path) {
-            const id = getByPath(payload, r.path.trim());
-            const contactId = id != null ? String(id) : null;
-            if (contactId) {
-                const key = `c:${contactId}`;
+            const raw = getByPath(payload, r.path.trim());
+            if (raw == null || raw === "") {
+                logs.push(`send_message: payload path ${r.path} resolved to empty`);
+                continue;
+            }
+            const s = String(raw).trim();
+            const kind = (r.value_kind ?? "auto").toLowerCase();
+            let resolved: ResolvedRecipient | null = null;
+            if (kind === "contact_id" || (kind === "auto" && isProbableUuid(s))) {
+                resolved = { contact_id: s };
+                logs.push(`send_message: path ${r.path} → contact_id ${s.slice(0, 8)}…`);
+            } else if (kind === "phone" || (kind === "auto" && ch === "sms" && digitCount(s) >= 10)) {
+                resolved = { to_phone: normalizePhoneForSms(s) };
+                logs.push(`send_message: path ${r.path} → to_phone ${maskPhoneForLog(resolved.to_phone ?? "")}`);
+            } else if (kind === "email" || (kind === "auto" && s.includes("@"))) {
+                resolved = { to_email: s };
+                logs.push(`send_message: path ${r.path} → to_email (set)`);
+            } else {
+                logs.push(
+                    `send_message: path ${r.path} could not map value (use value_kind: contact_id|phone|email or fix path/channel); channel=${ch}`
+                );
+            }
+            if (resolved) {
+                const key = resolved.contact_id
+                    ? `c:${resolved.contact_id}`
+                    : `p:${resolved.to_phone ?? ""}:e:${resolved.to_email ?? ""}`;
                 if (!seen.has(key)) {
                     seen.add(key);
-                    out.push({ contact_id: contactId });
+                    out.push(resolved);
                 }
-            } else {
-                logs.push(`send_message: payload path ${r.path} resolved to empty`);
             }
             continue;
         }
@@ -838,42 +979,51 @@ export async function executeWorkflowRun(
                     const customerId = resolveId(pl.customer_id, payload);
                     const opportunityId = resolveId(pl.opportunity_id, payload);
                     const jobId = resolveId(pl.job_id, payload);
-                    const { error: msgErr } = await supabase.from("messages").insert({
-                        customer_id: customerId,
-                        contact_id: contactId,
-                        opportunity_id: opportunityId,
-                        job_id: jobId,
-                        channel,
-                        direction: "outbound",
-                        from_value: null,
-                        to_value: toValue,
-                        body: bodyText,
-                        status: "queued",
-                        sent_at: null,
-                        provider: null,
-                        provider_message_id: null,
-                        metadata: {
-                            workflow_id: workflowId,
+                    const { data: insertedMsg, error: msgErr } = await supabase
+                        .from("messages")
+                        .insert({
+                            customer_id: customerId,
+                            contact_id: contactId,
+                            opportunity_id: opportunityId,
+                            job_id: jobId,
+                            channel,
+                            direction: "outbound",
+                            from_value: null,
+                            to_value: toValue,
+                            body: bodyText,
+                            status: "queued",
+                            sent_at: null,
+                            provider: null,
+                            provider_message_id: null,
+                            metadata: {
+                                workflow_id: workflowId,
+                                workflow_run_id: runId,
+                                action_type: "create_message",
+                                action_order: action.action_order,
+                            },
+                            related_entity_type: null,
+                            related_entity_id: null,
                             workflow_run_id: runId,
-                            action_type: "create_message",
-                            action_order: action.action_order,
-                        },
-                        related_entity_type: null,
-                        related_entity_id: null,
-                        workflow_run_id: runId,
-                        error: null,
-                    });
+                            error: null,
+                        })
+                        .select("id")
+                        .single();
                     if (msgErr) throw new Error(`create_message: ${msgErr.message}`);
+                    const newMsgId = (insertedMsg as { id?: string } | null)?.id ?? null;
+                    if (newMsgId) {
+                        (payload as Record<string, unknown>)._last_workflow_message_id = newMsgId;
+                    }
                     console.log("[WORKFLOW_RUN] create_message_queued", {
                         workflow_id: workflowId,
                         workflow_run_id: runId,
                         action_order: action.action_order,
                         channel,
+                        message_id: newMsgId,
                         to_value_tail: maskPhoneForLog(toValue),
                         contact_id: contactId,
                         job_id: jobId,
                     });
-                    actionOutputs = { queued: true };
+                    actionOutputs = { queued: true, message_id: newMsgId };
                     actionCompleted = true;
                     break;
                 }
@@ -885,7 +1035,38 @@ export async function executeWorkflowRun(
                     const bodyText = renderTemplate(template, payload);
                     const bodyHash = createHash("sha1").update(bodyText ?? "").digest("hex").slice(0, 16);
                     const outboxPayload: Record<string, unknown> = { body: bodyText };
-                    const resolved = await resolveRecipients(supabase, payload, recipients, logs);
+                    const triggerProcess = pl.trigger_messages_process !== false;
+
+                    console.log("[WORKFLOW_RUN] send_message_start", {
+                        workflow_id: workflowId,
+                        workflow_run_id: runId,
+                        action_order: action.action_order,
+                        channel,
+                        recipients_spec_count: recipients.length,
+                        recipient_specs: recipients.map((x) => ({
+                            source: x.source,
+                            type: x.type,
+                            path: x.path,
+                            value_kind: x.value_kind,
+                        })),
+                        last_workflow_message_id: (payload as { _last_workflow_message_id?: string })._last_workflow_message_id ?? null,
+                    });
+
+                    let resolved = await resolveRecipients(supabase, payload, recipients, logs, channel);
+                    if (resolved.length === 0) {
+                        const preferredId = (payload as { _last_workflow_message_id?: string | null })._last_workflow_message_id ?? null;
+                        logs.push(
+                            "send_message: resolveRecipients returned 0 — trying public.messages rows for this workflow_run (create_message step)"
+                        );
+                        resolved = await recipientsFromQueuedWorkflowMessages(
+                            supabase,
+                            runId,
+                            channel,
+                            logs,
+                            preferredId
+                        );
+                    }
+
                     const deduped: ResolvedRecipient[] = [];
                     const seenKey = new Set<string>();
                     for (const r of resolved) {
@@ -894,12 +1075,47 @@ export async function executeWorkflowRun(
                         seenKey.add(key);
                         deduped.push(r);
                     }
+
+                    console.log("[WORKFLOW_RUN] send_message_resolved", {
+                        workflow_run_id: runId,
+                        deduped_count: deduped.length,
+                        summary: deduped.map((r) => ({
+                            has_contact_id: !!r.contact_id,
+                            to_phone_tail: maskPhoneForLog(r.to_phone),
+                            has_email: !!(r.to_email && String(r.to_email).trim()),
+                            use_existing_messages_row: !!r.useExistingQueuedMessageId,
+                        })),
+                    });
+
+                    let outboxInserted = 0;
+                    let usedQueuedMessageRows = 0;
+                    const isSms = channel.toLowerCase() === "sms";
+
                     for (const r of deduped) {
+                        if (r.useExistingQueuedMessageId) {
+                            usedQueuedMessageRows++;
+                            logs.push(
+                                `send_message: skipping messages_outbox — using queued row id=${r.useExistingQueuedMessageId} (Twilio via backend process_queued_messages on public.messages)`
+                            );
+                            console.log("[WORKFLOW_RUN] send_message_skip_outbox_use_messages_row", {
+                                message_id: r.useExistingQueuedMessageId,
+                                to_phone_tail: maskPhoneForLog(r.to_phone),
+                            });
+                            continue;
+                        }
                         const filled = await ensureContactPhoneEmail(supabase, r);
                         const toPhone = filled.to_phone ?? null;
                         const toEmail = filled.to_email ?? null;
-                        const isSms = channel.toLowerCase() === "sms";
                         const recipient = isSms ? (toPhone ?? "") : (toEmail ?? "");
+                        if (!recipient.trim()) {
+                            logs.push(
+                                `send_message: skip outbox insert — no phone/email after contact lookup (contact_id=${filled.contact_id ?? "none"})`
+                            );
+                            console.warn("[WORKFLOW_RUN] send_message_empty_recipient_after_lookup", {
+                                contact_id: filled.contact_id,
+                            });
+                            continue;
+                        }
                         const dedupeKey = `${workflowId}:${channel}:${recipient}:${templateKey}:${bodyHash}`;
                         const row: Record<string, unknown> = {
                             org_id: orgId,
@@ -933,6 +1149,7 @@ export async function executeWorkflowRun(
                                 throw new Error(`send_message outbox: ${outErr.message}`);
                             }
                         } else {
+                            outboxInserted++;
                             console.log("[WORKFLOW_RUN] messages_outbox_queued", {
                                 workflow_id: workflowId,
                                 workflow_run_id: runId,
@@ -941,12 +1158,25 @@ export async function executeWorkflowRun(
                                 to_phone_tail: maskPhoneForLog(toPhone),
                                 to_email_set: !!(toEmail && String(toEmail).trim()),
                                 contact_id: filled.contact_id ?? null,
-                                note: "SMS delivery/Twilio runs in outbox worker; no SID at insert time",
+                                note: "messages_outbox is separate from public.messages Twilio pipeline; prefer create_message + process for SMS",
                             });
                         }
                     }
-                    logs.push(`send_message: queued ${deduped.length} recipient(s)`);
-                    actionOutputs = { recipients: deduped.length };
+                    logs.push(
+                        `send_message: resolved_recipients=${deduped.length} outbox_inserted=${outboxInserted} used_queued_messages_rows=${usedQueuedMessageRows}`
+                    );
+
+                    if (isSms && triggerProcess) {
+                        logs.push("send_message: invoking INTERNAL_MESSAGES_PROCESS_URL to send queued public.messages via Twilio");
+                        await triggerInternalMessagesProcess(logs);
+                    }
+
+                    actionOutputs = {
+                        recipients: deduped.length,
+                        outbox_queued: outboxInserted,
+                        used_queued_messages: usedQueuedMessageRows,
+                        messages_process_triggered: isSms && triggerProcess,
+                    };
                     actionCompleted = true;
                     break;
                 }
