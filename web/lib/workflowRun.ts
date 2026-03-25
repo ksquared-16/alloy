@@ -21,27 +21,75 @@ export type WorkflowEventPayload = {
 
 const CANONICAL_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor"] as const;
 
+/** First 5 digits of a ZIP from arbitrary UI/JSON values. */
+function zip5FromUnknown(v: unknown): string | null {
+    if (v == null) return null;
+    const digitsOnly = String(v).replace(/\D/g, "");
+    const five = digitsOnly.slice(0, 5);
+    return five.length >= 5 ? five : null;
+}
+
 /**
- * Resolve job zip from payload for vendor matching. Tries schedule, job, opportunity, customer.
- * Returns 5-digit zip (strip non-digits, take first 5) or null.
+ * `metadata` on opportunity/job is usually jsonb object; occasionally a JSON string.
+ */
+function readMetadataRecord(entity: Record<string, unknown> | undefined): Record<string, unknown> | null {
+    const m = entity?.metadata;
+    if (m == null) return null;
+    if (typeof m === "string") {
+        try {
+            const p = JSON.parse(m) as unknown;
+            return p != null && typeof p === "object" ? (p as Record<string, unknown>) : null;
+        } catch {
+            return null;
+        }
+    }
+    if (typeof m === "object") return m as Record<string, unknown>;
+    return null;
+}
+
+/** Book-v2 stores service ZIP under metadata.quote_input.zip (not opportunity.postal_code). */
+function zipFromQuoteInputMetadata(entity: Record<string, unknown> | undefined): string | null {
+    const meta = readMetadataRecord(entity);
+    if (!meta) return null;
+    const qi = meta.quote_input;
+    if (!qi || typeof qi !== "object") return null;
+    const q = qi as Record<string, unknown>;
+    return zip5FromUnknown(q.zip ?? q.postal_code ?? q.postal ?? q.zip_code);
+}
+
+/**
+ * Resolve job zip from payload for vendor matching (service area / job_qualified_vendors).
+ * Tries schedule, job, opportunity, book-v2 quote_input on metadata, customer.
+ * Returns 5-digit zip or null.
  */
 function getJobZip(payload: Record<string, unknown>): string | null {
     const schedule = payload.schedule as Record<string, unknown> | undefined;
     const job = payload.job as Record<string, unknown> | undefined;
     const opportunity = payload.opportunity as Record<string, unknown> | undefined;
     const customer = payload.customer as Record<string, unknown> | undefined;
-    const raw =
-        (schedule?.postal_code != null && String(schedule.postal_code).trim() !== "" ? String(schedule.postal_code).trim() : null) ??
-        (schedule?.location != null && typeof schedule.location === "object" && (schedule.location as Record<string, unknown>)?.postal_code != null
-            ? String((schedule.location as Record<string, unknown>).postal_code).trim()
-            : null) ??
-        (job?.postal_code != null && String(job.postal_code).trim() !== "" ? String(job.postal_code).trim() : null) ??
-        (opportunity?.postal_code != null && String(opportunity.postal_code).trim() !== "" ? String(opportunity.postal_code).trim() : null) ??
-        (customer?.postal_code != null && String(customer.postal_code).trim() !== "" ? String(customer.postal_code).trim() : null);
-    if (raw == null || raw === "") return null;
-    const digitsOnly = String(raw).replace(/\D/g, "");
-    const five = digitsOnly.slice(0, 5);
-    return five.length >= 5 ? five : null;
+
+    const candidates: unknown[] = [
+        schedule?.postal_code,
+        schedule?.location != null && typeof schedule.location === "object"
+            ? (schedule.location as Record<string, unknown>).postal_code
+            : null,
+        job?.postal_code,
+        opportunity?.postal_code,
+        zipFromQuoteInputMetadata(opportunity),
+        zipFromQuoteInputMetadata(job),
+        getByPath(payload, "opportunity.metadata.quote_input.zip"),
+        getByPath(payload, "opportunity.metadata.quote_input.postal_code"),
+        getByPath(payload, "job.metadata.quote_input.zip"),
+        getByPath(payload, "job.metadata.quote_input.postal_code"),
+        getByPath(payload, "customer.metadata.quote_input.zip"),
+        customer?.postal_code,
+    ];
+
+    for (const c of candidates) {
+        const z = zip5FromUnknown(c);
+        if (z) return z;
+    }
+    return null;
 }
 
 /** Map entity type (e.g. "schedule", "job") to real table name for update_entity and other actions. */
@@ -629,15 +677,32 @@ async function resolveRecipients(
                 .eq("vendor_status_id", activeStatusId)
                 .limit(500);
             const { data: activeVendors } = await vendorsQuery;
+            const rawVendorCount = (activeVendors ?? []).length;
+            if (vendorIdSet.size > 0 && rawVendorCount === 0) {
+                logs.push(
+                    `job_qualified_vendors: ${vendorIdSet.size} vendor(s) in vendor_verticals for vertical but 0 rows after org_id + active status filter (check payload.org_id vs vendors.org_id and vendor_status for "${vendorStatusKey}")`
+                );
+            }
             let list = (activeVendors ?? []) as VendorRowForOfferSms[];
             if (jobZip) {
+                const beforeZip = list.length;
                 list = list.filter((v) => {
                     const zips = v.service_area_zip_codes;
                     if (!zips || !Array.isArray(zips)) return false;
                     return zips.some((z) => String(z).replace(/\D/g, "").slice(0, 5) === jobZip);
                 });
+                if (beforeZip > 0 && list.length === 0) {
+                    logs.push(
+                        `job_qualified_vendors: jobZip=${jobZip} excluded all ${beforeZip} active vendor(s) (service_area_zip_codes has no match)`
+                    );
+                }
             }
             const nJq = await appendEligibleVendorRecipients(supabase, list, max, seen, out, "job_qualified_vendors", logs);
+            if (list.length > 0 && nJq === 0) {
+                logs.push(
+                    `job_qualified_vendors: ${list.length} vendor row(s) matched but 0 SMS recipients (need vendors.phone, persons.phone via primary_person_id, or primary_contact_id → contact.phone)`
+                );
+            }
             console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: nJq });
             logs.push(`job_qualified_vendors: resolved count=${nJq}`);
             continue;
