@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
       name: vendorName,
       company_name: company_name || null,
       vendor_status_id: vendorStatusId,
+      ...(vendorStatusId ? { status_key: "pending" as const, status: "pending" as const } : {}),
       email,
       phone,
       primary_person_id: personId,

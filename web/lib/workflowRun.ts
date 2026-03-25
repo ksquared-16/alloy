@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
-import { createActionLink } from "@/lib/actionLinks";
+import { createActionLink, buildShortActionLinkUrl } from "@/lib/actionLinks";
+import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 import { getByPath, renderTemplate } from "@/lib/workflowTemplate";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
@@ -269,7 +270,7 @@ type RecipientSpec = {
     vendor_id_path?: string;
     role_in?: string[];
     max?: number;
-    /** vendors_query: filter by status key (e.g. "approved") */
+    /** vendors_query: filter by status key (e.g. "active") */
     status_key?: string | null;
     /** vendors_query: vertical slug when match_job_vertical is false */
     vertical_slug?: string | null;
@@ -460,14 +461,19 @@ async function resolveRecipients(
                 continue;
             }
 
-            let statusId: string | null = null;
-            if (r.status_key != null && String(r.status_key).trim() !== "") {
-                const { data: statusRow } = await supabase
-                    .from("vendor_statuses")
-                    .select("id")
-                    .eq("key", String(r.status_key).trim())
-                    .maybeSingle();
-                statusId = (statusRow as { id?: string } | null)?.id ?? null;
+            const vendorStatusKey =
+                r.status_key != null && String(r.status_key).trim() !== ""
+                    ? String(r.status_key).trim()
+                    : DEFAULT_VENDOR_ASSIGNMENT_POLICY.vendorStatusKey;
+            const { data: statusRow } = await supabase
+                .from("vendor_statuses")
+                .select("id")
+                .eq("key", vendorStatusKey)
+                .maybeSingle();
+            const statusId = (statusRow as { id?: string } | null)?.id ?? null;
+            if (!statusId) {
+                logs.push(`vendors_query: vendor status "${vendorStatusKey}" not found in vendor_statuses; skipping`);
+                continue;
             }
 
             const { data: vvRows } = await supabase
@@ -487,9 +493,7 @@ async function resolveRecipients(
                 .eq("org_id", orgId)
                 .in("id", Array.from(vendorIdSet))
                 .limit(500);
-            if (statusId) {
-                vendorsQuery = vendorsQuery.eq("vendor_status_id", statusId);
-            }
+            vendorsQuery = vendorsQuery.eq("vendor_status_id", statusId);
             const { data: vendorRows } = await vendorsQuery;
             let list = (vendorRows ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
 
@@ -556,20 +560,25 @@ async function resolveRecipients(
                 console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: 0 });
                 continue;
             }
-            const vendorStatusKey = (r.status_key != null && String(r.status_key).trim() !== "") ? String(r.status_key).trim() : "approved";
+            const vendorStatusKey =
+                r.status_key != null && String(r.status_key).trim() !== ""
+                    ? String(r.status_key).trim()
+                    : DEFAULT_VENDOR_ASSIGNMENT_POLICY.vendorStatusKey;
             const { data: statusRow } = await supabase.from("vendor_statuses").select("id").eq("key", vendorStatusKey).maybeSingle();
-            const approvedStatusId = (statusRow as { id?: string } | null)?.id ?? null;
+            const activeStatusId = (statusRow as { id?: string } | null)?.id ?? null;
+            if (!activeStatusId) {
+                logs.push(`job_qualified_vendors: vendor status "${vendorStatusKey}" not found; skipping`);
+                continue;
+            }
             let vendorsQuery = supabase
                 .from("vendors")
                 .select("id, primary_contact_id, service_area_zip_codes")
                 .eq("org_id", orgId)
                 .in("id", Array.from(vendorIdSet))
+                .eq("vendor_status_id", activeStatusId)
                 .limit(500);
-            if (approvedStatusId) {
-                vendorsQuery = vendorsQuery.eq("vendor_status_id", approvedStatusId);
-            }
-            const { data: approvedVendors } = await vendorsQuery;
-            let list = (approvedVendors ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
+            const { data: activeVendors } = await vendorsQuery;
+            let list = (activeVendors ?? []) as { id: string; primary_contact_id?: string | null; service_area_zip_codes?: string[] | null }[];
             if (jobZip) {
                 list = list.filter((v) => {
                     const zips = v.service_area_zip_codes;
@@ -1404,17 +1413,7 @@ export async function executeWorkflowRun(
                         expires_in_minutes: expiresInMinutes,
                         metadata: (pl.metadata != null && typeof pl.metadata === "object" ? pl.metadata : null) as Record<string, unknown> | null,
                     });
-                    let token: string | null = null;
-                    if (typeof result === "string") {
-                        token = result;
-                    } else if (result && typeof result === "object") {
-                        const obj = result as Record<string, unknown>;
-                        if ("token" in obj && typeof obj.token === "string") {
-                            token = obj.token;
-                        } else if ("data" in obj && obj.data != null && typeof obj.data === "object" && "token" in (obj.data as Record<string, unknown>) && typeof (obj.data as Record<string, unknown>).token === "string") {
-                            token = (obj.data as { token: string }).token;
-                        }
-                    }
+                    const token = result?.token ?? null;
                     console.log("[WORKFLOW_RUN] create_action_link_result", {
                         workflow_id: workflowId,
                         workflow_run_id: runId,
@@ -1422,11 +1421,14 @@ export async function executeWorkflowRun(
                         output_key: outputKey,
                         token_resolved: !!token,
                     });
-                    if (token) {
+                    if (token && result?.short_code) {
                         const baseUrl =
                             (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL) ||
                             (typeof process !== "undefined" && process.env?.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-                        const actionLinkUrl = baseUrl ? `${String(baseUrl).replace(/\/$/, "")}/action/${token}` : `/action/${token}`;
+                        const shortUrl = buildShortActionLinkUrl(result.short_code);
+                        const actionLinkUrl =
+                            shortUrl ||
+                            (baseUrl ? `${String(baseUrl).replace(/\/$/, "")}/action/${token}` : `/action/${token}`);
                         (payload as Record<string, unknown>)[outputKey] = actionLinkUrl;
                         logs.push(`create_action_link: set ${outputKey}`);
                         actionOutputs = { output_key: outputKey };

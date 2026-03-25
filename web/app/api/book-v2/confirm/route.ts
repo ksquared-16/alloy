@@ -16,6 +16,7 @@ import {
 import { resolveBookingJobStatus } from "@/lib/book-v2/resolveBookingJobStatus";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { persistBookingPaymentMethod, resolveStripePaymentMethodId } from "@/lib/book-v2/persistBookingPaymentMethod";
+import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/bookingConfirmationSms";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -338,6 +339,14 @@ async function runDeferredBookingEffects(params: {
             opportunity: oppRow ?? null,
             schedule: normalizedSchedule,
         };
+
+        const schedForSms = normalizedSchedule as { id?: string; start_at?: string | null; timezone?: string | null };
+        const smsTz = resolveBookingSmsTimeZone({
+            scheduleTimezone: schedForSms.timezone,
+            contactTimezone: (contactRow as { timezone?: string | null } | null)?.timezone,
+        });
+        const startIsoForSms = (schedForSms.start_at as string | undefined) ?? slot_start;
+        eventPayload.formatted_start_at = formatBookingStartForSms(startIsoForSms, smsTz);
 
         const j = jobRow as { status_key?: unknown; id?: string } | null;
         const s = normalizedSchedule as { status_key?: unknown; id?: string };

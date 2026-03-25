@@ -5,7 +5,7 @@ import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 
-/** GET: vendors that can be assigned to this schedule (org + job vertical + approved). */
+/** GET: vendors that can be assigned to this schedule (org + job vertical + status_key = active per assignment policy). */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;

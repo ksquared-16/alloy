@@ -46,7 +46,7 @@ const STATUS_VARIANTS: Record<string, string> = {
 export function getStatusVariant(statusKey: string | null | undefined): "default" | "success" | "warning" | "neutral" | "info" | "error" | "gold" {
     if (!statusKey) return "neutral";
     const k = statusKey.toLowerCase();
-    if (["active", "completed", "success", "accepted", "posted", "approved"].some((x) => k.includes(x))) return "success";
+    if (["active", "completed", "success", "accepted", "posted"].some((x) => k.includes(x))) return "success";
     if (["pending", "new", "draft", "scheduled", "offered", "in_progress"].some((x) => k.includes(x))) return "info";
     if (["inactive", "archived", "canceled", "cancelled", "removed", "unassigned", "declined"].some((x) => k.includes(x))) return "neutral";
     if (["failed", "error", "lost"].some((x) => k.includes(x))) return "error";

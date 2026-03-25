@@ -694,6 +694,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       ],
       quickActions: [
         { key: "run_payment", label: "Run payment", variant: "primary", inHeader: true, locked: true },
+        { key: "assign_vendor", label: "Assign vendor", variant: "secondary", inHeader: true, locked: true },
         { key: "mark_completed", label: "Mark completed", variant: "secondary", inHeader: true, locked: true },
         { key: "reschedule", label: "Reschedule", variant: "secondary", inHeader: false, locked: true },
       ],
@@ -759,6 +760,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       relatedModules: [],
       quickActions: [
         { key: "run_payment", label: "Run payment", variant: "primary", inHeader: true, locked: true },
+        { key: "assign_vendor", label: "Assign vendor", variant: "secondary", inHeader: true, locked: true },
       ],
     },
   },

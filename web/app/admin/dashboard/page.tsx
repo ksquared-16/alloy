@@ -100,13 +100,13 @@ async function getDashboardData(orgId: string): Promise<DashboardData> {
     const canceled = typeof (canceledCountRes as { count?: number }).count === "number" ? (canceledCountRes as { count: number }).count : 0;
     const upcoming = upcomingTotal;
 
-    const vendorCounts = { pending: 0, approved: 0, suspended: 0 };
+    const vendorCounts = { pending: 0, active: 0, suspended: 0 };
     vendors.forEach((v) => {
         const k = String((v as { status_key?: string | null }).status_key ?? "")
             .trim()
             .toLowerCase();
         if (k === "pending") vendorCounts.pending++;
-        else if (k === "approved") vendorCounts.approved++;
+        else if (k === "active") vendorCounts.active++;
         else if (k === "suspended") vendorCounts.suspended++;
     });
 
@@ -195,7 +195,7 @@ export default async function AdminDashboardPage() {
         jobs: { total: 0, withDefaultVendor: 0 },
         opportunities: { total: 0, booked: 0, notBooked: 0, byStage: {} },
         schedules: { upcoming: 0, unassigned: 0, offered: 0, accepted: 0, canceled: 0 },
-        vendors: { pending: 0, approved: 0, suspended: 0 },
+        vendors: { pending: 0, active: 0, suspended: 0 },
         attention: { unassignedSchedules: 0, offeredNotAccepted: 0, failedWorkflowRuns: 0, messageOutboxFailures: 0 },
         upcomingSchedules: [],
         financialSnapshot: null,

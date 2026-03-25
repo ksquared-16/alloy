@@ -5,7 +5,7 @@ import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 
 /** GET: vendor options for dropdowns (`id`, `name`, `label`). `value` = id; `label` = human-readable.
- *  `?for_assignment=true` — only vendors with `status_key` matching the assignment policy (default `approved`).
+ *  `?for_assignment=true` — only vendors with `status_key` matching the assignment policy (default `active`).
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();

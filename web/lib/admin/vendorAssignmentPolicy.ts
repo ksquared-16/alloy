@@ -1,8 +1,8 @@
 /**
- * Who may be offered in job/schedule “assign vendor” UIs.
- * Eligibility: `vendors.status_key` equals this key (configure in status_definitions, entity_type=vendors).
+ * Who may be offered in job/schedule “assign vendor” UIs and in job_qualified_vendors / vendors_query when no status override is set.
+ * Eligibility: `vendors.status_key` equals this key (vendor_statuses.key = assignable / activated vendor).
  */
-export const VENDOR_ASSIGNMENT_VENDOR_STATUS_KEY = "approved" as const;
+export const VENDOR_ASSIGNMENT_VENDOR_STATUS_KEY = "active" as const;
 
 export type VendorAssignmentPolicy = {
     vendorStatusKey: string;

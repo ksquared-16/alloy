@@ -471,7 +471,7 @@ function JobDrawerRelationshipsSection(props: {
             </button>
             {p.jobExpandedSections.relationships && (
                 <div className="space-y-3 pb-3">
-                    <div>
+                    <div id="job-assign-vendor-section">
                         <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
                         <div className="flex flex-wrap items-center gap-2">
                             <select value={p.jobAssignedVendorId ?? ""} onChange={(e) => p.setJobAssignedVendorId(e.target.value || null)} className="px-2 py-1.5 border rounded text-sm min-w-[140px]">
@@ -3166,6 +3166,20 @@ export default function AdminEntityDrawer() {
                 </button>
             )}
             <button type="button" disabled={!!jobActionLoading} onClick={async () => { if (!drawer.id) return; setJobActionLoading("mark_completed"); try { const res = await fetch(`/api/admin/jobs/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark_completed" }) }); const json = await res.json().catch(() => ({})); if (!res.ok) throw new Error((json.error as string) || "Failed"); setData((prev) => (prev ? { ...prev, ...json } : prev)); refetch(); router.refresh(); } catch (e) { console.error("Mark completed failed", e); } finally { setJobActionLoading(null); } }} className="px-3 py-1.5 text-sm bg-alloy-juniper text-white rounded-md hover:opacity-90 disabled:opacity-50">{jobActionLoading === "mark_completed" ? "…" : "Mark completed"}</button>
+            {canMutate && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        setJobExpandedSections((s) => ({ ...s, relationships: true }));
+                        requestAnimationFrame(() => {
+                            document.getElementById("job-assign-vendor-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                        });
+                    }}
+                    className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
+                >
+                    Assign {vendorSingular}
+                </button>
+            )}
             {jobSchedules.length > 0 && !rescheduleForm && <button type="button" onClick={() => openReschedule(jobSchedules[0])} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">Reschedule</button>}
         </div>
     ) : null;
@@ -3203,6 +3217,29 @@ export default function AdminEntityDrawer() {
                         Retry payment
                     </button>
                 )}
+            </div>
+        ) : null;
+
+    const scheduleAssignVendorHeaderButton =
+        isScheduleExistingView && drawer.id && canMutate && data && !(data as { canceled_at?: string | null }).canceled_at ? (
+            <button
+                type="button"
+                onClick={() => {
+                    requestAnimationFrame(() => {
+                        document.getElementById("schedule-assign-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    });
+                }}
+                className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
+            >
+                Assign {vendorSingular}
+            </button>
+        ) : null;
+
+    const scheduleHeaderQuickActionsNode =
+        isScheduleExistingView && drawer.id && (schedulePaymentQuickActionsNode != null || scheduleAssignVendorHeaderButton != null) ? (
+            <div className="flex flex-wrap gap-2 items-center">
+                {schedulePaymentQuickActionsNode}
+                {scheduleAssignVendorHeaderButton}
             </div>
         ) : null;
 
@@ -4540,7 +4577,7 @@ export default function AdminEntityDrawer() {
             {overviewData && !loading && canEditInDrawer(drawer.type) && (
                 <>
             {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
-            {drawer.type === "schedules" && isScheduleExistingView && schedulePaymentQuickActionsNode}
+            {drawer.type === "schedules" && isScheduleExistingView && scheduleHeaderQuickActionsNode}
                         {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
                             <>
                                 <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
@@ -7355,7 +7392,7 @@ export default function AdminEntityDrawer() {
                                     {(data.canceled_at as string) && (
                                         <div className="text-alloy-ember text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
                                     )}
-                                    <div className="pt-2 border-t border-[#e6e8ec]">
+                                    <div className="pt-2 border-t border-[#e6e8ec]" id="schedule-assign-section">
                                         <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
                                         {(data._assignment as { id?: string }) ? (
                                             <div className="flex flex-wrap items-center gap-2">
@@ -7784,7 +7821,7 @@ export default function AdminEntityDrawer() {
                                                                                                     else if (t === "vendor_primary") next[ri] = { type: "vendor", source: "payload", path: "vendor.primary_contact_id" };
                                                                                                     else if (t === "contacts_by_vendor") next[ri] = { type: "contacts_by_vendor", source: "query", vendor_id_path: "vendor.id", role_in: ["primary", "billing"] };
                                                                                                     else if (t === "job_qualified_vendors") next[ri] = { type: "job_qualified_vendors", source: "resolver", max: 25, role_in: ["primary"] };
-                                                                                                    else if (t === "vendors_query") next[ri] = { type: "vendors_query", source: "query", status_key: "approved", vertical_slug: null, match_job_vertical: true, match_job_zip: true, max: 25, role_in: ["primary"] };
+                                                                                                    else if (t === "vendors_query") next[ri] = { type: "vendors_query", source: "query", status_key: "active", vertical_slug: null, match_job_vertical: true, match_job_zip: true, max: 25, role_in: ["primary"] };
                                                                                                     else next[ri] = { type: "contact", source: "payload", path: "contact.id" };
                                                                                                     setWorkflowActions((prev) => prev.map((p, j) => j === i ? { ...p, payload: { ...(typeof p.payload === "object" && p.payload ? p.payload : {}), recipients: next } } : p));
                                                                                                 }} className="min-w-[200px] px-2 py-1.5 border rounded text-sm">

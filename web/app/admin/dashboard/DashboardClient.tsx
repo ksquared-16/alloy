@@ -13,7 +13,7 @@ export interface DashboardData {
     jobs: { total: number; withDefaultVendor: number };
     opportunities: { total: number; booked: number; notBooked: number; byStage: Record<string, number> };
     schedules: { upcoming: number; unassigned: number; offered: number; accepted: number; canceled: number };
-    vendors: { pending: number; approved: number; suspended: number };
+    vendors: { pending: number; active: number; suspended: number };
     attention: { unassignedSchedules: number; offeredNotAccepted: number; failedWorkflowRuns: number; messageOutboxFailures: number };
     upcomingSchedules: { id: string; start_at: string; end_at: string; _job_title: string | null; _customer_name: string | null; _assignment_status: string | null }[];
     financialSnapshot: FinancialSnapshot | null;
@@ -76,7 +76,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
                 <SectionCard title={`${vendorSingular} funnel`}>
                     <div className="flex flex-wrap gap-4">
                         <div className="rounded-lg bg-[#F4F6F9] px-4 py-2"><span className="text-xs text-[#59678b]">Pending</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.pending}</span></div>
-                        <div className="rounded-lg bg-[#e6d3a0]/30 px-4 py-2 border border-[#DBC078]/50"><span className="text-xs text-[#59678b]">Approved</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.approved}</span></div>
+                        <div className="rounded-lg bg-[#e6d3a0]/30 px-4 py-2 border border-[#DBC078]/50"><span className="text-xs text-[#59678b]">Active</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.active}</span></div>
                         <div className="rounded-lg bg-[#F4F6F9] px-4 py-2"><span className="text-xs text-[#59678b]">Suspended</span><span className="ml-2 font-semibold text-[#31394d]">{vendors.suspended}</span></div>
                     </div>
                 </SectionCard>
