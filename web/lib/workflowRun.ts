@@ -329,6 +329,14 @@ type RecipientSpec = {
     match_job_zip?: boolean;
 };
 
+/** Payload paths that target the job/customer contact — must not mix with job_qualified_vendors SMS. */
+function isPayloadContactRecipientSpec(spec: RecipientSpec): boolean {
+    if ((spec.source ?? "payload").toLowerCase() !== "payload") return false;
+    const path = (spec.path ?? "").trim().toLowerCase();
+    if (!path) return false;
+    return path === "contact" || path.startsWith("contact.");
+}
+
 type VendorRowForOfferSms = {
     id: string;
     primary_contact_id?: string | null;
@@ -338,7 +346,10 @@ type VendorRowForOfferSms = {
 };
 
 /**
- * Active eligible vendors may have SMS via primary_contact_id, vendors.phone, or primary_person.phone (no contact row).
+ * Resolve SMS/email recipients for vendor offer flows (job_qualified_vendors, vendors_query).
+ * Phone order: vendors.phone → persons.phone (primary_person_id) → contacts.phone only when
+ * contact.vendor_id matches the vendor. Never use primary_contact_id if it is not vendor-scoped.
+ * Does not read payload.contact (callers must not merge payload contact specs for the same SMS; see send_message).
  */
 async function appendEligibleVendorRecipients(
     supabase: SupabaseClient,
@@ -359,32 +370,108 @@ async function appendEligibleVendorRecipients(
             phoneByPersonId.set(row.id, row.phone ?? null);
         }
     }
+    const contactIds = [...new Set(slice.map((v) => v.primary_contact_id).filter(Boolean))] as string[];
+    const contactById = new Map<string, { id: string; phone?: string | null; email?: string | null; vendor_id?: string | null }>();
+    if (contactIds.length > 0) {
+        const { data: contacts } = await supabase.from("contacts").select("id, phone, email, vendor_id").in("id", contactIds);
+        for (const c of contacts ?? []) {
+            const row = c as { id: string; phone?: string | null; email?: string | null; vendor_id?: string | null };
+            contactById.set(row.id, row);
+        }
+    }
+
     let n = 0;
     for (const v of slice) {
-        if (v.primary_contact_id) {
-            const key = `c:${v.primary_contact_id}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                out.push({ contact_id: v.primary_contact_id });
-                n++;
+        const vendorId = v.id;
+        const shortVid = `${String(vendorId).slice(0, 8)}…`;
+
+        const tryPushPhone = (raw: string, phoneSource: "vendor" | "person" | "vendor_contact", contactId?: string | null): boolean => {
+            const norm = normalizePhoneForSms(raw);
+            if (!norm) return false;
+            const pkey = `p:${norm}`;
+            if (seen.has(pkey)) return false;
+            seen.add(pkey);
+            if (contactId) {
+                const ckey = `c:${contactId}`;
+                if (!seen.has(ckey)) seen.add(ckey);
+                out.push({ contact_id: contactId, to_phone: norm });
+            } else {
+                out.push({ to_phone: norm });
             }
-            continue;
-        }
+            n++;
+            logs.push(
+                `${logPrefix}: vendor_id=${vendorId} phone_source=${phoneSource} to_phone=${maskPhoneForLog(norm)}` +
+                    (contactId ? ` contact_id=${String(contactId).slice(0, 8)}…` : "")
+            );
+            console.log("[WORKFLOW] vendor_offer_recipient", {
+                log_prefix: logPrefix,
+                vendor_id: vendorId,
+                phone_source: phoneSource,
+                to_phone_tail: maskPhoneForLog(norm),
+                contact_id: contactId ?? null,
+            });
+            return true;
+        };
+
+        // 1) vendors.phone (highest priority — never skip for a mis-linked primary_contact_id)
         const direct = v.phone != null ? String(v.phone).trim() : "";
+        if (direct) {
+            if (tryPushPhone(direct, "vendor")) continue;
+            logs.push(`${logPrefix}: vendor_id=${vendorId} vendors.phone present but not a valid SMS number; trying person then vendor contact`);
+        }
+
+        // 2) persons.phone via primary_person_id
         const fromPerson =
             v.primary_person_id != null ? phoneByPersonId.get(v.primary_person_id) : undefined;
-        const raw = direct || (fromPerson != null ? String(fromPerson).trim() : "");
-        if (!raw) {
-            logs.push(`${logPrefix}: vendor ${String(v.id).slice(0, 8)}… has no contact, vendor.phone, or person phone; skipping`);
-            continue;
+        const personRaw = fromPerson != null ? String(fromPerson).trim() : "";
+        if (personRaw) {
+            if (tryPushPhone(personRaw, "person")) continue;
+            logs.push(`${logPrefix}: vendor_id=${vendorId} person phone present but not a valid SMS number; trying vendor contact`);
         }
-        const norm = normalizePhoneForSms(raw);
-        if (!norm) continue;
-        const pkey = `p:${norm}`;
-        if (seen.has(pkey)) continue;
-        seen.add(pkey);
-        out.push({ to_phone: norm });
-        n++;
+
+        // 3) primary contact only if row is scoped to this vendor (never payload / customer contact)
+        const pc = v.primary_contact_id;
+        if (pc) {
+            const row = contactById.get(pc);
+            if (!row) {
+                logs.push(
+                    `${logPrefix}: vendor_id=${vendorId} primary_contact_id=${String(pc).slice(0, 8)}… not found in contacts; skipping`
+                );
+            } else if (row.vendor_id !== vendorId) {
+                logs.push(
+                    `${logPrefix}: vendor_id=${vendorId} primary_contact_id=${String(pc).slice(0, 8)}… ignored — contact.vendor_id=${row.vendor_id ?? "null"} (must equal vendor; no fallback to customer/payload contact)`
+                );
+            } else {
+                const ph = row.phone != null ? String(row.phone).trim() : "";
+                if (ph && tryPushPhone(ph, "vendor_contact", pc)) {
+                    continue;
+                }
+                const em = row.email != null ? String(row.email).trim() : "";
+                if (em) {
+                    const ckey = `c:${pc}`;
+                    if (!seen.has(ckey)) {
+                        seen.add(ckey);
+                        out.push({ contact_id: pc, to_email: em });
+                        n++;
+                        logs.push(
+                            `${logPrefix}: vendor_id=${vendorId} phone_source=vendor_contact_email contact_id=${String(pc).slice(0, 8)}… email_only=${!ph}`
+                        );
+                        console.log("[WORKFLOW] vendor_offer_recipient", {
+                            log_prefix: logPrefix,
+                            vendor_id: vendorId,
+                            phone_source: "vendor_contact_email",
+                            contact_id: pc,
+                            email_only: !ph,
+                        });
+                    }
+                    continue;
+                }
+            }
+        }
+
+        logs.push(
+            `${logPrefix}: vendor_id=${vendorId} (${shortVid}) skipped — no usable vendor.phone, person.phone, or vendor-scoped contact phone/email`
+        );
     }
     return n;
 }
@@ -700,7 +787,7 @@ async function resolveRecipients(
             const nJq = await appendEligibleVendorRecipients(supabase, list, max, seen, out, "job_qualified_vendors", logs);
             if (list.length > 0 && nJq === 0) {
                 logs.push(
-                    `job_qualified_vendors: ${list.length} vendor row(s) matched but 0 SMS recipients (need vendors.phone, persons.phone via primary_person_id, or primary_contact_id → contact.phone)`
+                    `job_qualified_vendors: ${list.length} vendor row(s) matched but 0 SMS recipients (need vendors.phone, persons.phone via primary_person_id, or primary_contact where contact.vendor_id = vendor.id — no payload.contact fallback)`
                 );
             }
             console.log("[WORKFLOW] job_qualified_vendors resolved", { jobId, orgId, jobZip: jobZip ?? null, jobVerticalId, count: nJq });
@@ -1166,15 +1253,31 @@ export async function executeWorkflowRun(
                     });
 
                     const recipientSpecs = Array.isArray(recipients) ? recipients : [];
+                    const bookingConfirmed = String(payload.event_type ?? "") === "booking_confirmed";
+                    const hasJobQualifiedSpec = recipientSpecs.some(
+                        (spec) =>
+                            (spec.source ?? "").toLowerCase() === "resolver" &&
+                            (spec.type ?? "").toLowerCase() === "job_qualified_vendors"
+                    );
+                    let specsToResolve = recipientSpecs;
+                    if (channel.toLowerCase() === "sms" && bookingConfirmed && hasJobQualifiedSpec) {
+                        const stripped = recipientSpecs.filter((spec) => !isPayloadContactRecipientSpec(spec));
+                        if (stripped.length !== recipientSpecs.length) {
+                            logs.push(
+                                "send_message: booking_confirmed + job_qualified_vendors — removed payload contact.* recipient specs so SMS is not sent to customer contact"
+                            );
+                        }
+                        specsToResolve = stripped.length > 0 ? stripped : recipientSpecs;
+                    }
                     const onlyVendorPayloadPaths =
-                        recipientSpecs.length > 0 &&
-                        recipientSpecs.every((spec) => {
+                        specsToResolve.length > 0 &&
+                        specsToResolve.every((spec) => {
                             const src = (spec.source ?? "payload").toLowerCase();
                             const path = typeof spec.path === "string" ? spec.path.trim().toLowerCase() : "";
                             return src === "payload" && path.startsWith("vendor.");
                         });
 
-                    let resolved = await resolveRecipients(supabase, payload, recipientSpecs, logs, channel);
+                    let resolved = await resolveRecipients(supabase, payload, specsToResolve, logs, channel);
                     if (
                         resolved.length === 0 &&
                         channel.toLowerCase() === "sms" &&
