@@ -315,6 +315,16 @@ async function runDeferredBookingEffects(params: {
             personRow = p as Record<string, unknown> | null;
         }
 
+        const jobPrimaryPersonId = (jobRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null;
+        if (!personRow && jobPrimaryPersonId) {
+            const { data: p } = await supa
+                .from("persons")
+                .select("id, first_name, last_name, email, phone")
+                .eq("id", jobPrimaryPersonId)
+                .maybeSingle();
+            personRow = p as Record<string, unknown> | null;
+        }
+
         const normalizedSchedule =
             scheduleRow ??
             ({
@@ -326,6 +336,7 @@ async function runDeferredBookingEffects(params: {
                 created_at: new Date().toISOString(),
             } as Record<string, unknown>);
 
+        /** Canonical SMS identity for book-v2: same as `person` when resolved (prefer person over contact for templates). */
         const eventPayload: Record<string, unknown> = {
             event_type: "booking_confirmed",
             /** Required for event-driven workflow validation (normalizeEntityType → jobs). */
@@ -337,6 +348,7 @@ async function runDeferredBookingEffects(params: {
             job: jobRow ?? null,
             contact: contactRow ?? null,
             person: personRow ?? null,
+            customer_booking_person: personRow ?? null,
             customer: customerRow ?? null,
             opportunity: oppRow ?? null,
             schedule: normalizedSchedule,

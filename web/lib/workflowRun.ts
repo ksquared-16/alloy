@@ -239,6 +239,23 @@ function resolvePath(eventPayload: Record<string, unknown>, path: string | null 
     return v != null && v !== "" ? String(v) : null;
 }
 
+/** Merge person phone/email onto `contact` so legacy templates using {{contact.phone}} use canonical person when present. */
+function bridgeContactFromPersonForTemplates(payload: Record<string, unknown>): Record<string, unknown> {
+    const person = payload.person;
+    if (person == null || typeof person !== "object") return payload;
+    const p = person as Record<string, unknown>;
+    const contact = payload.contact;
+    const c = contact != null && typeof contact === "object" ? (contact as Record<string, unknown>) : {};
+    const mergedContact = {
+        ...c,
+        phone: p.phone ?? c.phone ?? null,
+        email: p.email ?? c.email ?? null,
+        first_name: p.first_name ?? c.first_name,
+        last_name: p.last_name ?? c.last_name,
+    };
+    return { ...payload, contact: mergedContact };
+}
+
 /** Log-safe phone tail (Twilio SID is logged by the outbox worker, not here). */
 function maskPhoneForLog(phone: string | null | undefined): string {
     if (phone == null || String(phone).trim() === "") return "(empty)";
@@ -1232,19 +1249,22 @@ export async function executeWorkflowRun(
                 switch (action.action_type) {
                 case "create_message": {
                     const channel = pl.channel != null ? String(pl.channel) : "email";
+                    const triggerProcess = pl.trigger_messages_process !== false;
+                    const tplPayload = bridgeContactFromPersonForTemplates(payload as Record<string, unknown>);
                     const toValueRaw = pl.to_value != null ? String(pl.to_value) : "";
                     const bodyRaw = pl.body != null ? String(pl.body) : "";
-                    let toValue = renderTemplate(toValueRaw, payload);
+                    let toValue = renderTemplate(toValueRaw, tplPayload);
                     if (!toValue.trim() && (toValueRaw.includes("person.phone") || toValueRaw.includes("person.email"))) {
-                        const fallbackPayload = { ...payload, person: (payload.person ?? payload.contact) ?? null };
+                        const fallbackPayload = { ...tplPayload, person: (tplPayload.person ?? tplPayload.contact) ?? null };
                         const fallback = renderTemplate(toValueRaw, fallbackPayload);
                         if (fallback != null && String(fallback).trim()) toValue = String(fallback).trim();
                     }
-                    const bodyText = renderTemplate(bodyRaw, payload);
+                    const bodyText = renderTemplate(bodyRaw, tplPayload);
                     const contactId = resolveId(pl.contact_id, payload);
                     const customerId = resolveId(pl.customer_id, payload);
                     const opportunityId = resolveId(pl.opportunity_id, payload);
                     const jobId = resolveId(pl.job_id, payload);
+                    const personIdForMeta = resolvePath(tplPayload, "person.id");
                     const { data: insertedMsg, error: msgErr } = await supabase
                         .from("messages")
                         .insert({
@@ -1266,6 +1286,7 @@ export async function executeWorkflowRun(
                                 workflow_run_id: runId,
                                 action_type: "create_message",
                                 action_order: action.action_order,
+                                ...(personIdForMeta ? { person_id: personIdForMeta } : {}),
                             },
                             related_entity_type: null,
                             related_entity_id: null,
@@ -1278,6 +1299,7 @@ export async function executeWorkflowRun(
                     const newMsgId = (insertedMsg as { id?: string } | null)?.id ?? null;
                     if (newMsgId) {
                         (payload as Record<string, unknown>)._last_workflow_message_id = newMsgId;
+                        (payload as Record<string, unknown>)._last_workflow_message_channel = channel;
                     }
                     console.log("[WORKFLOW_RUN] create_message_queued", {
                         workflow_id: workflowId,
@@ -1289,7 +1311,13 @@ export async function executeWorkflowRun(
                         contact_id: contactId,
                         job_id: jobId,
                     });
-                    actionOutputs = { queued: true, message_id: newMsgId };
+                    if (channel.toLowerCase() === "sms" && triggerProcess) {
+                        logs.push(
+                            `create_message: invoking INTERNAL_MESSAGES_PROCESS_URL for workflow_run_id=${runId} (SMS queued on public.messages)`
+                        );
+                        await triggerInternalMessagesProcess(logs, { workflow_run_id: runId });
+                    }
+                    actionOutputs = { queued: true, message_id: newMsgId, messages_process_triggered: channel.toLowerCase() === "sms" && triggerProcess };
                     actionCompleted = true;
                     break;
                 }
@@ -1325,6 +1353,31 @@ export async function executeWorkflowRun(
                             (spec.source ?? "").toLowerCase() === "resolver" &&
                             (spec.type ?? "").toLowerCase() === "job_qualified_vendors"
                     );
+                    const lastQueuedId = (payload as { _last_workflow_message_id?: string | null })._last_workflow_message_id;
+                    const lastQueuedChannel = String(
+                        (payload as { _last_workflow_message_channel?: string | null })._last_workflow_message_channel ?? ""
+                    )
+                        .trim()
+                        .toLowerCase();
+                    if (
+                        bookingConfirmed &&
+                        channel.toLowerCase() === "sms" &&
+                        !hasJobQualifiedSpec &&
+                        lastQueuedId != null &&
+                        String(lastQueuedId).trim() !== "" &&
+                        lastQueuedChannel === "sms"
+                    ) {
+                        logs.push(
+                            "send_message: skipped on booking_confirmed — SMS already queued via create_message this run; vendor SMS must use recipients with source=resolver and type=job_qualified_vendors. Remove redundant send_message from customer workflows."
+                        );
+                        actionOutputs = {
+                            skipped: true,
+                            reason: "booking_confirmed_duplicate_sms_suppressed",
+                            prior_create_message_id: String(lastQueuedId).trim(),
+                        };
+                        actionCompleted = true;
+                        break;
+                    }
                     let usedJobQualifiedVendorsResolver = hasJobQualifiedSpec;
                     let specsToResolve = recipientSpecs;
                     if (channel.toLowerCase() === "sms" && bookingConfirmed && hasJobQualifiedSpec) {
