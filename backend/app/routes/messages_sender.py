@@ -63,5 +63,8 @@ async def post_process_messages(request: Request, x_cron_token: Optional[str] = 
     limit = int(body.get("limit", 25))
     limit = max(1, min(limit, 100))
 
-    result = process_queued_messages(limit=limit)
+    wr_raw = body.get("workflow_run_id")
+    wr = wr_raw.strip() if isinstance(wr_raw, str) and wr_raw.strip() else None
+
+    result = process_queued_messages(limit=limit, workflow_run_id=wr)
     return result

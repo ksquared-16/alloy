@@ -3,8 +3,9 @@ Consume queued rows from public.messages and send via Twilio.
 Uses Supabase (service role) for read/update and integrations.twilio_client for send.
 """
 import logging
+import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -15,13 +16,21 @@ logger = logging.getLogger("alloy-dispatcher")
 
 ERROR_TRUNCATE = 500
 
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.I,
+)
 
-def process_queued_messages(limit: int = 25) -> Dict[str, Any]:
+
+def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Fetch queued SMS messages from Supabase, send via Twilio, and update rows.
 
     Query: status=queued, direction=outbound, channel=sms, sent_at is null,
     order by created_at asc, limit=limit.
+
+    If workflow_run_id is a valid UUID, only rows with that workflow_run_id are considered
+    (avoids processing unrelated queued SMS from other workflows in the same batch).
 
     On success: status=sent, sent_at=now(), provider=twilio, provider_message_id=sid, error=null.
     On failure: status=failed, error=str(exception) truncated to 500 chars.
@@ -42,6 +51,10 @@ def process_queued_messages(limit: int = 25) -> Dict[str, Any]:
         "order": "created_at.asc",
         "limit": str(max(1, min(limit, 100))),
     }
+    wr = (workflow_run_id or "").strip()
+    if wr and _UUID_RE.match(wr):
+        params["workflow_run_id"] = f"eq.{wr}"
+        logger.info("MESSAGE_SENDER_FILTER workflow_run_id=%s", wr)
 
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=30)
