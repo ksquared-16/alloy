@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createActionLink, buildShortActionLinkUrl } from "@/lib/actionLinks";
 import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
-import { getByPath, renderTemplate } from "@/lib/workflowTemplate";
+import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -1792,13 +1792,28 @@ export async function executeWorkflowRun(
                         skipReason = "could not resolve entity_id";
                         break;
                     }
+                    const tplPayload = payload as Record<string, unknown>;
+                    let rawLinkMeta: Record<string, unknown> = {};
+                    if (typeof pl.metadata === "string") {
+                        try {
+                            const parsed = JSON.parse(pl.metadata) as unknown;
+                            if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
+                                rawLinkMeta = parsed as Record<string, unknown>;
+                            }
+                        } catch {
+                            rawLinkMeta = {};
+                        }
+                    } else if (pl.metadata != null && typeof pl.metadata === "object" && !Array.isArray(pl.metadata)) {
+                        rawLinkMeta = pl.metadata as Record<string, unknown>;
+                    }
+                    const resolvedLinkMeta = renderActionLinkMetadata(rawLinkMeta, tplPayload);
                     const result = await createActionLink(supabase, {
                         org_id: linkOrgId,
                         action_type: linkActionType,
                         entity_type: linkEntityType,
                         entity_id: entityIdResolved,
                         expires_in_minutes: expiresInMinutes,
-                        metadata: (pl.metadata != null && typeof pl.metadata === "object" ? pl.metadata : null) as Record<string, unknown> | null,
+                        metadata: resolvedLinkMeta,
                     });
                     const token = result?.token ?? null;
                     console.log("[WORKFLOW_RUN] create_action_link_result", {

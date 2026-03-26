@@ -25,3 +25,54 @@ export function renderTemplate(templateString: string, eventPayload: Record<stri
         return String(val);
     });
 }
+
+/** Fullwidth curly braces sometimes appear in copied workflow JSON; normalize so {{ }} matching works. */
+function normalizeTemplateBraces(s: string): string {
+    return s.replace(/\uFF5B/g, "{").replace(/\uFF5D/g, "}");
+}
+
+/**
+ * Resolve {{dot.path}} in a string using eventPayload (with brace normalization + second pass if placeholders remain).
+ */
+export function renderTemplateForActionLinkMetadata(
+    templateString: string,
+    eventPayload: Record<string, unknown>
+): string {
+    if (typeof templateString !== "string") return "";
+    const normalized = normalizeTemplateBraces(templateString);
+    let out = renderTemplate(normalized, eventPayload);
+    if (/\{\{/.test(out)) {
+        out = out.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, path: string) => {
+            const val = getByPath(eventPayload, path.trim());
+            if (val == null || val === "") return "";
+            return String(val);
+        });
+    }
+    return out;
+}
+
+/**
+ * Walk create_action_link `metadata` and render every string value (e.g. vendor_id: "{{job.assigned_vendor_id}}").
+ * Template-only values that resolve empty become null so DB never stores literal {{...}}.
+ */
+export function renderActionLinkMetadata(
+    metadata: Record<string, unknown> | null | undefined,
+    eventPayload: Record<string, unknown>
+): Record<string, unknown> {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+        return {};
+    }
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(metadata)) {
+        if (typeof v === "string") {
+            const hadPlaceholder = /\{\{/.test(normalizeTemplateBraces(v));
+            const rendered = renderTemplateForActionLinkMetadata(v, eventPayload);
+            out[k] = hadPlaceholder && rendered.trim() === "" ? null : rendered;
+        } else if (v != null && typeof v === "object" && !Array.isArray(v)) {
+            out[k] = renderActionLinkMetadata(v as Record<string, unknown>, eventPayload);
+        } else {
+            out[k] = v;
+        }
+    }
+    return out;
+}

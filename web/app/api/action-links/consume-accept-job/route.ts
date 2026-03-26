@@ -7,11 +7,19 @@ function isUuid(s: unknown): s is string {
     return typeof s === "string" && UUID_REGEX.test(s);
 }
 
+/** Unrendered workflow placeholders must not be treated as vendor UUIDs. */
+function vendorUuidFromMetadata(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    if (!s || /\{\{/.test(s)) return null;
+    return isUuid(s) ? s : null;
+}
+
 /**
  * POST /api/action-links/consume-accept-job
- * Body: { token: string }
- * Validates action link (vendor_accept_job, entity_type job, metadata.vendor_id),
- * atomically assigns job to vendor, marks link consumed. Single-use.
+ * Body: { token: string } — same raw `action_links.token` as in /action/[token] URL.
+ * Resolves vendor: metadata.vendor_id (UUID) else jobs.assigned_vendor_id for entity job.
+ * Assigns job, marks link consumed. Single-use.
  */
 export async function POST(request: NextRequest) {
     let body: { token?: string };
@@ -35,7 +43,7 @@ export async function POST(request: NextRequest) {
         .single();
 
     if (fetchErr || !row) {
-        return NextResponse.json({ ok: false, reason: "invalid" }, { status: 404 });
+        return NextResponse.json({ ok: false, reason: "not_found" }, { status: 404 });
     }
 
     const r = row as {
@@ -62,12 +70,23 @@ export async function POST(request: NextRequest) {
     }
 
     const metadata = r.metadata != null && typeof r.metadata === "object" ? (r.metadata as Record<string, unknown>) : {};
-    const vendorId = metadata.vendor_id;
-    if (!isUuid(vendorId)) {
-        return NextResponse.json({ ok: false, reason: "invalid" }, { status: 400 });
-    }
-
     const jobId = r.entity_id;
+
+    let vendorId: string | null = vendorUuidFromMetadata(metadata.vendor_id);
+    if (!vendorId) {
+        const { data: jobRow } = await supabase
+            .from("jobs")
+            .select("assigned_vendor_id")
+            .eq("id", jobId)
+            .maybeSingle();
+        const av = (jobRow as { assigned_vendor_id?: string | null } | null)?.assigned_vendor_id;
+        if (av != null && isUuid(String(av).trim())) {
+            vendorId = String(av).trim();
+        }
+    }
+    if (!vendorId) {
+        return NextResponse.json({ ok: false, reason: "missing_vendor_id" }, { status: 400 });
+    }
     const { data: updatedJob, error: updateErr } = await supabase
         .from("jobs")
         .update({ assigned_vendor_id: vendorId })
