@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
     if (new Date(r.expires_at) <= new Date()) {
         return NextResponse.json({ error: "Expired" }, { status: 410 });
     }
-    if (r.action_type !== "customer_reschedule" || r.entity_type !== "schedule") {
+    if (
+        r.entity_type !== "schedule" ||
+        (r.action_type !== "customer_reschedule" && r.action_type !== "reschedule_schedule")
+    ) {
         return NextResponse.json({ error: "Action not valid for reschedule" }, { status: 400 });
     }
 
@@ -76,6 +79,8 @@ export async function POST(request: NextRequest) {
         start_at: startAt,
         end_at: endAt,
         duration_minutes: durationMinutes > 0 ? durationMinutes : undefined,
+        /** Matches workflow 89992143 (action_link_consumed → update_entity schedules.reschedule_reason). */
+        reschedule_reason: "action_link",
     };
     if (timezone) scheduleUpdate.timezone = timezone;
 

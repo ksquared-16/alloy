@@ -346,6 +346,8 @@ type ResolvedRecipient = {
     to_email?: string | null;
     /** Delivery is the existing public.messages row (Python sender); skip messages_outbox for this recipient. */
     useExistingQueuedMessageId?: string | null;
+    /** Vendors from job_qualified_vendors / vendors_query — used for per-vendor vendor_accept_job links in SMS. */
+    vendor_id?: string | null;
 };
 
 /** Recipient spec from send_message payload.recipients[]. */
@@ -433,9 +435,9 @@ async function appendEligibleVendorRecipients(
             if (contactId) {
                 const ckey = `c:${contactId}`;
                 if (!seen.has(ckey)) seen.add(ckey);
-                out.push({ contact_id: contactId, to_phone: norm });
+                out.push({ contact_id: contactId, to_phone: norm, vendor_id: vendorId });
             } else {
-                out.push({ to_phone: norm });
+                out.push({ to_phone: norm, vendor_id: vendorId });
             }
             n++;
             logs.push(
@@ -490,7 +492,7 @@ async function appendEligibleVendorRecipients(
                     const ckey = `c:${pc}`;
                     if (!seen.has(ckey)) {
                         seen.add(ckey);
-                        out.push({ contact_id: pc, to_email: em });
+                        out.push({ contact_id: pc, to_email: em, vendor_id: vendorId });
                         n++;
                         logs.push(
                             `${logPrefix}: vendor_id=${vendorId} phone_source=vendor_contact_email contact_id=${String(pc).slice(0, 8)}… email_only=${!ph}`
@@ -851,6 +853,54 @@ async function ensureContactPhoneEmail(supabase: SupabaseClient, r: ResolvedReci
     return r;
 }
 
+/**
+ * One vendor_accept_job link per qualified vendor SMS: metadata.vendor_id set; template re-rendered with vendor_accept_url + vendor.id.
+ */
+async function createVendorOfferAcceptLinkAndBody(args: {
+    supabase: SupabaseClient;
+    template: string;
+    payload: Record<string, unknown>;
+    linkOrgId: string | null;
+    vendorId: string;
+    jobId: string;
+    expiresInMinutes: number;
+    defaultBody: string;
+    defaultHash: string;
+    logs: string[];
+}): Promise<{ body: string; hash: string }> {
+    const linkResult = await createActionLink(args.supabase, {
+        org_id: args.linkOrgId,
+        action_type: "vendor_accept_job",
+        entity_type: "job",
+        entity_id: args.jobId,
+        expires_in_minutes: args.expiresInMinutes,
+        metadata: { vendor_id: args.vendorId, source: "vendor_offer_sms" },
+    });
+    if (!linkResult?.token || !linkResult.short_code) {
+        args.logs.push(
+            `send_message: vendor_offer createActionLink failed for vendor_id=${String(args.vendorId).slice(0, 8)}…; using template without new link`
+        );
+        return { body: args.defaultBody, hash: args.defaultHash };
+    }
+    const shortUrl = buildShortActionLinkUrl(linkResult.short_code);
+    const origin = getPublicAppOrigin();
+    const actionLinkUrl =
+        shortUrl || (origin ? `${origin}/action/${linkResult.token}` : `/action/${linkResult.token}`);
+    const prevVendor =
+        args.payload.vendor != null && typeof args.payload.vendor === "object"
+            ? (args.payload.vendor as Record<string, unknown>)
+            : {};
+    const pv: Record<string, unknown> = {
+        ...args.payload,
+        vendor_accept_url: actionLinkUrl,
+        vendor: { ...prevVendor, id: args.vendorId },
+    };
+    const body = renderTemplate(args.template, pv);
+    const hash = createHash("sha1").update(body ?? "").digest("hex").slice(0, 16);
+    args.logs.push(`send_message: vendor_offer action_link vendor_id=${String(args.vendorId).slice(0, 8)}…`);
+    return { body, hash };
+}
+
 /** Twilio pipeline reads public.messages (queued); messages_outbox is audit/UI only. */
 function buildPublicMessagesInsertForSendMessageSms(
     eventPayload: Record<string, unknown>,
@@ -862,6 +912,7 @@ function buildPublicMessagesInsertForSendMessageSms(
         toPhone: string;
         contactId: string | null;
         usedJobQualifiedVendorsResolver: boolean;
+        vendorOfferVendorId?: string | null;
     }
 ): Record<string, unknown> {
     const jobId = resolvePath(eventPayload, "job.id");
@@ -887,6 +938,7 @@ function buildPublicMessagesInsertForSendMessageSms(
             action_type: "send_message",
             action_order: params.actionOrder,
             used_job_qualified_vendors_resolver: params.usedJobQualifiedVendorsResolver,
+            ...(params.vendorOfferVendorId ? { vendor_offer_vendor_id: params.vendorOfferVendorId } : {}),
         },
         related_entity_type: null,
         related_entity_id: null,
@@ -1328,7 +1380,6 @@ export async function executeWorkflowRun(
                     const recipients = (pl.recipients ?? []) as RecipientSpec[];
                     const bodyText = renderTemplate(template, payload);
                     const bodyHash = createHash("sha1").update(bodyText ?? "").digest("hex").slice(0, 16);
-                    const outboxPayload: Record<string, unknown> = { body: bodyText };
                     const triggerProcess = pl.trigger_messages_process !== false;
 
                     console.log("[WORKFLOW_RUN] send_message_start", {
@@ -1424,20 +1475,21 @@ export async function executeWorkflowRun(
                         deduped.push(r);
                     }
 
-                    const bodyPreview = (bodyText ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+                    const defaultBodyPreview = (bodyText ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
                     console.log("[WORKFLOW_RUN] send_message_resolved", {
                         workflow_id: workflowId,
                         workflow_run_id: runId,
                         action_order: action.action_order,
                         deduped_count: deduped.length,
                         used_job_qualified_vendors_resolver: usedJobQualifiedVendorsResolver,
-                        body_preview: bodyPreview,
+                        body_preview: defaultBodyPreview,
                         resolved_recipient_phones_masked: deduped.map((r) => maskPhoneForLog(r.to_phone)),
                         summary: deduped.map((r) => ({
                             has_contact_id: !!r.contact_id,
                             to_phone_tail: maskPhoneForLog(r.to_phone),
                             has_email: !!(r.to_email && String(r.to_email).trim()),
                             use_existing_messages_row: !!r.useExistingQueuedMessageId,
+                            vendor_id_tail: r.vendor_id ? `${String(r.vendor_id).slice(0, 8)}…` : null,
                         })),
                     });
 
@@ -1445,6 +1497,12 @@ export async function executeWorkflowRun(
                     let usedQueuedMessageRows = 0;
                     const publicMessageIds: string[] = [];
                     const isSms = channel.toLowerCase() === "sms";
+                    const jobIdForVendorOffer = resolvePath(payload as Record<string, unknown>, "job.id");
+                    const linkOrgIdForVendorOffer = run?.org_id ?? (payload.org_id != null ? String(payload.org_id) : null);
+                    const vendorOfferExpires =
+                        typeof pl.vendor_accept_link_expires_in_minutes === "number"
+                            ? Math.max(1, Math.min(10_080, pl.vendor_accept_link_expires_in_minutes))
+                            : 120;
 
                     for (const r of deduped) {
                         if (r.useExistingQueuedMessageId) {
@@ -1471,15 +1529,38 @@ export async function executeWorkflowRun(
                             });
                             continue;
                         }
+
+                        let bodyForRecipient = bodyText;
+                        let hashForRecipient = bodyHash;
+                        const vid = filled.vendor_id != null ? String(filled.vendor_id).trim() : "";
+                        if (isSms && toPhone && vid && jobIdForVendorOffer) {
+                            const built = await createVendorOfferAcceptLinkAndBody({
+                                supabase,
+                                template,
+                                payload: payload as Record<string, unknown>,
+                                linkOrgId: linkOrgIdForVendorOffer,
+                                vendorId: vid,
+                                jobId: jobIdForVendorOffer,
+                                expiresInMinutes: vendorOfferExpires,
+                                defaultBody: bodyText,
+                                defaultHash: bodyHash,
+                                logs,
+                            });
+                            bodyForRecipient = built.body;
+                            hashForRecipient = built.hash;
+                        }
+
+                        const bodyPreviewRow = (bodyForRecipient ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
                         if (isSms && toPhone) {
                             const msgRow = buildPublicMessagesInsertForSendMessageSms(payload as Record<string, unknown>, {
                                 workflowId,
                                 runId,
                                 actionOrder: action.action_order ?? 0,
-                                bodyText,
+                                bodyText: bodyForRecipient,
                                 toPhone,
                                 contactId: filled.contact_id ?? null,
                                 usedJobQualifiedVendorsResolver,
+                                vendorOfferVendorId: vid || null,
                             });
                             const { data: pubIns, error: pubErr } = await supabase.from("messages").insert(msgRow).select("id").single();
                             if (pubErr) {
@@ -1488,7 +1569,7 @@ export async function executeWorkflowRun(
                             const newPubId = (pubIns as { id?: string } | null)?.id ?? null;
                             if (newPubId) publicMessageIds.push(newPubId);
                             logs.push(
-                                `send_message: public.messages queued id=${newPubId ?? "?"} workflow_run_id=${runId} to_value=${maskPhoneForLog(toPhone)} body_preview=${bodyPreview.slice(0, 100)}`
+                                `send_message: public.messages queued id=${newPubId ?? "?"} workflow_run_id=${runId} to_value=${maskPhoneForLog(toPhone)} body_preview=${bodyPreviewRow.slice(0, 100)}`
                             );
                             console.log("[WORKFLOW_RUN] send_message_public_messages_queued", {
                                 workflow_id: workflowId,
@@ -1496,20 +1577,21 @@ export async function executeWorkflowRun(
                                 action_order: action.action_order,
                                 message_id: newPubId,
                                 to_phone_tail: maskPhoneForLog(toPhone),
-                                body_preview: bodyPreview,
+                                body_preview: bodyPreviewRow,
                                 used_job_qualified_vendors_resolver: usedJobQualifiedVendorsResolver,
+                                vendor_offer_vendor_id: vid || null,
                             });
                         }
-                        const dedupeKey = `${workflowId}:${channel}:${recipient}:${templateKey}:${bodyHash}`;
+                        const dedupeKey = `${workflowId}:${channel}:${recipient}:${templateKey}:${hashForRecipient}`;
                         const row: Record<string, unknown> = {
                             org_id: orgId,
                             workflow_run_id: runId,
                             workflow_id: workflowId,
                             channel,
-                            payload: outboxPayload,
+                            payload: { body: bodyForRecipient },
                             status: "queued",
                             template_key: templateKey || null,
-                            body: bodyText,
+                            body: bodyForRecipient,
                             dedupe_key: dedupeKey,
                             to_contact_id: filled.contact_id ?? null,
                         };
@@ -1556,7 +1638,7 @@ export async function executeWorkflowRun(
                         public_message_ids: publicMessageIds,
                         outbox_inserted: outboxInserted,
                         used_queued_messages_rows: usedQueuedMessageRows,
-                        body_preview: bodyPreview,
+                        body_preview: defaultBodyPreview,
                     });
 
                     if (isSms && triggerProcess) {

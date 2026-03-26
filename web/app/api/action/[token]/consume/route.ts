@@ -28,6 +28,21 @@ export async function POST(
         return NextResponse.json({ error: "Expired" }, { status: 410 });
     }
 
+    /** Customer reschedule is finalized in book-v2 + POST /api/action-links/consume-reschedule after a new slot is chosen. */
+    if (
+        r.entity_type === "schedule" &&
+        (r.action_type === "customer_reschedule" || r.action_type === "reschedule_schedule")
+    ) {
+        return NextResponse.json(
+            {
+                error: "reschedule_requires_booking_flow",
+                message:
+                    "Open the booking calendar to pick a new time; the link is consumed only after you confirm the new slot.",
+            },
+            { status: 400 }
+        );
+    }
+
     const { error: updateErr } = await supabase
         .from("action_links")
         .update({ consumed_at: new Date().toISOString() })
@@ -90,9 +105,6 @@ export async function POST(
     }
     if (r.action_type === "customer_cancel" && r.entity_type === "schedule") {
         return NextResponse.json({ ok: true, action: "customer_cancel" });
-    }
-    if (r.action_type === "customer_reschedule") {
-        return NextResponse.json({ ok: true, action: "customer_reschedule" });
     }
 
     return NextResponse.json({ ok: true });

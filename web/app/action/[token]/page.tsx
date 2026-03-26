@@ -11,6 +11,14 @@ const ACTION_COPY: Record<string, { title: string; subtitle: string; primaryCta:
 };
 const DEFAULT_ACTION_COPY = { title: "Confirm action", subtitle: "Confirm the action below.", primaryCta: "Confirm" };
 
+/** Workflows emit `reschedule_schedule`; book-v2 + consume-reschedule use the same guided flow as `customer_reschedule`. */
+function isScheduleRescheduleLink(actionType: string, entityType: string): boolean {
+    return (
+        entityType === "schedule" &&
+        (actionType === "customer_reschedule" || actionType === "reschedule_schedule")
+    );
+}
+
 function getActionCopy(actionType: string) {
     return ACTION_COPY[actionType] ?? DEFAULT_ACTION_COPY;
 }
@@ -24,7 +32,7 @@ function ActionIcon({ actionType }: { actionType: string }) {
             </svg>
         );
     }
-    if (actionType === "customer_reschedule") {
+    if (actionType === "customer_reschedule" || actionType === "reschedule_schedule") {
         return (
             <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -49,6 +57,7 @@ function formatActionTypeLabel(actionType: string): string {
     const labels: Record<string, string> = {
         customer_cancel: "Cancel appointment",
         customer_reschedule: "Reschedule appointment",
+        reschedule_schedule: "Reschedule appointment",
         vendor_accept_job: "Accept job",
     };
     if (labels[actionType]) return labels[actionType];
@@ -321,7 +330,9 @@ export default function ActionConfirmPage() {
     const expiresAt = new Date(meta.expires_at);
     const isExpired = expiresAt <= new Date();
     const linkStatus = meta.consumed_at ? "Already used" : isExpired ? "Expired" : "Valid";
-    const copy = getActionCopy(meta.action_type);
+    const copy = getActionCopy(
+        isScheduleRescheduleLink(meta.action_type, meta.entity_type) ? "customer_reschedule" : meta.action_type
+    );
     const md = meta.metadata ?? {};
     const startAt = md.start_at != null ? String(md.start_at) : null;
     const endAt = md.end_at != null ? String(md.end_at) : null;
@@ -422,7 +433,7 @@ export default function ActionConfirmPage() {
                     )}
 
                     <div className="pt-5 flex flex-col sm:flex-row sm:items-center gap-3">
-                        {meta.action_type === "customer_reschedule" ? (
+                        {isScheduleRescheduleLink(meta.action_type, meta.entity_type) ? (
                             <button
                                 type="button"
                                 onClick={() => router.push(`/book-v2?reschedule_token=${encodeURIComponent(token)}`)}

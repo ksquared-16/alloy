@@ -535,7 +535,12 @@ export default function BookV2Client() {
         fetch(`/api/action-links/resolve?token=${encodeURIComponent(token.trim())}`)
             .then((res) => res.json())
             .then((data: { valid?: boolean; action_type?: string; entity_type?: string; entity_id?: string; expires_at?: string; consumed_at?: string | null }) => {
-                if (data.valid && data.action_type === "customer_reschedule" && data.entity_type === "schedule" && data.entity_id) {
+                if (
+                    data.valid &&
+                    data.entity_type === "schedule" &&
+                    data.entity_id &&
+                    (data.action_type === "customer_reschedule" || data.action_type === "reschedule_schedule")
+                ) {
                     setRescheduleResolve({
                         token: token.trim(),
                         action_type: data.action_type,

@@ -40,8 +40,8 @@ export default async function ActionLinkPage({
     if (actionType === "vendor_accept_job" && entityType === "job") {
         redirect(`/a/accept-job?token=${encodeURIComponent(resolvedToken)}`);
     }
-    if (actionType === "customer_reschedule") {
-        redirect(`/a/reschedule?token=${encodeURIComponent(resolvedToken)}`);
+    if (actionType === "customer_reschedule" || actionType === "reschedule_schedule") {
+        redirect(`/book-v2?reschedule_token=${encodeURIComponent(resolvedToken)}`);
     }
     if (actionType === "customer_cancel") {
         redirect(`/a/cancel?token=${encodeURIComponent(resolvedToken)}`);
