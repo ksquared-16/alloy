@@ -1336,35 +1336,16 @@ export async function executeWorkflowRun(
                         }
                         specsToResolve = stripped.length > 0 ? stripped : recipientSpecs;
                     }
-                    const onlyVendorPayloadPaths =
-                        specsToResolve.length > 0 &&
-                        specsToResolve.every((spec) => {
-                            const src = (spec.source ?? "payload").toLowerCase();
-                            const path = typeof spec.path === "string" ? spec.path.trim().toLowerCase() : "";
-                            return src === "payload" && path.startsWith("vendor.");
-                        });
 
                     let resolved = await resolveRecipients(supabase, payload, specsToResolve, logs, channel);
                     if (
                         resolved.length === 0 &&
                         channel.toLowerCase() === "sms" &&
-                        String(payload.event_type ?? "") === "booking_confirmed" &&
-                        (recipientSpecs.length === 0 || onlyVendorPayloadPaths)
+                        bookingConfirmed &&
+                        !hasJobQualifiedSpec
                     ) {
-                        usedJobQualifiedVendorsResolver = true;
                         logs.push(
-                            "send_message: booking_confirmed vendor SMS — no recipients from payload; resolving job_qualified_vendors (active, vertical/zip rules)"
-                        );
-                        const jqMax =
-                            typeof pl.job_qualified_vendor_max === "number" && pl.job_qualified_vendor_max > 0
-                                ? Math.min(500, pl.job_qualified_vendor_max)
-                                : 25;
-                        resolved = await resolveRecipients(
-                            supabase,
-                            payload,
-                            [{ source: "resolver", type: "job_qualified_vendors", max: jqMax }],
-                            logs,
-                            channel
+                            "send_message: booking_confirmed — no recipients resolved; job_qualified_vendors is NOT auto-injected (add an explicit recipients[] entry with source=resolver and type=job_qualified_vendors only on vendor-offer workflows)"
                         );
                     }
                     if (resolved.length === 0) {
