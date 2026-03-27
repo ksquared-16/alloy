@@ -17,6 +17,61 @@ if STRIPE_SECRET_KEY:
 
 logger = logging.getLogger("alloy-dispatcher")
 
+
+def stripe_error_is_no_such_customer(err: BaseException) -> bool:
+    """
+    True when Stripe indicates the customer id does not exist in this account/mode
+    (e.g. LIVE cus_ copied into staging with TEST keys).
+    """
+    msg = str(err).lower()
+    if "no such customer" in msg:
+        return True
+    code = getattr(err, "code", None)
+    param = getattr(err, "param", None)
+    if code == "resource_missing" and param == "customer":
+        return True
+    return False
+
+
+def clear_stripe_customer_id_for_supabase_customer(supa_customer_id: str) -> None:
+    """Set customers.stripe_customer_id to null for the given Supabase customer UUID."""
+    if not supa_customer_id or not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return
+    base_url = _get_base_url()
+    headers = _get_headers()
+    clear_url = f"{base_url}/customers?id=eq.{supa_customer_id}"
+    try:
+        requests.patch(clear_url, headers=headers, json={"stripe_customer_id": None}, timeout=30)
+    except Exception as clear_err:
+        logger.warning("clear_stripe_customer_id_for_supabase_customer: patch failed: %s", clear_err)
+
+
+def lookup_supabase_customer_id_by_stripe_customer_id(stripe_customer_id: str) -> Optional[str]:
+    """Return public.customers.id for a row with this stripe_customer_id, if any."""
+    if not stripe_customer_id or not str(stripe_customer_id).startswith("cus_"):
+        return None
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    customers_url = f"{base_url}/customers"
+    params = {
+        "select": "id",
+        "stripe_customer_id": f"eq.{stripe_customer_id}",
+        "limit": "1",
+    }
+    try:
+        response = requests.get(customers_url, headers=headers, params=params, timeout=30)
+        if response.ok:
+            data = response.json()
+            if data and len(data) > 0 and isinstance(data[0], dict):
+                rid = data[0].get("id")
+                return str(rid) if rid else None
+    except Exception as e:
+        logger.warning("lookup_supabase_customer_id_by_stripe_customer_id: %s", e)
+    return None
+
+
 def _get_base_url() -> str:
     """Get PostgREST base URL from SUPABASE_URL."""
     if not SUPABASE_URL:
@@ -1483,25 +1538,35 @@ def get_or_create_stripe_customer_for_customer(
                     existing_stripe_customer_id[:8] + "***"
                 )
                 return existing_stripe_customer_id
-            except stripe.error.InvalidRequestError as e:
-                # Customer from other Stripe mode (e.g. LIVE id when using TEST keys) or deleted
+            except stripe.error.StripeError as e:
+                if not stripe_error_is_no_such_customer(e):
+                    logger.warning(
+                        "get_or_create_stripe_customer: Stripe error validating customer (not clearing; not auto-creating) supa_customer_id=%s error=%s",
+                        supa_customer_row.get("id")[:8] + "***" if supa_customer_row.get("id") else "None",
+                        str(e),
+                    )
+                    return None
                 logger.warning(
-                    "get_or_create_stripe_customer: existing stripe_customer_id invalid in current mode (clearing) supa_customer_id=%s error=%s",
+                    "get_or_create_stripe_customer: existing stripe_customer_id invalid in current Stripe env (clearing) supa_customer_id=%s error=%s",
                     supa_customer_row.get("id")[:8] + "***" if supa_customer_row.get("id") else "None",
                     str(e),
                 )
-                # Clear invalid ID so we create a new Stripe customer below
                 supa_customer_id_to_clear = supa_customer_row.get("id")
                 if supa_customer_id_to_clear:
-                    try:
-                        clear_url = f"{base_url}/customers?id=eq.{supa_customer_id_to_clear}"
-                        requests.patch(clear_url, headers=headers, json={"stripe_customer_id": None}, timeout=30)
-                    except Exception as clear_err:
-                        logger.warning("get_or_create_stripe_customer: failed to clear invalid stripe_customer_id: %s", clear_err)
-            except stripe.error.StripeError as e:
-                logger.warning("get_or_create_stripe_customer: Stripe error validating customer (will create new): %s", e)
-                # Fall through to create new customer
-    
+                    clear_stripe_customer_id_for_supabase_customer(supa_customer_id_to_clear)
+                supa_customer_row["stripe_customer_id"] = None
+
+    # Backfill email/phone from primary contact when missing (quote path may only send contact/customer ids)
+    if supa_customer_row and (not email or not phone):
+        pcid = supa_customer_row.get("primary_contact_id")
+        if pcid:
+            c = find_contact_by_id(str(pcid))
+            if c:
+                if not email and c.get("email"):
+                    email = str(c.get("email")).strip().lower()
+                if not phone and c.get("phone"):
+                    phone = normalize_phone(str(c.get("phone")))
+
     # Step 3: Create new Stripe customer (if we have email/phone)
     if not email and not phone:
         logger.warning("get_or_create_stripe_customer: cannot create Stripe customer - missing email and phone")

@@ -9,6 +9,15 @@ type PersistParams = {
 
 const LOG = "[BOOKING_PAYMENT_METHOD]";
 
+function isStripeNoSuchCustomerError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const o = err as { code?: string; message?: string; param?: string };
+  const m = typeof o.message === "string" ? o.message.toLowerCase() : "";
+  if (m.includes("no such customer")) return true;
+  if (o.code === "resource_missing" && o.param === "customer") return true;
+  return false;
+}
+
 /**
  * Resolve pm_… from body or by retrieving the SetupIntent server-side (client sometimes omits expanded payment_method).
  */
@@ -101,7 +110,7 @@ export async function persistBookingPaymentMethod(
 
   const { data: row, error: custErr } = await supabase
     .from("customers")
-    .select("id, stripe_customer_id")
+    .select("id, stripe_customer_id, primary_contact_id, name")
     .eq("id", customerId)
     .maybeSingle();
   if (custErr || !row) {
@@ -109,46 +118,114 @@ export async function persistBookingPaymentMethod(
     return false;
   }
 
-  const stripeCustomerId = (row as { stripe_customer_id?: string | null }).stripe_customer_id;
-  if (!stripeCustomerId?.startsWith("cus_")) {
-    console.warn(`${LOG} abort: customer.stripe_customer_id missing or not cus_`);
-    return false;
-  }
+  const r = row as {
+    stripe_customer_id?: string | null;
+    primary_contact_id?: string | null;
+    name?: string | null;
+  };
 
   const stripe = new Stripe(secret);
+
+  async function loadContactForStripe(): Promise<{
+    email: string | null;
+    phone: string | null;
+    displayName: string | null;
+  }> {
+    const pcid = r.primary_contact_id;
+    if (!pcid) return { email: null, phone: null, displayName: r.name ?? null };
+    const { data: c } = await supabase
+      .from("contacts")
+      .select("email, phone, first_name, last_name")
+      .eq("id", pcid)
+      .maybeSingle();
+    if (!c) return { email: null, phone: null, displayName: r.name ?? null };
+    const ct = c as { email?: string | null; phone?: string | null; first_name?: string | null; last_name?: string | null };
+    const fn = ct.first_name ?? "";
+    const ln = ct.last_name ?? "";
+    const fromContact = `${fn} ${ln}`.trim() || null;
+    return {
+      email: ct.email?.trim() ? String(ct.email).trim().toLowerCase() : null,
+      phone: ct.phone?.trim() ? String(ct.phone).trim() : null,
+      displayName: r.name ?? fromContact,
+    };
+  }
+
+  async function createStripeCustomerAndPersist(): Promise<string | null> {
+    const { email, phone, displayName } = await loadContactForStripe();
+    try {
+      const created = await stripe.customers.create({
+        email: email ?? undefined,
+        phone: phone ?? undefined,
+        name: displayName ?? undefined,
+        metadata: { supabase_customer_id: customerId },
+      });
+      const { error: up } = await supabase.from("customers").update({ stripe_customer_id: created.id }).eq("id", customerId);
+      if (up) {
+        console.error(`${LOG} failed to save new stripe_customer_id after env heal`, up.message);
+        return created.id;
+      }
+      console.log(`${LOG} created Stripe customer after missing/invalid cus_ id=${created.id.slice(0, 12)}…`);
+      return created.id;
+    } catch (e) {
+      console.error(`${LOG} createStripeCustomerAndPersist failed`, e);
+      return null;
+    }
+  }
+
+  let stripeCustomerId = r.stripe_customer_id?.startsWith("cus_") ? r.stripe_customer_id : null;
+  if (!stripeCustomerId) {
+    stripeCustomerId = await createStripeCustomerAndPersist();
+    if (!stripeCustomerId) {
+      console.warn(`${LOG} abort: could not resolve or create stripe_customer_id`);
+      return false;
+    }
+  }
 
   let brand: string | null = null;
   let last4: string | null = null;
   let stripeOk = false;
-  try {
-    const pm = await stripe.paymentMethods.retrieve(stripePaymentMethodId);
-    if (pm.type === "card" && pm.card) {
-      brand = pm.card.brand ?? null;
-      last4 = pm.card.last4 ?? null;
-    }
-    const attachedCustomer =
-      typeof pm.customer === "string" ? pm.customer : pm.customer && "id" in pm.customer ? pm.customer.id : null;
-    if (attachedCustomer !== stripeCustomerId) {
-      try {
-        await stripe.paymentMethods.attach(stripePaymentMethodId, { customer: stripeCustomerId });
-        console.log(`${LOG} stripe attach ok`);
-      } catch (attachErr: unknown) {
-        const msg = attachErr instanceof Error ? attachErr.message : String(attachErr);
-        if (!msg.toLowerCase().includes("already been attached")) {
-          throw attachErr;
-        }
-        console.log(`${LOG} stripe attach skipped (already attached)`);
+  for (let healAttempt = 0; healAttempt < 2; healAttempt++) {
+    try {
+      const pm = await stripe.paymentMethods.retrieve(stripePaymentMethodId);
+      if (pm.type === "card" && pm.card) {
+        brand = pm.card.brand ?? null;
+        last4 = pm.card.last4 ?? null;
       }
-    } else {
-      console.log(`${LOG} stripe PM already on customer`);
+      const attachedCustomer =
+        typeof pm.customer === "string" ? pm.customer : pm.customer && "id" in pm.customer ? pm.customer.id : null;
+      if (attachedCustomer !== stripeCustomerId) {
+        try {
+          await stripe.paymentMethods.attach(stripePaymentMethodId, { customer: stripeCustomerId });
+          console.log(`${LOG} stripe attach ok`);
+        } catch (attachErr: unknown) {
+          const msg = attachErr instanceof Error ? attachErr.message : String(attachErr);
+          if (!msg.toLowerCase().includes("already been attached")) {
+            throw attachErr;
+          }
+          console.log(`${LOG} stripe attach skipped (already attached)`);
+        }
+      } else {
+        console.log(`${LOG} stripe PM already on customer`);
+      }
+      await stripe.customers.update(stripeCustomerId, {
+        invoice_settings: { default_payment_method: stripePaymentMethodId },
+      });
+      console.log(`${LOG} stripe customer default_payment_method set ok`);
+      stripeOk = true;
+      break;
+    } catch (e) {
+      if (healAttempt === 0 && isStripeNoSuchCustomerError(e)) {
+        console.warn(`${LOG} Stripe customer invalid for this env; clearing and recreating`, e);
+        await supabase.from("customers").update({ stripe_customer_id: null }).eq("id", customerId);
+        const fresh = await createStripeCustomerAndPersist();
+        if (fresh) {
+          stripeCustomerId = fresh;
+          continue;
+        }
+      }
+      console.error(`${LOG} stripe retrieve/attach/default failed (continuing with DB denorm)`, e);
+      break;
     }
-    await stripe.customers.update(stripeCustomerId, {
-      invoice_settings: { default_payment_method: stripePaymentMethodId },
-    });
-    console.log(`${LOG} stripe customer default_payment_method set ok`);
-    stripeOk = true;
-  } catch (e) {
-    console.error(`${LOG} stripe retrieve/attach/default failed (continuing with DB denorm)`, e);
   }
 
   const customerPatch: Record<string, unknown> = {

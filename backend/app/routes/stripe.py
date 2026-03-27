@@ -29,6 +29,9 @@ from ..ghl_client import (
 from ..supabase_client import (
     link_stripe_customer_to_supabase,
     get_or_create_stripe_customer_for_customer,
+    stripe_error_is_no_such_customer,
+    clear_stripe_customer_id_for_supabase_customer,
+    lookup_supabase_customer_id_by_stripe_customer_id,
     get_payment_status_id_by_key,
     update_payment_by_provider_payment_id,
     get_job_by_id,
@@ -464,6 +467,9 @@ async def get_card_status(
         email=email,
         phone=phone,
     )
+
+    if stripe_customer_id and not customer_id_from_supabase:
+        customer_id_from_supabase = lookup_supabase_customer_id_by_stripe_customer_id(stripe_customer_id)
     
     # Log if GHL had a customer ID but we ignored it
     if contact:
@@ -556,9 +562,15 @@ async def get_card_status(
             stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
             e
         )
+        if stripe_error_is_no_such_customer(e):
+            supa_clear = customer_id_from_supabase or lookup_supabase_customer_id_by_stripe_customer_id(
+                stripe_customer_id or ""
+            )
+            if supa_clear:
+                clear_stripe_customer_id_for_supabase_customer(supa_clear)
         return JSONResponse({
             "has_card_on_file": False,
-            "customer_id": stripe_customer_id,
+            "customer_id": None if stripe_error_is_no_such_customer(e) else stripe_customer_id,
             "default_payment_method_id": None,
             "brand": None,
             "last4": None,
@@ -764,16 +776,41 @@ async def create_setup_intent(request: Request):
         metadata["ghl_contact_id"] = ghl_contact_id
 
     try:
-        # Create SetupIntent (not PaymentIntent - no charge)
-        setup_intent_params = {
-            "usage": "off_session",  # For future charges
-            "metadata": metadata,
-        }
+        setup_intent = None
+        for si_attempt in range(2):
+            setup_intent_params = {
+                "usage": "off_session",  # For future charges
+                "metadata": metadata,
+            }
+            if stripe_customer_id:
+                setup_intent_params["customer"] = stripe_customer_id
+            try:
+                setup_intent = stripe.SetupIntent.create(**setup_intent_params)
+                break
+            except stripe.error.StripeError as e:
+                if (
+                    si_attempt == 0
+                    and stripe_customer_id
+                    and stripe_error_is_no_such_customer(e)
+                ):
+                    logger.warning(
+                        "create_setup_intent: SetupIntent rejected stale Stripe customer; clearing DB id and refreshing booking_attempt_id=%s supa_customer_id=%s",
+                        booking_attempt_id or "None",
+                        supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
+                    )
+                    clear_stripe_customer_id_for_supabase_customer(supa_customer_id)
+                    stripe_customer_id = get_or_create_stripe_customer_for_customer(
+                        customer_id=supa_customer_id,
+                        email=normalized_email,
+                        phone=normalized_phone,
+                        name=name,
+                    )
+                    continue
+                logger.error("create_setup_intent: Stripe error: %s", e)
+                raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}") from e
 
-        if stripe_customer_id:
-            setup_intent_params["customer"] = stripe_customer_id
-
-        setup_intent = stripe.SetupIntent.create(**setup_intent_params)
+        if not setup_intent:
+            raise HTTPException(status_code=500, detail="Stripe error: could not create SetupIntent")
 
         logger.info(
             "create_setup_intent: created booking_attempt_id=%s setup_intent_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s stripe_customer_id=%s",
@@ -813,9 +850,11 @@ async def create_setup_intent(request: Request):
                 )
 
         return JSONResponse(response_data, status_code=200)
+    except HTTPException:
+        raise
     except stripe.error.StripeError as e:
         logger.error("create_setup_intent: Stripe error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}") from e
     except Exception as e:
         logger.error("create_setup_intent: unexpected error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1426,12 +1465,11 @@ async def charge_customer(
     
     # If stripe_customer_id is missing, use Supabase-first approach (ignore GHL)
     resolution_path = "direct"
+    email_for_lookup = body.get("email")
+    phone_for_lookup = body.get("phone")
+    customer_id_from_supabase = None
     if not stripe_customer_id:
         # Try to get from Supabase using email/phone or ghl_contact_id
-        email_for_lookup = body.get("email")
-        phone_for_lookup = body.get("phone")
-        customer_id_from_supabase = None
-        
         # Try to resolve Supabase customer_id from GHL contact_id
         if ghl_contact_id:
             from ..supabase_client import resolve_contact_id_from_ghl, find_contact_by_email, find_contact_by_phone
@@ -1471,6 +1509,9 @@ async def charge_customer(
                         "charge_customer: ignoring Stripe Customer ID from GHL source=ignored_ghl ghl_stripe_customer_id=%s (using Supabase-first)",
                         ghl_stripe_customer_id[:8] + "***"
                     )
+
+    if stripe_customer_id and not customer_id_from_supabase:
+        customer_id_from_supabase = lookup_supabase_customer_id_by_stripe_customer_id(stripe_customer_id)
     
     # If amount is missing and opportunity_id is provided, try to extract from GHL opportunity
     amount_resolution_path = "direct"
@@ -1662,21 +1703,58 @@ async def charge_customer(
             "attempted_charge": False
         }, status_code=200)
     
-    # Retrieve Stripe customer and resolve payment method
-    try:
-        customer = stripe.Customer.retrieve(stripe_customer_id)
-        logger.info("charge_customer: retrieved customer_id=%s", stripe_customer_id[:8] + "***")
-    except stripe.error.StripeError as e:
-        logger.error("charge_customer: failed to retrieve customer_id=%s: %s", stripe_customer_id[:8] + "***", e)
-        error_msg = f"Failed to retrieve customer: {str(e)}"
-        
-        note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
-        if opportunity_id:
-            note_body += f"\nOpportunity ID: {opportunity_id}"
-        if description:
-            note_body += f"\nDescription: {description}"
+    # Retrieve Stripe customer and resolve payment method (self-heal stale cus_ from another Stripe env)
+    customer = None
+    for retrieve_attempt in range(2):
+        try:
+            customer = stripe.Customer.retrieve(stripe_customer_id)
+            logger.info("charge_customer: retrieved customer_id=%s", stripe_customer_id[:8] + "***")
+            break
+        except stripe.error.StripeError as e:
+            if (
+                retrieve_attempt == 0
+                and stripe_error_is_no_such_customer(e)
+            ):
+                logger.warning(
+                    "charge_customer: Stripe customer missing in this env; clearing DB link and refreshing stripe_id=%s",
+                    stripe_customer_id[:8] + "***",
+                )
+                supa_to_clear = customer_id_from_supabase or lookup_supabase_customer_id_by_stripe_customer_id(
+                    stripe_customer_id
+                )
+                if supa_to_clear:
+                    clear_stripe_customer_id_for_supabase_customer(supa_to_clear)
+                    customer_id_from_supabase = supa_to_clear
+                stripe_customer_id = get_or_create_stripe_customer_for_customer(
+                    customer_id=customer_id_from_supabase,
+                    email=email_for_lookup,
+                    phone=phone_for_lookup,
+                )
+                if stripe_customer_id:
+                    continue
+            logger.error("charge_customer: failed to retrieve customer_id=%s: %s", stripe_customer_id[:8] + "***", e)
+            error_msg = f"Failed to retrieve customer: {str(e)}"
+
+            note_body = f"Payment failed: {error_msg}\nStripe Customer ID: {stripe_customer_id}\nAmount: ${amount_decimal:.2f}"
+            if opportunity_id:
+                note_body += f"\nOpportunity ID: {opportunity_id}"
+            if description:
+                note_body += f"\nDescription: {description}"
+            record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
+
+            return JSONResponse({
+                "status": "failed",
+                "payment_intent_id": None,
+                "amount_cents": amount_cents,
+                "opportunity_id": opportunity_id,
+                "error": error_msg,
+                "attempted_charge": True
+            }, status_code=200)
+
+    if not customer:
+        error_msg = "Failed to retrieve Stripe customer after refresh"
+        note_body = f"Payment failed: {error_msg}\nAmount: ${amount_decimal:.2f}"
         record_payment_failure(ghl_contact_id, "Payment Failed", note_body)
-        
         return JSONResponse({
             "status": "failed",
             "payment_intent_id": None,
@@ -1685,7 +1763,7 @@ async def charge_customer(
             "error": error_msg,
             "attempted_charge": True
         }, status_code=200)
-    
+
     # Determine default payment method
     payment_method_id = customer.invoice_settings.default_payment_method
     
