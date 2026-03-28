@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     const { data: row, error: fetchErr } = await supabase
         .from("action_links")
-        .select("id, action_type, entity_type, entity_id, expires_at, consumed_at, metadata")
+        .select("id, action_type, entity_type, entity_id, expires_at, consumed_at, metadata, org_id")
         .eq("token", token)
         .single();
 
@@ -54,6 +56,7 @@ export async function POST(request: NextRequest) {
         expires_at: string;
         consumed_at: string | null;
         metadata: unknown;
+        org_id?: string | null;
     };
 
     if (r.consumed_at) {
@@ -133,6 +136,72 @@ export async function POST(request: NextRequest) {
         job_id: jobId,
         assigned_vendor_id: assignedVendorId,
     };
+
+    /** Same pattern as POST /api/action/[token]/consume: canonical workflow_events + workflow_runs for SMS / follow-ups. */
+    if (accepted) {
+        const orgId = r.org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        const [{ data: jobFull }, { data: vendorFull }] = await Promise.all([
+            supabase.from("jobs").select("*").eq("id", jobId).maybeSingle(),
+            supabase.from("vendors").select("*").eq("id", assignedVendorId).maybeSingle(),
+        ]);
+        const occurredAt = now;
+        const eventPayload: Record<string, unknown> = {
+            event_type: "action_link_consumed",
+            occurred_at: occurredAt,
+            org_id: orgId,
+            action_type: "vendor_accept_job",
+            entity_type: "job",
+            entity_id: jobId,
+            vendor_id: assignedVendorId,
+            job: jobFull ?? null,
+            vendor: vendorFull ?? null,
+        };
+
+        let eventId: string | null = null;
+        try {
+            eventId = await emitEvent({
+                org_id: orgId,
+                event_type: "action_link_consumed",
+                entity_type: "job",
+                entity_id: jobId,
+                action_type: "vendor_accept_job",
+                occurred_at: occurredAt,
+                payload: eventPayload,
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error("[CONSUME_ACCEPT_JOB] emitEvent failed", msg);
+            return NextResponse.json(
+                { ok: false, reason: "event_emit_failed", message: msg, action_link_result: actionLinkResult },
+                { status: 500 }
+            );
+        }
+
+        let wq = supabase
+            .from("workflows")
+            .select("id")
+            .eq("enabled", true)
+            .eq("event_type", "action_link_consumed")
+            .eq("entity_type", "job");
+        if (orgId) wq = wq.or(`org_id.eq.${orgId},org_id.is.null`);
+        const { data: wfs } = await wq;
+
+        for (const wf of wfs ?? []) {
+            try {
+                await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                    event_id: eventId,
+                    org_id: orgId,
+                });
+            } catch (err) {
+                console.error(
+                    "[CONSUME_ACCEPT_JOB] executeWorkflowRun failed",
+                    (err as Error).message,
+                    "workflow_id=",
+                    (wf as { id: string }).id
+                );
+            }
+        }
+    }
 
     return NextResponse.json({
         ok: true,

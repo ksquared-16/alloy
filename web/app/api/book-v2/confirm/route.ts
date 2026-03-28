@@ -9,6 +9,7 @@ import {
     BOOKED_PIPELINE_STAGE_ID,
     BOOKING_CONFIRM_JOB_STATUS_ID,
     BOOKING_CONFIRM_JOB_STATUS_KEY,
+    BOOKING_CONFIRM_JOB_STATUS_RESOLVE_KEYS,
     BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
     BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
     BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
@@ -1789,10 +1790,7 @@ export async function POST(request: NextRequest) {
         bookV2PerfLog("canonical_location", tCanonicalLoc, booking_attempt_id ?? null);
 
         const bookingOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-        const resolvedJobSt = await resolveBookingJobStatus(supabase, bookingOrgId, [
-            BOOKING_CONFIRM_JOB_STATUS_KEY,
-            "scheduled",
-        ]);
+        const resolvedJobSt = await resolveBookingJobStatus(supabase, bookingOrgId, BOOKING_CONFIRM_JOB_STATUS_RESOLVE_KEYS);
         const bookingJobStatusId = resolvedJobSt?.id ?? BOOKING_CONFIRM_JOB_STATUS_ID;
         const bookingJobStatusKey = resolvedJobSt?.key ?? BOOKING_CONFIRM_JOB_STATUS_KEY;
         const resolvedSchedSt = await resolveScheduleStatusRowByKey(supabase, BOOKING_CONFIRM_SCHEDULE_STATUS_KEY);
