@@ -15,6 +15,8 @@ export type WorkflowEventPayload = {
     opportunity?: Record<string, unknown> | null;
     job?: Record<string, unknown> | null;
     schedule?: Record<string, unknown> | null;
+    /** Service location joined from schedule.location_id / job.location_id (e.g. postal_code for templates & zip matching). */
+    location?: Record<string, unknown> | null;
     vendor?: Record<string, unknown> | null;
     [key: string]: unknown;
 };
@@ -68,12 +70,17 @@ function getJobZip(payload: Record<string, unknown>): string | null {
     const opportunity = payload.opportunity as Record<string, unknown> | undefined;
     const customer = payload.customer as Record<string, unknown> | undefined;
 
+    const rootLoc = payload.location as Record<string, unknown> | undefined;
     const candidates: unknown[] = [
+        rootLoc?.postal_code,
         schedule?.postal_code,
         schedule?.location != null && typeof schedule.location === "object"
             ? (schedule.location as Record<string, unknown>).postal_code
             : null,
         job?.postal_code,
+        job?.location != null && typeof job.location === "object"
+            ? (job.location as Record<string, unknown>).postal_code
+            : null,
         opportunity?.postal_code,
         zipFromQuoteInputMetadata(opportunity),
         zipFromQuoteInputMetadata(job),
@@ -956,6 +963,99 @@ export interface WorkflowRunResult {
     logs?: string[];
 }
 
+/** Ensure entity.metadata is a plain object when stored as jsonb string (rare). */
+function normalizeStoredMetadata(ent: Record<string, unknown> | null | undefined): void {
+    if (!ent) return;
+    const m = readMetadataRecord(ent);
+    if (m) ent.metadata = m;
+}
+
+/**
+ * Load full job/schedule/opportunity/location rows into the workflow payload so send_message templates and
+ * resolvers (e.g. job zip) see DB truth: location.postal_code, opportunity.metadata.service_frequency, etc.
+ * Safe to call for any event; no-ops when ids are missing.
+ */
+async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payload: WorkflowEventPayload): Promise<void> {
+    const p = payload as Record<string, unknown>;
+
+    let schedule =
+        p.schedule != null && typeof p.schedule === "object" ? (p.schedule as Record<string, unknown>) : undefined;
+    const scheduleId = schedule?.id != null ? String(schedule.id).trim() : "";
+    if (scheduleId) {
+        const { data: sFull } = await supabase.from("schedules").select("*").eq("id", scheduleId).maybeSingle();
+        if (sFull) {
+            schedule = { ...schedule, ...(sFull as Record<string, unknown>) };
+            p.schedule = schedule;
+        }
+    }
+    if (schedule) normalizeStoredMetadata(schedule);
+
+    let job = p.job != null && typeof p.job === "object" ? (p.job as Record<string, unknown>) : undefined;
+    const jobIdFromSchedule = schedule?.job_id != null ? String(schedule.job_id).trim() : "";
+    const jobIdFromJob = job?.id != null ? String(job.id).trim() : "";
+    const jobId = jobIdFromJob || jobIdFromSchedule;
+
+    if (jobId) {
+        const { data: jFull } = await supabase.from("jobs").select("*").eq("id", jobId).maybeSingle();
+        if (jFull) {
+            job = { ...(job ?? {}), ...(jFull as Record<string, unknown>) };
+            p.job = job;
+        }
+    }
+    if (job) normalizeStoredMetadata(job);
+
+    const jobForOpp = p.job as Record<string, unknown> | undefined;
+    const existingOpp =
+        p.opportunity != null && typeof p.opportunity === "object"
+            ? (p.opportunity as Record<string, unknown>)
+            : undefined;
+    const oppIdFromPayload = existingOpp?.id != null ? String(existingOpp.id).trim() : "";
+    const oppIdFromJob =
+        jobForOpp?.opportunity_id != null ? String(jobForOpp.opportunity_id).trim() : "";
+    const oppId = oppIdFromPayload || oppIdFromJob;
+
+    if (oppId) {
+        const { data: oFull } = await supabase.from("opportunities").select("*").eq("id", oppId).maybeSingle();
+        if (oFull) {
+            p.opportunity = { ...(existingOpp ?? {}), ...(oFull as Record<string, unknown>) };
+        }
+    }
+    if (p.opportunity != null && typeof p.opportunity === "object") {
+        normalizeStoredMetadata(p.opportunity as Record<string, unknown>);
+    }
+
+    const sched = p.schedule as Record<string, unknown> | undefined;
+    const j = p.job as Record<string, unknown> | undefined;
+    const hasJobOrSchedule =
+        (sched != null && typeof sched === "object") || (j != null && typeof j === "object");
+    if (!hasJobOrSchedule) {
+        return;
+    }
+
+    const locationId =
+        (sched?.location_id != null ? String(sched.location_id).trim() : "") ||
+        (j?.location_id != null ? String(j.location_id).trim() : "") ||
+        "";
+
+    if (!locationId) {
+        return;
+    }
+
+    const { data: locRow } = await supabase.from("locations").select("*").eq("id", locationId).maybeSingle();
+    if (!locRow) return;
+
+    const loc = { ...(locRow as Record<string, unknown>) };
+    normalizeStoredMetadata(loc);
+    p.location = loc;
+
+    if (j && typeof j === "object") {
+        j.location = loc;
+    }
+    if (sched && typeof sched === "object") {
+        sched.location = loc;
+    }
+}
+
 /**
  * Enrich payload.vendor with vendor_status (id, key, label), vendor_vertical_ids, vendor_vertical_keys (slugs), vendor_vertical_names
  * so conditions like vendor_status.key and vendor_vertical_keys can be evaluated without extra DB in the condition loop.
@@ -1105,6 +1205,7 @@ export async function executeWorkflowRun(
         ...eventPayload,
     };
 
+    await enrichWorkflowEventPayloadEntities(supabase, payload);
     await enrichVendorPayload(supabase, payload);
 
     const { data: workflow, error: wErr } = await supabase
