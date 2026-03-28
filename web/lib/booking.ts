@@ -9,12 +9,12 @@
 /**
  * Get the booking path from environment variable.
  * Safe for client-side usage.
- * Defaults to "/book" (production).
- * Set NEXT_PUBLIC_BOOKING_PATH in Vercel to override (e.g., "/book-v2" for staging).
+ * Defaults to "/book-v2" (canonical web booking flow).
+ * Set NEXT_PUBLIC_BOOKING_PATH only if you need a non-default path (e.g. temporary rollback).
  */
 export function getBookingPath(): string {
   // Safe for client: process.env.NEXT_PUBLIC_* vars are replaced at build time
-  return process.env.NEXT_PUBLIC_BOOKING_PATH || "/book";
+  return process.env.NEXT_PUBLIC_BOOKING_PATH || "/book-v2";
 }
 
 const BOOKING_ROUTE = getBookingPath();
