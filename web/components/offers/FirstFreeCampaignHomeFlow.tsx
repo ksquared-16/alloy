@@ -4,9 +4,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuoteModal } from "@/lib/quoteModal";
 import {
-  FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
-  isFirstFree4x60CampaignQuery,
-} from "@/lib/campaigns/firstFree4x60";
+  FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+  isFirstFree4x120CampaignQuery,
+} from "@/lib/campaigns/firstFree4x120";
 import { mergeFirstFreeCampaignBookingPrefill } from "@/lib/campaigns/mergeFirstFreeCampaignPrefill";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import FirstFreeTermsModal from "@/components/offers/FirstFreeTermsModal";
@@ -31,8 +31,8 @@ function FirstFreeCampaignHomeFlowInner() {
         trackMetaEvent("Lead", {
           vertical: "cleaning",
           flow: "quote",
-          campaign: FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
-          firstfree4x60_step: "quote_submitted",
+          campaign: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+          firstfree4x120_step: "quote_submitted",
           estimated_price: q.first_clean_price ?? q.estimated_price ?? undefined,
         });
       }
@@ -43,7 +43,7 @@ function FirstFreeCampaignHomeFlowInner() {
   }, []);
 
   useEffect(() => {
-    if (!isFirstFree4x60CampaignQuery(campaignParam)) {
+    if (!isFirstFree4x120CampaignQuery(campaignParam)) {
       flowPhaseRef.current = "quote_modal";
       return;
     }
@@ -51,7 +51,7 @@ function FirstFreeCampaignHomeFlowInner() {
     const run = () => {
       openModal({
         defaultService: "cleaning",
-        campaignQuoteFlow: "firstfree4x60",
+        campaignQuoteFlow: "firstfree4x120",
         onCampaignQuoteComplete: handleQuoteStepComplete,
       });
     };
@@ -62,7 +62,7 @@ function FirstFreeCampaignHomeFlowInner() {
     }
   }, [campaignParam, openModal, handleQuoteStepComplete]);
 
-  if (!isFirstFree4x60CampaignQuery(campaignParam)) return null;
+  if (!isFirstFree4x120CampaignQuery(campaignParam)) return null;
 
   return (
     <FirstFreeTermsModal
@@ -76,7 +76,7 @@ function FirstFreeCampaignHomeFlowInner() {
 }
 
 /**
- * Homepage (and any page that mounts this): `/?campaign=firstfree4x60` opens the quote modal, then terms modal, then /book-v2.
+ * Homepage (and any page that mounts this): `/?campaign=firstfree4x120` (or legacy `firstfree4x60`) opens the quote modal, then terms modal, then booking.
  */
 export default function FirstFreeCampaignHomeFlow() {
   return (

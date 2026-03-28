@@ -75,6 +75,10 @@ export default function BookClient() {
                 // Fallback to sessionStorage (backward compatibility)
                 storedQuote = sessionStorage.getItem("alloy_cleaning_quote");
             }
+            if (!storedQuote) {
+                storedQuote =
+                    localStorage.getItem("alloy_quote_v1") || sessionStorage.getItem("alloy_quote_v1");
+            }
 
             if (storedQuote) {
                 const parsedQuote: QuoteResponse = JSON.parse(storedQuote);
@@ -91,15 +95,37 @@ export default function BookClient() {
                 localStorage.getItem("alloy_booking_prefill");
             if (prefill) {
                 try {
-                    const prefillData = JSON.parse(prefill);
-                    if (prefillData.discount_code && prefillData.discount_code_id && prefillData.discount_amount) {
+                    const prefillData = JSON.parse(prefill) as Record<string, unknown>;
+                    const codeRaw =
+                        (typeof prefillData.discount_code === "string" && prefillData.discount_code.trim()) ||
+                        (typeof prefillData.discount_program_code === "string" &&
+                            prefillData.discount_program_code.trim());
+                    const legacyId =
+                        typeof prefillData.discount_code_id === "string"
+                            ? prefillData.discount_code_id.trim()
+                            : "";
+                    const programId =
+                        typeof prefillData.discount_program_id === "string"
+                            ? prefillData.discount_program_id.trim()
+                            : "";
+                    const rawAmt = prefillData.discount_amount;
+                    const discountAmt = typeof rawAmt === "number" ? rawAmt : Number(rawAmt);
+                    if (
+                        codeRaw &&
+                        Number.isFinite(discountAmt) &&
+                        discountAmt >= 0 &&
+                        (legacyId || programId)
+                    ) {
                         setDiscountData({
-                            code: prefillData.discount_code,
-                            discount_code_id: prefillData.discount_code_id,
-                            discount_amount: prefillData.discount_amount,
-                            quote_total: prefillData.quote_total || 0,
+                            code: codeRaw.toUpperCase(),
+                            discount_code_id: legacyId || programId,
+                            discount_amount: discountAmt,
+                            quote_total:
+                                typeof prefillData.quote_total === "number"
+                                    ? prefillData.quote_total
+                                    : Number(prefillData.quote_total) || 0,
                         });
-                        setDiscountCode(prefillData.discount_code);
+                        setDiscountCode(codeRaw.toUpperCase());
                     }
                 } catch (e) {
                     console.warn("Failed to load discount from prefill:", e);

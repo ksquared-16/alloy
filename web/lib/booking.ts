@@ -9,12 +9,12 @@
 /**
  * Get the booking path from environment variable.
  * Safe for client-side usage.
- * Defaults to "/book-v2" (canonical web booking flow).
- * Set NEXT_PUBLIC_BOOKING_PATH only if you need a non-default path (e.g. temporary rollback).
+ * Defaults to "/book" so production matches staging (GHL /book flow + campaign handoff).
+ * Override with NEXT_PUBLIC_BOOKING_PATH only when intentionally routing elsewhere (e.g. /book-v2).
  */
 export function getBookingPath(): string {
   // Safe for client: process.env.NEXT_PUBLIC_* vars are replaced at build time
-  return process.env.NEXT_PUBLIC_BOOKING_PATH || "/book-v2";
+  return process.env.NEXT_PUBLIC_BOOKING_PATH || "/book";
 }
 
 const BOOKING_ROUTE = getBookingPath();

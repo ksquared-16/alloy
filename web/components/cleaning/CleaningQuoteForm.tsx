@@ -132,14 +132,14 @@ const RECURRING_CLEANING_FREQUENCIES: CleaningFrequencyOption[] = [
 ];
 
 export type CampaignQuoteModeConfig = {
-    /** Currently: First Service Free / 4-in-60 campaign landing */
-    id: "firstfree4x60";
+    /** First Service Free — 4 visits in 120 days (recurring standard cleaning) */
+    id: "firstfree4x120";
     /** After quote is stored locally; skips redirect to booking. */
     onCampaignFlowQuoteReady?: (payload: { result: CleaningQuoteResult; input: CleaningQuoteInput }) => void;
 };
 
 function buildInitialFormState(campaign?: CampaignQuoteModeConfig | undefined): FormState {
-    if (campaign?.id === "firstfree4x60") {
+    if (campaign?.id === "firstfree4x120") {
         return {
             ...INITIAL_FORM,
             serviceType: "Standard Cleaning",
@@ -175,7 +175,7 @@ export default function CleaningQuoteForm({
     const [isCalculatingQuote, setIsCalculatingQuote] = useState(false);
 
     const isDark = variant === "dark";
-    const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x60";
+    const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
     const isMoveOut = !isCampaignFirstFree && form.serviceType === "Move-Out / Heavy Clean";
 
     // Calculate quote when relevant form fields change (for Standard Cleaning only)
