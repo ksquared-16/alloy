@@ -1046,6 +1046,15 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
 
     const loc = { ...(locRow as Record<string, unknown>) };
     normalizeStoredMetadata(loc);
+    /** DB column is `address1` / `address2`; SMS/workflow templates use `location.address_line1` (contact-style names). */
+    if (loc.address_line1 == null || String(loc.address_line1).trim() === "") {
+        const a1 = loc.address1;
+        if (a1 != null && String(a1).trim() !== "") loc.address_line1 = a1;
+    }
+    if (loc.address_line2 == null || String(loc.address_line2).trim() === "") {
+        const a2 = loc.address2;
+        if (a2 != null && String(a2).trim() !== "") loc.address_line2 = a2;
+    }
     p.location = loc;
 
     if (j && typeof j === "object") {

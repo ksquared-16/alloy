@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+    loadBookingPersonForJobWorkflow,
+    loadJobScheduleAndLocationForActionLink,
+} from "@/lib/actionLinkDisplayDetails";
 import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/bookingConfirmationSms";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -10,34 +14,25 @@ function isUuid(s: unknown): s is string {
     return typeof s === "string" && UUID_REGEX.test(s);
 }
 
-type SchedulePickRow = {
-    start_at?: string | null;
-    canceled_at?: string | null;
-    status_key?: string | null;
-    [key: string]: unknown;
-};
+function uuidish(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s || null;
+}
 
-/**
- * Prefer next non-canceled visit (by start_at); else most recent start; else first row.
- * Matches "current / next" schedule for vendor assignment SMS.
- */
-function pickScheduleRowForAcceptedJob(rows: SchedulePickRow[] | null | undefined): SchedulePickRow | null {
-    if (!rows?.length) return null;
-    const canceled = (s: SchedulePickRow) =>
-        s.canceled_at != null || String(s.status_key ?? "").toLowerCase() === "canceled";
-    const active = rows.filter((s) => !canceled(s));
-    const pool = active.length > 0 ? active : rows;
-    const now = Date.now();
-    const withStart = pool.filter((s) => s.start_at != null && String(s.start_at).trim() !== "");
-    const upcoming = withStart.filter((s) => {
-        const t = Date.parse(String(s.start_at));
-        return !Number.isNaN(t) && t >= now;
-    });
-    upcoming.sort((a, b) => Date.parse(String(a.start_at)) - Date.parse(String(b.start_at)));
-    if (upcoming.length > 0) return upcoming[0] ?? null;
-    withStart.sort((a, b) => Date.parse(String(b.start_at)) - Date.parse(String(a.start_at)));
-    if (withStart.length > 0) return withStart[0] ?? null;
-    return pool[0] ?? null;
+/** Copy `locations.address1` → `address_line1` for workflow templates (matches enrichWorkflowEventPayloadEntities). */
+function locationWithLineAliases(loc: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (!loc) return null;
+    const out = { ...loc };
+    if (out.address_line1 == null || String(out.address_line1).trim() === "") {
+        const a1 = out.address1;
+        if (a1 != null && String(a1).trim() !== "") out.address_line1 = a1;
+    }
+    if (out.address_line2 == null || String(out.address_line2).trim() === "") {
+        const a2 = out.address2;
+        if (a2 != null && String(a2).trim() !== "") out.address_line2 = a2;
+    }
+    return out;
 }
 
 /** Unrendered workflow placeholders must not be treated as vendor UUIDs. */
@@ -171,23 +166,19 @@ export async function POST(request: NextRequest) {
     /** Same pattern as POST /api/action/[token]/consume: canonical workflow_events + workflow_runs for SMS / follow-ups. */
     if (accepted) {
         const orgId = r.org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-        const { data: jobFull } = await supabase.from("jobs").select("*").eq("id", jobId).maybeSingle();
-        const jobRow = (jobFull ?? null) as Record<string, unknown> | null;
 
-        const customerId = jobRow?.customer_id != null ? String(jobRow.customer_id).trim() : "";
-        const opportunityId = jobRow?.opportunity_id != null ? String(jobRow.opportunity_id).trim() : "";
-        const primaryContactId = jobRow?.primary_contact_id != null ? String(jobRow.primary_contact_id).trim() : "";
-        const primaryPersonId = jobRow?.primary_person_id != null ? String(jobRow.primary_person_id).trim() : "";
+        const visitCtx = await loadJobScheduleAndLocationForActionLink(supabase, jobId);
+        const jobRow = visitCtx.job;
+        if (!jobRow) {
+            console.error("[CONSUME_ACCEPT_JOB] job missing after accept", { job_id: jobId });
+            return NextResponse.json({ ok: false, reason: "invalid", action_link_result: actionLinkResult }, { status: 500 });
+        }
 
-        const [
-            schedulesRes,
-            vendorRes,
-            oppRes,
-            customerRes,
-            contactRes,
-            personByJobPrimaryRes,
-        ] = await Promise.all([
-            supabase.from("schedules").select("*").eq("job_id", jobId).order("start_at", { ascending: true }),
+        const customerId = uuidish(jobRow.customer_id);
+        const opportunityId = uuidish(jobRow.opportunity_id);
+        const primaryContactId = uuidish(jobRow.primary_contact_id);
+
+        const [vendorRes, oppRes, customerRes, contactRes, personRow] = await Promise.all([
             supabase.from("vendors").select("*").eq("id", assignedVendorId).maybeSingle(),
             opportunityId
                 ? supabase.from("opportunities").select("*").eq("id", opportunityId).maybeSingle()
@@ -198,26 +189,15 @@ export async function POST(request: NextRequest) {
             primaryContactId
                 ? supabase.from("contacts").select("*").eq("id", primaryContactId).maybeSingle()
                 : Promise.resolve({ data: null as null }),
-            primaryPersonId
-                ? supabase.from("persons").select("id, first_name, last_name, email, phone").eq("id", primaryPersonId).maybeSingle()
-                : Promise.resolve({ data: null as null }),
+            loadBookingPersonForJobWorkflow(supabase, jobRow, customerId),
         ]);
 
-        const scheduleRow = pickScheduleRowForAcceptedJob((schedulesRes.data ?? []) as SchedulePickRow[]);
         const contactRow = (contactRes as { data: Record<string, unknown> | null }).data;
-        let personRow = (personByJobPrimaryRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
-        if (!personRow && contactRow && contactRow.person_id != null && String(contactRow.person_id).trim()) {
-            const { data: p } = await supabase
-                .from("persons")
-                .select("id, first_name, last_name, email, phone")
-                .eq("id", String(contactRow.person_id).trim())
-                .maybeSingle();
-            personRow = (p as Record<string, unknown> | null) ?? null;
-        }
 
-        const normalizedSchedule: Record<string, unknown> | null = scheduleRow
-            ? { ...(scheduleRow as Record<string, unknown>) }
-            : jobRow?.scheduled_at != null && String(jobRow.scheduled_at).trim() !== ""
+        const scheduleFromCtx = visitCtx.schedule ? { ...visitCtx.schedule } : null;
+        const normalizedSchedule: Record<string, unknown> | null = scheduleFromCtx
+            ? scheduleFromCtx
+            : jobRow.scheduled_at != null && String(jobRow.scheduled_at).trim() !== ""
               ? {
                     job_id: jobId,
                     org_id: orgId,
@@ -233,13 +213,14 @@ export async function POST(request: NextRequest) {
         });
         const startIsoForSms =
             (normalizedSchedule?.start_at != null ? String(normalizedSchedule.start_at) : "") ||
-            (jobRow?.scheduled_at != null ? String(jobRow.scheduled_at) : "");
+            (jobRow.scheduled_at != null ? String(jobRow.scheduled_at) : "");
         const formattedStartAt = startIsoForSms.trim() ? formatBookingStartForSms(startIsoForSms, smsTz) : "";
 
         const occurredAt = now;
         const vendorFull = (vendorRes as { data: Record<string, unknown> | null }).data;
         const oppRow = (oppRes as { data: Record<string, unknown> | null }).data;
         const customerRow = (customerRes as { data: Record<string, unknown> | null }).data;
+        const locationRow = locationWithLineAliases(visitCtx.location);
 
         const eventPayload: Record<string, unknown> = {
             event_type: "action_link_consumed",
@@ -249,9 +230,10 @@ export async function POST(request: NextRequest) {
             entity_type: "job",
             entity_id: jobId,
             vendor_id: assignedVendorId,
-            job: jobRow ?? null,
+            job: jobRow,
             vendor: vendorFull ?? null,
             schedule: normalizedSchedule,
+            location: locationRow,
             opportunity: oppRow ?? null,
             customer: customerRow ?? null,
             contact: contactRow ?? null,
@@ -266,6 +248,11 @@ export async function POST(request: NextRequest) {
             vendor_id: assignedVendorId,
             has_schedule: !!normalizedSchedule,
             schedule_id: (normalizedSchedule as { id?: string } | null)?.id ?? null,
+            has_location: !!locationRow,
+            location_address_line1_set: !!(
+                locationRow &&
+                String((locationRow as { address_line1?: string }).address_line1 ?? "").trim()
+            ),
             has_opportunity: !!oppRow,
             has_customer: !!customerRow,
             has_contact: !!contactRow,

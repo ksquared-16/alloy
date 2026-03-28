@@ -70,6 +70,160 @@ function buildLocationSummary(loc: {
     return core || null;
 }
 
+function uuidish(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s || null;
+}
+
+/**
+ * Same schedule + location resolution as the vendor-accept action-link UI (`hydrateActionLinkDisplay` job branch):
+ * upcoming `start_at` if any, else earliest row; location from `schedule.location_id` then `job.location_id`.
+ */
+export async function loadJobScheduleAndLocationForActionLink(
+    supabase: SupabaseClient,
+    jobId: string
+): Promise<{
+    job: Record<string, unknown> | null;
+    schedule: Record<string, unknown> | null;
+    location: Record<string, unknown> | null;
+}> {
+    const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).maybeSingle();
+    if (!job) {
+        return { job: null, schedule: null, location: null };
+    }
+    const j = job as Record<string, unknown> & { id: string; location_id?: string | null };
+
+    const { data: schedules } = await supabase
+        .from("schedules")
+        .select("*")
+        .eq("job_id", j.id)
+        .order("start_at", { ascending: true });
+
+    const list = (schedules ?? []) as Array<Record<string, unknown> & { start_at?: string | null }>;
+    const now = Date.now();
+    const upcoming = list.find((row) => row.start_at && new Date(String(row.start_at)).getTime() >= now);
+    const sch = (upcoming ?? list[0] ?? null) as Record<string, unknown> | null;
+
+    const locId =
+        (sch?.location_id != null ? String(sch.location_id).trim() : "") ||
+        (j.location_id != null ? String(j.location_id).trim() : "") ||
+        "";
+
+    let location: Record<string, unknown> | null = null;
+    if (locId) {
+        const { data: loc } = await supabase.from("locations").select("*").eq("id", locId).maybeSingle();
+        location = (loc as Record<string, unknown>) ?? null;
+    }
+
+    return { job: j as Record<string, unknown>, schedule: sch, location };
+}
+
+/**
+ * Resolve the customer-facing person for workflow templates (`person.phone`, `person.first_name`).
+ * Order: job.primary_person_id → job.primary_contact.person → customer.primary_contact.person →
+ * customer_persons (primary / primary_contact) → person-shaped fields from job/customer primary contact (non-vendor contacts only).
+ */
+export async function loadBookingPersonForJobWorkflow(
+    supabase: SupabaseClient,
+    job: Record<string, unknown>,
+    customerId: string | null
+): Promise<Record<string, unknown> | null> {
+    const fetchPersonById = async (personId: string) => {
+        const { data } = await supabase.from("persons").select("*").eq("id", personId).maybeSingle();
+        return (data as Record<string, unknown>) ?? null;
+    };
+
+    const tryContactPerson = async (contactUuid: string) => {
+        const { data: c } = await supabase.from("contacts").select("*").eq("id", contactUuid).maybeSingle();
+        const cRow = c as Record<string, unknown> | null;
+        if (!cRow) return null;
+        const pp = uuidish(cRow.person_id);
+        if (pp) {
+            const p = await fetchPersonById(pp);
+            if (p) return p;
+        }
+        return null;
+    };
+
+    const ppJob = uuidish(job.primary_person_id);
+    if (ppJob) {
+        const p = await fetchPersonById(ppJob);
+        if (p) return p;
+    }
+
+    const jobContactId = uuidish(job.primary_contact_id);
+    if (jobContactId) {
+        const p = await tryContactPerson(jobContactId);
+        if (p) return p;
+    }
+
+    let customerPrimaryContactId: string | null = null;
+    if (customerId) {
+        const { data: cust } = await supabase
+            .from("customers")
+            .select("primary_contact_id")
+            .eq("id", customerId)
+            .maybeSingle();
+        customerPrimaryContactId = uuidish((cust as { primary_contact_id?: string | null } | null)?.primary_contact_id);
+        if (customerPrimaryContactId && customerPrimaryContactId !== jobContactId) {
+            const p = await tryContactPerson(customerPrimaryContactId);
+            if (p) return p;
+        }
+
+        const { data: cpRows } = await supabase
+            .from("customer_persons")
+            .select("person_id, is_primary, role_type")
+            .eq("customer_id", customerId);
+
+        const rows = (cpRows ?? []) as { person_id?: string; is_primary?: boolean; role_type?: string }[];
+        const sorted = rows.slice().sort((a, b) => {
+            if (Boolean(b.is_primary) !== Boolean(a.is_primary)) return (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0);
+            const aPc = String(a.role_type ?? "") === "primary_contact" ? 1 : 0;
+            const bPc = String(b.role_type ?? "") === "primary_contact" ? 1 : 0;
+            return bPc - aPc;
+        });
+        for (const row of sorted) {
+            const pId = uuidish(row.person_id);
+            if (!pId) continue;
+            const p = await fetchPersonById(pId);
+            if (p) return p;
+        }
+    }
+
+    if (jobContactId) {
+        const { data: c } = await supabase.from("contacts").select("*").eq("id", jobContactId).maybeSingle();
+        const syn = personShapedFromCustomerContact(c as Record<string, unknown> | null);
+        if (syn) return syn;
+    }
+    if (customerPrimaryContactId && customerPrimaryContactId !== jobContactId) {
+        const { data: c } = await supabase
+            .from("contacts")
+            .select("*")
+            .eq("id", customerPrimaryContactId)
+            .maybeSingle();
+        const syn = personShapedFromCustomerContact(c as Record<string, unknown> | null);
+        if (syn) return syn;
+    }
+
+    return null;
+}
+
+function personShapedFromCustomerContact(c: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (!c) return null;
+    if (c.vendor_id != null && String(c.vendor_id).trim() !== "") return null;
+    const phone = String(c.phone ?? "").trim();
+    const fn = String(c.first_name ?? "").trim();
+    if (!phone && !fn) return null;
+    return {
+        id: uuidish(c.person_id),
+        first_name: c.first_name ?? null,
+        last_name: c.last_name ?? null,
+        phone: c.phone ?? null,
+        email: c.email ?? null,
+    };
+}
+
 function overlayFromLinkMetadata(
     base: ActionLinkDisplayDetails,
     md: Record<string, unknown>
@@ -202,16 +356,9 @@ export async function hydrateActionLinkDisplay(
                 if (schHouse.length && !details.house_detail_lines.length) details.house_detail_lines = schHouse;
             }
         } else if (params.entity_type === "job") {
-            const { data: job } = await supabase
-                .from("jobs")
-                .select(
-                    "id, title, description, estimated_total_cents, gross_price_cents, service_key, service_frequency_key, location_id, metadata"
-                )
-                .eq("id", params.entity_id)
-                .maybeSingle();
-
-            if (job) {
-                const j = job as {
+            const ctx = await loadJobScheduleAndLocationForActionLink(supabase, params.entity_id);
+            if (ctx.job) {
+                const j = ctx.job as {
                     id: string;
                     title?: string | null;
                     description?: string | null;
@@ -229,28 +376,17 @@ export async function hydrateActionLinkDisplay(
                 details.price_display =
                     formatUsdFromCents(j.gross_price_cents) ?? formatUsdFromCents(j.estimated_total_cents);
 
-                const { data: schedules } = await supabase
-                    .from("schedules")
-                    .select("id, start_at, end_at, timezone, visit_type, price_cents, location_id, metadata")
-                    .eq("job_id", j.id)
-                    .order("start_at", { ascending: true });
-
-                const list = (schedules ?? []) as Array<{
-                    id: string;
+                const sch = ctx.schedule as {
+                    id?: string;
                     start_at?: string | null;
                     end_at?: string | null;
                     timezone?: string | null;
                     visit_type?: string | null;
                     price_cents?: number | null;
-                    location_id?: string | null;
                     metadata?: unknown;
-                }>;
+                } | null;
 
-                const now = Date.now();
-                const upcoming = list.find((row) => row.start_at && new Date(row.start_at).getTime() >= now);
-                const sch = upcoming ?? list[0];
-
-                if (sch) {
+                if (sch && sch.id) {
                     details.schedule_id = sch.id;
                     if (sch.start_at) details.start_at = sch.start_at;
                     if (sch.end_at) details.end_at = sch.end_at;
@@ -260,35 +396,17 @@ export async function hydrateActionLinkDisplay(
                         const pc = formatUsdFromCents(sch.price_cents);
                         if (pc) details.price_display = pc;
                     }
-                    const locId = sch.location_id ?? j.location_id;
-                    if (locId) {
-                        const { data: loc } = await supabase
-                            .from("locations")
-                            .select("label, address1, address2, city, state, postal_code, metadata")
-                            .eq("id", locId)
-                            .maybeSingle();
-                        if (loc) {
-                            details.location_summary = buildLocationSummary(loc as Record<string, string | null>);
-                            const hl = houseDetailsFromMetadata(
-                                (loc as { metadata?: unknown }).metadata
-                            );
-                            if (hl.length) details.house_detail_lines = hl;
-                        }
-                    }
+                }
+
+                if (ctx.location) {
+                    details.location_summary = buildLocationSummary(ctx.location as Record<string, string | null>);
+                    const hl = houseDetailsFromMetadata((ctx.location as { metadata?: unknown }).metadata);
+                    if (hl.length) details.house_detail_lines = hl;
+                }
+
+                if (sch) {
                     const schHouse = houseDetailsFromMetadata(sch.metadata);
                     if (schHouse.length && !details.house_detail_lines.length) details.house_detail_lines = schHouse;
-                } else if (j.location_id) {
-                    const { data: loc } = await supabase
-                        .from("locations")
-                        .select("label, address1, address2, city, state, postal_code, metadata")
-                        .eq("id", j.location_id)
-                        .maybeSingle();
-                    if (loc) {
-                        details.location_summary = buildLocationSummary(loc as Record<string, string | null>);
-                        details.house_detail_lines = houseDetailsFromMetadata(
-                            (loc as { metadata?: unknown }).metadata
-                        );
-                    }
                 }
 
                 const jobHouse = houseDetailsFromMetadata(j.metadata);
