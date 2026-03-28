@@ -405,7 +405,7 @@ export default function CleaningQuoteForm({
                         : (form.addOnFrequency || undefined)),
             };
 
-            // For Standard Cleaning: Calculate quote and navigate to /book
+            // For Standard Cleaning: Calculate quote and navigate to the booking flow (see getBookingPath / buildBookingUrl)
             if (!isMoveOut) {
                 const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
 
@@ -451,7 +451,7 @@ export default function CleaningQuoteForm({
                         cleanInput.addOns
                     );
 
-                    // Store quote in localStorage for /book and /book-v2 pages
+                    // Store quote in localStorage for the booking flow (book-v2 reads alloy_quote_v1)
                     try {
                         if (isStaging) {
                             console.log("[STAGING] Storing quote to localStorage/sessionStorage", {
@@ -552,7 +552,7 @@ export default function CleaningQuoteForm({
                         estimatedPrice: result.estimated_price ?? undefined,
                     });
 
-                    // Navigate to /book page (page mode only)
+                    // Navigate to booking flow (page mode only)
                     router.push(bookingUrl);
                     return; // Exit early, don't continue with backend submission
                 } catch (error) {
