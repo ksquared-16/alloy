@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import ActionLinkDetailsPanel from "@/components/action/ActionLinkDetailsPanel";
+import type { ActionLinkDisplayDetails } from "@/lib/actionLinkDisplayDetails";
 
 const ACTION_COPY: Record<string, { title: string; subtitle: string; primaryCta: string }> = {
-    customer_cancel: { title: "Confirm cancellation", subtitle: "You’re about to cancel your appointment.", primaryCta: "Confirm cancellation" },
-    customer_reschedule: { title: "Confirm reschedule", subtitle: "You’re about to reschedule your appointment.", primaryCta: "Choose a new time" },
-    vendor_accept_job: { title: "Confirm acceptance", subtitle: "You’re about to accept this job.", primaryCta: "Confirm acceptance" },
+    customer_cancel: { title: "Cancel appointment", subtitle: "Review your booking below, then confirm if you want to cancel.", primaryCta: "Confirm cancellation" },
+    customer_reschedule: { title: "Reschedule appointment", subtitle: "Review your current booking, then choose a new time.", primaryCta: "Continue to calendar" },
+    vendor_accept_job: { title: "Accept this job", subtitle: "Review the visit details below, then confirm to claim the job.", primaryCta: "Claim job" },
 };
 const DEFAULT_ACTION_COPY = { title: "Confirm action", subtitle: "Confirm the action below.", primaryCta: "Confirm" };
 
@@ -53,26 +55,6 @@ function ActionIcon({ actionType }: { actionType: string }) {
     );
 }
 
-function formatActionTypeLabel(actionType: string): string {
-    const labels: Record<string, string> = {
-        customer_cancel: "Cancel appointment",
-        customer_reschedule: "Reschedule appointment",
-        reschedule_schedule: "Reschedule appointment",
-        vendor_accept_job: "Accept job",
-    };
-    if (labels[actionType]) return labels[actionType];
-    return actionType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatEntityTypeLabel(entityType: string): string {
-    const labels: Record<string, string> = {
-        schedule: "Appointment",
-        job: "Job",
-    };
-    if (labels[entityType]) return labels[entityType];
-    return entityType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 type LinkMeta = {
     id: string;
     org_id: string | null;
@@ -83,6 +65,7 @@ type LinkMeta = {
     consumed_at: string | null;
     created_at: string;
     metadata?: Record<string, unknown>;
+    details?: ActionLinkDisplayDetails;
 };
 
 type Status = "loading" | "ready" | "expired" | "consumed" | "not_found" | "success" | "error" | "already_assigned";
@@ -279,7 +262,16 @@ export default function ActionConfirmPage() {
     }
 
     if (status === "success") {
-        const isAcceptJob = meta?.action_type === "vendor_accept_job";
+        const at = meta?.action_type ?? "";
+        let title = "Done";
+        let message = "Your request was completed.";
+        if (at === "vendor_accept_job") {
+            title = "Job claimed";
+            message = "You’ve accepted this job. It’s now assigned to you.";
+        } else if (at === "customer_cancel") {
+            title = "Appointment canceled";
+            message = "Your booking has been canceled.";
+        }
         return (
             <div className={pageBg}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -287,12 +279,10 @@ export default function ActionConfirmPage() {
                 </div>
                 <div className={cardClass}>
                     <div className={headerClass}>
-                        <h1 className="text-lg font-semibold text-alloy-midnight">{isAcceptJob ? "You're booked!" : "Done"}</h1>
+                        <h1 className="text-lg font-semibold text-alloy-midnight">{title}</h1>
                     </div>
                     <div className={`${bodyClass} text-center`}>
-                        <p className="text-alloy-midnight/70 text-sm">
-                            {isAcceptJob ? "Job accepted." : "Your action has been completed successfully."}
-                        </p>
+                        <p className="text-alloy-midnight/70 text-sm">{message}</p>
                         {backLink}
                     </div>
                 </div>
@@ -308,10 +298,10 @@ export default function ActionConfirmPage() {
                 </div>
                 <div className={cardClass}>
                     <div className={headerClass}>
-                        <h1 className="text-lg font-semibold text-alloy-midnight">Job no longer available</h1>
+                        <h1 className="text-lg font-semibold text-alloy-midnight">Already claimed</h1>
                     </div>
                     <div className={`${bodyClass} text-center`}>
-                        <p className="text-alloy-midnight/70 text-sm">This job has already been accepted by someone else.</p>
+                        <p className="text-alloy-midnight/70 text-sm">This job was already accepted by another vendor.</p>
                         {backLink}
                     </div>
                 </div>
@@ -333,27 +323,21 @@ export default function ActionConfirmPage() {
     const copy = getActionCopy(
         isScheduleRescheduleLink(meta.action_type, meta.entity_type) ? "customer_reschedule" : meta.action_type
     );
-    const md = meta.metadata ?? {};
-    const startAt = md.start_at != null ? String(md.start_at) : null;
-    const endAt = md.end_at != null ? String(md.end_at) : null;
-    const timezone = md.timezone != null ? String(md.timezone) : null;
-    const serviceLabel = md.service_label != null ? String(md.service_label) : formatEntityTypeLabel(meta.entity_type);
-    const address = md.address != null ? String(md.address) : null;
-    const city = md.city != null ? String(md.city) : null;
-    const showAppointmentSummary = meta.entity_type === "schedule";
-
-    function formatDateTime(iso: string, tz: string | null): string {
-        try {
-            const d = new Date(iso);
-            if (Number.isNaN(d.getTime())) return iso;
-            if (tz) {
-                return d.toLocaleString(undefined, { timeZone: tz, dateStyle: "medium", timeStyle: "short" });
-            }
-            return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-        } catch {
-            return iso;
-        }
-    }
+    const details: ActionLinkDisplayDetails = meta.details ?? {
+        start_at: null,
+        end_at: null,
+        timezone: null,
+        service_label: null,
+        job_title: null,
+        job_description: null,
+        visit_type: null,
+        location_summary: null,
+        house_detail_lines: [],
+        price_display: null,
+        schedule_id: null,
+        job_id: null,
+    };
+    const detailsHeading = meta.entity_type === "job" ? "Job details" : "Current appointment";
 
     return (
         <div className={pageBg}>
@@ -369,7 +353,9 @@ export default function ActionConfirmPage() {
                         <div className="flex-1 min-w-0">
                             <h1 className="text-xl font-semibold text-alloy-midnight tracking-tight">{copy.title}</h1>
                             <p className="mt-0.5 text-sm text-alloy-midnight/70">{copy.subtitle}</p>
-                            <p className="mt-1 text-xs text-alloy-midnight/60">This link is secure and expires in 2 hours.</p>
+                            <p className="mt-1 text-xs text-alloy-midnight/55">
+                                Secure link · Expires {expiresAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                            </p>
                         </div>
                         <span
                             className={`flex-shrink-0 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
@@ -385,36 +371,9 @@ export default function ActionConfirmPage() {
                     </div>
                 </div>
                 <div className={bodyClass}>
-                    <dl className="text-sm text-alloy-midnight/80 space-y-2 pb-5 border-b border-alloy-stone/20">
-                        <div><span className="font-medium text-alloy-midnight">Action:</span> {formatActionTypeLabel(meta.action_type)}</div>
-                        <div><span className="font-medium text-alloy-midnight">Entity:</span> {formatEntityTypeLabel(meta.entity_type)}</div>
-                        <div><span className="font-medium text-alloy-midnight">Expires:</span> {isExpired ? "Expired" : expiresAt.toLocaleString()}</div>
-                    </dl>
-
-                    {showAppointmentSummary && (
-                        <div className="py-5 border-b border-alloy-stone/20">
-                            <h2 className="text-sm font-semibold text-alloy-midnight mb-3">Appointment summary</h2>
-                            <dl className="text-sm text-alloy-midnight/80 space-y-2">
-                                {(startAt || endAt) && (
-                                    <div>
-                                        <span className="font-medium text-alloy-midnight">Date & time:</span>{" "}
-                                        {startAt && endAt
-                                            ? `${formatDateTime(startAt, timezone)} – ${formatDateTime(endAt, timezone)}`
-                                            : startAt
-                                              ? formatDateTime(startAt, timezone)
-                                              : endAt
-                                                ? formatDateTime(endAt, timezone)
-                                                : null}
-                                    </div>
-                                )}
-                                <div><span className="font-medium text-alloy-midnight">Service:</span> {serviceLabel}</div>
-                                {(address || city) && (
-                                    <div>
-                                        <span className="font-medium text-alloy-midnight">Location:</span>{" "}
-                                        {[address, city].filter(Boolean).join(", ")}
-                                    </div>
-                                )}
-                            </dl>
+                    {(meta.entity_type === "schedule" || meta.entity_type === "job") && (
+                        <div className="pb-5 border-b border-alloy-stone/20">
+                            <ActionLinkDetailsPanel details={details} heading={detailsHeading} />
                         </div>
                     )}
 
@@ -436,7 +395,11 @@ export default function ActionConfirmPage() {
                         {isScheduleRescheduleLink(meta.action_type, meta.entity_type) ? (
                             <button
                                 type="button"
-                                onClick={() => router.push(`/book-v2?reschedule_token=${encodeURIComponent(token)}`)}
+                                onClick={() =>
+                                    router.push(
+                                        `/book-v2?reschedule_token=${encodeURIComponent(token)}&reschedule_skip_review=1`
+                                    )
+                                }
                                 className="w-full sm:w-auto px-5 py-2.5 bg-alloy-blue text-white rounded-lg text-sm font-medium hover:bg-alloy-blue/90 transition-colors"
                             >
                                 {copy.primaryCta}

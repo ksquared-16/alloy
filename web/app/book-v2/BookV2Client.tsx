@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadStripe, Stripe, StripeElements, StripeCardNumberElement, StripeCardExpiryElement, StripeCardCvcElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
+import ActionLinkDetailsPanel from "@/components/action/ActionLinkDetailsPanel";
+import type { ActionLinkDisplayDetails } from "@/lib/actionLinkDisplayDetails";
 import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
@@ -77,6 +79,21 @@ const QUOTE_STORAGE_KEYS = [
     "alloy_customer_id",
     "alloy_opportunity_id",
 ] as const;
+
+const EMPTY_ACTION_LINK_DETAILS: ActionLinkDisplayDetails = {
+    start_at: null,
+    end_at: null,
+    timezone: null,
+    service_label: null,
+    job_title: null,
+    job_description: null,
+    visit_type: null,
+    location_summary: null,
+    house_detail_lines: [],
+    price_display: null,
+    schedule_id: null,
+    job_id: null,
+};
 
 const BOOKING_IDENTITY_SIG_KEY = "alloy_booking_identity_sig";
 
@@ -493,6 +510,8 @@ export default function BookV2Client() {
     const [rescheduleLoading, setRescheduleLoading] = useState(true);
     const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
     const [rescheduleResult, setRescheduleResult] = useState<{ start_at: string; end_at: string } | null>(null);
+    const [rescheduleDetails, setRescheduleDetails] = useState<ActionLinkDisplayDetails | null>(null);
+    const [rescheduleShowSlots, setRescheduleShowSlots] = useState(false);
     
     // Resolve email/phone with priority: query params > alloy_booking_prefill > stored quote
     const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
@@ -525,6 +544,7 @@ export default function BookV2Client() {
     // Resolve reschedule_token from URL: if valid, go to slot selection; if invalid, show error
     useEffect(() => {
         const token = searchParams?.get("reschedule_token");
+        const skipReview = searchParams?.get("reschedule_skip_review") === "1";
         if (!token?.trim()) {
             setRescheduleLoading(false);
             return;
@@ -532,9 +552,20 @@ export default function BookV2Client() {
         setRescheduleLoading(true);
         setRescheduleError(null);
         setRescheduleResolve(null);
+        setRescheduleDetails(null);
+        setRescheduleShowSlots(skipReview);
         fetch(`/api/action-links/resolve?token=${encodeURIComponent(token.trim())}`)
             .then((res) => res.json())
-            .then((data: { valid?: boolean; action_type?: string; entity_type?: string; entity_id?: string; expires_at?: string; consumed_at?: string | null }) => {
+            .then(
+                (data: {
+                    valid?: boolean;
+                    action_type?: string;
+                    entity_type?: string;
+                    entity_id?: string;
+                    expires_at?: string;
+                    consumed_at?: string | null;
+                    details?: ActionLinkDisplayDetails;
+                }) => {
                 if (
                     data.valid &&
                     data.entity_type === "schedule" &&
@@ -549,7 +580,8 @@ export default function BookV2Client() {
                         expires_at: data.expires_at ?? "",
                         consumed_at: data.consumed_at ?? null,
                     });
-                    setCurrentStep("slot_selection");
+                    setRescheduleDetails(data.details ?? null);
+                    setRescheduleShowSlots(skipReview);
                 } else {
                     if (!data.valid) {
                         if (data.consumed_at) setRescheduleError("This link has already been used.");
@@ -2183,16 +2215,46 @@ export default function BookV2Client() {
             );
         }
         if (rescheduleResult) {
-            const startDate = new Date(rescheduleResult.start_at);
-            const endDate = new Date(rescheduleResult.end_at);
-            const formatted = startDate.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
             return (
                 <div className="py-6 md:py-10">
                     <Section className="max-w-7xl">
                         <div className="max-w-md mx-auto bg-white rounded-xl border border-alloy-stone/20 shadow-sm p-6 text-center">
                             <h2 className="text-xl font-semibold text-alloy-midnight mb-2">Appointment rescheduled</h2>
-                            <p className="text-alloy-midnight/70 text-sm mb-4">Your appointment is now scheduled for {formatted}.</p>
+                            <p className="text-alloy-midnight/70 text-sm mb-4">Your booking has been updated to your new time.</p>
                             <a href="/" className="text-alloy-juniper hover:underline text-sm font-medium">Go home</a>
+                        </div>
+                    </Section>
+                </div>
+            );
+        }
+        if (rescheduleResolve && !rescheduleShowSlots) {
+            return (
+                <div className="py-6 md:py-10">
+                    <Section className="max-w-7xl">
+                        <div className="max-w-lg mx-auto space-y-6">
+                            <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6">
+                                <h2 className="text-xl font-bold text-alloy-midnight mb-1">Reschedule appointment</h2>
+                                <p className="text-sm text-alloy-midnight/70 mb-5">
+                                    Review your current visit below. When you’re ready, open the calendar to pick a new time.
+                                </p>
+                                <ActionLinkDetailsPanel
+                                    details={rescheduleDetails ?? EMPTY_ACTION_LINK_DETAILS}
+                                    heading="Current appointment"
+                                    className="mb-6"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setRescheduleShowSlots(true)}
+                                    className="w-full sm:w-auto px-5 py-2.5 bg-alloy-juniper text-white rounded-lg text-sm font-medium hover:bg-alloy-juniper/90 transition-colors"
+                                >
+                                    Continue to calendar
+                                </button>
+                                <div className="mt-4">
+                                    <a href="/" className="text-alloy-midnight/70 hover:underline text-sm">
+                                        Back
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </Section>
                 </div>
@@ -2229,7 +2291,9 @@ export default function BookV2Client() {
                         <div className="max-w-4xl mx-auto space-y-6">
                             <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6">
                                 <h2 className="text-xl font-bold text-alloy-midnight mb-2">Choose a new time</h2>
-                                <p className="text-sm text-alloy-midnight/70 mb-6">Select an available slot below, then confirm to reschedule your appointment.</p>
+                                <p className="text-sm text-alloy-midnight/70 mb-6">
+                                    Select an available slot, then confirm to reschedule your appointment.
+                                </p>
                                 <SlotPicker
                                     selectedSlot={selectedSlot}
                                     onSelectSlot={handleSelectSlot}
@@ -2237,8 +2301,17 @@ export default function BookV2Client() {
                                     timezone={timezone}
                                     error={bookingError}
                                 />
-                                <div className="mt-4">
-                                    <a href="/" className="text-alloy-midnight/70 hover:underline text-sm">Back</a>
+                                <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:gap-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRescheduleShowSlots(false)}
+                                        className="text-sm text-alloy-midnight/80 hover:underline text-left"
+                                    >
+                                        ← Back to booking summary
+                                    </button>
+                                    <a href="/" className="text-alloy-midnight/70 hover:underline text-sm">
+                                        Home
+                                    </a>
                                 </div>
                             </div>
                         </div>

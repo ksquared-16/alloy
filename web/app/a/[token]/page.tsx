@@ -38,13 +38,13 @@ export default async function ActionLinkPage({
     const entityId = (row as { entity_id: string }).entity_id;
 
     if (actionType === "vendor_accept_job" && entityType === "job") {
-        redirect(`/a/accept-job?token=${encodeURIComponent(resolvedToken)}`);
+        redirect(`/action/${encodeURIComponent(resolvedToken)}`);
     }
     if (actionType === "customer_reschedule" || actionType === "reschedule_schedule") {
         redirect(`/book-v2?reschedule_token=${encodeURIComponent(resolvedToken)}`);
     }
     if (actionType === "customer_cancel") {
-        redirect(`/a/cancel?token=${encodeURIComponent(resolvedToken)}`);
+        redirect(`/action/${encodeURIComponent(resolvedToken)}`);
     }
 
     redirect("/");
