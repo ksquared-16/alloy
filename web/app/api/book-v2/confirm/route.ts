@@ -16,6 +16,7 @@ import {
 import { resolveBookingJobStatus } from "@/lib/book-v2/resolveBookingJobStatus";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { persistBookingPaymentMethod, resolveStripePaymentMethodId } from "@/lib/book-v2/persistBookingPaymentMethod";
+import { emailsAllowPhoneIdentityReuse } from "@/lib/bookingIdentityNormalize";
 import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/bookingConfirmationSms";
 import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { emitEvent } from "@/lib/emitEvent";
@@ -1134,14 +1135,23 @@ export async function POST(request: NextRequest) {
                             if (byEmail?.id) existingContactId = (byEmail as { id: string }).id;
                         }
                         if (!existingContactId && personPhone && String(personPhone).trim()) {
-                            const { data: byPhone } = await supabase
+                            const { data: byPhoneRows } = await supabase
                                 .from("contacts")
-                                .select("id")
+                                .select("id, email")
                                 .eq("org_id", contactOrgId)
                                 .eq("phone", String(personPhone).trim())
-                                .limit(1)
-                                .maybeSingle();
-                            if (byPhone?.id) existingContactId = (byPhone as { id: string }).id;
+                                .limit(20);
+                            const anchorEmail =
+                                String(contact_email ?? "").trim() || String(personEmail ?? "").trim();
+                            for (const row of byPhoneRows ?? []) {
+                                const r = row as { id?: string; email?: string | null };
+                                if (!r.id) continue;
+                                if (!emailsAllowPhoneIdentityReuse(anchorEmail, r.email)) {
+                                    continue;
+                                }
+                                existingContactId = r.id;
+                                break;
+                            }
                         }
                         if (existingContactId) {
                             contactId = existingContactId;

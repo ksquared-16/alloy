@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { emailsAllowPhoneIdentityReuse } from "@/lib/bookingIdentityNormalize";
 
 type MinimalSupabase = Pick<SupabaseClient, "from">;
 
@@ -34,11 +35,14 @@ export async function findOrCreatePersonInOrgWithMeta(
     }
   }
   if (phoneNorm) {
-    let q = supabase.from("persons").select("id").eq("phone", phoneNorm).limit(1);
+    let q = supabase.from("persons").select("id, email").eq("phone", phoneNorm).limit(20);
     if (org_id) q = q.eq("org_id", org_id);
-    const { data: byPhone } = await q.maybeSingle();
-    if (byPhone && typeof (byPhone as { id?: string }).id === "string") {
-      return { id: (byPhone as { id: string }).id, created: false };
+    const { data: byPhoneRows } = await q;
+    for (const row of byPhoneRows ?? []) {
+      const r = row as { id?: string; email?: string | null };
+      if (typeof r.id !== "string") continue;
+      if (!emailsAllowPhoneIdentityReuse(emailNorm, r.email)) continue;
+      return { id: r.id, created: false };
     }
   }
 
@@ -71,9 +75,17 @@ export async function findOrCreatePersonInOrgWithMeta(
         }
       }
       if (phoneNorm) {
-        const { data: again } = await supabase.from("persons").select("id").eq("org_id", org_id).eq("phone", phoneNorm).limit(1).maybeSingle();
-        if (again && typeof (again as { id?: string }).id === "string") {
-          return { id: (again as { id: string }).id, created: false };
+        const { data: againRows } = await supabase
+          .from("persons")
+          .select("id, email")
+          .eq("org_id", org_id)
+          .eq("phone", phoneNorm)
+          .limit(20);
+        for (const row of againRows ?? []) {
+          const r = row as { id?: string; email?: string | null };
+          if (typeof r.id !== "string") continue;
+          if (!emailsAllowPhoneIdentityReuse(emailNorm, r.email)) continue;
+          return { id: r.id, created: false };
         }
       }
     }

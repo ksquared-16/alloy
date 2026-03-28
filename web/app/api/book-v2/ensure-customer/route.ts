@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { emailsAllowPhoneIdentityReuse } from "@/lib/bookingIdentityNormalize";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
@@ -23,7 +24,7 @@ async function findExistingContact(
     const phoneP =
         phoneTrim != null
             ? (() => {
-                  let q = supabase.from("contacts").select("id, customer_id").eq("phone", phoneTrim);
+                  let q = supabase.from("contacts").select("id, customer_id, email").eq("phone", phoneTrim);
                   if (org_id) q = q.eq("org_id", org_id);
                   return q.limit(1).maybeSingle();
               })()
@@ -31,7 +32,13 @@ async function findExistingContact(
 
     const [{ data: byEmail }, { data: byPhone }] = await Promise.all([emailP, phoneP]);
     if (byEmail?.id) return { id: (byEmail as { id: string }).id, customer_id: (byEmail as { customer_id?: string | null }).customer_id };
-    if (byPhone?.id) return { id: (byPhone as { id: string }).id, customer_id: (byPhone as { customer_id?: string | null }).customer_id };
+    if (byPhone?.id) {
+        const row = byPhone as { id: string; customer_id?: string | null; email?: string | null };
+        if (!emailsAllowPhoneIdentityReuse(emailTrim ?? "", row.email)) {
+            return null;
+        }
+        return { id: row.id, customer_id: row.customer_id };
+    }
     return null;
 }
 

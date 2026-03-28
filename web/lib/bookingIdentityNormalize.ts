@@ -9,6 +9,22 @@ export function normalizeBookingEmail(email: string): string {
 }
 
 /**
+ * Whether a DB row found by phone may be treated as the same identity as the booking submission.
+ * - Incoming has no email: phone-only match (weaker, but allowed).
+ * - Incoming has email: reuse only if the row has the same email; if the row has no email or a different email, do not reuse.
+ */
+export function emailsAllowPhoneIdentityReuse(
+  incomingEmailRaw: string | null | undefined,
+  storedEmailRaw: string | null | undefined
+): boolean {
+  const incoming = normalizeBookingEmail(String(incomingEmailRaw ?? ""));
+  if (!incoming) return true;
+  const stored = normalizeBookingEmail(String(storedEmailRaw ?? ""));
+  if (!stored) return false;
+  return incoming === stored;
+}
+
+/**
  * E.164-style: strip to digits, then + prefix.
  * US: 10 digits → +1…; 11 starting with 1 → +1….
  */

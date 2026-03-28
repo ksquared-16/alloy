@@ -5,6 +5,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import {
   bookingPhoneLookupVariants,
+  emailsAllowPhoneIdentityReuse,
   normalizeBookingEmail,
   normalizeBookingPhone,
   phoneDigitsTailForLog,
@@ -140,7 +141,14 @@ async function selectContactByEmailOrPhoneConflictRecovery(
 ): Promise<ContactRow | null> {
   const byEmail = await selectContactByEmail(supabase, orgId, normalizedEmail, logPrefix + " recovery_email");
   if (byEmail) return byEmail;
-  return selectContactByPhoneVariants(supabase, orgId, rawPhoneInput, logPrefix + " recovery_phone");
+  const byPhone = await selectContactByPhoneVariants(supabase, orgId, rawPhoneInput, logPrefix + " recovery_phone");
+  if (byPhone && !emailsAllowPhoneIdentityReuse(normalizedEmail, byPhone.email)) {
+    console.log(
+      `${logPrefix} recovery_phone discarded email_mismatch contact_id=${byPhone.id} redact_incoming=${redactEmailForLog(normalizedEmail)}`
+    );
+    return null;
+  }
+  return byPhone;
 }
 
 export async function resolve_or_create_contact_and_customer(
@@ -208,6 +216,12 @@ export async function resolve_or_create_contact_and_customer(
     resolutionPath = "found_by_email";
   } else if (normalizedPhone.replace(/\D/g, "")) {
     existingContact = await selectContactByPhoneVariants(supabase, orgId, phone, logPrefix);
+    if (existingContact && !emailsAllowPhoneIdentityReuse(normalizedEmail, existingContact.email)) {
+      console.log(
+        `${logPrefix} step=contact_lookup_phone discarded email_mismatch contact_id=${existingContact.id} redact_incoming=${redactEmailForLog(normalizedEmail)}`
+      );
+      existingContact = null;
+    }
     if (existingContact) resolutionPath = "found_by_phone";
   }
 
