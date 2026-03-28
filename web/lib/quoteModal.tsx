@@ -5,7 +5,7 @@ import { createContext, useContext, useState, useRef, useCallback, useMemo, Reac
 type DefaultService = "cleaning" | "gutters" | null;
 
 /** Campaign flows that use the same modal shell + constrained quick quote, then custom handoff (e.g. T&C page). */
-export type CampaignQuoteFlowId = "firstfree4x60";
+export type CampaignQuoteFlowId = "firstfree4x120";
 
 interface QuoteModalContextType {
   isOpen: boolean;

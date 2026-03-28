@@ -135,7 +135,7 @@ export default function QuoteModal({
               : selectedVertical === null
                 ? "What service do you need?"
                 : selectedVertical === "cleaning"
-                  ? campaignQuoteFlow === "firstfree4x60"
+                  ? campaignQuoteFlow === "firstfree4x120"
                     ? "Get your recurring quote"
                     : "Get a cleaning quote"
                   : "Get early access"}
@@ -304,32 +304,32 @@ export default function QuoteModal({
                 {/* Form */}
                 {selectedVertical === "cleaning" ? (
                   <div className="space-y-4">
-                    {campaignQuoteFlow === "firstfree4x60" ? (
+                    {campaignQuoteFlow === "firstfree4x120" ? (
                       <div
                         className="rounded-xl border border-alloy-juniper/25 bg-alloy-juniper/5 px-4 py-3 text-sm text-alloy-midnight"
                         role="region"
                         aria-label="Promotional offer"
                       >
                         <p className="font-semibold text-alloy-pine mb-1">
-                          First cleaning on us — 4 visits in 60 days
+                          First Service Free — Complete 4 Visits in 120 Days
                         </p>
                         <p className="text-alloy-midnight/85 leading-relaxed">
-                          Sign up for <strong>recurring standard cleaning</strong>. Complete four visits within 60 days
-                          and your <strong>first clean is covered</strong> by this offer. Use{" "}
-                          <strong>Get my recurring quote</strong> below — next you&apos;ll review the program terms,
-                          then continue to booking.
+                          Sign up for <strong>recurring standard cleaning</strong> (weekly, every 2 weeks, or monthly).
+                          Complete four visits within 120 days and your <strong>first clean is covered</strong> by this
+                          offer. Use <strong>Get my recurring quote</strong> below — next you&apos;ll review the program
+                          terms, then continue to booking.
                         </p>
                       </div>
                     ) : null}
                     <p className="text-sm text-alloy-midnight/80">
-                      {campaignQuoteFlow === "firstfree4x60"
+                      {campaignQuoteFlow === "firstfree4x120"
                         ? "Recurring standard cleaning only. We’ll save your quote for the next step."
                         : "We'll calculate your price and save it so you can book when you're ready."}
                     </p>
                     <CleaningQuickQuoteForm
-                      campaignQuoteMode={campaignQuoteFlow === "firstfree4x60" ? { id: "firstfree4x60" } : undefined}
+                      campaignQuoteMode={campaignQuoteFlow === "firstfree4x120" ? { id: "firstfree4x120" } : undefined}
                       onSuccess={() => {
-                        const isCampaign = campaignQuoteFlow === "firstfree4x60";
+                        const isCampaign = campaignQuoteFlow === "firstfree4x120";
                         if (isCampaign) {
                           // MUST run before onClose(): closeModal() clears onCampaignQuoteCompleteRef — a microtask would fire too late.
                           if (invokeCampaignQuoteComplete) {

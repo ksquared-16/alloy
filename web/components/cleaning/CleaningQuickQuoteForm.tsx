@@ -13,7 +13,7 @@ const SQUARE_FOOTAGE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export type QuickQuoteCampaignMode = {
-  id: "firstfree4x60";
+  id: "firstfree4x120";
 };
 
 interface CleaningQuickQuoteFormProps {
@@ -26,7 +26,7 @@ export default function CleaningQuickQuoteForm({
   onSuccess,
   campaignQuoteMode,
 }: CleaningQuickQuoteFormProps) {
-  const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x60";
+  const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -136,6 +136,41 @@ export default function CleaningQuickQuoteForm({
       localStorage.setItem("alloy_quote_v1", quoteJson);
       sessionStorage.setItem("alloy_quote_v1", quoteJson);
 
+      // Legacy /book (BookClient): reads cleaning_quote / alloy_cleaning_quote — keep in sync with quick quote
+      try {
+        localStorage.setItem("cleaning_quote", quoteJson);
+        sessionStorage.setItem("alloy_cleaning_quote", quoteJson);
+        sessionStorage.setItem("cleaning_quote", quoteJson);
+      } catch (e) {
+        console.warn("legacy quote storage set failed:", e);
+      }
+
+      const freqKey = isCampaignFirstFree ? cleaning_frequency || "weekly" : cleaning_frequency || "one_time";
+      const cleaningFrequencyLabel =
+        freqKey === "weekly"
+          ? "Weekly (30% Off)"
+          : freqKey === "biweekly"
+            ? "Bi-Weekly (20% Off)"
+            : freqKey === "monthly"
+              ? "Monthly (10% Off)"
+              : "One-time";
+      const leadFormPayload = {
+        first_name: first_name.trim(),
+        last_name: last_name.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        postal_code: zip.trim(),
+        home_type: "Single-Family Home",
+        service_type: "Standard Cleaning",
+        approximate_square_footage: square_footage.trim(),
+        cleaning_frequency: cleaningFrequencyLabel,
+      };
+      try {
+        sessionStorage.setItem("alloy_lead_form_data", JSON.stringify(leadFormPayload));
+      } catch (e) {
+        console.warn("alloy_lead_form_data set failed:", e);
+      }
+
       // Persist contact for BookV2 (same key + shape as BookV2 reads: alloy_booking_prefill)
       const prefillData: Record<string, string | undefined> = {
         email: email?.trim() || undefined,
@@ -146,9 +181,9 @@ export default function CleaningQuickQuoteForm({
         postal_code: zip?.trim() || undefined,
       };
       if (isCampaignFirstFree) {
-        prefillData.campaign = "firstfree4x60";
-        prefillData.discount_program_code = "FIRSTFREE4X60";
-        prefillData.campaign_source = "quote_modal_firstfree4x60";
+        prefillData.campaign = "firstfree4x120";
+        prefillData.discount_program_code = "FIRSTFREE4X120";
+        prefillData.campaign_source = "quote_modal_firstfree4x120";
       }
       const prefillJson = JSON.stringify(prefillData);
       try {

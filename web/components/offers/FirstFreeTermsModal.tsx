@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import FirstFree4x60TermsPlaceholder from "@/components/offers/FirstFree4x60TermsPlaceholder";
+import FirstFree4x120TermsPlaceholder from "@/components/offers/FirstFree4x120TermsPlaceholder";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import {
-  FIRSTFREE4X60_CAMPAIGN_QUERY,
-  FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
-  FIRSTFREE4X60_SESSION_KEY,
-  type FirstFree4x60SessionV1,
-} from "@/lib/campaigns/firstFree4x60";
+  FIRSTFREE4X120_CAMPAIGN_QUERY,
+  FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+  FIRSTFREE4X120_SESSION_KEY,
+  type FirstFree4x120SessionV1,
+} from "@/lib/campaigns/firstFree4x120";
 import { mergeFirstFreeCampaignBookingPrefill } from "@/lib/campaigns/mergeFirstFreeCampaignPrefill";
 import { validateDiscountCodeForBooking } from "@/lib/campaigns/validateProgramDiscountClient";
 import { getBookingPath } from "@/lib/booking";
@@ -119,7 +119,7 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
       phone = phone || quote.phone;
 
       const validated = await validateDiscountCodeForBooking({
-        code: FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
+        code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
         email,
         phone,
         quoteSubtotal: subtotal,
@@ -146,15 +146,15 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
         quote_total: validated.prefill.quote_total,
       });
 
-      const session: FirstFree4x60SessionV1 = {
+      const session: FirstFree4x120SessionV1 = {
         version: 1,
-        campaign: FIRSTFREE4X60_CAMPAIGN_QUERY,
-        discount_program_code: FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
+        campaign: FIRSTFREE4X120_CAMPAIGN_QUERY,
+        discount_program_code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
         terms_accepted_at: new Date().toISOString(),
-        landing_path: "/?campaign=firstfree4x60",
+        landing_path: "/?campaign=firstfree4x120",
       };
       try {
-        sessionStorage.setItem(FIRSTFREE4X60_SESSION_KEY, JSON.stringify(session));
+        sessionStorage.setItem(FIRSTFREE4X120_SESSION_KEY, JSON.stringify(session));
       } catch {
         // ignore
       }
@@ -162,12 +162,12 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
       trackMetaEvent("Lead", {
         vertical: "cleaning",
         flow: "book",
-        campaign: FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
-        firstfree4x60_step: "terms_accepted",
+        campaign: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+        firstfree4x120_step: "terms_accepted",
       });
 
       const bookPath = getBookingPath();
-      const dest = `${bookPath}?campaign=${encodeURIComponent(FIRSTFREE4X60_CAMPAIGN_QUERY)}`;
+      const dest = `${bookPath}?campaign=${encodeURIComponent(FIRSTFREE4X120_CAMPAIGN_QUERY)}`;
       onClose();
       router.push(dest);
     } catch (e) {
@@ -215,7 +215,7 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
           <p className="text-sm text-alloy-midnight/80 mb-4">
             Please read and accept the terms for the <strong>first cleaning</strong> promotional offer before booking.
           </p>
-          <FirstFree4x60TermsPlaceholder />
+          <FirstFree4x120TermsPlaceholder />
           <label className="flex items-start gap-3 text-sm text-alloy-midnight cursor-pointer mt-4">
             <input
               type="checkbox"
@@ -228,7 +228,7 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
               className="mt-1 h-4 w-4 rounded border-alloy-stone/60 text-alloy-juniper focus:ring-alloy-juniper"
             />
             <span>
-              I agree to the Terms &amp; Conditions for this promotional offer ({FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE}).
+              I agree to the Terms &amp; Conditions for this promotional offer ({FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE}).
             </span>
           </label>
           {termsError && <p className="text-sm text-red-600 mt-3">{termsError}</p>}

@@ -13,9 +13,11 @@ import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing";
 import {
-    FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
-    isFirstFree4x60CampaignQuery,
-} from "@/lib/campaigns/firstFree4x60";
+    FIRSTFREE4X120_CAMPAIGN_QUERY,
+    FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+    isFirstFree4x120CampaignPrefillSlug,
+    isFirstFree4x120CampaignQuery,
+} from "@/lib/campaigns/firstFree4x120";
 
 interface QuoteInputStored {
     zip?: string;
@@ -464,7 +466,7 @@ export default function BookV2Client() {
     const refineRequestIdRef = useRef(0);
     /** If a one-time quote lands in campaign mode, bump to weekly once via quote-refine. */
     const firstFreeCampaignRecurringBootstrapRef = useRef(false);
-    /** One-shot auto-validate FIRSTFREE4X60 on refine when prefill is campaign but amounts weren’t hydrated. */
+    /** One-shot auto-validate FIRSTFREE4X120 on refine when prefill is campaign but amounts weren’t hydrated. */
     const firstFreePromoAutoAppliedRef = useRef(false);
 
     // Per-attempt correlation id: new on "Confirm time" or first use; reset after successful confirm
@@ -487,15 +489,15 @@ export default function BookV2Client() {
     const cardCvcRef = useRef<HTMLDivElement>(null);
 
     const debug = searchParams?.get("debug") === "1";
-    const campaignFirstFree4x60 = !debug && isFirstFree4x60CampaignQuery(searchParams?.get("campaign"));
+    const campaignFirstFree4x120 = !debug && isFirstFree4x120CampaignQuery(searchParams?.get("campaign"));
 
     // Campaign /book-v2: default quote-start frequency to recurring (not one-time).
     useEffect(() => {
-        if (!campaignFirstFree4x60) return;
+        if (!campaignFirstFree4x120) return;
         setQuoteStartForm((f) =>
             f.cleaning_frequency === "one_time" ? { ...f, cleaning_frequency: "weekly" } : f
         );
-    }, [campaignFirstFree4x60]);
+    }, [campaignFirstFree4x120]);
 
     // Reschedule-via-action-link: token from URL, resolve result, and confirm result
     const [rescheduleResolve, setRescheduleResolve] = useState<{
@@ -691,7 +693,7 @@ export default function BookV2Client() {
 
     /** Campaign + prefill: log identity vs stored quote ids (diagnostics). Clearing is handled by maybeCreateLeadFromPrefill / payment submit. */
     useEffect(() => {
-        if (!mounted || debug || !campaignFirstFree4x60 || typeof window === "undefined") return;
+        if (!mounted || debug || !campaignFirstFree4x120 || typeof window === "undefined") return;
         let hasStoredIds = false;
         let prevSig: string | null = null;
         try {
@@ -718,7 +720,7 @@ export default function BookV2Client() {
             resolved_email_present: !!String(resolvedEmail ?? "").trim(),
             resolved_phone_present: !!String(resolvedPhone ?? "").trim(),
         });
-    }, [mounted, debug, campaignFirstFree4x60, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName]);
+    }, [mounted, debug, campaignFirstFree4x120, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName]);
 
     // Prefill quote-start form with resolved email/phone/name when they become available
     useEffect(() => {
@@ -869,29 +871,30 @@ export default function BookV2Client() {
         }
     }, [debug]);
 
-    // FIRSTFREE4X60: show program code in the promo input even before apply/hydrate completes
+    // FIRSTFREE4X120: show program code in the promo input even before apply/hydrate completes
     useEffect(() => {
-        if (debug || !campaignFirstFree4x60) return;
+        if (debug || !campaignFirstFree4x120) return;
         if (discountCode.trim()) return;
         try {
             const raw =
                 sessionStorage.getItem("alloy_booking_prefill") || localStorage.getItem("alloy_booking_prefill");
             if (!raw) return;
             const p = JSON.parse(raw) as Record<string, unknown>;
-            if (p.campaign !== "firstfree4x60" && !p.discount_program_code && !p.discount_code) return;
+            const camp = typeof p.campaign === "string" ? p.campaign : "";
+            if (!isFirstFree4x120CampaignPrefillSlug(camp) && !p.discount_program_code && !p.discount_code) return;
             const c =
                 (typeof p.discount_program_code === "string" && p.discount_program_code.trim()) ||
                 (typeof p.discount_code === "string" && p.discount_code.trim()) ||
-                FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE;
+                FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE;
             setDiscountCode(String(c).trim().toUpperCase());
         } catch {
             // ignore
         }
-    }, [debug, campaignFirstFree4x60, discountCode]);
+    }, [debug, campaignFirstFree4x120, discountCode]);
 
-    // FIRSTFREE4X60: if terms didn’t write amounts into prefill, validate once on refine (no duplicate after ref is set)
+    // FIRSTFREE4X120: if terms didn’t write amounts into prefill, validate once on refine (no duplicate after ref is set)
     useEffect(() => {
-        if (debug || !campaignFirstFree4x60) return;
+        if (debug || !campaignFirstFree4x120) return;
         if (firstFreePromoAutoAppliedRef.current) return;
         if (!quote || !hasQuote || currentStep !== "refine_quote") return;
         if (discountData) return;
@@ -917,7 +920,9 @@ export default function BookV2Client() {
         const subtotal = getFirstVisitGrossSubtotal(quote);
         if (subtotal <= 0) return;
 
-        if (prefillCheck.campaign !== "firstfree4x60") return;
+        if (!isFirstFree4x120CampaignPrefillSlug(typeof prefillCheck.campaign === "string" ? prefillCheck.campaign : "")) {
+            return;
+        }
 
         firstFreePromoAutoAppliedRef.current = true;
 
@@ -932,7 +937,7 @@ export default function BookV2Client() {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        code: FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE,
+                        code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
                         email: email?.trim() || undefined,
                         phone: phone?.trim() || undefined,
                         quote_subtotal: subtotal,
@@ -953,7 +958,7 @@ export default function BookV2Client() {
                 }
                 const programId = String(data.discount_program_id).trim();
                 const displayCode = (
-                    data.discount_program_code || FIRSTFREE4X60_DISCOUNT_PROGRAM_CODE
+                    data.discount_program_code || FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE
                 ).trim().toUpperCase();
                 const legacyId =
                     typeof data.discount_code_id === "string" && data.discount_code_id.trim()
@@ -989,7 +994,7 @@ export default function BookV2Client() {
                         discount_program_code: displayCode,
                         discount_amount: data.discount_amount,
                         quote_total: qt,
-                        campaign: "firstfree4x60",
+                        campaign: FIRSTFREE4X120_CAMPAIGN_QUERY,
                     };
                     if (legacyId) merged.discount_code_id = legacyId;
                     const json = JSON.stringify(merged);
@@ -1029,7 +1034,7 @@ export default function BookV2Client() {
                 setIsValidatingDiscount(false);
             }
         })();
-    }, [debug, campaignFirstFree4x60, quote, hasQuote, currentStep, discountData]);
+    }, [debug, campaignFirstFree4x120, quote, hasQuote, currentStep, discountData]);
 
     // Check if payment is unlocked (requires both steps to be confirmed)
     const isPaymentUnlocked = slotConfirmed && serviceDetailsConfirmed;
@@ -1138,7 +1143,7 @@ export default function BookV2Client() {
                 : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
                 : freqLabel.includes("monthly") ? "monthly"
                 : "one_time";
-        if (campaignFirstFree4x60 && nextFreq === "one_time") {
+        if (campaignFirstFree4x120 && nextFreq === "one_time") {
             nextFreq = "weekly";
         }
         setRefineFrequency(nextFreq);
@@ -1153,7 +1158,7 @@ export default function BookV2Client() {
             })
             .filter((x): x is string => x != null && x.length > 0);
         setSelectedAddonKeys(keys);
-    }, [quote, currentStep, campaignFirstFree4x60]);
+    }, [quote, currentStep, campaignFirstFree4x120]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
@@ -1250,9 +1255,9 @@ export default function BookV2Client() {
         [quote]
     );
 
-    // FIRSTFREE4X60: ensure stored quote is recurring (quote-refine) if it was one-time.
+    // FIRSTFREE4X120: ensure stored quote is recurring (quote-refine) if it was one-time.
     useEffect(() => {
-        if (!campaignFirstFree4x60 || debug || !quote || !hasQuote || currentStep !== "refine_quote") return;
+        if (!campaignFirstFree4x120 || debug || !quote || !hasQuote || currentStep !== "refine_quote") return;
         if (firstFreeCampaignRecurringBootstrapRef.current) return;
         const qi = quote.quote_input?.cleaning_frequency;
         const label = (quote.frequency_label || "").toLowerCase();
@@ -1273,7 +1278,7 @@ export default function BookV2Client() {
             })
             .filter((x): x is string => x != null && x.length > 0);
         void applyRefineAndPersist("weekly", keysFromQuote);
-    }, [campaignFirstFree4x60, debug, quote, hasQuote, currentStep, applyRefineAndPersist]);
+    }, [campaignFirstFree4x120, debug, quote, hasQuote, currentStep, applyRefineAndPersist]);
 
     // Fetch available_addons once when entering refine step (so prices show before user toggles)
     useEffect(() => {
@@ -1299,7 +1304,7 @@ export default function BookV2Client() {
     }, [currentStep, quote, availableAddons, applyRefineAndPersist]);
 
     const handleRefineFrequencyChange = (freq: "one_time" | "weekly" | "biweekly" | "monthly") => {
-        if (campaignFirstFree4x60 && freq === "one_time") return;
+        if (campaignFirstFree4x120 && freq === "one_time") return;
         setRefineFrequency(freq);
         setRefineError(null);
         applyRefineAndPersist(freq, selectedAddonKeys);
@@ -1580,6 +1585,12 @@ export default function BookV2Client() {
                 (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
             if (!hasIds) {
                 clearBookingIdentityKeys();
+                let paymentIdentityQuoteStartFreq: "one_time" | "weekly" | "biweekly" | "monthly" = "one_time";
+                if (campaignFirstFree4x120) {
+                    const qi = quote?.quote_input?.cleaning_frequency;
+                    paymentIdentityQuoteStartFreq =
+                        qi === "monthly" || qi === "biweekly" || qi === "weekly" ? qi : "weekly";
+                }
                 const res = await fetch("/api/book-v2/quote-start", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -1589,11 +1600,11 @@ export default function BookV2Client() {
                         first_name: (resolvedFirstName ?? (prefillData.first_name as string))?.trim() || undefined,
                         last_name: (resolvedLastName ?? (prefillData.last_name as string))?.trim() || undefined,
                         zip: (prefillData.zip as string)?.trim() || (prefillData.postal_code as string)?.trim() || undefined,
-                        cleaning_frequency: campaignFirstFree4x60 ? "weekly" : "one_time",
+                        cleaning_frequency: paymentIdentityQuoteStartFreq,
                         quote_context: {
                             source: "book_v2_payment_identity",
                             url: typeof window !== "undefined" ? window.location.href : "",
-                            ...(campaignFirstFree4x60 ? { campaign: "firstfree4x60" } : {}),
+                            ...(campaignFirstFree4x120 ? { campaign: FIRSTFREE4X120_CAMPAIGN_QUERY } : {}),
                         },
                     }),
                 });
@@ -2391,7 +2402,7 @@ export default function BookV2Client() {
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly" }))}
                                     className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
-                                    {!campaignFirstFree4x60 && <option value="one_time">One-time</option>}
+                                    {!campaignFirstFree4x120 && <option value="one_time">One-time</option>}
                                     <option value="weekly">Weekly</option>
                                     <option value="biweekly">Every 2 weeks</option>
                                     <option value="monthly">Monthly</option>
@@ -2536,7 +2547,7 @@ export default function BookV2Client() {
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Cleaning frequency</p>
                             <div className="flex flex-wrap gap-2">
-                                {(campaignFirstFree4x60
+                                {(campaignFirstFree4x120
                                     ? (["weekly", "biweekly", "monthly"] as const)
                                     : (["one_time", "weekly", "biweekly", "monthly"] as const)
                                 ).map((freq) => (
