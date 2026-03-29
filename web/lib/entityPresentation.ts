@@ -137,8 +137,24 @@ export function getJobUnifiedPricingSection(): EntityDrawerSectionConfig {
 }
 
 /**
+ * Job **Overview** billing block: plan hint + payment rollup.
+ * Priced job total for collections uses `total_cents` (line-item model); see **Pricing breakdown** for detail.
+ */
+export function getJobPricingBreakdownSection(): EntityDrawerSectionConfig {
+  return {
+    key: "job_pricing_breakdown",
+    title: "Pricing breakdown",
+    defaultExpanded: true,
+    collapsible: true,
+    gridCols: 1,
+    fields: [],
+    locked: true,
+  };
+}
+
+/**
  * Job **Overview** billing block: plan hint + priced total + payment rollup only.
- * Per-visit detail belongs on Related / Financials / schedule records; full line-item pricing stays on the Financials tab and inline job sections.
+ * Per-visit detail belongs on Related / Financials / schedule records.
  */
 export function getJobOverviewBillingSummarySection(): EntityDrawerSectionConfig {
   return {
@@ -160,7 +176,7 @@ export function getJobOverviewBillingSummarySection(): EntityDrawerSectionConfig
       {
         title: "Totals & payment status",
         fields: [
-          { key: "display_total_cents", label: "Job total (priced)", span: 1, renderHint: "money", editable: false },
+          { key: "total_cents", label: "Job total (priced)", span: 1, renderHint: "money", editable: false },
           { key: "recurring_total_cents", label: "Recurring total", span: 1, renderHint: "money", editable: false },
           { key: "_job_payment_paid_cents", label: "Total paid", span: 1, renderHint: "money", editable: false },
           { key: "_job_payment_balance_cents", label: "Balance due", span: 1, renderHint: "money", editable: false },
@@ -656,6 +672,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           ],
           locked: true,
         },
+        getJobPricingBreakdownSection(),
         getJobOverviewBillingSummarySection(),
         {
           key: "notes",

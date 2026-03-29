@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/jobDisplayPrice";
 import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
+import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 import { buildOverrideLinesFromAdminJobRow, overrideJobPricing } from "@/lib/pricing/overrideJobPricing";
 
 const ALLOWED_KEYS = [
@@ -135,6 +136,7 @@ export async function GET(
     }
     const _status_display = sk ? await resolveStatusLabel(supabase, ctx.orgId, "jobs", sk) : null;
 
+    const _job_line_items = await fetchActiveJobLineItemsForAdmin(supabase, ctx.orgId, id);
     const payload = {
         ...j,
         status_key: sk ?? (j.status_key as string | null) ?? null,
@@ -148,6 +150,7 @@ export async function GET(
         display_total_cents,
         _price_display: display_total_cents != null ? display_total_cents / 100 : null,
         _status_display,
+        _job_line_items,
     };
     const withWu = await attachJobWorkUnitDisplay(supabase, ctx.orgId, payload as Record<string, unknown>);
     return NextResponse.json(withWu);

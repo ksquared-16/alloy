@@ -8,6 +8,7 @@ import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 
 type JobRecord = Record<string, unknown> & {
     _customer_name?: string | null;
@@ -409,6 +410,12 @@ export default function JobDetailClient({
                                     </p>
                                 )}
                             </div>
+                        </div>
+                        <div className="pt-4 border-t border-alloy-stone/20">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">
+                                Pricing breakdown
+                            </h3>
+                            <JobPricingBreakdown record={job} />
                         </div>
                         {(scheduledAt || completedAt) && (
                             <div className="pt-2 border-t border-alloy-stone/20 text-sm text-alloy-midnight/70">

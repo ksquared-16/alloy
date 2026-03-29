@@ -21,6 +21,7 @@ import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
+import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 
 /**
  * Drawer entity org model:
@@ -384,6 +385,7 @@ export async function GET(
             out._work_unit_name = withWu._work_unit_name;
             out._work_unit_department_name = withWu._work_unit_department_name;
             out._work_unit_label = withWu._work_unit_label;
+            out._job_line_items = await fetchActiveJobLineItemsForAdmin(supabase, orgId, id);
             await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
             return NextResponse.json(out);
         }
