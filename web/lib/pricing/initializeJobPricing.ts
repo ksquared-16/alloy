@@ -3,6 +3,7 @@ import { emitEvent } from "@/lib/emitEvent";
 import {
   type JobLineItemRow,
   computeJobTotals,
+  discountableBaseCentsFromLineRows,
   insertJobPricingSnapshot,
   nextSnapshotVersion,
 } from "@/lib/pricing/jobPricingCore";
@@ -100,9 +101,7 @@ function appendExplicitDiscountLine(
   const { orgId, jobId, discount, actorUserId, fallbackPricingSource } = params;
   if (!discount.enabled) return params.sortStart;
 
-  const discountBase = rows
-    .filter((li) => (li.metadata as Record<string, unknown> | undefined)?.is_discountable === true)
-    .reduce((sum, li) => sum + Math.round(Number(li.amount_cents) || 0), 0);
+  const discountBase = discountableBaseCentsFromLineRows(rows);
 
   if (discountBase <= 0) return params.sortStart;
 

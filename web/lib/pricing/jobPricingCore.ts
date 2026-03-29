@@ -35,6 +35,13 @@ export type ComputedPricingTotals = {
   total_cents: number;
 };
 
+/** Sum of amount_cents for lines with metadata.is_discountable === true (discount base for promos). */
+export function discountableBaseCentsFromLineRows(lines: JobLineItemRow[]): number {
+  return lines
+    .filter((li) => (li.metadata as Record<string, unknown> | undefined)?.is_discountable === true)
+    .reduce((sum, li) => sum + Math.round(Number(li.amount_cents) || 0), 0);
+}
+
 /**
  * Aggregates job totals from line rows only. Does not infer or recompute discounts;
  * discount lines must already be present with negative (or conventionally negative) amounts.
