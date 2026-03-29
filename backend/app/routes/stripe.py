@@ -9,7 +9,7 @@ import os
 import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, Request, Header, HTTPException, Query, Body
 from fastapi.responses import JSONResponse
 import stripe
@@ -58,6 +58,37 @@ def _is_supabase_unique_or_conflict(exc: BaseException) -> bool:
 
 
 router = APIRouter()
+
+# SetupIntent metadata: at least one of these must be present to run GHL/Supabase side effects.
+SETUP_INTENT_ALLOY_CORRELATION_KEYS = (
+    "org_id",
+    "customer_id",
+    "booking_id",
+    "booking_attempt_id",
+    "supabase_contact_id",
+    "contact_id",
+    "ghl_contact_id",
+)
+
+
+def _coerce_stripe_metadata_dict(raw: Any) -> Dict[str, Any]:
+    """Stripe may send metadata as null, a dict, or a StripeObject; never assume dict."""
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return dict(raw)
+    except (TypeError, ValueError):
+        return {}
+
+
+def _setup_intent_metadata_has_alloy_correlation(metadata: Dict[str, Any]) -> bool:
+    for key in SETUP_INTENT_ALLOY_CORRELATION_KEYS:
+        val = metadata.get(key)
+        if val is not None and str(val).strip():
+            return True
+    return False
 
 
 @router.post("/admin/payments/run")
@@ -638,7 +669,8 @@ async def create_setup_intent(request: Request):
     
     The SetupIntent will have:
     - usage="off_session" (for future charges)
-    - metadata with ghl_contact_id, phone, email for webhook matching
+    - metadata with phone, email, optional ghl_contact_id, and Alloy correlation keys
+      (booking_attempt_id, supabase_contact_id, customer_id, org_id) for webhook matching
     """
     try:
         body = await request.json()
@@ -767,13 +799,22 @@ async def create_setup_intent(request: Request):
             supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
         )
     
-    # Build metadata for webhook matching
-    metadata = {
-        "phone": phone,
-        "email": email,
-    }
+    # Build metadata for webhook matching (Stripe values must be strings; include Alloy correlation keys)
+    metadata: Dict[str, str] = {}
+    if phone:
+        metadata["phone"] = str(phone).strip()
+    if email:
+        metadata["email"] = str(email).strip().lower()
     if ghl_contact_id:
-        metadata["ghl_contact_id"] = ghl_contact_id
+        metadata["ghl_contact_id"] = str(ghl_contact_id).strip()
+    if booking_attempt_id:
+        metadata["booking_attempt_id"] = str(booking_attempt_id).strip()
+    if supabase_contact_id:
+        metadata["supabase_contact_id"] = str(supabase_contact_id).strip()
+    if supa_customer_id:
+        metadata["customer_id"] = str(supa_customer_id).strip()
+    if public_org_id:
+        metadata["org_id"] = str(public_org_id).strip()
 
     try:
         setup_intent = None
@@ -860,62 +901,38 @@ async def create_setup_intent(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/stripe/webhook")
-async def stripe_webhook(request: Request):
-    """
-    Stripe webhook endpoint for SetupIntent events.
-    
-    Handles:
-    - setup_intent.succeeded: Tag contact with "card_on_file:collected"
-    - setup_intent.setup_failed: Log only
-    - Other events: Ignore (return 200)
-    
-    Args:
-        request: FastAPI request object
-    
-    Returns:
-        JSONResponse with status 200 for all events (Stripe requires 200)
-    """
-    # Get Stripe signature from headers (case-insensitive)
-    stripe_signature = request.headers.get("stripe-signature")
-    if not stripe_signature:
-        logger.error("stripe_webhook: missing Stripe-Signature header")
-        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
-    
-    # Get raw body for signature verification (MUST be bytes, not parsed JSON)
-    body = await request.body()
-    
-    try:
-        # Verify webhook signature
-        event = stripe.Webhook.construct_event(
-            body, stripe_signature, STRIPE_WEBHOOK_SECRET
-        )
-    except ValueError as e:
-        logger.error("stripe_webhook: invalid payload: %s", e)
-        raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError as e:
-        logger.error("stripe_webhook: invalid signature: %s", e)
-        raise HTTPException(status_code=400, detail="Invalid signature")
-    
+
+def _dispatch_verified_stripe_webhook_event(event: Dict[str, Any]) -> None:
     event_type = event.get("type")
     event_id = event.get("id")
     logger.info("stripe_webhook: received event type=%s id=%s", event_type, event_id)
     
     # Handle setup_intent.succeeded
     if event_type == "setup_intent.succeeded":
-        setup_intent_obj = event.get("data", {}).get("object", {})
+        setup_intent_obj = event.get("data", {}) or {}
+        setup_intent_obj = setup_intent_obj.get("object", {}) or {}
         setup_intent_id = setup_intent_obj.get("id")
+        metadata = _coerce_stripe_metadata_dict(setup_intent_obj.get("metadata"))
+
+        if not _setup_intent_metadata_has_alloy_correlation(metadata):
+            logger.warning(
+                "stripe_webhook: setup_intent.succeeded missing Alloy correlation metadata; "
+                "acknowledging without side effects stripe_event_id=%s setup_intent_id=%s metadata=%s",
+                event_id,
+                setup_intent_id,
+                metadata,
+            )
+            return
+
         logger.info(
             "stripe_webhook: handling setup_intent.succeeded event_id=%s setup_intent_id=%s",
             event_id,
-            setup_intent_id
+            setup_intent_id,
         )
-        metadata = setup_intent_obj.get("metadata", {})
-        
         ghl_contact_id = metadata.get("ghl_contact_id")
         phone = metadata.get("phone")
         email = metadata.get("email")
-        
+
         # Retrieve full SetupIntent to get customer and payment_method (may not be in webhook payload)
         stripe_customer_id = setup_intent_obj.get("customer")
         payment_method_id = setup_intent_obj.get("payment_method")
@@ -984,7 +1001,7 @@ async def stripe_webhook(request: Request):
                     logger.info(
                         "stripe_webhook: found contact by email: contact_id=%s email=%s (path: email_search)",
                         contact_id_to_tag,
-                        email[:10] + "***"
+                        str(email)[:10] + "***",
                     )
         
         # Process contact updates (idempotent - safe to run multiple times)
@@ -1108,9 +1125,14 @@ async def stripe_webhook(request: Request):
             # 4. Link Stripe customer to Supabase (non-blocking)
             if stripe_customer_id:
                 try:
+                    _ba = metadata.get("booking_attempt_id")
+                    booking_attempt_id_meta = _ba.strip() if isinstance(_ba, str) and _ba.strip() else None
+                    _sc = metadata.get("supabase_contact_id") or metadata.get("contact_id")
+                    supabase_contact_id_meta = _sc.strip() if isinstance(_sc, str) and _sc.strip() else None
                     link_stripe_customer_to_supabase(
                         stripe_customer_id,
                         ghl_contact_id=ghl_contact_id,
+                        supabase_contact_id=supabase_contact_id_meta,
                         email=email,
                         phone=phone,
                         setup_intent_id=setup_intent_id,
@@ -1118,6 +1140,7 @@ async def stripe_webhook(request: Request):
                         payment_method_brand=payment_method_brand,
                         payment_method_last4=payment_method_last4,
                         billing_address=billing_address,
+                        booking_attempt_id=booking_attempt_id_meta,
                     )
                 except Exception as e:
                     logger.warning(
@@ -1136,9 +1159,10 @@ async def stripe_webhook(request: Request):
     
     # Handle setup_intent.setup_failed (log only)
     elif event_type == "setup_intent.setup_failed":
-        setup_intent = event.get("data", {}).get("object", {})
+        data = event.get("data") or {}
+        setup_intent = data.get("object") or {}
         setup_intent_id = setup_intent.get("id")
-        last_setup_error = setup_intent.get("last_setup_error", {})
+        last_setup_error = setup_intent.get("last_setup_error") or {}
         error_code = last_setup_error.get("code")
         error_decline_code = last_setup_error.get("decline_code")
         error_type = last_setup_error.get("type")
@@ -1158,9 +1182,10 @@ async def stripe_webhook(request: Request):
 
     # Handle payment_intent.succeeded: update payments row (idempotent); fallback to metadata.payment_id if 0 rows
     elif event_type == "payment_intent.succeeded":
-        pi_obj = event.get("data", {}).get("object", {})
+        pi_obj = event.get("data", {}) or {}
+        pi_obj = pi_obj.get("object", {}) or {}
         pi_id = pi_obj.get("id")
-        metadata = pi_obj.get("metadata") or {}
+        metadata = _coerce_stripe_metadata_dict(pi_obj.get("metadata"))
         payment_id_meta = metadata.get("payment_id") if isinstance(metadata.get("payment_id"), str) else None
         logger.info(
             "stripe_webhook: payment_intent.succeeded event_id=%s pi_id=%s metadata.payment_id=%s",
@@ -1201,11 +1226,12 @@ async def stripe_webhook(request: Request):
 
     # Handle payment_intent.payment_failed: set payment_status_id=failed; fallback to metadata.payment_id if 0 rows
     elif event_type == "payment_intent.payment_failed":
-        pi_obj = event.get("data", {}).get("object", {})
+        pi_obj = event.get("data", {}) or {}
+        pi_obj = pi_obj.get("object", {}) or {}
         pi_id = pi_obj.get("id")
         last_error = pi_obj.get("last_payment_error", {}) or {}
         err_message = last_error.get("message", "Payment failed")
-        metadata = pi_obj.get("metadata") or {}
+        metadata = _coerce_stripe_metadata_dict(pi_obj.get("metadata"))
         payment_id_meta = metadata.get("payment_id") if isinstance(metadata.get("payment_id"), str) else None
         logger.info(
             "stripe_webhook: payment_intent.payment_failed event_id=%s pi_id=%s metadata.payment_id=%s",
@@ -1245,9 +1271,10 @@ async def stripe_webhook(request: Request):
 
     # Handle payment_intent.canceled: set payment_status_id=failed; fallback to metadata.payment_id if 0 rows
     elif event_type == "payment_intent.canceled":
-        pi_obj = event.get("data", {}).get("object", {})
+        pi_obj = event.get("data", {}) or {}
+        pi_obj = pi_obj.get("object", {}) or {}
         pi_id = pi_obj.get("id")
-        metadata = pi_obj.get("metadata") or {}
+        metadata = _coerce_stripe_metadata_dict(pi_obj.get("metadata"))
         payment_id_meta = metadata.get("payment_id") if isinstance(metadata.get("payment_id"), str) else None
         logger.info(
             "stripe_webhook: payment_intent.canceled event_id=%s pi_id=%s metadata.payment_id=%s",
@@ -1288,6 +1315,54 @@ async def stripe_webhook(request: Request):
     # Ignore other event types
     else:
         logger.debug("stripe_webhook: ignoring event type=%s event_id=%s", event_type, event_id)
+
+@router.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """
+    Stripe webhook endpoint for SetupIntent events.
+    
+    Handles:
+    - setup_intent.succeeded: Tag contact with "card_on_file:collected"
+    - setup_intent.setup_failed: Log only
+    - Other events: Ignore (return 200)
+    
+    Args:
+        request: FastAPI request object
+    
+    Returns:
+        JSONResponse with status 200 for all events (Stripe requires 200)
+    """
+    # Get Stripe signature from headers (case-insensitive)
+    stripe_signature = request.headers.get("stripe-signature")
+    if not stripe_signature:
+        logger.error("stripe_webhook: missing Stripe-Signature header")
+        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+    
+    # Get raw body for signature verification (MUST be bytes, not parsed JSON)
+    body = await request.body()
+    
+    try:
+        # Verify webhook signature
+        event = stripe.Webhook.construct_event(
+            body, stripe_signature, STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError as e:
+        logger.error("stripe_webhook: invalid payload: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    except stripe.error.SignatureVerificationError as e:
+        logger.error("stripe_webhook: invalid signature: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    try:
+        _dispatch_verified_stripe_webhook_event(event)
+    except Exception as e:
+        logger.exception(
+            "stripe_webhook: unhandled error (returning 200 to Stripe) stripe_event_id=%s event_type=%s: %s",
+            event.get("id") if isinstance(event, dict) else None,
+            event.get("type") if isinstance(event, dict) else None,
+            e,
+        )
+
     
     # Always return 200 (Stripe requires 200 for all events)
     return JSONResponse({"received": True}, status_code=200)
