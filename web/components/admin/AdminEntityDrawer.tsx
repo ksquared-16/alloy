@@ -28,6 +28,7 @@ import {
 import {
     getEntityPresentation,
     getJobOverviewBillingSummarySection,
+    getJobPricingBreakdownSection,
     toPresentationType,
     type DrawerTabKey,
     type EntityDrawerSectionConfig,
@@ -4319,12 +4320,14 @@ export default function AdminEntityDrawer() {
                 property_service: 1,
                 customer_location: 2,
                 scheduling: 3,
-                pricing: 4,
-                notes: 5,
-                record_info: 6,
+                job_pricing_breakdown: 4,
+                pricing: 5,
+                notes: 6,
+                record_info: 7,
             };
             const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
             const overviewBilling = getJobOverviewBillingSummarySection();
+            const pricingBreakdown = getJobPricingBreakdownSection();
             if (fromDefs.length === 0 && append.length === 0) {
                 const base = (getEntityPresentation("jobs").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
                 result = base.map((s) => (s.key === "pricing" ? overviewBilling : s));
@@ -4350,10 +4353,15 @@ export default function AdminEntityDrawer() {
                         const ss = s.subsections?.length ?? 0;
                         return sf > 0 || ss > 0;
                     });
-                const withoutPricing = result.filter((s) => s.key !== "pricing");
+                const withoutPricing = result.filter((s) => s.key !== "pricing" && s.key !== "job_pricing_breakdown");
                 const notesIdx = withoutPricing.findIndex((s) => s.key === "notes");
                 const insertAt = notesIdx >= 0 ? notesIdx : withoutPricing.length;
-                result = [...withoutPricing.slice(0, insertAt), overviewBilling, ...withoutPricing.slice(insertAt)];
+                result = [
+                    ...withoutPricing.slice(0, insertAt),
+                    pricingBreakdown,
+                    overviewBilling,
+                    ...withoutPricing.slice(insertAt),
+                ];
                 result.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
             }
         }
