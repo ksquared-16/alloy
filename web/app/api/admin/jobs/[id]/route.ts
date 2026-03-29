@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/jobDisplayPrice";
 import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
+import { buildOverrideLinesFromAdminJobRow, overrideJobPricing } from "@/lib/pricing/overrideJobPricing";
 
 const ALLOWED_KEYS = [
     "title",
@@ -337,6 +338,28 @@ export async function PATCH(
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        const pricingTouched =
+            Object.prototype.hasOwnProperty.call(updates, "gross_price_cents") ||
+            Object.prototype.hasOwnProperty.call(updates, "discount_code_id") ||
+            Object.prototype.hasOwnProperty.call(updates, "discount_amount") ||
+            Object.prototype.hasOwnProperty.call(updates, "discounted") ||
+            Object.prototype.hasOwnProperty.call(updates, "discount_program_id");
+
+        if (pricingTouched) {
+            const jobRow = data as JobPriceInput & { discount_code?: string | null };
+            const over = await overrideJobPricing({
+                supabase,
+                orgId: ctx.orgId,
+                jobId: id,
+                changes: buildOverrideLinesFromAdminJobRow(jobRow),
+                reason: "admin_job_update",
+                actorUserId: ctx.userId,
+            });
+            if (!over.ok) {
+                return NextResponse.json({ error: over.error }, { status: 500 });
+            }
+        }
 
         await upsertFieldValuesFromBody(supabase, ctx.orgId, "job", id, body, [
             ...ALLOWED_KEYS,
