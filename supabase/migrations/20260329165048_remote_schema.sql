@@ -1,11 +1,9 @@
 
 
 
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -956,11 +954,16 @@ CREATE TABLE IF NOT EXISTS "public"."action_links" (
     "expires_at" timestamp with time zone DEFAULT ("now"() + '02:00:00'::interval),
     "consumed_at" timestamp with time zone,
     "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "short_code" "text"
 );
 
 
 ALTER TABLE "public"."action_links" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."action_links"."short_code" IS 'Short opaque code for SMS-friendly /a/{code} URLs; maps to token.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."activity_log" (
@@ -1364,6 +1367,31 @@ CREATE TABLE IF NOT EXISTS "public"."customers" (
 
 
 ALTER TABLE "public"."customers" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."departments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "org_id" "uuid" NOT NULL,
+    "key" "text" NOT NULL,
+    "name" "text" NOT NULL,
+    "description" "text",
+    "sort_order" integer DEFAULT 0 NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone,
+    CONSTRAINT "departments_key_nonempty" CHECK (("btrim"("key") <> ''::"text")),
+    CONSTRAINT "departments_name_nonempty" CHECK (("btrim"("name") <> ''::"text"))
+);
+
+ALTER TABLE ONLY "public"."departments" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."departments" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."departments" IS 'Tenant-scoped business function (Org → Department → Work unit → Record).';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."discount_applications" (
@@ -2019,11 +2047,16 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "status_key" "text",
     "primary_person_id" "uuid",
     "discount_program_id" "uuid",
+    "work_unit_id" "uuid",
     CONSTRAINT "chk_jobs_amounts_nonnegative" CHECK (((("estimated_total_cents" IS NULL) OR ("estimated_total_cents" >= 0)) AND (("recurring_total_cents" IS NULL) OR ("recurring_total_cents" >= 0))))
 );
 
 
 ALTER TABLE "public"."jobs" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."jobs"."work_unit_id" IS 'Optional work unit for routing/UI V2; null = unassigned to a work unit.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."ledger_transactions" (
@@ -2108,12 +2141,22 @@ CREATE TABLE IF NOT EXISTS "public"."locations" (
     "parent_location_id" "uuid",
     "location_type_id" "uuid",
     "status_key" "text",
+    "access_code" "text",
+    "has_pets" boolean,
     CONSTRAINT "locations_location_type_check" CHECK (("location_type" = ANY (ARRAY['address'::"text", 'site'::"text", 'unit'::"text"]))),
     CONSTRAINT "locations_owner_xor_check" CHECK ((NOT (("customer_id" IS NOT NULL) AND ("vendor_id" IS NOT NULL))))
 );
 
 
 ALTER TABLE "public"."locations" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."locations"."access_code" IS 'Door/gate code when customer selects code-based access; optional.';
+
+
+
+COMMENT ON COLUMN "public"."locations"."has_pets" IS 'Whether pets are present at the service address.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."messages" (
@@ -2937,7 +2980,7 @@ ALTER TABLE "public"."vendor_verticals" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."vendors" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "name" "text" NOT NULL,
-    "status" "text" DEFAULT 'active'::"text" NOT NULL,
+    "status" "text" DEFAULT 'pending'::"text" NOT NULL,
     "email" "text",
     "phone" "text",
     "payout_percent" numeric DEFAULT 0.70 NOT NULL,
@@ -2998,6 +3041,41 @@ CREATE TABLE IF NOT EXISTS "public"."verticals" (
 
 
 ALTER TABLE "public"."verticals" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."work_units" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "org_id" "uuid" NOT NULL,
+    "department_id" "uuid" NOT NULL,
+    "key" "text" NOT NULL,
+    "name" "text" NOT NULL,
+    "description" "text",
+    "sort_order" integer DEFAULT 0 NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "queue_definition" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone,
+    CONSTRAINT "work_units_key_nonempty" CHECK (("btrim"("key") <> ''::"text")),
+    CONSTRAINT "work_units_name_nonempty" CHECK (("btrim"("name") <> ''::"text"))
+);
+
+ALTER TABLE ONLY "public"."work_units" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."work_units" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."work_units" IS 'Operational queue/cohort within a department; optional JSON queue_definition for future filter DSL.';
+
+
+
+COMMENT ON COLUMN "public"."work_units"."org_id" IS 'Denormalized from department.org_id for RLS and admin queries; must match parent department.org_id (enforced on write via RLS WITH CHECK).';
+
+
+
+COMMENT ON COLUMN "public"."work_units"."queue_definition" IS 'Structured queue/filter config; semantics defined by app (v1: often {}).';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."workflow_action_runs" (
@@ -3300,6 +3378,11 @@ ALTER TABLE ONLY "public"."customer_vertical_job_counters"
 
 ALTER TABLE ONLY "public"."customers"
     ADD CONSTRAINT "customers_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."departments"
+    ADD CONSTRAINT "departments_pkey" PRIMARY KEY ("id");
 
 
 
@@ -3838,8 +3921,18 @@ ALTER TABLE ONLY "public"."customer_persons"
 
 
 
+ALTER TABLE ONLY "public"."departments"
+    ADD CONSTRAINT "uq_departments_org_key" UNIQUE ("org_id", "key");
+
+
+
 ALTER TABLE ONLY "public"."person_relationships"
     ADD CONSTRAINT "uq_person_relationships_unique" UNIQUE ("org_id", "from_person_id", "to_person_id", "relationship_type");
+
+
+
+ALTER TABLE ONLY "public"."work_units"
+    ADD CONSTRAINT "uq_work_units_department_key" UNIQUE ("department_id", "key");
 
 
 
@@ -3898,6 +3991,11 @@ ALTER TABLE ONLY "public"."verticals"
 
 
 
+ALTER TABLE ONLY "public"."work_units"
+    ADD CONSTRAINT "work_units_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."workflow_action_runs"
     ADD CONSTRAINT "workflow_action_runs_pkey" PRIMARY KEY ("id");
 
@@ -3929,6 +4027,14 @@ ALTER TABLE ONLY "public"."workflows"
 
 
 CREATE INDEX "action_links_entity_idx" ON "public"."action_links" USING "btree" ("entity_type", "entity_id");
+
+
+
+CREATE UNIQUE INDEX "action_links_short_code_key" ON "public"."action_links" USING "btree" ("short_code") WHERE ("short_code" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "action_links_short_code_uidx" ON "public"."action_links" USING "btree" ("short_code") WHERE ("short_code" IS NOT NULL);
 
 
 
@@ -4252,6 +4358,14 @@ CREATE INDEX "idx_customers_vertical_id" ON "public"."customers" USING "btree" (
 
 
 
+CREATE INDEX "idx_departments_org_active_sort" ON "public"."departments" USING "btree" ("org_id", "is_active", "sort_order");
+
+
+
+CREATE INDEX "idx_departments_org_id" ON "public"."departments" USING "btree" ("org_id");
+
+
+
 CREATE INDEX "idx_discount_codes_active" ON "public"."discount_codes" USING "btree" ("is_active");
 
 
@@ -4393,6 +4507,10 @@ CREATE INDEX "idx_jobs_primary_person" ON "public"."jobs" USING "btree" ("primar
 
 
 CREATE INDEX "idx_jobs_status" ON "public"."jobs" USING "btree" ("job_status_id");
+
+
+
+CREATE INDEX "idx_jobs_work_unit_id" ON "public"."jobs" USING "btree" ("work_unit_id") WHERE ("work_unit_id" IS NOT NULL);
 
 
 
@@ -4673,6 +4791,18 @@ CREATE INDEX "idx_vendors_status" ON "public"."vendors" USING "btree" ("status")
 
 
 CREATE INDEX "idx_vendors_submitted_at" ON "public"."vendors" USING "btree" ("submitted_at");
+
+
+
+CREATE INDEX "idx_work_units_department_id" ON "public"."work_units" USING "btree" ("department_id");
+
+
+
+CREATE INDEX "idx_work_units_org_department_active_sort" ON "public"."work_units" USING "btree" ("org_id", "department_id", "is_active", "sort_order");
+
+
+
+CREATE INDEX "idx_work_units_org_id" ON "public"."work_units" USING "btree" ("org_id");
 
 
 
@@ -5584,6 +5714,11 @@ ALTER TABLE ONLY "public"."customers"
 
 
 
+ALTER TABLE ONLY "public"."departments"
+    ADD CONSTRAINT "departments_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE RESTRICT;
+
+
+
 ALTER TABLE ONLY "public"."discount_applications"
     ADD CONSTRAINT "discount_applications_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE SET NULL;
 
@@ -5971,6 +6106,11 @@ ALTER TABLE ONLY "public"."jobs"
 
 ALTER TABLE ONLY "public"."jobs"
     ADD CONSTRAINT "jobs_vertical_id_fkey" FOREIGN KEY ("vertical_id") REFERENCES "public"."verticals"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."jobs"
+    ADD CONSTRAINT "jobs_work_unit_id_fkey" FOREIGN KEY ("work_unit_id") REFERENCES "public"."work_units"("id") ON DELETE SET NULL;
 
 
 
@@ -6546,6 +6686,16 @@ ALTER TABLE ONLY "public"."vendors"
 
 ALTER TABLE ONLY "public"."vendors"
     ADD CONSTRAINT "vendors_vendor_status_id_fkey" FOREIGN KEY ("vendor_status_id") REFERENCES "public"."vendor_statuses"("id");
+
+
+
+ALTER TABLE ONLY "public"."work_units"
+    ADD CONSTRAINT "work_units_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."work_units"
+    ADD CONSTRAINT "work_units_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "public"."orgs"("id") ON DELETE RESTRICT;
 
 
 
@@ -7228,6 +7378,25 @@ ALTER TABLE "public"."customer_vertical_job_counters" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."customers" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."departments" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "departments_delete_same_org" ON "public"."departments" FOR DELETE TO "authenticated" USING (("org_id" = "public"."current_org_id"()));
+
+
+
+CREATE POLICY "departments_insert_same_org" ON "public"."departments" FOR INSERT TO "authenticated" WITH CHECK (("org_id" = "public"."current_org_id"()));
+
+
+
+CREATE POLICY "departments_select_same_org" ON "public"."departments" FOR SELECT TO "authenticated" USING (("org_id" = "public"."current_org_id"()));
+
+
+
+CREATE POLICY "departments_update_same_org" ON "public"."departments" FOR UPDATE TO "authenticated" USING (("org_id" = "public"."current_org_id"())) WITH CHECK (("org_id" = "public"."current_org_id"()));
+
 
 
 ALTER TABLE "public"."discount_applications" ENABLE ROW LEVEL SECURITY;
@@ -8223,6 +8392,14 @@ CREATE POLICY "service role full access customer_subscriptions" ON "public"."cus
 
 
 
+CREATE POLICY "service role full access departments" ON "public"."departments" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "service role full access work_units" ON "public"."work_units" TO "service_role" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."service_offerings" ENABLE ROW LEVEL SECURITY;
 
 
@@ -8452,6 +8629,31 @@ CREATE POLICY "vendors_write_org_admin" ON "public"."vendors" FOR INSERT TO "aut
 
 
 ALTER TABLE "public"."verticals" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."work_units" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "work_units_delete_same_org" ON "public"."work_units" FOR DELETE TO "authenticated" USING (("org_id" = "public"."current_org_id"()));
+
+
+
+CREATE POLICY "work_units_insert_same_org" ON "public"."work_units" FOR INSERT TO "authenticated" WITH CHECK ((("org_id" = "public"."current_org_id"()) AND (EXISTS ( SELECT 1
+   FROM "public"."departments" "d"
+  WHERE (("d"."id" = "work_units"."department_id") AND ("d"."org_id" = "d"."org_id"))))));
+
+
+
+CREATE POLICY "work_units_select_same_org" ON "public"."work_units" FOR SELECT TO "authenticated" USING ((("org_id" = "public"."current_org_id"()) AND (EXISTS ( SELECT 1
+   FROM "public"."departments" "d"
+  WHERE (("d"."id" = "work_units"."department_id") AND ("d"."org_id" = "work_units"."org_id"))))));
+
+
+
+CREATE POLICY "work_units_update_same_org" ON "public"."work_units" FOR UPDATE TO "authenticated" USING (("org_id" = "public"."current_org_id"())) WITH CHECK ((("org_id" = "public"."current_org_id"()) AND (EXISTS ( SELECT 1
+   FROM "public"."departments" "d"
+  WHERE (("d"."id" = "work_units"."department_id") AND ("d"."org_id" = "d"."org_id"))))));
+
 
 
 ALTER TABLE "public"."workflow_action_runs" ENABLE ROW LEVEL SECURITY;
@@ -8926,8 +9128,8 @@ GRANT ALL ON TABLE "public"."contact_tags" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."contacts" TO "anon";
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."contacts" TO "authenticated";
+GRANT ALL ON TABLE "public"."contacts" TO "anon";
+GRANT ALL ON TABLE "public"."contacts" TO "authenticated";
 GRANT ALL ON TABLE "public"."contacts" TO "service_role";
 
 
@@ -8956,6 +9158,8 @@ GRANT ALL ON TABLE "public"."customer_members" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."customer_payment_methods" TO "anon";
+GRANT ALL ON TABLE "public"."customer_payment_methods" TO "authenticated";
 GRANT ALL ON TABLE "public"."customer_payment_methods" TO "service_role";
 
 
@@ -8984,11 +9188,21 @@ GRANT ALL ON TABLE "public"."customer_tags" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."customer_vertical_job_counters" TO "anon";
+GRANT ALL ON TABLE "public"."customer_vertical_job_counters" TO "authenticated";
 GRANT ALL ON TABLE "public"."customer_vertical_job_counters" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."customers" TO "anon";
+GRANT ALL ON TABLE "public"."customers" TO "authenticated";
 GRANT ALL ON TABLE "public"."customers" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."departments" TO "anon";
+GRANT ALL ON TABLE "public"."departments" TO "authenticated";
+GRANT ALL ON TABLE "public"."departments" TO "service_role";
 
 
 
@@ -8998,6 +9212,8 @@ GRANT ALL ON TABLE "public"."discount_applications" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."discount_codes" TO "anon";
+GRANT ALL ON TABLE "public"."discount_codes" TO "authenticated";
 GRANT ALL ON TABLE "public"."discount_codes" TO "service_role";
 
 
@@ -9038,6 +9254,8 @@ GRANT ALL ON TABLE "public"."discount_programs_admin_v" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."discount_redemptions" TO "anon";
+GRANT ALL ON TABLE "public"."discount_redemptions" TO "authenticated";
 GRANT ALL ON TABLE "public"."discount_redemptions" TO "service_role";
 
 
@@ -9210,6 +9428,8 @@ GRANT ALL ON TABLE "public"."org_settings" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."orgs" TO "anon";
+GRANT ALL ON TABLE "public"."orgs" TO "authenticated";
 GRANT ALL ON TABLE "public"."orgs" TO "service_role";
 
 
@@ -9436,8 +9656,9 @@ GRANT ALL ON TABLE "public"."user_roles" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."vendor_statuses" TO "anon";
+GRANT ALL ON TABLE "public"."vendor_statuses" TO "authenticated";
 GRANT ALL ON TABLE "public"."vendor_statuses" TO "service_role";
-GRANT SELECT ON TABLE "public"."vendor_statuses" TO "authenticated";
 
 
 
@@ -9471,6 +9692,12 @@ GRANT ALL ON TABLE "public"."verticals" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."work_units" TO "anon";
+GRANT ALL ON TABLE "public"."work_units" TO "authenticated";
+GRANT ALL ON TABLE "public"."work_units" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."workflow_action_runs" TO "anon";
 GRANT ALL ON TABLE "public"."workflow_action_runs" TO "authenticated";
 GRANT ALL ON TABLE "public"."workflow_action_runs" TO "service_role";
@@ -9501,8 +9728,9 @@ GRANT ALL ON TABLE "public"."workflow_runs" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."workflow_run_events" TO "anon";
+GRANT ALL ON TABLE "public"."workflow_run_events" TO "authenticated";
 GRANT ALL ON TABLE "public"."workflow_run_events" TO "service_role";
-GRANT SELECT ON TABLE "public"."workflow_run_events" TO "authenticated";
 
 
 
@@ -9573,4 +9801,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 
 
 
-RESET ALL;
+drop extension if exists "pg_net";
+
+
