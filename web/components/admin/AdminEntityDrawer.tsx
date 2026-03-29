@@ -28,6 +28,7 @@ import {
 import {
     getEntityPresentation,
     getJobOverviewBillingSummarySection,
+    getJobPricingBreakdownSection,
     toPresentationType,
     type DrawerTabKey,
     type EntityDrawerSectionConfig,
@@ -35,6 +36,7 @@ import {
 } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
+import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
 import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from "@/lib/admin/jobDiscountSelection";
@@ -1448,13 +1450,20 @@ export default function AdminEntityDrawer() {
 
     /** Canonical job payment rollup for drawer + modal parent (API summary when present, else derive from rows). */
     const jobPaymentSummaryEffective = useMemo(() => {
-        const d = data as { display_total_cents?: number | null } | undefined;
-        const origFromJob =
-            drawer.type === "jobs" &&
-            d?.display_total_cents != null &&
-            Number.isFinite(Number(d.display_total_cents))
+        const d = data as {
+            total_cents?: number | null;
+            display_total_cents?: number | null;
+            _job_line_items?: unknown;
+        } | undefined;
+        const hasActiveLines = Array.isArray(d?._job_line_items) && (d._job_line_items as unknown[]).length > 0;
+        const tc =
+            d?.total_cents != null && Number.isFinite(Number(d.total_cents)) ? Math.round(Number(d.total_cents)) : null;
+        const disp =
+            d?.display_total_cents != null && Number.isFinite(Number(d.display_total_cents))
                 ? Math.round(Number(d.display_total_cents))
                 : null;
+        const origFromJob =
+            drawer.type === "jobs" ? (hasActiveLines && tc != null ? tc : disp ?? tc) : null;
         const fallback = computeJobPaymentSummary(origFromJob, jobPayments);
         return jobPaymentSummaryFromApi ?? fallback;
     }, [jobPaymentSummaryFromApi, jobPayments, data, drawer.type]);
@@ -3971,8 +3980,32 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create && drawer.id && drawer.id !== "new") {
+            const jobRec = entityDrawerOverviewData as Record<string, unknown>;
+            return {
+                job_pricing_breakdown: <JobPricingBreakdown record={jobRec} />,
+            };
+        }
         return {};
-    }, [drawer.type, drawer.id, overviewData, openDrawer, memberRelatedLinks, memberRelatedRoles, formData, setFormData, saveEdit, nonJobFormDirty, canMutate, memberRelationshipOptions, statusDefsForDrawer, isEditing, refetch]);
+    }, [
+        drawer.type,
+        drawer.id,
+        overviewData,
+        data,
+        entityDrawerOverviewData,
+        openDrawer,
+        memberRelatedLinks,
+        memberRelatedRoles,
+        formData,
+        setFormData,
+        saveEdit,
+        nonJobFormDirty,
+        canMutate,
+        memberRelationshipOptions,
+        statusDefsForDrawer,
+        isEditing,
+        refetch,
+    ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return [];
@@ -4028,6 +4061,7 @@ export default function AdminEntityDrawer() {
         ]);
         /** Shown only in Overview "Billing summary" block — omit from field_definitions grid to avoid duplicates. */
         const jobOverviewBillingFieldKeys = new Set([
+            "total_cents",
             "display_total_cents",
             "recurring_total_cents",
             "service_frequency_key",
@@ -4286,12 +4320,14 @@ export default function AdminEntityDrawer() {
                 property_service: 1,
                 customer_location: 2,
                 scheduling: 3,
-                pricing: 4,
-                notes: 5,
-                record_info: 6,
+                job_pricing_breakdown: 4,
+                pricing: 5,
+                notes: 6,
+                record_info: 7,
             };
             const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
             const overviewBilling = getJobOverviewBillingSummarySection();
+            const pricingBreakdown = getJobPricingBreakdownSection();
             if (fromDefs.length === 0 && append.length === 0) {
                 const base = (getEntityPresentation("jobs").drawer?.overviewSections ?? []) as EntityDrawerSectionConfig[];
                 result = base.map((s) => (s.key === "pricing" ? overviewBilling : s));
@@ -4317,10 +4353,15 @@ export default function AdminEntityDrawer() {
                         const ss = s.subsections?.length ?? 0;
                         return sf > 0 || ss > 0;
                     });
-                const withoutPricing = result.filter((s) => s.key !== "pricing");
+                const withoutPricing = result.filter((s) => s.key !== "pricing" && s.key !== "job_pricing_breakdown");
                 const notesIdx = withoutPricing.findIndex((s) => s.key === "notes");
                 const insertAt = notesIdx >= 0 ? notesIdx : withoutPricing.length;
-                result = [...withoutPricing.slice(0, insertAt), overviewBilling, ...withoutPricing.slice(insertAt)];
+                result = [
+                    ...withoutPricing.slice(0, insertAt),
+                    pricingBreakdown,
+                    overviewBilling,
+                    ...withoutPricing.slice(insertAt),
+                ];
                 result.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
             }
         }

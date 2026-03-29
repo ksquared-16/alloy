@@ -21,6 +21,7 @@ import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/booki
 import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
@@ -1861,15 +1862,7 @@ export async function POST(request: NextRequest) {
                 jobUpdatePayload.vertical_id = verticalId;
             }
 
-            // Pricing: estimated_total_cents = net first visit; gross_price_cents = pre-discount subtotal when available
-            if (netFirstVisitCents != null) {
-                if (!existingJobData?.estimated_total_cents) {
-                    jobUpdatePayload.estimated_total_cents = netFirstVisitCents;
-                }
-                if (!existingJobData?.gross_price_cents) {
-                    jobUpdatePayload.gross_price_cents = grossFirstVisitCents ?? netFirstVisitCents;
-                }
-            }
+            // First-visit gross/estimated totals are set by initializeJobPricing (job_line_items + jobs pricing columns).
             jobUpdatePayload.recurring_total_cents = is_recurring ? recurringCents : null;
             if (!existingJobData?.service_frequency_key) {
                 console.log(`[BOOK_V2_CONFIRM] Backfilled job.service_frequency_key=${service_frequency_key} job_id=${jobId}`);
@@ -1905,9 +1898,6 @@ export async function POST(request: NextRequest) {
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
-                estimated_total_cents: netFirstVisitCents ?? null,
-                recurring_total_cents: is_recurring ? recurringCents : null,
-                ...(netFirstVisitCents != null && { gross_price_cents: grossFirstVisitCents ?? netFirstVisitCents }),
                 ...((discount_program_id != null || discount_code_id != null) && {
                     discounted: true,
                     ...(discount_program_id != null && { discount_program_id }),
@@ -1952,6 +1942,51 @@ export async function POST(request: NextRequest) {
             console.error("[BOOK_V2_CONFIRM] job_id missing, aborting booking_attempt_id=", booking_attempt_id);
             return NextResponse.json(
                 { ok: false, message: "Job creation failed", booking_attempt_id: booking_attempt_id ?? null },
+                { status: 500 }
+            );
+        }
+
+        const orgIdForPricing = (process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim();
+        if (!orgIdForPricing) {
+            console.error("[BOOK_V2_CONFIRM] ALLOY_PUBLIC_ORG_ID missing for initializeJobPricing");
+            return NextResponse.json(
+                { ok: false, message: "Server configuration error", booking_attempt_id: booking_attempt_id ?? null },
+                { status: 500 }
+            );
+        }
+
+        const quoteOutForPricing =
+            quote_output != null && typeof quote_output === "object" ? (quote_output as Record<string, unknown>) : null;
+
+        const pricingInit = await initializeJobPricing({
+            supabase,
+            orgId: orgIdForPricing,
+            jobId,
+            quoteData: {
+                grossFirstVisitCents,
+                netFirstVisitCents,
+                recurringCents: is_recurring ? recurringCents : null,
+                quoteOutput: quoteOutForPricing,
+                frequencyLabel: frequency_label ?? null,
+            },
+            addons: [],
+            discount: {
+                enabled: jobDiscountAmountCents != null && jobDiscountAmountCents > 0,
+                amount_cents: jobDiscountAmountCents,
+                discount_code: discount_code ?? null,
+                discount_code_id: discount_code_id,
+                discount_program_id: discount_program_id,
+            },
+            source: "book-v2",
+            skipIfActiveLines: true,
+            replaceExisting: true,
+            actorUserId: null,
+        });
+
+        if (!pricingInit.ok) {
+            console.error("[BOOK_V2_CONFIRM] initializeJobPricing failed", pricingInit.error, booking_attempt_id);
+            return NextResponse.json(
+                { ok: false, message: "Failed to persist job pricing", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 500 }
             );
         }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
@@ -245,7 +246,13 @@ export default function JobsClient() {
         label: "Actions",
         sortable: false,
         render: (_: unknown, row: JobRow) => (
-          <span className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+          <span className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Link
+              href={`/admin/jobs/${row.id}`}
+              className="text-xs font-medium text-alloy-blue hover:underline"
+            >
+              View details
+            </Link>
             {row.archived_at ? (
               <button type="button" onClick={() => unarchive(row.id)} disabled={actionLoadingId === row.id} className="text-xs font-medium text-alloy-muted hover:text-alloy-midnight hover:underline disabled:opacity-50">Unarchive</button>
             ) : (

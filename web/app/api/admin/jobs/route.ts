@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
+import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
 import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
@@ -349,5 +350,38 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.from("jobs").insert(row).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (!data) return NextResponse.json({ error: "Insert failed" }, { status: 400 });
+
+  const jobId = (data as { id: string }).id;
+  const grossCents = gross_price_cents;
+  const discCents = discounted ? Math.round(Number(discount_amount)) : 0;
+  const pricingInit = await initializeJobPricing({
+    supabase,
+    orgId: ctx.orgId,
+    jobId,
+    quoteData: {
+      grossFirstVisitCents: grossCents,
+      netFirstVisitCents: null,
+      recurringCents: null,
+      quoteOutput: null,
+      frequencyLabel: null,
+    },
+    addons: [],
+    discount: {
+      enabled: discounted && discCents > 0,
+      amount_cents: discCents > 0 ? discCents : null,
+      discount_code,
+      discount_code_id,
+      discount_program_id,
+    },
+    source: "admin",
+    skipIfActiveLines: false,
+    actorUserId: ctx.userId,
+  });
+
+  if (!pricingInit.ok) {
+    return NextResponse.json({ error: pricingInit.error, job: data }, { status: 500 });
+  }
+
   return NextResponse.json(data);
 }

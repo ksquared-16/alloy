@@ -97,9 +97,10 @@ export function mergeUnifiedStatusIntoConfigOverview(
       property_service: 1,
       customer_location: 2,
       scheduling: 3,
-      pricing: 4,
-      notes: 5,
-      record_info: 6,
+      job_pricing_breakdown: 4,
+      pricing: 5,
+      notes: 6,
+      record_info: 7,
     };
     const rank = (k: string) => (jobSectionRank[k] !== undefined ? jobSectionRank[k]! : 50);
     result = [...result].sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
