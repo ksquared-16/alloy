@@ -21,6 +21,8 @@ type CollectApiJob = {
   original_cents: number | null;
   paid_cents: number;
   balance_cents: number;
+  job_total_cents?: number | null;
+  pending_payment_amount_cents?: number;
 };
 
 type CollectApiSchedule = {
@@ -53,7 +55,8 @@ function defaultCentsForTarget(target: PaymentTarget, data: CollectApiResponse |
   if (!data || target === "adhoc") return null;
   if (target === "job") {
     if (data.job.balance_cents > 0) return data.job.balance_cents;
-    if (data.job.original_cents != null && data.job.original_cents > 0) return data.job.original_cents;
+    const jobTotal = data.job.job_total_cents ?? data.job.original_cents;
+    if (jobTotal != null && jobTotal > 0) return jobTotal;
     return 0;
   }
   if (target === "schedule" && data.schedule) {
@@ -331,7 +334,7 @@ export function AdminCollectPaymentModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      let json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       console.log("[CollectPayment] response received", {
         traceId,
         httpStatus: res.status,
@@ -454,17 +457,23 @@ export function AdminCollectPaymentModal({
               {target === "job" && (
                 <>
                   <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Original amount</span>
-                    <span className="font-medium">{money(collect.job.original_cents)}</span>
+                    <span className="text-alloy-midnight/70">Job total</span>
+                    <span className="font-medium">{money(collect.job.job_total_cents ?? collect.job.original_cents)}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Already paid</span>
+                    <span className="text-alloy-midnight/70">Paid (posted)</span>
                     <span className="font-medium">{money(collect.job.paid_cents)}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Balance due</span>
+                    <span className="text-alloy-midnight/70">Outstanding</span>
                     <span className="font-medium text-alloy-midnight">{money(collect.job.balance_cents)}</span>
                   </div>
+                  {(collect.job.pending_payment_amount_cents ?? 0) > 0 ? (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-alloy-midnight/70">Pending (authorized)</span>
+                      <span className="font-medium">{money(collect.job.pending_payment_amount_cents)}</span>
+                    </div>
+                  ) : null}
                 </>
               )}
               {target === "schedule" && collect.schedule && (

@@ -10,6 +10,13 @@ import type { JobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
 
 export type JobPaymentStatusKey = "unpaid" | "partial" | "paid" | "failed";
 
+/** GET /api/admin/jobs/[id]/payments `payment_summary` (allocation snapshot + legacy UI aliases). */
+export type JobPaymentsSummaryFromApi = JobBalanceSnapshot & {
+  original_amount_cents: number | null;
+  balance_due_cents: number | null;
+  payment_status_key: JobPaymentStatusKey;
+};
+
 export type PaymentRowLike = {
   amount_cents?: number | null;
   paid_at?: string | null;
@@ -141,4 +148,27 @@ export function jobPaymentStatusKeyLabel(key: JobPaymentStatusKey): string {
     default:
       return key;
   }
+}
+
+/** Display label for canonical `payments.status` (posted/failed/pending/voided). */
+export function formatCanonicalPaymentStatusForDisplay(status: string | null | undefined): string {
+  const s = (status ?? "").trim().toLowerCase();
+  if (!s) return "—";
+  if (s === "posted") return "Posted";
+  if (s === "pending") return "Pending";
+  if (s === "failed") return "Failed";
+  if (s === "voided") return "Voided";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Prefer canonical `status`; otherwise legacy row resolution via effectivePaymentRowStatusKey. */
+export function paymentRowStatusDisplayLabel(row: PaymentRowLike): string {
+  const raw = row.status != null && String(row.status).trim() !== "" ? String(row.status).trim().toLowerCase() : "";
+  if (raw) return formatCanonicalPaymentStatusForDisplay(row.status);
+  const legacy = effectivePaymentRowStatusKey(row);
+  if (legacy === "paid") return "Posted";
+  if (legacy === "pending") return "Pending";
+  if (legacy === "failed") return "Failed";
+  if (legacy === "voided") return "Voided";
+  return legacy ? legacy.charAt(0).toUpperCase() + legacy.slice(1) : "—";
 }

@@ -45,10 +45,10 @@ import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/adm
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import {
-    computeJobPaymentSummary,
     effectivePaymentRowStatusKey,
     jobPaymentStatusKeyLabel,
-    type JobPaymentSummary,
+    paymentRowStatusDisplayLabel,
+    type JobPaymentsSummaryFromApi,
 } from "@/lib/admin/jobPaymentSummary";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -666,14 +666,24 @@ export default function AdminEntityDrawer() {
         id: string;
         created_at: string;
         amount_cents: number;
+        status?: string | null;
+        received_at?: string | null;
+        posted_at?: string | null;
+        processor?: string | null;
+        processor_transaction_id?: string | null;
+        allocated_amount_cents?: number | null;
+        unallocated_amount_cents?: number | null;
+        allocation_state?: string | null;
         paid_at?: string | null;
-        provider_payment_id: string | null;
-        payment_status_id: string | null;
-        payment_statuses: { key: string; label?: string | null } | null;
+        provider_payment_id?: string | null;
+        payment_status_id?: string | null;
+        status_key?: string | null;
+        payment_statuses?: { key: string; label?: string | null } | null;
     };
     const [jobPayments, setJobPayments] = useState<JobPaymentRowUi[]>([]);
     const [jobPaymentsLoading, setJobPaymentsLoading] = useState(false);
-    const [jobPaymentSummaryFromApi, setJobPaymentSummaryFromApi] = useState<JobPaymentSummary | null>(null);
+    const [jobPaymentSummaryFromApi, setJobPaymentSummaryFromApi] = useState<JobPaymentsSummaryFromApi | null>(null);
+    const [jobPaymentsFetchError, setJobPaymentsFetchError] = useState<string | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -1391,15 +1401,38 @@ export default function AdminEntityDrawer() {
     const refetchJobPayments = useCallback(() => {
         if (!paymentParentJobId) return;
         setJobPaymentsLoading(true);
+        setJobPaymentsFetchError(null);
         fetch(`/api/admin/jobs/${paymentParentJobId}/payments`)
-            .then((res) => (res.ok ? res.json() : { payments: [], payment_summary: undefined }))
-            .then((json: { payments?: JobPaymentRowUi[]; payment_summary?: JobPaymentSummary }) => {
+            .then(async (res) => {
+                const raw = await res.text();
+                let json: { payments?: JobPaymentRowUi[]; payment_summary?: JobPaymentsSummaryFromApi; error?: string } = {};
+                try {
+                    json = raw ? (JSON.parse(raw) as typeof json) : {};
+                } catch {
+                    setJobPayments([]);
+                    setJobPaymentSummaryFromApi(null);
+                    setJobPaymentsFetchError("Invalid response from payments API.");
+                    return;
+                }
+                if (!res.ok) {
+                    setJobPayments([]);
+                    setJobPaymentSummaryFromApi(null);
+                    setJobPaymentsFetchError(json.error ?? `Payments unavailable (${res.status}).`);
+                    return;
+                }
+                if (json.payment_summary == null || typeof json.payment_summary !== "object") {
+                    setJobPayments([]);
+                    setJobPaymentSummaryFromApi(null);
+                    setJobPaymentsFetchError("Payment summary missing from server response.");
+                    return;
+                }
                 setJobPayments(json.payments ?? []);
-                setJobPaymentSummaryFromApi(json.payment_summary ?? null);
+                setJobPaymentSummaryFromApi(json.payment_summary);
             })
             .catch(() => {
                 setJobPayments([]);
                 setJobPaymentSummaryFromApi(null);
+                setJobPaymentsFetchError("Could not load payments.");
             })
             .finally(() => setJobPaymentsLoading(false));
     }, [paymentParentJobId]);
@@ -1408,6 +1441,7 @@ export default function AdminEntityDrawer() {
         if (!paymentParentJobId) {
             setJobPayments([]);
             setJobPaymentSummaryFromApi(null);
+            setJobPaymentsFetchError(null);
             return;
         }
         refetchJobPayments();
@@ -1447,26 +1481,6 @@ export default function AdminEntityDrawer() {
         const t = setTimeout(() => setPaymentToast(null), 8000);
         return () => clearTimeout(t);
     }, [paymentToast]);
-
-    /** Canonical job payment rollup for drawer + modal parent (API summary when present, else derive from rows). */
-    const jobPaymentSummaryEffective = useMemo(() => {
-        const d = data as {
-            total_cents?: number | null;
-            display_total_cents?: number | null;
-            _job_line_items?: unknown;
-        } | undefined;
-        const hasActiveLines = Array.isArray(d?._job_line_items) && (d._job_line_items as unknown[]).length > 0;
-        const tc =
-            d?.total_cents != null && Number.isFinite(Number(d.total_cents)) ? Math.round(Number(d.total_cents)) : null;
-        const disp =
-            d?.display_total_cents != null && Number.isFinite(Number(d.display_total_cents))
-                ? Math.round(Number(d.display_total_cents))
-                : null;
-        const origFromJob =
-            drawer.type === "jobs" ? (hasActiveLines && tc != null ? tc : disp ?? tc) : null;
-        const fallback = computeJobPaymentSummary(origFromJob, jobPayments);
-        return jobPaymentSummaryFromApi ?? fallback;
-    }, [jobPaymentSummaryFromApi, jobPayments, data, drawer.type]);
 
     useEffect(() => {
         if (drawer.type === "jobs" && data) {
@@ -3135,18 +3149,27 @@ export default function AdminEntityDrawer() {
     const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
-    const paymentStatusLabel = jobPaymentStatusKeyLabel(jobPaymentSummaryEffective.payment_status_key);
-    const paymentStatusVariant =
-        jobPaymentSummaryEffective.payment_status_key === "paid"
+    const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
+    const paymentStatusLabel = hasServerJobPaymentSummary
+        ? jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)
+        : jobPaymentsFetchError
+          ? "Unavailable"
+          : jobPaymentsLoading && paymentParentJobId
+            ? "…"
+            : "—";
+    const paymentStatusVariant = hasServerJobPaymentSummary
+        ? jobPaymentSummaryFromApi.payment_status_key === "paid"
             ? "success"
-            : jobPaymentSummaryEffective.payment_status_key === "failed"
+            : jobPaymentSummaryFromApi.payment_status_key === "failed"
               ? "warning"
-              : "default";
+              : "default"
+        : "default";
 
     const paidInFullKnown =
-        jobPaymentSummaryEffective.payment_status_key === "paid" &&
-        jobPaymentSummaryEffective.balance_due_cents !== null &&
-        jobPaymentSummaryEffective.balance_due_cents <= 0;
+        hasServerJobPaymentSummary &&
+        jobPaymentSummaryFromApi.payment_status_key === "paid" &&
+        jobPaymentSummaryFromApi.balance_due_cents !== null &&
+        jobPaymentSummaryFromApi.balance_due_cents <= 0;
 
     const jobQuickActionsNode = isJobExistingView && drawer.id ? (
         <div className="flex flex-wrap gap-2 items-center">
@@ -3161,7 +3184,7 @@ export default function AdminEntityDrawer() {
             >
                 {paidInFullKnown ? "Add payment" : "Collect payment"}
             </button>
-            {jobPaymentSummaryEffective.payment_status_key === "failed" && (
+            {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                 <button
                     type="button"
                     disabled={!canMutate}
@@ -3195,9 +3218,10 @@ export default function AdminEntityDrawer() {
 
     const isScheduleExistingView = drawer.type === "schedules" && data && !(data as Record<string, unknown>)._create;
     const schedulePaidInFullKnown =
-        jobPaymentSummaryEffective.payment_status_key === "paid" &&
-        jobPaymentSummaryEffective.balance_due_cents !== null &&
-        jobPaymentSummaryEffective.balance_due_cents <= 0;
+        hasServerJobPaymentSummary &&
+        jobPaymentSummaryFromApi.payment_status_key === "paid" &&
+        jobPaymentSummaryFromApi.balance_due_cents !== null &&
+        jobPaymentSummaryFromApi.balance_due_cents <= 0;
 
     const schedulePaymentQuickActionsNode =
         isScheduleExistingView && paymentParentJobId ? (
@@ -3213,7 +3237,7 @@ export default function AdminEntityDrawer() {
                 >
                     {schedulePaidInFullKnown ? "Add payment" : "Collect payment"}
                 </button>
-                {jobPaymentSummaryEffective.payment_status_key === "failed" && (
+                {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                     <button
                         type="button"
                         disabled={!canMutate}
@@ -3353,7 +3377,8 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "jobs" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return base;
         }
-        const summ = jobPaymentSummaryEffective;
+        const summ = jobPaymentSummaryFromApi;
+        if (!summ) return base;
         return {
             ...base,
             _job_payment_original_cents: summ.original_amount_cents ?? undefined,
@@ -3361,7 +3386,7 @@ export default function AdminEntityDrawer() {
             _job_payment_balance_cents: summ.balance_due_cents ?? undefined,
             _job_payment_status_label: jobPaymentStatusKeyLabel(summ.payment_status_key),
         };
-    }, [drawer.type, overviewData, jobPaymentSummaryEffective]);
+    }, [drawer.type, overviewData, jobPaymentSummaryFromApi]);
 
     const overviewCustomContent = useMemo(() => {
         if (!overviewData || !drawer.type) return {};
@@ -5832,46 +5857,85 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
                         <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Payments &amp; pricing</h3>
-                            <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-4">
-                                <div className="flex justify-between gap-2">
-                                    <span className="text-alloy-midnight/70">Job total (priced)</span>
-                                    <span className="font-medium">
-                                        {jobPaymentSummaryEffective.original_amount_cents != null
-                                            ? formatMoneyFromCents(jobPaymentSummaryEffective.original_amount_cents)
-                                            : "—"}
-                                    </span>
+                            {jobPaymentsFetchError ? (
+                                <p className="text-sm text-red-600 mb-3 rounded border border-red-200 bg-red-50 px-2 py-2">{jobPaymentsFetchError}</p>
+                            ) : !jobPaymentSummaryFromApi ? (
+                                <p className="text-sm text-alloy-midnight/60 mb-4">Loading payment summary…</p>
+                            ) : (
+                                <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-4">
+                                    <div className="flex justify-between gap-2">
+                                        <span className="text-alloy-midnight/70">Job total</span>
+                                        <span className="font-medium">
+                                            {jobPaymentSummaryFromApi.job_total_cents != null
+                                                ? formatMoneyFromCents(jobPaymentSummaryFromApi.job_total_cents)
+                                                : jobPaymentSummaryFromApi.original_amount_cents != null
+                                                  ? formatMoneyFromCents(jobPaymentSummaryFromApi.original_amount_cents)
+                                                  : "—"}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between gap-2">
+                                        <span className="text-alloy-midnight/70">Paid</span>
+                                        <span className="font-medium">{formatMoneyFromCents(jobPaymentSummaryFromApi.paid_amount_cents)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-2">
+                                        <span className="text-alloy-midnight/70">Outstanding</span>
+                                        <span className="font-medium">
+                                            {(jobPaymentSummaryFromApi.outstanding_balance_cents ?? jobPaymentSummaryFromApi.balance_due_cents) != null
+                                                ? formatMoneyFromCents(
+                                                      (jobPaymentSummaryFromApi.outstanding_balance_cents ??
+                                                          jobPaymentSummaryFromApi.balance_due_cents) as number
+                                                  )
+                                                : "—"}
+                                        </span>
+                                    </div>
+                                    {jobPaymentSummaryFromApi.pending_payment_amount_cents > 0 ? (
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-alloy-midnight/70">Pending (authorized)</span>
+                                            <span className="font-medium">
+                                                {formatMoneyFromCents(jobPaymentSummaryFromApi.pending_payment_amount_cents)}
+                                            </span>
+                                        </div>
+                                    ) : null}
+                                    <div className="flex justify-between gap-2">
+                                        <span className="text-alloy-midnight/70">Payment state</span>
+                                        <span className="font-medium">
+                                            {jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between gap-2">
-                                    <span className="text-alloy-midnight/70">Total paid</span>
-                                    <span className="font-medium">{formatMoneyFromCents(jobPaymentSummaryEffective.paid_amount_cents)}</span>
-                                </div>
-                                <div className="flex justify-between gap-2">
-                                    <span className="text-alloy-midnight/70">Balance due</span>
-                                    <span className="font-medium">
-                                        {jobPaymentSummaryEffective.balance_due_cents != null
-                                            ? formatMoneyFromCents(jobPaymentSummaryEffective.balance_due_cents)
-                                            : "—"}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between gap-2">
-                                    <span className="text-alloy-midnight/70">Payment state</span>
-                                    <span className="font-medium">{jobPaymentStatusKeyLabel(jobPaymentSummaryEffective.payment_status_key)}</span>
-                                </div>
-                            </div>
-                            {jobPayments.length > 0 ? (
+                            )}
+                            {jobPaymentsFetchError ? null : !jobPaymentSummaryFromApi ? null : jobPayments.length > 0 ? (
                                 <ul className="space-y-2">
-                                    {jobPayments.map((p) => (
-                                        <li key={p.id} className="text-sm">
-                                            <span className="font-medium">{formatMoneyFromCents(p.amount_cents)}</span>
-                                            <span className="text-alloy-midnight/70"> — {p.payment_statuses?.key ?? effectivePaymentRowStatusKey(p)}</span>
-                                            {p.paid_at ? (
-                                                <span className="text-alloy-midnight/55"> · Paid {formatDateTime(p.paid_at)}</span>
-                                            ) : null}
-                                            {p.provider_payment_id ? (
-                                                <span className="block font-mono text-xs text-alloy-midnight/50 mt-0.5">{p.provider_payment_id}</span>
-                                            ) : null}
-                                        </li>
-                                    ))}
+                                    {jobPayments.map((p) => {
+                                        const refId =
+                                            (p.processor_transaction_id != null && String(p.processor_transaction_id).trim() !== ""
+                                                ? String(p.processor_transaction_id).trim()
+                                                : null) ?? (p.provider_payment_id?.trim() || null);
+                                        const recv = p.received_at ? formatDateTime(p.received_at) : null;
+                                        const posted = p.posted_at ? formatDateTime(p.posted_at) : p.paid_at ? formatDateTime(p.paid_at) : null;
+                                        return (
+                                            <li key={p.id} className="text-sm border-b border-alloy-stone/15 pb-2 last:border-0">
+                                                <div>
+                                                    <span className="font-medium">{formatMoneyFromCents(p.amount_cents)}</span>
+                                                    <span className="text-alloy-midnight/70"> — {paymentRowStatusDisplayLabel(p)}</span>
+                                                    {p.processor ? (
+                                                        <span className="text-alloy-midnight/55"> · {p.processor}</span>
+                                                    ) : null}
+                                                </div>
+                                                <div className="text-xs text-alloy-midnight/55 mt-0.5 space-x-2 space-y-0.5">
+                                                    {recv ? <span>Received {recv}</span> : null}
+                                                    {posted ? <span>{recv ? "·" : ""} Posted {posted}</span> : null}
+                                                    {p.allocation_state ? (
+                                                        <span>
+                                                            · Alloc {formatMoneyFromCents(p.allocated_amount_cents ?? 0)} / unalloc{" "}
+                                                            {formatMoneyFromCents(p.unallocated_amount_cents ?? 0)} ({p.allocation_state})
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                                {refId ? <span className="block font-mono text-xs text-alloy-midnight/50 mt-0.5">{refId}</span> : null}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             ) : (
                                 <p className="text-sm text-alloy-midnight/60">No payments yet.</p>
@@ -5979,7 +6043,7 @@ export default function AdminEntityDrawer() {
                                             (t.total_vendor_payout_debits || 0) +
                                             (t.total_cash_debits || 0) +
                                             (t.total_vendor_payable_credits || 0);
-                                        const hasPaidMoney = jobPaymentSummaryEffective.paid_amount_cents > 0;
+                                        const hasPaidMoney = (jobPaymentSummaryFromApi?.paid_amount_cents ?? 0) > 0;
                                         if (glSum === 0 && hasPaidMoney) {
                                             return (
                                                 <p className="text-xs text-alloy-midnight/80 mt-2 max-w-xl rounded border border-amber-200/80 bg-amber-50/90 px-2.5 py-2 leading-relaxed">
@@ -7316,23 +7380,47 @@ export default function AdminEntityDrawer() {
                                                 {paymentToast.message}
                                             </div>
                                         )}
-                                        {jobPaymentsLoading ? (
-                                            <p className="text-sm text-alloy-midnight/60">Loading payments…</p>
+                                        {jobPaymentsFetchError ? (
+                                            <p className="text-sm text-red-600">{jobPaymentsFetchError}</p>
+                                        ) : !jobPaymentSummaryFromApi ? (
+                                            <p className="text-sm text-alloy-midnight/60">Loading payment summary…</p>
                                         ) : (
                                             <>
                                                 <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-2 mb-2 text-xs space-y-1">
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="text-alloy-midnight/60">Total paid</span>
-                                                        <span>{formatMoneyFromCents(jobPaymentSummaryEffective.paid_amount_cents)}</span>
+                                                        <span className="text-alloy-midnight/60">Job total</span>
+                                                        <span>
+                                                            {jobPaymentSummaryFromApi.job_total_cents != null
+                                                                ? formatMoneyFromCents(jobPaymentSummaryFromApi.job_total_cents)
+                                                                : jobPaymentSummaryFromApi.original_amount_cents != null
+                                                                  ? formatMoneyFromCents(jobPaymentSummaryFromApi.original_amount_cents)
+                                                                  : "—"}
+                                                        </span>
                                                     </div>
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="text-alloy-midnight/60">Balance due</span>
+                                                        <span className="text-alloy-midnight/60">Paid</span>
+                                                        <span>{formatMoneyFromCents(jobPaymentSummaryFromApi.paid_amount_cents)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-2">
+                                                        <span className="text-alloy-midnight/60">Outstanding</span>
                                                         <span>
-                                                            {jobPaymentSummaryEffective.balance_due_cents != null
-                                                                ? formatMoneyFromCents(jobPaymentSummaryEffective.balance_due_cents)
+                                                            {(jobPaymentSummaryFromApi.outstanding_balance_cents ??
+                                                                jobPaymentSummaryFromApi.balance_due_cents) != null
+                                                                ? formatMoneyFromCents(
+                                                                      (jobPaymentSummaryFromApi.outstanding_balance_cents ??
+                                                                          jobPaymentSummaryFromApi.balance_due_cents) as number
+                                                                  )
                                                                 : "—"}
                                                         </span>
                                                     </div>
+                                                    {jobPaymentSummaryFromApi.pending_payment_amount_cents > 0 ? (
+                                                        <div className="flex justify-between gap-2">
+                                                            <span className="text-alloy-midnight/60">Pending</span>
+                                                            <span>
+                                                                {formatMoneyFromCents(jobPaymentSummaryFromApi.pending_payment_amount_cents)}
+                                                            </span>
+                                                        </div>
+                                                    ) : null}
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-2 mb-2">
                                                     <span className="text-xs text-alloy-midnight/60">Payment state:</span>
@@ -7342,14 +7430,24 @@ export default function AdminEntityDrawer() {
                                                     <div className="mb-3">
                                                         <p className="text-xs text-alloy-midnight/60 mb-1">Attempts (newest first)</p>
                                                         <ul className="text-sm space-y-1 border border-[#e6e8ec] rounded p-2 bg-[#F4F6F9]/30 max-h-40 overflow-y-auto">
-                                                            {jobPayments.map((p) => (
-                                                                <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                                                                    <span>{formatDateTime(p.created_at)}</span>
-                                                                    <span>{formatMoneyFromCents(p.amount_cents)}</span>
-                                                                    <span className="text-alloy-midnight/70">{p.payment_statuses?.key ?? effectivePaymentRowStatusKey(p)}</span>
-                                                                    {p.provider_payment_id && <span className="font-mono text-xs text-alloy-midnight/60">{p.provider_payment_id}</span>}
-                                                                </li>
-                                                            ))}
+                                                            {jobPayments.map((p) => {
+                                                                const refId =
+                                                                    (p.processor_transaction_id != null &&
+                                                                    String(p.processor_transaction_id).trim() !== ""
+                                                                        ? String(p.processor_transaction_id).trim()
+                                                                        : null) ?? (p.provider_payment_id?.trim() || null);
+                                                                const when = p.posted_at || p.received_at || p.created_at;
+                                                                return (
+                                                                    <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                                                                        <span>{formatDateTime(when)}</span>
+                                                                        <span>{formatMoneyFromCents(p.amount_cents)}</span>
+                                                                        <span className="text-alloy-midnight/70">{paymentRowStatusDisplayLabel(p)}</span>
+                                                                        {refId ? (
+                                                                            <span className="font-mono text-xs text-alloy-midnight/60">{refId}</span>
+                                                                        ) : null}
+                                                                    </li>
+                                                                );
+                                                            })}
                                                         </ul>
                                                     </div>
                                                 )}
