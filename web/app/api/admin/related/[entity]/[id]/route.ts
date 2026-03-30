@@ -409,31 +409,64 @@ export async function GET(
         }
 
         if (entity === "payment") {
-            const { data: paymentRow } = await supabase.from("payments").select("id, customer_id, job_id, provider_payment_id, org_id").eq("id", id).maybeSingle();
+            const { data: paymentRow } = await supabase
+                .from("payments")
+                .select("id, customer_id, job_id, provider_payment_id, processor_transaction_id, org_id")
+                .eq("id", id)
+                .maybeSingle();
             if (!paymentRow) {
                 return NextResponse.json({ error: "Payment not found" }, { status: 404 });
             }
-            const payment = paymentRow as { customer_id?: string | null; job_id?: string | null; provider_payment_id?: string | null; org_id?: string | null };
+            const payment = paymentRow as {
+                customer_id?: string | null;
+                job_id?: string | null;
+                provider_payment_id?: string | null;
+                processor_transaction_id?: string | null;
+                org_id?: string | null;
+            };
             const customerId = payment.customer_id ?? null;
-            const jobId = payment.job_id ?? null;
-            const providerRef = payment.provider_payment_id?.trim() || null;
             const orgId = payment.org_id ?? ctx.orgId;
+            let jobId = payment.job_id ?? null;
+            if (!jobId) {
+                const { data: jobAlloc } = await supabase
+                    .from("payment_allocations")
+                    .select("target_entity_id")
+                    .eq("org_id", orgId)
+                    .eq("payment_id", id)
+                    .eq("target_entity_type", "job")
+                    .eq("status", "active")
+                    .order("allocated_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                jobId = (jobAlloc as { target_entity_id?: string } | null)?.target_entity_id ?? null;
+            }
+            const processorTxnRef = payment.processor_transaction_id?.trim() || null;
+            const legacyProviderRef = payment.provider_payment_id?.trim() || null;
 
-            const [customerRes, jobRes, ledgerRes] = await Promise.all([
+            async function ledgerByProviderRef(ref: string | null) {
+                if (!ref || !orgId) {
+                    return [] as { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string; journal_entry_id?: string | null }[];
+                }
+                const r = await supabase
+                    .from("ledger_transactions")
+                    .select("id, occurred_at, type, direction, amount_cents, currency, provider, provider_ref, journal_entry_id")
+                    .eq("org_id", orgId)
+                    .eq("provider_ref", ref)
+                    .order("occurred_at", { ascending: false })
+                    .limit(LIMIT);
+                return (r.data ?? []) as { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string; journal_entry_id?: string | null }[];
+            }
+
+            let ledgerTransactions = await ledgerByProviderRef(processorTxnRef);
+            if (ledgerTransactions.length === 0 && legacyProviderRef && legacyProviderRef !== processorTxnRef) {
+                ledgerTransactions = await ledgerByProviderRef(legacyProviderRef);
+            }
+
+            const [customerRes, jobRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name, created_at").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
                 jobId ? supabase.from("jobs").select("id, title, service_key, job_number_for_customer, created_at, job_status_id").eq("id", jobId).maybeSingle() : Promise.resolve({ data: null }),
-                providerRef && orgId
-                    ? supabase
-                        .from("ledger_transactions")
-                        .select("id, occurred_at, type, direction, amount_cents, currency, provider, provider_ref, journal_entry_id")
-                        .eq("org_id", orgId)
-                        .eq("provider_ref", providerRef)
-                        .order("occurred_at", { ascending: false })
-                        .limit(LIMIT)
-                    : { data: [] as { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string; journal_entry_id?: string | null }[] },
             ]);
 
-            const ledgerTransactions = (ledgerRes.data ?? []) as { id: string; occurred_at?: string; type?: string; direction?: string; amount_cents?: number; currency?: string; provider?: string; provider_ref?: string; journal_entry_id?: string | null }[];
             const entryIds = [...new Set(ledgerTransactions.map((lt) => lt.journal_entry_id).filter(Boolean))] as string[];
             let glJournalLines: { id: string; entry_id: string; line_no?: number; account_id?: string; amount_cents?: number; created_at?: string; [k: string]: unknown }[] = [];
             if (entryIds.length > 0) {

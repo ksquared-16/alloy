@@ -172,3 +172,39 @@ export function paymentRowStatusDisplayLabel(row: PaymentRowLike): string {
   if (legacy === "voided") return "Voided";
   return legacy ? legacy.charAt(0).toUpperCase() + legacy.slice(1) : "—";
 }
+
+/** Semantic variant for `StatusBadge` from canonical `payments.status`. */
+export type PaymentStatusBadgeVariant = "default" | "success" | "warning" | "neutral" | "info" | "error";
+
+export function getCanonicalPaymentStatusVariant(canonicalStatus: string | null | undefined): PaymentStatusBadgeVariant {
+  const s = (canonicalStatus ?? "").trim().toLowerCase();
+  if (s === "posted") return "success";
+  if (s === "pending") return "info";
+  if (s === "failed") return "error";
+  if (s === "voided") return "neutral";
+  return "neutral";
+}
+
+function variantForLegacyEffectivePaymentKey(legacy: string): PaymentStatusBadgeVariant {
+  const k = legacy.toLowerCase();
+  if (k === "paid") return "success";
+  if (k === "pending") return "info";
+  if (k === "failed") return "error";
+  if (k === "voided") return "neutral";
+  return "neutral";
+}
+
+/** Label + badge variant for payment list/drawer (canonical `status` first; else legacy row keys). */
+export function paymentRowStatusBadgeProps(row: PaymentRowLike): { label: string; variant: PaymentStatusBadgeVariant } {
+  const raw = row.status != null && String(row.status).trim() !== "" ? String(row.status).trim().toLowerCase() : "";
+  if (raw) {
+    return {
+      label: formatCanonicalPaymentStatusForDisplay(row.status),
+      variant: getCanonicalPaymentStatusVariant(row.status),
+    };
+  }
+  return {
+    label: paymentRowStatusDisplayLabel(row),
+    variant: variantForLegacyEffectivePaymentKey(effectivePaymentRowStatusKey(row)),
+  };
+}

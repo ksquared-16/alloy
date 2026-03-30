@@ -47,8 +47,10 @@ import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "
 import {
     effectivePaymentRowStatusKey,
     jobPaymentStatusKeyLabel,
+    paymentRowStatusBadgeProps,
     paymentRowStatusDisplayLabel,
     type JobPaymentsSummaryFromApi,
+    type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -4005,6 +4007,80 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
+        if (drawer.type === "payments" && data && !(data as { _create?: boolean })._create && drawer.id && drawer.id !== "new") {
+            const pay = data as Record<string, unknown> & {
+                _allocation_summary?: {
+                    allocated_amount_cents?: number;
+                    unallocated_amount_cents?: number;
+                    allocation_state?: string;
+                };
+                _allocations?: Array<{
+                    id: string;
+                    target_entity_type?: string | null;
+                    target_entity_id?: string | null;
+                    allocated_amount_cents?: number | null;
+                    status?: string | null;
+                    allocation_type?: string | null;
+                }>;
+            };
+            const sum = pay._allocation_summary;
+            const allocs = pay._allocations ?? [];
+            return {
+                payment_allocations: (
+                    <div className="space-y-3 text-sm">
+                        {sum ? (
+                            <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/5 px-3 py-2 space-y-1">
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Allocated (total)</span>
+                                    <span className="font-medium">{formatMoneyFromCents(sum.allocated_amount_cents ?? 0)}</span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Unallocated</span>
+                                    <span className="font-medium">{formatMoneyFromCents(sum.unallocated_amount_cents ?? 0)}</span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-alloy-midnight/70">Allocation state</span>
+                                    <span className="font-medium">{sum.allocation_state ?? "—"}</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-alloy-midnight/60">No allocation summary.</p>
+                        )}
+                        {allocs.length > 0 ? (
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 mb-2">Allocation rows</p>
+                                <ul className="space-y-0 list-none rounded-md border border-[#e6e8ec] divide-y divide-alloy-stone/20">
+                                    {allocs.map((a) => (
+                                        <li key={a.id} className="px-3 py-2">
+                                            <div className="font-medium text-alloy-forge/90">
+                                                {(a.target_entity_type ?? "—").toString()} · {formatMoneyFromCents(a.allocated_amount_cents ?? 0)}
+                                            </div>
+                                            <div className="text-xs text-alloy-midnight/60 mt-0.5">
+                                                Target{" "}
+                                                <span className="font-mono">{a.target_entity_id ?? "—"}</span>
+                                                {a.status ? ` · ${a.status}` : ""}
+                                                {a.allocation_type ? ` · ${a.allocation_type}` : ""}
+                                            </div>
+                                            {String(a.target_entity_type ?? "").toLowerCase() === "job" && a.target_entity_id ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDrawer({ type: "jobs", id: String(a.target_entity_id) })}
+                                                    className="text-alloy-blue hover:underline text-xs mt-1"
+                                                >
+                                                    Open job
+                                                </button>
+                                            ) : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : (
+                            <p className="text-alloy-midnight/60">No allocation rows.</p>
+                        )}
+                    </div>
+                ),
+            };
+        }
         if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create && drawer.id && drawer.id !== "new") {
             const jobRec = entityDrawerOverviewData as Record<string, unknown>;
             return {
@@ -4628,6 +4704,11 @@ export default function AdminEntityDrawer() {
                 }
                 variant="default"
             />
+        ) : drawer.type === "payments" && overviewData && !(overviewData as { _create?: boolean })._create ? (
+            (() => {
+                const { label, variant } = paymentRowStatusBadgeProps(overviewData as PaymentRowLike);
+                return <StatusBadge label={label} variant={variant} />;
+            })()
         ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (overviewData as { status_key?: string }).status_key ? (
             <StatusBadge label={getStatusLabel((overviewData as { status_key: string }).status_key) ?? (overviewData as { status_key: string }).status_key} variant="default" />
         ) : null
@@ -6280,14 +6361,31 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                            {(data as { status?: string | null })?.status != null && String((data as { status: string }).status).trim() !== "" ? (
+                                                <li>Status (canonical): {paymentRowStatusDisplayLabel(data as PaymentRowLike)}</li>
+                                            ) : null}
+                                            {(data as { received_at?: string | null })?.received_at != null ? (
+                                                <li>Received: {formatDateTime(String((data as { received_at: string }).received_at))}</li>
+                                            ) : null}
+                                            {(data as { posted_at?: string | null })?.posted_at != null ? (
+                                                <li>Posted: {formatDateTime(String((data as { posted_at: string }).posted_at))}</li>
+                                            ) : null}
                                             {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
                                             {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
-                                            {data?.paid_at != null ? <li>Paid At: {formatDateTime(String(data.paid_at))}</li> : null}
-                                            {data?.posted_to_ledger_at != null ? <li>Posted To Ledger At: {formatDateTime(String(data.posted_to_ledger_at))}</li> : null}
+                                            {data?.paid_at != null ? <li>Paid at (legacy): {formatDateTime(String(data.paid_at))}</li> : null}
+                                            {data?.posted_to_ledger_at != null ? (
+                                                <li>Posted to ledger: {formatDateTime(String(data.posted_to_ledger_at))}</li>
+                                            ) : null}
                                         </ul>
-                                        {!data?.created_at && !data?.updated_at && !data?.paid_at && !data?.posted_to_ledger_at && (
-                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
-                                        )}
+                                        {!data?.created_at &&
+                                            !data?.updated_at &&
+                                            !data?.paid_at &&
+                                            !data?.posted_to_ledger_at &&
+                                            !(data as { received_at?: string | null })?.received_at &&
+                                            !(data as { posted_at?: string | null })?.posted_at &&
+                                            (!(data as { status?: string | null })?.status || String((data as { status: string }).status).trim() === "") && (
+                                                <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                            )}
                                     </section>
                                 </div>
                             ) : drawer.type === "customers" && drawer.id && drawer.id !== "new" ? (
