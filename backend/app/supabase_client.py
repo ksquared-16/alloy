@@ -17,6 +17,17 @@ if STRIPE_SECRET_KEY:
 
 logger = logging.getLogger("alloy-dispatcher")
 
+# PostgREST response / repr size cap for insert_payment diagnostics (full body up to this length).
+_PAYMENTS_INSERT_LOG_BODY_MAX = 4000
+
+
+def _trunc_log_body(text: str, max_len: int = _PAYMENTS_INSERT_LOG_BODY_MAX) -> str:
+    if not text:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len]}... [truncated, {len(text)} total chars]"
+
 
 def stripe_error_is_no_such_customer(err: BaseException) -> bool:
     """
@@ -2047,6 +2058,13 @@ def insert_payment(
     payment_allocations row for the job (V1).
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.error(
+            "insert_payment: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY job_id=%s customer_id=%s org_id=%s payment_status_id=%s",
+            job_id,
+            customer_id,
+            org_id,
+            payment_status_id,
+        )
         return None
     base_url = _get_base_url()
     headers = _get_headers()
@@ -2069,21 +2087,56 @@ def insert_payment(
         payload["org_id"] = org_id
     if metadata is not None:
         payload["metadata"] = metadata
+    payload_keys_log = sorted(payload.keys())
     try:
         url = f"{base_url}/payments"
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
         if not resp.ok:
-            logger.warning("insert_payment: POST failed status=%d body=%s", resp.status_code, resp.text[:200])
+            logger.warning(
+                "insert_payment: POST /payments not ok status=%s payload_keys=%s body=%s",
+                resp.status_code,
+                payload_keys_log,
+                _trunc_log_body(resp.text or ""),
+            )
             return None
         data = resp.json()
         if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
             pid = data[0].get("id")
             if pid and org_id:
                 ensure_job_payment_allocation(str(pid), str(org_id), str(job_id), int(amount_cents))
+            if not pid:
+                logger.warning(
+                    "insert_payment: ok response but row missing id row_keys=%s row_repr_truncated=%s payload_keys=%s job_id=%s customer_id=%s org_id=%s payment_status_id=%s",
+                    sorted(data[0].keys()),
+                    _trunc_log_body(repr(data[0])),
+                    payload_keys_log,
+                    job_id,
+                    customer_id,
+                    org_id,
+                    payment_status_id,
+                )
+                return None
             return pid
+        logger.warning(
+            "insert_payment: ok response unexpected shape type=%s repr_truncated=%s payload_keys=%s job_id=%s customer_id=%s org_id=%s payment_status_id=%s",
+            type(data).__name__,
+            _trunc_log_body(repr(data)),
+            payload_keys_log,
+            job_id,
+            customer_id,
+            org_id,
+            payment_status_id,
+        )
         return None
-    except Exception as e:
-        logger.warning("insert_payment: exception %s", e)
+    except Exception:
+        logger.exception(
+            "insert_payment: exception job_id=%s customer_id=%s org_id=%s payment_status_id=%s payload_keys=%s",
+            job_id,
+            customer_id,
+            org_id,
+            payment_status_id,
+            payload_keys_log,
+        )
         return None
 
 

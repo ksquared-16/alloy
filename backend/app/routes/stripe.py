@@ -193,6 +193,15 @@ async def admin_payments_run(
     if client_idempotency_key:
         metadata_insert["client_idempotency_key"] = client_idempotency_key
 
+    logger.info(
+        "admin_payments_run: before insert_payment job_id=%s customer_id=%s org_id=%s amount_cents=%s pending_payment_status_id=%s",
+        job_id,
+        customer_id,
+        org_id,
+        amount_cents,
+        pending_uuid,
+    )
+
     payment_id = insert_payment(
         job_id=job_id,
         customer_id=customer_id,
