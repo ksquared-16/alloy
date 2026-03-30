@@ -571,7 +571,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: false,
           gridCols: 2,
           fields: [
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true },
+            { key: "status", label: "Status", span: 1, renderHint: "status", editable: true },
             { key: "_ref", label: "Ref", span: 1, renderHint: "text", locked: true },
             { key: "service_type", label: "Service", span: 1, renderHint: "text", locked: true },
             { key: "_frequency_label", label: "Frequency", span: 1, renderHint: "text", locked: true },

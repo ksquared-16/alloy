@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe, type Stripe, type StripeCardElement } from "@stripe/stripe-js";
 import { AD_HOC_CHARGE_TYPE_OPTIONS } from "@/lib/admin/adHocChargeTypes";
 import { adminPaymentRunFeedback } from "@/lib/admin/paymentRunFeedback";
-import { formatMoneyFromCents } from "@/lib/adminFormatters";
+import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 
 export type AdminCollectPaymentModalContext = {
   jobId: string;
@@ -13,7 +13,7 @@ export type AdminCollectPaymentModalContext = {
   scheduleLabel?: string;
 };
 
-type PaymentTarget = "job" | "schedule" | "adhoc";
+type PaymentTarget = "job" | "adhoc";
 
 type CardMode = "on_file" | "new_card";
 
@@ -25,16 +25,15 @@ type CollectApiJob = {
   pending_payment_amount_cents?: number;
 };
 
-type CollectApiSchedule = {
-  schedule_id: string;
-  original_cents: number;
-  paid_cents: number;
-  balance_cents: number;
+/** Informational only when modal opened from a schedule row (V1 charges still allocate to the job). */
+type CollectApiScheduleContext = {
+  visit_start_at: string | null;
+  list_price_cents: number | null;
 };
 
 type CollectApiResponse = {
   job: CollectApiJob;
-  schedule: CollectApiSchedule | null;
+  schedule_context: CollectApiScheduleContext | null;
   customer: {
     id: string;
     stripe_customer_id: string | null;
@@ -53,17 +52,10 @@ function money(cents: number | null | undefined): string {
 
 function defaultCentsForTarget(target: PaymentTarget, data: CollectApiResponse | null): number | null {
   if (!data || target === "adhoc") return null;
-  if (target === "job") {
-    if (data.job.balance_cents > 0) return data.job.balance_cents;
-    const jobTotal = data.job.job_total_cents ?? data.job.original_cents;
-    if (jobTotal != null && jobTotal > 0) return jobTotal;
-    return 0;
-  }
-  if (target === "schedule" && data.schedule) {
-    if (data.schedule.balance_cents > 0) return data.schedule.balance_cents;
-    return data.schedule.original_cents;
-  }
-  return null;
+  if (data.job.balance_cents > 0) return data.job.balance_cents;
+  const jobTotal = data.job.job_total_cents ?? data.job.original_cents;
+  if (jobTotal != null && jobTotal > 0) return jobTotal;
+  return 0;
 }
 
 export function AdminCollectPaymentModal({
@@ -166,13 +158,13 @@ export function AdminCollectPaymentModal({
 
   useEffect(() => {
     if (!isOpen || !context) return;
-    setTarget(hasSchedule ? "schedule" : "job");
+    setTarget("job");
     setCardMode("on_file");
     setSavePaymentMethod(true);
     setFeedback(null);
     setAmountTouched(false);
     setAdhocChargeType(AD_HOC_CHARGE_TYPE_OPTIONS[0]?.value ?? "other");
-  }, [isOpen, context, hasSchedule]);
+  }, [isOpen, context]);
 
   useEffect(() => {
     if (!isOpen || !collect || amountTouched) return;
@@ -278,7 +270,7 @@ export function AdminCollectPaymentModal({
     if (!effectiveJobId || !canSubmit) return;
     paymentInFlightRef.current = true;
     const traceId = crypto.randomUUID().slice(0, 8);
-    const afterScheduleId = target === "schedule" ? context?.scheduleId ?? null : null;
+    const afterScheduleId = context?.scheduleId?.trim() ? context.scheduleId.trim() : null;
     console.log("[CollectPayment] charge start", {
       traceId,
       jobId: effectiveJobId.slice(0, 8),
@@ -309,11 +301,10 @@ export function AdminCollectPaymentModal({
       if (target === "adhoc") {
         body.ad_hoc_charge_type = adhocChargeType;
         body.payment_target = "ad_hoc";
-      } else if (target === "schedule" && context?.scheduleId) {
-        body.payment_target = "schedule";
-        body.schedule_id = context.scheduleId;
       } else {
         body.payment_target = "job";
+        const sid = context?.scheduleId?.trim();
+        if (sid) body.schedule_id = sid;
       }
       if (paymentMethodId) {
         body.payment_method_id = paymentMethodId;
@@ -413,15 +404,26 @@ export function AdminCollectPaymentModal({
     setTarget(next);
   };
 
+  const scheduleContextLine = useMemo(() => {
+    if (!hasSchedule || !collect) return null;
+    const sc = collect.schedule_context;
+    const visit =
+      (context?.scheduleLabel && String(context.scheduleLabel).trim()) ||
+      (sc?.visit_start_at ? formatDateTime(String(sc.visit_start_at)) : null);
+    const price =
+      sc?.list_price_cents != null && Number.isFinite(sc.list_price_cents) && sc.list_price_cents > 0
+        ? money(sc.list_price_cents)
+        : null;
+    if (!visit && !price) return null;
+    const head = `Opened from visit ${visit ?? "—"}`;
+    return price ? `${head} · visit list price ${price}` : head;
+  }, [hasSchedule, collect, context?.scheduleLabel]);
+
   if (!isOpen || !context) return null;
 
   const savedCardDescription =
     collect?.saved_card_label ??
     (hasStripeCustomer ? "Saved card on file" : "No saved card on file");
-
-  const jobLineSuffix = collect ? ` — balance due ${money(collect.job.balance_cents)}` : "";
-  const schedLineSuffix =
-    collect?.schedule != null ? ` — balance due ${money(collect.schedule.balance_cents)}` : "";
 
   return (
     <div
@@ -432,117 +434,84 @@ export function AdminCollectPaymentModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-5 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-xl border border-alloy-stone/25 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="admin-collect-payment-title" className="text-base font-semibold text-alloy-midnight mb-1">
-          Collect payment
+        <h3 id="admin-collect-payment-title" className="text-lg font-semibold text-alloy-midnight tracking-tight">
+          Collect for job
         </h3>
-        <p className="text-sm text-alloy-midnight/70 mb-4">
-          Charge the customer&apos;s job. Amount defaults to balance due for the selected target. All charges run through
-          Stripe; saved cards use your existing customer profile.
+        {context.jobLabel ? (
+          <p className="text-sm font-medium text-alloy-forge/90 mt-0.5">{context.jobLabel}</p>
+        ) : null}
+        <p className="text-sm text-alloy-midnight/65 mt-2 leading-relaxed">
+          Payment applies to this job&apos;s balance (posted allocations). Charges run through Stripe using the customer&apos;s
+          profile.
         </p>
 
-        {ctxLoading && <p className="text-sm text-alloy-midnight/60 mb-3">Loading job &amp; payment details…</p>}
+        {scheduleContextLine ? (
+          <p className="text-xs text-alloy-midnight/50 mt-3 leading-snug border-l-2 border-alloy-stone/40 pl-2.5">
+            {scheduleContextLine}
+          </p>
+        ) : null}
+
+        {ctxLoading && <p className="text-sm text-alloy-midnight/60 mt-4">Loading payment details…</p>}
         {ctxError && (
-          <div className="text-sm text-alloy-ember mb-3 rounded border border-alloy-ember/30 bg-alloy-ember/5 px-2 py-2">
+          <div className="text-sm text-alloy-ember mt-4 rounded-lg border border-alloy-ember/25 bg-alloy-ember/5 px-3 py-2">
             {ctxError}
           </div>
         )}
 
-        <div className="space-y-4 text-sm">
-          {(target === "job" || target === "schedule") && collect && (
-            <div className="rounded-md border border-alloy-stone/40 bg-alloy-stone/10 px-3 py-2 space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-alloy-forge/90">Financial summary</p>
-              {target === "job" && (
-                <>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Job total</span>
-                    <span className="font-medium">{money(collect.job.job_total_cents ?? collect.job.original_cents)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Paid (posted)</span>
-                    <span className="font-medium">{money(collect.job.paid_cents)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Outstanding</span>
-                    <span className="font-medium text-alloy-midnight">{money(collect.job.balance_cents)}</span>
-                  </div>
-                  {(collect.job.pending_payment_amount_cents ?? 0) > 0 ? (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-alloy-midnight/70">Pending (authorized)</span>
-                      <span className="font-medium">{money(collect.job.pending_payment_amount_cents)}</span>
-                    </div>
-                  ) : null}
-                </>
-              )}
-              {target === "schedule" && collect.schedule && (
-                <>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">This schedule (line amount)</span>
-                    <span className="font-medium">{money(collect.schedule.original_cents)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Paid on job (all payments)</span>
-                    <span className="font-medium">{money(collect.schedule.paid_cents)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-alloy-midnight/70">Suggested balance for this line</span>
-                    <span className="font-medium text-alloy-midnight">{money(collect.schedule.balance_cents)}</span>
-                  </div>
-                  <p className="text-[11px] text-alloy-midnight/55 pt-1">
-                    Payments are recorded on the parent job; the line amount is capped by remaining job balance when possible.
-                  </p>
-                </>
-              )}
+        <div className="space-y-5 text-sm mt-4">
+          {collect && (
+            <div className="rounded-lg border border-alloy-stone/35 bg-gradient-to-b from-alloy-stone/5 to-transparent px-4 py-3 space-y-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75">Job balance</p>
+              <div className="flex justify-between gap-3 text-sm">
+                <span className="text-alloy-midnight/65">Total</span>
+                <span className="font-medium tabular-nums">{money(collect.job.job_total_cents ?? collect.job.original_cents)}</span>
+              </div>
+              <div className="flex justify-between gap-3 text-sm">
+                <span className="text-alloy-midnight/65">Paid (posted)</span>
+                <span className="font-medium tabular-nums">{money(collect.job.paid_cents)}</span>
+              </div>
+              <div className="flex justify-between gap-3 text-sm pt-0.5 border-t border-alloy-stone/25">
+                <span className="text-alloy-midnight/80 font-medium">Outstanding</span>
+                <span className="font-semibold text-alloy-midnight tabular-nums">{money(collect.job.balance_cents)}</span>
+              </div>
+              {(collect.job.pending_payment_amount_cents ?? 0) > 0 ? (
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="text-alloy-midnight/65">Pending (authorized)</span>
+                  <span className="font-medium tabular-nums text-alloy-midnight/85">{money(collect.job.pending_payment_amount_cents)}</span>
+                </div>
+              ) : null}
             </div>
           )}
 
           <div>
-            <span className="block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-2">
-              Apply payment to
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75 mb-2">
+              Charge type
             </span>
-            <div className="space-y-2">
-              <label className="flex items-start gap-2 cursor-pointer">
+            <div className="space-y-2.5">
+              <label className="flex items-start gap-2.5 cursor-pointer rounded-md px-1 py-0.5 -mx-1 hover:bg-alloy-stone/10">
                 <input
                   type="radio"
                   name="pay-target"
                   checked={target === "job"}
                   onChange={() => onTargetChange("job")}
-                  className="mt-1"
+                  className="mt-0.5"
                 />
-                <span>
-                  This job
-                  {context.jobLabel ? ` (${context.jobLabel})` : ""}
-                  {jobLineSuffix}
+                <span className="leading-snug">
+                  Job balance{collect ? ` · outstanding ${money(collect.job.balance_cents)}` : ""}
                 </span>
               </label>
-              {hasSchedule && (
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="pay-target"
-                    checked={target === "schedule"}
-                    onChange={() => onTargetChange("schedule")}
-                    className="mt-1"
-                  />
-                  <span>
-                    This schedule
-                    {context.scheduleLabel ? ` (${context.scheduleLabel})` : ""}
-                    {schedLineSuffix}
-                    <span className="block text-xs text-alloy-midnight/55">Charges still post to the parent job.</span>
-                  </span>
-                </label>
-              )}
-              <label className="flex items-start gap-2 cursor-pointer">
+              <label className="flex items-start gap-2.5 cursor-pointer rounded-md px-1 py-0.5 -mx-1 hover:bg-alloy-stone/10">
                 <input
                   type="radio"
                   name="pay-target"
                   checked={target === "adhoc"}
                   onChange={() => onTargetChange("adhoc")}
-                  className="mt-1"
+                  className="mt-0.5"
                 />
-                <span>Ad hoc charge (enter amount; category required)</span>
+                <span className="leading-snug">Ad hoc amount (category required)</span>
               </label>
             </div>
           </div>
@@ -651,12 +620,12 @@ export function AdminCollectPaymentModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 mt-5">
+        <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-alloy-stone/20">
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50"
+            className="px-4 py-2 text-sm border border-alloy-stone/45 rounded-lg hover:bg-alloy-stone/15 disabled:opacity-50"
           >
             Close
           </button>
@@ -664,9 +633,9 @@ export function AdminCollectPaymentModal({
             type="button"
             onClick={() => void runPayment()}
             disabled={!canSubmit}
-            className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium bg-alloy-blue text-white rounded-lg hover:opacity-90 disabled:opacity-50 shadow-sm"
           >
-            {submitting ? "Processing…" : "Charge"}
+            {submitting ? "Processing…" : target === "adhoc" ? "Charge ad hoc" : "Charge job"}
           </button>
         </div>
       </div>

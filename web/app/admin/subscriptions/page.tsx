@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    displayLabelsFromDefinitions,
+    fetchEffectiveStatusDefinitions,
+    resolveDisplayFromLabelMap,
+} from "@/lib/admin/statusDefinitionsResolve";
 import SubscriptionsClient from "./SubscriptionsClient";
 import { addWeeks, addMonths } from "date-fns";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
@@ -17,7 +21,7 @@ export default async function AdminSubscriptionsPage() {
 
     const { data: subs, error } = await supabase
         .from("customer_subscriptions")
-        .select("id, created_at, customer_id, status, status_key, cadence, interval, start_date")
+        .select("id, created_at, customer_id, status, cadence, interval, start_date")
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -75,14 +79,10 @@ export default async function AdminSubscriptionsPage() {
             const next = cadence === "week" ? addWeeks(startDate, interval) : addMonths(startDate, interval);
             nextPreview = next.toISOString().slice(0, 10);
         }
-        const sk = (s as { status_key?: string | null }).status_key ?? null;
-        const _status_display =
-            sk != null && String(sk).trim() !== ""
-                ? (subStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
-                : null;
+        const st = (s as { status?: string | null }).status != null ? String((s as { status: string }).status).trim() : "";
+        const _status_display = resolveDisplayFromLabelMap(subStatusLabels, st || null, st || null);
         return {
             ...s,
-            status_key: sk,
             _status_display,
             _frequency_label: formatFrequencyLabel(cadence, interval),
             _customer_name: customerMap[s.customer_id] || null,

@@ -2072,7 +2072,7 @@ export default function AdminEntityDrawer() {
             });
         } else if (drawer.type === "subscriptions") {
             setFormData({
-                status_key: (data.status_key as string) ?? "",
+                status: (data.status as string) ?? "",
             });
         } else if (drawer.type === "documents") {
             setFormData({
@@ -2453,7 +2453,7 @@ export default function AdminEntityDrawer() {
         if (String((data as { id?: string }).id) !== String(drawer.id)) return;
 
         if (drawer.type === "subscriptions") {
-            setFormData((prev) => ({ ...prev, status_key: (data.status_key as string) ?? "" }));
+            setFormData((prev) => ({ ...prev, status: (data.status as string) ?? "" }));
             return;
         }
         if (drawer.type === "documents") {
@@ -3011,11 +3011,12 @@ export default function AdminEntityDrawer() {
                 if (payload.payout_override_value === "") payload.payout_override_value = null;
             }
             if (drawer.type === "subscriptions") {
-                const status_key = typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null;
+                const status =
+                    typeof formData.status === "string" && formData.status.trim() ? formData.status.trim() : null;
                 const res = await fetch(`/api/admin/subscriptions/${drawer.id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ status_key }),
+                    body: JSON.stringify({ status }),
                 });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json as { error?: string }).error || "Save failed");
@@ -3184,7 +3185,7 @@ export default function AdminEntityDrawer() {
                 }}
                 className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
             >
-                {paidInFullKnown ? "Add payment" : "Collect payment"}
+                {paidInFullKnown ? "Add payment" : "Collect for job"}
             </button>
             {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                 <button
@@ -3237,7 +3238,7 @@ export default function AdminEntityDrawer() {
                     }}
                     className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
                 >
-                    {schedulePaidInFullKnown ? "Add payment" : "Collect payment"}
+                    {schedulePaidInFullKnown ? "Add payment" : "Collect for job"}
                 </button>
                 {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                     <button
@@ -4709,6 +4710,15 @@ export default function AdminEntityDrawer() {
                 const { label, variant } = paymentRowStatusBadgeProps(overviewData as PaymentRowLike);
                 return <StatusBadge label={label} variant={variant} />;
             })()
+        ) : drawer.type === "subscriptions" && overviewData ? (
+            <StatusBadge
+                label={
+                    String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                    String((overviewData as { status?: string | null }).status ?? "").trim() ||
+                    "—"
+                }
+                variant="default"
+            />
         ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (overviewData as { status_key?: string }).status_key ? (
             <StatusBadge label={getStatusLabel((overviewData as { status_key: string }).status_key) ?? (overviewData as { status_key: string }).status_key} variant="default" />
         ) : null

@@ -1331,8 +1331,8 @@ export async function GET(
             } else {
                 out._customer_name = null;
             }
-            const subSk = (sub as { status_key?: string | null }).status_key ?? null;
-            out._status_display = await resolveStatusLabel(supabase, orgId, "subscriptions", subSk);
+            const subStatus = (sub as { status?: string | null }).status ?? null;
+            out._status_display = await resolveStatusLabel(supabase, orgId, "subscriptions", subStatus);
             const { data: scheds } = await supabase
                 .from("schedules")
                 .select("id, job_id, start_at, end_at, timezone, subscription_sequence, rescheduled_from_schedule_id, canceled_at, canceled_by, cancel_reason")

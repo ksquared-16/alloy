@@ -20,7 +20,7 @@ function formatCardBrand(brand: string | null | undefined): string {
 
 /**
  * GET: financial + customer card summary for admin Collect Payment modal.
- * ?schedule_id= optional — when set, must belong to this job.
+ * ?schedule_id= optional — when set, must belong to this job; returned only in `schedule_context` (informational).
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContext();
@@ -62,28 +62,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             ? balanceSnap.outstanding_balance_cents
             : Math.max(0, basisForBalance - paidCents);
 
-    let scheduleOriginalCents: number | null = null;
+    let schedule_context: { visit_start_at: string | null; list_price_cents: number | null } | null = null;
     if (scheduleId) {
         const { data: sched } = await supabase
             .from("schedules")
-            .select("id, job_id, price_cents")
+            .select("id, job_id, price_cents, start_at")
             .eq("id", scheduleId)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
-        const s = sched as { job_id?: string; price_cents?: number | null } | null;
+        const s = sched as { job_id?: string; price_cents?: number | null; start_at?: string | null } | null;
         if (!s || s.job_id !== jobId) {
             return NextResponse.json({ error: "Schedule not found for this job" }, { status: 400 });
         }
+        let listPrice: number | null = null;
         if (s.price_cents != null && Number.isFinite(Number(s.price_cents)) && Number(s.price_cents) > 0) {
-            scheduleOriginalCents = Math.max(0, Math.round(Number(s.price_cents)));
-        } else if (jobOriginalSafe != null) {
-            scheduleOriginalCents = jobOriginalSafe;
+            listPrice = Math.max(0, Math.round(Number(s.price_cents)));
         }
+        schedule_context = {
+            visit_start_at: s.start_at != null ? String(s.start_at) : null,
+            list_price_cents: listPrice,
+        };
     }
-
-    /** Default for this schedule line: cap by remaining job balance when we have both. */
-    const scheduleBalanceCents =
-        scheduleOriginalCents != null ? Math.max(0, Math.min(scheduleOriginalCents, jobBalanceCents)) : null;
 
     const customerId = j.customer_id;
     let customer: {
@@ -179,16 +178,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             balance_cents: jobBalanceCents,
             pending_payment_amount_cents: pendingAllocatedCents,
         },
-        schedule:
-            scheduleId && scheduleOriginalCents != null
-                ? {
-                      schedule_id: scheduleId,
-                      original_cents: scheduleOriginalCents,
-                      /** Posted allocations to this job (active + parent payment posted). */
-                      paid_cents: paidCents,
-                      balance_cents: scheduleBalanceCents ?? Math.max(0, scheduleOriginalCents - paidCents),
-                  }
-                : null,
+        schedule_context,
         customer,
         saved_card_label: savedCardLabel,
         /** Value kept as `job` for client typing; amounts use allocations + posted payments. */
