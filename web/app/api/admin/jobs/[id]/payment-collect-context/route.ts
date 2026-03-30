@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
-import { sumPaidAmountCents, type PaymentRowLike } from "@/lib/admin/jobPaymentSummary";
-import { fetchPaymentStatusKeyByIdMap } from "@/lib/admin/resolvePaymentStatusKeys";
+import { computeJobBalanceSnapshot, getJobPricingTotalCents } from "@/lib/admin/jobPaymentBalances";
 
 function formatCardBrand(brand: string | null | undefined): string {
     if (!brand || !String(brand).trim()) return "Card";
@@ -22,7 +20,7 @@ function formatCardBrand(brand: string | null | undefined): string {
 
 /**
  * GET: financial + customer card summary for admin Collect Payment modal.
- * ?schedule_id= optional — when set, must belong to this job.
+ * ?schedule_id= optional — when set, must belong to this job; returned only in `schedule_context` (informational).
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContext();
@@ -50,67 +48,41 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    const j = job as JobPriceInput & { id: string; customer_id: string | null };
-    const jobOriginalCents = computeJobDisplayTotalCents(j);
+    const j = job as { id: string; customer_id: string | null };
+    const balanceSnap = await computeJobBalanceSnapshot(supabase, ctx.orgId, jobId);
+    const jobTotalCents = balanceSnap.job_total_cents ?? (await getJobPricingTotalCents(supabase, ctx.orgId, jobId));
 
-    const { data: payRows } = await supabase
-        .from("payments")
-        .select("amount_cents, paid_at, status_key, payment_status_id")
-        .eq("job_id", jobId);
+    const paidCents = balanceSnap.paid_amount_cents;
+    const pendingAllocatedCents = balanceSnap.pending_payment_amount_cents;
 
-    const payStatusMap = await fetchPaymentStatusKeyByIdMap(
-        supabase,
-        (payRows ?? []).map((p) => (p as { payment_status_id?: string | null }).payment_status_id)
-    );
-    const rowsForSum: PaymentRowLike[] = (payRows ?? []).map((p) => {
-        const raw = p as {
-            amount_cents?: number;
-            paid_at?: string | null;
-            status_key?: string | null;
-            payment_status_id?: string | null;
-        };
-        const col =
-            raw.status_key != null && String(raw.status_key).trim() !== ""
-                ? String(raw.status_key).trim().toLowerCase()
-                : null;
-        const fk = raw.payment_status_id ? payStatusMap.get(raw.payment_status_id) : undefined;
-        const resolved = col ?? fk ?? null;
-        return {
-            amount_cents: raw.amount_cents,
-            paid_at: raw.paid_at ?? null,
-            status_key: resolved,
-            payment_statuses: resolved ? { key: resolved } : null,
-        };
-    });
-
-    const paidCents = sumPaidAmountCents(rowsForSum);
-
-    const jobOriginalSafe = jobOriginalCents != null && jobOriginalCents > 0 ? jobOriginalCents : null;
+    const jobOriginalSafe = jobTotalCents != null && jobTotalCents > 0 ? jobTotalCents : null;
     const basisForBalance = jobOriginalSafe ?? 0;
-    const jobBalanceCents = Math.max(0, basisForBalance - paidCents);
+    const jobBalanceCents =
+        balanceSnap.outstanding_balance_cents != null
+            ? balanceSnap.outstanding_balance_cents
+            : Math.max(0, basisForBalance - paidCents);
 
-    let scheduleOriginalCents: number | null = null;
+    let schedule_context: { visit_start_at: string | null; list_price_cents: number | null } | null = null;
     if (scheduleId) {
         const { data: sched } = await supabase
             .from("schedules")
-            .select("id, job_id, price_cents")
+            .select("id, job_id, price_cents, start_at")
             .eq("id", scheduleId)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
-        const s = sched as { job_id?: string; price_cents?: number | null } | null;
+        const s = sched as { job_id?: string; price_cents?: number | null; start_at?: string | null } | null;
         if (!s || s.job_id !== jobId) {
             return NextResponse.json({ error: "Schedule not found for this job" }, { status: 400 });
         }
+        let listPrice: number | null = null;
         if (s.price_cents != null && Number.isFinite(Number(s.price_cents)) && Number(s.price_cents) > 0) {
-            scheduleOriginalCents = Math.max(0, Math.round(Number(s.price_cents)));
-        } else if (jobOriginalSafe != null) {
-            scheduleOriginalCents = jobOriginalSafe;
+            listPrice = Math.max(0, Math.round(Number(s.price_cents)));
         }
+        schedule_context = {
+            visit_start_at: s.start_at != null ? String(s.start_at) : null,
+            list_price_cents: listPrice,
+        };
     }
-
-    /** Default for this schedule line: cap by remaining job balance when we have both. */
-    const scheduleBalanceCents =
-        scheduleOriginalCents != null ? Math.max(0, Math.min(scheduleOriginalCents, jobBalanceCents)) : null;
 
     const customerId = j.customer_id;
     let customer: {
@@ -199,23 +171,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json({
         job: {
+            /** @deprecated use job_total_cents — kept for collect-payment modal compatibility */
             original_cents: jobOriginalSafe,
+            job_total_cents: jobTotalCents,
             paid_cents: paidCents,
             balance_cents: jobBalanceCents,
+            pending_payment_amount_cents: pendingAllocatedCents,
         },
-        schedule:
-            scheduleId && scheduleOriginalCents != null
-                ? {
-                      schedule_id: scheduleId,
-                      original_cents: scheduleOriginalCents,
-                      /** Same job-level sum; payments are stored on the job today. */
-                      paid_cents: paidCents,
-                      balance_cents: scheduleBalanceCents ?? Math.max(0, scheduleOriginalCents - paidCents),
-                  }
-                : null,
+        schedule_context,
         customer,
         saved_card_label: savedCardLabel,
-        /** Payments without paid_at are not counted toward "already paid" (pending/failed). */
+        /** Value kept as `job` for client typing; amounts use allocations + posted payments. */
         paid_attribution: "job" as const,
     });
 }

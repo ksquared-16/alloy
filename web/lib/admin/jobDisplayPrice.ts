@@ -58,7 +58,11 @@ export function normalizeJobDiscountAmountToCents(
   return Math.min(g, n);
 }
 
-/** Final customer-facing job total in cents (after discount), or null if no basis. */
+/**
+ * Final customer-facing job total in cents (after discount), or null if no basis.
+ * @deprecated For payment balance / job_total_cents, use `getJobPricingTotalCents` from
+ *   `@/lib/admin/jobPaymentBalances` (line-item sum with jobs.total_cents fallback).
+ */
 export function computeJobDisplayTotalCents(row: JobPriceInput): number | null {
   const gross = computeJobGrossBasisCents(row);
   if (gross == null) return null;

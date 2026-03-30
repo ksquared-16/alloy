@@ -463,6 +463,8 @@ export default function EntityDrawerOverview({
         ? record._status_display
         : key === "status_key" && record._status_display != null
         ? record._status_display
+        : key === "status" && record._status_display != null && String(record._status_display).trim() !== ""
+          ? record._status_display
         : key === "assigned_vendor_id" && (record._vendor_name != null || record._assigned_vendor_name != null)
           ? String(record._vendor_name ?? record._assigned_vendor_name)
           : key === "work_unit_id" && record._work_unit_label != null

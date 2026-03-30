@@ -3,6 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Map payments.payment_status_id (UUID) → lowercase logical key (e.g. pending, paid, failed).
  * Rows often omit denormalized payments.status_key and sometimes paid_at; the FK is canonical.
+ *
+ * @deprecated For display and filtering, prefer `payments.status` (posted/pending/failed/voided).
+ *   Keep for decoding legacy rows only.
  */
 export async function fetchPaymentStatusKeyByIdMap(
     supabase: SupabaseClient,

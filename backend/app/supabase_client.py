@@ -17,6 +17,17 @@ if STRIPE_SECRET_KEY:
 
 logger = logging.getLogger("alloy-dispatcher")
 
+# PostgREST response / repr size cap for insert_payment diagnostics (full body up to this length).
+_PAYMENTS_INSERT_LOG_BODY_MAX = 4000
+
+
+def _trunc_log_body(text: str, max_len: int = _PAYMENTS_INSERT_LOG_BODY_MAX) -> str:
+    if not text:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len]}... [truncated, {len(text)} total chars]"
+
 
 def stripe_error_is_no_such_customer(err: BaseException) -> bool:
     """
@@ -1726,6 +1737,246 @@ def get_or_create_stripe_customer_for_customer(
 PAYMENT_STATUS_LOOKUP_COLUMN = "key"
 
 
+def _payment_iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _legacy_status_key_for_canonical(status: str) -> str:
+    s = (status or "").strip().lower()
+    if s == "posted":
+        return "paid"
+    return s or "pending"
+
+
+def get_payment_row_by_id(payment_id: str) -> Optional[Dict[str, Any]]:
+    """Load payments row fields needed for allocations and Stripe sync."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not payment_id:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payments"
+        params = {
+            "id": f"eq.{payment_id}",
+            "select": "id,org_id,job_id,amount_cents,customer_id,status,provider_payment_id,processor_transaction_id",
+            "limit": "1",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return None
+    except Exception as e:
+        logger.warning("get_payment_row_by_id: exception %s", e)
+        return None
+
+
+def sum_active_allocations_for_payment(payment_id: str, org_id: str) -> int:
+    total = 0
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return 0
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payment_allocations"
+        params = {
+            "payment_id": f"eq.{payment_id}",
+            "org_id": f"eq.{org_id}",
+            "status": "eq.active",
+            "select": "allocated_amount_cents",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        if not resp.ok:
+            return 0
+        data = resp.json()
+        if not isinstance(data, list):
+            return 0
+        for row in data:
+            if isinstance(row, dict):
+                v = row.get("allocated_amount_cents")
+                try:
+                    total += int(v)
+                except (TypeError, ValueError):
+                    pass
+        return total
+    except Exception as e:
+        logger.warning("sum_active_allocations_for_payment: exception %s", e)
+        return 0
+
+
+def _get_active_job_allocation(
+    payment_id: str, org_id: str, job_id: str
+) -> Optional[Dict[str, Any]]:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payment_allocations"
+        params = {
+            "payment_id": f"eq.{payment_id}",
+            "org_id": f"eq.{org_id}",
+            "target_entity_type": "eq.job",
+            "target_entity_id": f"eq.{job_id}",
+            "status": "eq.active",
+            "select": "id,allocated_amount_cents",
+            "limit": "5",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return None
+    except Exception as e:
+        logger.warning("_get_active_job_allocation: exception %s", e)
+        return None
+
+
+def ensure_job_payment_allocation(
+    payment_id: str,
+    org_id: str,
+    job_id: str,
+    requested_amount_cents: int,
+) -> bool:
+    """
+    V1: single job target, active allocation, idempotent upsert.
+    Enforces job org matches payment org and sum(active allocations) <= payment.amount_cents.
+    """
+    if not job_id or not org_id or not payment_id:
+        logger.warning("ensure_job_payment_allocation: missing job_id/org_id/payment_id")
+        return False
+    row = get_payment_row_by_id(payment_id)
+    if not row:
+        logger.warning("ensure_job_payment_allocation: payment not found id=%s", payment_id[:8] + "***")
+        return False
+    if str(row.get("org_id") or "") != str(org_id):
+        logger.error("ensure_job_payment_allocation: org mismatch payment vs arg")
+        return False
+    job = get_job_by_id(job_id)
+    if not job:
+        logger.warning("ensure_job_payment_allocation: job not found job_id=%s", job_id[:8] + "***")
+        return False
+    if str(job.get("org_id") or "") != str(org_id):
+        logger.error("ensure_job_payment_allocation: job org does not match payment org")
+        return False
+
+    try:
+        payment_amount = int(row.get("amount_cents") or 0)
+    except (TypeError, ValueError):
+        payment_amount = 0
+    if payment_amount < 1:
+        return False
+
+    try:
+        req = int(requested_amount_cents)
+    except (TypeError, ValueError):
+        req = payment_amount
+    req = max(0, min(req, payment_amount))
+
+    total_active = sum_active_allocations_for_payment(payment_id, org_id)
+    existing = _get_active_job_allocation(payment_id, org_id, job_id)
+    existing_cents = 0
+    if existing:
+        try:
+            existing_cents = int(existing.get("allocated_amount_cents") or 0)
+        except (TypeError, ValueError):
+            existing_cents = 0
+
+    other_active = total_active - existing_cents
+    room = payment_amount - other_active
+    alloc_amt = max(0, min(req, room))
+    if alloc_amt < 1:
+        logger.info(
+            "ensure_job_payment_allocation: skip alloc (no room) payment_id=%s room=%s",
+            payment_id[:8] + "***",
+            room,
+        )
+        return True
+
+    base_url = _get_base_url()
+    headers = _get_headers()
+    headers_write = {**headers, "Prefer": "return=minimal"}
+
+    if existing and existing.get("id"):
+        alloc_id = existing["id"]
+        patch_url = f"{base_url}/payment_allocations?id=eq.{alloc_id}"
+        try:
+            resp = requests.patch(
+                patch_url,
+                headers=headers_write,
+                json={"allocated_amount_cents": alloc_amt, "updated_at": _payment_iso_now()},
+                timeout=30,
+            )
+            if not resp.ok:
+                logger.error(
+                    "ensure_job_payment_allocation: PATCH allocation failed status=%s body=%s",
+                    resp.status_code,
+                    resp.text[:300],
+                )
+                return False
+            return True
+        except requests.RequestException as e:
+            logger.exception("ensure_job_payment_allocation: PATCH exception %s", e)
+            return False
+
+    insert_payload: Dict[str, Any] = {
+        "org_id": org_id,
+        "payment_id": payment_id,
+        "target_entity_type": "job",
+        "target_entity_id": job_id,
+        "allocated_amount_cents": alloc_amt,
+        "status": "active",
+        "allocation_type": "payment_application",
+        "metadata": {},
+    }
+    try:
+        resp = requests.post(f"{base_url}/payment_allocations", headers=headers_write, json=insert_payload, timeout=30)
+        if resp.ok:
+            return True
+        # Idempotent retry: row may have been created concurrently
+        if resp.status_code in (409, 400) or "23505" in (resp.text or ""):
+            retry = _get_active_job_allocation(payment_id, org_id, job_id)
+            if retry and retry.get("id"):
+                patch_url = f"{base_url}/payment_allocations?id=eq.{retry['id']}"
+                pr = requests.patch(
+                    patch_url,
+                    headers=headers_write,
+                    json={"allocated_amount_cents": alloc_amt, "updated_at": _payment_iso_now()},
+                    timeout=30,
+                )
+                return pr.ok
+        logger.error(
+            "ensure_job_payment_allocation: POST failed status=%s body=%s",
+            resp.status_code,
+            resp.text[:300],
+        )
+        return False
+    except requests.RequestException as e:
+        logger.exception("ensure_job_payment_allocation: POST exception %s", e)
+        return False
+
+
+def finalize_payment_allocation_for_job(payment_id: str) -> None:
+    """After payment is posted, ensure job allocation matches payment amount (V1 full job pay)."""
+    row = get_payment_row_by_id(payment_id)
+    if not row:
+        return
+    job_id = row.get("job_id")
+    org_id = row.get("org_id")
+    if not job_id or not org_id:
+        logger.warning("finalize_payment_allocation_for_job: missing job_id or org_id on payment")
+        return
+    try:
+        amt = int(row.get("amount_cents") or 0)
+    except (TypeError, ValueError):
+        amt = 0
+    ensure_job_payment_allocation(str(payment_id), str(org_id), str(job_id), amt)
+
+
 def get_job_by_id(job_id: str) -> Optional[Dict]:
     """Fetch a single job by id. Returns dict with id, customer_id, opportunity_id, org_id, estimated_total_cents, recurring_total_cents or None."""
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
@@ -1803,36 +2054,89 @@ def insert_payment(
 ) -> Optional[str]:
     """
     Insert a row into payments. Returns the new row id (UUID string) or None on error.
-    Caller must set provider, currency, etc. via payload; this helper sets minimal required fields.
+    Sets canonical fields (status=pending, processor, received_at, …) and creates a pending
+    payment_allocations row for the job (V1).
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.error(
+            "insert_payment: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY job_id=%s customer_id=%s org_id=%s payment_status_id=%s",
+            job_id,
+            customer_id,
+            org_id,
+            payment_status_id,
+        )
         return None
     base_url = _get_base_url()
     headers = _get_headers()
-    payload = {
+    received_at = _payment_iso_now()
+    payload: Dict[str, Any] = {
         "job_id": job_id,
         "customer_id": customer_id,
         "amount_cents": amount_cents,
         "currency": "USD",
         "payment_status_id": payment_status_id,
         "provider": "stripe",
+        "processor": "stripe",
+        "status": "pending",
+        "direction": "inbound",
+        "received_at": received_at,
+        "payment_method": "card",
+        "status_key": "pending",
     }
     if org_id:
         payload["org_id"] = org_id
     if metadata is not None:
         payload["metadata"] = metadata
+    payload_keys_log = sorted(payload.keys())
     try:
         url = f"{base_url}/payments"
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
         if not resp.ok:
-            logger.warning("insert_payment: POST failed status=%d body=%s", resp.status_code, resp.text[:200])
+            logger.warning(
+                "insert_payment: POST /payments not ok status=%s payload_keys=%s body=%s",
+                resp.status_code,
+                payload_keys_log,
+                _trunc_log_body(resp.text or ""),
+            )
             return None
         data = resp.json()
         if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-            return data[0].get("id")
+            pid = data[0].get("id")
+            if pid and org_id:
+                ensure_job_payment_allocation(str(pid), str(org_id), str(job_id), int(amount_cents))
+            if not pid:
+                logger.warning(
+                    "insert_payment: ok response but row missing id row_keys=%s row_repr_truncated=%s payload_keys=%s job_id=%s customer_id=%s org_id=%s payment_status_id=%s",
+                    sorted(data[0].keys()),
+                    _trunc_log_body(repr(data[0])),
+                    payload_keys_log,
+                    job_id,
+                    customer_id,
+                    org_id,
+                    payment_status_id,
+                )
+                return None
+            return pid
+        logger.warning(
+            "insert_payment: ok response unexpected shape type=%s repr_truncated=%s payload_keys=%s job_id=%s customer_id=%s org_id=%s payment_status_id=%s",
+            type(data).__name__,
+            _trunc_log_body(repr(data)),
+            payload_keys_log,
+            job_id,
+            customer_id,
+            org_id,
+            payment_status_id,
+        )
         return None
-    except Exception as e:
-        logger.warning("insert_payment: exception %s", e)
+    except Exception:
+        logger.exception(
+            "insert_payment: exception job_id=%s customer_id=%s org_id=%s payment_status_id=%s payload_keys=%s",
+            job_id,
+            customer_id,
+            org_id,
+            payment_status_id,
+            payload_keys_log,
+        )
         return None
 
 
@@ -1843,9 +2147,11 @@ def update_payment_by_id(
     payment_status_id: Optional[str] = None,
     paid_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    additional_fields: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, int]:
     """
     Update a payments row by id. All keyword-only args are optional.
+    additional_fields: merged into PATCH body (use for explicit JSON nulls, e.g. posted_at).
     Returns (success, rows_updated). On non-2xx response logs request/response and raises RuntimeError.
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
@@ -1853,7 +2159,7 @@ def update_payment_by_id(
         return (False, 0)
     base_url = _get_base_url()
     headers = _get_headers()
-    payload: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    payload: Dict[str, Any] = {"updated_at": _payment_iso_now()}
     if provider_payment_id is not None:
         payload["provider_payment_id"] = provider_payment_id
     if payment_status_id is not None:
@@ -1862,6 +2168,8 @@ def update_payment_by_id(
         payload["paid_at"] = paid_at
     if metadata is not None:
         payload["metadata"] = metadata
+    if additional_fields:
+        payload.update(additional_fields)
     url = f"{base_url}/payments"
     params = {"id": f"eq.{payment_id}"}
     try:
@@ -1895,7 +2203,7 @@ def get_payment_row_by_provider_payment_id(provider_payment_id: str) -> Optional
         url = f"{base_url}/payments"
         params = {
             "provider_payment_id": f"eq.{provider_payment_id}",
-            "select": "id,amount_cents,payment_status_id,provider_payment_id,paid_at,metadata",
+            "select": "id,org_id,job_id,amount_cents,payment_status_id,provider_payment_id,processor_transaction_id,paid_at,metadata,status",
             "limit": "1",
         }
         resp = requests.get(url, headers=headers, params=params, timeout=10)
@@ -1945,14 +2253,19 @@ def update_payment_by_provider_payment_id(
     payment_status_id: str,
     paid_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    *,
+    outcome: str = "succeeded",
 ) -> Tuple[bool, int]:
     """
-    Update a payments row by Stripe PaymentIntent id.
-    WHERE filter uses DB column: public.payments.provider_payment_id (PostgREST: provider_payment_id=eq.<id>).
-    payment_status_id must be the UUID (string) of payment_statuses.id.
-    Used by Stripe webhook handlers for payment_intent.succeeded / payment_failed / canceled.
-    Idempotent: safe to call multiple times for the same event.
-    Returns (success, rows_updated). On non-2xx response logs request/response and raises RuntimeError.
+    Update a payments row by Stripe PaymentIntent id (dual-written to provider_payment_id
+    and processor_transaction_id when applicable).
+
+    outcome:
+      - succeeded: status=posted, mirrors paid_at/posted_at, Stripe ids, then syncs job allocation.
+      - failed: status=failed, failed_at set, clears paid/posted/voided timestamps.
+      - canceled: status=voided, voided_at set, clears paid/posted/failed timestamps.
+
+    payment_status_id: FK to payment_statuses (legacy); keep in sync with outcome.
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         logger.error("update_payment_by_provider_payment_id: Supabase not configured")
@@ -1962,14 +2275,45 @@ def update_payment_by_provider_payment_id(
         return (False, 0)
     base_url = _get_base_url()
     headers = _get_headers()
-    payload = {
+    now = _payment_iso_now()
+    payload: Dict[str, Any] = {
         "payment_status_id": payment_status_id,
-        "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "updated_at": now,
     }
-    if paid_at is not None:
-        payload["paid_at"] = paid_at
     if metadata is not None:
         payload["metadata"] = metadata
+
+    oc = (outcome or "succeeded").strip().lower()
+    if oc == "succeeded":
+        ts = paid_at or now
+        payload["status"] = "posted"
+        payload["status_key"] = _legacy_status_key_for_canonical("posted")
+        payload["posted_at"] = ts
+        payload["paid_at"] = ts
+        payload["failed_at"] = None
+        payload["voided_at"] = None
+        payload["processor_transaction_id"] = provider_payment_id
+        payload["provider_payment_id"] = provider_payment_id
+        payload["provider"] = "stripe"
+        payload["processor"] = "stripe"
+    elif oc == "failed":
+        payload["status"] = "failed"
+        payload["status_key"] = "failed"
+        payload["failed_at"] = now
+        payload["posted_at"] = None
+        payload["paid_at"] = None
+        payload["voided_at"] = None
+    elif oc == "canceled":
+        payload["status"] = "voided"
+        payload["status_key"] = "voided"
+        payload["voided_at"] = now
+        payload["posted_at"] = None
+        payload["paid_at"] = None
+        payload["failed_at"] = None
+    else:
+        if paid_at is not None:
+            payload["paid_at"] = paid_at
+
     url = f"{base_url}/payments"
     # Filter by actual DB column: provider_payment_id (text)
     params = {"provider_payment_id": f"eq.{provider_payment_id}"}
@@ -1979,9 +2323,13 @@ def update_payment_by_provider_payment_id(
             data = resp.json()
             rows = len(data) if isinstance(data, list) else 0
             logger.info(
-                "update_payment_by_provider_payment_id: filter_column=provider_payment_id rows_updated=%s pi_id=%s",
-                rows, provider_payment_id[:14] + "***",
+                "update_payment_by_provider_payment_id: filter_column=provider_payment_id rows_updated=%s pi_id=%s outcome=%s",
+                rows, provider_payment_id[:14] + "***", oc,
             )
+            if oc == "succeeded" and rows > 0:
+                row = get_payment_row_by_provider_payment_id(provider_payment_id)
+                if row and row.get("id"):
+                    finalize_payment_allocation_for_job(str(row["id"]))
             return (True, rows)
         logger.error(
             "update_payment_by_provider_payment_id: PATCH non-2xx request url=%s params=%s response status=%d body=%s",

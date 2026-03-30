@@ -22,6 +22,7 @@ import { formatFrequencyLabel } from "@/lib/adminFormatters";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
+import { getPaymentAllocationRollup } from "@/lib/admin/jobPaymentBalances";
 
 /**
  * Drawer entity org model:
@@ -1330,8 +1331,8 @@ export async function GET(
             } else {
                 out._customer_name = null;
             }
-            const subSk = (sub as { status_key?: string | null }).status_key ?? null;
-            out._status_display = await resolveStatusLabel(supabase, orgId, "subscriptions", subSk);
+            const subStatus = (sub as { status?: string | null }).status ?? null;
+            out._status_display = await resolveStatusLabel(supabase, orgId, "subscriptions", subStatus);
             const { data: scheds } = await supabase
                 .from("schedules")
                 .select("id, job_id, start_at, end_at, timezone, subscription_sequence, rescheduled_from_schedule_id, canceled_at, canceled_by, cancel_reason")
@@ -1459,29 +1460,86 @@ export async function GET(
         if (type === "payments") {
             const { data, error } = await supabase.from("payments").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const payment = data as Record<string, unknown> & { customer_id?: string | null; job_id?: string | null; status_key?: string | null; payment_status_id?: string | null; provider_payment_id?: string | null };
+            const payment = data as Record<string, unknown> & {
+                customer_id?: string | null;
+                job_id?: string | null;
+                status_key?: string | null;
+                payment_status_id?: string | null;
+                provider_payment_id?: string | null;
+                processor_transaction_id?: string | null;
+                status?: string | null;
+                amount_cents?: unknown;
+            };
             const out: Record<string, unknown> = { ...payment };
-            out._payment_label = (payment.provider_payment_id && String(payment.provider_payment_id).trim()) ? payment.provider_payment_id : `Payment #${(payment.id as string).slice(-6)}`;
+            const procRef =
+                (payment.processor_transaction_id && String(payment.processor_transaction_id).trim()) ||
+                (payment.provider_payment_id && String(payment.provider_payment_id).trim());
+            out._payment_label = procRef || `Payment #${(payment.id as string).slice(-6)}`;
+
+            const amountCents =
+                typeof payment.amount_cents === "bigint"
+                    ? Number(payment.amount_cents)
+                    : Math.round(Number(payment.amount_cents) || 0);
+            const rollup = await getPaymentAllocationRollup(supabase, orgId, id, amountCents);
+            out._allocation_summary = {
+                allocated_amount_cents: rollup.allocated_amount_cents,
+                unallocated_amount_cents: rollup.unallocated_amount_cents,
+                allocation_state: rollup.allocation_state,
+            };
+
+            const { data: allocRows } = await supabase
+                .from("payment_allocations")
+                .select(
+                    "id, target_entity_type, target_entity_id, allocated_amount_cents, status, allocation_type, allocated_at, reversed_at"
+                )
+                .eq("org_id", orgId)
+                .eq("payment_id", id)
+                .order("allocated_at", { ascending: false });
+            out._allocations = allocRows ?? [];
+
             if (payment.customer_id) {
                 const { data: cust } = await supabase.from("customers").select("name").eq("id", payment.customer_id).eq("org_id", orgId).maybeSingle();
                 out._customer_name = (cust as { name?: string | null } | null)?.name ?? null;
             } else {
                 out._customer_name = null;
             }
-            if (payment.job_id) {
+
+            let primaryJobId: string | null = payment.job_id ?? null;
+            if (!primaryJobId && allocRows && allocRows.length > 0) {
+                const jobAlloc = (allocRows as { target_entity_type?: string; target_entity_id?: string }[]).find(
+                    (a) => String(a.target_entity_type ?? "").toLowerCase() === "job"
+                );
+                if (jobAlloc?.target_entity_id) primaryJobId = String(jobAlloc.target_entity_id);
+            }
+
+            if (primaryJobId) {
                 const { data: job } = await supabase
                     .from("jobs")
                     .select("id, title, service_key, job_number_for_customer")
-                    .eq("id", payment.job_id)
+                    .eq("id", primaryJobId)
                     .eq("org_id", orgId)
                     .maybeSingle();
                 const j = job as { title?: string | null; service_key?: string | null; job_number_for_customer?: string | null } | null;
-                out._job_label = j ? ((j.title && String(j.title).trim()) || (j.service_key && String(j.service_key).trim()) || (j.job_number_for_customer && String(j.job_number_for_customer).trim()) || `Job #${(payment.job_id as string).slice(-6)}`) : null;
+                out._job_label = j
+                    ? (j.title && String(j.title).trim()) ||
+                      (j.service_key && String(j.service_key).trim()) ||
+                      (j.job_number_for_customer && String(j.job_number_for_customer).trim()) ||
+                      `Job #${primaryJobId.slice(-6)}`
+                    : null;
             } else {
                 out._job_label = null;
             }
+
+            const canon = payment.status != null && String(payment.status).trim() !== "" ? String(payment.status).trim().toLowerCase() : "";
+            const canonicalLabels: Record<string, string> = {
+                pending: "Pending",
+                posted: "Posted",
+                failed: "Failed",
+                voided: "Voided",
+            };
             const paySk = payment.status_key ?? null;
-            out._status_display = await resolveStatusLabel(supabase, orgId, "payments", paySk);
+            const legacyDisplay = await resolveStatusLabel(supabase, orgId, "payments", paySk);
+            out._status_display = (canon && canonicalLabels[canon]) || legacyDisplay || canon || paySk || null;
             return NextResponse.json(out);
         }
         if (type === "customer_members") {

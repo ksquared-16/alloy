@@ -11,6 +11,8 @@ from typing import Dict, Any, List, Optional
 from .settings import (
     GHL_API_KEY,
     GHL_LOCATION_ID,
+    ghl_configured,
+    require_ghl_config,
     CUSTOM_FIELD_IDS,
     INTERNAL_TO_GHL_FIELD_MAPPING,
     CONTACTS_URL,
@@ -222,9 +224,9 @@ def fetch_contractors() -> List[Dict[str, Any]]:
         List of contact dicts with keys: id, name, phone, tags, contact_source
     """
     logger.warning("FETCH_CONTRACTORS_FINGERPRINT: backend/app/ghl_client.py v2026-01-05")
-    
-    if not GHL_LOCATION_ID:
-        logger.error("GHL_LOCATION_ID is not set; cannot fetch contractors.")
+
+    if not ghl_configured():
+        logger.error("GHL is not configured (GHL_API_KEY and GHL_LOCATION_ID required); cannot fetch contractors.")
         return []
 
     params = {
@@ -1418,7 +1420,8 @@ def upload_photo_to_ghl(file_content: bytes, filename: str, content_type: str = 
     if not GHL_LOCATION_ID:
         logger.error("upload_photo_to_ghl: GHL_LOCATION_ID not configured")
         return None
-    
+
+    require_ghl_config()
     url = f"{LC_BASE_URL}/medias/upload-file"
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",
@@ -1473,7 +1476,8 @@ def create_contact_note(contact_id: str, title: str, body: str) -> bool:
     if not GHL_LOCATION_ID:
         logger.error("create_contact_note: GHL_LOCATION_ID not configured")
         return False
-    
+
+    require_ghl_config()
     url = f"{LC_BASE_URL}/contacts/{contact_id}/notes"
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",

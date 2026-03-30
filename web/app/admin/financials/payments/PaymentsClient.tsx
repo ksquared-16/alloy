@@ -5,38 +5,22 @@ import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import DataTable from "@/components/admin/DataTable";
-import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
+import type { PaymentListItem } from "@/app/api/admin/payments/route";
+import { paymentRowStatusBadgeProps } from "@/lib/admin/jobPaymentSummary";
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { Filter } from "lucide-react";
 
-export type PaymentRow = {
-    id: string;
-    created_at: string;
-    updated_at?: string | null;
-    amount_cents: number;
-    provider_payment_id: string | null;
-    payment_status_id: string;
-    job_id: string | null;
-    customer_id: string | null;
-    status_key: string | null;
-    payment_statuses: { key: string; label?: string | null } | null;
-    paid_at?: string | null;
-    posted_to_ledger_at?: string | null;
-    provider?: string | null;
-    _payment_label?: string | null;
-    _customer_name?: string | null;
-    _job_label?: string | null;
-    _status_display?: string | null;
-    _amount_display?: number | null;
-    _posted_yes_no?: boolean;
-    _updated?: string | null;
-};
+export type PaymentRow = PaymentListItem;
 
+/** Quick filter: canonical + legacy keys that mean “money captured” (matches `GET` server-side filter tokens). */
 const STATUS_OPTIONS = [
     { value: "", label: "All" },
-    { value: "paid", label: "Paid" },
+    { value: "posted,paid,succeeded,complete,completed", label: "Succeeded / posted" },
     { value: "pending", label: "Pending" },
     { value: "failed", label: "Failed" },
+    { value: "voided", label: "Voided" },
 ];
 
 export default function PaymentsClient() {
@@ -112,6 +96,24 @@ export default function PaymentsClient() {
 
     const columns = useMemo(() => {
         return buildEntityTableColumns<PaymentRow>("payments", {
+            status: (_value: unknown, row: PaymentRow) => {
+                const hasCanon = row.status != null && String(row.status).trim() !== "";
+                const { label: canonLabel, variant } = paymentRowStatusBadgeProps(row);
+                if (hasCanon) {
+                    return <StatusBadge label={canonLabel} variant={variant} />;
+                }
+                const sk = row.status_key ?? null;
+                const fromDefs = sk ? statusKeyOptions.find((s) => s.status_key === sk)?.status_label?.trim() : null;
+                const label = fromDefs || row._status_display || canonLabel || "—";
+                return <StatusBadge label={label} variant={variant} />;
+            },
+            processor_transaction_id: (_value: unknown, row: PaymentRow) => {
+                const ref =
+                    (row.processor_transaction_id != null && String(row.processor_transaction_id).trim() !== ""
+                        ? String(row.processor_transaction_id).trim()
+                        : null) ?? (row.provider_payment_id?.trim() || null);
+                return <span className="font-mono text-xs">{ref ?? "—"}</span>;
+            },
             _customer_name: (_value: unknown, row: PaymentRow) => {
                 const name = row._customer_name ?? "—";
                 const id = row.customer_id;
@@ -146,15 +148,12 @@ export default function PaymentsClient() {
                     </button>
                 );
             },
-            _status_display: (_value: unknown, row: PaymentRow) => {
-                const sk = row.status_key ?? null;
-                const label =
-                    (sk && statusKeyOptions.find((s) => s.status_key === sk)?.status_label?.trim()) ||
-                    row._status_display ||
-                    sk ||
-                    "—";
-                return <StatusBadge label={label} variant={getStatusVariant(sk)} />;
-            },
+            allocation_state: (_value: unknown, row: PaymentRow) => (
+                <span className="text-xs text-alloy-midnight/80">
+                    {formatMoneyFromCents(row.allocated_amount_cents)} / {formatMoneyFromCents(row.unallocated_amount_cents)}{" "}
+                    <span className="text-alloy-muted">({row.allocation_state})</span>
+                </span>
+            ),
         });
     }, [openDrawer, statusKeyOptions]);
 
@@ -175,7 +174,7 @@ export default function PaymentsClient() {
                 <div className="absolute left-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-alloy-stone/40 bg-white p-4 shadow-lg">
                     <div className="space-y-3">
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Payment status</label>
+                            <label className="mb-1 block text-xs font-medium text-alloy-muted">Lifecycle status</label>
                             <select
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}

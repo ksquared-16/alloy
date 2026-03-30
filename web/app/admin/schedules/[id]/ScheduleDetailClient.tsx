@@ -8,19 +8,13 @@ import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import type { JobPaymentRow, JobPaymentsPaymentSummary } from "@/app/api/admin/jobs/[id]/payments/route";
+import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
 
 type ScheduleRecord = Record<string, unknown> & {
     _job_title?: string | null;
     _customer_name?: string | null;
     _assigned_vendor_name?: string | null;
-};
-
-type PaymentRow = {
-    id: string;
-    created_at: string;
-    amount_cents: number;
-    paid_at: string | null;
-    payment_status: string | null;
 };
 
 const TABS = ["overview", "related", "activity"] as const;
@@ -37,7 +31,9 @@ export default function ScheduleDetailClient({
 }) {
     const [schedule, setSchedule] = useState<ScheduleRecord>(initialSchedule);
     const [tab, setTab] = useState<TabKey>("overview");
-    const [payments, setPayments] = useState<PaymentRow[]>([]);
+    const [payments, setPayments] = useState<JobPaymentRow[]>([]);
+    const [paymentSummary, setPaymentSummary] = useState<JobPaymentsPaymentSummary | null>(null);
+    const [paymentsFetchError, setPaymentsFetchError] = useState<string | null>(null);
     const [loadingPayments, setLoadingPayments] = useState(false);
     const [rescheduleOpen, setRescheduleOpen] = useState(false);
     const [rescheduleForm, setRescheduleForm] = useState({ start_at: "", end_at: "", timezone: "America/Los_Angeles" });
@@ -59,9 +55,39 @@ export default function ScheduleDetailClient({
     useEffect(() => {
         if (tab !== "related" || !jobId) return;
         setLoadingPayments(true);
+        setPaymentsFetchError(null);
         fetch(`/api/admin/jobs/${jobId}/payments`)
-            .then((r) => r.json())
-            .then((d) => setPayments(d.payments ?? []))
+            .then(async (r) => {
+                const raw = await r.text();
+                let json: { payments?: JobPaymentRow[]; payment_summary?: JobPaymentsPaymentSummary; error?: string } = {};
+                try {
+                    json = raw ? (JSON.parse(raw) as typeof json) : {};
+                } catch {
+                    setPayments([]);
+                    setPaymentSummary(null);
+                    setPaymentsFetchError("Invalid response from payments API.");
+                    return;
+                }
+                if (!r.ok) {
+                    setPayments([]);
+                    setPaymentSummary(null);
+                    setPaymentsFetchError(json.error ?? `Payments unavailable (${r.status}).`);
+                    return;
+                }
+                if (json.payment_summary == null || typeof json.payment_summary !== "object") {
+                    setPayments([]);
+                    setPaymentSummary(null);
+                    setPaymentsFetchError("Payment summary missing from server response.");
+                    return;
+                }
+                setPayments(json.payments ?? []);
+                setPaymentSummary(json.payment_summary);
+            })
+            .catch(() => {
+                setPayments([]);
+                setPaymentSummary(null);
+                setPaymentsFetchError("Could not load payments.");
+            })
             .finally(() => setLoadingPayments(false));
     }, [tab, jobId]);
 
@@ -228,41 +254,107 @@ export default function ScheduleDetailClient({
                         </div>
                         <div>
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Payments (job)</h3>
-                            {loadingPayments ? (
+                            {!jobId ? (
+                                <p className="text-sm text-alloy-midnight/60">No job linked.</p>
+                            ) : loadingPayments ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                            ) : paymentsFetchError ? (
+                                <p className="text-sm text-red-600">{paymentsFetchError}</p>
+                            ) : !paymentSummary ? (
+                                <p className="text-sm text-alloy-midnight/60">Payment summary unavailable.</p>
                             ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                                <th className="pb-2 pr-4">Amount</th>
-                                                <th className="pb-2 pr-4">Status</th>
-                                                <th className="pb-2 pr-4">Paid at</th>
-                                                <th className="pb-2 pr-4">Created</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {payments.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={4} className="py-4 text-alloy-midnight/60">
-                                                        No payments.
-                                                    </td>
+                                <>
+                                    <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-3">
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-alloy-midnight/70">Job total</span>
+                                            <span className="font-medium">
+                                                {paymentSummary.job_total_cents != null
+                                                    ? formatMoneyFromCents(paymentSummary.job_total_cents)
+                                                    : paymentSummary.original_amount_cents != null
+                                                      ? formatMoneyFromCents(paymentSummary.original_amount_cents)
+                                                      : "—"}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-alloy-midnight/70">Paid</span>
+                                            <span className="font-medium">{formatMoneyFromCents(paymentSummary.paid_amount_cents)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-alloy-midnight/70">Outstanding</span>
+                                            <span className="font-medium">
+                                                {(paymentSummary.outstanding_balance_cents ?? paymentSummary.balance_due_cents) != null
+                                                    ? formatMoneyFromCents(
+                                                          (paymentSummary.outstanding_balance_cents ??
+                                                              paymentSummary.balance_due_cents) as number
+                                                      )
+                                                    : "—"}
+                                            </span>
+                                        </div>
+                                        {paymentSummary.pending_payment_amount_cents > 0 ? (
+                                            <div className="flex justify-between gap-2">
+                                                <span className="text-alloy-midnight/70">Pending</span>
+                                                <span className="font-medium">
+                                                    {formatMoneyFromCents(paymentSummary.pending_payment_amount_cents)}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
+                                                    <th className="pb-2 pr-4">Charge</th>
+                                                    <th className="pb-2 pr-4">Status</th>
+                                                    <th className="pb-2 pr-4">Received</th>
+                                                    <th className="pb-2 pr-4">Posted</th>
+                                                    <th className="pb-2 pr-4">Processor</th>
+                                                    <th className="pb-2 pr-4">Txn / ref</th>
+                                                    <th className="pb-2 pr-4">Allocated</th>
+                                                    <th className="pb-2 pr-4">Unallocated</th>
+                                                    <th className="pb-2 pr-4">Allocation</th>
                                                 </tr>
-                                            ) : (
-                                                payments.map((p) => (
-                                                    <tr key={p.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                                                        <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
-                                                        <td className="py-2 pr-4">
-                                                            <StatusBadge label={p.payment_status ?? "—"} variant="neutral" />
+                                            </thead>
+                                            <tbody>
+                                                {payments.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={9} className="py-4 text-alloy-midnight/60">
+                                                            No payments.
                                                         </td>
-                                                        <td className="py-2 pr-4">{p.paid_at ? formatDateTime(p.paid_at) : "—"}</td>
-                                                        <td className="py-2 pr-4">{formatDateTime(p.created_at)}</td>
                                                     </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                ) : (
+                                                    payments.map((p) => {
+                                                        const refId =
+                                                            (p.processor_transaction_id?.trim() || "") ||
+                                                            (p.provider_payment_id?.trim() || "");
+                                                        return (
+                                                            <tr key={p.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
+                                                                <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
+                                                                <td className="py-2 pr-4">
+                                                                    <StatusBadge label={paymentRowStatusDisplayLabel(p)} variant="neutral" />
+                                                                </td>
+                                                                <td className="py-2 pr-4">
+                                                                    {p.received_at ? formatDateTime(p.received_at) : "—"}
+                                                                </td>
+                                                                <td className="py-2 pr-4">
+                                                                    {p.posted_at
+                                                                        ? formatDateTime(p.posted_at)
+                                                                        : p.paid_at
+                                                                          ? formatDateTime(p.paid_at)
+                                                                          : "—"}
+                                                                </td>
+                                                                <td className="py-2 pr-4">{p.processor ?? "—"}</td>
+                                                                <td className="py-2 pr-4 font-mono text-xs">{refId || "—"}</td>
+                                                                <td className="py-2 pr-4">{formatMoneyFromCents(p.allocated_amount_cents)}</td>
+                                                                <td className="py-2 pr-4">{formatMoneyFromCents(p.unallocated_amount_cents)}</td>
+                                                                <td className="py-2 pr-4">{p.allocation_state ?? "—"}</td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>

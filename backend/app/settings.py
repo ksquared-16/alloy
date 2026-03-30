@@ -1,10 +1,17 @@
 """
 Application settings, environment variables, and constants.
 """
-import os
 import logging
+import os
 import threading
+from pathlib import Path
 from typing import Dict, Any, Optional
+
+from dotenv import load_dotenv
+
+# Backend root: .../backend/.env (not cwd — stable under uvicorn reload / any launch dir)
+env_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(env_path)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("alloy-dispatcher")
@@ -13,11 +20,27 @@ logger = logging.getLogger("alloy-dispatcher")
 GHL_API_KEY = os.getenv("GHL_API_KEY", "").strip()
 GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID", "").strip()
 
-# Fail fast if required env vars are missing
-if not GHL_API_KEY:
-    raise ValueError("GHL_API_KEY environment variable is required but not set")
-if not GHL_LOCATION_ID:
-    raise ValueError("GHL_LOCATION_ID environment variable is required but not set")
+
+def ghl_configured() -> bool:
+    """True when both GHL credentials are present (API calls may proceed)."""
+    return bool(GHL_API_KEY and GHL_LOCATION_ID)
+
+
+def require_ghl_config() -> None:
+    """
+    Enforce GHL env for code paths that call the LeadConnector API.
+    Do not call at import time — allows the app to boot for Stripe-only / health checks.
+    """
+    if not GHL_API_KEY:
+        raise ValueError("GHL_API_KEY is required for this operation but is not set")
+    if not GHL_LOCATION_ID:
+        raise ValueError("GHL_LOCATION_ID is required for this operation but is not set")
+
+
+if not ghl_configured():
+    logger.warning(
+        "GHL_API_KEY and/or GHL_LOCATION_ID not set. GoHighLevel API calls will fail until both are configured."
+    )
 
 # GHL Custom Field IDs (for contact custom fields)
 # These are loaded from environment variables. If not set, the field will be skipped.
@@ -126,13 +149,28 @@ STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 GHL_WORKFLOW_SECRET = os.getenv("GHL_WORKFLOW_SECRET", "").strip()
 
+
+def ghl_workflow_configured() -> bool:
+    """True when GHL workflow webhook secret is set (POST /stripe/charge can authenticate)."""
+    return bool(GHL_WORKFLOW_SECRET)
+
+
+def require_ghl_workflow_secret() -> None:
+    """Raise if workflow charge / GHL automation secret is missing. Call at runtime, not import time."""
+    if not GHL_WORKFLOW_SECRET:
+        raise ValueError("GHL_WORKFLOW_SECRET is required for this operation but is not set")
+
+
 # Fail fast if required Stripe env vars are missing
 if not STRIPE_SECRET_KEY:
     raise ValueError("STRIPE_SECRET_KEY environment variable is required but not set")
 if not STRIPE_WEBHOOK_SECRET:
     raise ValueError("STRIPE_WEBHOOK_SECRET environment variable is required but not set")
-if not GHL_WORKFLOW_SECRET:
-    raise ValueError("GHL_WORKFLOW_SECRET environment variable is required but not set")
+
+if not ghl_workflow_configured():
+    logger.warning(
+        "GHL_WORKFLOW_SECRET not set. POST /stripe/charge will return 503 until configured."
+    )
 
 # GHL Opportunity Stage IDs
 GHL_STAGE_ID_PAYMENT_SUCCEEDED = os.getenv("GHL_STAGE_ID_PAYMENT_SUCCEEDED", "").strip()

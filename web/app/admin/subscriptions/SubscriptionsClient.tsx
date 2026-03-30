@@ -13,7 +13,6 @@ interface SubscriptionRow {
     created_at: string;
     customer_id: string;
     status: string;
-    status_key?: string | null;
     _status_display?: string | null;
     cadence?: string;
     interval?: number;
@@ -53,9 +52,9 @@ export default function SubscriptionsClient({
             label: "Status",
             sortable: true,
             render: (_: unknown, row: SubscriptionRow) => {
-                const sk = row.status_key ?? null;
-                const label = row._status_display ?? sk ?? "—";
-                return <StatusBadge label={label} variant={getStatusVariant(sk)} />;
+                const keyForVariant = row.status?.trim() || null;
+                const label = row._status_display ?? keyForVariant ?? "—";
+                return <StatusBadge label={label} variant={getStatusVariant(keyForVariant)} />;
             },
         },
         { key: "created_at", label: "Created", sortable: true, render: (_: unknown, row: SubscriptionRow) => formatDateTime(row.created_at) },
