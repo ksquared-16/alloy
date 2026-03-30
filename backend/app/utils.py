@@ -7,13 +7,14 @@ import os
 import urllib.parse
 from typing import Optional
 
-from .settings import GHL_API_KEY, GHL_API_VERSION
+from .settings import GHL_API_KEY, GHL_API_VERSION, require_ghl_config
 
 logger = logging.getLogger("alloy-dispatcher")
 
 
 def _ghl_headers() -> dict[str, str]:
     """Build standard headers for GHL API requests."""
+    require_ghl_config()
     return {
         "Authorization": f"Bearer {GHL_API_KEY}",
         "Version": GHL_API_VERSION,

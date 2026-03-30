@@ -15,3 +15,8 @@ node_modules/
 # local-only
 .env.local
 .vercel/
+
+__pycache__/
+*.pyc
+backend/.env
+web/.env.local

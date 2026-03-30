@@ -1,6 +1,9 @@
 /**
  * Smoke-test helpers: real Supabase service-role client + job lifecycle.
  * Loads .env.local / .env from web/ so tests match local dev credentials.
+ *
+ * Related: payments + allocations smoke uses the same org/customer env vars — see
+ * `tests/payments/paymentsTask2.smoke.helpers.ts`.
  */
 
 import { config as loadEnv } from "dotenv";

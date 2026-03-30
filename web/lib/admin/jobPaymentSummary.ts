@@ -1,7 +1,12 @@
 /**
  * Job-level payment summary derived from payments rows (not job status).
- * Aligns with payment-collect-context: "paid" = paid_at set OR status key paid/succeeded.
+ *
+ * @deprecated For server-side job balance and paid totals, use `computeJobBalanceSnapshot` and
+ *   `getPostedAllocatedCentsForJob` from `@/lib/admin/jobPaymentBalances` instead of
+ *   `computeJobPaymentSummary` / `sumPaidAmountCents`.
  */
+
+import type { JobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
 
 export type JobPaymentStatusKey = "unpaid" | "partial" | "paid" | "failed";
 
@@ -10,10 +15,34 @@ export type PaymentRowLike = {
   paid_at?: string | null;
   status_key?: string | null;
   payment_statuses?: { key?: string | null } | null;
+  /** Canonical `payments.status` when present (posted/failed/pending/voided). */
+  status?: string | null;
 };
+
+/** Map allocation-based snapshot to the legacy aggregate status key for existing UI. */
+export function legacyPaymentStatusKeyFromSnapshot(snap: JobBalanceSnapshot): JobPaymentStatusKey {
+  const { job_total_cents, paid_amount_cents, outstanding_balance_cents } = snap;
+  if (!paid_amount_cents || paid_amount_cents <= 0) return "unpaid";
+  if (
+    job_total_cents != null &&
+    job_total_cents > 0 &&
+    outstanding_balance_cents != null &&
+    outstanding_balance_cents <= 0
+  ) {
+    return "paid";
+  }
+  if (outstanding_balance_cents != null && outstanding_balance_cents > 0) return "partial";
+  return "partial";
+}
 
 /** Canonical display key for a single payment row (avoids stale "pending" when paid_at is set). */
 export function effectivePaymentRowStatusKey(row: PaymentRowLike): "paid" | "failed" | "pending" | string {
+  const canon = row.status != null && String(row.status).trim() !== "" ? String(row.status).trim().toLowerCase() : "";
+  if (canon === "posted") return "paid";
+  if (canon === "failed") return "failed";
+  if (canon === "voided") return "voided";
+  if (canon === "pending") return "pending";
+
   const paidAt = row.paid_at != null && String(row.paid_at).trim() !== "";
   if (paidAt) return "paid";
   const fromNested = row.payment_statuses?.key != null ? String(row.payment_statuses.key).trim().toLowerCase() : "";
@@ -33,7 +62,10 @@ export function isPaymentRowFailed(row: PaymentRowLike): boolean {
   return effectivePaymentRowStatusKey(row) === "failed";
 }
 
-/** Sum amount_cents for rows that count as successfully paid. */
+/**
+ * Sum amount_cents for rows that count as successfully paid (legacy paid_at / status_key).
+ * @deprecated Use `getPostedAllocatedCentsForJob` for authoritative paid totals.
+ */
 export function sumPaidAmountCents(rows: PaymentRowLike[]): number {
   let t = 0;
   for (const row of rows) {
@@ -54,6 +86,7 @@ export type JobPaymentSummary = {
 
 /**
  * @param originalAmountCents — display total for the job (e.g. computeJobDisplayTotalCents), or null
+ * @deprecated Prefer `computeJobBalanceSnapshot` + `legacyPaymentStatusKeyFromSnapshot` on the server.
  */
 export function computeJobPaymentSummary(originalAmountCents: number | null, rows: PaymentRowLike[]): JobPaymentSummary {
   const paid_amount_cents = sumPaidAmountCents(rows);
