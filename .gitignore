@@ -20,3 +20,8 @@ __pycache__/
 *.pyc
 backend/.env
 web/.env.local
+
+supabase/.temp/
+supabase/.branches/
+supabase/.temp/
+supabase/.branches/
