@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 # Backend root: .../backend/.env (not cwd — stable under uvicorn reload / any launch dir)
 env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(env_path)
-print("STRIPE_SECRET_KEY loaded:", bool(os.getenv("STRIPE_SECRET_KEY")))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("alloy-dispatcher")
