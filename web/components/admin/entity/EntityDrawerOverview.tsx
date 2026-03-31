@@ -13,6 +13,7 @@ import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
 import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
 import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import {
   opportunityOverviewRelationshipReadLabel,
   opportunityOverviewStatusBadgeLabel,
@@ -256,7 +257,8 @@ function renderFieldEditNode(
   onEscape: (key: string) => void,
   statusDefs: StatusDefOption[] | undefined,
   disabled: boolean,
-  selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>
+  selectOptionsByFieldKey: Record<string, { value: string; label: string }[]> | undefined,
+  presentationEntityType: EntityPresentationType
 ): ReactNode {
   const key = field.key;
   const formVal = formData[key];
@@ -363,7 +365,22 @@ function renderFieldEditNode(
 
   if (hint === "status" && statusDefs && statusDefs.length > 0) {
     const valStr = String(value ?? "").trim();
+    const scheduleCanceled =
+      presentationEntityType === "schedules" &&
+      record.canceled_at != null &&
+      String(record.canceled_at).trim() !== "";
+    if (scheduleCanceled) {
+      const lab = statusDefs.find((s) => s.status_key === valStr)?.status_label ?? valStr;
+      return (
+        <span className="inline-flex w-full items-center rounded border border-admin-border bg-alloy-stone/5 px-2 py-1.5 text-sm text-alloy-midnight/80">
+          {lab || "—"}
+        </span>
+      );
+    }
     let options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    if (presentationEntityType === "schedules") {
+      options = options.filter((s) => !isScheduleCanceledStatusKey(s.status_key));
+    }
     if (valStr && !options.some((s) => s.status_key === valStr)) {
       options = [...options, { status_key: valStr, status_label: valStr, sort_order: 9999, is_active: true }];
     }
@@ -547,7 +564,8 @@ export default function EntityDrawerOverview({
           handleEscape,
           statusDefs,
           !canEdit,
-          selectOptionsByFieldKey
+          selectOptionsByFieldKey,
+          entityType
         )
       : undefined;
     return (

@@ -53,6 +53,7 @@ import {
     type JobPaymentsSummaryFromApi,
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -7649,6 +7650,12 @@ export default function AdminEntityDrawer() {
                                                 <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
                                                 {statusDefsLoading ? (
                                                     <p className="text-sm text-alloy-midnight/60">Loading…</p>
+                                                ) : (data.canceled_at as string) ? (
+                                                    <p className="text-sm text-alloy-midnight/80 py-1">
+                                                        {statusDefsForDrawer.find((s) => s.status_key === (data.status_key as string))?.status_label ??
+                                                            (data.status_key as string) ??
+                                                            "Canceled"}
+                                                    </p>
                                                 ) : (
                                                     <select
                                                         value={String(formData.status_key ?? "")}
@@ -7662,6 +7669,7 @@ export default function AdminEntityDrawer() {
                                                         <option value="">— None —</option>
                                                         {statusDefsForDrawer
                                                             .filter((s) => s.is_active)
+                                                            .filter((s) => !isScheduleCanceledStatusKey(s.status_key))
                                                             .sort((a, b) => a.sort_order - b.sort_order)
                                                             .map((s) => (
                                                                 <option key={s.status_key} value={s.status_key}>
