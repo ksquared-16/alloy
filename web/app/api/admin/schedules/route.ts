@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
@@ -176,6 +177,14 @@ export async function POST(request: NextRequest) {
   if (location_id) row.location_id = location_id;
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
   if (body_status_key) row.status_key = body_status_key;
+
+  if (!body_status_key) {
+    const defaultSched = await resolveScheduleStatusRowByKey(supabase, "scheduled");
+    if (defaultSched) {
+      row.schedule_status_id = defaultSched.id;
+      row.status_key = defaultSched.key;
+    }
+  }
 
   const durationMs = new Date(end_at).getTime() - new Date(start_at).getTime();
   const duration_minutes = Math.round(durationMs / 60000);
