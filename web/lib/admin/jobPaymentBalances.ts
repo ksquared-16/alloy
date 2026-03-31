@@ -24,6 +24,7 @@ export type JobChargeBalanceRow = {
     status: string;
     /** Sum of active allocations on this charge where parent payment is posted. */
     posted_allocated_cents: number;
+    /** amount_cents − posted_allocated_cents (may be negative for credit adjustments). */
     outstanding_cents: number;
     service_date: string | null;
     due_date: string | null;
@@ -44,7 +45,7 @@ export type JobBalanceSnapshot = {
     pending_payment_amount_cents: number;
     /** True when `job_total_cents` and paid/pending splits used non-void `charges` + charge allocations. */
     receivable_source?: "charges" | "legacy_job";
-    /** Non-void charges with posted_allocated_cents < amount_cents (charge read model only). */
+    /** Non-void charges where outstanding (amount − posted alloc) is non-zero (charge read model only). */
     open_charge_count?: number;
     /** Per-charge breakdown when in charge read model (non-void charges only). */
     charge_balance_rows?: JobChargeBalanceRow[];
@@ -269,7 +270,7 @@ function buildChargeBalanceRows(
     for (const c of nonVoidCharges) {
         const amount = toIntCents(c.amount_cents);
         const postedAlloc = postedByCharge.get(c.id) ?? 0;
-        const outstanding = Math.max(0, amount - postedAlloc);
+        const outstanding = amount - postedAlloc;
         const st = String(c.status ?? "").toLowerCase();
         const rawDesc = c.description != null && String(c.description).trim() ? String(c.description).trim() : null;
         rows.push({
@@ -283,7 +284,7 @@ function buildChargeBalanceRows(
             due_date: normalizeDateOnly(c.due_date),
             description: rawDesc ? truncateDesc(rawDesc, 120) : null,
         });
-        if (outstanding > 0) open += 1;
+        if (outstanding !== 0) open += 1;
     }
     return { rows, open_charge_count: open };
 }

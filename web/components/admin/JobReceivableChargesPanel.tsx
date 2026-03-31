@@ -17,6 +17,7 @@ function labelChargeType(t: string): string {
     if (k === "service") return "Service";
     if (k === "fee") return "Fee";
     if (k === "adjustment") return "Adjustment";
+    if (k === "cancellation_fee") return "Cancellation fee";
     return t ? t.charAt(0).toUpperCase() + t.slice(1) : "—";
 }
 
@@ -79,9 +80,9 @@ export function JobReceivableChargesPanel({
             <div className="flex items-baseline justify-between gap-2 mb-2">
                 <p className={`font-semibold text-alloy-midnight ${compact ? "text-xs" : "text-sm"}`}>Receivable charges</p>
                 {openChargeCount != null && openChargeCount > 0 ? (
-                    <span className="text-[11px] text-alloy-midnight/55 tabular-nums">{openChargeCount} open</span>
+                    <span className="text-[11px] text-alloy-midnight/55 tabular-nums">{openChargeCount} with balance</span>
                 ) : (
-                    <span className="text-[11px] text-alloy-midnight/45">All settled</span>
+                    <span className="text-[11px] text-alloy-midnight/45">No outstanding balance</span>
                 )}
             </div>
             <p className="text-[11px] text-alloy-midnight/55 mb-2 leading-snug">
@@ -109,7 +110,18 @@ export function JobReceivableChargesPanel({
                                         {shortId(r.charge_id)}
                                     </td>
                                 )}
-                                <td className={td}>{labelChargeType(r.charge_type)}</td>
+                                <td className={td}>
+                                    <span className="block font-medium text-alloy-midnight">{labelChargeType(r.charge_type)}</span>
+                                    {r.description ? (
+                                        <span
+                                            className={`block font-normal text-alloy-midnight/55 leading-snug mt-0.5 ${
+                                                compact ? "text-[10px]" : "text-[11px]"
+                                            }`}
+                                        >
+                                            {r.description}
+                                        </span>
+                                    ) : null}
+                                </td>
                                 <td className={td}>{labelChargeStatus(r.status)}</td>
                                 <td className={`${td} text-right tabular-nums font-medium`}>{formatMoneyFromCents(r.amount_cents)}</td>
                                 <td className={`${td} text-right tabular-nums`}>{formatMoneyFromCents(r.posted_allocated_cents)}</td>
@@ -122,15 +134,6 @@ export function JobReceivableChargesPanel({
                     </tbody>
                 </table>
             </div>
-            {!compact
-                ? rows
-                      .filter((r) => r.description)
-                      .map((r) => (
-                          <p key={`d-${r.charge_id}`} className="text-[11px] text-alloy-midnight/55 mt-1.5">
-                              <span className="font-mono text-alloy-midnight/45">{shortId(r.charge_id)}</span> — {r.description}
-                          </p>
-                      ))
-                : null}
         </div>
     );
 }

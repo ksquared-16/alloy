@@ -7,6 +7,7 @@ import {
   insertJobPricingSnapshot,
   nextSnapshotVersion,
 } from "@/lib/pricing/jobPricingCore";
+import { applyPricingDeltaAdjustmentCharge } from "@/lib/pricing/pricingChangeAdjustmentCharge";
 import { upsertPrimaryDraftServiceCharge } from "@/lib/pricing/upsertPrimaryDraftServiceCharge";
 
 export type InitializeJobPricingQuoteData = {
@@ -389,6 +390,16 @@ export async function initializeJobPricing(params: InitializeJobPricingParams): 
   }
   if (chargeRes.skipped && chargeRes.reason !== "zero_or_negative_total_cents") {
     console.log(`[initializeJobPricing] primary service charge skipped job_id=${jobId} reason=${chargeRes.reason}`);
+  }
+
+  const adjRes = await applyPricingDeltaAdjustmentCharge({
+    supabase,
+    orgId,
+    jobId,
+    newPricingTotalCents: totals.total_cents,
+  });
+  if (!adjRes.ok) {
+    return { ok: false, error: adjRes.error };
   }
 
   await emitJobPricingLockedSafe({
