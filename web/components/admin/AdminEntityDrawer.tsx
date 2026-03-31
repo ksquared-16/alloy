@@ -1715,9 +1715,21 @@ export default function AdminEntityDrawer() {
             return;
         }
         setStatusDefsLoading(true);
-        fetch(`/api/admin/status-definitions?entity_type=${encodeURIComponent(drawer.type)}`)
-            .then((r) => (r.ok ? r.json() : { statuses: [] }))
-            .then((json: { statuses?: StatusDefOption[] }) => setStatusDefsForDrawer(json.statuses ?? []))
+        /** Effective defs (org + industry merge) — matches resolveStatusLabel / list badges; avoids org-only legacy gaps. */
+        fetch(`/api/admin/status-options?entity_type=${encodeURIComponent(drawer.type)}`)
+            .then((r) => (r.ok ? r.json() : { options: [] }))
+            .then((json: { options?: { value: string; label: string }[] }) => {
+                const opts = json.options ?? [];
+                setStatusDefsForDrawer(
+                    opts.map((o, i) => ({
+                        status_key: o.value,
+                        status_label: o.label,
+                        sort_order: i,
+                        is_active: true,
+                        is_system: false,
+                    }))
+                );
+            })
             .catch(() => setStatusDefsForDrawer([]))
             .finally(() => setStatusDefsLoading(false));
     }, [drawer.type, drawer.id]);

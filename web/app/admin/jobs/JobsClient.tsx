@@ -70,9 +70,15 @@ export default function JobsClient() {
   const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/admin/status-definitions?entity_type=jobs")
-      .then((r) => r.ok ? r.json() : { statuses: [] })
-      .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    fetch("/api/admin/status-options?entity_type=jobs")
+      .then((r) => (r.ok ? r.json() : { options: [] }))
+      .then((j: { options?: { value: string; label: string }[] }) =>
+        setStatusOptions(
+          (j.options ?? [])
+            .filter((o) => o.value)
+            .map((o) => ({ status_key: o.value, status_label: o.label }))
+        )
+      );
   }, []);
 
   useEffect(() => {
