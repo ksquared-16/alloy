@@ -7773,7 +7773,11 @@ export default function AdminEntityDrawer() {
                                                     <input value={scheduleCancelReason} onChange={(e) => setScheduleCancelReason(e.target.value)} placeholder="Reason (optional)" className="px-2 py-1.5 border rounded text-sm w-40" />
                                                     <button type="button" onClick={async () => {
                                                         try {
-                                                            const res = await fetch(`/api/admin/schedules/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canceled_at: new Date().toISOString(), canceled_by: "admin", cancel_reason: scheduleCancelReason || null }) });
+                                                            const res = await fetch(`/api/admin/schedules/${drawer.id}/cancel`, {
+                                                                method: "POST",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ cancel_reason: scheduleCancelReason || null }),
+                                                            });
                                                             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
                                                             setScheduleCancelReason("");
                                                             setScheduleCancelPrompt(false);

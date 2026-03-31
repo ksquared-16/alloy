@@ -7,30 +7,39 @@ function envInt(name: string, defaultVal: number): number {
     return Number.isFinite(n) ? n : defaultVal;
 }
 
-/** Cents to charge when cancellation policy applies (0 disables). */
+/** Cents to charge when the late-cancel window applies (0 disables all cancellation fees). */
 export function getCancellationFeeCents(): number {
     return Math.max(0, envInt("ALLOY_CANCELLATION_FEE_CENTS", 2500));
 }
 
 /**
- * Simple policy: `always` (default) or `within_hours` (fee only if visit start is within N hours, or in the past 1h).
+ * V1 business rule: fee only if the schedule is canceled while `start_at` is still in the future
+ * and the time until `start_at` is at most `windowHours` (default 24).
+ *
+ * No "always charge", no post-start window — only the simple late-cancel case.
  */
-export function shouldApplyCancellationFeePolicy(visitStartAtIso: string | null | undefined): boolean {
-    if (getCancellationFeeCents() <= 0) return false;
-    const policy = (process.env.ALLOY_CANCELLATION_FEE_POLICY || "always").trim().toLowerCase();
-    if (policy === "always") return true;
-    if (policy !== "within_hours") return true;
-
-    const windowH = Math.max(0, envInt("ALLOY_CANCELLATION_FEE_WITHIN_HOURS", 24));
+function isLateCancellationWithinWindow(
+    visitStartAtIso: string | null | undefined,
+    cancelTimeMs: number,
+    windowHours: number
+): boolean {
     if (!visitStartAtIso || !String(visitStartAtIso).trim()) return false;
-
     const startMs = Date.parse(String(visitStartAtIso));
     if (Number.isNaN(startMs)) return false;
-    const now = Date.now();
-    const hoursUntil = (startMs - now) / (1000 * 60 * 60);
-    if (hoursUntil >= 0 && hoursUntil <= windowH) return true;
-    if (hoursUntil < 0 && hoursUntil >= -1) return true;
-    return false;
+    if (Number.isNaN(cancelTimeMs)) return false;
+
+    const msUntilStart = startMs - cancelTimeMs;
+    if (msUntilStart <= 0) {
+        return false;
+    }
+    const hoursUntilStart = msUntilStart / (1000 * 60 * 60);
+    return hoursUntilStart <= windowHours;
+}
+
+/** Hours-before-start threshold; invalid or non-positive values fall back to 24. */
+function getCancellationFeeWindowHours(): number {
+    const w = envInt("ALLOY_CANCELLATION_FEE_WITHIN_HOURS", 24);
+    return w > 0 ? w : 24;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -43,7 +52,8 @@ export type CancellationFeeChargeResult =
     | { ok: false; error: string };
 
 /**
- * Idempotent: skips if a non-void cancellation_fee already exists for this schedule in metadata.
+ * Idempotent per schedule: if a non-void `cancellation_fee` charge already has
+ * `metadata.source_schedule_id` = this schedule, skip (no duplicate).
  */
 export async function maybeCreateCancellationFeeCharge(params: {
     supabase: SupabaseClient;
@@ -51,14 +61,19 @@ export async function maybeCreateCancellationFeeCharge(params: {
     jobId: string;
     scheduleId: string;
     visitStartAt: string | null | undefined;
+    /** Wall time of cancellation (use DB `canceled_at` from the cancel row when available). */
+    canceledAtIso: string;
 }): Promise<CancellationFeeChargeResult> {
     const { supabase, orgId, jobId, scheduleId } = params;
     const feeCents = getCancellationFeeCents();
     if (feeCents <= 0) {
         return { ok: true, skipped: true, reason: "fee_disabled" };
     }
-    if (!shouldApplyCancellationFeePolicy(params.visitStartAt)) {
-        return { ok: true, skipped: true, reason: "policy_not_met" };
+
+    const cancelMs = Date.parse(params.canceledAtIso);
+    const windowH = getCancellationFeeWindowHours();
+    if (!isLateCancellationWithinWindow(params.visitStartAt, cancelMs, windowH)) {
+        return { ok: true, skipped: true, reason: "outside_late_cancel_window" };
     }
 
     const { data: existing, error: exErr } = await supabase
