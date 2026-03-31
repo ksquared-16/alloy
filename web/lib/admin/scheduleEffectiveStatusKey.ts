@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 
 /** Resolve an active schedule_statuses row by canonical key (global table, no org). */
 export async function resolveScheduleStatusRowByKey(
@@ -46,4 +47,34 @@ export function effectiveScheduleStatusKey(
         return k && String(k).trim() ? String(k).trim() : null;
     }
     return null;
+}
+
+/**
+ * Server-side schedule status for admin detail pages — matches entity GET semantics:
+ * effective key from `status_key` or `schedule_status_id`, `_status_display` via status_definitions.
+ */
+export async function hydrateScheduleStatusForAdminDetail(
+    supabase: SupabaseClient,
+    orgId: string,
+    schedule: { status_key?: string | null; schedule_status_id?: string | null }
+): Promise<{ status_key: string | null; _status_display: string | null; _schedule_status_label: string | null }> {
+    const fid = schedule.schedule_status_id;
+    const keyByFk = new Map<string, string>();
+    let _schedule_status_label: string | null = null;
+    if (fid) {
+        const { data: sst } = await supabase.from("schedule_statuses").select("key, label").eq("id", fid).maybeSingle();
+        const row = sst as { key?: string | null; label?: string | null } | null;
+        if (row?.key && String(row.key).trim()) keyByFk.set(fid, String(row.key).trim());
+        if (row?.label && String(row.label).trim()) _schedule_status_label = String(row.label).trim();
+    }
+    const effective = effectiveScheduleStatusKey(
+        { status_key: schedule.status_key, schedule_status_id: schedule.schedule_status_id },
+        keyByFk
+    );
+    const _status_display = await resolveStatusLabel(supabase, orgId, "schedules", effective);
+    return {
+        status_key: effective,
+        _status_display,
+        _schedule_status_label,
+    };
 }

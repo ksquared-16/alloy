@@ -19,7 +19,7 @@ import {
     personDisplayName,
     formatScheduleDrawerHeaderTitle,
 } from "@/lib/adminFormatters";
-import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
+import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
     WORKFLOW_EVENT_TYPES,
@@ -4667,7 +4667,19 @@ export default function AdminEntityDrawer() {
 
     const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
-            <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+            <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge
+                    label={
+                        String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                        getStatusLabel((overviewData as { status_key?: string }).status_key) ||
+                        String((overviewData as { status_key?: string }).status_key ?? "").trim() ||
+                        "—"
+                    }
+                    variant={getStatusVariant((overviewData as { status_key?: string }).status_key)}
+                />
+                <span className="text-xs text-alloy-midnight/55 whitespace-nowrap">Payment</span>
+                <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+            </div>
         ) : drawer.type === "opportunities" &&
           (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
               (overviewData as { status_key?: string }).status_key) ? (

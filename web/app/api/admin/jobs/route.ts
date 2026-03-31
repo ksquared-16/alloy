@@ -6,6 +6,7 @@ import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
 import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { fetchJobStatusKeyByFk, effectiveJobStatusKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
@@ -110,6 +111,9 @@ export async function GET(request: NextRequest) {
     jobStatusLabelByKey = new Map();
   }
 
+  const jobStatusFkIds = jobs.map((j) => (j as { job_status_id?: string | null }).job_status_id);
+  const jobKeyByFk = await fetchJobStatusKeyByFk(supabase, jobStatusFkIds);
+
   const [custRes, vendorRes, locationRes, nextSchedulesRes] = await Promise.all([
     customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] },
     vendorIds.length
@@ -207,8 +211,11 @@ export async function GET(request: NextRequest) {
       (jr.service_key && String(jr.service_key).trim()) ||
       (jr.job_number_for_customer && String(jr.job_number_for_customer).trim()) ||
       (jr.id ? jr.id.slice(-6) : "—");
-    const sk = jr.status_key && String(jr.status_key).trim() ? String(jr.status_key).trim() : null;
-    const _status_display = sk ? (jobStatusLabelByKey.get(sk) ?? sk) : null;
+    const effectiveSk = effectiveJobStatusKey(
+      { status_key: jr.status_key, job_status_id: jr.job_status_id },
+      jobKeyByFk
+    );
+    const _status_display = effectiveSk ? (jobStatusLabelByKey.get(effectiveSk) ?? effectiveSk) : null;
     const _next_schedule = nextScheduleByJobId.get(jr.id) ?? null;
     const _vendor_name = jr.assigned_vendor_id ? vendorLabelById.get(jr.assigned_vendor_id) ?? null : null;
     const display_total_cents = computeJobDisplayTotalCents(jr);
@@ -216,6 +223,7 @@ export async function GET(request: NextRequest) {
     const _updated = jr.updated_at ?? jr.created_at ?? null;
     return {
       ...j,
+      status_key: effectiveSk,
       _customer_name: jr.customer_id ? customerMap.get(jr.customer_id) ?? null : null,
       _assigned_vendor_name: _vendor_name,
       _vendor_name,
