@@ -7773,7 +7773,11 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                     {!(data.canceled_at as string) && (
-                                        <div className="pt-2 border-t border-[#e6e8ec] flex flex-wrap gap-2">
+                                        <div className="pt-2 border-t border-[#e6e8ec] space-y-2">
+                                            <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl">
+                                                Cancelling records <code className="text-[10px] bg-alloy-stone/40 px-1 rounded">canceled_at</code> and fee rules on the server. Use this action—not workflow status—to cancel a visit.
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
                                             {!scheduleCancelPrompt ? (
                                                 <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded hover:bg-alloy-ember/10">Cancel {scheduleSingular.toLowerCase()}</button>
                                             ) : (
@@ -7790,12 +7794,14 @@ export default function AdminEntityDrawer() {
                                                             setScheduleCancelReason("");
                                                             setScheduleCancelPrompt(false);
                                                             refetch(); router.refresh();
+                                                            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: drawer.id } }));
                                                         } catch (err) { setSaveError((err as Error).message); }
                                                     }} className="px-2 py-1.5 text-sm bg-alloy-ember/15 text-alloy-ember rounded hover:bg-alloy-ember/20">Confirm cancel</button>
                                                     <button type="button" onClick={() => { setScheduleCancelPrompt(false); setScheduleCancelReason(""); }} className="text-sm text-alloy-midnight/60">Back</button>
                                                 </div>
                                             )}
                                             <button type="button" onClick={() => setScheduleRescheduleForm(scheduleRescheduleForm ? null : { start_at: (data.start_at as string) ? new Date(data.start_at as string).toISOString().slice(0, 16) : "", end_at: (data.end_at as string) ? new Date(data.end_at as string).toISOString().slice(0, 16) : "", copy_assignment: !!(data._assignment as { id?: string }) })} className="px-2 py-1.5 text-sm border border-alloy-blue text-alloy-blue rounded hover:bg-alloy-stone/10">Reschedule</button>
+                                            </div>
                                         </div>
                                     )}
                                     {scheduleRescheduleForm && (
