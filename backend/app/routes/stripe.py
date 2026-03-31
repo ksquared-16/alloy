@@ -47,7 +47,6 @@ from ..supabase_client import (
     insert_payment,
     update_payment_by_id,
     get_payment_row_by_provider_payment_id,
-    finalize_payment_allocation_for_job,
     _payment_iso_now,
 )
 
@@ -405,6 +404,7 @@ async def admin_payments_run(
                 ledger_payment_id,
                 payment_status_id=paid_uuid,
                 paid_at=paid_at,
+                finalize_job_allocation=True,
                 additional_fields={
                     "status": "posted",
                     "status_key": "paid",
@@ -418,9 +418,8 @@ async def admin_payments_run(
                     "processor": "stripe",
                 },
             )
-            if not ok or n < 1:
-                raise HTTPException(status_code=500, detail="Payment update failed: could not set paid status (0 rows updated)")
-            finalize_payment_allocation_for_job(ledger_payment_id)
+            if not ok:
+                raise HTTPException(status_code=500, detail="Payment update failed: could not set paid status")
         except RuntimeError as e:
             raise HTTPException(status_code=500, detail="Payment update failed: %s" % e)
         out: Dict[str, Any] = {
@@ -1305,32 +1304,42 @@ def _dispatch_verified_stripe_webhook_event(event: Dict[str, Any]) -> None:
                 if ok and rows > 0:
                     logger.info("stripe_webhook: updated payment paid by provider_payment_id event_id=%s pi_id=%s rows=%s", event_id, pi_id[:12] + "***", rows)
                 elif payment_id_meta:
-                    try:
-                        ok2, n2 = update_payment_by_id(
-                            payment_id_meta,
-                            payment_status_id=paid_status_uuid,
-                            paid_at=paid_at,
-                            additional_fields={
-                                "status": "posted",
-                                "status_key": "paid",
-                                "posted_at": paid_at,
-                                "paid_at": paid_at,
-                                "failed_at": None,
-                                "voided_at": None,
-                                "processor_transaction_id": pi_id,
-                                "provider_payment_id": pi_id,
-                                "provider": "stripe",
-                                "processor": "stripe",
-                            },
-                        )
-                        if ok2 and n2 > 0:
-                            finalize_payment_allocation_for_job(payment_id_meta)
-                        logger.info(
-                            "stripe_webhook: fallback update by payment_id (metadata) event_id=%s payment_id=%s success=%s rows=%s",
-                            event_id, payment_id_meta[:8] + "***", ok2, n2,
-                        )
-                    except RuntimeError as e:
-                        logger.exception("stripe_webhook: fallback update_payment_by_id failed event_id=%s payment_id=%s: %s", event_id, payment_id_meta[:8] + "***", e)
+                    skip_metadata_fallback = False
+                    if ok and rows == 0 and pi_id:
+                        row_chk = get_payment_row_by_provider_payment_id(pi_id)
+                        if row_chk and str(row_chk.get("status") or "").lower() == "posted":
+                            skip_metadata_fallback = True
+                            logger.info(
+                                "stripe_webhook: skip metadata.payment_id fallback; row posted after provider_payment_id PATCH "
+                                "(empty representation) event_id=%s",
+                                event_id,
+                            )
+                    if not skip_metadata_fallback:
+                        try:
+                            ok2, n2 = update_payment_by_id(
+                                payment_id_meta,
+                                payment_status_id=paid_status_uuid,
+                                paid_at=paid_at,
+                                finalize_job_allocation=True,
+                                additional_fields={
+                                    "status": "posted",
+                                    "status_key": "paid",
+                                    "posted_at": paid_at,
+                                    "paid_at": paid_at,
+                                    "failed_at": None,
+                                    "voided_at": None,
+                                    "processor_transaction_id": pi_id,
+                                    "provider_payment_id": pi_id,
+                                    "provider": "stripe",
+                                    "processor": "stripe",
+                                },
+                            )
+                            logger.info(
+                                "stripe_webhook: fallback update by payment_id (metadata) event_id=%s payment_id=%s success=%s rows=%s",
+                                event_id, payment_id_meta[:8] + "***", ok2, n2,
+                            )
+                        except RuntimeError as e:
+                            logger.exception("stripe_webhook: fallback update_payment_by_id failed event_id=%s payment_id=%s: %s", event_id, payment_id_meta[:8] + "***", e)
                 else:
                     logger.warning("stripe_webhook: could not update payment (0 rows by provider_payment_id, no metadata.payment_id) event_id=%s pi_id=%s", event_id, pi_id[:12] + "***")
 
