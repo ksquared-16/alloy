@@ -109,22 +109,54 @@ export async function GET(request: NextRequest) {
     }
     const rollups = await batchPaymentAllocationRollups(supabase, ctx.orgId, listIds, amountById);
 
-    const { data: allocJobRows } =
+    const { data: allocRows } =
         listIds.length > 0
             ? await supabase
                   .from("payment_allocations")
-                  .select("payment_id, target_entity_id")
+                  .select("payment_id, target_entity_id, target_entity_type, charge_id")
                   .eq("org_id", ctx.orgId)
-                  .eq("target_entity_type", "job")
                   .eq("status", "active")
                   .in("payment_id", listIds)
-            : { data: [] as { payment_id: string; target_entity_id: string }[] };
+            : { data: [] as { payment_id: string; target_entity_id: string; target_entity_type: string; charge_id: string | null }[] };
+
+    const chargeIdsForJobLookup = [
+        ...new Set(
+            (allocRows ?? [])
+                .map((r) => (r as { charge_id?: string | null }).charge_id)
+                .filter((x): x is string => typeof x === "string" && x.length > 0)
+        ),
+    ];
+
+    const { data: chargeJobRows } =
+        chargeIdsForJobLookup.length > 0
+            ? await supabase
+                  .from("charges")
+                  .select("id, job_id")
+                  .eq("org_id", ctx.orgId)
+                  .in("id", chargeIdsForJobLookup)
+            : { data: [] as { id: string; job_id: string }[] };
+
+    const jobIdByChargeId = new Map<string, string>();
+    for (const c of chargeJobRows ?? []) {
+        const row = c as { id: string; job_id: string };
+        if (row.id && row.job_id) jobIdByChargeId.set(row.id, row.job_id);
+    }
 
     const jobIdFromAllocation = new Map<string, string>();
-    for (const r of allocJobRows ?? []) {
+    for (const r of allocRows ?? []) {
         const pid = (r as { payment_id: string }).payment_id;
+        const ttype = String((r as { target_entity_type?: string }).target_entity_type ?? "").toLowerCase();
+        if (ttype !== "job") continue;
         if (!jobIdFromAllocation.has(pid)) {
             jobIdFromAllocation.set(pid, (r as { target_entity_id: string }).target_entity_id);
+        }
+    }
+    for (const r of allocRows ?? []) {
+        const pid = (r as { payment_id: string }).payment_id;
+        if (jobIdFromAllocation.has(pid)) continue;
+        const cid = (r as { charge_id?: string | null }).charge_id;
+        if (cid && jobIdByChargeId.has(cid)) {
+            jobIdFromAllocation.set(pid, jobIdByChargeId.get(cid)!);
         }
     }
 

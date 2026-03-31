@@ -3,7 +3,8 @@
  *
  * @deprecated For server-side job balance and paid totals, use `computeJobBalanceSnapshot` and
  *   `getPostedAllocatedCentsForJob` from `@/lib/admin/jobPaymentBalances` instead of
- *   `computeJobPaymentSummary` / `sumPaidAmountCents`.
+ *   `computeJobPaymentSummary` / `sumPaidAmountCents`. When the job has non-void `charges`, those
+ *   helpers use charge totals and `payment_allocations.charge_id` (plus legacy null-charge job rows).
  */
 
 import type { JobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
@@ -26,7 +27,10 @@ export type PaymentRowLike = {
   status?: string | null;
 };
 
-/** Map allocation-based snapshot to the legacy aggregate status key for existing UI. */
+/**
+ * Map allocation-based snapshot to the legacy aggregate status key for existing UI.
+ * `job_total_cents` / `outstanding_balance_cents` reflect charge receivables when `receivable_source === "charges"`.
+ */
 export function legacyPaymentStatusKeyFromSnapshot(snap: JobBalanceSnapshot): JobPaymentStatusKey {
   const { job_total_cents, paid_amount_cents, outstanding_balance_cents } = snap;
   if (!paid_amount_cents || paid_amount_cents <= 0) return "unpaid";
