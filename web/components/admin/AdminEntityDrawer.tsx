@@ -44,6 +44,7 @@ import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOver
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
+import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import {
     effectivePaymentRowStatusKey,
     jobPaymentStatusKeyLabel,
@@ -5979,7 +5980,9 @@ export default function AdminEntityDrawer() {
                             ) : (
                                 <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-4">
                                     <div className="flex justify-between gap-2">
-                                        <span className="text-alloy-midnight/70">Job total</span>
+                                        <span className="text-alloy-midnight/70">
+                                            {jobTotalSummaryLabel(jobPaymentSummaryFromApi.receivable_source)}
+                                        </span>
                                         <span className="font-medium">
                                             {jobPaymentSummaryFromApi.job_total_cents != null
                                                 ? formatMoneyFromCents(jobPaymentSummaryFromApi.job_total_cents)
@@ -6018,6 +6021,14 @@ export default function AdminEntityDrawer() {
                                         </span>
                                     </div>
                                 </div>
+                            )}
+                            {jobPaymentsFetchError ? null : !jobPaymentSummaryFromApi ? null : (
+                                <JobReceivableChargesPanel
+                                    receivableSource={jobPaymentSummaryFromApi.receivable_source}
+                                    chargeRows={jobPaymentSummaryFromApi.charge_balance_rows}
+                                    openChargeCount={jobPaymentSummaryFromApi.open_charge_count}
+                                    className="mb-4"
+                                />
                             )}
                             {jobPaymentsFetchError ? null : !jobPaymentSummaryFromApi ? null : jobPayments.length > 0 ? (
                                 <ul className="space-y-2">
@@ -6144,9 +6155,10 @@ export default function AdminEntityDrawer() {
                                                 </tbody>
                                             </table>
                                             <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
-                                                Billing model here: job-level payments (above) roll up all <span className="font-mono text-[11px]">payments</span>{" "}
-                                                rows; this table is per schedule with <span className="font-mono text-[11px]">schedule_completed</span> GL
-                                                entries when visits are completed and amounts post.
+                                                Billing model here: the payment summary above uses receivable <span className="font-mono text-[11px]">charges</span>{" "}
+                                                when present (see receivable charges list); otherwise priced job lines. Job-level{" "}
+                                                <span className="font-mono text-[11px]">payments</span> rows roll up below. This table is per schedule with{" "}
+                                                <span className="font-mono text-[11px]">schedule_completed</span> GL entries when visits complete.
                                             </p>
                                         </div>
                                     ) : null}

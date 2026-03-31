@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe, type Stripe, type StripeCardElement } from "@stripe/stripe-js";
 import { AD_HOC_CHARGE_TYPE_OPTIONS } from "@/lib/admin/adHocChargeTypes";
 import { adminPaymentRunFeedback } from "@/lib/admin/paymentRunFeedback";
+import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
+import type { JobChargeBalanceRow } from "@/lib/admin/jobPaymentBalances";
 
 export type AdminCollectPaymentModalContext = {
   jobId: string;
@@ -23,6 +25,9 @@ type CollectApiJob = {
   balance_cents: number;
   job_total_cents?: number | null;
   pending_payment_amount_cents?: number;
+  receivable_source?: "charges" | "legacy_job" | null;
+  open_charge_count?: number | null;
+  charge_balance_rows?: JobChargeBalanceRow[] | null;
 };
 
 /** Informational only when modal opened from a schedule row (V1 charges still allocate to the job). */
@@ -444,8 +449,9 @@ export function AdminCollectPaymentModal({
           <p className="text-sm font-medium text-alloy-forge/90 mt-0.5">{context.jobLabel}</p>
         ) : null}
         <p className="text-sm text-alloy-midnight/65 mt-2 leading-relaxed">
-          Payment applies to this job&apos;s balance (posted allocations). Charges run through Stripe using the customer&apos;s
-          profile.
+          {collect?.job.receivable_source === "charges"
+            ? "Amounts follow receivable charges on this job (see below). Posted card payments allocate to those charges; Stripe runs on the customer profile."
+            : "Payment applies to this job&apos;s balance (posted allocations). Charges run through Stripe using the customer&apos;s profile."}
         </p>
 
         {scheduleContextLine ? (
@@ -466,7 +472,7 @@ export function AdminCollectPaymentModal({
             <div className="rounded-lg border border-alloy-stone/35 bg-gradient-to-b from-alloy-stone/5 to-transparent px-4 py-3 space-y-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75">Job balance</p>
               <div className="flex justify-between gap-3 text-sm">
-                <span className="text-alloy-midnight/65">Total</span>
+                <span className="text-alloy-midnight/65">{jobTotalSummaryLabel(collect.job.receivable_source ?? undefined)}</span>
                 <span className="font-medium tabular-nums">{money(collect.job.job_total_cents ?? collect.job.original_cents)}</span>
               </div>
               <div className="flex justify-between gap-3 text-sm">
@@ -485,6 +491,15 @@ export function AdminCollectPaymentModal({
               ) : null}
             </div>
           )}
+          {collect ? (
+            <JobReceivableChargesPanel
+              receivableSource={collect.job.receivable_source ?? undefined}
+              chargeRows={collect.job.charge_balance_rows}
+              openChargeCount={collect.job.open_charge_count ?? undefined}
+              compact
+              className="mt-3"
+            />
+          ) : null}
 
           <div>
             <span className="block text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75 mb-2">

@@ -18,11 +18,17 @@ export type PaymentAllocationRollup = {
 
 export type JobChargeBalanceRow = {
     charge_id: string;
+    /** service | fee | adjustment */
+    charge_type: string;
     amount_cents: number;
     status: string;
     /** Sum of active allocations on this charge where parent payment is posted. */
     posted_allocated_cents: number;
     outstanding_cents: number;
+    service_date: string | null;
+    due_date: string | null;
+    /** Short description for admin UI (may be truncated). */
+    description: string | null;
 };
 
 export type JobBalanceSnapshot = {
@@ -50,7 +56,15 @@ function toIntCents(v: unknown): number {
     return Math.round(n);
 }
 
-type ChargeRowMinimal = { id: string; amount_cents: unknown; status: unknown };
+type ChargeRowMinimal = {
+    id: string;
+    amount_cents: unknown;
+    status: unknown;
+    charge_type: unknown;
+    service_date: unknown;
+    due_date: unknown;
+    description: unknown;
+};
 
 /** Non-void service/fee/adjustment charges for the job (receivable total). */
 export async function fetchNonVoidChargesForJob(
@@ -60,7 +74,7 @@ export async function fetchNonVoidChargesForJob(
 ): Promise<ChargeRowMinimal[]> {
     const { data, error } = await supabase
         .from("charges")
-        .select("id, amount_cents, status")
+        .select("id, amount_cents, status, charge_type, service_date, due_date, description")
         .eq("org_id", orgId)
         .eq("job_id", jobId)
         .neq("status", "void");
@@ -233,6 +247,19 @@ async function sumPostedAllocatedByChargeId(
     return out;
 }
 
+function truncateDesc(s: string, max: number): string {
+    const t = s.trim();
+    if (t.length <= max) return t;
+    return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function normalizeDateOnly(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
 function buildChargeBalanceRows(
     nonVoidCharges: ChargeRowMinimal[],
     postedByCharge: Map<string, number>
@@ -244,12 +271,17 @@ function buildChargeBalanceRows(
         const postedAlloc = postedByCharge.get(c.id) ?? 0;
         const outstanding = Math.max(0, amount - postedAlloc);
         const st = String(c.status ?? "").toLowerCase();
+        const rawDesc = c.description != null && String(c.description).trim() ? String(c.description).trim() : null;
         rows.push({
             charge_id: c.id,
+            charge_type: String(c.charge_type ?? "service").toLowerCase(),
             amount_cents: amount,
             status: st,
             posted_allocated_cents: postedAlloc,
             outstanding_cents: outstanding,
+            service_date: normalizeDateOnly(c.service_date),
+            due_date: normalizeDateOnly(c.due_date),
+            description: rawDesc ? truncateDesc(rawDesc, 120) : null,
         });
         if (outstanding > 0) open += 1;
     }
