@@ -18,74 +18,123 @@ WHERE "c"."charge_type" = 'service'::"text"
   AND ("c"."metadata"->>'backfill_source') = 'job_level_receivable_migration';
 
 -- ---------------------------------------------------------------------------
--- 2) Approximate “eligible” jobs (financial signals; should align with migration intent)
+-- 2) Backfill-eligible jobs (matches Migration 2 “charge_amount_cents” rule only)
+--    A job counts here iff the migration would compute a positive receivable amount:
+--    same CASE as 20260331130000_charges_receivables_backfill.sql (lines → total_cents →
+--    amount_due → posted job allocations on posted payments → gross/estimated).
+--    Excludes: payments.job_id alone, amount_paid alone, allocations without a positive basis.
 -- ---------------------------------------------------------------------------
-SELECT COUNT(*) AS "eligible_job_approx_count"
-FROM "public"."jobs" AS "j"
-WHERE
-    EXISTS (
-        SELECT 1
-        FROM "public"."job_line_items" AS "jli"
-        WHERE "jli"."job_id" = "j"."id"
-          AND COALESCE("jli"."is_active", true)
-    )
-    OR COALESCE("j"."total_cents", 0) > 0
-    OR COALESCE("j"."amount_due_cents", 0) > 0
-    OR COALESCE("j"."amount_paid_cents", 0) > 0
-    OR COALESCE("j"."gross_price_cents", 0) > 0
-    OR COALESCE("j"."estimated_total_cents", 0) > 0
-    OR EXISTS (
-        SELECT 1
-        FROM "public"."payments" AS "p"
-        WHERE "p"."job_id" = "j"."id"
-    )
-    OR EXISTS (
-        SELECT 1
-        FROM "public"."payment_allocations" AS "pa"
-        WHERE "lower"(TRIM(BOTH FROM "pa"."target_entity_type")) = 'job'::"text"
-          AND "pa"."target_entity_id" = "j"."id"
-    );
+WITH "jl" AS (
+    SELECT
+        "jli"."job_id",
+        COUNT(*) FILTER (WHERE COALESCE("jli"."is_active", true)) AS "active_line_count",
+        COALESCE(
+            SUM("jli"."amount_cents") FILTER (WHERE COALESCE("jli"."is_active", true)),
+            0
+        )::bigint AS "line_sum_cents"
+    FROM "public"."job_line_items" AS "jli"
+    GROUP BY "jli"."job_id"
+),
+"posted_alloc" AS (
+    SELECT
+        "pa"."target_entity_id" AS "job_id",
+        SUM("pa"."allocated_amount_cents")::bigint AS "posted_alloc_cents"
+    FROM "public"."payment_allocations" AS "pa"
+    INNER JOIN "public"."payments" AS "p" ON "p"."id" = "pa"."payment_id" AND "p"."org_id" = "pa"."org_id"
+    WHERE "lower"(TRIM(BOTH FROM "pa"."target_entity_type")) = 'job'::"text"
+      AND "pa"."status" = 'active'::"text"
+      AND "p"."status" = 'posted'::"text"
+    GROUP BY "pa"."target_entity_id"
+),
+"with_charge_basis" AS (
+    SELECT
+        "j"."id" AS "job_id",
+        CASE
+            WHEN COALESCE("jl"."active_line_count", 0::bigint) > 0 THEN
+                CASE
+                    WHEN COALESCE("jl"."line_sum_cents", 0::bigint) > 0 THEN "jl"."line_sum_cents"
+                    WHEN COALESCE("pa"."posted_alloc_cents", 0::bigint) > 0 THEN "pa"."posted_alloc_cents"
+                    ELSE NULL::bigint
+                END
+            WHEN COALESCE("j"."total_cents", 0) > 0 THEN "j"."total_cents"::bigint
+            WHEN COALESCE("j"."amount_due_cents", 0) > 0 THEN "j"."amount_due_cents"::bigint
+            WHEN COALESCE("pa"."posted_alloc_cents", 0::bigint) > 0 THEN "pa"."posted_alloc_cents"
+            WHEN GREATEST(COALESCE("j"."gross_price_cents", 0), COALESCE("j"."estimated_total_cents", 0)) > 0 THEN
+                GREATEST(COALESCE("j"."gross_price_cents", 0), COALESCE("j"."estimated_total_cents", 0))::bigint
+            ELSE NULL::bigint
+        END AS "charge_amount_cents"
+    FROM "public"."jobs" AS "j"
+    LEFT JOIN "jl" ON "jl"."job_id" = "j"."id"
+    LEFT JOIN "posted_alloc" AS "pa" ON "pa"."job_id" = "j"."id"
+)
+SELECT COUNT(*) AS "backfill_eligible_job_count"
+FROM "with_charge_basis" AS "w"
+WHERE "w"."charge_amount_cents" IS NOT NULL
+  AND "w"."charge_amount_cents" > 0;
 
 -- ---------------------------------------------------------------------------
--- 3) Eligible jobs (approx) missing a v1 backfilled charge
+-- 3) Backfill-eligible jobs (positive charge_amount basis) missing a v1 backfilled charge
 -- ---------------------------------------------------------------------------
-SELECT "j"."id" AS "job_id", "j"."org_id", "j"."job_number_for_customer"
-FROM "public"."jobs" AS "j"
-WHERE
-    (
-        EXISTS (
-            SELECT 1
-            FROM "public"."job_line_items" AS "jli"
-            WHERE "jli"."job_id" = "j"."id"
-              AND COALESCE("jli"."is_active", true)
-        )
-        OR COALESCE("j"."total_cents", 0) > 0
-        OR COALESCE("j"."amount_due_cents", 0) > 0
-        OR COALESCE("j"."amount_paid_cents", 0) > 0
-        OR COALESCE("j"."gross_price_cents", 0) > 0
-        OR COALESCE("j"."estimated_total_cents", 0) > 0
-        OR EXISTS (
-            SELECT 1
-            FROM "public"."payments" AS "p"
-            WHERE "p"."job_id" = "j"."id"
-        )
-        OR EXISTS (
-            SELECT 1
-            FROM "public"."payment_allocations" AS "pa"
-            WHERE "lower"(TRIM(BOTH FROM "pa"."target_entity_type")) = 'job'::"text"
-              AND "pa"."target_entity_id" = "j"."id"
-        )
-    )
-    AND NOT EXISTS (
-        SELECT 1
-        FROM "public"."charges" AS "c"
-        WHERE "c"."job_id" = "j"."id"
-          AND "c"."charge_type" = 'service'::"text"
-          AND COALESCE(("c"."metadata"->>'backfilled')::boolean, false) = true
-          AND ("c"."metadata"->>'backfill_version') = '1'
-          AND ("c"."metadata"->>'backfill_source') = 'job_level_receivable_migration'
-    )
-ORDER BY "j"."created_at" DESC
+WITH "jl" AS (
+    SELECT
+        "jli"."job_id",
+        COUNT(*) FILTER (WHERE COALESCE("jli"."is_active", true)) AS "active_line_count",
+        COALESCE(
+            SUM("jli"."amount_cents") FILTER (WHERE COALESCE("jli"."is_active", true)),
+            0
+        )::bigint AS "line_sum_cents"
+    FROM "public"."job_line_items" AS "jli"
+    GROUP BY "jli"."job_id"
+),
+"posted_alloc" AS (
+    SELECT
+        "pa"."target_entity_id" AS "job_id",
+        SUM("pa"."allocated_amount_cents")::bigint AS "posted_alloc_cents"
+    FROM "public"."payment_allocations" AS "pa"
+    INNER JOIN "public"."payments" AS "p" ON "p"."id" = "pa"."payment_id" AND "p"."org_id" = "pa"."org_id"
+    WHERE "lower"(TRIM(BOTH FROM "pa"."target_entity_type")) = 'job'::"text"
+      AND "pa"."status" = 'active'::"text"
+      AND "p"."status" = 'posted'::"text"
+    GROUP BY "pa"."target_entity_id"
+),
+"with_charge_basis" AS (
+    SELECT
+        "j"."id" AS "job_id",
+        "j"."org_id",
+        "j"."job_number_for_customer",
+        "j"."created_at",
+        CASE
+            WHEN COALESCE("jl"."active_line_count", 0::bigint) > 0 THEN
+                CASE
+                    WHEN COALESCE("jl"."line_sum_cents", 0::bigint) > 0 THEN "jl"."line_sum_cents"
+                    WHEN COALESCE("pa"."posted_alloc_cents", 0::bigint) > 0 THEN "pa"."posted_alloc_cents"
+                    ELSE NULL::bigint
+                END
+            WHEN COALESCE("j"."total_cents", 0) > 0 THEN "j"."total_cents"::bigint
+            WHEN COALESCE("j"."amount_due_cents", 0) > 0 THEN "j"."amount_due_cents"::bigint
+            WHEN COALESCE("pa"."posted_alloc_cents", 0::bigint) > 0 THEN "pa"."posted_alloc_cents"
+            WHEN GREATEST(COALESCE("j"."gross_price_cents", 0), COALESCE("j"."estimated_total_cents", 0)) > 0 THEN
+                GREATEST(COALESCE("j"."gross_price_cents", 0), COALESCE("j"."estimated_total_cents", 0))::bigint
+            ELSE NULL::bigint
+        END AS "charge_amount_cents"
+    FROM "public"."jobs" AS "j"
+    LEFT JOIN "jl" ON "jl"."job_id" = "j"."id"
+    LEFT JOIN "posted_alloc" AS "pa" ON "pa"."job_id" = "j"."id"
+)
+SELECT "w"."job_id", "w"."org_id", "w"."job_number_for_customer", "w"."charge_amount_cents"
+FROM "with_charge_basis" AS "w"
+WHERE "w"."charge_amount_cents" IS NOT NULL
+  AND "w"."charge_amount_cents" > 0
+  AND NOT EXISTS (
+      SELECT 1
+      FROM "public"."charges" AS "c"
+      WHERE "c"."job_id" = "w"."job_id"
+        AND "c"."charge_type" = 'service'::"text"
+        AND COALESCE(("c"."metadata"->>'backfilled')::boolean, false) = true
+        AND ("c"."metadata"->>'backfill_version') = '1'
+        AND ("c"."metadata"->>'backfill_source') = 'job_level_receivable_migration'
+  )
+ORDER BY "w"."created_at" DESC
 LIMIT 200;
 
 -- ---------------------------------------------------------------------------
