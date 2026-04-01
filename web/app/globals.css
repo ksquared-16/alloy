@@ -105,7 +105,7 @@ body {
   75% { transform: translate(-1%, 1.5%); }
 }
 
-/* Drifting specs: stronger amplitude; timing unchanged */
+/* Drifting specs: modest amplitude over pre-lattice baseline (timing unchanged) */
 @keyframes public-spec-float {
   0%,
   100% {
@@ -113,7 +113,7 @@ body {
     opacity: 0.58;
   }
   50% {
-    transform: translate(24px, -26px);
+    transform: translate(22px, -24px);
     opacity: 0.92;
   }
 }
@@ -125,7 +125,7 @@ body {
     opacity: 0.54;
   }
   50% {
-    transform: translate(-20px, 23px);
+    transform: translate(-18px, 21px);
     opacity: 0.88;
   }
 }
@@ -133,11 +133,11 @@ body {
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(10px, 12px);
+    transform: translate(9px, 11px);
     opacity: 0.5;
   }
   50% {
-    transform: translate(-24px, -20px);
+    transform: translate(-22px, -19px);
     opacity: 0.86;
   }
 }
@@ -481,21 +481,21 @@ body {
     0 0 12px rgba(39, 63, 82, 0.05);
 }
 
-/* Bend Pine — dominant accent: high contrast, tight particle read */
+/* Bend Pine — modest bump vs pre-lattice; crisp particle, not haze */
 .public-ambient-spec-dot-pine {
-  background: rgba(39, 63, 82, 0.9);
+  background: rgba(39, 63, 82, 0.86);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.68),
-    0 0 4px rgba(39, 63, 82, 0.68),
-    0 0 9px rgba(0, 162, 131, 0.2);
+    0 0 0 1px rgba(255, 255, 255, 0.66),
+    0 0 4px rgba(39, 63, 82, 0.66),
+    0 0 10px rgba(0, 162, 131, 0.19);
 }
 
 .public-ambient-spec-dot-juniper {
-  background: rgba(0, 162, 131, 0.78);
+  background: rgba(0, 162, 131, 0.76);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.62),
-    0 0 4px rgba(0, 162, 131, 0.66),
-    0 0 9px rgba(0, 220, 185, 0.18);
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 0 4px rgba(0, 162, 131, 0.64),
+    0 0 10px rgba(0, 220, 185, 0.17);
 }
 
 /* Small: slightly larger than 3px so reads as intentional */
@@ -514,20 +514,20 @@ body {
 
 .public-ambient-spec-sm.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-sm {
-  background: rgba(39, 63, 82, 0.84);
+  background: rgba(39, 63, 82, 0.8);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.6),
-    0 0 3px rgba(39, 63, 82, 0.6),
-    0 0 8px rgba(0, 162, 131, 0.18);
+    0 0 0 0.5px rgba(255, 255, 255, 0.58),
+    0 0 3px rgba(39, 63, 82, 0.58),
+    0 0 8px rgba(0, 162, 131, 0.17);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-sm {
-  background: rgba(0, 162, 131, 0.72);
+  background: rgba(0, 162, 131, 0.7);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.56),
-    0 0 3px rgba(0, 162, 131, 0.6),
-    0 0 8px rgba(0, 220, 185, 0.16);
+    0 0 0 0.5px rgba(255, 255, 255, 0.54),
+    0 0 3px rgba(0, 162, 131, 0.58),
+    0 0 8px rgba(0, 220, 185, 0.15);
 }
 
 /* Large: anchor accents */
@@ -546,20 +546,20 @@ body {
 
 .public-ambient-spec-lg.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-lg {
-  background: rgba(39, 63, 82, 0.92);
+  background: rgba(39, 63, 82, 0.9);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.7),
-    0 0 5px rgba(39, 63, 82, 0.7),
-    0 0 11px rgba(0, 162, 131, 0.22);
+    0 0 0 1px rgba(255, 255, 255, 0.68),
+    0 0 5px rgba(39, 63, 82, 0.68),
+    0 0 12px rgba(0, 162, 131, 0.21);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-lg {
-  background: rgba(0, 162, 131, 0.82);
+  background: rgba(0, 162, 131, 0.8);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.62),
-    0 0 5px rgba(0, 162, 131, 0.64),
-    0 0 11px rgba(0, 220, 185, 0.2);
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 0 5px rgba(0, 162, 131, 0.62),
+    0 0 12px rgba(0, 220, 185, 0.19);
 }
 
 .public-ambient-spec:nth-child(3n + 1) {

@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Document-scoped ambient (rendered inside `public-site-atmosphere-layer` in ConditionalSiteLayout).
- * Specs: single staggered grid for even coverage; ~30% blue / 55% pine / 15% juniper; strong pine read.
+ * Document-scoped ambient (`public-site-atmosphere-layer` in ConditionalSiteLayout).
+ * Multi-band placement (grid + edges + upper band + mid/lower) — organic density, not a single lattice.
+ * ~40% blue / 50% pine / 10% juniper.
  */
 const CLOUDS = [
   { className: "home-atmosphere-cloud home-atmosphere-cloud-1" },
@@ -24,11 +25,10 @@ type SpecTone = "blue" | "juniper" | "pine";
 
 type SpecPoint = { left: string; top: string; tone: SpecTone; size?: SpecSize };
 
-/** 30% blue / 55% Bend Pine / 15% juniper — pine + juniper dominate vs blue */
 function toneFromMod(m: number): SpecTone {
-  const x = ((m % 100) + 100) % 100;
-  if (x < 30) return "blue";
-  if (x < 85) return "pine";
+  const x = ((m % 10) + 10) % 10;
+  if (x < 4) return "blue";
+  if (x < 9) return "pine";
   return "juniper";
 }
 
@@ -38,55 +38,82 @@ function toneClass(tone: SpecTone): string {
   return "";
 }
 
-/* 13×18 = 234 specs; margins keep field under header/footer chrome; odd-row stagger reduces grid aliasing */
-const SPEC_COLS = 13;
-const SPEC_ROWS = 18;
-const MARGIN_X = 3.5;
-const MARGIN_TOP = 12;
-const MARGIN_BOTTOM = 16;
+const GRID_ROWS = 7;
+const GRID_COLS = 12;
+const EDGE_N = 22;
+const UPPER_N = 22;
+const MID_LOWER_N = 20;
 
 function buildSpecPositions(): SpecPoint[] {
   const out: SpecPoint[] = [];
-  const innerW = 100 - 2 * MARGIN_X;
-  const innerH = 100 - MARGIN_TOP - MARGIN_BOTTOM;
-  const cellW = innerW / SPEC_COLS;
-  const cellH = innerH / SPEC_ROWS;
-  const stagger = cellW * 0.5;
-
-  for (let r = 0; r < SPEC_ROWS; r++) {
-    const rowShift = (r % 2) * stagger;
-    for (let c = 0; c < SPEC_COLS; c++) {
-      let l = MARGIN_X + cellW * (c + 0.5) + rowShift;
-      l = Math.min(100 - MARGIN_X - 0.35, Math.max(MARGIN_X + 0.35, l));
-      const t = MARGIN_TOP + cellH * (r + 0.5);
-      const tone = toneFromMod(r * 97 + c * 41 + (r % 3) * 17);
-      const size: SpecSize = (r + c) % 7 === 0 ? "lg" : (r + c) % 4 === 1 ? "sm" : "md";
-      out.push({ left: `${l.toFixed(2)}%`, top: `${t.toFixed(2)}%`, tone, size });
+  for (let row = 0; row < GRID_ROWS; row++) {
+    const t = 4 + row * 13;
+    for (let col = 0; col < GRID_COLS; col++) {
+      const l = 3 + (col * 91) / (GRID_COLS - 1);
+      const tone = toneFromMod(row * 17 + col * 3);
+      const size: SpecSize = (row + col) % 5 === 0 ? "lg" : (row + col) % 3 === 1 ? "sm" : "md";
+      out.push({ left: `${l}%`, top: `${t}%`, tone, size });
     }
+  }
+  for (let i = 0; i < EDGE_N; i++) {
+    const u = EDGE_N <= 1 ? 0 : i / (EDGE_N - 1);
+    const x = 3 + u * 94;
+    const y = 4 + u * 88;
+    out.push({ left: `${x}%`, top: "0.85%", tone: toneFromMod(i), size: "md" });
+    out.push({ left: `${x}%`, top: "99.15%", tone: toneFromMod(i + 3), size: "sm" });
+    out.push({ left: "0.85%", top: `${y}%`, tone: toneFromMod(i + 5), size: i % 5 === 0 ? "lg" : "md" });
+    out.push({ left: "99.15%", top: `${y}%`, tone: toneFromMod(i + 7), size: i % 5 === 1 ? "lg" : "md" });
+  }
+  for (let i = 0; i < UPPER_N; i++) {
+    const left = 2 + (i * 92) / (UPPER_N - 1 || 1);
+    const top = 8.5 + (i % 7) * 2.05;
+    out.push({
+      left: `${left}%`,
+      top: `${top}%`,
+      tone: toneFromMod(i + 11),
+      size: i % 6 === 0 ? "lg" : "md",
+    });
+  }
+  for (let i = 0; i < MID_LOWER_N; i++) {
+    const leftMid = 4 + ((i * 47) % 91);
+    const topMid = 43 + (i % 5) * 9;
+    out.push({
+      left: `${leftMid}%`,
+      top: `${topMid}%`,
+      tone: toneFromMod(i + 19),
+      size: i % 4 === 0 ? "lg" : "sm",
+    });
+    const leftLow = 5 + ((i * 53) % 89);
+    const topLow = 73 + (i % 4) * 6.2;
+    out.push({
+      left: `${leftLow}%`,
+      top: `${topLow}%`,
+      tone: toneFromMod(i + 29),
+      size: "md",
+    });
   }
   return out;
 }
 
 const SPEC_POSITIONS = buildSpecPositions();
 
-/** 16 hero specs — ~5 blue / ~9 pine / ~2 juniper, spread on card perimeter */
 const HERO_PERIMETER_SPECS: { left: string; top: string; tone: SpecTone; size?: SpecSize }[] = [
-  { left: "3%", top: "20%", tone: "pine", size: "lg" },
-  { left: "10%", top: "76%", tone: "pine", size: "md" },
-  { left: "50%", top: "5%", tone: "pine", size: "lg" },
-  { left: "92%", top: "52%", tone: "pine", size: "md" },
-  { left: "48%", top: "93%", tone: "pine", size: "lg" },
-  { left: "20%", top: "14%", tone: "blue", size: "sm" },
-  { left: "86%", top: "30%", tone: "blue", size: "md" },
-  { left: "36%", top: "86%", tone: "juniper", size: "sm" },
-  { left: "28%", top: "9%", tone: "pine", size: "sm" },
-  { left: "68%", top: "13%", tone: "blue", size: "md" },
-  { left: "12%", top: "46%", tone: "pine", size: "md" },
-  { left: "89%", top: "40%", tone: "blue", size: "sm" },
-  { left: "42%", top: "16%", tone: "pine", size: "lg" },
-  { left: "61%", top: "82%", tone: "blue", size: "md" },
-  { left: "24%", top: "56%", tone: "pine", size: "md" },
-  { left: "75%", top: "66%", tone: "juniper", size: "sm" },
+  { left: "2%", top: "22%", tone: "pine", size: "lg" },
+  { left: "8%", top: "78%", tone: "pine", size: "md" },
+  { left: "52%", top: "4%", tone: "pine", size: "lg" },
+  { left: "94%", top: "55%", tone: "pine", size: "md" },
+  { left: "50%", top: "96%", tone: "pine", size: "lg" },
+  { left: "18%", top: "12%", tone: "blue", size: "sm" },
+  { left: "88%", top: "28%", tone: "blue", size: "md" },
+  { left: "38%", top: "88%", tone: "juniper", size: "sm" },
+  { left: "30%", top: "7%", tone: "pine", size: "sm" },
+  { left: "71%", top: "11%", tone: "blue", size: "md" },
+  { left: "14%", top: "48%", tone: "pine", size: "md" },
+  { left: "91%", top: "42%", tone: "blue", size: "sm" },
+  { left: "44%", top: "18%", tone: "pine", size: "lg" },
+  { left: "63%", top: "84%", tone: "blue", size: "md" },
+  { left: "26%", top: "58%", tone: "blue", size: "md" },
+  { left: "77%", top: "68%", tone: "juniper", size: "sm" },
 ];
 
 export default function HomeAmbient() {
