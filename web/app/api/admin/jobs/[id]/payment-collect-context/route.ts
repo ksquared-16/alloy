@@ -62,7 +62,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             ? balanceSnap.outstanding_balance_cents
             : Math.max(0, basisForBalance - paidCents);
 
-    let schedule_context: { visit_start_at: string | null; list_price_cents: number | null } | null = null;
+    let schedule_context: {
+        visit_start_at: string | null;
+        list_price_cents: number | null;
+        /** Non-void charges on this job with schedule_id = this visit (for UI highlight). */
+        linked_charge_count: number;
+    } | null = null;
     if (scheduleId) {
         const { data: sched } = await supabase
             .from("schedules")
@@ -78,9 +83,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         if (s.price_cents != null && Number.isFinite(Number(s.price_cents)) && Number(s.price_cents) > 0) {
             listPrice = Math.max(0, Math.round(Number(s.price_cents)));
         }
+        const linked =
+            Array.isArray(balanceSnap.charge_balance_rows) && balanceSnap.charge_balance_rows.length > 0
+                ? balanceSnap.charge_balance_rows.filter((row) => row.schedule_id === scheduleId).length
+                : 0;
         schedule_context = {
             visit_start_at: s.start_at != null ? String(s.start_at) : null,
             list_price_cents: listPrice,
+            linked_charge_count: linked,
         };
     }
 
@@ -169,6 +179,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
               ? "Saved card on file"
               : null;
 
+    /** Always a string so the collect modal label can use strict `=== "charges"` (never JSON `null` / omitted). */
+    const receivableSourceForCollect: "charges" | "legacy_job" =
+        balanceSnap.receivable_source === "charges"
+            ? "charges"
+            : balanceSnap.receivable_source === "legacy_job"
+              ? "legacy_job"
+              : Array.isArray(balanceSnap.charge_balance_rows) && balanceSnap.charge_balance_rows.length > 0
+                ? "charges"
+                : "legacy_job";
+
     return NextResponse.json({
         job: {
             /** @deprecated use job_total_cents — kept for collect-payment modal compatibility */
@@ -177,6 +197,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             paid_cents: paidCents,
             balance_cents: jobBalanceCents,
             pending_payment_amount_cents: pendingAllocatedCents,
+            receivable_source: receivableSourceForCollect,
+            open_charge_count: balanceSnap.open_charge_count ?? null,
+            charge_balance_rows: balanceSnap.charge_balance_rows ?? null,
         },
         schedule_context,
         customer,

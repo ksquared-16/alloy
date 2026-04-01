@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { hydrateScheduleStatusForAdminDetail } from "@/lib/admin/scheduleEffectiveStatusKey";
 import ScheduleDetailClient from "./ScheduleDetailClient";
 
 export const dynamic = 'force-dynamic';
@@ -56,7 +57,17 @@ export default async function Page({
         }
     }
 
-    const initialSchedule = { ...s, _job_title, _customer_name, _assigned_vendor_name };
+    const statusHydration = await hydrateScheduleStatusForAdminDetail(supabase, ctx.orgId, {
+        status_key: s.status_key as string | null | undefined,
+        schedule_status_id: s.schedule_status_id as string | null | undefined,
+    });
+    const initialSchedule = {
+        ...s,
+        ...statusHydration,
+        _job_title,
+        _customer_name,
+        _assigned_vendor_name,
+    };
 
     return (
         <ScheduleDetailClient

@@ -6,6 +6,10 @@ import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/job
 
 const LIMIT = 25;
 
+/** Fields for schedule rows in Related tabs (workflow + cancellation audit). */
+const SCHEDULE_RELATED_LIST_SELECT =
+    "id, job_id, start_at, end_at, timezone, status_key, canceled_at, cancel_reason";
+
 const DOC_SELECT =
     "id, org_id, title, original_filename, doc_type, status, created_at, mime_type, bucket, storage_path, owner_contact_id, entity_type, entity_id";
 
@@ -64,11 +68,23 @@ export async function GET(
             const linkedCustomer = linkedCustomerRes.data;
             const linkedVendor = linkedVendorRes.data;
 
+            const contactJobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
+            const contactSchedulesRes =
+                contactJobIds.length > 0
+                    ? await supabase
+                          .from("schedules")
+                          .select(SCHEDULE_RELATED_LIST_SELECT)
+                          .in("job_id", contactJobIds)
+                          .order("start_at", { ascending: false })
+                          .limit(LIMIT)
+                    : { data: [] as Record<string, unknown>[] };
+
             return NextResponse.json({
                 linkedCustomer: linkedCustomer ?? null,
                 linkedVendor: linkedVendor ?? null,
                 opportunities: oppRes.data ?? [],
                 jobs: jobsRes.data ?? [],
+                schedules: contactSchedulesRes.data ?? [],
                 customer_subscriptions: subsRes.data ?? [],
                 customer_member_contacts: cmcRes.data ?? [],
                 vendor_contacts: vcRes.data ?? [],
@@ -129,8 +145,13 @@ export async function GET(
             });
             const jobIds = (jobsRes.data ?? []).map((j) => j.id);
             const schedulesRes = jobIds.length > 0
-                ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false }).limit(LIMIT)
-                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
+                ? await supabase
+                      .from("schedules")
+                      .select(SCHEDULE_RELATED_LIST_SELECT)
+                      .in("job_id", jobIds)
+                      .order("start_at", { ascending: false })
+                      .limit(LIMIT)
+                : { data: [] as Record<string, unknown>[] };
             const contactIds = (contactsRes.data ?? []).map((c: { id: string }) => c.id);
             const messagesRes = contactIds.length > 0
                 ? await supabase.from("messages_outbox").select("id, created_at, to_phone, status, body").in("to_contact_id", contactIds).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r))
@@ -173,8 +194,13 @@ export async function GET(
                 discountRedemptions = redRes.data ?? [];
             }
             const schedulesRes = jobIds.length > 0
-                ? await supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").in("job_id", jobIds).order("start_at", { ascending: false }).limit(LIMIT)
-                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string }[] };
+                ? await supabase
+                      .from("schedules")
+                      .select(SCHEDULE_RELATED_LIST_SELECT)
+                      .in("job_id", jobIds)
+                      .order("start_at", { ascending: false })
+                      .limit(LIMIT)
+                : { data: [] as Record<string, unknown>[] };
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
@@ -197,7 +223,12 @@ export async function GET(
                 if (loc) location = loc as Record<string, unknown>;
             }
             const [schedulesRes, opportunityRes, discountRedemptionsRes, documentsRes] = await Promise.all([
-                supabase.from("schedules").select("id, job_id, start_at, end_at, timezone, status_key, price_cents, canceled_at").eq("job_id", id).order("start_at", { ascending: true }).limit(LIMIT),
+                supabase
+                    .from("schedules")
+                    .select("id, job_id, start_at, end_at, timezone, status_key, price_cents, canceled_at, cancel_reason")
+                    .eq("job_id", id)
+                    .order("start_at", { ascending: true })
+                    .limit(LIMIT),
                 opportunityId ? supabase.from("opportunities").select("id, name, created_at, status_key, quote_total").eq("id", opportunityId).maybeSingle() : Promise.resolve({ data: null }),
                 supabase.from("discount_redemptions").select("id, created_at, discount_code_id, job_id").eq("job_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase
@@ -210,7 +241,17 @@ export async function GET(
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
-            const schedules = (schedulesRes.data ?? []) as { id: string; job_id?: string; start_at?: string; end_at?: string; timezone?: string; status_key?: string | null; price_cents?: number | null; canceled_at?: string | null }[];
+            const schedules = (schedulesRes.data ?? []) as {
+                id: string;
+                job_id?: string;
+                start_at?: string;
+                end_at?: string;
+                timezone?: string;
+                status_key?: string | null;
+                price_cents?: number | null;
+                canceled_at?: string | null;
+                cancel_reason?: string | null;
+            }[];
             const scheduleIds = schedules.map((s) => s.id);
             let assignments: { schedule_id: string; vendor_id: string }[] = [];
             let vendorNames: Map<string, string> = new Map();
@@ -306,11 +347,11 @@ export async function GET(
             const schedulesRes = jobIds.length > 0
                 ? await supabase
                     .from("schedules")
-                    .select("id, job_id, start_at, end_at, timezone, status_key, price_cents")
+                    .select(`${SCHEDULE_RELATED_LIST_SELECT}, price_cents`)
                     .in("job_id", jobIds)
                     .order("start_at", { ascending: false })
                     .limit(LIMIT)
-                : { data: [] as { id: string; job_id: string; start_at: string; end_at: string; timezone: string; status_key?: string | null; price_cents?: number | null }[] };
+                : { data: [] as Record<string, unknown>[] };
             const totalGrossCents = jobs.reduce((acc, j) => acc + (typeof j.gross_price_cents === "number" ? j.gross_price_cents : 0), 0);
             const totalDisplayCents = jobs.reduce((acc, j) => {
                 const n = j.display_total_cents;
@@ -365,7 +406,13 @@ export async function GET(
             const [customerRes, jobsRes, schedulesRes, plRes, documentsRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : { data: null },
                 supabase.from("jobs").select("id, created_at, title, scheduled_at").eq("location_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
-                supabase.from("schedules").select("id, job_id, start_at, end_at, timezone").eq("location_id", id).eq("org_id", ctx.orgId).order("start_at", { ascending: false }).limit(LIMIT),
+                supabase
+                    .from("schedules")
+                    .select(SCHEDULE_RELATED_LIST_SELECT)
+                    .eq("location_id", id)
+                    .eq("org_id", ctx.orgId)
+                    .order("start_at", { ascending: false })
+                    .limit(LIMIT),
                 supabase.from("person_locations").select("person_id, is_primary, relationship_type").eq("location_id", id).eq("org_id", ctx.orgId).limit(LIMIT),
                 supabase
                     .from("documents")

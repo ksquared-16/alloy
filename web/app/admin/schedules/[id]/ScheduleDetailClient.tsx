@@ -2,19 +2,24 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
-import { StatusBadge } from "@/components/admin/StatusBadge";
+import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { JobPaymentRow, JobPaymentsPaymentSummary } from "@/app/api/admin/jobs/[id]/payments/route";
+import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
 
 type ScheduleRecord = Record<string, unknown> & {
     _job_title?: string | null;
     _customer_name?: string | null;
     _assigned_vendor_name?: string | null;
+    _status_display?: string | null;
+    _schedule_status_label?: string | null;
+    status_key?: string | null;
 };
 
 const TABS = ["overview", "related", "activity"] as const;
@@ -42,6 +47,8 @@ export default function ScheduleDetailClient({
     const [cancelOpen, setCancelOpen] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
     const [cancelLoading, setCancelLoading] = useState(false);
+    const [cancelError, setCancelError] = useState<string | null>(null);
+    const router = useRouter();
 
     const { labels } = useEntityLabels();
     const scheduleSingular = labels?.schedules?.singular ?? "Schedule";
@@ -50,7 +57,17 @@ export default function ScheduleDetailClient({
     const jobId = schedule.job_id as string | null | undefined;
     const canceledAt = schedule.canceled_at as string | null | undefined;
     const vendorName = (schedule._assigned_vendor_name as string) ?? null;
+    const workflowStatusLabel =
+        String(schedule._status_display ?? "").trim() ||
+        String(schedule._schedule_status_label ?? "").trim() ||
+        String(schedule.status_key ?? "").trim() ||
+        "—";
+    const workflowStatusKey = (schedule.status_key as string | null | undefined) ?? null;
     const title = `${scheduleSingular} · ${schedule.start_at ? formatDateTime(schedule.start_at as string) : scheduleId}`;
+
+    useEffect(() => {
+        setSchedule(initialSchedule);
+    }, [initialSchedule]);
 
     useEffect(() => {
         if (tab !== "related" || !jobId) return;
@@ -115,6 +132,7 @@ export default function ScheduleDetailClient({
             }
             setSchedule((prev) => ({ ...prev, ...data }));
             setRescheduleOpen(false);
+            router.refresh();
         } finally {
             setRescheduleLoading(false);
         }
@@ -122,18 +140,23 @@ export default function ScheduleDetailClient({
 
     const handleCancel = async () => {
         setCancelLoading(true);
+        setCancelError(null);
         try {
             const res = await fetch(`/api/admin/schedules/${scheduleId}/cancel`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cancel_reason: cancelReason || null }),
+                body: JSON.stringify({ cancel_reason: cancelReason.trim() ? cancelReason.trim() : null }),
             });
-            if (res.ok) {
-                const data = await res.json().catch(() => ({}));
-                setSchedule((prev) => ({ ...prev, ...data }));
-                setCancelOpen(false);
-                setCancelReason("");
+            const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
+            if (!res.ok) {
+                setCancelError(data.error ?? `Cancel failed (${res.status})`);
+                return;
             }
+            setSchedule((prev) => ({ ...prev, ...data }));
+            setCancelOpen(false);
+            setCancelReason("");
+            router.refresh();
+            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: scheduleId } }));
         } finally {
             setCancelLoading(false);
         }
@@ -146,10 +169,8 @@ export default function ScheduleDetailClient({
                 subtitle={schedule._job_title ? `Job: ${schedule._job_title}` : undefined}
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge
-                            label={canceledAt ? "Canceled" : "Scheduled"}
-                            variant={canceledAt ? "neutral" : "default"}
-                        />
+                        <StatusBadge label={workflowStatusLabel} variant={getStatusVariant(workflowStatusKey)} />
+                        {canceledAt ? <StatusBadge label="Canceled" variant="neutral" /> : null}
                         <StatusBadge label={vendorName ?? "Unassigned"} variant="default" />
                         {isAdmin && !canceledAt && (
                             <>
@@ -200,6 +221,20 @@ export default function ScheduleDetailClient({
                 {tab === "overview" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
+                            <span className="text-alloy-midnight/60">Workflow status</span>
+                            <p className="font-medium">{workflowStatusLabel}</p>
+                        </div>
+                        <div>
+                            <span className="text-alloy-midnight/60">Visit canceled</span>
+                            <p className="font-medium">{canceledAt ? `Yes · ${formatDateTime(canceledAt)}` : "No"}</p>
+                        </div>
+                        {canceledAt ? (
+                            <div className="sm:col-span-2">
+                                <span className="text-alloy-midnight/60">Cancel reason</span>
+                                <p className="font-medium">{String(schedule.cancel_reason ?? "").trim() || "—"}</p>
+                            </div>
+                        ) : null}
+                        <div>
                             <span className="text-alloy-midnight/60">Start</span>
                             <p className="font-medium">{schedule.start_at ? formatDateTime(schedule.start_at as string) : "—"}</p>
                         </div>
@@ -222,10 +257,6 @@ export default function ScheduleDetailClient({
                                     "—"
                                 )}
                             </p>
-                        </div>
-                        <div>
-                            <span className="text-alloy-midnight/60">Canceled</span>
-                            <p className="font-medium">{canceledAt ? formatDateTime(canceledAt) : "No"}</p>
                         </div>
                     </div>
                 )}
@@ -253,7 +284,10 @@ export default function ScheduleDetailClient({
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Payments (job)</h3>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-1">Payments (job)</h3>
+                            <p className="text-xs text-alloy-midnight/55 mb-3">
+                                Figures are for the linked job. Charges linked to this visit are highlighted in the table below.
+                            </p>
                             {!jobId ? (
                                 <p className="text-sm text-alloy-midnight/60">No job linked.</p>
                             ) : loadingPayments ? (
@@ -266,7 +300,9 @@ export default function ScheduleDetailClient({
                                 <>
                                     <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-3">
                                         <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">Job total</span>
+                                            <span className="text-alloy-midnight/70">
+                                                {jobTotalSummaryLabel(paymentSummary.receivable_source)}
+                                            </span>
                                             <span className="font-medium">
                                                 {paymentSummary.job_total_cents != null
                                                     ? formatMoneyFromCents(paymentSummary.job_total_cents)
@@ -276,7 +312,7 @@ export default function ScheduleDetailClient({
                                             </span>
                                         </div>
                                         <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">Paid</span>
+                                            <span className="text-alloy-midnight/70">Paid (posted)</span>
                                             <span className="font-medium">{formatMoneyFromCents(paymentSummary.paid_amount_cents)}</span>
                                         </div>
                                         <div className="flex justify-between gap-2">
@@ -292,18 +328,25 @@ export default function ScheduleDetailClient({
                                         </div>
                                         {paymentSummary.pending_payment_amount_cents > 0 ? (
                                             <div className="flex justify-between gap-2">
-                                                <span className="text-alloy-midnight/70">Pending</span>
+                                                <span className="text-alloy-midnight/70">Pending (authorized)</span>
                                                 <span className="font-medium">
                                                     {formatMoneyFromCents(paymentSummary.pending_payment_amount_cents)}
                                                 </span>
                                             </div>
                                         ) : null}
                                     </div>
+                                    <JobReceivableChargesPanel
+                                        receivableSource={paymentSummary.receivable_source}
+                                        chargeRows={paymentSummary.charge_balance_rows}
+                                        openChargeCount={paymentSummary.open_charge_count}
+                                        contextScheduleId={scheduleId}
+                                        className="mb-3"
+                                    />
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                                    <th className="pb-2 pr-4">Charge</th>
+                                                    <th className="pb-2 pr-4">Amount</th>
                                                     <th className="pb-2 pr-4">Status</th>
                                                     <th className="pb-2 pr-4">Received</th>
                                                     <th className="pb-2 pr-4">Posted</th>
@@ -417,6 +460,12 @@ export default function ScheduleDetailClient({
                         <p className="text-sm text-alloy-midnight/80 mb-2">
                             Start: {schedule.start_at ? formatDateTime(schedule.start_at as string) : "—"}
                         </p>
+                        <p className="text-xs text-alloy-midnight/55 mb-3 leading-snug">
+                            Uses the dedicated cancel endpoint (fee rules apply). This is not the same as changing workflow status to canceled.
+                        </p>
+                        {cancelError ? (
+                            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5 mb-3">{cancelError}</p>
+                        ) : null}
                         <div className="mb-4">
                             <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Reason (optional)</label>
                             <input
@@ -430,7 +479,7 @@ export default function ScheduleDetailClient({
                         <div className="flex gap-2 justify-end">
                             <button
                                 type="button"
-                                onClick={() => { setCancelOpen(false); setCancelReason(""); }}
+                                onClick={() => { setCancelOpen(false); setCancelReason(""); setCancelError(null); }}
                                 disabled={cancelLoading}
                                 className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50"
                             >
