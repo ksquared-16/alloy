@@ -11,7 +11,7 @@ import BrandValueCard from "@/components/BrandValueCard";
 import { SERVICES } from "@/lib/services";
 import GetQuoteButton from "@/components/GetQuoteButton";
 import HeroSpecs from "@/components/HeroSpecs";
-import HomeAmbient, { HeroPerimeterSpecs } from "@/components/HomeAmbient";
+import { HeroPerimeterSpecs } from "@/components/HomeAmbient";
 import FirstFreeCampaignHomeFlow from "@/components/offers/FirstFreeCampaignHomeFlow";
 
 export default function Home() {
@@ -114,12 +114,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen home-page">
-      {/* Full-page ambient layer: blooms + drifting specs (visible, restrained) */}
-      <HomeAmbient />
-
-      {/* Content sits above atmosphere */}
-      <div className="relative z-10">
+    <div className="relative z-10 flex flex-1 flex-col w-full min-w-0">
         <FirstFreeCampaignHomeFlow />
         {/* Hero — floating card embedded in atmosphere */}
         <section className="relative mx-auto max-w-6xl px-4 md:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
@@ -370,7 +365,6 @@ export default function Home() {
         </div>
         </div>
       </Section>
-      </div>
     </div>
   );
 }

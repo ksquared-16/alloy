@@ -105,7 +105,7 @@ body {
   75% { transform: translate(-1%, 1.5%); }
 }
 
-/* Drifting specs: larger travel (timing unchanged) — signature motion, still smooth */
+/* Drifting specs: stronger amplitude; timing unchanged */
 @keyframes public-spec-float {
   0%,
   100% {
@@ -113,7 +113,7 @@ body {
     opacity: 0.58;
   }
   50% {
-    transform: translate(19px, -21px);
+    transform: translate(24px, -26px);
     opacity: 0.92;
   }
 }
@@ -125,7 +125,7 @@ body {
     opacity: 0.54;
   }
   50% {
-    transform: translate(-16px, 18px);
+    transform: translate(-20px, 23px);
     opacity: 0.88;
   }
 }
@@ -133,11 +133,11 @@ body {
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(8px, 9px);
+    transform: translate(10px, 12px);
     opacity: 0.5;
   }
   50% {
-    transform: translate(-19px, -16px);
+    transform: translate(-24px, -20px);
     opacity: 0.86;
   }
 }
@@ -481,21 +481,21 @@ body {
     0 0 12px rgba(39, 63, 82, 0.05);
 }
 
-/* Bend Pine — primary accent: brighter core + crisp ring + tight juniper ping */
+/* Bend Pine — dominant accent: high contrast, tight particle read */
 .public-ambient-spec-dot-pine {
-  background: rgba(39, 63, 82, 0.82);
+  background: rgba(39, 63, 82, 0.9);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.62),
-    0 0 4px rgba(39, 63, 82, 0.62),
-    0 0 10px rgba(0, 162, 131, 0.16);
+    0 0 0 1px rgba(255, 255, 255, 0.68),
+    0 0 4px rgba(39, 63, 82, 0.68),
+    0 0 9px rgba(0, 162, 131, 0.2);
 }
 
 .public-ambient-spec-dot-juniper {
-  background: rgba(0, 162, 131, 0.72);
+  background: rgba(0, 162, 131, 0.78);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.58),
-    0 0 4px rgba(0, 162, 131, 0.62),
-    0 0 11px rgba(0, 200, 165, 0.14);
+    0 0 0 1px rgba(255, 255, 255, 0.62),
+    0 0 4px rgba(0, 162, 131, 0.66),
+    0 0 9px rgba(0, 220, 185, 0.18);
 }
 
 /* Small: slightly larger than 3px so reads as intentional */
@@ -514,20 +514,20 @@ body {
 
 .public-ambient-spec-sm.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-sm {
-  background: rgba(39, 63, 82, 0.76);
+  background: rgba(39, 63, 82, 0.84);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.55),
-    0 0 3px rgba(39, 63, 82, 0.56),
-    0 0 8px rgba(0, 162, 131, 0.14);
+    0 0 0 0.5px rgba(255, 255, 255, 0.6),
+    0 0 3px rgba(39, 63, 82, 0.6),
+    0 0 8px rgba(0, 162, 131, 0.18);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-sm {
-  background: rgba(0, 162, 131, 0.66);
+  background: rgba(0, 162, 131, 0.72);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.52),
-    0 0 3px rgba(0, 162, 131, 0.56),
-    0 0 8px rgba(0, 200, 165, 0.13);
+    0 0 0 0.5px rgba(255, 255, 255, 0.56),
+    0 0 3px rgba(0, 162, 131, 0.6),
+    0 0 8px rgba(0, 220, 185, 0.16);
 }
 
 /* Large: anchor accents */
@@ -546,20 +546,20 @@ body {
 
 .public-ambient-spec-lg.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-lg {
-  background: rgba(39, 63, 82, 0.86);
+  background: rgba(39, 63, 82, 0.92);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.64),
-    0 0 5px rgba(39, 63, 82, 0.64),
-    0 0 12px rgba(0, 162, 131, 0.18);
+    0 0 0 1px rgba(255, 255, 255, 0.7),
+    0 0 5px rgba(39, 63, 82, 0.7),
+    0 0 11px rgba(0, 162, 131, 0.22);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-lg {
-  background: rgba(0, 162, 131, 0.76);
+  background: rgba(0, 162, 131, 0.82);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.58),
-    0 0 5px rgba(0, 162, 131, 0.58),
-    0 0 12px rgba(0, 200, 165, 0.16);
+    0 0 0 1px rgba(255, 255, 255, 0.62),
+    0 0 5px rgba(0, 162, 131, 0.64),
+    0 0 11px rgba(0, 220, 185, 0.2);
 }
 
 .public-ambient-spec:nth-child(3n + 1) {
@@ -591,17 +591,49 @@ body {
   --home-atmosphere-soft: #fafcfe;
 }
 
-/* Page wrapper: richer blue-teal atmospheric field; white content floats above */
+/* Page wrapper (legacy / inner sections): gradient when not inside public-site-chrome */
 .home-page {
   background: linear-gradient(165deg, var(--home-atmosphere-base) 0%, var(--home-atmosphere-mid) 30%, var(--home-atmosphere-soft) 55%, var(--home-atmosphere-mid) 80%, var(--home-atmosphere-base) 100%);
   position: relative;
   min-height: 100vh;
 }
 
-/* Full-page ambient layer: continuous motion environment */
-.home-atmosphere {
-  position: fixed;
+/* Public site: flex column + gradient + clip horizontal bleed (100vw/overflow gaps) */
+.public-site-chrome {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: linear-gradient(165deg, var(--home-atmosphere-base) 0%, var(--home-atmosphere-mid) 30%, var(--home-atmosphere-soft) 55%, var(--home-atmosphere-mid) 80%, var(--home-atmosphere-base) 100%);
+}
+
+/* Document-tall layer behind nav/main/footer (ambient is not viewport-fixed inside main) */
+.public-site-atmosphere-layer {
+  position: absolute;
   inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.public-site-main {
+  position: relative;
+  z-index: 10;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Ambient root: fills atmosphere layer (absolute = same frame as chrome, no right-edge gap) */
+.home-atmosphere {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 100%;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
@@ -812,9 +844,9 @@ body {
   background: rgba(0, 162, 131, 0.35);
 }
 
-/* Translucent header (reduces visual heaviness) */
+/* Header: nearly opaque so ambient specs never read through the bar */
 .home-header-translucent {
-  background: rgba(24, 39, 58, 0.88);
+  background: rgba(24, 39, 58, 0.97);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);

@@ -1,10 +1,8 @@
 "use client";
 
-import HomeAmbient from "@/components/HomeAmbient";
-
 /**
- * Shared shell for public-site pages: same atmospheric background and spec field as homepage.
- * Keeps /services/cleaning, /gutters, /about, /join in the same visual family.
+ * Shared wrapper for public-site pages. Background + ambient are provided by `public-site-chrome`
+ * in ConditionalSiteLayout; this only sizes content in the main column.
  */
 export default function PublicPageShell({
   children,
@@ -14,9 +12,6 @@ export default function PublicPageShell({
   className?: string;
 }) {
   return (
-    <div className={`min-h-screen home-page ${className}`.trim()}>
-      <HomeAmbient />
-      <div className="relative z-10">{children}</div>
-    </div>
+    <div className={`flex flex-1 flex-col w-full min-w-0 ${className}`.trim()}>{children}</div>
   );
 }

@@ -19,7 +19,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-alloy-midnight text-alloy-stone mt-20 relative">
+    <footer className="relative z-20 mt-20 bg-alloy-midnight text-alloy-stone">
       {/* Subtle gradient border at top */}
       <div className="h-1 bg-gradient-to-r from-alloy-pine via-alloy-juniper to-alloy-pine"></div>
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
