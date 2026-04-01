@@ -45,6 +45,7 @@ import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/adm
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
+import { JobManualChargeForm } from "@/components/admin/JobManualChargeForm";
 import {
     effectivePaymentRowStatusKey,
     jobPaymentStatusKeyLabel,
@@ -567,7 +568,7 @@ function JobDrawerRelationshipsSection(props: {
 
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer } = useAdminDrawer();
-    const { canMutate } = useAdminAuth();
+    const { canMutate, role: adminRole } = useAdminAuth();
     const { labels } = useEntityLabels();
     const memberSingular = labels.customer_members?.singular ?? "Member";
     const memberPlural = labels.customer_members?.plural ?? "Members";
@@ -3199,7 +3200,7 @@ export default function AdminEntityDrawer() {
                 }}
                 className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
             >
-                {paidInFullKnown ? "Add payment" : "Collect for job"}
+                Add payment
             </button>
             {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                 <button
@@ -3252,7 +3253,7 @@ export default function AdminEntityDrawer() {
                     }}
                     className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
                 >
-                    {schedulePaidInFullKnown ? "Add payment" : "Collect for job"}
+                    Add payment
                 </button>
                 {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                     <button
@@ -5974,6 +5975,9 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
                         <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Payments &amp; pricing</h3>
+                            {drawer.id && drawer.id !== "new" && canMutate && adminRole === "admin" ? (
+                                <JobManualChargeForm jobId={drawer.id} disabled={!canMutate} onCreated={() => refetchJobPayments()} />
+                            ) : null}
                             {jobPaymentsFetchError ? (
                                 <p className="text-sm text-red-600 mb-3 rounded border border-red-200 bg-red-50 px-2 py-2">{jobPaymentsFetchError}</p>
                             ) : !jobPaymentSummaryFromApi ? (
@@ -5993,7 +5997,7 @@ export default function AdminEntityDrawer() {
                                         </span>
                                     </div>
                                     <div className="flex justify-between gap-2">
-                                        <span className="text-alloy-midnight/70">Paid</span>
+                                        <span className="text-alloy-midnight/70">Paid (posted)</span>
                                         <span className="font-medium">{formatMoneyFromCents(jobPaymentSummaryFromApi.paid_amount_cents)}</span>
                                     </div>
                                     <div className="flex justify-between gap-2">
@@ -6113,7 +6117,7 @@ export default function AdminEntityDrawer() {
                                     <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
                                         These totals sum <strong>gl_journal_lines</strong> for this job (mapped accounts only).{" "}
                                         <strong>Posted journal entries</strong> counts <strong>schedule_completed</strong>{" "}
-                                        entries for this job&apos;s schedules — not individual Stripe charges.
+                                        entries for this job's schedules — not individual Stripe charges.
                                     </p>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80 mt-3">
                                         <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
@@ -7533,7 +7537,9 @@ export default function AdminEntityDrawer() {
                                             <>
                                                 <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-2 mb-2 text-xs space-y-1">
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="text-alloy-midnight/60">Job total</span>
+                                                        <span className="text-alloy-midnight/60">
+                                                            {jobTotalSummaryLabel(jobPaymentSummaryFromApi.receivable_source)}
+                                                        </span>
                                                         <span>
                                                             {jobPaymentSummaryFromApi.job_total_cents != null
                                                                 ? formatMoneyFromCents(jobPaymentSummaryFromApi.job_total_cents)
@@ -7543,7 +7549,7 @@ export default function AdminEntityDrawer() {
                                                         </span>
                                                     </div>
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="text-alloy-midnight/60">Paid</span>
+                                                        <span className="text-alloy-midnight/60">Paid (posted)</span>
                                                         <span>{formatMoneyFromCents(jobPaymentSummaryFromApi.paid_amount_cents)}</span>
                                                     </div>
                                                     <div className="flex justify-between gap-2">
@@ -7560,13 +7566,22 @@ export default function AdminEntityDrawer() {
                                                     </div>
                                                     {jobPaymentSummaryFromApi.pending_payment_amount_cents > 0 ? (
                                                         <div className="flex justify-between gap-2">
-                                                            <span className="text-alloy-midnight/60">Pending</span>
+                                                            <span className="text-alloy-midnight/60">Pending (authorized)</span>
                                                             <span>
                                                                 {formatMoneyFromCents(jobPaymentSummaryFromApi.pending_payment_amount_cents)}
                                                             </span>
                                                         </div>
                                                     ) : null}
                                                 </div>
+                                                {jobPaymentSummaryFromApi.receivable_source === "charges" ? (
+                                                    <JobReceivableChargesPanel
+                                                        receivableSource={jobPaymentSummaryFromApi.receivable_source}
+                                                        chargeRows={jobPaymentSummaryFromApi.charge_balance_rows}
+                                                        openChargeCount={jobPaymentSummaryFromApi.open_charge_count}
+                                                        compact
+                                                        className="mb-2"
+                                                    />
+                                                ) : null}
                                                 <div className="flex flex-wrap items-center gap-2 mb-2">
                                                     <span className="text-xs text-alloy-midnight/60">Payment state:</span>
                                                     <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
@@ -7615,6 +7630,32 @@ export default function AdminEntityDrawer() {
                             )}
                             {drawer.type === "schedules" && !(data as { _create?: boolean })?._create && (
                                 <>
+                                    {(data.canceled_at as string) ? (
+                                        <div className="rounded-lg border border-alloy-stone/45 bg-alloy-stone/20 px-3 py-2.5 mb-3 space-y-1.5">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <StatusBadge label="Visit canceled" variant="neutral" />
+                                                <span className="text-sm text-alloy-midnight/80 tabular-nums">
+                                                    {formatDateTime(String(data.canceled_at))}
+                                                </span>
+                                            </div>
+                                            {(data.cancel_reason as string)?.trim() ? (
+                                                <p className="text-sm text-alloy-midnight/80">
+                                                    <span className="font-medium">Reason:</span> {String(data.cancel_reason).trim()}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-alloy-midnight/50">No cancel reason on file.</p>
+                                            )}
+                                            <p className="text-xs text-alloy-midnight/55 leading-snug">
+                                                Workflow and assignment below are read-only for this visit. Cancellation was applied via{" "}
+                                                <strong>Cancel {scheduleSingular.toLowerCase()}</strong> (not the status dropdown).
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-alloy-midnight/50 mb-3 max-w-xl leading-snug">
+                                            <strong>Workflow status</strong> is for visit progress only. To cancel, use{" "}
+                                            <strong>Cancel {scheduleSingular.toLowerCase()}</strong> in the actions below — not this field.
+                                        </p>
+                                    )}
                                     {(data.job_id as string) && (
                                         <div>
                                             <strong className="text-alloy-midnight/70">{jobSingular}</strong>
@@ -7643,18 +7684,19 @@ export default function AdminEntityDrawer() {
                                         </div>
                                     )}
                                     <div className="space-y-4">
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                             <div>
-                                                <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
+                                                <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Workflow status</label>
                                                 {statusDefsLoading ? (
                                                     <p className="text-sm text-alloy-midnight/60">Loading…</p>
                                                 ) : (data.canceled_at as string) ? (
                                                     <p className="text-sm text-alloy-midnight/80 py-1">
+                                                        <span className="text-alloy-midnight/55 text-xs uppercase tracking-wide mr-1">Recorded</span>
                                                         {statusDefsForDrawer.find((s) => s.status_key === (data.status_key as string))?.status_label ??
                                                             (data.status_key as string) ??
-                                                            "Canceled"}
+                                                            "—"}
                                                     </p>
                                                 ) : (
                                                     <select
@@ -7663,7 +7705,7 @@ export default function AdminEntityDrawer() {
                                                         onBlur={() => {
                                                             if (drawer.type === "schedules" && nonJobFormDirty) saveEdit();
                                                         }}
-                                                        disabled={!canMutate}
+                                                        disabled={!canMutate || !!(data.canceled_at as string)}
                                                         className={INLINE_EDIT_INPUT_CLASS}
                                                     >
                                                         <option value="">— None —</option>
@@ -7680,9 +7722,6 @@ export default function AdminEntityDrawer() {
                                                 )}
                                             </div>
                                             </div>
-                                    {(data.canceled_at as string) && (
-                                        <div className="text-alloy-ember text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
-                                    )}
                                     <div className="pt-2 border-t border-[#e6e8ec]" id="schedule-assign-section">
                                         <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
                                         {(data._assignment as { id?: string }) ? (

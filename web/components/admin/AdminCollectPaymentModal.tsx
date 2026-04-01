@@ -30,10 +30,12 @@ type CollectApiJob = {
   charge_balance_rows?: JobChargeBalanceRow[] | null;
 };
 
-/** Informational only when modal opened from a schedule row (V1 charges still allocate to the job). */
+/** Informational when modal opened from a schedule row; payment still runs at job scope. */
 type CollectApiScheduleContext = {
   visit_start_at: string | null;
   list_price_cents: number | null;
+  /** Present when API includes visit-linked charge count (older responses may omit). */
+  linked_charge_count?: number;
 };
 
 type CollectApiResponse = {
@@ -419,9 +421,21 @@ export function AdminCollectPaymentModal({
       sc?.list_price_cents != null && Number.isFinite(sc.list_price_cents) && sc.list_price_cents > 0
         ? money(sc.list_price_cents)
         : null;
-    if (!visit && !price) return null;
-    const head = `Opened from visit ${visit ?? "—"}`;
-    return price ? `${head} · visit list price ${price}` : head;
+    const linked =
+      sc && typeof sc.linked_charge_count === "number"
+        ? sc.linked_charge_count
+        : null;
+    const parts: string[] = [];
+    parts.push(`Opened from visit ${visit ?? "—"}`);
+    if (price) parts.push(`visit list price ${price}`);
+    if (linked != null) {
+      parts.push(
+        linked === 0
+          ? "no receivable rows linked to this visit yet (charges may be job-level only)"
+          : `${linked} receivable row${linked === 1 ? "" : "s"} linked to this visit (highlighted below)`
+      );
+    }
+    return parts.join(" · ");
   }, [hasSchedule, collect, context?.scheduleLabel]);
 
   if (!isOpen || !context) return null;
@@ -435,23 +449,23 @@ export function AdminCollectPaymentModal({
       className="fixed inset-0 z-[85] flex items-center justify-center bg-black/50"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="admin-collect-payment-title"
+      aria-labelledby="admin-add-payment-title"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl border border-alloy-stone/25 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-xl border border-alloy-stone/25 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="admin-collect-payment-title" className="text-lg font-semibold text-alloy-midnight tracking-tight">
-          Collect for job
+        <h3 id="admin-add-payment-title" className="text-lg font-semibold text-alloy-midnight tracking-tight">
+          Add payment
         </h3>
         {context.jobLabel ? (
           <p className="text-sm font-medium text-alloy-forge/90 mt-0.5">{context.jobLabel}</p>
         ) : null}
         <p className="text-sm text-alloy-midnight/65 mt-2 leading-relaxed">
           {collect?.job.receivable_source === "charges"
-            ? "Amounts follow receivable charges on this job (see below). Posted card payments allocate to those charges; Stripe runs on the customer profile."
-            : "Payment applies to this job&apos;s balance (posted allocations). Charges run through Stripe using the customer&apos;s profile."}
+            ? "Balances are driven by receivable charges on this job (listed below). The amount you enter is collected on the customer’s card; the server applies it to open charge balances (not a manual per-charge picker yet)."
+            : "This job is still on legacy pricing totals until receivable charges exist. Payment posts to the job; Stripe uses the customer’s profile."}
         </p>
 
         {scheduleContextLine ? (
@@ -470,7 +484,7 @@ export function AdminCollectPaymentModal({
         <div className="space-y-5 text-sm mt-4">
           {collect && (
             <div className="rounded-lg border border-alloy-stone/35 bg-gradient-to-b from-alloy-stone/5 to-transparent px-4 py-3 space-y-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75">Job balance</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75">Receivables summary</p>
               <div className="flex justify-between gap-3 text-sm">
                 <span className="text-alloy-midnight/65">{jobTotalSummaryLabel(collect.job.receivable_source ?? undefined)}</span>
                 <span className="font-medium tabular-nums">{money(collect.job.job_total_cents ?? collect.job.original_cents)}</span>
@@ -496,6 +510,7 @@ export function AdminCollectPaymentModal({
               receivableSource={collect.job.receivable_source ?? undefined}
               chargeRows={collect.job.charge_balance_rows}
               openChargeCount={collect.job.open_charge_count ?? undefined}
+              contextScheduleId={hasSchedule ? context?.scheduleId?.trim() ?? null : null}
               compact
               className="mt-3"
             />
@@ -515,7 +530,12 @@ export function AdminCollectPaymentModal({
                   className="mt-0.5"
                 />
                 <span className="leading-snug">
-                  Job balance{collect ? ` · outstanding ${money(collect.job.balance_cents)}` : ""}
+                  Pay toward job balance{collect ? ` · outstanding ${money(collect.job.balance_cents)}` : ""}
+                  {collect?.job.receivable_source === "charges" ? (
+                    <span className="block text-[11px] text-alloy-midnight/50 font-normal mt-0.5">
+                      Allocations are applied by the server across open charges.
+                    </span>
+                  ) : null}
                 </span>
               </label>
               <label className="flex items-start gap-2.5 cursor-pointer rounded-md px-1 py-0.5 -mx-1 hover:bg-alloy-stone/10">
@@ -650,7 +670,7 @@ export function AdminCollectPaymentModal({
             disabled={!canSubmit}
             className="px-4 py-2 text-sm font-medium bg-alloy-blue text-white rounded-lg hover:opacity-90 disabled:opacity-50 shadow-sm"
           >
-            {submitting ? "Processing…" : target === "adhoc" ? "Charge ad hoc" : "Charge job"}
+            {submitting ? "Processing…" : target === "adhoc" ? "Charge ad hoc" : "Charge customer"}
           </button>
         </div>
       </div>

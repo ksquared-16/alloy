@@ -8,6 +8,7 @@ import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/ven
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { fetchJobStatusKeyByFk, effectiveJobStatusKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { computeJobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
 
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
@@ -238,7 +239,22 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ jobs: result, total: count ?? result.length });
+  const balanceSnaps =
+    result.length > 0
+      ? await Promise.all(
+          result.map((row) => computeJobBalanceSnapshot(supabase, ctx.orgId, (row as { id: string }).id))
+        )
+      : [];
+  const withReceivables = result.map((row, i) => {
+    const snap = balanceSnaps[i];
+    return {
+      ...row,
+      receivable_paid_cents: snap?.paid_amount_cents ?? 0,
+      receivable_outstanding_cents: snap?.outstanding_balance_cents ?? null,
+    };
+  });
+
+  return NextResponse.json({ jobs: withReceivables, total: count ?? withReceivables.length });
 }
 
 /** POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required. */

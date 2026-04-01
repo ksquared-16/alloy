@@ -8,7 +8,7 @@ import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import DataTable from "@/components/admin/DataTable";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { buildEntityTableColumns } from "@/components/admin/entity/buildEntityTableColumns";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { Filter } from "lucide-react";
 
 export type JobRow = {
@@ -42,6 +42,9 @@ export type JobRow = {
   _price_display?: number | null;
   _updated?: string | null;
   archived_at?: string | null;
+  /** From computeJobBalanceSnapshot (charge-aware when charges exist). */
+  receivable_paid_cents?: number;
+  receivable_outstanding_cents?: number | null;
 };
 
 export default function JobsClient() {
@@ -247,6 +250,24 @@ export default function JobsClient() {
     });
     return [
       ...base,
+      {
+        key: "receivable_paid_cents" as keyof JobRow,
+        label: "Paid",
+        sortable: false,
+        render: (_v: unknown, row: JobRow) => (
+          <span className="tabular-nums text-sm text-alloy-midnight/80">{formatMoneyFromCents(row.receivable_paid_cents ?? 0)}</span>
+        ),
+      },
+      {
+        key: "receivable_outstanding_cents" as keyof JobRow,
+        label: "Outstanding",
+        sortable: false,
+        render: (_v: unknown, row: JobRow) => (
+          <span className="tabular-nums text-sm font-medium text-alloy-midnight">
+            {row.receivable_outstanding_cents != null ? formatMoneyFromCents(row.receivable_outstanding_cents) : "—"}
+          </span>
+        ),
+      },
       {
         key: "id" as keyof JobRow,
         label: "Actions",
