@@ -315,9 +315,11 @@ export default function QuoteModal({
                         </p>
                         <p className="text-alloy-midnight/85 leading-relaxed">
                           Sign up for <strong>recurring standard cleaning</strong> (weekly, every 2 weeks, or monthly).
-                          Schedule and complete your <strong>first clean within 30 days of redeeming</strong> this offer,
-                          then complete <strong>all four recurring visits within 120 days of that first clean</strong>—
-                          your <strong>first clean is covered</strong> when you meet the program terms. Use{" "}
+                          The complimentary first cleaning must be scheduled and fully completed within{" "}
+                          <strong>30 days</strong> from the date the offer is redeemed. To qualify for the full
+                          promotion, all <strong>four (4) recurring cleanings</strong> must be scheduled and completed
+                          within <strong>120 days</strong> following the date of your first (complimentary) cleaning.
+                          Your <strong>first clean is covered</strong> when you meet the program terms. Use{" "}
                           <strong>Get my recurring quote</strong> below — next you&apos;ll review the program terms,
                           then continue to booking.
                         </p>

@@ -24,10 +24,30 @@ export const COMPANY_FIELD_EDGE: { l: number; t: number }[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ l: 98.8, t: 8 + (i * 84) / 11 })),
 ];
 
+/**
+ * Extra drift layers (~+40% total points vs prior full set) — phase / mirror transforms of base
+ * drift so distribution stays even (no random clumps). Perimeter styling still applies only to
+ * COMPANY_FIELD_EDGE (last N entries in COMPANY_FIELD_DRIFT_FULL).
+ */
+export const COMPANY_FIELD_DRIFT_PHASE_A: { l: number; t: number }[] = COMPANY_FIELD_DRIFT.map((p, i) => ({
+  l: (p.l + 29 + ((i * 7) % 19)) % 100,
+  t: (p.t + 41 + ((i * 5) % 17)) % 100,
+}));
+
+export const COMPANY_FIELD_DRIFT_PHASE_B: { l: number; t: number }[] = COMPANY_FIELD_DRIFT.map((p, i) => ({
+  l: (p.l * 0.88 + 7 + (i % 9)) % 100,
+  t: (100 - p.t * 0.9 + 12) % 100,
+}));
+
+/** First 31 of PHASE_B completes +83 interior points (52 + 31) ≈ +40% on prior 208 total */
+const COMPANY_FIELD_DRIFT_PHASE_B_TRIM = COMPANY_FIELD_DRIFT_PHASE_B.slice(0, 31);
+
 export const COMPANY_FIELD_DRIFT_FULL: { l: number; t: number }[] = [
   ...COMPANY_FIELD_DRIFT,
   ...COMPANY_FIELD_DRIFT.map((p, i) => ({ l: (p.l + 19) % 100, t: (p.t + 23 + i) % 100 })),
   ...COMPANY_FIELD_DRIFT.map((p, i) => ({ l: (p.l * 0.7 + 15) % 100, t: (p.t * 0.8 + 10) % 100 })),
+  ...COMPANY_FIELD_DRIFT_PHASE_A,
+  ...COMPANY_FIELD_DRIFT_PHASE_B_TRIM,
   ...COMPANY_FIELD_EDGE,
 ];
 

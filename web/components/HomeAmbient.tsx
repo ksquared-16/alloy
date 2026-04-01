@@ -2,8 +2,8 @@
 
 /**
  * Document-scoped ambient (`public-site-atmosphere-layer` in ConditionalSiteLayout).
- * Multi-band placement (grid + edges + upper band + mid/lower) — organic density, not a single lattice.
- * ~40% blue / 50% pine / 10% juniper.
+ * Multi-band placement — ~+40% specs vs prior pass, aligned to adminV2 workspace density target.
+ * ~30% blue / 55% pine / 15% juniper (Bend Pine / life forward, like workspace particle mix).
  */
 const CLOUDS = [
   { className: "home-atmosphere-cloud home-atmosphere-cloud-1" },
@@ -26,9 +26,9 @@ type SpecTone = "blue" | "juniper" | "pine";
 type SpecPoint = { left: string; top: string; tone: SpecTone; size?: SpecSize };
 
 function toneFromMod(m: number): SpecTone {
-  const x = ((m % 10) + 10) % 10;
-  if (x < 4) return "blue";
-  if (x < 9) return "pine";
+  const x = ((m % 20) + 20) % 20;
+  if (x < 6) return "blue";
+  if (x < 17) return "pine";
   return "juniper";
 }
 
@@ -38,18 +38,18 @@ function toneClass(tone: SpecTone): string {
   return "";
 }
 
-const GRID_ROWS = 7;
-const GRID_COLS = 12;
-const EDGE_N = 22;
-const UPPER_N = 22;
-const MID_LOWER_N = 20;
+const GRID_ROWS = 9;
+const GRID_COLS = 13;
+const EDGE_N = 31;
+const UPPER_N = 31;
+const MID_LOWER_N = 28;
 
 function buildSpecPositions(): SpecPoint[] {
   const out: SpecPoint[] = [];
   for (let row = 0; row < GRID_ROWS; row++) {
-    const t = 4 + row * 13;
+    const t = 3 + (row * 92) / (GRID_ROWS - 1 || 1);
     for (let col = 0; col < GRID_COLS; col++) {
-      const l = 3 + (col * 91) / (GRID_COLS - 1);
+      const l = 3 + (col * 94) / (GRID_COLS - 1 || 1);
       const tone = toneFromMod(row * 17 + col * 3);
       const size: SpecSize = (row + col) % 5 === 0 ? "lg" : (row + col) % 3 === 1 ? "sm" : "md";
       out.push({ left: `${l}%`, top: `${t}%`, tone, size });

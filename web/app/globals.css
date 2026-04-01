@@ -105,16 +105,16 @@ body {
   75% { transform: translate(-1%, 1.5%); }
 }
 
-/* Drifting specs: modest amplitude over pre-lattice baseline (timing unchanged) */
+/* Drifting specs: cadence/feel aligned with adminV2 workspace company-field drift (~9/-12 at 5.5s), scaled for full-page */
 @keyframes public-spec-float {
   0%,
   100% {
     transform: translate(0, 0);
-    opacity: 0.58;
+    opacity: 0.52;
   }
   50% {
-    transform: translate(22px, -24px);
-    opacity: 0.92;
+    transform: translate(14px, -16px);
+    opacity: 0.88;
   }
 }
 
@@ -122,23 +122,23 @@ body {
   0%,
   100% {
     transform: translate(0, 0);
-    opacity: 0.54;
+    opacity: 0.48;
   }
   50% {
-    transform: translate(-18px, 21px);
-    opacity: 0.88;
+    transform: translate(-12px, 14px);
+    opacity: 0.84;
   }
 }
 
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(9px, 11px);
-    opacity: 0.5;
+    transform: translate(7px, 8px);
+    opacity: 0.46;
   }
   50% {
-    transform: translate(-22px, -19px);
-    opacity: 0.86;
+    transform: translate(-15px, -13px);
+    opacity: 0.82;
   }
 }
 
@@ -453,11 +453,11 @@ body {
 }
 
 .public-hero-spec:nth-child(odd) {
-  animation: public-spec-float 6s ease-in-out infinite;
+  animation: public-spec-float 5.8s ease-in-out infinite;
 }
 
 .public-hero-spec:nth-child(even) {
-  animation: public-spec-float-slow 7.5s ease-in-out infinite;
+  animation: public-spec-float-slow 6.8s ease-in-out infinite;
 }
 
 /* Page-level ambient specs — adminV2-style density and visibility (read in screenshots) */
@@ -481,21 +481,22 @@ body {
     0 0 12px rgba(39, 63, 82, 0.05);
 }
 
-/* Bend Pine — modest bump vs pre-lattice; crisp particle, not haze */
+/* Bend Pine + life glow — closer to adminV2 workspace company-field / particle read */
 .public-ambient-spec-dot-pine {
-  background: rgba(39, 63, 82, 0.86);
+  background: rgba(39, 63, 82, 0.88);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.66),
-    0 0 4px rgba(39, 63, 82, 0.66),
-    0 0 10px rgba(0, 162, 131, 0.19);
+    0 0 0 0.5px rgba(255, 255, 255, 0.68),
+    0 0 4px rgba(39, 63, 82, 0.64),
+    0 0 8px rgba(0, 162, 131, 0.38),
+    0 0 3px rgba(255, 255, 255, 0.12);
 }
 
 .public-ambient-spec-dot-juniper {
-  background: rgba(0, 162, 131, 0.76);
+  background: rgba(0, 162, 131, 0.82);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.6),
-    0 0 4px rgba(0, 162, 131, 0.64),
-    0 0 10px rgba(0, 220, 185, 0.17);
+    0 0 0 0.5px rgba(255, 255, 255, 0.62),
+    0 0 8px rgba(0, 220, 185, 0.36),
+    0 0 4px rgba(255, 255, 255, 0.14);
 }
 
 /* Small: slightly larger than 3px so reads as intentional */
@@ -514,20 +515,20 @@ body {
 
 .public-ambient-spec-sm.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-sm {
-  background: rgba(39, 63, 82, 0.8);
+  background: rgba(39, 63, 82, 0.82);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.58),
-    0 0 3px rgba(39, 63, 82, 0.58),
-    0 0 8px rgba(0, 162, 131, 0.17);
+    0 0 0 0.5px rgba(255, 255, 255, 0.6),
+    0 0 3px rgba(39, 63, 82, 0.56),
+    0 0 7px rgba(0, 162, 131, 0.34);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-sm {
-  background: rgba(0, 162, 131, 0.7);
+  background: rgba(0, 162, 131, 0.76);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.54),
-    0 0 3px rgba(0, 162, 131, 0.58),
-    0 0 8px rgba(0, 220, 185, 0.15);
+    0 0 0 0.5px rgba(255, 255, 255, 0.56),
+    0 0 7px rgba(0, 220, 185, 0.32),
+    0 0 3px rgba(255, 255, 255, 0.12);
 }
 
 /* Large: anchor accents */
@@ -546,32 +547,33 @@ body {
 
 .public-ambient-spec-lg.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-lg {
-  background: rgba(39, 63, 82, 0.9);
+  background: rgba(39, 63, 82, 0.91);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.68),
-    0 0 5px rgba(39, 63, 82, 0.68),
-    0 0 12px rgba(0, 162, 131, 0.21);
+    0 0 0 0.5px rgba(255, 255, 255, 0.7),
+    0 0 5px rgba(39, 63, 82, 0.66),
+    0 0 10px rgba(0, 162, 131, 0.4),
+    0 0 4px rgba(255, 255, 255, 0.14);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-lg {
-  background: rgba(0, 162, 131, 0.8);
+  background: rgba(0, 162, 131, 0.86);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.6),
-    0 0 5px rgba(0, 162, 131, 0.62),
-    0 0 12px rgba(0, 220, 185, 0.19);
+    0 0 0 0.5px rgba(255, 255, 255, 0.62),
+    0 0 9px rgba(0, 220, 185, 0.38),
+    0 0 4px rgba(255, 255, 255, 0.14);
 }
 
 .public-ambient-spec:nth-child(3n + 1) {
-  animation: public-spec-float 9.5s ease-in-out infinite;
+  animation: public-spec-float 6.8s ease-in-out infinite;
 }
 
 .public-ambient-spec:nth-child(3n + 2) {
-  animation: public-spec-float-slow 11.5s ease-in-out infinite;
+  animation: public-spec-float-slow 7.8s ease-in-out infinite;
 }
 
 .public-ambient-spec:nth-child(3n) {
-  animation: public-spec-drift-alt 8.5s ease-in-out infinite;
+  animation: public-spec-drift-alt 6.2s ease-in-out infinite;
 }
 
 /* ========== Homepage visual system (brand hierarchy, section depth, transitions) ========== */
