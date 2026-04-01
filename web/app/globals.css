@@ -105,7 +105,7 @@ body {
   75% { transform: translate(-1%, 1.5%); }
 }
 
-/* Drifting specs: subtle motion with slightly higher visibility floor (reads “alive” on bright bg) */
+/* Drifting specs: moderate travel + slightly quicker cadence (readable motion, not chaotic) */
 @keyframes public-spec-float {
   0%,
   100% {
@@ -113,7 +113,7 @@ body {
     opacity: 0.58;
   }
   50% {
-    transform: translate(10px, -12px);
+    transform: translate(15px, -17px);
     opacity: 0.92;
   }
 }
@@ -125,7 +125,7 @@ body {
     opacity: 0.54;
   }
   50% {
-    transform: translate(-9px, 10px);
+    transform: translate(-13px, 14px);
     opacity: 0.88;
   }
 }
@@ -133,11 +133,11 @@ body {
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(5px, 5px);
+    transform: translate(6px, 7px);
     opacity: 0.5;
   }
   50% {
-    transform: translate(-10px, -9px);
+    transform: translate(-15px, -13px);
     opacity: 0.86;
   }
 }
@@ -448,15 +448,16 @@ body {
   box-shadow:
     0 0 0 0.5px rgba(255, 255, 255, 0.58),
     0 0 5px rgba(255, 255, 255, 0.45),
-    0 0 10px rgba(0, 162, 131, 0.12);
+    0 0 8px rgba(39, 63, 82, 0.14),
+    0 0 10px rgba(0, 162, 131, 0.1);
 }
 
 .public-hero-spec:nth-child(odd) {
-  animation: public-spec-float 7s ease-in-out infinite;
+  animation: public-spec-float 6s ease-in-out infinite;
 }
 
 .public-hero-spec:nth-child(even) {
-  animation: public-spec-float-slow 9s ease-in-out infinite;
+  animation: public-spec-float-slow 7.5s ease-in-out infinite;
 }
 
 /* Page-level ambient specs — adminV2-style density and visibility (read in screenshots) */
@@ -472,18 +473,28 @@ body {
   height: 5px;
   margin-left: -2.5px;
   margin-top: -2.5px;
-  background: rgba(0, 69, 140, 0.62);
+  background: rgba(0, 69, 140, 0.6);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.52),
-    0 0 4px rgba(0, 69, 140, 0.55),
-    0 0 12px rgba(0, 69, 140, 0.14);
+    0 0 4px rgba(0, 69, 140, 0.52),
+    0 0 12px rgba(0, 69, 140, 0.12),
+    0 0 14px rgba(39, 63, 82, 0.06);
+}
+
+/* Bend Pine — depth accent (still a point, not a wash) */
+.public-ambient-spec-dot-pine {
+  background: rgba(39, 63, 82, 0.68);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 4px rgba(39, 63, 82, 0.52),
+    0 0 11px rgba(0, 162, 131, 0.11);
 }
 
 .public-ambient-spec-dot-juniper {
-  background: rgba(0, 162, 131, 0.56);
+  background: rgba(0, 162, 131, 0.58);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.48),
-    0 0 4px rgba(0, 162, 131, 0.52),
+    0 0 4px rgba(0, 162, 131, 0.54),
     0 0 12px rgba(0, 162, 131, 0.13);
 }
 
@@ -493,19 +504,29 @@ body {
   height: 4px;
   margin-left: -2px;
   margin-top: -2px;
-  background: rgba(0, 69, 140, 0.54);
+  background: rgba(0, 69, 140, 0.52);
   box-shadow:
     0 0 0 0.5px rgba(255, 255, 255, 0.42),
-    0 0 3px rgba(0, 69, 140, 0.48),
-    0 0 9px rgba(0, 69, 140, 0.12);
+    0 0 3px rgba(0, 69, 140, 0.46),
+    0 0 9px rgba(0, 69, 140, 0.1),
+    0 0 10px rgba(39, 63, 82, 0.05);
+}
+
+.public-ambient-spec-sm.public-ambient-spec-dot-pine,
+.public-ambient-spec-dot-pine.public-ambient-spec-sm {
+  background: rgba(39, 63, 82, 0.62);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.4),
+    0 0 3px rgba(39, 63, 82, 0.48),
+    0 0 9px rgba(0, 162, 131, 0.09);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-sm {
-  background: rgba(0, 162, 131, 0.5);
+  background: rgba(0, 162, 131, 0.52);
   box-shadow:
     0 0 0 0.5px rgba(255, 255, 255, 0.38),
-    0 0 3px rgba(0, 162, 131, 0.46),
+    0 0 3px rgba(0, 162, 131, 0.48),
     0 0 9px rgba(0, 162, 131, 0.11);
 }
 
@@ -515,32 +536,42 @@ body {
   height: 7px;
   margin-left: -3.5px;
   margin-top: -3.5px;
-  background: rgba(0, 69, 140, 0.64);
+  background: rgba(0, 69, 140, 0.62);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.55),
-    0 0 5px rgba(0, 69, 140, 0.52),
-    0 0 14px rgba(0, 69, 140, 0.15);
+    0 0 5px rgba(0, 69, 140, 0.5),
+    0 0 14px rgba(0, 69, 140, 0.13),
+    0 0 16px rgba(39, 63, 82, 0.07);
+}
+
+.public-ambient-spec-lg.public-ambient-spec-dot-pine,
+.public-ambient-spec-dot-pine.public-ambient-spec-lg {
+  background: rgba(39, 63, 82, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.52),
+    0 0 5px rgba(39, 63, 82, 0.54),
+    0 0 13px rgba(0, 162, 131, 0.12);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-lg {
-  background: rgba(0, 162, 131, 0.58);
+  background: rgba(0, 162, 131, 0.6);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 0 5px rgba(0, 162, 131, 0.48),
+    0 0 5px rgba(0, 162, 131, 0.5),
     0 0 14px rgba(0, 162, 131, 0.14);
 }
 
 .public-ambient-spec:nth-child(3n + 1) {
-  animation: public-spec-float 11s ease-in-out infinite;
+  animation: public-spec-float 9.5s ease-in-out infinite;
 }
 
 .public-ambient-spec:nth-child(3n + 2) {
-  animation: public-spec-float-slow 13s ease-in-out infinite;
+  animation: public-spec-float-slow 11.5s ease-in-out infinite;
 }
 
 .public-ambient-spec:nth-child(3n) {
-  animation: public-spec-drift-alt 10s ease-in-out infinite;
+  animation: public-spec-drift-alt 8.5s ease-in-out infinite;
 }
 
 /* ========== Homepage visual system (brand hierarchy, section depth, transitions) ========== */
