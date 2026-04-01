@@ -26,6 +26,44 @@ interface TabConfig {
     documentUploadEntityType?: string;
 }
 
+const RELATED_SCHEDULE_COLUMNS: TabConfig["columns"] = [
+    { key: "start_at", label: "Start", render: (v) => (v ? new Date(v as string).toLocaleString() : "—") },
+    { key: "end_at", label: "End", render: (v) => (v ? new Date(v as string).toLocaleString() : "—") },
+    {
+        key: "timezone",
+        label: "Timezone",
+        render: (v) => {
+            if (v == null || v === "") return "—";
+            const s = String(v).trim();
+            return s.length > 0 ? s : "—";
+        },
+    },
+    {
+        key: "status_key",
+        label: "Workflow",
+        render: (v) => {
+            if (v == null || v === "") return "—";
+            const s = String(v).trim();
+            return s.length > 0 ? s : "—";
+        },
+    },
+    {
+        key: "canceled_at",
+        label: "Canceled",
+        render: (v, row) => {
+            if (!v) return "—";
+            const when = new Date(v as string).toLocaleString();
+            const reason = row?.cancel_reason;
+            if (reason != null && String(reason).trim()) {
+                const s = String(reason).trim();
+                const short = s.length > 64 ? `${s.slice(0, 64)}…` : s;
+                return `${when} · ${short}`;
+            }
+            return when;
+        },
+    },
+];
+
 const EMPTY: Record<string, unknown[]> = { people: [], opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [], linked_persons: [] };
 
 export default function RelatedRecordsTabs({
@@ -65,6 +103,15 @@ export default function RelatedRecordsTabs({
 
     useEffect(() => {
         refetch();
+    }, [refetch]);
+
+    useEffect(() => {
+        const onSaved = (ev: Event) => {
+            const detail = (ev as CustomEvent<{ type?: string }>).detail;
+            if (detail?.type === "schedules") refetch();
+        };
+        window.addEventListener("admin-entity-saved", onSaved);
+        return () => window.removeEventListener("admin-entity-saved", onSaved);
     }, [refetch]);
 
     const [addLocationOpen, setAddLocationOpen] = useState(false);
@@ -110,11 +157,7 @@ export default function RelatedRecordsTabs({
                 { key: "title", label: "Title" },
                 { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
-                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "timezone", label: "Timezone" },
-            ]},
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
             { key: "documents", label: "Documents", entityType: "contacts", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "contact", columns: [] },
         );
     } else if (entityType === "customer") {
@@ -149,10 +192,7 @@ export default function RelatedRecordsTabs({
                 { key: "title", label: "Title" },
                 { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
-                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-            ]},
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
             { key: "locations", label: "Locations", entityType: "locations", dataKey: "locations", columns: [
                 { key: "label", label: "Name" },
                 { key: "location_type", label: "Type", render: (v) => (v && typeof v === "string") ? (v as string).charAt(0).toUpperCase() + (v as string).slice(1).toLowerCase() : "—" },
@@ -177,20 +217,12 @@ export default function RelatedRecordsTabs({
                 { key: "title", label: "Title" },
                 { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
-                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "timezone", label: "Timezone" },
-            ]},
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
             { key: "documents", label: "Documents", entityType: "opportunities", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "opportunity", columns: [] },
         );
     } else if (entityType === "job") {
         tabs.push(
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
-                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "timezone", label: "Timezone" },
-            ]},
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
             { key: "documents", label: "Documents", entityType: "jobs", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "job", columns: [] },
         );
     } else if (entityType === "location") {
@@ -205,11 +237,7 @@ export default function RelatedRecordsTabs({
                 { key: "title", label: "Title" },
                 { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: [
-                { key: "start_at", label: "Start", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "end_at", label: "End", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
-                { key: "timezone", label: "Timezone" },
-            ]},
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
             { key: "documents", label: "Documents", entityType: "locations", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "location", columns: [] },
         );
     }

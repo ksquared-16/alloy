@@ -3,6 +3,7 @@ import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. When copy_assignment is false, workflow(s) with event_type "schedule_created" may create assignment from job default. */
@@ -39,17 +40,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const durationMinutes = Math.round(durationMs / 60000) || (oldSchedule as { duration_minutes?: number }).duration_minutes || 120;
     const timezone = body.timezone != null ? String(body.timezone).trim() : ((oldSchedule as { timezone?: string }).timezone ?? "UTC");
 
+    const defaultSched = await resolveScheduleStatusRowByKey(supabase, "scheduled");
+    const insertRow: Record<string, unknown> = {
+        org_id: orgId,
+        job_id: jobId,
+        start_at: startAt,
+        end_at: endAt,
+        timezone,
+        duration_minutes: durationMinutes,
+        rescheduled_from_schedule_id: oldScheduleId,
+    };
+    if (defaultSched) {
+        insertRow.schedule_status_id = defaultSched.id;
+        insertRow.status_key = defaultSched.key;
+    }
+
     const { data: newSchedule, error: insErr } = await supabase
         .from("schedules")
-        .insert({
-            org_id: orgId,
-            job_id: jobId,
-            start_at: startAt,
-            end_at: endAt,
-            timezone,
-            duration_minutes: durationMinutes,
-            rescheduled_from_schedule_id: oldScheduleId,
-        })
+        .insert(insertRow)
         .select("id")
         .single();
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 400 });

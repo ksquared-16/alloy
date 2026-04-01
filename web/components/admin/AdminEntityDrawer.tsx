@@ -19,7 +19,7 @@ import {
     personDisplayName,
     formatScheduleDrawerHeaderTitle,
 } from "@/lib/adminFormatters";
-import { AssignmentStatusBadge, StatusBadge } from "@/components/admin/StatusBadge";
+import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import {
     WORKFLOW_ENTITY_TYPES,
     WORKFLOW_EVENT_TYPES,
@@ -44,6 +44,8 @@ import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOver
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
+import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
+import { JobManualChargeForm } from "@/components/admin/JobManualChargeForm";
 import {
     effectivePaymentRowStatusKey,
     jobPaymentStatusKeyLabel,
@@ -52,6 +54,7 @@ import {
     type JobPaymentsSummaryFromApi,
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -565,7 +568,7 @@ function JobDrawerRelationshipsSection(props: {
 
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer } = useAdminDrawer();
-    const { canMutate } = useAdminAuth();
+    const { canMutate, role: adminRole } = useAdminAuth();
     const { labels } = useEntityLabels();
     const memberSingular = labels.customer_members?.singular ?? "Member";
     const memberPlural = labels.customer_members?.plural ?? "Members";
@@ -1715,9 +1718,21 @@ export default function AdminEntityDrawer() {
             return;
         }
         setStatusDefsLoading(true);
-        fetch(`/api/admin/status-definitions?entity_type=${encodeURIComponent(drawer.type)}`)
-            .then((r) => (r.ok ? r.json() : { statuses: [] }))
-            .then((json: { statuses?: StatusDefOption[] }) => setStatusDefsForDrawer(json.statuses ?? []))
+        /** Effective defs (org + industry merge) — matches resolveStatusLabel / list badges; avoids org-only legacy gaps. */
+        fetch(`/api/admin/status-options?entity_type=${encodeURIComponent(drawer.type)}`)
+            .then((r) => (r.ok ? r.json() : { options: [] }))
+            .then((json: { options?: { value: string; label: string }[] }) => {
+                const opts = json.options ?? [];
+                setStatusDefsForDrawer(
+                    opts.map((o, i) => ({
+                        status_key: o.value,
+                        status_label: o.label,
+                        sort_order: i,
+                        is_active: true,
+                        is_system: false,
+                    }))
+                );
+            })
             .catch(() => setStatusDefsForDrawer([]))
             .finally(() => setStatusDefsLoading(false));
     }, [drawer.type, drawer.id]);
@@ -3185,7 +3200,7 @@ export default function AdminEntityDrawer() {
                 }}
                 className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
             >
-                {paidInFullKnown ? "Add payment" : "Collect for job"}
+                Add payment
             </button>
             {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                 <button
@@ -3238,7 +3253,7 @@ export default function AdminEntityDrawer() {
                     }}
                     className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
                 >
-                    {schedulePaidInFullKnown ? "Add payment" : "Collect for job"}
+                    Add payment
                 </button>
                 {hasServerJobPaymentSummary && jobPaymentSummaryFromApi.payment_status_key === "failed" && (
                     <button
@@ -4667,7 +4682,19 @@ export default function AdminEntityDrawer() {
 
     const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
-            <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+            <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge
+                    label={
+                        String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                        getStatusLabel((overviewData as { status_key?: string }).status_key) ||
+                        String((overviewData as { status_key?: string }).status_key ?? "").trim() ||
+                        "—"
+                    }
+                    variant={getStatusVariant((overviewData as { status_key?: string }).status_key)}
+                />
+                <span className="text-xs text-alloy-midnight/55 whitespace-nowrap">Payment</span>
+                <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+            </div>
         ) : drawer.type === "opportunities" &&
           (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
               (overviewData as { status_key?: string }).status_key) ? (
@@ -5948,6 +5975,9 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "financials" && drawer.type === "jobs" && data && !(data as { _create?: boolean })?._create && (
                         <div className={`pt-2 ${DRAWER_ROW_SPACING}`}>
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Payments &amp; pricing</h3>
+                            {drawer.id && drawer.id !== "new" && canMutate && adminRole === "admin" ? (
+                                <JobManualChargeForm jobId={drawer.id} disabled={!canMutate} onCreated={() => refetchJobPayments()} />
+                            ) : null}
                             {jobPaymentsFetchError ? (
                                 <p className="text-sm text-red-600 mb-3 rounded border border-red-200 bg-red-50 px-2 py-2">{jobPaymentsFetchError}</p>
                             ) : !jobPaymentSummaryFromApi ? (
@@ -5955,7 +5985,9 @@ export default function AdminEntityDrawer() {
                             ) : (
                                 <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-4">
                                     <div className="flex justify-between gap-2">
-                                        <span className="text-alloy-midnight/70">Job total</span>
+                                        <span className="text-alloy-midnight/70">
+                                            {jobTotalSummaryLabel(jobPaymentSummaryFromApi.receivable_source)}
+                                        </span>
                                         <span className="font-medium">
                                             {jobPaymentSummaryFromApi.job_total_cents != null
                                                 ? formatMoneyFromCents(jobPaymentSummaryFromApi.job_total_cents)
@@ -5965,7 +5997,7 @@ export default function AdminEntityDrawer() {
                                         </span>
                                     </div>
                                     <div className="flex justify-between gap-2">
-                                        <span className="text-alloy-midnight/70">Paid</span>
+                                        <span className="text-alloy-midnight/70">Paid (posted)</span>
                                         <span className="font-medium">{formatMoneyFromCents(jobPaymentSummaryFromApi.paid_amount_cents)}</span>
                                     </div>
                                     <div className="flex justify-between gap-2">
@@ -5994,6 +6026,14 @@ export default function AdminEntityDrawer() {
                                         </span>
                                     </div>
                                 </div>
+                            )}
+                            {jobPaymentsFetchError ? null : !jobPaymentSummaryFromApi ? null : (
+                                <JobReceivableChargesPanel
+                                    receivableSource={jobPaymentSummaryFromApi.receivable_source}
+                                    chargeRows={jobPaymentSummaryFromApi.charge_balance_rows}
+                                    openChargeCount={jobPaymentSummaryFromApi.open_charge_count}
+                                    className="mb-4"
+                                />
                             )}
                             {jobPaymentsFetchError ? null : !jobPaymentSummaryFromApi ? null : jobPayments.length > 0 ? (
                                 <ul className="space-y-2">
@@ -6077,7 +6117,7 @@ export default function AdminEntityDrawer() {
                                     <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
                                         These totals sum <strong>gl_journal_lines</strong> for this job (mapped accounts only).{" "}
                                         <strong>Posted journal entries</strong> counts <strong>schedule_completed</strong>{" "}
-                                        entries for this job&apos;s schedules — not individual Stripe charges.
+                                        entries for this job's schedules — not individual Stripe charges.
                                     </p>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80 mt-3">
                                         <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
@@ -6120,9 +6160,10 @@ export default function AdminEntityDrawer() {
                                                 </tbody>
                                             </table>
                                             <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
-                                                Billing model here: job-level payments (above) roll up all <span className="font-mono text-[11px]">payments</span>{" "}
-                                                rows; this table is per schedule with <span className="font-mono text-[11px]">schedule_completed</span> GL
-                                                entries when visits are completed and amounts post.
+                                                Billing model here: the payment summary above uses receivable <span className="font-mono text-[11px]">charges</span>{" "}
+                                                when present (see receivable charges list); otherwise priced job lines. Job-level{" "}
+                                                <span className="font-mono text-[11px]">payments</span> rows roll up below. This table is per schedule with{" "}
+                                                <span className="font-mono text-[11px]">schedule_completed</span> GL entries when visits complete.
                                             </p>
                                         </div>
                                     ) : null}
@@ -7496,7 +7537,9 @@ export default function AdminEntityDrawer() {
                                             <>
                                                 <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-2 mb-2 text-xs space-y-1">
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="text-alloy-midnight/60">Job total</span>
+                                                        <span className="text-alloy-midnight/60">
+                                                            {jobTotalSummaryLabel(jobPaymentSummaryFromApi.receivable_source)}
+                                                        </span>
                                                         <span>
                                                             {jobPaymentSummaryFromApi.job_total_cents != null
                                                                 ? formatMoneyFromCents(jobPaymentSummaryFromApi.job_total_cents)
@@ -7506,7 +7549,7 @@ export default function AdminEntityDrawer() {
                                                         </span>
                                                     </div>
                                                     <div className="flex justify-between gap-2">
-                                                        <span className="text-alloy-midnight/60">Paid</span>
+                                                        <span className="text-alloy-midnight/60">Paid (posted)</span>
                                                         <span>{formatMoneyFromCents(jobPaymentSummaryFromApi.paid_amount_cents)}</span>
                                                     </div>
                                                     <div className="flex justify-between gap-2">
@@ -7523,13 +7566,22 @@ export default function AdminEntityDrawer() {
                                                     </div>
                                                     {jobPaymentSummaryFromApi.pending_payment_amount_cents > 0 ? (
                                                         <div className="flex justify-between gap-2">
-                                                            <span className="text-alloy-midnight/60">Pending</span>
+                                                            <span className="text-alloy-midnight/60">Pending (authorized)</span>
                                                             <span>
                                                                 {formatMoneyFromCents(jobPaymentSummaryFromApi.pending_payment_amount_cents)}
                                                             </span>
                                                         </div>
                                                     ) : null}
                                                 </div>
+                                                {jobPaymentSummaryFromApi.receivable_source === "charges" ? (
+                                                    <JobReceivableChargesPanel
+                                                        receivableSource={jobPaymentSummaryFromApi.receivable_source}
+                                                        chargeRows={jobPaymentSummaryFromApi.charge_balance_rows}
+                                                        openChargeCount={jobPaymentSummaryFromApi.open_charge_count}
+                                                        compact
+                                                        className="mb-2"
+                                                    />
+                                                ) : null}
                                                 <div className="flex flex-wrap items-center gap-2 mb-2">
                                                     <span className="text-xs text-alloy-midnight/60">Payment state:</span>
                                                     <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
@@ -7578,6 +7630,76 @@ export default function AdminEntityDrawer() {
                             )}
                             {drawer.type === "schedules" && !(data as { _create?: boolean })?._create && (
                                 <>
+                                    <div className="rounded-md border border-alloy-stone/40 bg-alloy-stone/10 px-3 py-2.5 mb-3 space-y-2">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/80">Current status</h4>
+                                            <Link
+                                                href="/admin/system/statuses?entity_type=schedules"
+                                                className="text-[11px] text-alloy-blue hover:underline shrink-0"
+                                            >
+                                                Schedules statuses (source of truth)
+                                            </Link>
+                                        </div>
+                                        {(data.canceled_at as string) ? (
+                                            <div className="space-y-1.5">
+                                                <p className="text-sm text-alloy-midnight flex flex-wrap items-center gap-2">
+                                                    <span className="text-alloy-midnight/60">Visit:</span>
+                                                    <strong>Canceled</strong>
+                                                    <StatusBadge label="Canceled" variant="neutral" />
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/70">
+                                                    <span className="text-alloy-midnight/50">Canceled at:</span>{" "}
+                                                    {formatDateTime(String(data.canceled_at))}
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/70">
+                                                    <span className="text-alloy-midnight/50">Cancel reason:</span>{" "}
+                                                    {(data.cancel_reason as string)?.trim() ? String(data.cancel_reason).trim() : "—"}
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/65 border-t border-alloy-stone/25 pt-1.5 mt-1.5">
+                                                    <span className="text-alloy-midnight/50">Workflow status (from statuses):</span>{" "}
+                                                    {(() => {
+                                                        const sk = String(data.status_key ?? "").trim();
+                                                        const lab =
+                                                            sk &&
+                                                            (statusDefsForDrawer.find((s) => s.status_key === sk)?.status_label?.trim() ||
+                                                                String(
+                                                                    (data as { _schedule_status_label?: string | null })._schedule_status_label ??
+                                                                        ""
+                                                                ).trim());
+                                                        return (
+                                                            <>
+                                                                {lab ? <strong>{lab}</strong> : <span className="text-alloy-midnight/45">—</span>}
+                                                                {sk ? (
+                                                                    <span className="font-mono text-[10px] text-alloy-midnight/45 ml-1">({sk})</span>
+                                                                ) : null}
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                <p className="text-sm text-alloy-midnight">
+                                                    <span className="text-alloy-midnight/60">Workflow status:</span>{" "}
+                                                    <strong>
+                                                        {String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
+                                                            (() => {
+                                                                const sk = String(formData.status_key ?? data.status_key ?? "").trim();
+                                                                return (
+                                                                    statusDefsForDrawer.find((s) => s.status_key === sk)?.status_label?.trim() ||
+                                                                    sk ||
+                                                                    "—"
+                                                                );
+                                                            })()}
+                                                    </strong>
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/55">
+                                                    <span className="text-alloy-midnight/50">status_key:</span>{" "}
+                                                    <span className="font-mono">{String(formData.status_key ?? data.status_key ?? "").trim() || "—"}</span>
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                     {(data.job_id as string) && (
                                         <div>
                                             <strong className="text-alloy-midnight/70">{jobSingular}</strong>
@@ -7606,39 +7728,46 @@ export default function AdminEntityDrawer() {
                                         </div>
                                     )}
                                     <div className="space-y-4">
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
-                                                {statusDefsLoading ? (
-                                                    <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                                                ) : (
-                                                    <select
-                                                        value={String(formData.status_key ?? "")}
-                                                        onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
-                                                        onBlur={() => {
-                                                            if (drawer.type === "schedules" && nonJobFormDirty) saveEdit();
-                                                        }}
-                                                        disabled={!canMutate}
-                                                        className={INLINE_EDIT_INPUT_CLASS}
-                                                    >
-                                                        <option value="">— None —</option>
-                                                        {statusDefsForDrawer
-                                                            .filter((s) => s.is_active)
-                                                            .sort((a, b) => a.sort_order - b.sort_order)
-                                                            .map((s) => (
-                                                                <option key={s.status_key} value={s.status_key}>
-                                                                    {s.status_label ?? s.status_key}
-                                                                </option>
-                                                            ))}
-                                                    </select>
-                                                )}
-                                            </div>
-                                            </div>
-                                    {(data.canceled_at as string) && (
-                                        <div className="text-alloy-ember text-sm">Canceled: {formatDateTime(data.canceled_at as string)} {(data.canceled_by as string) && `by ${data.canceled_by}`} {(data.cancel_reason as string) && ` — ${data.cancel_reason}`}</div>
-                                    )}
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
+                                    </div>
+                                    <div className="rounded-md border border-alloy-stone/35 bg-white px-3 py-2.5 mt-3 space-y-2">
+                                        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/80">Change workflow status</h4>
+                                        <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl">
+                                            Options match{" "}
+                                            <Link href="/admin/system/statuses?entity_type=schedules" className="text-alloy-blue hover:underline">
+                                                System → Statuses → Schedules
+                                            </Link>
+                                            . This updates operational workflow only — it does <strong>not</strong> cancel the visit.
+                                        </p>
+                                        {statusDefsLoading ? (
+                                            <p className="text-sm text-alloy-midnight/60">Loading status definitions…</p>
+                                        ) : (data.canceled_at as string) ? (
+                                            <p className="text-sm text-alloy-midnight/60 py-1">Workflow editing is disabled while the visit is canceled.</p>
+                                        ) : (
+                                            <select
+                                                value={String(formData.status_key ?? "")}
+                                                onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
+                                                onBlur={() => {
+                                                    if (drawer.type === "schedules" && nonJobFormDirty) saveEdit();
+                                                }}
+                                                disabled={!canMutate}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            >
+                                                <option value="">— None —</option>
+                                                {statusDefsForDrawer
+                                                    .filter((s) => s.is_active)
+                                                    .filter((s) => !isScheduleCanceledStatusKey(s.status_key))
+                                                    .sort((a, b) => a.sort_order - b.sort_order)
+                                                    .map((s) => (
+                                                        <option key={s.status_key} value={s.status_key}>
+                                                            {s.status_label ?? s.status_key}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        )}
+                                    </div>
                                     <div className="pt-2 border-t border-[#e6e8ec]" id="schedule-assign-section">
                                         <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
                                         {(data._assignment as { id?: string }) ? (
@@ -7729,7 +7858,16 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                     {!(data.canceled_at as string) && (
-                                        <div className="pt-2 border-t border-[#e6e8ec] flex flex-wrap gap-2">
+                                        <div className="pt-3 border-t border-[#e6e8ec] space-y-2">
+                                            <div className="mb-1">
+                                                <strong className="text-sm text-alloy-midnight/85 block">Cancel visit</strong>
+                                                <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl mt-0.5">
+                                                    Separate from workflow status above. Calls the cancel API (sets{" "}
+                                                    <code className="text-[10px] bg-alloy-stone/40 px-1 rounded">canceled_at</code> and fee rules on
+                                                    the server).
+                                                </p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
                                             {!scheduleCancelPrompt ? (
                                                 <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded hover:bg-alloy-ember/10">Cancel {scheduleSingular.toLowerCase()}</button>
                                             ) : (
@@ -7737,17 +7875,23 @@ export default function AdminEntityDrawer() {
                                                     <input value={scheduleCancelReason} onChange={(e) => setScheduleCancelReason(e.target.value)} placeholder="Reason (optional)" className="px-2 py-1.5 border rounded text-sm w-40" />
                                                     <button type="button" onClick={async () => {
                                                         try {
-                                                            const res = await fetch(`/api/admin/schedules/${drawer.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canceled_at: new Date().toISOString(), canceled_by: "admin", cancel_reason: scheduleCancelReason || null }) });
+                                                            const res = await fetch(`/api/admin/schedules/${drawer.id}/cancel`, {
+                                                                method: "POST",
+                                                                headers: { "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ cancel_reason: scheduleCancelReason || null }),
+                                                            });
                                                             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed");
                                                             setScheduleCancelReason("");
                                                             setScheduleCancelPrompt(false);
                                                             refetch(); router.refresh();
+                                                            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: drawer.id } }));
                                                         } catch (err) { setSaveError((err as Error).message); }
                                                     }} className="px-2 py-1.5 text-sm bg-alloy-ember/15 text-alloy-ember rounded hover:bg-alloy-ember/20">Confirm cancel</button>
                                                     <button type="button" onClick={() => { setScheduleCancelPrompt(false); setScheduleCancelReason(""); }} className="text-sm text-alloy-midnight/60">Back</button>
                                                 </div>
                                             )}
                                             <button type="button" onClick={() => setScheduleRescheduleForm(scheduleRescheduleForm ? null : { start_at: (data.start_at as string) ? new Date(data.start_at as string).toISOString().slice(0, 16) : "", end_at: (data.end_at as string) ? new Date(data.end_at as string).toISOString().slice(0, 16) : "", copy_assignment: !!(data._assignment as { id?: string }) })} className="px-2 py-1.5 text-sm border border-alloy-blue text-alloy-blue rounded hover:bg-alloy-stone/10">Reschedule</button>
+                                            </div>
                                         </div>
                                     )}
                                     {scheduleRescheduleForm && (

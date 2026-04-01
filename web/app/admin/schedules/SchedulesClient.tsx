@@ -6,6 +6,7 @@ import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import Drawer from "@/components/admin/Drawer";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { Filter } from "lucide-react";
 
 type ScheduleRow = {
@@ -57,6 +58,7 @@ export default function SchedulesClient() {
   const [cancelTarget, setCancelTarget] = useState<ScheduleRow | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelModalError, setCancelModalError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
@@ -71,9 +73,16 @@ export default function SchedulesClient() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/admin/status-definitions?entity_type=schedules")
-      .then((r) => r.ok ? r.json() : { statuses: [] })
-      .then((j: { statuses?: { status_key: string; status_label: string | null }[] }) => setStatusOptions((j.statuses ?? []).filter((s) => s.status_key)));
+    fetch("/api/admin/status-options?entity_type=schedules")
+      .then((r) => (r.ok ? r.json() : { options: [] }))
+      .then((j: { options?: { value: string; label: string }[] }) =>
+        setStatusOptions(
+          (j.options ?? [])
+            .filter((o) => o.value)
+            .filter((o) => !isScheduleCanceledStatusKey(o.value))
+            .map((o) => ({ status_key: o.value, status_label: o.label }))
+        )
+      );
   }, []);
 
   const fetchSchedules = useCallback(async () => {
@@ -159,18 +168,24 @@ export default function SchedulesClient() {
 
   const handleCancelConfirm = async () => {
     if (!cancelTarget) return;
+    const scheduleId = cancelTarget.id;
     setCancelLoading(true);
+    setCancelModalError(null);
     try {
-      const res = await fetch(`/api/admin/schedules/${cancelTarget.id}/cancel`, {
+      const res = await fetch(`/api/admin/schedules/${scheduleId}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cancel_reason: cancelReason || null }),
+        body: JSON.stringify({ cancel_reason: cancelReason.trim() ? cancelReason.trim() : null }),
       });
-      if (res.ok) {
-        setCancelTarget(null);
-        setCancelReason("");
-        fetchSchedules();
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setCancelModalError(json.error ?? `Cancel failed (${res.status})`);
+        return;
       }
+      setCancelTarget(null);
+      setCancelReason("");
+      fetchSchedules();
+      window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: scheduleId } }));
     } finally {
       setCancelLoading(false);
     }
@@ -212,13 +227,16 @@ export default function SchedulesClient() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-alloy-muted">Status</label>
+              <label className="mb-1 block text-xs font-medium text-alloy-muted">Workflow status</label>
               <select value={statusKeyFilter} onChange={(e) => setStatusKeyFilter(e.target.value)} className="w-full rounded-lg border border-alloy-stone/40 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20">
                 <option value="">All</option>
                 {statusOptions.map((s) => (
                   <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-alloy-muted leading-snug">
+                Canceled visits are not a status filter — use <span className="font-medium">Include canceled</span> and the row <span className="font-medium">Cancel</span> action (POST cancel), not workflow status.
+              </p>
             </div>
             <label className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" checked={includeCanceled} onChange={(e) => setIncludeCanceled(e.target.checked)} className="rounded border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/20" />
@@ -260,7 +278,7 @@ export default function SchedulesClient() {
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Assigned {vendorSingular}</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Canceled?</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Actions</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Cancel visit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-alloy-stone/30">
@@ -291,7 +309,17 @@ export default function SchedulesClient() {
                       <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
                         <span className="flex flex-wrap gap-1">
                           {!s.canceled_at && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setCancelTarget(s); }} className="text-xs font-medium text-amber-700 hover:underline">Cancel</button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCancelModalError(null);
+                                setCancelTarget(s);
+                              }}
+                              className="text-xs font-medium text-amber-700 hover:underline"
+                            >
+                              Cancel schedule
+                            </button>
                           )}
                         </span>
                       </td>
@@ -372,6 +400,12 @@ export default function SchedulesClient() {
           <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Cancel {singular.toLowerCase()}</h3>
             <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this {singular.toLowerCase()}? Start: {formatDateTime(cancelTarget.start_at)}</p>
+            <p className="text-xs text-alloy-midnight/55 mb-3 leading-snug">
+              This uses the server cancel action (records <code className="text-[11px] bg-alloy-stone/15 px-1 rounded">canceled_at</code>, applies cancellation-fee rules). It is not the same as setting workflow status to canceled.
+            </p>
+            {cancelModalError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5 mb-3">{cancelModalError}</p>
+            )}
             <div className="mb-4">
               <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Reason (optional)</label>
               <input
@@ -383,7 +417,7 @@ export default function SchedulesClient() {
               />
             </div>
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => { setCancelTarget(null); setCancelReason(""); }} disabled={cancelLoading} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50">Back</button>
+              <button type="button" onClick={() => { setCancelTarget(null); setCancelReason(""); setCancelModalError(null); }} disabled={cancelLoading} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50">Back</button>
               <button type="button" onClick={handleCancelConfirm} disabled={cancelLoading} className="px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded hover:opacity-90 disabled:opacity-50">{cancelLoading ? "Canceling…" : `Cancel ${singular.toLowerCase()}`}</button>
             </div>
           </div>

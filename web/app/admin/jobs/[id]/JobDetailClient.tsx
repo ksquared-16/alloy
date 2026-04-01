@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
-import { StatusBadge } from "@/components/admin/StatusBadge";
+import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
+import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import type { JobPaymentRow, JobPaymentsPaymentSummary } from "@/app/api/admin/jobs/[id]/payments/route";
 import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
 
@@ -26,6 +28,9 @@ type ScheduleRow = {
     end_at: string;
     timezone: string | null;
     canceled_at?: string | null;
+    cancel_reason?: string | null;
+    status_key?: string | null;
+    _status_display?: string | null;
 };
 
 type VendorOption = { id: string; name: string | null; label?: string | null };
@@ -49,6 +54,7 @@ export default function JobDetailClient({
     const [paymentSummary, setPaymentSummary] = useState<JobPaymentsPaymentSummary | null>(null);
     const [paymentsFetchError, setPaymentsFetchError] = useState<string | null>(null);
     const [vendors, setVendors] = useState<VendorOption[]>([]);
+    const router = useRouter();
     const { labels } = useEntityLabels();
     const vendorSingular = getEntityLabel(labels, "vendors", "singular");
     const jobSingular = getEntityLabel(labels, "jobs", "singular");
@@ -69,6 +75,7 @@ export default function JobDetailClient({
     const [cancelTarget, setCancelTarget] = useState<ScheduleRow | null>(null);
     const [cancelReason, setCancelReason] = useState("");
     const [cancelLoading, setCancelLoading] = useState(false);
+    const [cancelModalError, setCancelModalError] = useState<string | null>(null);
     const [workUnitOptions, setWorkUnitOptions] = useState<WorkUnitOpt[]>([]);
     const [workUnitSaving, setWorkUnitSaving] = useState(false);
     const [workUnitError, setWorkUnitError] = useState<string | null>(null);
@@ -303,18 +310,25 @@ export default function JobDetailClient({
 
     const handleCancelSchedule = async () => {
         if (!cancelTarget) return;
+        const sid = cancelTarget.id;
         setCancelLoading(true);
+        setCancelModalError(null);
         try {
-            const res = await fetch(`/api/admin/schedules/${cancelTarget.id}/cancel`, {
+            const res = await fetch(`/api/admin/schedules/${sid}/cancel`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cancel_reason: cancelReason || null }),
+                body: JSON.stringify({ cancel_reason: cancelReason.trim() ? cancelReason.trim() : null }),
             });
-            if (res.ok) {
-                setCancelTarget(null);
-                setCancelReason("");
-                setSchedules((prev) => prev.map((s) => (s.id === cancelTarget.id ? { ...s, canceled_at: new Date().toISOString() } : s)));
+            const row = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
+            if (!res.ok) {
+                setCancelModalError(row.error ?? `Cancel failed (${res.status})`);
+                return;
             }
+            setCancelTarget(null);
+            setCancelReason("");
+            setSchedules((prev) => prev.map((s) => (s.id === sid ? { ...s, ...row } : s)));
+            router.refresh();
+            window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: sid } }));
         } finally {
             setCancelLoading(false);
         }
@@ -481,13 +495,14 @@ export default function JobDetailClient({
                                                 <th className="pb-2 pr-4">End</th>
                                                 <th className="pb-2 pr-4">Timezone</th>
                                                 <th className="pb-2 pr-4">Status</th>
+                                                <th className="pb-2 pr-4">Cancellation</th>
                                                 {isAdmin && <th className="pb-2 pr-4">Actions</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {schedules.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={isAdmin ? 5 : 4} className="py-4 text-alloy-midnight/60">
+                                                    <td colSpan={isAdmin ? 6 : 5} className="py-4 text-alloy-midnight/60">
                                                         No schedules.
                                                     </td>
                                                 </tr>
@@ -498,10 +513,35 @@ export default function JobDetailClient({
                                                         <td className="py-2 pr-4">{formatDateTime(s.end_at)}</td>
                                                         <td className="py-2 pr-4">{(s as { timezone?: string }).timezone ?? "—"}</td>
                                                         <td className="py-2 pr-4">
-                                                            <StatusBadge
-                                                                label={s.canceled_at ? "Canceled" : "Scheduled"}
-                                                                variant={s.canceled_at ? "neutral" : "default"}
-                                                            />
+                                                            <div className="flex flex-wrap items-center gap-1">
+                                                                <StatusBadge
+                                                                    label={
+                                                                        String(s._status_display ?? "").trim() ||
+                                                                        String(s.status_key ?? "").trim() ||
+                                                                        "—"
+                                                                    }
+                                                                    variant={getStatusVariant(s.status_key ?? null)}
+                                                                />
+                                                                {s.canceled_at ? (
+                                                                    <StatusBadge label="Canceled" variant="neutral" />
+                                                                ) : null}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2 pr-4 align-top text-xs text-alloy-midnight/80 max-w-[200px]">
+                                                            {s.canceled_at ? (
+                                                                <div>
+                                                                    <div>{formatDateTime(s.canceled_at)}</div>
+                                                                    {s.cancel_reason ? (
+                                                                        <div className="text-alloy-midnight/60 mt-1 leading-snug">
+                                                                            {s.cancel_reason}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="text-alloy-midnight/45 mt-0.5">No reason</div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                "—"
+                                                            )}
                                                         </td>
                                                         {isAdmin && (
                                                             <td className="py-2 pr-4">
@@ -517,10 +557,13 @@ export default function JobDetailClient({
                                                                             </button>
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => setCancelTarget(s)}
+                                                                                onClick={() => {
+                                                                                    setCancelModalError(null);
+                                                                                    setCancelTarget(s);
+                                                                                }}
                                                                                 className="text-xs px-2 py-0.5 text-amber-700 hover:underline"
                                                                             >
-                                                                                Cancel
+                                                                                Cancel schedule
                                                                             </button>
                                                                         </>
                                                                     )}
@@ -547,7 +590,9 @@ export default function JobDetailClient({
                                 <>
                                     <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-3">
                                         <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">Job total</span>
+                                            <span className="text-alloy-midnight/70">
+                                                {jobTotalSummaryLabel(paymentSummary.receivable_source)}
+                                            </span>
                                             <span className="font-medium">
                                                 {paymentSummary.job_total_cents != null
                                                     ? formatMoneyFromCents(paymentSummary.job_total_cents)
@@ -557,7 +602,7 @@ export default function JobDetailClient({
                                             </span>
                                         </div>
                                         <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">Paid</span>
+                                            <span className="text-alloy-midnight/70">Paid (posted)</span>
                                             <span className="font-medium">{formatMoneyFromCents(paymentSummary.paid_amount_cents)}</span>
                                         </div>
                                         <div className="flex justify-between gap-2">
@@ -573,18 +618,24 @@ export default function JobDetailClient({
                                         </div>
                                         {paymentSummary.pending_payment_amount_cents > 0 ? (
                                             <div className="flex justify-between gap-2">
-                                                <span className="text-alloy-midnight/70">Pending</span>
+                                                <span className="text-alloy-midnight/70">Pending (authorized)</span>
                                                 <span className="font-medium">
                                                     {formatMoneyFromCents(paymentSummary.pending_payment_amount_cents)}
                                                 </span>
                                             </div>
                                         ) : null}
                                     </div>
+                                    <JobReceivableChargesPanel
+                                        receivableSource={paymentSummary.receivable_source}
+                                        chargeRows={paymentSummary.charge_balance_rows}
+                                        openChargeCount={paymentSummary.open_charge_count}
+                                        className="mb-3"
+                                    />
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                                    <th className="pb-2 pr-4">Charge</th>
+                                                    <th className="pb-2 pr-4">Amount</th>
                                                     <th className="pb-2 pr-4">Status</th>
                                                     <th className="pb-2 pr-4">Received</th>
                                                     <th className="pb-2 pr-4">Posted</th>
@@ -759,6 +810,12 @@ export default function JobDetailClient({
                     <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-6 max-w-md w-full mx-4">
                         <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Cancel schedule</h3>
                         <p className="text-sm text-alloy-midnight/80 mb-2">Start: {formatDateTime(cancelTarget.start_at)}</p>
+                        <p className="text-xs text-alloy-midnight/55 mb-3 leading-snug">
+                            Server cancel (fee rules apply). Not the same as setting workflow status to canceled.
+                        </p>
+                        {cancelModalError ? (
+                            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5 mb-3">{cancelModalError}</p>
+                        ) : null}
                         <div className="mb-4">
                             <label className="block text-xs font-medium text-alloy-midnight/70 mb-1">Reason (optional)</label>
                             <input
@@ -770,7 +827,7 @@ export default function JobDetailClient({
                             />
                         </div>
                         <div className="flex gap-2 justify-end">
-                            <button type="button" onClick={() => { setCancelTarget(null); setCancelReason(""); }} disabled={cancelLoading} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50">Back</button>
+                            <button type="button" onClick={() => { setCancelTarget(null); setCancelReason(""); setCancelModalError(null); }} disabled={cancelLoading} className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50">Back</button>
                             <button type="button" onClick={handleCancelSchedule} disabled={cancelLoading} className="px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded hover:opacity-90 disabled:opacity-50">{cancelLoading ? "Canceling…" : "Cancel schedule"}</button>
                         </div>
                     </div>

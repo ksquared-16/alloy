@@ -1836,6 +1836,140 @@ def _get_active_job_allocation(
         return None
 
 
+def _list_job_service_charges(org_id: str, job_id: str) -> List[Dict[str, Any]]:
+    """All service charges for a job (newest first). Service role / PostgREST."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not org_id or not job_id:
+        return []
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/charges"
+        params = {
+            "org_id": f"eq.{org_id}",
+            "job_id": f"eq.{job_id}",
+            "charge_type": "eq.service",
+            "select": "id,status,metadata,created_at",
+            "order": "created_at.desc",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        if not resp.ok:
+            logger.warning(
+                "_list_job_service_charges: GET failed status=%s body=%s",
+                resp.status_code,
+                _trunc_log_body(resp.text or ""),
+            )
+            return []
+        data = resp.json()
+        if not isinstance(data, list):
+            logger.warning(
+                "_list_job_service_charges: unexpected JSON type=%s org_id=%s job_id=%s",
+                type(data).__name__,
+                org_id[:8] + "***",
+                job_id[:8] + "***",
+            )
+            return []
+        if len(data) == 0:
+            logger.info(
+                "_list_job_service_charges: empty result org_id=%s job_id=%s",
+                org_id[:8] + "***",
+                job_id[:8] + "***",
+            )
+        return [r for r in data if isinstance(r, dict)]
+    except Exception as e:
+        logger.warning(
+            "_list_job_service_charges: exception org_id=%s job_id=%s err=%s",
+            org_id[:8] + "***" if org_id else "",
+            job_id[:8] + "***" if job_id else "",
+            e,
+        )
+        return []
+
+
+def resolve_primary_service_charge_id(org_id: str, job_id: str) -> Optional[str]:
+    """
+    Primary service charge for payment allocation: prefer metadata.primary_service_charge,
+    else lowest sort key among draft / partially_paid / posted / paid (void excluded).
+    """
+    rows = _list_job_service_charges(org_id, job_id)
+    if not rows:
+        return None
+    non_void = [r for r in rows if str(r.get("status") or "").lower() != "void"]
+    if not non_void:
+        return None
+    primary_rows = [
+        r
+        for r in non_void
+        if isinstance(r.get("metadata"), dict)
+        and (r.get("metadata") or {}).get("primary_service_charge") is True
+    ]
+    if primary_rows:
+        primary_rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+        rid = primary_rows[0].get("id")
+        return str(rid) if rid else None
+    status_order = {"draft": 0, "partially_paid": 1, "posted": 2, "paid": 3}
+    non_void.sort(
+        key=lambda r: (
+            status_order.get(str(r.get("status") or "").lower(), 99),
+            str(r.get("created_at") or ""),
+        )
+    )
+    rid = non_void[0].get("id")
+    return str(rid) if rid else None
+
+
+def ensure_charge_posted_for_allocation(charge_id: str) -> bool:
+    """If charge is still draft, transition to posted and set posted_at before allocating payment."""
+    if not charge_id or not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/charges"
+        params = {"id": f"eq.{charge_id}", "select": "id,status", "limit": "1"}
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            logger.warning(
+                "ensure_charge_posted_for_allocation: GET charge failed status=%s",
+                resp.status_code,
+            )
+            return False
+        data = resp.json()
+        if not isinstance(data, list) or len(data) < 1 or not isinstance(data[0], dict):
+            return False
+        st = str(data[0].get("status") or "").lower()
+        if st != "draft":
+            logger.info(
+                "ensure_charge_posted_for_allocation: charge already non-draft status=%s charge_id=%s",
+                st,
+                charge_id[:8] + "***",
+            )
+            return True
+        now = _payment_iso_now()
+        headers_write = {**headers, "Prefer": "return=minimal"}
+        patch_url = f"{base_url}/charges?id=eq.{charge_id}"
+        pr = requests.patch(
+            patch_url,
+            headers=headers_write,
+            json={"status": "posted", "posted_at": now, "updated_at": now},
+            timeout=30,
+        )
+        if not pr.ok:
+            logger.error(
+                "ensure_charge_posted_for_allocation: PATCH failed status=%s body=%s",
+                pr.status_code,
+                _trunc_log_body(pr.text or ""),
+            )
+            return False
+        logger.info(
+            "ensure_charge_posted_for_allocation: posted draft charge charge_id=%s",
+            charge_id[:8] + "***",
+        )
+        return True
+    except Exception as e:
+        logger.exception("ensure_charge_posted_for_allocation: exception %s", e)
+        return False
+
+
 def ensure_job_payment_allocation(
     payment_id: str,
     org_id: str,
@@ -1897,9 +2031,38 @@ def ensure_job_payment_allocation(
         )
         return True
 
+    charge_id: Optional[str] = resolve_primary_service_charge_id(org_id, job_id)
+    if charge_id:
+        logger.info(
+            "ensure_job_payment_allocation: resolved primary service charge charge_id=%s payment_id=%s job_id=%s",
+            charge_id[:8] + "***",
+            payment_id[:8] + "***",
+            job_id[:8] + "***",
+        )
+        if not ensure_charge_posted_for_allocation(charge_id):
+            logger.error(
+                "ensure_job_payment_allocation: draft charge post failed charge_id=%s",
+                charge_id[:8] + "***",
+            )
+            return False
+    else:
+        logger.info(
+            "ensure_job_payment_allocation: no primary service charge org_id=%s job_id=%s payment_id=%s",
+            org_id[:8] + "***",
+            job_id[:8] + "***",
+            payment_id[:8] + "***",
+        )
+
     base_url = _get_base_url()
     headers = _get_headers()
     headers_write = {**headers, "Prefer": "return=minimal"}
+
+    patch_alloc_body: Dict[str, Any] = {
+        "allocated_amount_cents": alloc_amt,
+        "updated_at": _payment_iso_now(),
+    }
+    if charge_id:
+        patch_alloc_body["charge_id"] = charge_id
 
     if existing and existing.get("id"):
         alloc_id = existing["id"]
@@ -1908,7 +2071,7 @@ def ensure_job_payment_allocation(
             resp = requests.patch(
                 patch_url,
                 headers=headers_write,
-                json={"allocated_amount_cents": alloc_amt, "updated_at": _payment_iso_now()},
+                json=patch_alloc_body,
                 timeout=30,
             )
             if not resp.ok:
@@ -1918,6 +2081,11 @@ def ensure_job_payment_allocation(
                     resp.text[:300],
                 )
                 return False
+            logger.info(
+                "ensure_job_payment_allocation: PATCH allocation ok alloc_id=%s charge_id_written=%s",
+                str(alloc_id)[:8] + "***",
+                patch_alloc_body.get("charge_id") is not None,
+            )
             return True
         except requests.RequestException as e:
             logger.exception("ensure_job_payment_allocation: PATCH exception %s", e)
@@ -1933,9 +2101,15 @@ def ensure_job_payment_allocation(
         "allocation_type": "payment_application",
         "metadata": {},
     }
+    if charge_id:
+        insert_payload["charge_id"] = charge_id
     try:
         resp = requests.post(f"{base_url}/payment_allocations", headers=headers_write, json=insert_payload, timeout=30)
         if resp.ok:
+            logger.info(
+                "ensure_job_payment_allocation: POST allocation ok charge_id_written=%s",
+                insert_payload.get("charge_id") is not None,
+            )
             return True
         # Idempotent retry: row may have been created concurrently
         if resp.status_code in (409, 400) or "23505" in (resp.text or ""):
@@ -1945,9 +2119,15 @@ def ensure_job_payment_allocation(
                 pr = requests.patch(
                     patch_url,
                     headers=headers_write,
-                    json={"allocated_amount_cents": alloc_amt, "updated_at": _payment_iso_now()},
+                    json=patch_alloc_body,
                     timeout=30,
                 )
+                if pr.ok:
+                    logger.info(
+                        "ensure_job_payment_allocation: PATCH after idempotent retry ok alloc_id=%s charge_id_written=%s",
+                        str(retry["id"])[:8] + "***",
+                        patch_alloc_body.get("charge_id") is not None,
+                    )
                 return pr.ok
         logger.error(
             "ensure_job_payment_allocation: POST failed status=%s body=%s",
@@ -1962,6 +2142,10 @@ def ensure_job_payment_allocation(
 
 def finalize_payment_allocation_for_job(payment_id: str) -> None:
     """After payment is posted, ensure job allocation matches payment amount (V1 full job pay)."""
+    logger.info(
+        "finalize_payment_allocation_for_job: enter payment_id=%s",
+        payment_id[:8] + "***",
+    )
     row = get_payment_row_by_id(payment_id)
     if not row:
         return
@@ -2148,10 +2332,13 @@ def update_payment_by_id(
     paid_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
     additional_fields: Optional[Dict[str, Any]] = None,
+    finalize_job_allocation: bool = False,
 ) -> Tuple[bool, int]:
     """
     Update a payments row by id. All keyword-only args are optional.
     additional_fields: merged into PATCH body (use for explicit JSON nulls, e.g. posted_at).
+    finalize_job_allocation: if True and PATCH returns 200, reload the row and run finalize_payment_allocation_for_job
+      (does not depend on PATCH response body shape).
     Returns (success, rows_updated). On non-2xx response logs request/response and raises RuntimeError.
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
@@ -2177,6 +2364,20 @@ def update_payment_by_id(
         if resp.status_code == 200:
             data = resp.json()
             rows = len(data) if isinstance(data, list) else 0
+            if finalize_job_allocation:
+                fresh = get_payment_row_by_id(payment_id)
+                if fresh and fresh.get("id"):
+                    logger.info(
+                        "update_payment_by_id: finalize_job_allocation payment_id=%s rows_in_patch_response=%s",
+                        payment_id[:8] + "***",
+                        rows,
+                    )
+                    finalize_payment_allocation_for_job(str(payment_id))
+                else:
+                    logger.warning(
+                        "update_payment_by_id: finalize_job_allocation set but payment row missing after PATCH payment_id=%s",
+                        payment_id[:8] + "***",
+                    )
             return (True, rows)
         logger.error(
             "update_payment_by_id: PATCH non-2xx request url=%s params=%s payload_keys=%s response status=%d body=%s",
@@ -2323,13 +2524,32 @@ def update_payment_by_provider_payment_id(
             data = resp.json()
             rows = len(data) if isinstance(data, list) else 0
             logger.info(
-                "update_payment_by_provider_payment_id: filter_column=provider_payment_id rows_updated=%s pi_id=%s outcome=%s",
-                rows, provider_payment_id[:14] + "***", oc,
+                "update_payment_by_provider_payment_id: filter_column=provider_payment_id rows_in_patch_response=%s pi_id=%s outcome=%s",
+                rows,
+                provider_payment_id[:14] + "***",
+                oc,
             )
-            if oc == "succeeded" and rows > 0:
+            if oc == "succeeded":
                 row = get_payment_row_by_provider_payment_id(provider_payment_id)
                 if row and row.get("id"):
+                    if rows == 0:
+                        logger.warning(
+                            "update_payment_by_provider_payment_id: PATCH 200 but empty/minimal body; "
+                            "finalizing via fresh lookup pi_id=%s payment_id=%s",
+                            provider_payment_id[:14] + "***",
+                            str(row["id"])[:8] + "***",
+                        )
+                    logger.info(
+                        "update_payment_by_provider_payment_id: finalize allocation payment_id=%s rows_in_patch_response=%s",
+                        str(row["id"])[:8] + "***",
+                        rows,
+                    )
                     finalize_payment_allocation_for_job(str(row["id"]))
+                else:
+                    logger.warning(
+                        "update_payment_by_provider_payment_id: succeeded PATCH but no payment row for finalize pi_id=%s",
+                        provider_payment_id[:14] + "***",
+                    )
             return (True, rows)
         logger.error(
             "update_payment_by_provider_payment_id: PATCH non-2xx request url=%s params=%s response status=%d body=%s",

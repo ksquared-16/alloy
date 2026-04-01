@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import {
+  fetchScheduleStatusKeyByFk,
+  effectiveScheduleStatusKey,
+  resolveScheduleStatusRowByKey,
+} from "@/lib/admin/scheduleEffectiveStatusKey";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
@@ -84,6 +89,9 @@ export async function GET(request: NextRequest) {
     scheduleDefLabelByKey = new Map();
   }
 
+  const scheduleStatusFkIds = list.map((s) => (s as { schedule_status_id?: string | null }).schedule_status_id);
+  const scheduleKeyByFk = await fetchScheduleStatusKeyByFk(supabase, scheduleStatusFkIds);
+
   const schedules = list.map((s) => {
     const job = (s as { job_id: string }).job_id ? jobMap.get((s as { job_id: string }).job_id) : undefined;
     const customerId = job ? (job as { customer_id?: string }).customer_id : null;
@@ -93,11 +101,12 @@ export async function GET(request: NextRequest) {
     const _assigned_vendor_name = vendorId ? vendorMap.get(vendorId) ?? null : null;
     const locId = (s as { location_id?: string | null }).location_id;
     const _location_label = locId ? locationMap.get(locId) ?? null : null;
-    const sk = (s as { status_key?: string | null }).status_key;
-    const skTrim = sk && String(sk).trim() ? String(sk).trim() : null;
-    const _status_display = skTrim ? (scheduleDefLabelByKey.get(skTrim) ?? skTrim) : null;
+    const statusRow = s as { status_key?: string | null; schedule_status_id?: string | null };
+    const effectiveSk = effectiveScheduleStatusKey(statusRow, scheduleKeyByFk);
+    const _status_display = effectiveSk ? (scheduleDefLabelByKey.get(effectiveSk) ?? effectiveSk) : null;
     return {
       ...s,
+      status_key: effectiveSk,
       _job_title: job ? (job as { title: string | null }).title ?? null : null,
       _customer_name: customerId ? customerMap.get(customerId) ?? null : null,
       _assigned_vendor_name,
@@ -176,6 +185,14 @@ export async function POST(request: NextRequest) {
   if (location_id) row.location_id = location_id;
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
   if (body_status_key) row.status_key = body_status_key;
+
+  if (!body_status_key) {
+    const defaultSched = await resolveScheduleStatusRowByKey(supabase, "scheduled");
+    if (defaultSched) {
+      row.schedule_status_id = defaultSched.id;
+      row.status_key = defaultSched.key;
+    }
+  }
 
   const durationMs = new Date(end_at).getTime() - new Date(start_at).getTime();
   const duration_minutes = Math.round(durationMs / 60000);

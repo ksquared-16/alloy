@@ -105,6 +105,7 @@ export async function createTestJob(
 }
 
 export async function deleteTestJob(supabase: SupabaseClient, jobId: string, orgId: string): Promise<void> {
+  await supabase.from("charges").delete().eq("job_id", jobId).eq("org_id", orgId);
   await supabase.from("jobs").delete().eq("id", jobId).eq("org_id", orgId);
 }
 

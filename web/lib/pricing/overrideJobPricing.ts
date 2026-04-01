@@ -7,6 +7,8 @@ import {
   nextSnapshotVersion,
 } from "@/lib/pricing/jobPricingCore";
 import { computeJobGrossBasisCents, normalizeJobDiscountAmountToCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
+import { applyPricingDeltaAdjustmentCharge } from "@/lib/pricing/pricingChangeAdjustmentCharge";
+import { upsertPrimaryDraftServiceCharge } from "@/lib/pricing/upsertPrimaryDraftServiceCharge";
 
 export type JobPricingOverrideLineInput = {
   line_type: "service" | "addon" | "discount" | "fee" | "adjustment" | "tax";
@@ -269,6 +271,27 @@ export async function overrideJobPricing(params: OverrideJobPricingParams): Prom
     totals,
     lineCount: lineRows.length,
   });
+
+  const draftCharge = await upsertPrimaryDraftServiceCharge({
+    supabase,
+    orgId,
+    jobId,
+    totals,
+    source: "admin",
+  });
+  if (!draftCharge.ok) {
+    return { ok: false, error: draftCharge.error };
+  }
+
+  const adj = await applyPricingDeltaAdjustmentCharge({
+    supabase,
+    orgId,
+    jobId,
+    newPricingTotalCents: totals.total_cents,
+  });
+  if (!adj.ok) {
+    return { ok: false, error: adj.error };
+  }
 
   return { ok: true };
 }

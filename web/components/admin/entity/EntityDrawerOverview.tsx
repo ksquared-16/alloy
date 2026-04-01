@@ -13,6 +13,7 @@ import EntityDrawerSection from "./EntityDrawerSection";
 import EntityDrawerField from "./EntityDrawerField";
 import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overviewRelationshipLabels";
 import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import {
   opportunityOverviewRelationshipReadLabel,
   opportunityOverviewStatusBadgeLabel,
@@ -256,10 +257,14 @@ function renderFieldEditNode(
   onEscape: (key: string) => void,
   statusDefs: StatusDefOption[] | undefined,
   disabled: boolean,
-  selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>
+  selectOptionsByFieldKey: Record<string, { value: string; label: string }[]> | undefined,
+  presentationEntityType: EntityPresentationType
 ): ReactNode {
   const key = field.key;
-  const value = formData[key] !== undefined && formData[key] !== "" ? formData[key] : record[key];
+  const formVal = formData[key];
+  const formHasMeaningful =
+    formVal !== undefined && formVal !== null && String(formVal).trim() !== "";
+  const value = formHasMeaningful ? formVal : record[key];
   const hint = field.renderHint ?? "text";
   const onKeyDown = makeKeydownHandlers(key, onBlur, onEscape);
 
@@ -359,10 +364,29 @@ function renderFieldEditNode(
   }
 
   if (hint === "status" && statusDefs && statusDefs.length > 0) {
-    const options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const valStr = String(value ?? "").trim();
+    const scheduleCanceled =
+      presentationEntityType === "schedules" &&
+      record.canceled_at != null &&
+      String(record.canceled_at).trim() !== "";
+    if (scheduleCanceled) {
+      const lab = statusDefs.find((s) => s.status_key === valStr)?.status_label ?? valStr;
+      return (
+        <span className="inline-flex w-full items-center rounded border border-admin-border bg-alloy-stone/5 px-2 py-1.5 text-sm text-alloy-midnight/80">
+          {lab || "—"}
+        </span>
+      );
+    }
+    let options = statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    if (presentationEntityType === "schedules") {
+      options = options.filter((s) => !isScheduleCanceledStatusKey(s.status_key));
+    }
+    if (valStr && !options.some((s) => s.status_key === valStr)) {
+      options = [...options, { status_key: valStr, status_label: valStr, sort_order: 9999, is_active: true }];
+    }
     return (
       <select
-        value={String(value ?? "")}
+        value={valStr}
         onChange={(e) => onFieldChange(key, e.target.value || null)}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
@@ -519,7 +543,13 @@ export default function EntityDrawerOverview({
     }
     const showFieldEdit = !!(isEditing && canEdit && field.editable && onFieldChange);
     const rawForRead = displayFallback !== undefined ? displayFallback : record[key];
-    const rawValue = showFieldEdit ? (editFormData[key] !== undefined ? editFormData[key] : record[key]) : rawForRead;
+    const rawValue = showFieldEdit
+      ? (() => {
+          const ed = editFormData[key];
+          if (ed !== undefined && ed !== null && String(ed).trim() !== "") return ed;
+          return record[key];
+        })()
+      : rawForRead;
     let displayValue = formatFieldValue(rawValue, field, getStatusLabel, record, onOpenDrawer, entityType);
     if (!showFieldEdit && (displayValue === null || displayValue === undefined || displayValue === "")) {
       displayValue = "—";
@@ -534,7 +564,8 @@ export default function EntityDrawerOverview({
           handleEscape,
           statusDefs,
           !canEdit,
-          selectOptionsByFieldKey
+          selectOptionsByFieldKey,
+          entityType
         )
       : undefined;
     return (
