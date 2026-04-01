@@ -114,10 +114,10 @@ export default function Home() {
   ];
 
   return (
-    <div className="relative z-10 flex flex-1 flex-col w-full min-w-0">
+    <div className="relative z-10 flex w-full max-w-full flex-1 flex-col self-stretch">
         <FirstFreeCampaignHomeFlow />
-        {/* Hero — floating card embedded in atmosphere */}
-        <section className="relative mx-auto max-w-6xl px-4 md:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
+        {/* Hero — floating card embedded in atmosphere (width aligned with navbar max-w-screen-xl) */}
+        <section className="relative mx-auto w-full max-w-screen-xl px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 pb-12 md:pb-16">
           {/* Layered motion behind and around hero */}
           <div className="home-hero-ambient-zone">
             <div className="home-hero-ambient-gradient" />

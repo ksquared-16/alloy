@@ -12,6 +12,6 @@ export default function PublicPageShell({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-1 flex-col w-full min-w-0 ${className}`.trim()}>{children}</div>
+    <div className={`flex w-full max-w-full flex-1 flex-col self-stretch ${className}`.trim()}>{children}</div>
   );
 }
