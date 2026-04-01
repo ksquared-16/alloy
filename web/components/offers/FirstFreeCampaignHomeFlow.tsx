@@ -7,6 +7,7 @@ import {
   FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
   isFirstFree4x120CampaignQuery,
 } from "@/lib/campaigns/firstFree4x120";
+import { isFirstFreeQaShimEnabled } from "@/lib/campaigns/firstFreeQaShim";
 import { mergeFirstFreeCampaignBookingPrefill } from "@/lib/campaigns/mergeFirstFreeCampaignPrefill";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import FirstFreeTermsModal from "@/components/offers/FirstFreeTermsModal";
@@ -47,6 +48,38 @@ function FirstFreeCampaignHomeFlowInner() {
       flowPhaseRef.current = "quote_modal";
       return;
     }
+
+    const qaSkipQuote =
+      isFirstFreeQaShimEnabled() && searchParams.get("qa_firstfree_terms") === "1";
+    if (qaSkipQuote) {
+      flowPhaseRef.current = "terms_modal";
+      const email = searchParams.get("qa_email")?.trim() || "qa-firstfree@example.invalid";
+      const phone = searchParams.get("qa_phone")?.trim() || "+15555550123";
+      const rawSub = searchParams.get("qa_subtotal");
+      const parsed = rawSub != null ? Number.parseFloat(rawSub) : NaN;
+      const subtotal = Number.isFinite(parsed) && parsed > 0 ? parsed : 265;
+      try {
+        const quotePayload = {
+          first_clean_price: subtotal,
+          estimated_price: subtotal,
+          email,
+          phone,
+        };
+        localStorage.setItem("alloy_quote_v1", JSON.stringify(quotePayload));
+        sessionStorage.setItem("alloy_quote_v1", JSON.stringify(quotePayload));
+        mergeFirstFreeCampaignBookingPrefill({ email, phone });
+      } catch {
+        // ignore
+      }
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn(
+          "[FIRSTFREE4X120 QA] Skipped quote modal (NEXT_PUBLIC_ALLOY_FIRSTFREE_QA_SHIM). Opened terms with stub quote."
+        );
+      }
+      setTermsModalOpen(true);
+      return;
+    }
+
     if (flowPhaseRef.current !== "quote_modal") return;
     const run = () => {
       openModal({
@@ -60,7 +93,7 @@ function FirstFreeCampaignHomeFlowInner() {
     } else {
       void Promise.resolve().then(run);
     }
-  }, [campaignParam, openModal, handleQuoteStepComplete]);
+  }, [campaignParam, openModal, handleQuoteStepComplete, searchParams]);
 
   if (!isFirstFree4x120CampaignQuery(campaignParam)) return null;
 

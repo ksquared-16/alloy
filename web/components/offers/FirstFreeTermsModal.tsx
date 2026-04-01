@@ -12,6 +12,10 @@ import {
   type FirstFree4x120SessionV1,
 } from "@/lib/campaigns/firstFree4x120";
 import { mergeFirstFreeCampaignBookingPrefill } from "@/lib/campaigns/mergeFirstFreeCampaignPrefill";
+import {
+  FIRSTFREE_QA_SHIM_DISCOUNT_PROGRAM_ID,
+  isFirstFreeQaShimEnabled,
+} from "@/lib/campaigns/firstFreeQaShim";
 import { validateDiscountCodeForBooking } from "@/lib/campaigns/validateProgramDiscountClient";
 import { getBookingPath } from "@/lib/booking";
 
@@ -118,33 +122,52 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
       email = email || quote.email;
       phone = phone || quote.phone;
 
-      const validated = await validateDiscountCodeForBooking({
-        code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
-        email,
-        phone,
-        quoteSubtotal: subtotal,
-      });
+      if (isFirstFreeQaShimEnabled()) {
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn(
+            "[FIRSTFREE4X120 QA] Skipping validate-promo; using stub discount prefill (not valid for real checkout)."
+          );
+        }
+        mergeFirstFreeCampaignBookingPrefill({
+          email,
+          phone,
+          discount_program_id: FIRSTFREE_QA_SHIM_DISCOUNT_PROGRAM_ID,
+          discount_program_code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+          discount_program_name: "QA shim — replace with real validate-promo in aligned envs",
+          discount_code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+          discount_code_id: null,
+          discount_amount: subtotal,
+          quote_total: subtotal,
+        });
+      } else {
+        const validated = await validateDiscountCodeForBooking({
+          code: FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
+          email,
+          phone,
+          quoteSubtotal: subtotal,
+        });
 
-      if (!validated.ok) {
-        setTermsError(
-          validated.message ||
-            "We could not apply this offer automatically. You can continue to booking and enter the code manually, or contact us for help."
-        );
-        setContinueBusy(false);
-        return;
+        if (!validated.ok) {
+          setTermsError(
+            validated.message ||
+              "We could not apply this offer automatically. You can continue to booking and enter the code manually, or contact us for help."
+          );
+          setContinueBusy(false);
+          return;
+        }
+
+        mergeFirstFreeCampaignBookingPrefill({
+          email,
+          phone,
+          discount_program_id: validated.prefill.discount_program_id,
+          discount_program_code: validated.prefill.discount_program_code,
+          discount_program_name: validated.prefill.discount_program_name,
+          discount_code: validated.prefill.discount_code,
+          discount_code_id: validated.prefill.discount_code_id,
+          discount_amount: validated.prefill.discount_amount,
+          quote_total: validated.prefill.quote_total,
+        });
       }
-
-      mergeFirstFreeCampaignBookingPrefill({
-        email,
-        phone,
-        discount_program_id: validated.prefill.discount_program_id,
-        discount_program_code: validated.prefill.discount_program_code,
-        discount_program_name: validated.prefill.discount_program_name,
-        discount_code: validated.prefill.discount_code,
-        discount_code_id: validated.prefill.discount_code_id,
-        discount_amount: validated.prefill.discount_amount,
-        quote_total: validated.prefill.quote_total,
-      });
 
       const session: FirstFree4x120SessionV1 = {
         version: 1,

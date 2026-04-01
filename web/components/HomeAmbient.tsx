@@ -4,7 +4,7 @@
  * Full-page motion environment: adminV2-style atmospheric field (lighter customer-facing).
  * - Large drifting gradient clouds (heavy blur)
  * - Slow radial blooms (breathe)
- * - Drifting specs: slightly reduced count vs proof pass — fewer DOM nodes, less “dust”.
+ * - Drifting specs: moderate density — readable particles without proof-era noise.
  */
 const CLOUDS = [
   { className: "home-atmosphere-cloud home-atmosphere-cloud-1" },
@@ -24,30 +24,30 @@ const BLOOMS = [
 type SpecSize = "sm" | "md" | "lg";
 type SpecPoint = { left: string; top: string; juniper?: boolean; size?: SpecSize };
 
-/** Grid + edges + bands — trimmed vs earlier proof density for a cleaner field */
+/** Grid + edges + bands — ~25–30% more points than sparse pass; still below original proof grid */
 function buildSpecPositions(): SpecPoint[] {
   const out: SpecPoint[] = [];
-  for (let row = 0; row <= 4; row++) {
-    const t = 4 + row * 19;
-    for (let col = 0; col <= 5; col++) {
-      const l = 6 + col * 16;
+  for (let row = 0; row <= 5; row++) {
+    const t = 3 + row * 15;
+    for (let col = 0; col <= 6; col++) {
+      const l = 3 + col * 14;
       const juniper = (row + col) % 3 === 0;
       const size: SpecSize = (row + col) % 5 === 0 ? "lg" : (row + col) % 3 === 1 ? "sm" : "md";
       out.push({ left: `${l}%`, top: `${t}%`, juniper, size });
     }
   }
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 11; i++) {
     out.push({ left: `${(i * 8.4) % 100}%`, top: "1%", juniper: i % 2 === 0, size: "md" });
     out.push({ left: `${(i * 8.4) % 100}%`, top: "99%", juniper: i % 2 === 1, size: "sm" });
-    out.push({ left: "1%", top: `${6 + (i * 8)}%`, juniper: i % 3 === 0, size: i % 4 === 0 ? "lg" : "md" });
-    out.push({ left: "99%", top: `${6 + (i * 8)}%`, juniper: i % 3 === 1, size: i % 4 === 1 ? "lg" : "md" });
+    out.push({ left: "1%", top: `${5 + (i * 8)}%`, juniper: i % 3 === 0, size: i % 4 === 0 ? "lg" : "md" });
+    out.push({ left: "99%", top: `${5 + (i * 8)}%`, juniper: i % 3 === 1, size: i % 4 === 1 ? "lg" : "md" });
   }
-  for (let i = 0; i < 8; i++) {
-    out.push({ left: `${4 + (i * 8.4) % 92}%`, top: `${12 + (i % 6) * 3}%`, juniper: i % 2 === 0, size: i % 5 === 0 ? "lg" : "md" });
+  for (let i = 0; i < 11; i++) {
+    out.push({ left: `${4 + (i * 8.4) % 92}%`, top: `${11 + (i % 6) * 3}%`, juniper: i % 2 === 0, size: i % 5 === 0 ? "lg" : "md" });
   }
-  for (let i = 0; i < 8; i++) {
-    out.push({ left: `${5 + (i * 9.6) % 90}%`, top: `${48 + (i % 4) * 12}%`, juniper: i % 3 === 0, size: i % 4 === 0 ? "lg" : "sm" });
-    out.push({ left: `${6 + (i * 9) % 88}%`, top: `${78 + (i % 3) * 7}%`, juniper: i % 2 === 1, size: "md" });
+  for (let i = 0; i < 10; i++) {
+    out.push({ left: `${5 + (i * 9.6) % 90}%`, top: `${46 + (i % 4) * 12}%`, juniper: i % 3 === 0, size: i % 4 === 0 ? "lg" : "sm" });
+    out.push({ left: `${6 + (i * 9) % 88}%`, top: `${76 + (i % 3) * 7}%`, juniper: i % 2 === 1, size: "md" });
   }
   return out;
 }
@@ -60,6 +60,9 @@ const HERO_PERIMETER_SPECS: { left: string; top: string; juniper?: boolean; size
   { left: "52%", top: "4%", juniper: true, size: "lg" },
   { left: "94%", top: "55%", juniper: true, size: "md" },
   { left: "50%", top: "96%", juniper: true, size: "lg" },
+  { left: "18%", top: "12%", juniper: false, size: "sm" },
+  { left: "88%", top: "28%", juniper: false, size: "md" },
+  { left: "38%", top: "88%", juniper: true, size: "sm" },
 ];
 
 export default function HomeAmbient() {
