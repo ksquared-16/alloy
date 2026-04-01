@@ -587,20 +587,23 @@ body {
   --home-pine: #273F52;
   --home-stone: #F4F6F9;
   --home-stone-warm: #eef1f6;
-  /* Atmospheric base — lifted + slightly cooler for a cleaner field behind white cards */
+  /* Atmospheric base — aligned to adminV2 workspace (riverStone #F6F8FC + neutral grays, not blue-gray ice) */
   --home-atmosphere-base: #f6f8fc;
-  --home-atmosphere-mid: #f8fafd;
-  --home-atmosphere-soft: #fafcfe;
+  --home-atmosphere-mid: #f7f8fa;
+  --home-atmosphere-soft: #f6f8fc;
 }
 
-/* Page wrapper (legacy / inner sections): gradient when not inside public-site-chrome */
+/* Page wrapper (legacy): same field as workspace content — river stone + subtle slate depth (no cool blue diagonal) */
 .home-page {
-  background: linear-gradient(165deg, var(--home-atmosphere-base) 0%, var(--home-atmosphere-mid) 30%, var(--home-atmosphere-soft) 55%, var(--home-atmosphere-mid) 80%, var(--home-atmosphere-base) 100%);
+  background-color: var(--home-atmosphere-base);
+  background-image:
+    linear-gradient(180deg, rgba(39, 63, 82, 0.026) 0%, transparent 40%),
+    linear-gradient(180deg, transparent 52%, rgba(39, 63, 82, 0.042) 100%);
   position: relative;
   min-height: 100vh;
 }
 
-/* Public site: flex column + gradient + clip horizontal bleed (100vw/overflow gaps) */
+/* Public site: match /adminV2/workspace ambient base (neutral.background + canvasField wash/depth vocabulary) */
 .public-site-chrome {
   position: relative;
   display: flex;
@@ -608,7 +611,10 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: clip;
-  background: linear-gradient(165deg, var(--home-atmosphere-base) 0%, var(--home-atmosphere-mid) 30%, var(--home-atmosphere-soft) 55%, var(--home-atmosphere-mid) 80%, var(--home-atmosphere-base) 100%);
+  background-color: var(--home-atmosphere-base);
+  background-image:
+    linear-gradient(180deg, rgba(39, 63, 82, 0.026) 0%, transparent 40%),
+    linear-gradient(180deg, transparent 52%, rgba(39, 63, 82, 0.042) 100%);
 }
 
 /* Document-tall layer behind nav/main/footer (ambient is not viewport-fixed inside main) */
@@ -663,7 +669,7 @@ body {
   height: 90vmax;
   left: -28vmax;
   top: -22vmax;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.1) 0%, rgba(39, 63, 82, 0.055) 40%, transparent 66%);
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.048) 0%, rgba(39, 63, 82, 0.038) 40%, transparent 66%);
 }
 
 .home-atmosphere-cloud-2 {
@@ -671,7 +677,7 @@ body {
   height: 75vmax;
   right: -22vmax;
   top: 8%;
-  background: radial-gradient(circle, rgba(39, 63, 82, 0.075) 0%, rgba(0, 162, 131, 0.045) 45%, transparent 66%);
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.048) 0%, rgba(0, 162, 131, 0.042) 45%, transparent 66%);
   animation-duration: 32s;
   animation-delay: -5s;
 }
@@ -681,7 +687,7 @@ body {
   height: 65vmax;
   left: 28%;
   bottom: -18vmax;
-  background: radial-gradient(circle, rgba(0, 162, 131, 0.065) 0%, rgba(0, 69, 140, 0.038) 45%, transparent 66%);
+  background: radial-gradient(circle, rgba(0, 162, 131, 0.052) 0%, rgba(0, 69, 140, 0.022) 45%, transparent 66%);
   animation: public-ambient-drift-slow 28s ease-in-out infinite;
   animation-delay: -10s;
 }
@@ -691,7 +697,7 @@ body {
   height: 55vmax;
   right: 8%;
   bottom: 18%;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.06) 0%, rgba(0, 162, 131, 0.032) 50%, transparent 66%);
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.034) 0%, rgba(0, 162, 131, 0.03) 50%, transparent 66%);
   animation: public-ambient-drift-parallax 30s ease-in-out infinite;
   animation-delay: -15s;
 }
@@ -703,7 +709,7 @@ body {
   top: 35%;
   margin-left: -24vmax;
   margin-top: -24vmax;
-  background: radial-gradient(circle, rgba(39, 63, 82, 0.06) 0%, rgba(0, 162, 131, 0.038) 45%, transparent 64%);
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.042) 0%, rgba(0, 162, 131, 0.034) 45%, transparent 64%);
   animation: public-ambient-drift-slow 26s ease-in-out infinite;
   animation-delay: -8s;
 }
@@ -721,8 +727,8 @@ body {
   height: 60vmax;
   left: -14vmax;
   top: -10vmax;
-  opacity: 0.44;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.12) 0%, rgba(39, 63, 82, 0.04) 40%, transparent 56%);
+  opacity: 0.3;
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.055) 0%, rgba(39, 63, 82, 0.028) 40%, transparent 56%);
 }
 
 .home-atmosphere-bloom-pine {
@@ -730,8 +736,8 @@ body {
   height: 52vmax;
   right: -10vmax;
   top: 26%;
-  opacity: 0.4;
-  background: radial-gradient(circle, rgba(39, 63, 82, 0.075) 0%, rgba(0, 162, 131, 0.038) 45%, transparent 56%);
+  opacity: 0.34;
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.048) 0%, rgba(0, 162, 131, 0.05) 45%, transparent 56%);
   animation-delay: -2s;
   animation-duration: 11s;
 }
@@ -741,8 +747,8 @@ body {
   height: 46vmax;
   left: 16%;
   bottom: -10vmax;
-  opacity: 0.38;
-  background: radial-gradient(circle, rgba(0, 162, 131, 0.075) 0%, rgba(0, 69, 140, 0.032) 45%, transparent 56%);
+  opacity: 0.3;
+  background: radial-gradient(circle, rgba(0, 162, 131, 0.058) 0%, rgba(0, 69, 140, 0.02) 45%, transparent 56%);
   animation-delay: -4s;
   animation-duration: 10s;
 }
@@ -754,8 +760,8 @@ body {
   top: 50%;
   margin-left: -22vmax;
   margin-top: -22vmax;
-  opacity: 0.34;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.062) 0%, rgba(0, 162, 131, 0.038) 40%, transparent 58%);
+  opacity: 0.26;
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.034) 0%, rgba(0, 162, 131, 0.036) 40%, transparent 58%);
   animation-delay: -6s;
   animation-duration: 12s;
 }
@@ -783,9 +789,9 @@ body {
   margin-top: -75%;
   background: radial-gradient(
     ellipse 70% 60% at 50% 40%,
-    rgba(0, 69, 140, 0.075) 0%,
-    rgba(39, 63, 82, 0.038) 35%,
-    rgba(0, 162, 131, 0.038) 55%,
+    rgba(0, 69, 140, 0.042) 0%,
+    rgba(39, 63, 82, 0.032) 35%,
+    rgba(0, 162, 131, 0.045) 55%,
     transparent 74%
   );
   animation: home-hero-bloom-shift 12s ease-in-out infinite;
@@ -803,7 +809,7 @@ body {
   height: 48vmin;
   left: 5%;
   top: 10%;
-  background: rgba(0, 69, 140, 0.055);
+  background: rgba(0, 69, 140, 0.034);
 }
 
 .home-hero-ambient-blur-2 {
