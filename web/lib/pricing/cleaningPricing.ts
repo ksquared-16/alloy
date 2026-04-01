@@ -17,13 +17,7 @@ export type SquareFootageOption =
     | "4,001-5,500 sq ft"
     | "Over 5,500 sq ft";
 
-export type AddOnId =
-    | "Fridge"
-    | "Oven"
-    | "Cabinets"
-    | "Windows & Blinds"
-    | "Pet Hair"
-    | "Baseboards";
+export type AddOnId = "Fridge" | "Oven" | "Cabinets" | "Pet Hair";
 
 export type AddOnFrequencyOption =
     | "First cleaning only"
@@ -150,9 +144,7 @@ const ADDON_PRICES: Record<
     Fridge: { id: "Fridge", name: "Fridge", price: 40 },
     Oven: { id: "Oven", name: "Oven", price: 40 },
     Cabinets: { id: "Cabinets", name: "Cabinets", price: 35 },
-    "Windows & Blinds": { id: "Windows & Blinds", name: "Windows & Blinds", price: 60 },
     "Pet Hair": { id: "Pet Hair", name: "Pet Hair", price: 30 },
-    Baseboards: { id: "Baseboards", name: "Baseboards", price: 30 },
 };
 
 function roundCurrency(value: number): number {

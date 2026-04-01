@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { computeCustomerMinBookableDateYmd } from "@/lib/booking/customerMinBookableDate";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_VALUE_TO_NUM: Record<string, number> = {
@@ -61,6 +62,7 @@ export default function SlotPicker({
     const [mounted, setMounted] = useState(false);
     // Visible month as YYYY-MM (first day of month for display)
     const [visibleMonthKey, setVisibleMonthKey] = useState<string>("");
+    const [apiMinBookableDate, setApiMinBookableDate] = useState<string | null>(null);
 
     useEffect(() => {
         setMounted(true);
@@ -84,6 +86,7 @@ export default function SlotPicker({
         async function fetchSlots() {
             setLoading(true);
             setSlotError(null);
+            setApiMinBookableDate(null);
             try {
                 const response = await fetch(`/api/book-v2/availability?timezone=${encodeURIComponent(timezone)}`);
                 if (!response.ok) {
@@ -98,6 +101,11 @@ export default function SlotPicker({
                 }
                 const data = await response.json();
                 setApiTimezone(data.timezone || timezone);
+                setApiMinBookableDate(
+                    typeof data.min_bookable_date === "string" && data.min_bookable_date.trim()
+                        ? data.min_bookable_date.trim()
+                        : null
+                );
                 const normalizedSlots: TimeSlot[] = (data.slots || []).map((slot: any) => {
                     try {
                         const startDate = slot.start instanceof Date ? slot.start : new Date(slot.start || slot.isoStart);
@@ -128,23 +136,13 @@ export default function SlotPicker({
 
     const minBookableDateStr = useMemo(() => {
         if (!mounted) return "";
+        if (apiMinBookableDate) return apiMinBookableDate;
         try {
-            const now = new Date();
-            const nowInTz = new Intl.DateTimeFormat("en-CA", {
-                timeZone: timezone,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-            }).format(now);
-            const [year, month, day] = nowInTz.split("-").map(Number);
-            const todayInTz = new Date(year, month - 1, day);
-            const minBookableDate = new Date(todayInTz);
-            minBookableDate.setDate(minBookableDate.getDate() + 2);
-            return `${minBookableDate.getFullYear()}-${String(minBookableDate.getMonth() + 1).padStart(2, "0")}-${String(minBookableDate.getDate()).padStart(2, "0")}`;
+            return computeCustomerMinBookableDateYmd(timezone);
         } catch {
             return "";
         }
-    }, [mounted, timezone]);
+    }, [mounted, timezone, apiMinBookableDate]);
 
     const firstValidMonthKey = useMemo(() => {
         if (!minBookableDateStr) return "";

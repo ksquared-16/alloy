@@ -9,7 +9,8 @@
 
 /** Confirmed Alloy brand palette — no invented colors */
 export const palette = {
-  riverStone: "#F4F6F9",
+  /** Slightly lifted vs legacy F4F6F9 — cleaner ambient read with white cards */
+  riverStone: "#F6F8FC",
   alloyBlue: "#00458C",
   bendPine: "#00A283",
   juniperEmber: "#BC4300",
@@ -46,9 +47,9 @@ export const derived = {
   /** System node subtle tint (department card) */
   nodeSurfaceTint: "rgba(0, 69, 140, 0.04)",
   /** Canvas field — slightly cooler than page bg (depth) */
-  canvasFieldWash: "rgba(39, 63, 82, 0.035)",
+  canvasFieldWash: "rgba(39, 63, 82, 0.028)",
   /** Canvas subtle vertical depth */
-  canvasFieldDepth: "rgba(39, 63, 82, 0.055)",
+  canvasFieldDepth: "rgba(39, 63, 82, 0.046)",
   /** Inspector column wash */
   inspectorColumnWash: "rgba(0, 69, 140, 0.018)",
   /** Inspector left edge depth */
@@ -121,9 +122,9 @@ export const derived = {
   /**
    * Bend Pine — “life” / motion / vitality (not full UI green-out).
    */
-  ambientLifeBloomCore: "rgba(0, 162, 131, 0.14)",
-  ambientLifeBloomMid: "rgba(0, 162, 131, 0.07)",
-  ambientLifeBloomEdge: "rgba(0, 162, 131, 0.03)",
+  ambientLifeBloomCore: "rgba(0, 162, 131, 0.11)",
+  ambientLifeBloomMid: "rgba(0, 162, 131, 0.055)",
+  ambientLifeBloomEdge: "rgba(0, 162, 131, 0.024)",
   ambientLifeSpec: "rgba(0, 162, 131, 0.5)",
   ambientLifeSpecSoft: "rgba(0, 162, 131, 0.28)",
   /** Company view — higher-contrast specs (still calmer than focus) */

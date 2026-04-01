@@ -53,10 +53,10 @@ export default function Footer() {
                 ·
               </span>
               <a
-                href="tel:+12108315653"
+                href="tel:+15412408863"
                 className="text-alloy-juniper hover:underline"
               >
-                +1 210-831-5653
+                541-240-8863
               </a>
             </p>
           </div>

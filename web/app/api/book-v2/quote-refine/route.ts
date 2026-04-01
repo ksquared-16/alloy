@@ -9,6 +9,10 @@ import {
   upsertTypedFieldValue,
   serializeSquareFootageForFieldValue,
 } from "@/lib/bookV2/fieldValueUpsert";
+import {
+  EXCLUDED_CUSTOMER_SELECTABLE_ADDON_KEYS,
+  filterExcludedCustomerAddonKeys,
+} from "@/lib/book-v2/customerAddonPolicy";
 
 const SERVICE_TYPE = "Standard Cleaning";
 const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
@@ -44,14 +48,7 @@ function mapApiFrequencyToOption(
 }
 
 /** Valid AddOnId list for cleaning (UI keys) */
-const ADDON_IDS: AddOnId[] = [
-  "Fridge",
-  "Oven",
-  "Cabinets",
-  "Windows & Blinds",
-  "Pet Hair",
-  "Baseboards",
-];
+const ADDON_IDS: AddOnId[] = ["Fridge", "Oven", "Cabinets", "Pet Hair"];
 
 /** Normalize incoming add_ons to addon keys (client sends ["fridge","oven"] or AddOnId; return lowercase keys) */
 function normalizeAddOnKeys(arr: unknown): string[] {
@@ -320,7 +317,7 @@ export async function POST(request: NextRequest) {
 
     const squareFootageOption = normalizeSquareFootageInput(square_footage);
     const frequencyOption = mapApiFrequencyToOption(body.cleaning_frequency ?? "one_time");
-    const selectedKeys = normalizeAddOnKeys(body.add_ons ?? []);
+    const selectedKeys = filterExcludedCustomerAddonKeys(normalizeAddOnKeys(body.add_ons ?? []));
 
     let quoteOutput = await computeQuote(
       supabase,
@@ -519,7 +516,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const available_addons = dbAvailableAddons.map((a) => ({ id: a.key, label: a.label, price: a.price }));
+    const available_addons = dbAvailableAddons
+      .filter((a) => !EXCLUDED_CUSTOMER_SELECTABLE_ADDON_KEYS.has(a.key))
+      .map((a) => ({ id: a.key, label: a.label, price: a.price }));
     const available_frequencies = pricingFrequencies.map((f) => ({
       frequency_key: f.frequency_key,
       frequency_label: f.frequency_label,

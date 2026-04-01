@@ -1070,7 +1070,7 @@ export default function CleaningQuoteForm({
                                 Add-ons
                             </label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {(["Fridge", "Oven", "Cabinets", "Windows & Blinds", "Pet Hair", "Baseboards"] as AddOnId[]).map(
+                                {(["Fridge", "Oven", "Cabinets", "Pet Hair"] as AddOnId[]).map(
                                     (id) => {
                                         const checked = form.addOns.includes(id);
                                         return (

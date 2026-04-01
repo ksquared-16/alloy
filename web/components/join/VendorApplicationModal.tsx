@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback, FormEvent } from "react";
 import { createPortal } from "react-dom";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const labelClass = "block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1";
-const inputClass =
-  "w-full px-3 py-2 text-sm border border-alloy-stone/30 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70";
-const ctaClass =
-  "w-full home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50";
+/** Match Get a Quote (`CleaningQuickQuoteForm`) label + input tokens */
+const labelClass =
+  "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
+const inputClass = "public-form-input";
+const ctaClass = "public-form-cta w-full disabled:opacity-50 disabled:cursor-not-allowed";
 
 type Vertical = { id: string; name: string; slug: string };
 
@@ -324,7 +324,14 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                 </div>
 
                 <div>
-                  <label className={labelClass}>Service area ZIP codes</label>
+                  <label className={labelClass} htmlFor="vendor-service-area-zip-input">
+                    Service area ZIP codes
+                  </label>
+                  <p className="text-xs text-alloy-midnight/70 leading-relaxed mb-2">
+                    Enter <strong>all service area ZIP codes</strong> you cover (not your business address ZIP alone).
+                    We use this list to match you with jobs in your area—<strong>missing ZIPs can mean you won&apos;t see
+                    offers</strong> for customers there.
+                  </p>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {form.service_area_zip_codes.map((z) => (
                       <span
@@ -337,6 +344,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                     ))}
                   </div>
                   <input
+                    id="vendor-service-area-zip-input"
                     type="text"
                     value={form.zipInput}
                     onChange={(e) => setForm((f) => ({ ...f, zipInput: e.target.value }))}
@@ -345,6 +353,7 @@ export default function VendorApplicationModal({ isOpen, onClose }: VendorApplic
                     placeholder="Type ZIP and press Enter"
                     className={inputClass}
                     maxLength={5}
+                    autoComplete="off"
                   />
                 </div>
 

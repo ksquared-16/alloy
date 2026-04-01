@@ -110,11 +110,11 @@ body {
   0%,
   100% {
     transform: translate(0, 0);
-    opacity: 0.6;
+    opacity: 0.52;
   }
   50% {
-    transform: translate(12px, -14px);
-    opacity: 0.95;
+    transform: translate(10px, -12px);
+    opacity: 0.86;
   }
 }
 
@@ -122,23 +122,23 @@ body {
   0%,
   100% {
     transform: translate(0, 0);
-    opacity: 0.55;
+    opacity: 0.48;
   }
   50% {
-    transform: translate(-10px, 12px);
-    opacity: 0.9;
+    transform: translate(-9px, 10px);
+    opacity: 0.82;
   }
 }
 
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(6px, 6px);
-    opacity: 0.5;
+    transform: translate(5px, 5px);
+    opacity: 0.44;
   }
   50% {
-    transform: translate(-12px, -10px);
-    opacity: 0.88;
+    transform: translate(-10px, -9px);
+    opacity: 0.8;
   }
 }
 
@@ -444,8 +444,8 @@ body {
   margin-left: -2px;
   margin-top: -2px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 4px rgba(0, 162, 131, 0.2);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.5), 0 0 7px rgba(255, 255, 255, 0.35), 0 0 3px rgba(0, 162, 131, 0.18);
 }
 
 .public-hero-spec:nth-child(odd) {
@@ -463,51 +463,63 @@ body {
   pointer-events: none;
 }
 
-/* Base dot (medium): clearly visible over atmospheric background */
+/* Base dot: crisp center + tighter halo (less “dirty screen” smear) */
 .public-ambient-spec-dot {
   width: 5px;
   height: 5px;
   margin-left: -2.5px;
   margin-top: -2.5px;
-  background: rgba(0, 69, 140, 0.62);
-  box-shadow: 0 0 12px rgba(0, 69, 140, 0.45), 0 0 4px rgba(255, 255, 255, 0.2);
+  background: rgba(0, 69, 140, 0.52);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 0 8px rgba(0, 69, 140, 0.32),
+    0 0 2px rgba(255, 255, 255, 0.35);
 }
 
 .public-ambient-spec-dot-juniper {
-  background: rgba(0, 162, 131, 0.58);
-  box-shadow: 0 0 14px rgba(0, 162, 131, 0.5), 0 0 5px rgba(255, 255, 255, 0.25);
+  background: rgba(0, 162, 131, 0.48);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 0 9px rgba(0, 162, 131, 0.34),
+    0 0 2px rgba(255, 255, 255, 0.32);
 }
 
-/* Small: finer grain */
+/* Small: fewer stray pixels read as dust */
 .public-ambient-spec-sm {
   width: 3px;
   height: 3px;
   margin-left: -1.5px;
   margin-top: -1.5px;
-  background: rgba(0, 69, 140, 0.55);
-  box-shadow: 0 0 8px rgba(0, 69, 140, 0.4);
+  background: rgba(0, 69, 140, 0.44);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.35), 0 0 5px rgba(0, 69, 140, 0.28);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-sm {
-  background: rgba(0, 162, 131, 0.52);
-  box-shadow: 0 0 10px rgba(0, 162, 131, 0.45);
+  background: rgba(0, 162, 131, 0.42);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.32), 0 0 6px rgba(0, 162, 131, 0.3);
 }
 
-/* Large: stronger focal points */
+/* Large: accent jewels, not blobs */
 .public-ambient-spec-lg {
   width: 6px;
   height: 6px;
   margin-left: -3px;
   margin-top: -3px;
-  background: rgba(0, 69, 140, 0.68);
-  box-shadow: 0 0 16px rgba(0, 69, 140, 0.5), 0 0 6px rgba(255, 255, 255, 0.22);
+  background: rgba(0, 69, 140, 0.56);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 11px rgba(0, 69, 140, 0.36),
+    0 0 3px rgba(255, 255, 255, 0.28);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-lg {
-  background: rgba(0, 162, 131, 0.65);
-  box-shadow: 0 0 18px rgba(0, 162, 131, 0.55), 0 0 6px rgba(255, 255, 255, 0.2);
+  background: rgba(0, 162, 131, 0.52);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 0 12px rgba(0, 162, 131, 0.38),
+    0 0 3px rgba(255, 255, 255, 0.26);
 }
 
 .public-ambient-spec:nth-child(3n + 1) {
@@ -533,10 +545,10 @@ body {
   --home-pine: #273F52;
   --home-stone: #F4F6F9;
   --home-stone-warm: #eef1f6;
-  /* Atmospheric base: 50% lower opacity (lighter, more transparent) */
-  --home-atmosphere-base: #f4f6f9;
-  --home-atmosphere-mid: #f6f8fb;
-  --home-atmosphere-soft: #f8fafc;
+  /* Atmospheric base — lifted + slightly cooler for a cleaner field behind white cards */
+  --home-atmosphere-base: #f6f8fc;
+  --home-atmosphere-mid: #f8fafd;
+  --home-atmosphere-soft: #fafcfe;
 }
 
 /* Page wrapper: richer blue-teal atmospheric field; white content floats above */
@@ -559,12 +571,12 @@ body {
 .home-atmosphere-cloud {
   position: absolute;
   border-radius: 50%;
-  filter: blur(100px);
+  filter: blur(88px);
   animation: public-ambient-drift 25s ease-in-out infinite;
 }
 
 .home-atmosphere-cloud-5 {
-  filter: blur(80px);
+  filter: blur(72px);
   animation: public-ambient-drift-parallax 27s ease-in-out infinite;
 }
 
@@ -573,7 +585,7 @@ body {
   height: 90vmax;
   left: -28vmax;
   top: -22vmax;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.14) 0%, rgba(39, 63, 82, 0.07) 40%, transparent 65%);
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.1) 0%, rgba(39, 63, 82, 0.055) 40%, transparent 66%);
 }
 
 .home-atmosphere-cloud-2 {
@@ -581,7 +593,7 @@ body {
   height: 75vmax;
   right: -22vmax;
   top: 8%;
-  background: radial-gradient(circle, rgba(39, 63, 82, 0.1) 0%, rgba(0, 162, 131, 0.06) 45%, transparent 65%);
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.075) 0%, rgba(0, 162, 131, 0.045) 45%, transparent 66%);
   animation-duration: 32s;
   animation-delay: -5s;
 }
@@ -591,7 +603,7 @@ body {
   height: 65vmax;
   left: 28%;
   bottom: -18vmax;
-  background: radial-gradient(circle, rgba(0, 162, 131, 0.09) 0%, rgba(0, 69, 140, 0.05) 45%, transparent 65%);
+  background: radial-gradient(circle, rgba(0, 162, 131, 0.065) 0%, rgba(0, 69, 140, 0.038) 45%, transparent 66%);
   animation: public-ambient-drift-slow 28s ease-in-out infinite;
   animation-delay: -10s;
 }
@@ -601,7 +613,7 @@ body {
   height: 55vmax;
   right: 8%;
   bottom: 18%;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.08) 0%, rgba(0, 162, 131, 0.04) 50%, transparent 65%);
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.06) 0%, rgba(0, 162, 131, 0.032) 50%, transparent 66%);
   animation: public-ambient-drift-parallax 30s ease-in-out infinite;
   animation-delay: -15s;
 }
@@ -613,7 +625,7 @@ body {
   top: 35%;
   margin-left: -24vmax;
   margin-top: -24vmax;
-  background: radial-gradient(circle, rgba(39, 63, 82, 0.08) 0%, rgba(0, 162, 131, 0.05) 45%, transparent 62%);
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.06) 0%, rgba(0, 162, 131, 0.038) 45%, transparent 64%);
   animation: public-ambient-drift-slow 26s ease-in-out infinite;
   animation-delay: -8s;
 }
@@ -622,7 +634,7 @@ body {
 .home-atmosphere-bloom {
   position: absolute;
   border-radius: 50%;
-  filter: blur(72px);
+  filter: blur(64px);
   animation: public-ambient-bloom 9s ease-in-out infinite;
 }
 
@@ -631,8 +643,8 @@ body {
   height: 60vmax;
   left: -14vmax;
   top: -10vmax;
-  opacity: 0.52;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.16) 0%, rgba(39, 63, 82, 0.05) 40%, transparent 55%);
+  opacity: 0.44;
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.12) 0%, rgba(39, 63, 82, 0.04) 40%, transparent 56%);
 }
 
 .home-atmosphere-bloom-pine {
@@ -640,8 +652,8 @@ body {
   height: 52vmax;
   right: -10vmax;
   top: 26%;
-  opacity: 0.48;
-  background: radial-gradient(circle, rgba(39, 63, 82, 0.1) 0%, rgba(0, 162, 131, 0.05) 45%, transparent 55%);
+  opacity: 0.4;
+  background: radial-gradient(circle, rgba(39, 63, 82, 0.075) 0%, rgba(0, 162, 131, 0.038) 45%, transparent 56%);
   animation-delay: -2s;
   animation-duration: 11s;
 }
@@ -651,8 +663,8 @@ body {
   height: 46vmax;
   left: 16%;
   bottom: -10vmax;
-  opacity: 0.46;
-  background: radial-gradient(circle, rgba(0, 162, 131, 0.1) 0%, rgba(0, 69, 140, 0.04) 45%, transparent 55%);
+  opacity: 0.38;
+  background: radial-gradient(circle, rgba(0, 162, 131, 0.075) 0%, rgba(0, 69, 140, 0.032) 45%, transparent 56%);
   animation-delay: -4s;
   animation-duration: 10s;
 }
@@ -664,16 +676,16 @@ body {
   top: 50%;
   margin-left: -22vmax;
   margin-top: -22vmax;
-  opacity: 0.42;
-  background: radial-gradient(circle, rgba(0, 69, 140, 0.08) 0%, rgba(0, 162, 131, 0.05) 40%, transparent 58%);
+  opacity: 0.34;
+  background: radial-gradient(circle, rgba(0, 69, 140, 0.062) 0%, rgba(0, 162, 131, 0.038) 40%, transparent 58%);
   animation-delay: -6s;
   animation-duration: 12s;
 }
 
 /* Stronger ambient near hero: moving gradient + larger blooms */
 @keyframes home-hero-bloom-shift {
-  0%, 100% { opacity: 0.65; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.06); }
+  0%, 100% { opacity: 0.52; transform: scale(1); }
+  50% { opacity: 0.78; transform: scale(1.05); }
 }
 
 .home-hero-ambient-zone {
@@ -693,10 +705,10 @@ body {
   margin-top: -75%;
   background: radial-gradient(
     ellipse 70% 60% at 50% 40%,
-    rgba(0, 69, 140, 0.1) 0%,
-    rgba(39, 63, 82, 0.05) 35%,
-    rgba(0, 162, 131, 0.05) 55%,
-    transparent 72%
+    rgba(0, 69, 140, 0.075) 0%,
+    rgba(39, 63, 82, 0.038) 35%,
+    rgba(0, 162, 131, 0.038) 55%,
+    transparent 74%
   );
   animation: home-hero-bloom-shift 12s ease-in-out infinite;
 }
@@ -713,7 +725,7 @@ body {
   height: 48vmin;
   left: 5%;
   top: 10%;
-  background: rgba(0, 69, 140, 0.08);
+  background: rgba(0, 69, 140, 0.055);
 }
 
 .home-hero-ambient-blur-2 {
@@ -721,7 +733,7 @@ body {
   height: 36vmin;
   right: 12%;
   top: 22%;
-  background: rgba(0, 162, 131, 0.06);
+  background: rgba(0, 162, 131, 0.045);
   animation-delay: -3s;
 }
 
@@ -730,7 +742,7 @@ body {
   height: 40vmin;
   right: 0%;
   bottom: -12%;
-  background: rgba(0, 69, 140, 0.07);
+  background: rgba(0, 69, 140, 0.05);
   animation-delay: -6s;
   animation-duration: 12s;
 }

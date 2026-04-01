@@ -18,6 +18,7 @@ import {
     isFirstFree4x120CampaignPrefillSlug,
     isFirstFree4x120CampaignQuery,
 } from "@/lib/campaigns/firstFree4x120";
+import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
 
 interface QuoteInputStored {
     zip?: string;
@@ -259,14 +260,7 @@ const PREFILL_ATTEMPTED_KEY = "alloy_quote_start_attempted_v1";
 const QUOTE_REFINED_KEY = "alloy_quote_refined_v1";
 
 /** Add-on IDs for cleaning (must match quote-refine API) */
-const ADDON_IDS = [
-  "Fridge",
-  "Oven",
-  "Cabinets",
-  "Windows & Blinds",
-  "Pet Hair",
-  "Baseboards",
-] as const;
+const ADDON_IDS = ["Fridge", "Oven", "Cabinets", "Pet Hair"] as const;
 type AddOnId = (typeof ADDON_IDS)[number];
 
 /** Map API frequency key to DB frequency_key (pricing_frequencies) for label lookup */
@@ -1148,15 +1142,17 @@ export default function BookV2Client() {
         }
         setRefineFrequency(nextFreq);
         const addonsList = quote.addons ?? [];
-        const keys: string[] = addonsList
-            .map((a) => {
-                const withId = a as { id?: string; name?: string };
-                if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
-                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
-                    return ADDON_ID_TO_KEY[withId.name as AddOnId];
-                return null;
-            })
-            .filter((x): x is string => x != null && x.length > 0);
+        const keys: string[] = filterExcludedCustomerAddonKeys(
+            addonsList
+                .map((a) => {
+                    const withId = a as { id?: string; name?: string };
+                    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+                    if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
+                        return ADDON_ID_TO_KEY[withId.name as AddOnId];
+                    return null;
+                })
+                .filter((x): x is string => x != null && x.length > 0)
+        );
         setSelectedAddonKeys(keys);
     }, [quote, currentStep, campaignFirstFree4x120]);
 
@@ -1268,15 +1264,17 @@ export default function BookV2Client() {
         if (!looksOneTime) return;
         firstFreeCampaignRecurringBootstrapRef.current = true;
         const addonsList = quote.addons ?? [];
-        const keysFromQuote: string[] = addonsList
-            .map((a) => {
-                const withId = a as { id?: string; name?: string };
-                if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
-                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
-                    return ADDON_ID_TO_KEY[withId.name as AddOnId];
-                return null;
-            })
-            .filter((x): x is string => x != null && x.length > 0);
+        const keysFromQuote: string[] = filterExcludedCustomerAddonKeys(
+            addonsList
+                .map((a) => {
+                    const withId = a as { id?: string; name?: string };
+                    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+                    if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
+                        return ADDON_ID_TO_KEY[withId.name as AddOnId];
+                    return null;
+                })
+                .filter((x): x is string => x != null && x.length > 0)
+        );
         void applyRefineAndPersist("weekly", keysFromQuote);
     }, [campaignFirstFree4x120, debug, quote, hasQuote, currentStep, applyRefineAndPersist]);
 
@@ -1291,15 +1289,17 @@ export default function BookV2Client() {
                 : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
                 : freqLabel.includes("monthly") ? "monthly"
                 : "one_time";
-        const keys = (quote.addons ?? [])
-            .map((a) => {
-                const withId = a as { id?: string; name?: string };
-                if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
-                if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
-                    return ADDON_ID_TO_KEY[withId.name as AddOnId];
-                return null;
-            })
-            .filter((x): x is string => x != null && x.length > 0);
+        const keys = filterExcludedCustomerAddonKeys(
+            (quote.addons ?? [])
+                .map((a) => {
+                    const withId = a as { id?: string; name?: string };
+                    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+                    if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
+                        return ADDON_ID_TO_KEY[withId.name as AddOnId];
+                    return null;
+                })
+                .filter((x): x is string => x != null && x.length > 0)
+        );
         applyRefineAndPersist(freq, keys);
     }, [currentStep, quote, availableAddons, applyRefineAndPersist]);
 

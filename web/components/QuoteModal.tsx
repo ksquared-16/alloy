@@ -311,13 +311,15 @@ export default function QuoteModal({
                         aria-label="Promotional offer"
                       >
                         <p className="font-semibold text-alloy-pine mb-1">
-                          First Service Free — Complete 4 Visits in 120 Days
+                          First Service Free — 4 Visits in 120 Days (From First Clean)
                         </p>
                         <p className="text-alloy-midnight/85 leading-relaxed">
                           Sign up for <strong>recurring standard cleaning</strong> (weekly, every 2 weeks, or monthly).
-                          Complete four visits within 120 days and your <strong>first clean is covered</strong> by this
-                          offer. Use <strong>Get my recurring quote</strong> below — next you&apos;ll review the program
-                          terms, then continue to booking.
+                          Schedule and complete your <strong>first clean within 30 days of redeeming</strong> this offer,
+                          then complete <strong>all four recurring visits within 120 days of that first clean</strong>—
+                          your <strong>first clean is covered</strong> when you meet the program terms. Use{" "}
+                          <strong>Get my recurring quote</strong> below — next you&apos;ll review the program terms,
+                          then continue to booking.
                         </p>
                       </div>
                     ) : null}

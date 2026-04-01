@@ -87,9 +87,7 @@ export const ADDON_ID_TO_KEY: Record<AddOnId, string> = {
   Fridge: "fridge",
   Oven: "oven",
   Cabinets: "cabinets",
-  "Windows & Blinds": "windows_blinds",
   "Pet Hair": "pet_hair",
-  Baseboards: "baseboards",
 };
 
 /** Reverse: addon_key -> UI AddOnId */
