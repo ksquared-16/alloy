@@ -7,6 +7,8 @@ export type JobReceivableChargesPanelProps = {
     receivableSource?: "charges" | "legacy_job";
     chargeRows?: JobChargeBalanceRow[] | null;
     openChargeCount?: number;
+    /** When set (e.g. schedule detail / collect from visit), highlight charges tied to this schedule_id. */
+    contextScheduleId?: string | null;
     /** Tighter layout for modals */
     compact?: boolean;
     className?: string;
@@ -19,6 +21,16 @@ function labelChargeType(t: string): string {
     if (k === "adjustment") return "Adjustment";
     if (k === "cancellation_fee") return "Cancellation fee";
     return t ? t.charAt(0).toUpperCase() + t.slice(1) : "—";
+}
+
+/** Short sub-label so adjustment vs cancellation fee is obvious in finance surfaces. */
+function chargeTypeHint(chargeType: string): string | null {
+    const k = chargeType.toLowerCase();
+    if (k === "adjustment") return "Pricing change (credit or additional charge)";
+    if (k === "cancellation_fee") return "From schedule cancellation rules";
+    if (k === "service") return "Primary visit / service receivable";
+    if (k === "fee") return "Other fee";
+    return null;
 }
 
 function labelChargeStatus(s: string): string {
@@ -45,6 +57,13 @@ function dateCell(service: string | null, due: string | null): string {
     return parts.length ? parts.join(" · ") : "—";
 }
 
+function formatOutstanding(cents: number): { text: string; isCredit: boolean } {
+    if (cents < 0) {
+        return { text: `${formatMoneyFromCents(cents)} (credit)`, isCredit: true };
+    }
+    return { text: formatMoneyFromCents(cents), isCredit: false };
+}
+
 /**
  * Lists receivable charges when the job uses the charge read model; otherwise shows a short legacy note.
  */
@@ -52,10 +71,12 @@ export function JobReceivableChargesPanel({
     receivableSource,
     chargeRows,
     openChargeCount,
+    contextScheduleId,
     compact = false,
     className = "",
 }: JobReceivableChargesPanelProps) {
     const rows = chargeRows ?? [];
+    const ctxSid = contextScheduleId?.trim() || null;
 
     if (receivableSource === "legacy_job") {
         return (
@@ -78,7 +99,7 @@ export function JobReceivableChargesPanel({
     return (
         <div className={`rounded-md border border-alloy-stone/30 bg-white px-3 py-2 ${className}`}>
             <div className="flex items-baseline justify-between gap-2 mb-2">
-                <p className={`font-semibold text-alloy-midnight ${compact ? "text-xs" : "text-sm"}`}>Receivable charges</p>
+                <p className={`font-semibold text-alloy-midnight ${compact ? "text-xs" : "text-sm"}`}>Open receivable charges</p>
                 {openChargeCount != null && openChargeCount > 0 ? (
                     <span className="text-[11px] text-alloy-midnight/55 tabular-nums">{openChargeCount} with balance</span>
                 ) : (
@@ -86,8 +107,18 @@ export function JobReceivableChargesPanel({
                 )}
             </div>
             <p className="text-[11px] text-alloy-midnight/55 mb-2 leading-snug">
-                Job totals above are the sum of these charges; paid amounts are posted allocations tied to each charge (plus legacy
-                job-only allocations).
+                {ctxSid ? (
+                    <>
+                        Rows <span className="font-medium text-alloy-midnight/70">highlighted</span> are linked to this visit (
+                        <span className="font-mono text-[10px]">schedule_id</span>). The summary totals still reflect{" "}
+                        <strong>all</strong> charges on the job; card collection allocates against open balances on the server.
+                    </>
+                ) : (
+                    <>
+                        Summary totals are the sum of these charge amounts. Posted payments allocate to charges (plus any legacy job-only
+                        allocations). Adjustments and cancellation fees appear as their own rows.
+                    </>
+                )}
             </p>
             <div className="overflow-x-auto -mx-1">
                 <table className={`w-full ${compact ? "" : "min-w-[520px]"}`}>
@@ -96,41 +127,71 @@ export function JobReceivableChargesPanel({
                             {!compact && <th className={th}>ID</th>}
                             <th className={th}>Type</th>
                             <th className={th}>Status</th>
-                            <th className={`${th} text-right`}>Charged</th>
+                            <th className={`${th} text-right`}>Amount</th>
                             <th className={`${th} text-right`}>Paid</th>
                             <th className={`${th} text-right`}>Outstanding</th>
                             <th className={th}>Dates</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((r) => (
-                            <tr key={r.charge_id} className="border-b border-alloy-stone/15 last:border-0">
-                                {!compact && (
-                                    <td className={`${td} font-mono text-alloy-midnight/50`} title={r.charge_id}>
-                                        {shortId(r.charge_id)}
-                                    </td>
-                                )}
-                                <td className={td}>
-                                    <span className="block font-medium text-alloy-midnight">{labelChargeType(r.charge_type)}</span>
-                                    {r.description ? (
-                                        <span
-                                            className={`block font-normal text-alloy-midnight/55 leading-snug mt-0.5 ${
-                                                compact ? "text-[10px]" : "text-[11px]"
-                                            }`}
-                                        >
-                                            {r.description}
+                        {rows.map((r) => {
+                            const linkedVisit = !!(ctxSid && r.schedule_id && r.schedule_id === ctxSid);
+                            const out = formatOutstanding(r.outstanding_cents);
+                            const hint = chargeTypeHint(r.charge_type);
+                            return (
+                                <tr
+                                    key={r.charge_id}
+                                    className={`border-b border-alloy-stone/15 last:border-0 ${linkedVisit ? "bg-alloy-blue/[0.06]" : ""}`}
+                                >
+                                    {!compact && (
+                                        <td className={`${td} font-mono text-alloy-midnight/50`} title={r.charge_id}>
+                                            {shortId(r.charge_id)}
+                                        </td>
+                                    )}
+                                    <td className={td}>
+                                        <span className="flex flex-wrap items-center gap-1.5">
+                                            <span className="font-medium text-alloy-midnight">{labelChargeType(r.charge_type)}</span>
+                                            {linkedVisit ? (
+                                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-blue bg-alloy-blue/10 px-1.5 py-0.5 rounded">
+                                                    This visit
+                                                </span>
+                                            ) : null}
                                         </span>
-                                    ) : null}
-                                </td>
-                                <td className={td}>{labelChargeStatus(r.status)}</td>
-                                <td className={`${td} text-right tabular-nums font-medium`}>{formatMoneyFromCents(r.amount_cents)}</td>
-                                <td className={`${td} text-right tabular-nums`}>{formatMoneyFromCents(r.posted_allocated_cents)}</td>
-                                <td className={`${td} text-right tabular-nums font-medium`}>{formatMoneyFromCents(r.outstanding_cents)}</td>
-                                <td className={`${td} text-alloy-midnight/70 whitespace-nowrap`}>
-                                    {dateCell(r.service_date, r.due_date)}
-                                </td>
-                            </tr>
-                        ))}
+                                        {hint ? (
+                                            <span
+                                                className={`block font-normal text-alloy-midnight/50 leading-snug mt-0.5 ${
+                                                    compact ? "text-[10px]" : "text-[11px]"
+                                                }`}
+                                            >
+                                                {hint}
+                                            </span>
+                                        ) : null}
+                                        {r.description ? (
+                                            <span
+                                                className={`block font-normal text-alloy-midnight/55 leading-snug mt-0.5 ${
+                                                    compact ? "text-[10px]" : "text-[11px]"
+                                                }`}
+                                            >
+                                                {r.description}
+                                            </span>
+                                        ) : null}
+                                    </td>
+                                    <td className={td}>{labelChargeStatus(r.status)}</td>
+                                    <td className={`${td} text-right tabular-nums font-medium`}>{formatMoneyFromCents(r.amount_cents)}</td>
+                                    <td className={`${td} text-right tabular-nums`}>{formatMoneyFromCents(r.posted_allocated_cents)}</td>
+                                    <td
+                                        className={`${td} text-right tabular-nums font-medium ${
+                                            out.isCredit ? "text-alloy-juniper" : "text-alloy-midnight"
+                                        }`}
+                                    >
+                                        {out.text}
+                                    </td>
+                                    <td className={`${td} text-alloy-midnight/70 whitespace-nowrap`}>
+                                        {dateCell(r.service_date, r.due_date)}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -140,5 +201,5 @@ export function JobReceivableChargesPanel({
 
 /** First summary row label: charge receivables vs legacy job pricing. */
 export function jobTotalSummaryLabel(receivableSource?: "charges" | "legacy_job"): string {
-    return receivableSource === "charges" ? "Total charged" : "Job total";
+    return receivableSource === "charges" ? "Total charged (sum of charges)" : "Job total (legacy pricing)";
 }

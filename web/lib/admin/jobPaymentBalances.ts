@@ -26,6 +26,8 @@ export type JobChargeBalanceRow = {
     posted_allocated_cents: number;
     /** amount_cents − posted_allocated_cents (may be negative for credit adjustments). */
     outstanding_cents: number;
+    /** When set, ties the charge to a visit (service/cancellation fee context). */
+    schedule_id: string | null;
     service_date: string | null;
     due_date: string | null;
     /** Short description for admin UI (may be truncated). */
@@ -62,6 +64,7 @@ type ChargeRowMinimal = {
     amount_cents: unknown;
     status: unknown;
     charge_type: unknown;
+    schedule_id: unknown;
     service_date: unknown;
     due_date: unknown;
     description: unknown;
@@ -75,7 +78,7 @@ export async function fetchNonVoidChargesForJob(
 ): Promise<ChargeRowMinimal[]> {
     const { data, error } = await supabase
         .from("charges")
-        .select("id, amount_cents, status, charge_type, service_date, due_date, description")
+        .select("id, amount_cents, status, charge_type, schedule_id, service_date, due_date, description")
         .eq("org_id", orgId)
         .eq("job_id", jobId)
         .neq("status", "void");
@@ -273,6 +276,7 @@ function buildChargeBalanceRows(
         const outstanding = amount - postedAlloc;
         const st = String(c.status ?? "").toLowerCase();
         const rawDesc = c.description != null && String(c.description).trim() ? String(c.description).trim() : null;
+        const sid = c.schedule_id != null && String(c.schedule_id).trim() ? String(c.schedule_id).trim() : null;
         rows.push({
             charge_id: c.id,
             charge_type: String(c.charge_type ?? "service").toLowerCase(),
@@ -280,6 +284,7 @@ function buildChargeBalanceRows(
             status: st,
             posted_allocated_cents: postedAlloc,
             outstanding_cents: outstanding,
+            schedule_id: sid,
             service_date: normalizeDateOnly(c.service_date),
             due_date: normalizeDateOnly(c.due_date),
             description: rawDesc ? truncateDesc(rawDesc, 120) : null,
