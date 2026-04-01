@@ -105,7 +105,7 @@ body {
   75% { transform: translate(-1%, 1.5%); }
 }
 
-/* Drifting specs: moderate travel + slightly quicker cadence (readable motion, not chaotic) */
+/* Drifting specs: larger travel (timing unchanged) — signature motion, still smooth */
 @keyframes public-spec-float {
   0%,
   100% {
@@ -113,7 +113,7 @@ body {
     opacity: 0.58;
   }
   50% {
-    transform: translate(15px, -17px);
+    transform: translate(19px, -21px);
     opacity: 0.92;
   }
 }
@@ -125,7 +125,7 @@ body {
     opacity: 0.54;
   }
   50% {
-    transform: translate(-13px, 14px);
+    transform: translate(-16px, 18px);
     opacity: 0.88;
   }
 }
@@ -133,11 +133,11 @@ body {
 @keyframes public-spec-drift-alt {
   0%,
   100% {
-    transform: translate(6px, 7px);
+    transform: translate(8px, 9px);
     opacity: 0.5;
   }
   50% {
-    transform: translate(-15px, -13px);
+    transform: translate(-19px, -16px);
     opacity: 0.86;
   }
 }
@@ -467,35 +467,35 @@ body {
   pointer-events: none;
 }
 
-/* Base dot: discrete core + tight inner glow + very soft outer ping (not diffuse haze) */
+/* Base dot: Alloy Blue secondary in the mix (~40%) — slightly quieter than pine accents */
 .public-ambient-spec-dot {
   width: 5px;
   height: 5px;
   margin-left: -2.5px;
   margin-top: -2.5px;
-  background: rgba(0, 69, 140, 0.6);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.52),
-    0 0 4px rgba(0, 69, 140, 0.52),
-    0 0 12px rgba(0, 69, 140, 0.12),
-    0 0 14px rgba(39, 63, 82, 0.06);
-}
-
-/* Bend Pine — depth accent (still a point, not a wash) */
-.public-ambient-spec-dot-pine {
-  background: rgba(39, 63, 82, 0.68);
+  background: rgba(0, 69, 140, 0.56);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 0 4px rgba(39, 63, 82, 0.52),
-    0 0 11px rgba(0, 162, 131, 0.11);
+    0 0 4px rgba(0, 69, 140, 0.46),
+    0 0 11px rgba(0, 69, 140, 0.1),
+    0 0 12px rgba(39, 63, 82, 0.05);
+}
+
+/* Bend Pine — primary accent: brighter core + crisp ring + tight juniper ping */
+.public-ambient-spec-dot-pine {
+  background: rgba(39, 63, 82, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.62),
+    0 0 4px rgba(39, 63, 82, 0.62),
+    0 0 10px rgba(0, 162, 131, 0.16);
 }
 
 .public-ambient-spec-dot-juniper {
-  background: rgba(0, 162, 131, 0.58);
+  background: rgba(0, 162, 131, 0.72);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.48),
-    0 0 4px rgba(0, 162, 131, 0.54),
-    0 0 12px rgba(0, 162, 131, 0.13);
+    0 0 0 1px rgba(255, 255, 255, 0.58),
+    0 0 4px rgba(0, 162, 131, 0.62),
+    0 0 11px rgba(0, 200, 165, 0.14);
 }
 
 /* Small: slightly larger than 3px so reads as intentional */
@@ -504,30 +504,30 @@ body {
   height: 4px;
   margin-left: -2px;
   margin-top: -2px;
-  background: rgba(0, 69, 140, 0.52);
+  background: rgba(0, 69, 140, 0.48);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.42),
-    0 0 3px rgba(0, 69, 140, 0.46),
-    0 0 9px rgba(0, 69, 140, 0.1),
-    0 0 10px rgba(39, 63, 82, 0.05);
+    0 0 0 0.5px rgba(255, 255, 255, 0.4),
+    0 0 3px rgba(0, 69, 140, 0.42),
+    0 0 8px rgba(0, 69, 140, 0.09),
+    0 0 9px rgba(39, 63, 82, 0.04);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-sm {
-  background: rgba(39, 63, 82, 0.62);
+  background: rgba(39, 63, 82, 0.76);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.4),
-    0 0 3px rgba(39, 63, 82, 0.48),
-    0 0 9px rgba(0, 162, 131, 0.09);
+    0 0 0 0.5px rgba(255, 255, 255, 0.55),
+    0 0 3px rgba(39, 63, 82, 0.56),
+    0 0 8px rgba(0, 162, 131, 0.14);
 }
 
 .public-ambient-spec-sm.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-sm {
-  background: rgba(0, 162, 131, 0.52);
+  background: rgba(0, 162, 131, 0.66);
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.38),
-    0 0 3px rgba(0, 162, 131, 0.48),
-    0 0 9px rgba(0, 162, 131, 0.11);
+    0 0 0 0.5px rgba(255, 255, 255, 0.52),
+    0 0 3px rgba(0, 162, 131, 0.56),
+    0 0 8px rgba(0, 200, 165, 0.13);
 }
 
 /* Large: anchor accents */
@@ -536,30 +536,30 @@ body {
   height: 7px;
   margin-left: -3.5px;
   margin-top: -3.5px;
-  background: rgba(0, 69, 140, 0.62);
+  background: rgba(0, 69, 140, 0.58);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.55),
-    0 0 5px rgba(0, 69, 140, 0.5),
-    0 0 14px rgba(0, 69, 140, 0.13),
-    0 0 16px rgba(39, 63, 82, 0.07);
+    0 0 0 1px rgba(255, 255, 255, 0.52),
+    0 0 5px rgba(0, 69, 140, 0.46),
+    0 0 13px rgba(0, 69, 140, 0.11),
+    0 0 14px rgba(39, 63, 82, 0.06);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-pine,
 .public-ambient-spec-dot-pine.public-ambient-spec-lg {
-  background: rgba(39, 63, 82, 0.72);
+  background: rgba(39, 63, 82, 0.86);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.52),
-    0 0 5px rgba(39, 63, 82, 0.54),
-    0 0 13px rgba(0, 162, 131, 0.12);
+    0 0 0 1px rgba(255, 255, 255, 0.64),
+    0 0 5px rgba(39, 63, 82, 0.64),
+    0 0 12px rgba(0, 162, 131, 0.18);
 }
 
 .public-ambient-spec-lg.public-ambient-spec-dot-juniper,
 .public-ambient-spec-dot-juniper.public-ambient-spec-lg {
-  background: rgba(0, 162, 131, 0.6);
+  background: rgba(0, 162, 131, 0.76);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 0 5px rgba(0, 162, 131, 0.5),
-    0 0 14px rgba(0, 162, 131, 0.14);
+    0 0 0 1px rgba(255, 255, 255, 0.58),
+    0 0 5px rgba(0, 162, 131, 0.58),
+    0 0 12px rgba(0, 200, 165, 0.16);
 }
 
 .public-ambient-spec:nth-child(3n + 1) {
