@@ -7630,32 +7630,76 @@ export default function AdminEntityDrawer() {
                             )}
                             {drawer.type === "schedules" && !(data as { _create?: boolean })?._create && (
                                 <>
-                                    {(data.canceled_at as string) ? (
-                                        <div className="rounded-lg border border-alloy-stone/45 bg-alloy-stone/20 px-3 py-2.5 mb-3 space-y-1.5">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <StatusBadge label="Visit canceled" variant="neutral" />
-                                                <span className="text-sm text-alloy-midnight/80 tabular-nums">
-                                                    {formatDateTime(String(data.canceled_at))}
-                                                </span>
-                                            </div>
-                                            {(data.cancel_reason as string)?.trim() ? (
-                                                <p className="text-sm text-alloy-midnight/80">
-                                                    <span className="font-medium">Reason:</span> {String(data.cancel_reason).trim()}
-                                                </p>
-                                            ) : (
-                                                <p className="text-xs text-alloy-midnight/50">No cancel reason on file.</p>
-                                            )}
-                                            <p className="text-xs text-alloy-midnight/55 leading-snug">
-                                                Workflow and assignment below are read-only for this visit. Cancellation was applied via{" "}
-                                                <strong>Cancel {scheduleSingular.toLowerCase()}</strong> (not the status dropdown).
-                                            </p>
+                                    <div className="rounded-md border border-alloy-stone/40 bg-alloy-stone/10 px-3 py-2.5 mb-3 space-y-2">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/80">Current status</h4>
+                                            <Link
+                                                href="/admin/system/statuses?entity_type=schedules"
+                                                className="text-[11px] text-alloy-blue hover:underline shrink-0"
+                                            >
+                                                Schedules statuses (source of truth)
+                                            </Link>
                                         </div>
-                                    ) : (
-                                        <p className="text-[11px] text-alloy-midnight/50 mb-3 max-w-xl leading-snug">
-                                            <strong>Workflow status</strong> is for visit progress only. To cancel, use{" "}
-                                            <strong>Cancel {scheduleSingular.toLowerCase()}</strong> in the actions below — not this field.
-                                        </p>
-                                    )}
+                                        {(data.canceled_at as string) ? (
+                                            <div className="space-y-1.5">
+                                                <p className="text-sm text-alloy-midnight flex flex-wrap items-center gap-2">
+                                                    <span className="text-alloy-midnight/60">Visit:</span>
+                                                    <strong>Canceled</strong>
+                                                    <StatusBadge label="Canceled" variant="neutral" />
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/70">
+                                                    <span className="text-alloy-midnight/50">Canceled at:</span>{" "}
+                                                    {formatDateTime(String(data.canceled_at))}
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/70">
+                                                    <span className="text-alloy-midnight/50">Cancel reason:</span>{" "}
+                                                    {(data.cancel_reason as string)?.trim() ? String(data.cancel_reason).trim() : "—"}
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/65 border-t border-alloy-stone/25 pt-1.5 mt-1.5">
+                                                    <span className="text-alloy-midnight/50">Workflow status (from statuses):</span>{" "}
+                                                    {(() => {
+                                                        const sk = String(data.status_key ?? "").trim();
+                                                        const lab =
+                                                            sk &&
+                                                            (statusDefsForDrawer.find((s) => s.status_key === sk)?.status_label?.trim() ||
+                                                                String(
+                                                                    (data as { _schedule_status_label?: string | null })._schedule_status_label ??
+                                                                        ""
+                                                                ).trim());
+                                                        return (
+                                                            <>
+                                                                {lab ? <strong>{lab}</strong> : <span className="text-alloy-midnight/45">—</span>}
+                                                                {sk ? (
+                                                                    <span className="font-mono text-[10px] text-alloy-midnight/45 ml-1">({sk})</span>
+                                                                ) : null}
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                <p className="text-sm text-alloy-midnight">
+                                                    <span className="text-alloy-midnight/60">Workflow status:</span>{" "}
+                                                    <strong>
+                                                        {String((data as { _status_display?: string | null })._status_display ?? "").trim() ||
+                                                            (() => {
+                                                                const sk = String(formData.status_key ?? data.status_key ?? "").trim();
+                                                                return (
+                                                                    statusDefsForDrawer.find((s) => s.status_key === sk)?.status_label?.trim() ||
+                                                                    sk ||
+                                                                    "—"
+                                                                );
+                                                            })()}
+                                                    </strong>
+                                                </p>
+                                                <p className="text-xs text-alloy-midnight/55">
+                                                    <span className="text-alloy-midnight/50">status_key:</span>{" "}
+                                                    <span className="font-mono">{String(formData.status_key ?? data.status_key ?? "").trim() || "—"}</span>
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                     {(data.job_id as string) && (
                                         <div>
                                             <strong className="text-alloy-midnight/70">{jobSingular}</strong>
@@ -7687,41 +7731,43 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Start</label><input type="datetime-local" value={String(formData.start_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, start_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">End</label><input type="datetime-local" value={String(formData.end_at ?? "")} onChange={(e) => setFormData((f) => ({ ...f, end_at: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Workflow status</label>
-                                                {statusDefsLoading ? (
-                                                    <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                                                ) : (data.canceled_at as string) ? (
-                                                    <p className="text-sm text-alloy-midnight/80 py-1">
-                                                        <span className="text-alloy-midnight/55 text-xs uppercase tracking-wide mr-1">Recorded</span>
-                                                        {statusDefsForDrawer.find((s) => s.status_key === (data.status_key as string))?.status_label ??
-                                                            (data.status_key as string) ??
-                                                            "—"}
-                                                    </p>
-                                                ) : (
-                                                    <select
-                                                        value={String(formData.status_key ?? "")}
-                                                        onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
-                                                        onBlur={() => {
-                                                            if (drawer.type === "schedules" && nonJobFormDirty) saveEdit();
-                                                        }}
-                                                        disabled={!canMutate || !!(data.canceled_at as string)}
-                                                        className={INLINE_EDIT_INPUT_CLASS}
-                                                    >
-                                                        <option value="">— None —</option>
-                                                        {statusDefsForDrawer
-                                                            .filter((s) => s.is_active)
-                                                            .filter((s) => !isScheduleCanceledStatusKey(s.status_key))
-                                                            .sort((a, b) => a.sort_order - b.sort_order)
-                                                            .map((s) => (
-                                                                <option key={s.status_key} value={s.status_key}>
-                                                                    {s.status_label ?? s.status_key}
-                                                                </option>
-                                                            ))}
-                                                    </select>
-                                                )}
-                                            </div>
-                                            </div>
+                                    </div>
+                                    <div className="rounded-md border border-alloy-stone/35 bg-white px-3 py-2.5 mt-3 space-y-2">
+                                        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/80">Change workflow status</h4>
+                                        <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl">
+                                            Options match{" "}
+                                            <Link href="/admin/system/statuses?entity_type=schedules" className="text-alloy-blue hover:underline">
+                                                System → Statuses → Schedules
+                                            </Link>
+                                            . This updates operational workflow only — it does <strong>not</strong> cancel the visit.
+                                        </p>
+                                        {statusDefsLoading ? (
+                                            <p className="text-sm text-alloy-midnight/60">Loading status definitions…</p>
+                                        ) : (data.canceled_at as string) ? (
+                                            <p className="text-sm text-alloy-midnight/60 py-1">Workflow editing is disabled while the visit is canceled.</p>
+                                        ) : (
+                                            <select
+                                                value={String(formData.status_key ?? "")}
+                                                onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))}
+                                                onBlur={() => {
+                                                    if (drawer.type === "schedules" && nonJobFormDirty) saveEdit();
+                                                }}
+                                                disabled={!canMutate}
+                                                className={INLINE_EDIT_INPUT_CLASS}
+                                            >
+                                                <option value="">— None —</option>
+                                                {statusDefsForDrawer
+                                                    .filter((s) => s.is_active)
+                                                    .filter((s) => !isScheduleCanceledStatusKey(s.status_key))
+                                                    .sort((a, b) => a.sort_order - b.sort_order)
+                                                    .map((s) => (
+                                                        <option key={s.status_key} value={s.status_key}>
+                                                            {s.status_label ?? s.status_key}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        )}
+                                    </div>
                                     <div className="pt-2 border-t border-[#e6e8ec]" id="schedule-assign-section">
                                         <strong className="text-alloy-midnight/70 block mb-1">Assignment</strong>
                                         {(data._assignment as { id?: string }) ? (
@@ -7812,10 +7858,15 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                     {!(data.canceled_at as string) && (
-                                        <div className="pt-2 border-t border-[#e6e8ec] space-y-2">
-                                            <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl">
-                                                Cancelling records <code className="text-[10px] bg-alloy-stone/40 px-1 rounded">canceled_at</code> and fee rules on the server. Use this action—not workflow status—to cancel a visit.
-                                            </p>
+                                        <div className="pt-3 border-t border-[#e6e8ec] space-y-2">
+                                            <div className="mb-1">
+                                                <strong className="text-sm text-alloy-midnight/85 block">Cancel visit</strong>
+                                                <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl mt-0.5">
+                                                    Separate from workflow status above. Calls the cancel API (sets{" "}
+                                                    <code className="text-[10px] bg-alloy-stone/40 px-1 rounded">canceled_at</code> and fee rules on
+                                                    the server).
+                                                </p>
+                                            </div>
                                             <div className="flex flex-wrap gap-2">
                                             {!scheduleCancelPrompt ? (
                                                 <button type="button" onClick={() => setScheduleCancelPrompt(true)} className="px-2 py-1.5 text-sm border border-alloy-ember/50 text-alloy-ember rounded hover:bg-alloy-ember/10">Cancel {scheduleSingular.toLowerCase()}</button>
