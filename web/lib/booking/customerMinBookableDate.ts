@@ -49,7 +49,7 @@ export function createInstantForLocalClock(
   return candidate;
 }
 
-function formatYmdInTimezone(date: Date, timezone: string): string {
+export function formatYmdInTimezone(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
@@ -89,4 +89,41 @@ export function computeCustomerMinBookableDateYmd(timezone: string, now: Date = 
     candidate = addCalendarDaysInTimezone(timezone, candidate, 1);
   }
   return candidate;
+}
+
+/** Long label for a calendar date key `YYYY-MM-DD` in the booking timezone (e.g. "Tuesday, May 5"). */
+export function formatDateKeyDisplayLong(dateKey: string, timezone: string): string {
+  const parts = dateKey.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return dateKey;
+  const [y, m, d] = parts;
+  const noon = createInstantForLocalClock(timezone, y, m - 1, d, 12, 0);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: timezone,
+  }).format(noon);
+}
+
+/** Short label for lists/chips (e.g. "Tue, May 5"). */
+export function formatDateKeyDisplayShort(dateKey: string, timezone: string): string {
+  const parts = dateKey.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return dateKey;
+  const [y, m, d] = parts;
+  const noon = createInstantForLocalClock(timezone, y, m - 1, d, 12, 0);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: timezone,
+  }).format(noon);
+}
+
+export function isWeekendDateKey(dateKey: string, timezone: string): boolean {
+  const parts = dateKey.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return false;
+  const [y, m, d] = parts;
+  const noon = createInstantForLocalClock(timezone, y, m - 1, d, 12, 0);
+  const w = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(noon);
+  return w === "Sat" || w === "Sun";
 }

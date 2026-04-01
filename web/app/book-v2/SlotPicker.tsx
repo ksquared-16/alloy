@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { computeCustomerMinBookableDateYmd } from "@/lib/booking/customerMinBookableDate";
+import {
+    computeCustomerMinBookableDateYmd,
+    formatDateKeyDisplayLong,
+    formatDateKeyDisplayShort,
+    isWeekendDateKey,
+} from "@/lib/booking/customerMinBookableDate";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_VALUE_TO_NUM: Record<string, number> = {
@@ -63,6 +68,7 @@ export default function SlotPicker({
     // Visible month as YYYY-MM (first day of month for display)
     const [visibleMonthKey, setVisibleMonthKey] = useState<string>("");
     const [apiMinBookableDate, setApiMinBookableDate] = useState<string | null>(null);
+    const [apiMaxBookableDate, setApiMaxBookableDate] = useState<string | null>(null);
 
     useEffect(() => {
         setMounted(true);
@@ -87,6 +93,7 @@ export default function SlotPicker({
             setLoading(true);
             setSlotError(null);
             setApiMinBookableDate(null);
+            setApiMaxBookableDate(null);
             try {
                 const response = await fetch(`/api/book-v2/availability?timezone=${encodeURIComponent(timezone)}`);
                 if (!response.ok) {
@@ -104,6 +111,11 @@ export default function SlotPicker({
                 setApiMinBookableDate(
                     typeof data.min_bookable_date === "string" && data.min_bookable_date.trim()
                         ? data.min_bookable_date.trim()
+                        : null
+                );
+                setApiMaxBookableDate(
+                    typeof data.max_bookable_date === "string" && data.max_bookable_date.trim()
+                        ? data.max_bookable_date.trim()
                         : null
                 );
                 const normalizedSlots: TimeSlot[] = (data.slots || []).map((slot: any) => {
@@ -167,21 +179,10 @@ export default function SlotPicker({
         }, {} as Record<string, TimeSlot[]>);
         Object.entries(grouped).forEach(([dateKey, dateSlots]) => {
             if (dateSlots.length > 0) {
-                const labels = mounted
-                    ? (() => {
-                        try {
-                            const full = dateSlots[0].start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: timezone });
-                            const short = dateSlots[0].start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone });
-                            return { full, short };
-                        } catch {
-                            return { full: dateKey, short: dateKey };
-                        }
-                    })()
-                    : { full: dateKey, short: dateKey };
                 groups.push({
                     dateKey,
-                    dateLabel: labels.full,
-                    dateShort: labels.short,
+                    dateLabel: formatDateKeyDisplayLong(dateKey, timezone),
+                    dateShort: formatDateKeyDisplayShort(dateKey, timezone),
                     slots: dateSlots.sort((a, b) => a.start.getTime() - b.start.getTime()),
                 });
             }
@@ -213,20 +214,33 @@ export default function SlotPicker({
         const days = getDaysInMonth(y, monthIndex);
         for (let day = 1; day <= days; day++) {
             const dateKey = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            if (dateKey >= minBookableDateStr) return dateKey;
+            if (dateKey < minBookableDateStr) continue;
+            if (apiMaxBookableDate && dateKey > apiMaxBookableDate) continue;
+            if (isWeekendDateKey(dateKey, timezone)) continue;
+            return dateKey;
         }
         return null;
-    }, [effectiveMonthKey, minBookableDateStr]);
+    }, [effectiveMonthKey, minBookableDateStr, apiMaxBookableDate, timezone]);
 
     // When visible month changes, if selected date is invalid or not in visible month, pick first valid in visible month
     useEffect(() => {
-        if (!mounted || !selectedDateKey || !firstValidDateInVisibleMonth) return;
-        const inVisibleMonth = selectedDateKey.startsWith(effectiveMonthKey || "");
-        const valid = selectedDateKey >= minBookableDateStr;
-        if (!inVisibleMonth || !valid) {
+        if (!mounted || !effectiveMonthKey || !minBookableDateStr || !firstValidDateInVisibleMonth) return;
+        const inVisibleMonth = selectedDateKey?.startsWith(`${effectiveMonthKey}-`) ?? false;
+        const validMin = selectedDateKey && selectedDateKey >= minBookableDateStr;
+        const validMax = !apiMaxBookableDate || (selectedDateKey && selectedDateKey <= apiMaxBookableDate);
+        const weekdayOk = selectedDateKey && !isWeekendDateKey(selectedDateKey, timezone);
+        if (!selectedDateKey || !inVisibleMonth || !validMin || !validMax || !weekdayOk) {
             setSelectedDateKey(firstValidDateInVisibleMonth);
         }
-    }, [mounted, selectedDateKey, effectiveMonthKey, firstValidDateInVisibleMonth, minBookableDateStr]);
+    }, [
+        mounted,
+        selectedDateKey,
+        effectiveMonthKey,
+        firstValidDateInVisibleMonth,
+        minBookableDateStr,
+        apiMaxBookableDate,
+        timezone,
+    ]);
 
     const selectedDateSlots = useMemo(() => {
         if (!selectedDateKey) return [];
@@ -267,12 +281,15 @@ export default function SlotPicker({
         for (let i = 0; i < firstWeekday; i++) cells.push({ type: "blank" });
         for (let day = 1; day <= daysInMonth; day++) {
             const dateKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-            const disabled = mounted && !!minBookableDateStr && dateKey < minBookableDateStr;
+            const beforeMin = !!minBookableDateStr && dateKey < minBookableDateStr;
+            const afterMax = !!apiMaxBookableDate && dateKey > apiMaxBookableDate;
+            const weekend = isWeekendDateKey(dateKey, timezone);
+            const disabled = beforeMin || afterMax || weekend;
             const slotCount = slotsByDate[dateKey] ?? 0;
             cells.push({ type: "day", dateKey, day, disabled, slotCount });
         }
         return cells;
-    }, [effectiveMonthKey, timezone, mounted, minBookableDateStr, slotsByDate]);
+    }, [effectiveMonthKey, timezone, minBookableDateStr, apiMaxBookableDate, slotsByDate]);
 
     const visibleMonthLabel = useMemo(() => {
         const [y, m] = (effectiveMonthKey || "").split("-").map(Number);
@@ -286,6 +303,15 @@ export default function SlotPicker({
     }, [effectiveMonthKey, timezone]);
 
     const canGoPrev = firstValidMonthKey && effectiveMonthKey && effectiveMonthKey > firstValidMonthKey;
+
+    const canGoNext = useMemo(() => {
+        if (!effectiveMonthKey || !apiMaxBookableDate) return true;
+        const [y, m] = effectiveMonthKey.split("-").map(Number);
+        const nextM = m === 12 ? 1 : m + 1;
+        const nextY = m === 12 ? y + 1 : y;
+        const firstOfNextMonth = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
+        return firstOfNextMonth <= apiMaxBookableDate;
+    }, [effectiveMonthKey, apiMaxBookableDate]);
     const goPrev = () => {
         if (!canGoPrev || !effectiveMonthKey) return;
         const [y, m] = effectiveMonthKey.split("-").map(Number);
@@ -296,7 +322,7 @@ export default function SlotPicker({
         }
     };
     const goNext = () => {
-        if (!effectiveMonthKey) return;
+        if (!effectiveMonthKey || !canGoNext) return;
         const [y, m] = effectiveMonthKey.split("-").map(Number);
         if (m === 12) {
             setVisibleMonthKey(`${y + 1}-01`);
@@ -365,7 +391,8 @@ export default function SlotPicker({
                             <button
                                 type="button"
                                 onClick={goNext}
-                                className="p-2 rounded-lg border border-alloy-stone/30 text-alloy-midnight hover:bg-alloy-stone/10 transition-colors"
+                                disabled={!canGoNext}
+                                className="p-2 rounded-lg border border-alloy-stone/30 text-alloy-midnight hover:bg-alloy-stone/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 aria-label="Next month"
                             >
                                 <span className="sr-only">Next</span>
@@ -424,13 +451,11 @@ export default function SlotPicker({
                                 </p>
                                 <p className="text-xs text-alloy-midnight/60 mt-0.5">
                                     {mounted
-                                        ? selectedSlot.start.toLocaleDateString("en-US", {
-                                            weekday: "long",
-                                            month: "long",
-                                            day: "numeric",
-                                            timeZone: timezone,
-                                          })
-                                        : selectedSlot.start.toISOString().split("T")[0]}
+                                        ? formatDateKeyDisplayLong(
+                                              selectedSlot.start.toLocaleDateString("en-CA", { timeZone: timezone }),
+                                              timezone
+                                          )
+                                        : ""}
                                 </p>
                             </div>
                             <div className="flex justify-center">
@@ -449,7 +474,7 @@ export default function SlotPicker({
                 {/* Right column: times list only — full height, scrolls inside */}
                 <div className="h-full lg:h-[520px] lg:min-h-[520px] lg:max-h-[520px] lg:overflow-hidden flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-1 shrink-0">
-                        {selectedDateKey ? (dateGroups.find(g => g.dateKey === selectedDateKey)?.dateLabel ?? selectedDateKey) : "Select a date"}
+                        {selectedDateKey ? formatDateKeyDisplayLong(selectedDateKey, timezone) : "Select a date"}
                     </h3>
                     <div className="flex-1 min-h-0 flex flex-col">
                         {selectedDateKey ? (

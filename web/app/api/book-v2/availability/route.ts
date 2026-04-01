@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
+  addCalendarDaysInTimezone,
   computeCustomerMinBookableDateYmd,
   createInstantForLocalClock,
+  formatYmdInTimezone,
 } from "@/lib/booking/customerMinBookableDate";
+
+/** Inclusive calendar-day window from "today" in the booking timezone (90 days → offsets 0..89). */
+const AVAILABILITY_CALENDAR_DAYS = 90;
 
 /**
  * GET /api/book-v2/availability
  *
- * Returns available time slots for the next 30 days.
+ * Returns available time slots for the next AVAILABILITY_CALENDAR_DAYS calendar days in the
+ * requested timezone (weekdays only, after min bookable date).
  *
  * Query params:
  * - timezone: IANA timezone string (default: America/Los_Angeles)
@@ -21,10 +27,15 @@ export async function GET(request: NextRequest) {
     const slotDurationMinutes = 120; // 2 hours
     const bufferMinutes = 30; // 30 minutes buffer between bookings
     const slotIncrementMinutes = 30; // 30-minute increments
-    const daysAhead = 30;
 
     const now = new Date();
     const minBookableDateStr = computeCustomerMinBookableDateYmd(timezone, now);
+    const todayYmd = formatYmdInTimezone(now, timezone);
+    const maxBookableDateStr = addCalendarDaysInTimezone(
+      timezone,
+      todayYmd,
+      AVAILABILITY_CALENDAR_DAYS - 1
+    );
 
     const slots: Array<{
       start: Date;
@@ -56,34 +67,17 @@ export async function GET(request: NextRequest) {
     const isWeekday = (dayName: string): boolean =>
       ["monday", "tuesday", "wednesday", "thursday", "friday"].includes(dayName);
 
-    for (let dayOffset = 0; dayOffset < daysAhead; dayOffset++) {
-      const targetDate = new Date(now);
-      targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
-      targetDate.setUTCHours(12, 0, 0, 0);
-
-      const dateParts = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(targetDate);
-
-      const year = parseInt(dateParts.find((p) => p.type === "year")!.value);
-      const month = parseInt(dateParts.find((p) => p.type === "month")!.value) - 1;
-      const day = parseInt(dateParts.find((p) => p.type === "day")!.value);
-
-      const dayDateStr = new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(targetDate);
+    for (let dayOffset = 0; dayOffset < AVAILABILITY_CALENDAR_DAYS; dayOffset++) {
+      const dayDateStr = addCalendarDaysInTimezone(timezone, todayYmd, dayOffset);
 
       if (dayDateStr < minBookableDateStr) {
         continue;
       }
 
-      const dayName = getDayName(targetDate);
+      const [year, monthOneBased, day] = dayDateStr.split("-").map(Number);
+      const monthIndex = monthOneBased - 1;
+      const noonAnchor = createInstantForLocalClock(timezone, year, monthIndex, day, 12, 0);
+      const dayName = getDayName(noonAnchor);
       if (!isWeekday(dayName)) {
         continue;
       }
@@ -93,7 +87,7 @@ export async function GET(request: NextRequest) {
           if (hour === 15 && minute === 30) {
             continue;
           }
-          const slotStart = createInstantForLocalClock(timezone, year, month, day, hour, minute);
+          const slotStart = createInstantForLocalClock(timezone, year, monthIndex, day, hour, minute);
           const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
 
           const startTimeStr = formatTime(slotStart);
@@ -113,11 +107,12 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const scheduleHorizonMs = (AVAILABILITY_CALENDAR_DAYS + 2) * 24 * 60 * 60 * 1000;
     const { data: existingSchedules, error: scheduleError } = await supabase
       .from("schedules")
       .select("start_at, end_at")
       .gte("start_at", now.toISOString())
-      .lte("start_at", new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000).toISOString());
+      .lte("start_at", new Date(now.getTime() + scheduleHorizonMs).toISOString());
 
     if (scheduleError) {
       console.error("[BOOK_V2_AVAILABILITY] Error fetching schedules:", scheduleError);
@@ -149,6 +144,8 @@ export async function GET(request: NextRequest) {
       count: availableSlots.length,
       timezone,
       min_bookable_date: minBookableDateStr,
+      max_bookable_date: maxBookableDateStr,
+      availability_calendar_days: AVAILABILITY_CALENDAR_DAYS,
     });
   } catch (error: unknown) {
     console.error("[BOOK_V2_AVAILABILITY_ERROR]", error);
