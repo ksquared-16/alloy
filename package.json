@@ -1,4 +1,11 @@
 {
+  "scripts": {
+    "smoke:field-registry-api": "npx tsx scripts/smoke/api_field_registry_smoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.19.0"
+  },
   "dependencies": {
     "stripe": "^20.3.1"
   }
