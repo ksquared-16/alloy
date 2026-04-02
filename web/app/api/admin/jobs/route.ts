@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("jobs")
     .select(
-      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, work_unit_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
+      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, work_unit_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)

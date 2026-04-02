@@ -10,7 +10,7 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("vendors")
-        .select("id, name")
+        .select("id, name, company_name, vendor_number")
         .eq("org_id", ctx.orgId)
         .order("name");
 

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   let q = supabase
     .from("schedules")
     .select(
-      "id, job_id, org_id, location_id, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
+      "id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
       { count: "exact" }
     )
     .eq("org_id", ctx.orgId)

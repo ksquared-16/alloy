@@ -5,6 +5,7 @@ import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@
 
 type CustomerRow = {
     id: string;
+    customer_number?: number | null;
     created_at: string | null;
     updated_at: string | null;
     name: string | null;
@@ -39,7 +40,8 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Number(searchParams.get("limit")) || 500, 500);
 
     const supabase = createAdminClient();
-    const selectCols = "id, created_at, updated_at, name, status, status_key, customer_type, primary_contact_id, vertical_id, org_id, metadata, stripe_customer_id, external_source, external_id, default_payment_method_id, payment_method_brand, payment_method_last4, setup_intent_id";
+    const selectCols =
+        "id, customer_number, created_at, updated_at, name, status, status_key, customer_type, primary_contact_id, vertical_id, org_id, metadata, stripe_customer_id, external_source, external_id, default_payment_method_id, payment_method_brand, payment_method_last4, setup_intent_id";
     let q = supabase
         .from("customers")
         .select(selectCols, { count: "exact" })

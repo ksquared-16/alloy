@@ -53,6 +53,10 @@ export async function GET(request: NextRequest) {
             skRaw != null && String(skRaw).trim() !== "" ? String(skRaw).trim() : null;
         return {
             id,
+            location_number:
+                r.location_number != null && r.location_number !== ""
+                    ? Number(r.location_number)
+                    : null,
             label: (r.label as string | null | undefined) ?? null,
             address1: (r.address1 as string | null | undefined) ?? null,
             city: (r.city as string | null | undefined) ?? null,

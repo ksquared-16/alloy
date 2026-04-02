@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("persons")
-        .select("id, org_id, first_name, last_name, email, phone, status_key, created_at, updated_at")
+        .select("id, org_id, first_name, last_name, email, phone, status_key, person_number, created_at, updated_at")
         .eq("org_id", ctx.orgId)
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(limit);

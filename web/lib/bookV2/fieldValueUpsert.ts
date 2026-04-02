@@ -20,6 +20,7 @@ export async function getFieldDefinitionMeta(
     .eq("entity_type", entityType)
     .eq("field_key", fieldKey)
     .eq("is_active", true)
+    .eq("is_system", false)
     .limit(1);
   if (error) {
     console.error("[BOOK_V2_FIELD_VALUES] field_definitions lookup failed", {

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     let q = supabase
         .from("opportunities")
-        .select("id, name")
+        .select("id, name, opportunity_number")
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false });
 
@@ -32,10 +32,14 @@ export async function GET(request: NextRequest) {
     }
 
     const opportunities = (rows ?? []).map((r) => {
-        const label = (r as { name?: string | null }).name?.trim() || (r as { id: string }).id;
+        const row = r as { id: string; name?: string | null; opportunity_number?: number | string | null };
+        const label = row.name?.trim() || row.id;
+        const rawNum = row.opportunity_number;
+        const n = rawNum != null && rawNum !== "" ? Number(rawNum) : null;
         return {
-            id: (r as { id: string }).id,
+            id: row.id,
             label,
+            record_number: n != null && Number.isFinite(n) ? n : null,
         };
     });
 

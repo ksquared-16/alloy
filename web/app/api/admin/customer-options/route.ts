@@ -15,7 +15,7 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("customers")
-        .select("id, name, status_key")
+        .select("id, name, status_key, customer_number")
         .eq("org_id", ctx.orgId)
         .order("name", { ascending: true, nullsFirst: false });
 
@@ -23,11 +23,16 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const customers = (rows ?? []).map((r) => ({
-        id: (r as { id: string }).id,
-        name: (r as { name: string | null }).name ?? null,
-        status_key: (r as { status_key?: string | null }).status_key ?? null,
-    }));
+    const customers = (rows ?? []).map((r) => {
+        const row = r as { id: string; name: string | null; status_key?: string | null; customer_number?: unknown };
+        const n = row.customer_number != null && row.customer_number !== "" ? Number(row.customer_number) : null;
+        return {
+            id: row.id,
+            name: row.name ?? null,
+            status_key: row.status_key ?? null,
+            record_number: n != null && Number.isFinite(n) ? n : null,
+        };
+    });
 
     return NextResponse.json({ customers });
 }
