@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { submitPublicVendorApplication } from "@/lib/vendors/publicVendorApplication";
+import { emitEvent } from "@/lib/emitEvent";
 
 function getStr(form: FormData, key: string): string {
   const v = form.get(key);
@@ -134,6 +135,23 @@ export async function POST(request: NextRequest) {
 
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+    }
+
+    try {
+      await emitEvent({
+        org_id: orgId,
+        event_type: "vendor_application_submitted",
+        entity_type: "vendor",
+        entity_id: result.vendor_id,
+        payload: {
+          event_type: "vendor_application_submitted",
+          vendor_id: result.vendor_id,
+          person_id: result.person_id,
+          contact_id: result.contact_id,
+        },
+      });
+    } catch (e) {
+      console.warn("[VENDOR_APPLICATION] emitEvent failed (non-fatal)", e);
     }
 
     return NextResponse.json({

@@ -24,6 +24,10 @@ logger = logging.getLogger("alloy-dispatcher")
 
 router = APIRouter()
 
+# Batch 3.7: Canonical public cleaning booking is Next.js Book v2 (Supabase field registry + opportunities).
+# This route remains a parallel path: multipart + GHL sync only — not the Alloy DB booking truth model.
+# Product choice: keep for legacy/custom forms until explicitly redirected to /book-v2; do not extend as canonical.
+
 
 @router.post("/leads/cleaning")
 async def submit_cleaning_lead(

@@ -13,49 +13,14 @@ import {
   serializeSquareFootageForFieldValue,
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
-/** Opportunity Statuses pipeline — Quote Started stage (website quote submission). */
-const QUOTE_STARTED_PIPELINE_STAGE_ID = "0cd4bcc7-2dc0-4706-89a7-5cf8307c8b62";
+import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
+import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/book-v2/resolvePipelineStage";
+import {
+  loadSqftTiersForVertical,
+  normalizeSqftKeyInput,
+} from "@/lib/book-v2/loadCleaningPricingCatalog";
 
 const SERVICE_TYPE = "Standard Cleaning";
-const SQUARE_FOOTAGE_OPTIONS: { max: number; key: SquareFootageOption }[] = [
-  { max: 1500, key: "Under 1500 sq ft" },
-  { max: 2000, key: "1501–2,000 sq ft" },
-  { max: 2600, key: "2,001-2,600 sq ft" },
-  { max: 3200, key: "2,601-3,200 sq ft" },
-  { max: 4000, key: "3,201-4,000 sq ft" },
-  { max: 5500, key: "4,001-5,500 sq ft" },
-  { max: Infinity, key: "Over 5,500 sq ft" },
-];
-
-const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
-  "Under 1500 sq ft",
-  "1501–2,000 sq ft",
-  "2,001-2,600 sq ft",
-  "2,601-3,200 sq ft",
-  "3,201-4,000 sq ft",
-  "4,001-5,500 sq ft",
-  "Over 5,500 sq ft",
-];
-
-function squareFootageToOption(sqft: number | null | undefined): SquareFootageOption {
-  if (sqft == null || sqft <= 0) return "Under 1500 sq ft";
-  for (const { max, key } of SQUARE_FOOTAGE_OPTIONS) {
-    if (sqft <= max) return key;
-  }
-  return "Over 5,500 sq ft";
-}
-
-/** Normalize body square_footage (bucket string or number) to SquareFootageOption for get_quote_pricing. */
-function normalizeSquareFootageInput(
-  val: string | number | null | undefined
-): SquareFootageOption {
-  if (val == null) return "Under 1500 sq ft";
-  const s = typeof val === "string" ? val.trim() : null;
-  if (s && (SQUARE_FOOTAGE_KEYS as string[]).includes(s)) return s as SquareFootageOption;
-  const num = typeof val === "number" ? val : parseInt(String(val), 10);
-  if (!Number.isNaN(num)) return squareFootageToOption(num);
-  return "Under 1500 sq ft";
-}
 
 function mapApiFrequencyToOption(
   freq: "one_time" | "weekly" | "biweekly" | "monthly" | null | undefined
@@ -311,7 +276,6 @@ export async function POST(request: NextRequest) {
     const zip = body.zip?.trim() || null;
     const square_footage_raw = body.square_footage ?? (body.beds != null ? (body.beds as number) * 400 : null);
     const cleaning_frequency = mapApiFrequencyToOption(body.cleaning_frequency);
-    const squareFootageOption = normalizeSquareFootageInput(square_footage_raw);
 
     const supabase = createServiceRoleClient();
     const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
@@ -354,12 +318,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sqftTierRows = await loadSqftTiersForVertical(supabase, verticalId);
+    const squareFootageOption = normalizeSqftKeyInput(square_footage_raw, sqftTierRows) as SquareFootageOption;
+
     if (!orgIdForWrites) {
       return NextResponse.json(
         { ok: false, message: "Server configuration error (org)" },
         { status: 500 }
       );
     }
+
+    const quoteStartedStageId =
+      (await resolvePipelineStageIdByOrgKey(supabase, orgIdForWrites, "quote_started")) ??
+      pipelineStageEnvFallback("quote_started") ??
+      LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID;
 
     const promoRaw =
       typeof body.promo_campaign === "string" ? body.promo_campaign.trim() : "";
@@ -497,7 +469,7 @@ export async function POST(request: NextRequest) {
       opportunityId = existingOppRow.id;
       const updatePayload: Record<string, unknown> = {
         location_id: locationId,
-        pipeline_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,
+        pipeline_stage_id: quoteStartedStageId,
         status_key: "quote_started",
         status: "open",
         vertical_id: verticalId,
@@ -525,7 +497,7 @@ export async function POST(request: NextRequest) {
         primary_contact_id: null,
         customer_id: null,
         location_id: locationId,
-        pipeline_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,
+        pipeline_stage_id: quoteStartedStageId,
         status_key: "quote_started",
         name: opportunityName,
         status: "open",
@@ -565,7 +537,7 @@ export async function POST(request: NextRequest) {
         event_type: "quote_started",
         occurred_at: new Date().toISOString(),
         org_id: orgIdForWrites ?? null,
-        quote_started_stage_id: QUOTE_STARTED_PIPELINE_STAGE_ID,
+        quote_started_stage_id: quoteStartedStageId,
         opportunity: oppRow ?? null,
       };
       let eventId: string | null = null;

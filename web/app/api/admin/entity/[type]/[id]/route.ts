@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
-import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
+import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
 import {
     computeJobDisplayTotalCents,
@@ -81,90 +82,7 @@ async function hydrateVendorDisplayStub(
     return vendorRowToDisplayStub(r, person);
 }
 
-const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
-    customers: "customer",
-    jobs: "job",
-    opportunities: "opportunity",
-    vendors: "vendor",
-    schedules: "schedule",
-    persons: "person",
-    locations: "location",
-};
-
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
-
-/** True if the entity row already has a value we should not replace with an empty custom field_values overlay. */
-function hasMeaningfulNativeFieldValue(v: unknown): boolean {
-    if (v === undefined) return false;
-    if (v === null) return false;
-    if (typeof v === "boolean") return true;
-    if (typeof v === "number") return !Number.isNaN(v);
-    if (typeof v === "string") return v.trim() !== "";
-    return true;
-}
-
-async function attachFieldDefinitionsAndValues(
-    supabase: ReturnType<typeof createAdminClient>,
-    out: Record<string, unknown>,
-    drawerType: string,
-    entityId: string
-): Promise<void> {
-    const entityType = DRAWER_TYPE_TO_FIELD_ENTITY_TYPE[drawerType];
-    if (!entityType) return;
-    let orgId: string | null = (out.org_id as string) ?? null;
-    if (!orgId && drawerType === "schedules" && out._job) {
-        orgId = (out._job as { org_id?: string }).org_id ?? null;
-    }
-    if (!orgId) return;
-    const { data: defRows } = await supabase
-        .from("field_definitions")
-        .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
-        .eq("org_id", orgId)
-        .eq("entity_type", entityType)
-        .eq("is_active", true)
-        .order("section_key", { ascending: true })
-        .order("sort_order", { ascending: true });
-    const fieldDefs = (defRows ?? []) as { id: string; field_key: string; field_type: string; label: string | null; section_key: string | null; sort_order: number; is_system: boolean; is_visible_in_drawer: boolean }[];
-    out._field_definitions = fieldDefs;
-    if (fieldDefs.length === 0) return;
-    const defIds = fieldDefs.map((d) => d.id);
-    const { data: fvRows } = await supabase
-        .from("field_values")
-        .select(
-            "field_definition_id, value_text, value_number, value_boolean, value_date, value_json"
-        )
-        .eq("entity_type", entityType)
-        .eq("entity_id", entityId)
-        .in("field_definition_id", defIds);
-    type FvRow = {
-        field_definition_id: string;
-        value_text?: string | null;
-        value_number?: number | null;
-        value_boolean?: boolean | null;
-        value_date?: string | null;
-        value_json?: unknown;
-    };
-    const rowByDefId = new Map(
-        ((fvRows ?? []) as FvRow[]).map((r) => [r.field_definition_id, r] as const)
-    );
-    for (const d of fieldDefs) {
-        if (!d.is_system) {
-            const row = rowByDefId.get(d.id);
-            const before = out[d.field_key];
-            if (row) {
-                const applied = displayFromFieldValueRow(d.field_type, row);
-                const appliedEmpty = applied === "" || (typeof applied === "string" && applied.trim() === "");
-                if (!appliedEmpty) {
-                    (out as Record<string, unknown>)[d.field_key] = applied;
-                } else if (!hasMeaningfulNativeFieldValue(before)) {
-                    (out as Record<string, unknown>)[d.field_key] = applied;
-                }
-            } else if (!hasMeaningfulNativeFieldValue(before) && !(d.field_key in out)) {
-                (out as Record<string, unknown>)[d.field_key] = "";
-            }
-        }
-    }
-}
 
 export async function GET(
     request: NextRequest,
@@ -388,6 +306,7 @@ export async function GET(
             out._work_unit_label = withWu._work_unit_label;
             out._job_line_items = await fetchActiveJobLineItemsForAdmin(supabase, orgId, id);
             await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "jobs", out);
             return NextResponse.json(out);
         }
         if (type === "opportunities") {
@@ -548,6 +467,7 @@ export async function GET(
                 : null;
             out._quote_total_display = qt;
             await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
             return NextResponse.json(out);
         }
         if (type === "contacts") {
@@ -712,6 +632,7 @@ export async function GET(
                 };
             }
             await attachFieldDefinitionsAndValues(supabase, out, "customers", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "customers", out);
             return NextResponse.json(out);
         }
         if (type === "schedules") {
@@ -971,6 +892,7 @@ export async function GET(
             }
 
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "schedules", out);
             return NextResponse.json(out);
         }
         if (type === "locations") {
@@ -1090,6 +1012,7 @@ export async function GET(
             }
 
             await attachFieldDefinitionsAndValues(supabase, out, "locations", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "locations", out);
             return NextResponse.json(out);
         }
         if (type === "discount_redemptions") {
@@ -1312,6 +1235,7 @@ export async function GET(
             out._vendor_schedules = vendorSchedules ?? [];
 
             await attachFieldDefinitionsAndValues(supabase, out, "vendors", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "vendors", out);
             return NextResponse.json(out);
         }
         if (type === "subscriptions") {
@@ -1763,6 +1687,7 @@ export async function GET(
             out._linked_opportunities = oppRows ?? [];
 
             await attachFieldDefinitionsAndValues(supabase, out, "persons", id);
+            await attachDirectFkRelationshipDisplays(supabase, orgId, "persons", out);
             return NextResponse.json(out);
         }
 

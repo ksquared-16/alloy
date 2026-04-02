@@ -21,7 +21,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
     const supabase = createAdminClient();
     const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
 
-    const cols = "id, created_at, updated_at, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, primary_person_id, external_id, vertical_id, source, estimated_price_cents, monetary_value_cents";
+    const cols = "id, created_at, updated_at, opportunity_number, name, status, status_key, job_date, job_time_window, quote_total, customer_id, primary_contact_id, primary_person_id, external_id, vertical_id, source, estimated_price_cents, monetary_value_cents";
     let q = supabase
         .from("opportunities")
         .select(cols)

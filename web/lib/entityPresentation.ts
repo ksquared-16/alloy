@@ -250,6 +250,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "customer_number", label: "Cust #", sortable: true, renderHint: "text", locked: true },
         { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "_primary_person_name", label: "Person", sortable: false, renderHint: "text" },
         { key: "_primary_contact_name", label: "Contact (compat)", sortable: false, renderHint: "text" },
@@ -372,6 +373,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "location_number", label: "Loc #", sortable: true, renderHint: "text", locked: true },
         { key: "label", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "location_type", label: "Type", sortable: true, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
@@ -446,6 +448,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: false, renderHint: "status" },
+        { key: "opportunity_number", label: "Opp #", sortable: true, renderHint: "text", locked: true },
         { key: "name", label: "Opportunity", sortable: true, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
         { key: "_quote_total_display", label: "Quote Total", sortable: false, renderHint: "money" },
@@ -597,6 +600,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "job_number", label: "Job #", sortable: true, renderHint: "text", locked: true },
         { key: "_job_label", label: "Job", sortable: true, renderHint: "text", locked: true },
         { key: "_customer_name", label: "Customer", sortable: true, renderHint: "link", locked: true },
         { key: "_next_schedule", label: "Next Visit", sortable: false, renderHint: "datetime" },
@@ -722,6 +726,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "schedule_number", label: "Sched #", sortable: true, renderHint: "text", locked: true },
         { key: "start_at", label: "Date", sortable: true, renderHint: "datetime" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "link" },
         { key: "_location_label", label: "Location", sortable: false, renderHint: "text" },
@@ -1031,6 +1036,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "vendor_number", label: "Vendor #", sortable: true, renderHint: "text", locked: true },
         { key: "company_name", label: "Company", sortable: true, renderHint: "text", locked: true },
         { key: "name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "_primary_person_name", label: "Person", sortable: false, renderHint: "text" },
@@ -1334,6 +1340,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     table: {
       columns: [
         { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
+        { key: "person_number", label: "Person #", sortable: true, renderHint: "text", locked: true },
         { key: "_person_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "email", label: "Email", sortable: true, renderHint: "text" },
         { key: "phone", label: "Phone", sortable: true, renderHint: "phone" },

@@ -12,11 +12,13 @@ import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { generateNextSubscriptionSchedule } from "@/lib/admin/generateNextSubscriptionSchedule";
 import {
-    effectiveScheduleStatusKey,
-    fetchScheduleStatusKeyByFk,
-    resolveScheduleStatusRowByKey,
+  effectiveScheduleStatusKey,
+  fetchScheduleStatusKeyByFk,
+  resolveScheduleStatusRowByKey,
 } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
+import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
@@ -75,12 +77,15 @@ export async function GET(
         }
     }
 
-    return NextResponse.json({
+    const out: Record<string, unknown> = {
         ...s,
         _job_title,
         _customer_name,
         _assigned_vendor_name,
-    });
+    };
+    await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
+    await attachDirectFkRelationshipDisplays(supabase, ctx.orgId, "schedules", out);
+    return NextResponse.json(out);
 }
 
 export async function PATCH(

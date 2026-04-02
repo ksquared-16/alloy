@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-import { splitBookV2LocationAccess } from "@/lib/book-v2/bookingCanonicalMaps";
-import { resolveAccessMethodIdByUiKey } from "@/lib/book-v2/resolveBookV2CatalogIds";
+import { parseRoomCount, splitBookV2LocationAccess } from "@/lib/book-v2/bookingCanonicalMaps";
+import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel } from "@/lib/book-v2/resolveBookV2CatalogIds";
+import {
+  getFieldDefinitionMeta,
+  upsertTypedFieldValue,
+} from "@/lib/bookV2/fieldValueUpsert";
 
 export type ServiceDetailsBody = {
   opportunity_id: string;
@@ -20,7 +24,8 @@ export type ServiceDetailsBody = {
 
 /**
  * POST /api/book-v2/service-details
- * Persists address + access on the opportunity's linked location. Home/property facts are saved on cleaning_job_details at confirm.
+ * Persists address + access on the linked location, optional location field_values, and
+ * `metadata.book_v2_service_property` as the authoritative service/property snapshot (not a shadow copy in service_details_preview).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -89,26 +94,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, message: "Failed to update location" }, { status: 500 });
     }
 
+    const homeTypeLabel = body.home_type != null ? String(body.home_type).trim() || null : null;
+    const homeTypeId = await resolveHomeTypeIdByLabel(supabase, homeTypeLabel);
+    const bedroomsNum = parseRoomCount(body.bedrooms ?? undefined);
+    const bathroomsNum = parseRoomCount(body.bathrooms ?? undefined);
+
+    const optionalLocationWrites: { key: string; value: unknown }[] = [
+      { key: "home_type", value: homeTypeLabel },
+      { key: "bedrooms", value: bedroomsNum != null ? String(bedroomsNum) : body.bedrooms },
+      { key: "bathrooms", value: bathroomsNum != null ? String(bathroomsNum) : body.bathrooms },
+      { key: "pets", value: hasPets === true ? "true" : hasPets === false ? "false" : undefined },
+    ];
+    for (const { key, value } of optionalLocationWrites) {
+      if (value === undefined || value === null || value === "") continue;
+      const def = await getFieldDefinitionMeta(supabase, orgId, "location", key);
+      if (!def) continue;
+      await upsertTypedFieldValue(
+        supabase,
+        orgId,
+        "location",
+        locationId,
+        def,
+        typeof value === "boolean" ? (value ? "true" : "false") : String(value).trim()
+      );
+    }
+
     const meta = ((opp as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
+    delete meta.service_details_preview;
+
+    const book_v2_service_property = {
+      home_type_id: homeTypeId,
+      home_type_label: homeTypeLabel,
+      bedrooms: bedroomsNum,
+      bathrooms: bathroomsNum,
+      has_pets: hasPets,
+      access_method: accessMethod,
+      access_note: body.access_note ?? null,
+      additional_notes: body.additional_notes ?? null,
+      address_line1: address,
+      city,
+      state,
+      postal_code: postal,
+      saved_at: new Date().toISOString(),
+    };
+
     await supabase
       .from("opportunities")
       .update({
         metadata: {
           ...meta,
-          service_details_saved_at: new Date().toISOString(),
-          service_details_preview: {
-            address,
-            city,
-            state,
-            postal_code: postal,
-            home_type: body.home_type ?? null,
-            bedrooms: body.bedrooms ?? null,
-            bathrooms: body.bathrooms ?? null,
-            access_method: accessMethod,
-            access_note: body.access_note ?? null,
-            additional_notes: body.additional_notes ?? null,
-            has_pets: hasPets,
-          },
+          service_details_saved_at: book_v2_service_property.saved_at,
+          book_v2_service_property,
         },
         updated_at: new Date().toISOString(),
       })

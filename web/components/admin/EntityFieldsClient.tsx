@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
+import { sortFieldDefinitionsForAdminList } from "@/lib/admin/sortFieldDefinitions";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
 const SECTION_OPTIONS = [
@@ -104,6 +105,10 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
     const createKeyManuallyEditedRef = useRef(false);
+    const [deleteSavingId, setDeleteSavingId] = useState<string | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -178,6 +183,23 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
             setEditError((e as Error).message);
         } finally {
             setEditSaving(false);
+        }
+    };
+
+    const deleteRow = async (row: FieldDef) => {
+        if (!canMutate || row.is_system) return;
+        setDeleteError(null);
+        if (!window.confirm(`Delete custom field "${row.field_key}"? Stored values for this field will be removed.`)) return;
+        setDeleteSavingId(row.id);
+        try {
+            const res = await fetch(`/api/admin/field-definitions/${row.id}`, { method: "DELETE" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Delete failed");
+            await fetchItems();
+        } catch (e) {
+            setDeleteError((e as Error).message);
+        } finally {
+            setDeleteSavingId(null);
         }
     };
 
@@ -286,6 +308,9 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
 
             {!loading && !error && (
                 <SectionCard title={`${title} definitions`}>
+                    {deleteError && (
+                        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
+                    )}
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[800px] text-left text-sm">
                             <thead>
@@ -304,14 +329,14 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.length === 0 ? (
+                                {sortedItems.length === 0 ? (
                                     <tr>
                                         <td colSpan={canMutate ? 11 : 10} className="py-4 text-[#59678b]">
                                             No field definitions. Seed in Supabase or add a custom field.
                                         </td>
                                     </tr>
                                 ) : (
-                                    items.map((row) => (
+                                    sortedItems.map((row) => (
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                             <td className="py-2 pr-4 font-mono text-[#59678b]">{row.field_key}</td>
                                             <td className="py-2 pr-4 text-[#59678b]">{row.field_type}</td>
@@ -325,13 +350,25 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
                                             <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
                                             {canMutate && (
                                                 <td className="py-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openEdit(row)}
-                                                        className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
-                                                    >
-                                                        Edit
-                                                    </button>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEdit(row)}
+                                                            className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        {!row.is_system && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => deleteRow(row)}
+                                                                disabled={deleteSavingId === row.id}
+                                                                className="rounded border border-alloy-ember/40 px-2 py-1 text-xs font-medium text-alloy-ember hover:bg-alloy-ember/10 disabled:opacity-50"
+                                                            >
+                                                                {deleteSavingId === row.id ? "…" : "Delete"}
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             )}
                                         </tr>

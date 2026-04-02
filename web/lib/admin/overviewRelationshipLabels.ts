@@ -31,7 +31,25 @@ function nonEmpty(s: unknown): string | null {
     return t.length > 0 ? t : null;
 }
 
+/** Prefer Batch-2 `_relationship_displays` keyed by FK column (e.g. `customer_id`). */
+function labelFromRelationshipDisplays(record: Record<string, unknown>, fkColumn: string): string | null {
+    const raw = record._relationship_displays;
+    if (!raw || typeof raw !== "object") return null;
+    const entry = (raw as Record<string, { label?: string | null; record_number?: unknown } | null | undefined>)[fkColumn];
+    if (!entry || typeof entry !== "object") return null;
+    const label = nonEmpty(entry.label);
+    if (label) return label;
+    const rn = entry.record_number;
+    if (rn != null && rn !== "") {
+        const n = typeof rn === "number" ? rn : Number(rn);
+        if (Number.isFinite(n)) return `#${n}`;
+    }
+    return null;
+}
+
 function labelForRelationshipKey(record: Record<string, unknown>, k: string): string | null {
+    const fromApi = labelFromRelationshipDisplays(record, k);
+    if (fromApi) return fromApi;
     switch (k) {
         case "job_id":
             return nonEmpty(record._job_title ?? record._job_label);

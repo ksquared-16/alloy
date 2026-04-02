@@ -2,10 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 
-const PERSON_SYSTEM_KEYS = ["first_name", "last_name", "email", "phone", "status_key"] as const;
+const PERSON_NATIVE_KEYS_IN_PATCH = ["first_name", "last_name", "email", "phone", "status_key"] as const;
 
-/** PATCH: update a person. System fields -> persons table; custom fields (by field_key) -> field_values. Admin only. */
+/** Keys never persisted via field_values (native columns, computed, or audit fields). */
+const PERSON_FIELD_VALUES_EXCLUDED_KEYS = [
+    ...PERSON_NATIVE_KEYS_IN_PATCH,
+    "full_name",
+    "preferred_name",
+    "date_of_birth",
+    "status",
+    "archived_at",
+    "archived_by",
+    "external_source",
+    "external_id",
+    "metadata",
+    "id",
+    "org_id",
+    "created_at",
+    "updated_at",
+] as const;
+
+/** PATCH: update a person. System fields -> persons table; custom fields -> typed field_values via shared helper. Admin only. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
@@ -34,7 +53,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("persons")
-        .select("id, org_id")
+        .select("id, org_id, first_name, last_name")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -85,49 +104,7 @@ export async function PATCH(
         }
     }
 
-    const customKeys = Object.keys(body).filter(
-        (k) =>
-            !PERSON_SYSTEM_KEYS.includes(k as (typeof PERSON_SYSTEM_KEYS)[number]) && k !== "full_name" && !k.startsWith("_")
-    );
-    if (customKeys.length > 0) {
-        const { data: defRows } = await supabase
-            .from("field_definitions")
-            .select("id, field_key")
-            .eq("org_id", ctx.orgId)
-            .eq("entity_type", "person")
-            .eq("is_system", false)
-            .in("field_key", customKeys);
-        const defsByKey = new Map((defRows ?? []).map((r: { id: string; field_key: string }) => [r.field_key, r.id]));
-
-        for (const field_key of customKeys) {
-            const defId = defsByKey.get(field_key);
-            if (!defId) continue;
-            const value = body[field_key] == null ? "" : String(body[field_key]).trim();
-            const { data: existingFv } = await supabase
-                .from("field_values")
-                .select("id")
-                .eq("entity_type", "person")
-                .eq("entity_id", id)
-                .eq("field_definition_id", defId)
-                .maybeSingle();
-            if (existingFv) {
-                await supabase
-                    .from("field_values")
-                    .update({ value, updated_at: new Date().toISOString() })
-                    .eq("entity_type", "person")
-                    .eq("entity_id", id)
-                    .eq("field_definition_id", defId);
-            } else {
-                await supabase.from("field_values").insert({
-                    org_id: ctx.orgId,
-                    entity_type: "person",
-                    entity_id: id,
-                    field_definition_id: defId,
-                    value,
-                });
-            }
-        }
-    }
+    await upsertFieldValuesFromBody(supabase, ctx.orgId, "person", id, body, PERSON_FIELD_VALUES_EXCLUDED_KEYS);
 
     const { data: updated } = await supabase
         .from("persons")

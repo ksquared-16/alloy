@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadStripe, Stripe, StripeElements, StripeCardNumberElement, StripeCardExpiryElement, StripeCardCvcElement } from "@stripe/stripe-js";
 import Section from "@/components/Section";
@@ -11,7 +11,9 @@ import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
-import { ADDON_ID_TO_KEY, ADDON_KEY_TO_ID } from "@/lib/pricing/supabasePricing";
+import { ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
+import type { AddOnId } from "@/lib/pricing/cleaningPricing";
+import { FALLBACK_SQFT_TIERS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import {
     FIRSTFREE4X120_CAMPAIGN_QUERY,
     FIRSTFREE4X120_DISCOUNT_PROGRAM_CODE,
@@ -27,6 +29,8 @@ interface QuoteInputStored {
     cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
     /** Present only for backward compat (e.g. existing metadata); not set by quote form */
     home_type?: string;
+    /** Add-on keys from pricing_addons (e.g. fridge, oven); legacy quotes may still use display names resolved server-side */
+    add_ons?: string[];
 }
 
 interface QuoteResponse {
@@ -245,23 +249,43 @@ function isQuoteReady(data: QuoteResponse | null): { ready: boolean; missingFiel
     return { ready, missingFields };
 }
 
-// Same buckets as cleaning quote form / get_quote_pricing RPC (SquareFootageOption)
-const SQUARE_FOOTAGE_OPTIONS: { value: string; label: string }[] = [
-    { value: "Under 1500 sq ft", label: "Under 1,500 sq ft" },
-    { value: "1501–2,000 sq ft", label: "1,501 – 2,000 sq ft" },
-    { value: "2,001-2,600 sq ft", label: "2,001 – 2,600 sq ft" },
-    { value: "2,601-3,200 sq ft", label: "2,601 – 3,200 sq ft" },
-    { value: "3,201-4,000 sq ft", label: "3,201 – 4,000 sq ft" },
-    { value: "4,001-5,500 sq ft", label: "4,001 – 5,500 sq ft" },
-    { value: "Over 5,500 sq ft", label: "Over 5,500 sq ft" },
-];
-
 const PREFILL_ATTEMPTED_KEY = "alloy_quote_start_attempted_v1";
 const QUOTE_REFINED_KEY = "alloy_quote_refined_v1";
 
-/** Add-on IDs for cleaning (must match quote-refine API) */
-const ADDON_IDS = ["Fridge", "Oven", "Cabinets", "Pet Hair"] as const;
-type AddOnId = (typeof ADDON_IDS)[number];
+type PublicBookingCatalog = {
+    square_footage_tiers: Array<{ sqft_key: string; sqft_label: string }>;
+    home_types: Array<{ key: string; label: string }>;
+    bedroom_options: Array<{ value: string; label: string }>;
+    bathroom_options: Array<{ value: string; label: string }>;
+    addons: Array<{ id: string; label: string; price: number }>;
+    pricing_frequencies: Array<{
+        frequency_key: string;
+        frequency_label: string;
+        discount_label: string | null;
+        is_recurring: boolean;
+    }>;
+};
+
+/** Normalize legacy quote_input.add_ons entries (display names or keys) to addon keys. */
+function normalizeStoredAddonToken(s: string): string {
+    const t = s.trim();
+    const fromLegacy = ADDON_ID_TO_KEY[t as AddOnId];
+    if (fromLegacy) return fromLegacy;
+    return t.toLowerCase().replace(/\s+/g, "_");
+}
+
+/** Map stored quote.addons[] to DB addon keys (id from refine, or legacy display name). */
+function addonTokenFromQuoteAddon(a: { id?: string; name?: string }): string | null {
+    const withId = a as { id?: string; name?: string };
+    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
+    if (withId.name && typeof withId.name === "string") {
+        const n = withId.name.trim();
+        const fromLegacy = ADDON_ID_TO_KEY[n as AddOnId];
+        if (fromLegacy) return fromLegacy;
+        return n.toLowerCase().replace(/\s+/g, "_");
+    }
+    return null;
+}
 
 /** Map API frequency key to DB frequency_key (pricing_frequencies) for label lookup */
 const REFINE_FREQ_TO_DB_KEY: Record<"one_time" | "weekly" | "biweekly" | "monthly", string | null> = {
@@ -456,6 +480,7 @@ export default function BookV2Client() {
     const [availableAddons, setAvailableAddons] = useState<Array<{ id: string; label: string; price: number }> | null>(null);
     /** Frequency options from pricing_frequencies (frequency_label + discount_label for display) */
     const [availableFrequencies, setAvailableFrequencies] = useState<Array<{ frequency_key: string; frequency_label: string; discount_label: string | null; is_recurring: boolean }> | null>(null);
+    const [bookingCatalog, setBookingCatalog] = useState<PublicBookingCatalog | null>(null);
     const refineDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refineRequestIdRef = useRef(0);
     /** If a one-time quote lands in campaign mode, bump to weekly once via quote-refine. */
@@ -536,6 +561,34 @@ export default function BookV2Client() {
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetch("/api/public/booking-config")
+            .then((r) => r.json())
+            .then((data: { ok?: boolean } & Partial<PublicBookingCatalog>) => {
+                if (cancelled || !data?.ok) return;
+                setBookingCatalog({
+                    square_footage_tiers: data.square_footage_tiers ?? [],
+                    home_types: data.home_types ?? [],
+                    bedroom_options: data.bedroom_options ?? [],
+                    bathroom_options: data.bathroom_options ?? [],
+                    addons: data.addons ?? [],
+                    pricing_frequencies: data.pricing_frequencies ?? [],
+                });
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const quoteStartSqftOptions = useMemo(() => {
+        const tiers = bookingCatalog?.square_footage_tiers?.length
+            ? bookingCatalog.square_footage_tiers
+            : FALLBACK_SQFT_TIERS.map((t) => ({ sqft_key: t.sqft_key, sqft_label: t.sqft_label ?? t.sqft_key }));
+        return tiers.map((t) => ({ value: t.sqft_key, label: t.sqft_label }));
+    }, [bookingCatalog]);
 
     // Resolve reschedule_token from URL: if valid, go to slot selection; if invalid, show error
     useEffect(() => {
@@ -1142,17 +1195,18 @@ export default function BookV2Client() {
         }
         setRefineFrequency(nextFreq);
         const addonsList = quote.addons ?? [];
-        const keys: string[] = filterExcludedCustomerAddonKeys(
+        const fromStoredKeys = Array.isArray(quote.quote_input?.add_ons)
+            ? (quote.quote_input!.add_ons as unknown[])
+                  .filter((x): x is string => typeof x === "string")
+                  .map(normalizeStoredAddonToken)
+            : [];
+        const keysFromAddons = filterExcludedCustomerAddonKeys(
             addonsList
-                .map((a) => {
-                    const withId = a as { id?: string; name?: string };
-                    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
-                    if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
-                        return ADDON_ID_TO_KEY[withId.name as AddOnId];
-                    return null;
-                })
+                .map((a) => addonTokenFromQuoteAddon(a))
                 .filter((x): x is string => x != null && x.length > 0)
         );
+        const keys: string[] =
+            keysFromAddons.length > 0 ? keysFromAddons : filterExcludedCustomerAddonKeys(fromStoredKeys);
         setSelectedAddonKeys(keys);
     }, [quote, currentStep, campaignFirstFree4x120]);
 
@@ -1230,12 +1284,9 @@ export default function BookV2Client() {
                     addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
                 };
                 setQuote(normalizeQuote(updated));
-                const addOnIds = addonKeys
-                    .map((k) => ADDON_KEY_TO_ID[k] ?? null)
-                    .filter((x): x is AddOnId => x != null);
                 const toStore = {
                     ...updated,
-                    quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addOnIds },
+                    quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addonKeys },
                 };
                 try {
                     const json = JSON.stringify(toStore);
@@ -1264,17 +1315,16 @@ export default function BookV2Client() {
         if (!looksOneTime) return;
         firstFreeCampaignRecurringBootstrapRef.current = true;
         const addonsList = quote.addons ?? [];
-        const keysFromQuote: string[] = filterExcludedCustomerAddonKeys(
-            addonsList
-                .map((a) => {
-                    const withId = a as { id?: string; name?: string };
-                    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
-                    if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
-                        return ADDON_ID_TO_KEY[withId.name as AddOnId];
-                    return null;
-                })
-                .filter((x): x is string => x != null && x.length > 0)
+        const fromStoredKeys = Array.isArray(quote.quote_input?.add_ons)
+            ? (quote.quote_input!.add_ons as unknown[])
+                  .filter((x): x is string => typeof x === "string")
+                  .map(normalizeStoredAddonToken)
+            : [];
+        const keysFromAddons = filterExcludedCustomerAddonKeys(
+            addonsList.map((a) => addonTokenFromQuoteAddon(a)).filter((x): x is string => x != null && x.length > 0)
         );
+        const keysFromQuote: string[] =
+            keysFromAddons.length > 0 ? keysFromAddons : filterExcludedCustomerAddonKeys(fromStoredKeys);
         void applyRefineAndPersist("weekly", keysFromQuote);
     }, [campaignFirstFree4x120, debug, quote, hasQuote, currentStep, applyRefineAndPersist]);
 
@@ -1289,17 +1339,17 @@ export default function BookV2Client() {
                 : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
                 : freqLabel.includes("monthly") ? "monthly"
                 : "one_time";
-        const keys = filterExcludedCustomerAddonKeys(
-            (quote.addons ?? [])
-                .map((a) => {
-                    const withId = a as { id?: string; name?: string };
-                    if (withId.id && typeof withId.id === "string") return withId.id.trim().toLowerCase();
-                    if (withId.name && (ADDON_IDS as readonly string[]).includes(withId.name))
-                        return ADDON_ID_TO_KEY[withId.name as AddOnId];
-                    return null;
-                })
-                .filter((x): x is string => x != null && x.length > 0)
+        const addonsList = quote.addons ?? [];
+        const fromStoredKeys = Array.isArray(quote.quote_input?.add_ons)
+            ? (quote.quote_input!.add_ons as unknown[])
+                  .filter((x): x is string => typeof x === "string")
+                  .map(normalizeStoredAddonToken)
+            : [];
+        const keysFromAddons = filterExcludedCustomerAddonKeys(
+            addonsList.map((a) => addonTokenFromQuoteAddon(a)).filter((x): x is string => x != null && x.length > 0)
         );
+        const keys =
+            keysFromAddons.length > 0 ? keysFromAddons : filterExcludedCustomerAddonKeys(fromStoredKeys);
         applyRefineAndPersist(freq, keys);
     }, [currentStep, quote, availableAddons, applyRefineAndPersist]);
 
@@ -2388,7 +2438,7 @@ export default function BookV2Client() {
                                     className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
                                     <option value="">Select</option>
-                                    {SQUARE_FOOTAGE_OPTIONS.map((opt) => (
+                                    {quoteStartSqftOptions.map((opt) => (
                                         <option key={opt.value} value={opt.value}>
                                             {opt.label}
                                         </option>
@@ -2573,12 +2623,17 @@ export default function BookV2Client() {
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Add-ons</p>
                             <div className="space-y-2">
-                                {ADDON_IDS.map((id) => {
-                                    const addonKey = ADDON_ID_TO_KEY[id];
-                                    const dbAddon = availableAddons?.find((a) => a.id === addonKey);
+                                {(availableAddons && availableAddons.length > 0
+                                    ? availableAddons
+                                    : bookingCatalog?.addons && bookingCatalog.addons.length > 0
+                                      ? bookingCatalog.addons
+                                      : []
+                                ).map((a) => {
+                                    const addonKey = a.id;
+                                    const dbAddon = availableAddons?.find((x) => x.id === addonKey) ?? a;
                                     const price = dbAddon?.price ?? null;
                                     return (
-                                        <label key={id} className="flex items-center gap-2 cursor-pointer">
+                                        <label key={addonKey} className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={selectedAddonKeys.includes(addonKey)}
@@ -2587,12 +2642,19 @@ export default function BookV2Client() {
                                                 className="rounded border-alloy-stone/50 text-alloy-juniper focus:ring-alloy-juniper"
                                             />
                                             <span className="text-sm text-alloy-midnight">
-                                                {dbAddon?.label ?? id}
+                                                {dbAddon?.label ?? addonKey}
                                                 {price != null && <span className="text-alloy-midnight/70 ml-1">— ${price.toFixed(2)}</span>}
                                             </span>
                                         </label>
                                     );
                                 })}
+                                {!(
+                                    (availableAddons && availableAddons.length > 0) ||
+                                    (bookingCatalog?.addons && bookingCatalog.addons.length > 0)
+                                ) &&
+                                    refineLoading && (
+                                        <p className="text-xs text-alloy-midnight/60">Loading add-ons…</p>
+                                    )}
                             </div>
                             {refineError && <p className="text-sm text-red-600 mt-2">{refineError}</p>}
                         </div>
@@ -3049,6 +3111,12 @@ export default function BookV2Client() {
                                         <ServiceDetailsForm
                                             initialData={quote?.quote_input?.home_type ? { home_type: quote.quote_input.home_type } : undefined}
                                             onDataChange={handleServiceDetailsChange}
+                                            homeTypeOptions={bookingCatalog?.home_types?.map((h) => ({
+                                                value: h.label,
+                                                label: h.label,
+                                            }))}
+                                            bedroomOptions={bookingCatalog?.bedroom_options}
+                                            bathroomOptions={bookingCatalog?.bathroom_options}
                                         />
                                         {serviceDetailsValid && (
                                             <div className="mt-6 pt-6 border-t border-alloy-stone/20">

@@ -6,6 +6,8 @@ interface DrawerProps {
     isOpen: boolean;
     onClose: () => void;
     title: ReactNode;
+    /** Optional: muted line under the title (e.g. record number). */
+    headerSubtitle?: ReactNode;
     children: ReactNode;
     /** Optional: status badge shown on second row with actions */
     statusBadge?: ReactNode;
@@ -20,7 +22,19 @@ interface DrawerProps {
     accentColor?: string;
 }
 
-export default function Drawer({ isOpen, onClose, title, statusBadge, headerActions, headerExtra, children, zIndexBackdrop = 40, zIndexPanel = 50, accentColor }: DrawerProps) {
+export default function Drawer({
+    isOpen,
+    onClose,
+    title,
+    headerSubtitle,
+    statusBadge,
+    headerActions,
+    headerExtra,
+    children,
+    zIndexBackdrop = 40,
+    zIndexPanel = 50,
+    accentColor,
+}: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -54,6 +68,9 @@ export default function Drawer({ isOpen, onClose, title, statusBadge, headerActi
                         <h2 className="text-xl font-bold text-alloy-forge leading-snug break-words">
                             {titleText}
                         </h2>
+                        {headerSubtitle != null && headerSubtitle !== false && (
+                            <p className="mt-1 text-sm font-medium text-alloy-midnight/55">{headerSubtitle}</p>
+                        )}
                     </div>
                     {/* Row 2: status + actions + close */}
                     <div className="px-6 pb-4 flex items-center justify-between gap-4">

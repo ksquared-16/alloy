@@ -14,6 +14,7 @@ import {
     BOOKING_CONFIRM_SCHEDULE_STATUS_ID,
     BOOKING_CONFIRM_SCHEDULE_STATUS_KEY,
 } from "@/lib/book-v2/bookingConstants";
+import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/book-v2/resolvePipelineStage";
 import { resolveBookingJobStatus } from "@/lib/book-v2/resolveBookingJobStatus";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { persistBookingPaymentMethod, resolveStripePaymentMethodId } from "@/lib/book-v2/persistBookingPaymentMethod";
@@ -83,6 +84,17 @@ function normConfirmPhoneDigits(v: unknown): string {
 
 function normConfirmNamePart(v: unknown): string {
     return String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Prefer confirm body; then `metadata.book_v2_service_property`; then prior `quote_input`. */
+function pickServiceDetail(bodyVal: unknown, svcVal: unknown, quoteInputVal: unknown): unknown {
+    if (bodyVal != null && String(bodyVal).trim() !== "") return bodyVal;
+    if (svcVal != null && svcVal !== "") {
+        if (typeof svcVal === "number" && !Number.isNaN(svcVal)) return String(svcVal);
+        if (typeof svcVal === "string" && svcVal.trim()) return svcVal;
+    }
+    if (quoteInputVal != null && String(quoteInputVal).trim() !== "") return quoteInputVal;
+    return null;
 }
 
 type ConfirmIdentityRow = {
@@ -268,6 +280,10 @@ async function runDeferredBookingEffects(params: {
     const tDeferred = typeof performance !== "undefined" ? performance.now() : Date.now();
     const supa = createServiceRoleClient();
     const orgIdForWorkflows = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+    const bookedStageIdForEvent =
+        (await resolvePipelineStageIdByOrgKey(supa, orgIdForWorkflows, "booked")) ??
+        pipelineStageEnvFallback("booked") ??
+        BOOKED_PIPELINE_STAGE_ID;
 
     try {
         let workflowQuery = supa
@@ -346,7 +362,7 @@ async function runDeferredBookingEffects(params: {
             entity_id: jobId,
             occurred_at: new Date().toISOString(),
             org_id: orgIdForWorkflows,
-            booked_stage_id: BOOKED_PIPELINE_STAGE_ID,
+            booked_stage_id: bookedStageIdForEvent,
             job: jobRow ?? null,
             contact: contactRow ?? null,
             person: personRow ?? null,
@@ -928,6 +944,11 @@ export async function POST(request: NextRequest) {
             hasDiscount && discountAmountDollars > 0 ? Math.round(discountAmountDollars * 100) : null;
 
         const supabase = createServiceRoleClient();
+        const publicOrgIdForStages = (process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim() || null;
+        const bookedPipelineStageIdResolved =
+            (await resolvePipelineStageIdByOrgKey(supabase, publicOrgIdForStages, "booked")) ??
+            pipelineStageEnvFallback("booked") ??
+            BOOKED_PIPELINE_STAGE_ID;
         const confirmRouteT0 = typeof performance !== "undefined" ? performance.now() : Date.now();
         bookV2PerfLog("confirm_route_entry", confirmRouteT0, booking_attempt_id ?? null);
 
@@ -1266,6 +1287,8 @@ export async function POST(request: NextRequest) {
                 : null;
 
             const existingMeta = ((oppMetaRow?.metadata as Record<string, unknown>) ?? {}) as Record<string, unknown>;
+            const svcMeta = (existingMeta.book_v2_service_property as Record<string, unknown> | undefined) ?? {};
+            const qiMeta = (existingMeta.quote_input as Record<string, unknown> | undefined) ?? {};
             const mergedMetadata: Record<string, unknown> = {
                 ...existingMeta,
                 booking_source: "book-v2",
@@ -1273,12 +1296,12 @@ export async function POST(request: NextRequest) {
                 timezone,
                 address: address ?? null,
                 city: city ?? null,
-                home_type: home_type ?? null,
-                bedrooms: bedrooms ?? null,
-                bathrooms: bathrooms ?? null,
-                access_method: access_method ?? null,
-                access_note: access_note ?? null,
-                additional_notes: additional_notes ?? null,
+                home_type: pickServiceDetail(home_type, svcMeta.home_type_label, qiMeta.home_type),
+                bedrooms: pickServiceDetail(bedrooms, svcMeta.bedrooms, qiMeta.bedrooms),
+                bathrooms: pickServiceDetail(bathrooms, svcMeta.bathrooms, qiMeta.bathrooms),
+                access_method: pickServiceDetail(access_method, svcMeta.access_method, undefined),
+                access_note: pickServiceDetail(access_note, svcMeta.access_note, undefined),
+                additional_notes: pickServiceDetail(additional_notes, svcMeta.additional_notes, undefined),
             };
             const normalizedQuoteInput =
                 quote_input != null && typeof quote_input === "object"
@@ -1296,7 +1319,7 @@ export async function POST(request: NextRequest) {
                 estimated_price_cents: estimatedPriceCents,
                 monetary_value_cents: estimatedPriceCents,
                 metadata: mergedMetadata,
-                pipeline_stage_id: BOOKED_PIPELINE_STAGE_ID,
+                pipeline_stage_id: bookedPipelineStageIdResolved,
                 status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
             };
             if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
@@ -1589,6 +1612,8 @@ export async function POST(request: NextRequest) {
                 : first_clean_price != null ? Math.round(first_clean_price * 100)
                 : null;
             const existingMetaElse = ((existingOppData?.metadata ?? existingOpp?.metadata) as Record<string, unknown>) ?? {};
+            const svcElse = (existingMetaElse.book_v2_service_property as Record<string, unknown> | undefined) ?? {};
+            const qiElse = (existingMetaElse.quote_input as Record<string, unknown> | undefined) ?? {};
             const mergedMetaElse: Record<string, unknown> = {
                 ...existingMetaElse,
                 booking_source: "book-v2",
@@ -1596,12 +1621,12 @@ export async function POST(request: NextRequest) {
                 timezone,
                 address: address ?? null,
                 city: city ?? null,
-                home_type: home_type ?? null,
-                bedrooms: bedrooms ?? null,
-                bathrooms: bathrooms ?? null,
-                access_method: access_method ?? null,
-                access_note: access_note ?? null,
-                additional_notes: additional_notes ?? null,
+                home_type: pickServiceDetail(home_type, svcElse.home_type_label, qiElse.home_type),
+                bedrooms: pickServiceDetail(bedrooms, svcElse.bedrooms, qiElse.bedrooms),
+                bathrooms: pickServiceDetail(bathrooms, svcElse.bathrooms, qiElse.bathrooms),
+                access_method: pickServiceDetail(access_method, svcElse.access_method, undefined),
+                access_note: pickServiceDetail(access_note, svcElse.access_note, undefined),
+                additional_notes: pickServiceDetail(additional_notes, svcElse.additional_notes, undefined),
             };
             const normalizedQuoteInputElse =
                 quote_input != null && typeof quote_input === "object"
@@ -1622,7 +1647,7 @@ export async function POST(request: NextRequest) {
                 ...(contactId != null && { primary_contact_id: contactId }),
                 ...(personIdFromQuote != null && { primary_person_id: personIdFromQuote }),
                 metadata: mergedMetaElse,
-                pipeline_stage_id: BOOKED_PIPELINE_STAGE_ID,
+                pipeline_stage_id: bookedPipelineStageIdResolved,
                 status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
             };
             if (recurringCents != null) updatePayload.recurring_price_cents = recurringCents;
@@ -1681,7 +1706,7 @@ export async function POST(request: NextRequest) {
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 status: "open",
                 source: "website",
-                pipeline_stage_id: BOOKED_PIPELINE_STAGE_ID,
+                pipeline_stage_id: bookedPipelineStageIdResolved,
                 status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
                 job_date: jobDate,
                 job_time_window: jobTimeWindow,
@@ -1726,6 +1751,14 @@ export async function POST(request: NextRequest) {
             .eq("id", opportunityId)
             .maybeSingle();
         const oppMeta = (oppForLocation?.metadata as Record<string, unknown>) ?? {};
+        const svcPropBook = (oppMeta.book_v2_service_property as Record<string, unknown> | undefined) ?? {};
+        const hasPetsFromSvc =
+            svcPropBook.has_pets === true || svcPropBook.has_pets === "true" || svcPropBook.has_pets === 1
+                ? true
+                : svcPropBook.has_pets === false || svcPropBook.has_pets === "false" || svcPropBook.has_pets === 0
+                  ? false
+                  : null;
+        const effectiveHasPetsForLocation = hasPetsResolved ?? hasPetsFromSvc;
         const quoteInput = (oppMeta.quote_input as Record<string, unknown>) ?? {};
         function asOptionalString(v: unknown): string | undefined {
             if (v == null) return undefined;
@@ -1751,11 +1784,14 @@ export async function POST(request: NextRequest) {
         if (address && !locationPostalCode) {
             console.warn("[BOOK_V2_CONFIRM] postal_code missing for location", { booking_attempt_id: booking_attempt_id ?? null, opportunity_id: opportunityId });
         }
-        const accessMethodUi = String(access_method ?? "home").trim() || "home";
+        const accessMethodUi =
+            String(pickServiceDetail(access_method, svcPropBook.access_method, undefined) ?? "home").trim() || "home";
+        const accessNoteMerged = pickServiceDetail(access_note, svcPropBook.access_note, undefined);
+        const additionalNotesMerged = pickServiceDetail(additional_notes, svcPropBook.additional_notes, undefined);
         const { access_code: locationAccessCode, access_notes: locationAccessNotes } = splitBookV2LocationAccess({
             access_method: accessMethodUi,
-            access_note,
-            additional_notes,
+            access_note: accessNoteMerged != null ? String(accessNoteMerged) : undefined,
+            additional_notes: additionalNotesMerged != null ? String(additionalNotesMerged) : undefined,
         });
         const accessMethodIdForLocation = await resolveAccessMethodIdByUiKey(supabase, accessMethodUi);
         let locationId: string | null = null;
@@ -1772,7 +1808,7 @@ export async function POST(request: NextRequest) {
                 postal_code: locationPostalCode,
                 access_method_id: accessMethodIdForLocation,
                 access_code: locationAccessCode,
-                has_pets: hasPetsResolved,
+                has_pets: effectiveHasPetsForLocation,
                 access_notes: locationAccessNotes,
             });
         } catch (locErr) {
@@ -1991,8 +2027,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const qiOpp = (oppMeta.quote_input as Record<string, unknown>) ?? {};
         const quoteInputForDetails =
-            quote_input != null && typeof quote_input === "object" ? (quote_input as Record<string, unknown>) : {};
+            quote_input != null && typeof quote_input === "object"
+                ? { ...qiOpp, ...(quote_input as Record<string, unknown>) }
+                : qiOpp;
         const sqftBucketRaw =
             typeof quoteInputForDetails.square_footage === "string"
                 ? quoteInputForDetails.square_footage
@@ -2001,13 +2040,19 @@ export async function POST(request: NextRequest) {
                   : null;
         const sqftBandKey = quoteSquareFootageToBandKey(sqftBucketRaw);
         const sqftBandIdResolved = sqftBandKey ? await resolveSqftBandIdByKey(supabase, sqftBandKey) : null;
-        const homeTypeIdResolved = await resolveHomeTypeIdByLabel(supabase, home_type);
+        const home_type_eff = pickServiceDetail(home_type, svcPropBook.home_type_label, quoteInputForDetails.home_type);
+        const bedrooms_eff = pickServiceDetail(bedrooms, svcPropBook.bedrooms, quoteInputForDetails.bedrooms);
+        const bathrooms_eff = pickServiceDetail(bathrooms, svcPropBook.bathrooms, quoteInputForDetails.bathrooms);
+        const homeTypeIdResolved = await resolveHomeTypeIdByLabel(
+            supabase,
+            home_type_eff != null ? String(home_type_eff) : null
+        );
         await upsertCleaningJobDetailsFromBookV2(supabase, jobId, {
             home_type_id: homeTypeIdResolved,
             sqft_band_id: sqftBandIdResolved,
             square_footage: squareFootageMidpointForBandKey(sqftBandKey),
-            bedrooms: parseRoomCount(bedrooms),
-            bathrooms: parseRoomCount(bathrooms),
+            bedrooms: parseRoomCount(bedrooms_eff != null ? String(bedrooms_eff) : undefined),
+            bathrooms: parseRoomCount(bathrooms_eff != null ? String(bathrooms_eff) : undefined),
         });
 
         // Step 5b: Persist discount redemption immediately after job creation

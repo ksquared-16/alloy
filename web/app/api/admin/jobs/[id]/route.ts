@@ -17,6 +17,8 @@ import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDe
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 import { buildOverrideLinesFromAdminJobRow, overrideJobPricing } from "@/lib/pricing/overrideJobPricing";
+import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 
 const ALLOWED_KEYS = [
     "title",
@@ -33,6 +35,7 @@ const ALLOWED_KEYS = [
     "completed_at",
     "gross_price_cents",
     "primary_contact_id",
+    "primary_person_id",
     "customer_id",
     "opportunity_id",
     "location_id",
@@ -153,7 +156,10 @@ export async function GET(
         _job_line_items,
     };
     const withWu = await attachJobWorkUnitDisplay(supabase, ctx.orgId, payload as Record<string, unknown>);
-    return NextResponse.json(withWu);
+    const out = withWu as Record<string, unknown>;
+    await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
+    await attachDirectFkRelationshipDisplays(supabase, ctx.orgId, "jobs", out);
+    return NextResponse.json(out);
 }
 
 export async function PATCH(
@@ -286,7 +292,14 @@ export async function PATCH(
                 updates.status_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : v;
                 continue;
             }
-            if (key === "assigned_vendor_id" || key === "primary_contact_id" || key === "customer_id" || key === "opportunity_id" || key === "location_id") {
+            if (
+                key === "assigned_vendor_id" ||
+                key === "primary_contact_id" ||
+                key === "primary_person_id" ||
+                key === "customer_id" ||
+                key === "opportunity_id" ||
+                key === "location_id"
+            ) {
                 updates[key] = body[key] === "" || body[key] == null ? null : body[key];
                 continue;
             }
@@ -393,7 +406,10 @@ export async function PATCH(
             actor_user_id: ctx.userId,
             role: ctx.role,
         });
-        const out = await attachJobWorkUnitDisplay(supabase, ctx.orgId, data as Record<string, unknown>);
+        const outRow = await attachJobWorkUnitDisplay(supabase, ctx.orgId, data as Record<string, unknown>);
+        const out = outRow as Record<string, unknown>;
+        await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
+        await attachDirectFkRelationshipDisplays(supabase, ctx.orgId, "jobs", out);
         return NextResponse.json(out);
     } catch (e: unknown) {
         console.error("[ADMIN_PATCH_JOB]", e);

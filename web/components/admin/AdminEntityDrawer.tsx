@@ -267,6 +267,39 @@ const DRAWER_ACCENT_COLORS: Partial<Record<AdminDrawerEntityType, string>> = {
     subscriptions: "rgb(0,162,131)",
 };
 
+/** Native record number column per rollout drawer entity (Batch 1). */
+const ROLLOUT_DRAWER_RECORD_NUMBER_KEY: Partial<Record<AdminDrawerEntityType, string>> = {
+    customers: "customer_number",
+    jobs: "job_number",
+    schedules: "schedule_number",
+    vendors: "vendor_number",
+    persons: "person_number",
+    opportunities: "opportunity_number",
+    locations: "location_number",
+};
+
+const ROLLOUT_DRAWER_RECORD_NUMBER_LABEL: Partial<Record<AdminDrawerEntityType, string>> = {
+    customers: "Customer",
+    jobs: "Job",
+    schedules: "Schedule",
+    vendors: "Vendor",
+    persons: "Person",
+    opportunities: "Opportunity",
+    locations: "Location",
+};
+
+function drawerRecordNumberSubtitle(type: AdminDrawerEntityType | null | undefined, data: Record<string, unknown>): string | null {
+    if (!type) return null;
+    const col = ROLLOUT_DRAWER_RECORD_NUMBER_KEY[type];
+    if (!col) return null;
+    const raw = data[col];
+    if (raw == null || raw === "") return null;
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n)) return null;
+    const entityLabel = ROLLOUT_DRAWER_RECORD_NUMBER_LABEL[type] ?? "Record";
+    return `${entityLabel} #${n}`;
+}
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <div className="py-1.5">
@@ -3304,6 +3337,11 @@ export default function AdminEntityDrawer() {
     const showDrawerBodyLoading =
         !!drawer.id && drawer.id !== "new" && (loading || (data != null && !dataMatchesDrawer));
 
+    const drawerHeaderRecordSubtitle = useMemo(() => {
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        return drawerRecordNumberSubtitle(drawer.type, overviewData as Record<string, unknown>);
+    }, [overviewData, drawer.type]);
+
     const title: React.ReactNode = overviewData
         ? drawer.type === "contacts"
             ? (overviewData as { _create?: boolean })._create
@@ -4836,6 +4874,7 @@ export default function AdminEntityDrawer() {
             isOpen
             onClose={closeDrawer}
             title={drawerTitle}
+            headerSubtitle={drawerHeaderRecordSubtitle ?? undefined}
             statusBadge={drawerStatusBadge}
             headerActions={drawerHeaderActions}
             headerExtra={drawerHeaderExtra}

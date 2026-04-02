@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
-import { mapServiceTypeToKey, mapFrequencyToKey, ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
+import { mapServiceTypeToKey, mapFrequencyToKey } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
-import type { AddOnId } from "@/lib/pricing/cleaningPricing";
 import {
   getFieldDefinitionMeta,
   upsertTypedFieldValue,
@@ -13,24 +12,17 @@ import {
   EXCLUDED_CUSTOMER_SELECTABLE_ADDON_KEYS,
   filterExcludedCustomerAddonKeys,
 } from "@/lib/book-v2/customerAddonPolicy";
+import {
+  loadCleaningAddonsFromDb,
+  loadPricingFrequenciesForVertical,
+  loadSqftTiersForVertical,
+  normalizeAddonKeysAgainstMap,
+  normalizeSqftKeyInput,
+  type DbAddonRow,
+  type PricingFrequencyRow,
+} from "@/lib/book-v2/loadCleaningPricingCatalog";
 
 const SERVICE_TYPE = "Standard Cleaning";
-const SQUARE_FOOTAGE_KEYS: SquareFootageOption[] = [
-  "Under 1500 sq ft",
-  "1501–2,000 sq ft",
-  "2,001-2,600 sq ft",
-  "2,601-3,200 sq ft",
-  "3,201-4,000 sq ft",
-  "4,001-5,500 sq ft",
-  "Over 5,500 sq ft",
-];
-
-function normalizeSquareFootageInput(val: string | null | undefined): SquareFootageOption {
-  if (val == null) return "Under 1500 sq ft";
-  const s = typeof val === "string" ? val.trim() : null;
-  if (s && (SQUARE_FOOTAGE_KEYS as string[]).includes(s)) return s as SquareFootageOption;
-  return "Under 1500 sq ft";
-}
 
 function mapApiFrequencyToOption(
   freq: "one_time" | "weekly" | "biweekly" | "monthly" | null | undefined
@@ -47,35 +39,14 @@ function mapApiFrequencyToOption(
   }
 }
 
-/** Valid AddOnId list for cleaning (UI keys) */
-const ADDON_IDS: AddOnId[] = ["Fridge", "Oven", "Cabinets", "Pet Hair"];
-
-/** Normalize incoming add_ons to addon keys (client sends ["fridge","oven"] or AddOnId; return lowercase keys) */
-function normalizeAddOnKeys(arr: unknown): string[] {
-  if (!Array.isArray(arr)) return [];
-  const keyToKey = (s: string) => {
-    const trimmed = s.trim();
-    if (!trimmed) return null;
-    if ((ADDON_IDS as string[]).includes(trimmed)) return ADDON_ID_TO_KEY[trimmed as AddOnId];
-    return trimmed.toLowerCase().replace(/\s+/g, "_");
-  };
-  return arr
-    .filter((x): x is string => typeof x === "string")
-    .map(keyToKey)
-    .filter((x): x is string => x != null && x.length > 0);
-}
-
 export interface QuoteRefineBody {
   square_footage: string;
   cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
-  add_ons?: string[] | AddOnId[];
+  add_ons?: string[];
   opportunity_id?: string;
   zip?: string;
   vertical_id?: string;
 }
-
-/** Canonical add-on from DB (addon_types + pricing_addons) */
-export type DbAddon = { key: string; label: string; price: number; sort_order: number };
 
 /** Resolve vertical id: use body.vertical_id if it exists, else lookup by slug "cleaning" */
 async function resolveVerticalId(
@@ -97,84 +68,6 @@ async function resolveVerticalId(
     throw new Error("Could not resolve cleaning vertical");
   }
   return bySlug.id;
-}
-
-/** Load available add-ons: types/order from addon_types, prices from pricing_addons (both filtered by vertical_id) */
-async function loadCleaningAddonsFromDb(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  verticalId: string
-): Promise<{ available_addons: DbAddon[]; addonPriceMap: Record<string, { label: string; price: number }> }> {
-  const addonPriceMap: Record<string, { label: string; price: number }> = {};
-  const available_addons: DbAddon[] = [];
-
-  type AddonTypeRow = { key: string; label: string; position: number };
-  const { data: typeRows, error: typesError } = await supabase
-    .from("addon_types")
-    .select("key, label, position")
-    .eq("vertical_id", verticalId)
-    .eq("is_active", true)
-    .order("position", { ascending: true });
-  if (typesError) {
-    console.error("[QUOTE_REFINE] addon_types query failed:", typesError.message);
-    throw new Error(`addon_types query failed: ${typesError.message}`);
-  }
-  const types = (typeRows ?? []) as AddonTypeRow[];
-
-  type PricingAddonRow = { addon_key: string; addon_name: string; amount_cents: number; sort_order: number };
-  const { data: priceRows, error: pricesError } = await supabase
-    .from("pricing_addons")
-    .select("addon_key, addon_name, amount_cents, sort_order")
-    .eq("vertical_id", verticalId)
-    .eq("is_active", true);
-  if (pricesError) {
-    console.error("[QUOTE_REFINE] pricing_addons query failed:", pricesError.message);
-    throw new Error(`pricing_addons query failed: ${pricesError.message}`);
-  }
-  const priceList = (priceRows ?? []) as PricingAddonRow[];
-  const priceByKey = new Map<string, { label: string; price: number }>();
-  for (const p of priceList) {
-    const key = String(p.addon_key ?? "").trim().toLowerCase();
-    if (!key) continue;
-    const price = (p.amount_cents ?? 0) / 100;
-    priceByKey.set(key, { label: (p.addon_name ?? key).trim(), price });
-  }
-
-  for (const t of types) {
-    const key = String(t.key ?? "").trim().toLowerCase();
-    if (!key) continue;
-    const pricing = priceByKey.get(key);
-    const label = (t.label ?? pricing?.label ?? key).trim();
-    const price = pricing?.price ?? 0;
-    const position = typeof t.position === "number" ? t.position : 0;
-    available_addons.push({ key, label, price, sort_order: position });
-    addonPriceMap[key] = { label, price };
-  }
-
-  return { available_addons, addonPriceMap };
-}
-
-/** Row from pricing_frequencies (source of truth for frequency display) */
-export type PricingFrequencyRow = {
-  frequency_key: string;
-  frequency_label: string;
-  discount_label: string | null;
-  is_recurring: boolean;
-};
-
-/** Load pricing_frequencies for a vertical (frequency_label + discount_label for UI) */
-async function loadPricingFrequencies(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  verticalId: string
-): Promise<PricingFrequencyRow[]> {
-  const { data, error } = await supabase
-    .from("pricing_frequencies")
-    .select("frequency_key, frequency_label, discount_label, is_recurring")
-    .eq("vertical_id", verticalId);
-  if (error) {
-    console.warn("[QUOTE_REFINE] pricing_frequencies query failed (optional):", error.message);
-    return [];
-  }
-  return (data ?? []) as PricingFrequencyRow[];
 }
 
 /** Build addons list and total from selected addon_key list and DB price map */
@@ -294,14 +187,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceRoleClient();
     let verticalId: string;
-    let dbAvailableAddons: DbAddon[];
+    let dbAvailableAddons: DbAddonRow[];
     let addonPriceMap: Record<string, { label: string; price: number }>;
     let pricingFrequencies: PricingFrequencyRow[] = [];
     try {
       verticalId = await resolveVerticalId(supabase, body.vertical_id);
       const [loaded, freqs] = await Promise.all([
         loadCleaningAddonsFromDb(supabase, verticalId),
-        loadPricingFrequencies(supabase, verticalId),
+        loadPricingFrequenciesForVertical(supabase, verticalId),
       ]);
       dbAvailableAddons = loaded.available_addons;
       addonPriceMap = loaded.addonPriceMap;
@@ -315,9 +208,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const squareFootageOption = normalizeSquareFootageInput(square_footage);
+    const sqftTiers = await loadSqftTiersForVertical(supabase, verticalId);
+    const squareFootageOption = normalizeSqftKeyInput(square_footage, sqftTiers) as SquareFootageOption;
     const frequencyOption = mapApiFrequencyToOption(body.cleaning_frequency ?? "one_time");
-    const selectedKeys = filterExcludedCustomerAddonKeys(normalizeAddOnKeys(body.add_ons ?? []));
+    const selectedKeys = filterExcludedCustomerAddonKeys(
+      normalizeAddonKeysAgainstMap(body.add_ons ?? [], addonPriceMap)
+    );
 
     let quoteOutput = await computeQuote(
       supabase,

@@ -47,7 +47,7 @@ test("person drawer: custom field edit and Saved", async ({ page }) => {
     await expect(page.locator("h2").first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/person #/i).first()).toBeVisible({ timeout: 15000 });
 
-    const field = page.getByLabel(personCustomFieldLabel, { exact: false }).first();
+    const field = page.getByLabel(personCustomFieldLabel as string, { exact: false }).first();
     await expect(field).toBeVisible({ timeout: 10000 });
     await field.fill(`pw-smoke-${Date.now()}`);
     await page.getByRole("button", { name: /^Save$/ }).click();

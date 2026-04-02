@@ -1,16 +1,7 @@
 "use client";
 
-import { useState } from "react";
-
-const SQUARE_FOOTAGE_OPTIONS: { value: string; label: string }[] = [
-  { value: "Under 1500 sq ft", label: "Under 1,500 sq ft" },
-  { value: "1501–2,000 sq ft", label: "1,501 – 2,000 sq ft" },
-  { value: "2,001-2,600 sq ft", label: "2,001 – 2,600 sq ft" },
-  { value: "2,601-3,200 sq ft", label: "2,601 – 3,200 sq ft" },
-  { value: "3,201-4,000 sq ft", label: "3,201 – 4,000 sq ft" },
-  { value: "4,001-5,500 sq ft", label: "4,001 – 5,500 sq ft" },
-  { value: "Over 5,500 sq ft", label: "Over 5,500 sq ft" },
-];
+import { useState, useEffect, useMemo } from "react";
+import { FALLBACK_SQFT_TIERS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 
 export type QuickQuoteCampaignMode = {
   id: "firstfree4x120";
@@ -27,6 +18,27 @@ export default function CleaningQuickQuoteForm({
   campaignQuoteMode,
 }: CleaningQuickQuoteFormProps) {
   const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
+  const [sqftTiers, setSqftTiers] = useState<Array<{ sqft_key: string; sqft_label: string }> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/public/booking-config")
+      .then((r) => r.json())
+      .then((data: { ok?: boolean; square_footage_tiers?: Array<{ sqft_key: string; sqft_label: string }> }) => {
+        if (cancelled || !data?.ok || !data.square_footage_tiers?.length) return;
+        setSqftTiers(data.square_footage_tiers);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const squareFootageOptions = useMemo(() => {
+    const tiers =
+      sqftTiers && sqftTiers.length > 0
+        ? sqftTiers
+        : FALLBACK_SQFT_TIERS.map((t) => ({ sqft_key: t.sqft_key, sqft_label: t.sqft_label ?? t.sqft_key }));
+    return tiers.map((t) => ({ value: t.sqft_key, label: t.sqft_label }));
+  }, [sqftTiers]);
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -264,7 +276,7 @@ export default function CleaningQuickQuoteForm({
             className="public-form-input"
           >
             <option value="">Select</option>
-            {SQUARE_FOOTAGE_OPTIONS.map((opt) => (
+            {squareFootageOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

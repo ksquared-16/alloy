@@ -14,9 +14,36 @@ export interface ServiceDetails {
     has_pets: boolean;
 }
 
+const DEFAULT_HOME_TYPE_OPTIONS: { value: string; label: string }[] = [
+    { value: "Single-Family Home", label: "Single-Family Home" },
+    { value: "Apartment / Condo", label: "Apartment / Condo" },
+    { value: "Townhome", label: "Townhome" },
+    { value: "Duplex", label: "Duplex" },
+    { value: "Other", label: "Other" },
+];
+
+const DEFAULT_BEDROOM_OPTIONS = [
+    { value: "1", label: "1" },
+    { value: "2", label: "2" },
+    { value: "3", label: "3" },
+    { value: "4", label: "4" },
+    { value: "5+", label: "5+" },
+];
+
+const DEFAULT_BATHROOM_OPTIONS = [
+    { value: "1", label: "1" },
+    { value: "2", label: "2" },
+    { value: "3", label: "3" },
+    { value: "4+", label: "4+" },
+];
+
 interface ServiceDetailsFormProps {
     initialData?: Partial<ServiceDetails>;
     onDataChange: (data: ServiceDetails, isValid: boolean) => void;
+    /** From GET /api/public/booking-config when available */
+    homeTypeOptions?: { value: string; label: string }[];
+    bedroomOptions?: { value: string; label: string }[];
+    bathroomOptions?: { value: string; label: string }[];
 }
 
 const STORAGE_KEY = "alloy_book_v2_service_details";
@@ -24,6 +51,9 @@ const STORAGE_KEY = "alloy_book_v2_service_details";
 export default function ServiceDetailsForm({
     initialData,
     onDataChange,
+    homeTypeOptions = DEFAULT_HOME_TYPE_OPTIONS,
+    bedroomOptions = DEFAULT_BEDROOM_OPTIONS,
+    bathroomOptions = DEFAULT_BATHROOM_OPTIONS,
 }: ServiceDetailsFormProps) {
     const [formData, setFormData] = useState<ServiceDetails>({
         address: initialData?.address || "",
@@ -145,11 +175,11 @@ export default function ServiceDetailsForm({
                         className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                     >
                         <option value="">Select home type</option>
-                        <option value="Single-Family Home">Single-Family Home</option>
-                        <option value="Apartment / Condo">Apartment / Condo</option>
-                        <option value="Townhome">Townhome</option>
-                        <option value="Duplex">Duplex</option>
-                        <option value="Other">Other</option>
+                        {homeTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
@@ -165,11 +195,11 @@ export default function ServiceDetailsForm({
                             className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                         >
                             <option value="">Select</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5+">5+</option>
+                            {bedroomOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
@@ -183,10 +213,11 @@ export default function ServiceDetailsForm({
                             className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent bg-white"
                         >
                             <option value="">Select</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4+">4+</option>
+                            {bathroomOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
                         </select>
                     </div>
                 </div>

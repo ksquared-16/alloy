@@ -33,7 +33,7 @@ export default async function VendorsPage({ searchParams }: { searchParams: Sear
     const supabase = createAdminClient();
     const statusKey = typeof searchParams?.status_key === "string" ? searchParams.status_key.trim() || null : null;
 
-    const vendorCols = "id, created_at, updated_at, submitted_at, name, company_name, email, phone, vendor_status_id, status_key, org_id, primary_contact_id, primary_person_id, payout_percent, service_area_zip_codes, days_available";
+    const vendorCols = "id, created_at, updated_at, submitted_at, vendor_number, name, company_name, email, phone, vendor_status_id, status_key, org_id, primary_contact_id, primary_person_id, payout_percent, service_area_zip_codes, days_available";
     let q = supabase
         .from("vendors")
         .select(vendorCols)

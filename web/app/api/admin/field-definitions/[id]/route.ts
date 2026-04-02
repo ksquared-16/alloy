@@ -139,3 +139,52 @@ export async function PATCH(
 
     return NextResponse.json(updated);
 }
+
+/** DELETE: remove a custom field definition (cascades field_values). System rows are protected. Admin only. */
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: existing, error: fetchErr } = await supabase
+        .from("field_definitions")
+        .select("id, org_id, is_system, field_key")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (fetchErr || !existing) {
+        return NextResponse.json({ error: "Field definition not found" }, { status: 404 });
+    }
+
+    if (Boolean((existing as { is_system: boolean }).is_system)) {
+        return NextResponse.json({ error: "Cannot delete a system field definition" }, { status: 400 });
+    }
+
+    const { error: delErr } = await supabase.from("field_definitions").delete().eq("id", id).eq("org_id", ctx.orgId);
+
+    if (delErr) {
+        return NextResponse.json({ error: delErr.message }, { status: 400 });
+    }
+
+    logAdminAudit({
+        entity: "field_definitions",
+        id,
+        changed_fields: ["deleted"],
+        actor_user_id: ctx.userId,
+        role: ctx.role,
+    });
+
+    return NextResponse.json({ ok: true });
+}

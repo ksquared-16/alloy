@@ -7,6 +7,7 @@ import {
   getVerticalIdBySlug,
   createOpportunity,
 } from "@/lib/supabase";
+import { emitEvent } from "@/lib/emitEvent";
 
 /**
  * POST /api/leads/gutters
@@ -151,6 +152,27 @@ export async function POST(request: NextRequest) {
     console.log(
       `[GUTTERS_LEAD_SUCCESS] contact_id=${contactId} opportunity_id=${opportunity.id} vertical_id=${verticalId} app_env=${appEnv}`
     );
+
+    const orgId = process.env.ALLOY_PUBLIC_ORG_ID?.trim() || null;
+    if (orgId) {
+      try {
+        await emitEvent({
+          org_id: orgId,
+          event_type: "gutter_lead_submitted",
+          entity_type: "opportunity",
+          entity_id: opportunity.id,
+          payload: {
+            event_type: "gutter_lead_submitted",
+            opportunity_id: opportunity.id,
+            contact_id: contactId,
+            vertical_id: verticalId,
+            source: "website",
+          },
+        });
+      } catch (e) {
+        console.warn("[GUTTERS_LEAD] emitEvent failed (non-fatal)", e);
+      }
+    }
 
     return NextResponse.json({
       ok: true,

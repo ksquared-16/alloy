@@ -64,7 +64,10 @@ const DRAWER_FK_SPECS: Record<string, FkSpec[]> = {
         { column: "location_id", kind: "location" },
         { column: "assigned_vendor_id", kind: "vendor" },
     ],
-    vendors: [{ column: "primary_person_id", kind: "person" }],
+    vendors: [
+        { column: "primary_person_id", kind: "person" },
+        { column: "primary_contact_id", kind: "contact" },
+    ],
 };
 
 const STUB_KEY = (kind: RelationshipEntityKind, id: string) => `${kind}:${id}`;
