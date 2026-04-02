@@ -15,6 +15,20 @@ const accessMethodLabels: Record<ServiceDetails["access_method"], string> = {
     building: "Building / Front Desk",
 };
 
+function formatConfigurableLabel(fieldKey: string): string {
+    return fieldKey
+        .split("_")
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+}
+
+function formatConfigurableValue(value: string | boolean | string[]): string {
+    if (Array.isArray(value)) return value.join(", ");
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    return String(value);
+}
+
 export default function ServiceDetailsSummary({
     details,
     onEdit,
@@ -22,36 +36,63 @@ export default function ServiceDetailsSummary({
     const [showFullNotes, setShowFullNotes] = useState(false);
     const maxNotesLength = 100;
 
+    const legacyProperty =
+        Boolean(details.home_type?.trim()) ||
+        Boolean(details.bedrooms?.trim()) ||
+        Boolean(details.bathrooms?.trim());
+
+    const configurableEntries = Object.entries(details.configurable_values ?? {}).filter(
+        ([, v]) =>
+            v !== undefined &&
+            v !== null &&
+            !(typeof v === "string" && !v.trim()) &&
+            !(Array.isArray(v) && v.length === 0)
+    );
+
     return (
         <div className="space-y-3">
             <div className="flex items-start justify-between">
                 <div className="flex-1 space-y-2">
-                    {/* Address + City */}
                     <div>
-                        <p className="text-sm font-medium text-alloy-midnight">
-                            {details.address}
-                        </p>
-                        <p className="text-sm text-alloy-midnight/70">
-                            {details.city}
-                        </p>
+                        <p className="text-sm font-medium text-alloy-midnight">{details.address}</p>
+                        <p className="text-sm text-alloy-midnight/70">{details.city}</p>
                     </div>
 
-                    {/* Home type */}
-                    {details.home_type && (
-                        <p className="text-sm text-alloy-midnight/70">
-                            <strong className="text-alloy-midnight">Home type:</strong> {details.home_type}
-                        </p>
+                    {legacyProperty && (
+                        <>
+                            {details.home_type && (
+                                <p className="text-sm text-alloy-midnight/70">
+                                    <strong className="text-alloy-midnight">Home type:</strong>{" "}
+                                    {details.home_type}
+                                </p>
+                            )}
+                            {(details.bedrooms || details.bathrooms) && (
+                                <div className="flex gap-4 text-sm text-alloy-midnight/70">
+                                    {details.bedrooms ? (
+                                        <span>
+                                            <strong className="text-alloy-midnight">{details.bedrooms}</strong>{" "}
+                                            Bedroom{details.bedrooms !== "1" ? "s" : ""}
+                                        </span>
+                                    ) : null}
+                                    {details.bathrooms ? (
+                                        <span>
+                                            <strong className="text-alloy-midnight">{details.bathrooms}</strong>{" "}
+                                            Bathroom
+                                            {details.bathrooms !== "1" && details.bathrooms !== "4+" ? "s" : ""}
+                                        </span>
+                                    ) : null}
+                                </div>
+                            )}
+                        </>
                     )}
 
-                    {/* Bedrooms / Bathrooms */}
-                    <div className="flex gap-4 text-sm text-alloy-midnight/70">
-                        <span>
-                            <strong className="text-alloy-midnight">{details.bedrooms}</strong> Bedroom{details.bedrooms !== "1" ? "s" : ""}
-                        </span>
-                        <span>
-                            <strong className="text-alloy-midnight">{details.bathrooms}</strong> Bathroom{details.bathrooms !== "1" && details.bathrooms !== "4+" ? "s" : ""}
-                        </span>
-                    </div>
+                    {!legacyProperty &&
+                        configurableEntries.map(([key, value]) => (
+                            <p key={key} className="text-sm text-alloy-midnight/70">
+                                <strong className="text-alloy-midnight">{formatConfigurableLabel(key)}:</strong>{" "}
+                                {formatConfigurableValue(value)}
+                            </p>
+                        ))}
 
                     {details.has_pets && (
                         <p className="text-sm text-alloy-midnight/70">
@@ -59,10 +100,10 @@ export default function ServiceDetailsSummary({
                         </p>
                     )}
 
-                    {/* Access Method */}
                     <div>
                         <p className="text-sm text-alloy-midnight/70">
-                            <strong className="text-alloy-midnight">Access:</strong> {accessMethodLabels[details.access_method]}
+                            <strong className="text-alloy-midnight">Access:</strong>{" "}
+                            {accessMethodLabels[details.access_method]}
                         </p>
                         {details.access_method !== "home" && details.access_note && (
                             <p className="text-sm text-alloy-midnight/70 mt-1 pl-4 border-l-2 border-alloy-stone/30">
@@ -71,7 +112,6 @@ export default function ServiceDetailsSummary({
                         )}
                     </div>
 
-                    {/* Additional Notes */}
                     {details.additional_notes && (
                         <div>
                             <p className="text-sm text-alloy-midnight/70">
@@ -82,6 +122,7 @@ export default function ServiceDetailsSummary({
                             </p>
                             {details.additional_notes.length > maxNotesLength && (
                                 <button
+                                    type="button"
                                     onClick={() => setShowFullNotes(!showFullNotes)}
                                     className="text-xs text-alloy-juniper hover:underline mt-1"
                                 >
@@ -94,6 +135,7 @@ export default function ServiceDetailsSummary({
             </div>
 
             <button
+                type="button"
                 onClick={onEdit}
                 className="text-sm text-alloy-juniper hover:underline font-medium"
             >
@@ -102,4 +144,3 @@ export default function ServiceDetailsSummary({
         </div>
     );
 }
-

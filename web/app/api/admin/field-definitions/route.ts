@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
+import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 
 const ALLOWED_ENTITY_TYPES = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"] as const;
 
@@ -25,6 +27,7 @@ export type FieldDef = {
     placeholder: string | null;
     help_text: string | null;
     config: Record<string, unknown> | null;
+    is_visible_in_public_booking: boolean;
     created_at: string;
     updated_at: string;
 };
@@ -65,7 +68,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ field_definitions: rows ?? [] });
 }
 
-const ALLOWED_FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
 const FIELD_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 /** POST: create a custom field definition. entity_type must be one of allowed types, is_system=false. Admin only. */
@@ -105,9 +107,9 @@ export async function POST(request: NextRequest) {
     }
 
     const field_type = typeof body.field_type === "string" ? body.field_type.trim().toLowerCase() : "text";
-    if (!ALLOWED_FIELD_TYPES.includes(field_type as (typeof ALLOWED_FIELD_TYPES)[number])) {
+    if (!ADMIN_FIELD_TYPES.includes(field_type as (typeof ADMIN_FIELD_TYPES)[number])) {
         return NextResponse.json(
-            { error: `field_type must be one of: ${ALLOWED_FIELD_TYPES.join(", ")}` },
+            { error: `field_type must be one of: ${ADMIN_FIELD_TYPES.join(", ")}` },
             { status: 400 }
         );
     }
@@ -127,6 +129,13 @@ export async function POST(request: NextRequest) {
     const help_text = typeof body.help_text === "string" ? body.help_text.trim() || null : null;
     const config: Record<string, unknown> =
         body.config != null && typeof body.config === "object" ? (body.config as Record<string, unknown>) : {};
+
+    const cfgCheck = validateSelectLikeConfig(field_type, config);
+    if (!cfgCheck.ok) {
+        return NextResponse.json({ error: cfgCheck.error }, { status: 400 });
+    }
+
+    const is_visible_in_public_booking = !!body.is_visible_in_public_booking;
 
     const supabase = createAdminClient();
 
@@ -166,6 +175,7 @@ export async function POST(request: NextRequest) {
         placeholder,
         help_text,
         config,
+        is_visible_in_public_booking,
     };
 
     const { data: created, error } = await supabase

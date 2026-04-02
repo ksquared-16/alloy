@@ -4366,9 +4366,19 @@ export default function AdminEntityDrawer() {
             }
             return null;
         };
+        const sectionTitleByKey = new Map(
+            (
+                (overviewData?._field_sections ?? []) as {
+                    section_key: string;
+                    label: string;
+                }[]
+            ).map((s) => [s.section_key, s.label])
+        );
+        const defaultSectionTitle = (sectionKey: string) =>
+            sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1).replace(/_/g, " ");
         const fromDefs = sectionOrder.map(([sectionKey, fields]) => ({
             key: sectionKey,
-            title: sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1).replace(/_/g, " "),
+            title: sectionTitleByKey.get(sectionKey) ?? defaultSectionTitle(sectionKey),
             defaultExpanded: true,
             collapsible: true,
             gridCols: 2 as const,

@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { parseRoomCount, splitBookV2LocationAccess } from "@/lib/book-v2/bookingCanonicalMaps";
 import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel } from "@/lib/book-v2/resolveBookV2CatalogIds";
-import {
-  getFieldDefinitionMeta,
-  upsertTypedFieldValue,
-} from "@/lib/bookV2/fieldValueUpsert";
+import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
+import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
 
 export type ServiceDetailsBody = {
   opportunity_id: string;
@@ -20,6 +18,8 @@ export type ServiceDetailsBody = {
   access_note?: string | null;
   additional_notes?: string | null;
   has_pets?: boolean | string | number | null;
+  /** Public-booking field keys → raw values (aligned with field_definitions). */
+  configurable_field_values?: Record<string, unknown> | null;
 };
 
 /**
@@ -94,30 +94,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, message: "Failed to update location" }, { status: 500 });
     }
 
-    const homeTypeLabel = body.home_type != null ? String(body.home_type).trim() || null : null;
-    const homeTypeId = await resolveHomeTypeIdByLabel(supabase, homeTypeLabel);
-    const bedroomsNum = parseRoomCount(body.bedrooms ?? undefined);
-    const bathroomsNum = parseRoomCount(body.bathrooms ?? undefined);
+    const cfgBag = (body.configurable_field_values && typeof body.configurable_field_values === "object"
+      ? body.configurable_field_values
+      : {}) as Record<string, unknown>;
+    const mergedByKey: Record<string, unknown> = { ...cfgBag };
+    if (body.home_type != null && String(body.home_type).trim()) mergedByKey.home_type = body.home_type;
+    if (body.bedrooms != null && String(body.bedrooms).trim()) mergedByKey.bedrooms = body.bedrooms;
+    if (body.bathrooms != null && String(body.bathrooms).trim()) mergedByKey.bathrooms = body.bathrooms;
+    if (hasPets === true || hasPets === false) mergedByKey.pets = hasPets ? "true" : "false";
 
-    const optionalLocationWrites: { key: string; value: unknown }[] = [
-      { key: "home_type", value: homeTypeLabel },
-      { key: "bedrooms", value: bedroomsNum != null ? String(bedroomsNum) : body.bedrooms },
-      { key: "bathrooms", value: bathroomsNum != null ? String(bathroomsNum) : body.bathrooms },
-      { key: "pets", value: hasPets === true ? "true" : hasPets === false ? "false" : undefined },
-    ];
-    for (const { key, value } of optionalLocationWrites) {
-      if (value === undefined || value === null || value === "") continue;
-      const def = await getFieldDefinitionMeta(supabase, orgId, "location", key);
-      if (!def) continue;
-      await upsertTypedFieldValue(
-        supabase,
-        orgId,
-        "location",
-        locationId,
-        def,
-        typeof value === "boolean" ? (value ? "true" : "false") : String(value).trim()
-      );
-    }
+    const publicDefs = await loadPublicBookingFieldDefRows(supabase, orgId, "location");
+    await upsertConfigurableFieldValuesForEntity(
+      supabase,
+      orgId,
+      "location",
+      locationId,
+      publicDefs,
+      mergedByKey
+    );
+
+    const homeTypeLabel =
+      body.home_type != null && String(body.home_type).trim()
+        ? String(body.home_type).trim()
+        : typeof mergedByKey.home_type === "string"
+          ? mergedByKey.home_type.trim() || null
+          : null;
+    const bedRaw =
+      body.bedrooms != null && String(body.bedrooms).trim()
+        ? body.bedrooms
+        : mergedByKey.bedrooms;
+    const bathRaw =
+      body.bathrooms != null && String(body.bathrooms).trim()
+        ? body.bathrooms
+        : mergedByKey.bathrooms;
+    const homeTypeId = await resolveHomeTypeIdByLabel(supabase, homeTypeLabel);
+    const bedroomsNum = parseRoomCount(bedRaw != null ? String(bedRaw) : undefined);
+    const bathroomsNum = parseRoomCount(bathRaw != null ? String(bathRaw) : undefined);
 
     const meta = ((opp as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
     delete meta.service_details_preview;

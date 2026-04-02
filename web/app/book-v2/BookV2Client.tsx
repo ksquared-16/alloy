@@ -1556,6 +1556,7 @@ export default function BookV2Client() {
                         access_note: serviceDetails.access_note?.trim() || null,
                         additional_notes: serviceDetails.additional_notes?.trim() || null,
                         has_pets: serviceDetails.has_pets,
+                        configurable_field_values: serviceDetails.configurable_values,
                     }),
                 });
                 const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
@@ -2123,6 +2124,7 @@ export default function BookV2Client() {
                 home_type: serviceDetails.home_type || undefined,
                 bedrooms: serviceDetails.bedrooms,
                 bathrooms: serviceDetails.bathrooms,
+                configurable_field_values: serviceDetails.configurable_values,
                 access_method: serviceDetails.access_method,
                 access_note: serviceDetails.access_note,
                 additional_notes: serviceDetails.additional_notes,
@@ -3109,14 +3111,13 @@ export default function BookV2Client() {
                                 ) : (
                                     <>
                                         <ServiceDetailsForm
-                                            initialData={quote?.quote_input?.home_type ? { home_type: quote.quote_input.home_type } : undefined}
+                                            initialData={
+                                                quote?.quote_input?.home_type
+                                                    ? { home_type: quote.quote_input.home_type }
+                                                    : undefined
+                                            }
                                             onDataChange={handleServiceDetailsChange}
-                                            homeTypeOptions={bookingCatalog?.home_types?.map((h) => ({
-                                                value: h.label,
-                                                label: h.label,
-                                            }))}
-                                            bedroomOptions={bookingCatalog?.bedroom_options}
-                                            bathroomOptions={bookingCatalog?.bathroom_options}
+                                            verticalSlug="cleaning"
                                         />
                                         {serviceDetailsValid && (
                                             <div className="mt-6 pt-6 border-t border-alloy-stone/20">

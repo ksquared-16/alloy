@@ -22,6 +22,30 @@ const EMPTY_TYPED: Record<string, unknown> = {
 
 /** Build insert/update payload from a string form value (API or form). */
 export function payloadFromFieldType(fieldType: string, raw: unknown): Record<string, unknown> {
+  const t = (fieldType || "text").toLowerCase();
+
+  if (t === "multiselect") {
+    let arr: string[] = [];
+    if (Array.isArray(raw)) {
+      arr = raw.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim());
+    } else if (typeof raw === "string" && raw.trim()) {
+      try {
+        const p = JSON.parse(raw) as unknown;
+        if (Array.isArray(p)) {
+          arr = p.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim());
+        }
+      } catch {
+        arr = raw
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
+      }
+    }
+    if (arr.length === 0) return { ...EMPTY_TYPED };
+    const text = arr.join(", ");
+    return { ...EMPTY_TYPED, value_json: arr, value_text: text };
+  }
+
   const s =
     raw == null
       ? ""
@@ -33,7 +57,6 @@ export function payloadFromFieldType(fieldType: string, raw: unknown): Record<st
           ? String(raw)
           : String(raw).trim();
 
-  const t = (fieldType || "text").toLowerCase();
   if (s === "") {
     return { ...EMPTY_TYPED };
   }
@@ -55,6 +78,10 @@ export function payloadFromFieldType(fieldType: string, raw: unknown): Record<st
     return { ...EMPTY_TYPED, value_date: iso, value_text: s };
   }
 
+  if (t === "select") {
+    return { ...EMPTY_TYPED, value_text: s };
+  }
+
   return { ...EMPTY_TYPED, value_text: s };
 }
 
@@ -73,6 +100,11 @@ export function displayFromFieldValueRow(
   }
   if ((t === "date" || t === "datetime") && row.value_date) {
     return String(row.value_date).slice(0, t === "date" ? 10 : 16);
+  }
+  if (t === "multiselect" && row.value_json != null) {
+    if (Array.isArray(row.value_json)) {
+      return (row.value_json as unknown[]).filter((x): x is string => typeof x === "string").join(", ");
+    }
   }
   if (row.value_text != null && row.value_text !== "") return row.value_text;
   if (row.value_json != null) {

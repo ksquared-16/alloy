@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 
 const ALLOWED_PATCH_KEYS = [
     "label",
@@ -18,6 +19,7 @@ const ALLOWED_PATCH_KEYS = [
     "placeholder",
     "help_text",
     "config",
+    "is_visible_in_public_booking",
 ] as const;
 
 const FORBIDDEN_FOR_SYSTEM = ["org_id", "entity_type", "field_key", "field_type", "is_system"] as const;
@@ -51,7 +53,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("field_definitions")
-        .select("id, org_id, is_system")
+        .select("id, org_id, is_system, field_type, config")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -99,7 +101,8 @@ export async function PATCH(
             key === "is_visible_in_drawer" ||
             key === "is_visible_in_table" ||
             key === "is_filterable" ||
-            key === "is_sortable"
+            key === "is_sortable" ||
+            key === "is_visible_in_public_booking"
         ) {
             updates[key] = !!body[key];
             continue;
@@ -107,6 +110,14 @@ export async function PATCH(
         if (key === "config") {
             updates[key] = body[key] != null && typeof body[key] === "object" ? (body[key] as Record<string, unknown>) : {};
             continue;
+        }
+    }
+
+    if (updates.config !== undefined) {
+        const ft = String((existing as { field_type?: string }).field_type ?? "text");
+        const cfgCheck = validateSelectLikeConfig(ft, updates.config as Record<string, unknown>);
+        if (!cfgCheck.ok) {
+            return NextResponse.json({ error: cfgCheck.error }, { status: 400 });
         }
     }
 

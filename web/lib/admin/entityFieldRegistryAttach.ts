@@ -59,6 +59,15 @@ export async function attachFieldDefinitionsAndValues(
         is_visible_in_drawer: boolean;
     }[];
     out._field_definitions = fieldDefs;
+
+    const { data: sectionRows } = await supabase
+        .from("field_section_definitions")
+        .select("section_key, label, sort_order")
+        .eq("org_id", orgId)
+        .eq("entity_type", entityType)
+        .order("sort_order", { ascending: true });
+    out._field_sections = (sectionRows ?? []) as { section_key: string; label: string; sort_order: number }[];
+
     if (fieldDefs.length === 0) return;
 
     const customDefs = fieldDefs.filter((d) => !d.is_system);

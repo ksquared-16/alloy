@@ -42,6 +42,7 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
         is_visible_in_form: r.is_visible_in_form !== false,
         is_visible_in_drawer: r.is_visible_in_drawer !== false,
         is_visible_in_table: r.is_visible_in_table !== false,
+        is_visible_in_public_booking: Boolean(r.is_visible_in_public_booking),
         is_filterable: Boolean(r.is_filterable),
         is_sortable: Boolean(r.is_sortable),
         section_key: r.section_key != null ? String(r.section_key) : null,
