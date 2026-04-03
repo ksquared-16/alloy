@@ -3,6 +3,7 @@
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
+import { ensureContactLinkedToPerson, ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
 import {
   bookingPhoneLookupVariants,
   normalizeBookingEmail,
@@ -159,6 +160,8 @@ export async function resolve_or_create_contact_and_customer(
     vertical_id?: string | null;
     org_id?: string | null;
     booking_attempt_id?: string | null;
+    /** When set (e.g. book-v2 quote person), link resolver contact + customer to this person. */
+    person_id?: string | null;
   }
 ): Promise<ContactCustomerResult> {
   const {
@@ -175,6 +178,7 @@ export async function resolve_or_create_contact_and_customer(
     vertical_id: verticalIdParam,
     org_id: orgIdParam,
     booking_attempt_id: bookingAttemptId,
+    person_id: personIdParam,
   } = params;
 
   const orgId = orgIdParam ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
@@ -469,6 +473,17 @@ export async function resolve_or_create_contact_and_customer(
   console.log(
     `${logPrefix} SUCCESS contact_id=${contactId} customer_id=${customerId} resolution_path=${resolutionPath} customer_resolution_path=${customerResolutionPath}`
   );
+
+  const personIdForLink = typeof personIdParam === "string" && personIdParam.trim() ? personIdParam.trim() : null;
+  if (personIdForLink) {
+    try {
+      await ensureContactLinkedToPerson(supabase, { contactId, personId: personIdForLink, orgId });
+      await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId: personIdForLink, orgId });
+    } catch (e) {
+      console.error(`${logPrefix} person_link_after_resolve FAILED`, e);
+      throw e;
+    }
+  }
 
   return {
     contact_id: contactId,
