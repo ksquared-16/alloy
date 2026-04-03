@@ -1935,11 +1935,11 @@ export default function BookV2Client() {
                 }
             }
 
-            // Step 0 (person-first): If we have person_id but no contact_id/customer_id, ensure customer + compat contact for payment/Stripe
+            // Step 0 (person-first): If we have person_id but no customer_id, ensure customer via customer_persons (contact_id optional).
             let setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
             let setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
             const setupPersonId = typeof window !== "undefined" ? localStorage.getItem("alloy_person_id") : null;
-            if (setupPersonId && (!setupContactId || !setupCustomerId)) {
+            if (setupPersonId && !setupCustomerId) {
                 try {
                     const tEnsure = typeof performance !== "undefined" ? performance.now() : 0;
                     const ensureRes = await fetch("/api/book-v2/ensure-customer", {
@@ -1949,11 +1949,15 @@ export default function BookV2Client() {
                     });
                     const ensureData = await ensureRes.json();
                     perfLog("ensure_customer", tEnsure);
-                    if (ensureRes.ok && ensureData.ok && ensureData.contact_id && ensureData.customer_id) {
-                        setupContactId = ensureData.contact_id;
+                    if (ensureRes.ok && ensureData.ok && ensureData.customer_id) {
                         setupCustomerId = ensureData.customer_id;
+                        if (ensureData.contact_id) {
+                            setupContactId = ensureData.contact_id;
+                        }
                         try {
-                            localStorage.setItem("alloy_contact_id", ensureData.contact_id);
+                            if (ensureData.contact_id) {
+                                localStorage.setItem("alloy_contact_id", ensureData.contact_id);
+                            }
                             localStorage.setItem("alloy_customer_id", ensureData.customer_id);
                             persistBookingIdentitySnapshot({
                                 email: resolvedEmail || prefillData.email,
@@ -1965,8 +1969,7 @@ export default function BookV2Client() {
                             // ignore
                         }
                     } else {
-                        // Person-first path requires contact + customer; do not proceed with null ids
-                        const msg = ensureData?.message ?? (ensureRes.ok ? "Missing contact or customer" : "Could not set up payment profile");
+                        const msg = ensureData?.message ?? (ensureRes.ok ? "Missing customer" : "Could not set up payment profile");
                         setPaymentError(msg);
                         return;
                     }

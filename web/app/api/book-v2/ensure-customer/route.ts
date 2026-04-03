@@ -83,9 +83,8 @@ function compatContactInsertError(
 }
 
 /**
- * Ensure person has a customer and a compatibility contact (for payment/Stripe).
- * Returns contact_id and customer_id so the payment flow can use them for SetupIntent.
- * Pass A: call this when we have person_id but no contact_id/customer_id (e.g. before payment).
+ * Person-native: resolve customer via customer_persons first; ensure customer_persons row exists.
+ * contact_id is optional (compat for Stripe/legacy UI); success requires customer_id only.
  */
 async function ensureCustomerForPerson(
     supabase: Supabase,
@@ -111,6 +110,7 @@ async function ensureCustomerForPerson(
     console.log("[BOOK_V2_ENSURE_CUSTOMER] Path: person_id=%s contactOrgId=%s customer_persons=%s", personId, contactOrgId ?? null, cp?.customer_id ?? "none");
     if (cp?.customer_id) {
         const customerId = (cp as { customer_id: string }).customer_id;
+        await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: contactOrgId });
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
         const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
         if (primaryContactId) {
@@ -119,59 +119,9 @@ async function ensureCustomerForPerson(
                 personId,
                 orgId: contactOrgId,
             });
-            await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: contactOrgId });
             return { customerId, contactId: primaryContactId };
         }
-        // Customer exists but no contact: reuse existing contact by email/phone or create
-        const existingContact = await findExistingContact(supabase, {
-            email: p.email ?? null,
-            phone: p.phone ?? null,
-            org_id: contactOrgId,
-        });
-        let contactId: string;
-        if (existingContact) {
-            contactId = existingContact.id;
-            const updatePayload: Record<string, unknown> = {
-                person_id: personId,
-                customer_id: customerId,
-                org_id: contactOrgId,
-                status: "active",
-            };
-            await supabase.from("contacts").update(updatePayload).eq("id", contactId);
-            await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-            return { customerId, contactId };
-        }
-        const contactInsert: Record<string, unknown> = {
-            org_id: contactOrgId,
-            first_name: p.first_name,
-            last_name: p.last_name,
-            email: p.email ?? null,
-            phone: p.phone ?? null,
-            person_id: personId,
-            contact_type: "lead",
-            status: "active",
-        };
-        const { data: newContact, error: contactErr } = await supabase
-            .from("contacts")
-            .insert(contactInsert)
-            .select("id")
-            .single();
-        if (contactErr || !newContact) {
-            throw compatContactInsertError(contactErr ?? null, {
-                org_id: contactOrgId,
-                person_id: personId,
-                customer_id: customerId,
-                first_name: p.first_name,
-                last_name: p.last_name,
-                email: p.email ?? null,
-                phone: p.phone ?? null,
-                status: "active",
-            });
-        }
-        contactId = (newContact as { id: string }).id;
-        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-        await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-        return { customerId, contactId };
+        return { customerId, contactId: null };
     }
 
     const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.email || p.phone || "New Customer";
@@ -311,7 +261,7 @@ async function ensureCustomerForPerson(
 /**
  * POST /api/book-v2/ensure-customer
  * Body: { person_id: string }
- * Returns: { ok: true, contact_id: string, customer_id: string } for payment/Stripe use.
+ * Returns: { ok: true, customer_id: string, contact_id: string | null } — customer_id always set; contact_id optional (compat).
  */
 export async function POST(request: NextRequest) {
     const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();

@@ -511,6 +511,9 @@ async function ensureCustomerForPersonInConfirm(
     console.log("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm path: person_id=%s contactOrgId=%s customer_persons=%s", personId, contactOrgId ?? null, cp?.customer_id ?? "none");
     if (cp?.customer_id) {
         const customerId = (cp as { customer_id: string }).customer_id;
+        if (contactOrgId) {
+            await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: contactOrgId });
+        }
         const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
         const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
         if (primaryContactId && contactOrgId) {
@@ -519,7 +522,6 @@ async function ensureCustomerForPersonInConfirm(
                 personId,
                 orgId: contactOrgId,
             });
-            await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: contactOrgId });
         }
         return { customerId, contactId: primaryContactId };
     }
@@ -720,7 +722,7 @@ async function ensureCustomerForContactInConfirm(
 /**
  * Single place to recover the booking's canonical person id when the client omits person_id or
  * contacts.person_id is null (e.g. ensure-customer returned an existing primary contact without backfilling person_id).
- * Order: body person → contact.person_id → opportunity.primary_person_id → customer_persons (prefer is_primary).
+ * Order: body person → customer_persons (by customer) → opportunity.primary_person_id → contact.person_id.
  */
 async function resolvePrimaryPersonIdForConfirm(
     supabase: Supabase,
@@ -730,20 +732,6 @@ async function resolvePrimaryPersonIdForConfirm(
         typeof s === "string" && s.trim() ? s.trim() : null;
 
     let pid = trim(params.personId);
-    if (pid) return pid;
-
-    if (params.contactId) {
-        const { data: row } = await supabase.from("contacts").select("person_id").eq("id", params.contactId).maybeSingle();
-        pid = trim((row as { person_id?: string | null } | null)?.person_id ?? null);
-        if (pid) return pid;
-    }
-
-    const { data: oppRow } = await supabase
-        .from("opportunities")
-        .select("primary_person_id")
-        .eq("id", params.opportunityId)
-        .maybeSingle();
-    pid = trim((oppRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null);
     if (pid) return pid;
 
     const { data: cpRows } = await supabase
@@ -757,6 +745,21 @@ async function resolvePrimaryPersonIdForConfirm(
         pid = trim((r as { person_id?: string | null }).person_id ?? null);
         if (pid) return pid;
     }
+
+    const { data: oppRow } = await supabase
+        .from("opportunities")
+        .select("primary_person_id")
+        .eq("id", params.opportunityId)
+        .maybeSingle();
+    pid = trim((oppRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null);
+    if (pid) return pid;
+
+    if (params.contactId) {
+        const { data: row } = await supabase.from("contacts").select("person_id").eq("id", params.contactId).maybeSingle();
+        pid = trim((row as { person_id?: string | null } | null)?.person_id ?? null);
+        if (pid) return pid;
+    }
+
     return null;
 }
 
@@ -1825,11 +1828,7 @@ export async function POST(request: NextRequest) {
         });
         if (resolvedPrimaryPersonId) {
             personIdFromQuote = resolvedPrimaryPersonId;
-            await supabase
-                .from("opportunities")
-                .update({ primary_person_id: resolvedPrimaryPersonId })
-                .eq("id", opportunityId)
-                .is("primary_person_id", null);
+            await supabase.from("opportunities").update({ primary_person_id: resolvedPrimaryPersonId }).eq("id", opportunityId);
         }
 
         // Step 4b: Canonical location — reuse opportunity.location_id when present (quote stage), else create/link
@@ -2207,23 +2206,13 @@ export async function POST(request: NextRequest) {
 
         // Step 5b: Persist discount redemption immediately after job creation
         if (discount_code_id || discount_program_id) {
-            if (contactId == null) {
-                console.error(
-                    "[BOOK_V2_CONFIRM] discount redemption requested but contactId is null (discount_redemptions.contact_id required) booking_attempt_id=%s",
-                    booking_attempt_id ?? "None"
-                );
-                return NextResponse.json(
-                    { ok: false, message: "Unable to record discount redemption.", booking_attempt_id: booking_attempt_id ?? null },
-                    { status: 500 }
-                );
-            }
             console.log(
                 "[BOOK_V2_CONFIRM_REDEMPTION_INSERT_BEFORE] booking_attempt_id=%s discount_code_id=%s discount_program_id=%s customer_id=%s contact_id=%s opportunity_id=%s job_id=%s",
                 booking_attempt_id ?? "None",
                 discount_code_id ?? "None",
                 discount_program_id ?? "None",
                 customerId,
-                contactId,
+                contactId ?? "null",
                 opportunityId,
                 jobId
             );
@@ -2266,7 +2255,7 @@ export async function POST(request: NextRequest) {
                         discount_program_id: discount_program_id ?? null,
                         discount_code: discount_code ?? null,
                         customer_id: customerId,
-                        contact_id: contactId,
+                        contact_id: contactId ?? null,
                         opportunity_id: opportunityId,
                         job_id: jobId,
                         quote_subtotal: quote_subtotal ?? null,
@@ -2620,24 +2609,24 @@ export async function POST(request: NextRequest) {
         const job = integrityCheck.jobs as any;
         const opportunity = job?.opportunities as any;
 
-        // Verify linkages (primary_contact_id when contactId set; primary_person_id when person path)
+        // Verify linkages: primary_person_id is required for book-v2 correctness; primary_contact_id is optional (compat only).
         const integrityIssues: string[] = [];
         if (job?.customer_id !== customerId) {
             integrityIssues.push(`job.customer_id mismatch: expected=${customerId} actual=${job?.customer_id}`);
         }
-        if (contactId != null) {
-            if (job?.primary_contact_id !== contactId) {
-                integrityIssues.push(`job.primary_contact_id mismatch: expected=${contactId} actual=${job?.primary_contact_id}`);
-            }
-            if (opportunity?.primary_contact_id !== contactId) {
-                integrityIssues.push(`opportunity.primary_contact_id mismatch: expected=${contactId} actual=${opportunity?.primary_contact_id}`);
-            }
-        } else if (personIdFromQuote) {
+        if (personIdFromQuote) {
             if ((job as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
                 integrityIssues.push(`job.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(job as { primary_person_id?: string | null })?.primary_person_id}`);
             }
             if ((opportunity as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
                 integrityIssues.push(`opportunity.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(opportunity as { primary_person_id?: string | null })?.primary_person_id}`);
+            }
+        }
+        if (contactId != null) {
+            if (job?.primary_contact_id !== contactId || opportunity?.primary_contact_id !== contactId) {
+                console.warn(
+                    `[BOOK_V2_CONFIRM_INTEGRITY] primary_contact_id optional mismatch (non-blocking) expected=${contactId} job=${job?.primary_contact_id} opp=${opportunity?.primary_contact_id} booking_attempt_id=${booking_attempt_id ?? "None"}`
+                );
             }
         }
         if (job?.opportunity_id !== opportunityId) {
