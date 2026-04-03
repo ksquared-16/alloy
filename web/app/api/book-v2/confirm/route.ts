@@ -736,6 +736,49 @@ async function ensureCustomerForContactInConfirm(
 }
 
 /**
+ * Single place to recover the booking's canonical person id when the client omits person_id or
+ * contacts.person_id is null (e.g. ensure-customer returned an existing primary contact without backfilling person_id).
+ * Order: body person → contact.person_id → opportunity.primary_person_id → customer_persons (prefer is_primary).
+ */
+async function resolvePrimaryPersonIdForConfirm(
+    supabase: Supabase,
+    params: { personId: string | null; contactId: string | null; customerId: string; opportunityId: string }
+): Promise<string | null> {
+    const trim = (s: string | null | undefined): string | null =>
+        typeof s === "string" && s.trim() ? s.trim() : null;
+
+    let pid = trim(params.personId);
+    if (pid) return pid;
+
+    if (params.contactId) {
+        const { data: row } = await supabase.from("contacts").select("person_id").eq("id", params.contactId).maybeSingle();
+        pid = trim((row as { person_id?: string | null } | null)?.person_id ?? null);
+        if (pid) return pid;
+    }
+
+    const { data: oppRow } = await supabase
+        .from("opportunities")
+        .select("primary_person_id")
+        .eq("id", params.opportunityId)
+        .maybeSingle();
+    pid = trim((oppRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null);
+    if (pid) return pid;
+
+    const { data: cpRows } = await supabase
+        .from("customer_persons")
+        .select("person_id, is_primary")
+        .eq("customer_id", params.customerId)
+        .limit(24);
+    const rows = cpRows ?? [];
+    const ordered = [...rows].sort((a, b) => Number(!!(b as { is_primary?: boolean }).is_primary) - Number(!!(a as { is_primary?: boolean }).is_primary));
+    for (const r of ordered) {
+        pid = trim((r as { person_id?: string | null }).person_id ?? null);
+        if (pid) return pid;
+    }
+    return null;
+}
+
+/**
  * Normalize frequency label to service_frequency_key
  */
 function normalizeFrequencyKey(frequencyLabel: string | null | undefined): string {
@@ -1040,7 +1083,8 @@ export async function POST(request: NextRequest) {
 
             // Person-first path: validate by primary_person_id
             if (person_id_from_quote) {
-                if (oppPrimaryPersonId !== person_id_from_quote) {
+                const trimmedPersonFromBody = person_id_from_quote.trim();
+                if (oppPrimaryPersonId != null && oppPrimaryPersonId !== trimmedPersonFromBody) {
                     return NextResponse.json(
                         {
                             ok: false,
@@ -1051,6 +1095,12 @@ export async function POST(request: NextRequest) {
                         },
                         { status: 409 }
                     );
+                }
+                if (oppPrimaryPersonId == null && trimmedPersonFromBody) {
+                    await supabase
+                        .from("opportunities")
+                        .update({ primary_person_id: trimmedPersonFromBody })
+                        .eq("id", opportunity_id_from_quote);
                 }
                 opportunityId = opportunity_id_from_quote;
                 verticalId = opp.vertical_id ?? "";
@@ -1797,6 +1847,21 @@ export async function POST(request: NextRequest) {
             console.log(`[BOOK_V2_CONFIRM] Created new opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId}`);
         }
         } // end else (!useQuoteIds)
+
+        const resolvedPrimaryPersonId = await resolvePrimaryPersonIdForConfirm(supabase, {
+            personId: personIdFromQuote,
+            contactId,
+            customerId,
+            opportunityId,
+        });
+        if (resolvedPrimaryPersonId) {
+            personIdFromQuote = resolvedPrimaryPersonId;
+            await supabase
+                .from("opportunities")
+                .update({ primary_person_id: resolvedPrimaryPersonId })
+                .eq("id", opportunityId)
+                .is("primary_person_id", null);
+        }
 
         // Step 4b: Canonical location — reuse opportunity.location_id when present (quote stage), else create/link
         const orgIdForLocation = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
