@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
         const [servicesRes, tiersRes] = await Promise.all([
             serviceIds.length ? supabase.from("pricing_services").select("id, service_offering_id").in("id", serviceIds) : { data: [] },
-            tierIds.length ? supabase.from("pricing_square_footage_tiers").select("id, dimension_value_id, sqft_label").in("id", tierIds) : { data: [] },
+            tierIds.length ? supabase.from("pricing_square_footage_tiers").select("id, dimension_value_id, tier_key").in("id", tierIds) : { data: [] },
         ]);
 
         const serviceOfferingIds = (servicesRes.data ?? []).map((s: Record<string, unknown>) => s.service_offering_id).filter(Boolean) as string[];
@@ -62,7 +62,15 @@ export async function GET(request: NextRequest) {
         const serviceNameMap = new Map<string, string>();
         serviceToOffering.forEach((offId, svcId) => { const name = offeringMap.get(offId); if (name) serviceNameMap.set(svcId, name); });
 
-        const tierMap = new Map((tiersRes.data ?? []).map((t: Record<string, unknown>) => [t.id as string, { dimension_value_id: t.dimension_value_id as string | null, sqft_label: (t.sqft_label as string) ?? null }]));
+        const tierMap = new Map(
+            (tiersRes.data ?? []).map((t: Record<string, unknown>) => [
+                t.id as string,
+                {
+                    dimension_value_id: t.dimension_value_id as string | null,
+                    tier_key: (t.tier_key as string) ?? null,
+                },
+            ])
+        );
         const dimValIdsFromTiers = [...new Set((tiersRes.data ?? []).map((t: Record<string, unknown>) => t.dimension_value_id as string).filter(Boolean))] as string[];
         const { data: dimValsData } = dimValIdsFromTiers.length ? await supabase.from("pricing_dimension_values").select("id, value_label").in("id", dimValIdsFromTiers) : { data: [] };
         const dimValMap = new Map((dimValsData ?? []).map((d: Record<string, unknown>) => [d.id as string, (d.value_label as string) ?? null]));
@@ -73,7 +81,7 @@ export async function GET(request: NextRequest) {
             const tier = tierId ? tierMap.get(tierId) : null;
             const dimValId = tier?.dimension_value_id ?? null;
             const dimLabel = dimValId ? (dimValMap.get(dimValId) ?? null) : null;
-            const sqftLabel = tier?.sqft_label ?? null;
+            const sqftLabel = tier?.tier_key ?? null;
             return {
                 id: r.id as string,
                 service_id: svcId ?? null,

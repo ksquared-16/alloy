@@ -38,6 +38,9 @@ function normalizeFieldPath(targetEntity: string | null, fieldPath: string): str
     if ((entity === "vendor" || entity === "vendors") && p.startsWith("vendor.")) {
         return p.slice("vendor.".length).trim() || p;
     }
+    if ((entity === "location" || entity === "locations") && p.startsWith("location.")) {
+        return p.slice("location.".length).trim() || p;
+    }
     return p;
 }
 

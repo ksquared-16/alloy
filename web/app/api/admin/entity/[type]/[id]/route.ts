@@ -24,6 +24,40 @@ import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 import { getPaymentAllocationRollup } from "@/lib/admin/jobPaymentBalances";
+import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
+
+type AdminSupabase = ReturnType<typeof createAdminClient>;
+
+function canonicalSqftTierLabel(tierKey: string | null | undefined): string | null {
+    const k = String(tierKey ?? "").trim();
+    if (!k) return null;
+    return CANONICAL_SQFT_TIER_OPTIONS.find((o) => o.value === k)?.label ?? k;
+}
+
+async function optionItemLabelForOrg(
+    supabase: AdminSupabase,
+    orgId: string,
+    setKey: string,
+    itemKey: string | null | undefined
+): Promise<string | null> {
+    const k = String(itemKey ?? "").trim();
+    if (!k) return null;
+    const { data: setRow } = await supabase.from("option_sets").select("id").eq("org_id", orgId).eq("set_key", setKey).maybeSingle();
+    const sid = (setRow as { id?: string } | null)?.id;
+    if (!sid) {
+        if (setKey === "square_footage_tier") return canonicalSqftTierLabel(k) ?? k;
+        return k;
+    }
+    const { data: it } = await supabase
+        .from("option_set_items")
+        .select("label")
+        .eq("option_set_id", sid)
+        .eq("item_key", k)
+        .maybeSingle();
+    const lab = (it as { label?: string } | null)?.label;
+    if (lab != null && String(lab).trim() !== "") return String(lab).trim();
+    return canonicalSqftTierLabel(k) ?? k;
+}
 
 /**
  * Drawer entity org model:
@@ -270,28 +304,28 @@ export async function GET(
             out._service_bathrooms = null;
             const { data: cjdJob } = await supabase.from("cleaning_job_details").select("*").eq("job_id", id).maybeSingle();
             const jd = cjdJob as {
-                home_type_id?: string | null;
-                sqft_band_id?: string | null;
-                square_footage?: number | null;
-                bedrooms?: number | null;
-                bathrooms?: number | null;
+                home_type_key?: string | null;
+                square_footage_tier_key?: string | null;
+                beds?: number | null;
+                baths?: number | null;
             } | null;
             if (jd) {
-                out._service_bedrooms = jd.bedrooms ?? null;
-                out._service_bathrooms = jd.bathrooms ?? null;
-                out._service_square_footage = jd.square_footage ?? null;
-                if (jd.home_type_id) {
-                    const { data: ht } = await supabase.from("home_types").select("label").eq("id", jd.home_type_id).maybeSingle();
-                    out._service_home_type_label = (ht as { label?: string } | null)?.label ?? null;
+                out._service_bedrooms = jd.beds ?? null;
+                out._service_bathrooms = jd.baths ?? null;
+                out._service_square_footage = null;
+                if (jd.home_type_key) {
+                    out._service_home_type_label = await optionItemLabelForOrg(supabase, orgId, "home_type", jd.home_type_key);
                 }
-                if (jd.sqft_band_id) {
-                    const { data: sb } = await supabase.from("sqft_bands").select("label").eq("id", jd.sqft_band_id).maybeSingle();
-                    out._service_sqft_band_label = (sb as { label?: string } | null)?.label ?? null;
+                if (jd.square_footage_tier_key) {
+                    out._service_sqft_band_label = await optionItemLabelForOrg(
+                        supabase,
+                        orgId,
+                        "square_footage_tier",
+                        jd.square_footage_tier_key
+                    );
                 }
                 const bandLabel = out._service_sqft_band_label != null ? String(out._service_sqft_band_label).trim() : "";
-                const sq = jd.square_footage;
-                out._service_square_footage_display =
-                    bandLabel || (sq != null && Number.isFinite(Number(sq)) ? `${sq} sq ft` : null);
+                out._service_square_footage_display = bandLabel || null;
             }
             const jobDprogId = (data as { discount_program_id?: string | null }).discount_program_id ?? null;
             if (jobDprogId) {
@@ -867,27 +901,28 @@ export async function GET(
             if (jobId) {
                 const { data: cjdSched } = await supabase.from("cleaning_job_details").select("*").eq("job_id", jobId).maybeSingle();
                 const sd = cjdSched as {
-                    home_type_id?: string | null;
-                    sqft_band_id?: string | null;
-                    square_footage?: number | null;
-                    bedrooms?: number | null;
-                    bathrooms?: number | null;
+                    home_type_key?: string | null;
+                    square_footage_tier_key?: string | null;
+                    beds?: number | null;
+                    baths?: number | null;
                 } | null;
                 if (sd) {
-                    out._service_bedrooms = sd.bedrooms ?? null;
-                    out._service_bathrooms = sd.bathrooms ?? null;
-                    if (sd.home_type_id) {
-                        const { data: ht } = await supabase.from("home_types").select("label").eq("id", sd.home_type_id).maybeSingle();
-                        out._service_home_type_label = (ht as { label?: string } | null)?.label ?? null;
+                    out._service_bedrooms = sd.beds ?? null;
+                    out._service_bathrooms = sd.baths ?? null;
+                    if (sd.home_type_key) {
+                        out._service_home_type_label = await optionItemLabelForOrg(supabase, orgId, "home_type", sd.home_type_key);
                     }
                     let bandLabel = "";
-                    if (sd.sqft_band_id) {
-                        const { data: sb } = await supabase.from("sqft_bands").select("label").eq("id", sd.sqft_band_id).maybeSingle();
-                        bandLabel = String((sb as { label?: string } | null)?.label ?? "").trim();
+                    if (sd.square_footage_tier_key) {
+                        bandLabel =
+                            (await optionItemLabelForOrg(
+                                supabase,
+                                orgId,
+                                "square_footage_tier",
+                                sd.square_footage_tier_key
+                            )) ?? "";
                     }
-                    const sq = sd.square_footage;
-                    out._service_square_footage_display =
-                        bandLabel || (sq != null && Number.isFinite(Number(sq)) ? `${sq} sq ft` : null);
+                    out._service_square_footage_display = bandLabel.trim() || null;
                 }
             }
 
@@ -956,8 +991,11 @@ export async function GET(
                 relationship_type: row.relationship_type ?? null,
             }));
 
+            const accessMethodKey = (location as { access_method_key?: string | null }).access_method_key;
             const accessMethodId = (location as { access_method_id?: string | null }).access_method_id;
-            if (accessMethodId) {
+            if (accessMethodKey) {
+                out._access_method_label = await optionItemLabelForOrg(supabase, orgId, "access_method", accessMethodKey);
+            } else if (accessMethodId) {
                 const { data: amRow } = await supabase.from("access_methods").select("label").eq("id", accessMethodId).maybeSingle();
                 out._access_method_label = (amRow as { label?: string } | null)?.label ?? null;
             } else {
@@ -984,30 +1022,34 @@ export async function GET(
             if (latestJobId) {
                 const { data: cjd } = await supabase.from("cleaning_job_details").select("*").eq("job_id", latestJobId).maybeSingle();
                 const details = cjd as {
-                    home_type_id?: string | null;
-                    sqft_band_id?: string | null;
-                    square_footage?: number | null;
-                    bedrooms?: number | null;
-                    bathrooms?: number | null;
+                    home_type_key?: string | null;
+                    square_footage_tier_key?: string | null;
+                    beds?: number | null;
+                    baths?: number | null;
                 } | null;
                 if (details) {
                     out._service_details_job_id = latestJobId;
-                    out._service_bedrooms = details.bedrooms ?? null;
-                    out._service_bathrooms = details.bathrooms ?? null;
-                    out._service_square_footage = details.square_footage ?? null;
-                    if (details.home_type_id) {
-                        const { data: ht } = await supabase.from("home_types").select("label").eq("id", details.home_type_id).maybeSingle();
-                        out._service_home_type_label = (ht as { label?: string } | null)?.label ?? null;
+                    out._service_bedrooms = details.beds ?? null;
+                    out._service_bathrooms = details.baths ?? null;
+                    out._service_square_footage = null;
+                    if (details.home_type_key) {
+                        out._service_home_type_label = await optionItemLabelForOrg(
+                            supabase,
+                            orgId,
+                            "home_type",
+                            details.home_type_key
+                        );
                     }
-                    if (details.sqft_band_id) {
-                        const { data: sb } = await supabase.from("sqft_bands").select("label").eq("id", details.sqft_band_id).maybeSingle();
-                        out._service_sqft_band_label = (sb as { label?: string } | null)?.label ?? null;
+                    if (details.square_footage_tier_key) {
+                        out._service_sqft_band_label = await optionItemLabelForOrg(
+                            supabase,
+                            orgId,
+                            "square_footage_tier",
+                            details.square_footage_tier_key
+                        );
                     }
                     const bandLabel = out._service_sqft_band_label != null ? String(out._service_sqft_band_label).trim() : "";
-                    const sq = details.square_footage;
-                    out._service_square_footage_display =
-                        bandLabel ||
-                        (sq != null && Number.isFinite(Number(sq)) ? `${sq} sq ft` : null);
+                    out._service_square_footage_display = bandLabel || null;
                 }
             }
 

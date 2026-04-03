@@ -3,11 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
 import { mapServiceTypeToKey, mapFrequencyToKey } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
-import {
-  getFieldDefinitionMeta,
-  upsertTypedFieldValue,
-  serializeSquareFootageForFieldValue,
-} from "@/lib/bookV2/fieldValueUpsert";
+import { getFieldDefinitionMeta, upsertTypedFieldValue } from "@/lib/bookV2/fieldValueUpsert";
 import {
   EXCLUDED_CUSTOMER_SELECTABLE_ADDON_KEYS,
   filterExcludedCustomerAddonKeys,
@@ -270,7 +266,7 @@ export async function POST(request: NextRequest) {
           typeof body.cleaning_frequency === "string" ? body.cleaning_frequency : "one_time";
         const quote_input = {
           zip: body.zip ?? (meta.quote_input as Record<string, unknown>)?.zip,
-          square_footage: square_footage,
+          square_footage: squareFootageOption,
           cleaning_frequency: typeof apiKeyFromFreq === "string" ? apiKeyFromFreq : "one_time",
           add_ons: selectedKeys,
         };
@@ -393,17 +389,14 @@ export async function POST(request: NextRequest) {
           }
         }
         if (orgId && locationId) {
-          const sqDef = await getFieldDefinitionMeta(supabase, orgId, "location", "square_footage");
-          if (sqDef) {
-            await upsertTypedFieldValue(
-              supabase,
-              orgId,
-              "location",
-              locationId,
-              sqDef,
-              serializeSquareFootageForFieldValue(square_footage)
-            );
-          }
+          await supabase
+            .from("locations")
+            .update({
+              square_footage_tier_key: squareFootageOption,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", locationId)
+            .eq("org_id", orgId);
         }
       } else if (!fetchOppErr) {
         console.warn("[QUOTE_REFINE_OPPORTUNITY] no opportunity row for id (skipping persist)", {

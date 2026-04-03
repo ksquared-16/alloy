@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { normalizeOptionsFromConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { isCatalogKey } from "@/lib/fields/fieldDefinitionConfig";
 import { resolveCatalogOptions } from "@/lib/fields/resolveFieldCatalog";
+import { optionSetKeyFromFieldConfig, resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
 
 /**
  * GET /api/public/field-definitions?entity_type=location&vertical_slug=cleaning
@@ -47,7 +48,6 @@ export async function GET(request: NextRequest) {
                 .eq("org_id", orgId)
                 .eq("entity_type", entityType)
                 .eq("is_active", true)
-                .eq("is_system", false)
                 .eq("is_visible_in_public_booking", true)
                 .order("section_key", { ascending: true })
                 .order("sort_order", { ascending: true }),
@@ -86,6 +86,10 @@ export async function GET(request: NextRequest) {
             };
             const cfg = row.config;
             let options: { value: string; label: string }[] = normalizeOptionsFromConfig(cfg);
+            const optSetKey = optionSetKeyFromFieldConfig(cfg);
+            if (optSetKey) {
+                options = await resolveOptionSetOptions(supabase, orgId, optSetKey);
+            }
             const ck =
                 cfg &&
                 typeof cfg === "object" &&
@@ -94,7 +98,7 @@ export async function GET(request: NextRequest) {
                     ? String((cfg as Record<string, unknown>).catalog_key).trim()
                     : "";
             if (ck && isCatalogKey(ck)) {
-                options = await resolveCatalogOptions(supabase, ck, { verticalSlug });
+                options = await resolveCatalogOptions(supabase, ck, { verticalSlug, orgId });
             }
 
             fields.push({

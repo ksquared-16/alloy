@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
                 return supabase.from("pricing_services").select("id, service_offering_id").in("service_offering_id", ids);
             })()
             : supabase.from("pricing_services").select("id, service_offering_id"),
-        supabase.from("pricing_square_footage_tiers").select("id, sqft_label, dimension_value_id").order("sort_order", { ascending: true, nullsFirst: false }),
+        supabase.from("pricing_square_footage_tiers").select("id, tier_key, dimension_value_id").order("sort_order", { ascending: true, nullsFirst: false }),
         verticalId
             ? supabase.from("pricing_frequencies").select("id, frequency_label, frequency_key").eq("vertical_id", verticalId).order("frequency_label", { ascending: true })
             : supabase.from("pricing_frequencies").select("id, frequency_label, frequency_key").order("frequency_label", { ascending: true }),
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         label: s.service_offering_id ? (offeringMap.get(s.service_offering_id) ?? s.id) : s.id,
     }));
 
-    const tiers = (tiersRes.data ?? []) as { id: string; sqft_label?: string | null; dimension_value_id?: string | null }[];
+    const tiers = (tiersRes.data ?? []) as { id: string; tier_key?: string | null; dimension_value_id?: string | null }[];
     const dimValIds = [...new Set(tiers.map((t) => t.dimension_value_id).filter(Boolean))] as string[];
     const { data: dimValsData } = dimValIds.length
         ? await supabase.from("pricing_dimension_values").select("id, value_label").in("id", dimValIds)
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     const dimValMap = new Map((dimValsData ?? []).map((d: { id: string; value_label?: string | null }) => [d.id, d.value_label ?? d.id]));
     const dimension_value_options = tiers.map((t) => ({
         id: t.id,
-        label: (t.dimension_value_id ? (dimValMap.get(t.dimension_value_id) ?? null) : null) ?? t.sqft_label ?? t.id,
+        label: (t.dimension_value_id ? (dimValMap.get(t.dimension_value_id) ?? null) : null) ?? t.tier_key ?? t.id,
     }));
 
     const frequencies = (freqsRes.data ?? []) as { id: string; frequency_label?: string | null; frequency_key?: string | null }[];

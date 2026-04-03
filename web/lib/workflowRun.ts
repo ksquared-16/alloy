@@ -4,6 +4,8 @@ import { createActionLink, buildShortActionLinkUrl } from "@/lib/actionLinks";
 import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
+import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
+import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -113,6 +115,8 @@ const ENTITY_TABLES: Record<string, string> = {
     schedules: "schedules",
     vendor: "vendors",
     vendors: "vendors",
+    location: "locations",
+    locations: "locations",
     assignment: "assignments",
     assignments: "assignments",
 };
@@ -127,24 +131,87 @@ type ConditionRow = {
     enabled?: boolean | null;
 };
 
-/** Normalize legacy field_path: for vendor entity, strip "vendor." prefix so path is relative to payload.vendor. */
+/** Normalize legacy field_path: strip redundant entity prefix when path is relative to target entity row. */
 function normalizeFieldPathForEntity(entityType: string, path: string): string {
     const p = path.trim();
     if (!p) return p;
     if ((entityType === "vendor" || entityType === "vendors") && p.startsWith("vendor.")) {
         return p.slice("vendor.".length).trim() || p;
     }
+    const locEt = entityType === "locations" ? "location" : entityType;
+    if ((locEt === "location") && p.startsWith("location.")) {
+        return p.slice("location.".length).trim() || p;
+    }
     return p;
 }
 
+/** booking_* root keys → enriched location columns (stable option / numeric keys). */
+const BOOKING_ROOT_TO_LOCATION: Record<string, string> = {
+    booking_bedrooms: "location.beds",
+    booking_bathrooms: "location.baths",
+    booking_square_footage: "location.square_footage_tier_key",
+};
+
+/** Old job/schedule-scoped semantic names → location.* (after enrichWorkflowEventPayloadEntities). */
+const WORKFLOW_LEGACY_SEMANTIC_TO_LOCATION: Record<string, string> = {
+    bedrooms: "location.beds",
+    bathrooms: "location.baths",
+    square_footage: "location.square_footage_tier_key",
+    home_type: "location.home_type_key",
+    access_method: "location.access_method_key",
+};
+
 function getConditionActual(payload: Record<string, unknown>, defaultEntityType: string | null, c: ConditionRow): unknown {
-    const entityType = (c.target_entity ?? defaultEntityType ?? "job").trim() || "job";
+    let entityType = (c.target_entity ?? defaultEntityType ?? "job").trim() || "job";
+    if (entityType === "locations") entityType = "location";
     const entity = payload[entityType];
     const rawPath = (c.field_path ?? c.field ?? "").trim();
     const path = normalizeFieldPathForEntity(entityType, rawPath);
-    if (path && entity != null && typeof entity === "object") {
-        return getByPath(entity, path);
+
+    if (!path) {
+        if (c.field && typeof c.field === "string" && c.field.trim()) {
+            return getByPath(payload, c.field.trim());
+        }
+        return undefined;
     }
+
+    // Dot-paths that address a top-level payload entity (e.g. location.beds, job.id)
+    if (
+        path.startsWith("location.") ||
+        path.startsWith("customer.") ||
+        path.startsWith("opportunity.") ||
+        path.startsWith("schedule.") ||
+        path.startsWith("job.") ||
+        path.startsWith("contact.") ||
+        path.startsWith("vendor.")
+    ) {
+        const cross = getByPath(payload, path);
+        if (cross !== undefined) return cross;
+    }
+
+    if (entity != null && typeof entity === "object") {
+        const v = getByPath(entity as Record<string, unknown>, path);
+        if (v !== undefined) return v;
+    }
+
+    if (path === "formatted_start_at" || path === "booking_price" || path.startsWith("booking_")) {
+        const root = getByPath(payload, path);
+        if (root !== undefined) return root;
+        const locPath = BOOKING_ROOT_TO_LOCATION[path];
+        if (locPath) {
+            const v = getByPath(payload, locPath);
+            if (v !== undefined) return v;
+        }
+    }
+
+    if (entityType === "job" || entityType === "schedule" || entityType === "opportunity") {
+        const locPath = WORKFLOW_LEGACY_SEMANTIC_TO_LOCATION[path];
+        if (locPath) {
+            const v = getByPath(payload, locPath);
+            if (v !== undefined) return v;
+        }
+    }
+
     if (c.field && typeof c.field === "string" && c.field.trim()) {
         return getByPath(payload, c.field.trim());
     }
@@ -273,6 +340,77 @@ function maskPhoneForLog(phone: string | null | undefined): string {
 
 function isProbableUuid(s: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+/** Coerce `update_entity` patches so jobs carry aligned `status_key` + `job_status_id` (legacy templates sometimes used a key string as `job_status_id`). */
+async function alignJobsPatchForStatusConvergence(
+    supabase: SupabaseClient,
+    orgId: string | null,
+    patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+    const out = { ...patch };
+    if (out.job_status_id != null && typeof out.job_status_id === "string") {
+        const raw = String(out.job_status_id).trim();
+        if (raw && !isProbableUuid(raw)) {
+            out.status_key = raw;
+            const row = await resolveJobStatusRowByOrgAndKey(supabase, orgId, raw);
+            out.job_status_id = row?.id ?? null;
+            return out;
+        }
+    }
+    if (out.status_key != null) {
+        const sk = String(out.status_key).trim();
+        if (sk && out.job_status_id === undefined) {
+            const row = await resolveJobStatusRowByOrgAndKey(supabase, orgId, sk);
+            out.job_status_id = row?.id ?? null;
+        }
+    }
+    if (
+        out.job_status_id != null &&
+        typeof out.job_status_id === "string" &&
+        isProbableUuid(out.job_status_id) &&
+        out.status_key === undefined
+    ) {
+        const { data } = await supabase.from("job_statuses").select("key").eq("id", out.job_status_id).maybeSingle();
+        const k = (data as { key?: string | null } | null)?.key;
+        if (k && String(k).trim()) out.status_key = String(k).trim();
+    }
+    return out;
+}
+
+/** Coerce `update_entity` patches so schedules carry aligned `status_key` + `schedule_status_id`. */
+async function alignSchedulesPatchForStatusConvergence(
+    supabase: SupabaseClient,
+    patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+    const out = { ...patch };
+    if (out.schedule_status_id != null && typeof out.schedule_status_id === "string") {
+        const raw = String(out.schedule_status_id).trim();
+        if (raw && !isProbableUuid(raw)) {
+            out.status_key = raw;
+            const row = await resolveScheduleStatusRowByKey(supabase, raw);
+            out.schedule_status_id = row?.id ?? null;
+            return out;
+        }
+    }
+    if (out.status_key != null) {
+        const sk = String(out.status_key).trim();
+        if (sk && out.schedule_status_id === undefined) {
+            const row = await resolveScheduleStatusRowByKey(supabase, sk);
+            out.schedule_status_id = row?.id ?? null;
+        }
+    }
+    if (
+        out.schedule_status_id != null &&
+        typeof out.schedule_status_id === "string" &&
+        isProbableUuid(out.schedule_status_id) &&
+        out.status_key === undefined
+    ) {
+        const { data } = await supabase.from("schedule_statuses").select("key").eq("id", out.schedule_status_id).maybeSingle();
+        const k = (data as { key?: string | null } | null)?.key;
+        if (k && String(k).trim()) out.status_key = String(k).trim();
+    }
+    return out;
 }
 
 /** E.164-ish for SMS: preserve leading +, default US +1 for 10-digit national. */
@@ -1134,6 +1272,8 @@ const ENTITY_TYPE_ALIASES: Record<string, string> = {
     customer: "customers",
     vendor: "vendors",
     vendors: "vendors",
+    location: "locations",
+    locations: "locations",
     customer_member: "customer_members",
     customer_members: "customer_members",
 };
@@ -1805,9 +1945,20 @@ export async function executeWorkflowRun(
                         patchResolved[k] = typeof v === "string" ? renderTemplate(v, payload) : v;
                     }
 
+                    let patchToApply = patchResolved;
+                    if (table === "jobs") {
+                        patchToApply = await alignJobsPatchForStatusConvergence(
+                            supabase,
+                            orgIdResolved != null ? String(orgIdResolved) : null,
+                            patchResolved
+                        );
+                    } else if (table === "schedules") {
+                        patchToApply = await alignSchedulesPatchForStatusConvergence(supabase, patchResolved);
+                    }
+
                     const { data, error: updErr } = await supabase
                         .from(table)
-                        .update(patchResolved)
+                        .update(patchToApply)
                         .eq("id", entityId)
                         .eq("org_id", orgIdResolved)
                         .select("id")
@@ -1851,8 +2002,13 @@ export async function executeWorkflowRun(
                         skipReason = "missing schedule_id or vendor_id";
                         break;
                     }
-                    const { data: statusRow } = await supabase.from("assignment_statuses").select("id").eq("key", statusKey).maybeSingle();
+                    const { data: statusRow } = await supabase
+                        .from("assignment_statuses")
+                        .select("id, key")
+                        .eq("key", statusKey)
+                        .maybeSingle();
                     const statusId = (statusRow as { id?: string } | null)?.id ?? null;
+                    const resolvedAssignmentKey = (statusRow as { key?: string } | null)?.key ?? statusKey;
                     if (!statusId) {
                         logs.push(`create_assignment: assignment_status key "${statusKey}" not found; skipping`);
                         actionSkipped = true;
@@ -1873,7 +2029,15 @@ export async function executeWorkflowRun(
                     const { data: existing } = await supabase.from("assignments").select("id").eq("schedule_id", scheduleId).maybeSingle();
                     const now = new Date().toISOString();
                     if (existing?.id) {
-                        const { error: uErr } = await supabase.from("assignments").update({ vendor_id: vendorId, assignment_status_id: statusId, updated_at: now }).eq("id", (existing as { id: string }).id);
+                        const { error: uErr } = await supabase
+                            .from("assignments")
+                            .update({
+                                vendor_id: vendorId,
+                                assignment_status_id: statusId,
+                                status_key: resolvedAssignmentKey,
+                                updated_at: now,
+                            })
+                            .eq("id", (existing as { id: string }).id);
                         if (uErr) throw new Error(`create_assignment update: ${uErr.message}`);
                         logs.push(`create_assignment: updated assignment for schedule ${scheduleId}`);
                     } else {
@@ -1883,6 +2047,7 @@ export async function executeWorkflowRun(
                             schedule_id: scheduleId,
                             org_id: orgId,
                             assignment_status_id: statusId,
+                            status_key: resolvedAssignmentKey,
                             updated_at: now,
                         });
                         if (iErr) throw new Error(`create_assignment insert: ${iErr.message}`);
@@ -1910,8 +2075,9 @@ export async function executeWorkflowRun(
                         break;
                     }
                     const now = new Date().toISOString();
-                    const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "offered").maybeSingle();
+                    const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id, key").eq("key", "offered").maybeSingle();
                     const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
+                    const offeredKey = (offeredStatus as { key?: string } | null)?.key ?? "offered";
                     if (!offeredStatusId) {
                         logs.push(`apply_job_vendor_to_upcoming: assignment status 'offered' not found; skipping`);
                         actionSkipped = true;
@@ -1949,6 +2115,7 @@ export async function executeWorkflowRun(
                                 vendor_id: vendorId,
                                 org_id: orgId,
                                 assignment_status_id: offeredStatusId,
+                                status_key: offeredKey,
                                 updated_at: now,
                             });
                             if (!iErr) created++;

@@ -184,7 +184,15 @@ export async function POST(request: NextRequest) {
   };
   if (location_id) row.location_id = location_id;
   if (typeof body.visit_type === "string") row.visit_type = body.visit_type;
-  if (body_status_key) row.status_key = body_status_key;
+  if (body_status_key) {
+    row.status_key = body_status_key;
+    const st = await resolveScheduleStatusRowByKey(supabase, body_status_key);
+    if (st) {
+      row.schedule_status_id = st.id;
+    } else {
+      console.warn("[ADMIN_POST_SCHEDULE] status_key has no matching schedule_statuses row", { body_status_key });
+    }
+  }
 
   if (!body_status_key) {
     const defaultSched = await resolveScheduleStatusRowByKey(supabase, "scheduled");

@@ -19,6 +19,7 @@ import {
   normalizeSqftKeyInput,
   resolveSquareFootageStorageString,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { homeTypeInputToStableKey, parseBathroomsForCjd, parseBedsFromBody } from "@/lib/book-v2/bookingCanonicalMaps";
 
 const SERVICE_TYPE = "Standard Cleaning";
 
@@ -175,6 +176,20 @@ async function upsertPersonLocationForQuote(
       console.error("[QUOTE_START] person_locations insert failed:", error.message);
     }
   }
+}
+
+function quoteStartNativeLocationPatch(body: Record<string, unknown>, squareFootageTierKey: string): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    square_footage_tier_key: squareFootageTierKey,
+    updated_at: new Date().toISOString(),
+  };
+  const beds = parseBedsFromBody(body.beds ?? body.bedrooms);
+  const baths = parseBathroomsForCjd(body.baths ?? body.bathrooms).baths;
+  const hk = homeTypeInputToStableKey(body.home_type);
+  if (beds != null) patch.beds = beds;
+  if (baths != null) patch.baths = baths;
+  if (hk) patch.home_type_key = hk;
+  return patch;
 }
 
 /** Default label for quote-created locations: "{Person Name} — {ZIP}" or "{Person Name} — Location". */
@@ -341,37 +356,18 @@ export async function POST(request: NextRequest) {
     const promoRaw =
       typeof body.promo_campaign === "string" ? body.promo_campaign.trim() : "";
 
-    const [locationSqftDef, opportunityFreqDef, opportunityPromoDef, personSmsConsentDef, personEmailConsentDef] =
-      await Promise.all([
-        getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "square_footage"),
-        getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "cleaning_frequency"),
-        promoRaw
-          ? getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "promo_campaign")
-          : Promise.resolve(null as FieldDefMeta | null),
-        body.sms_consent
-          ? getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "sms_consent")
-          : Promise.resolve(null as FieldDefMeta | null),
-        body.email_consent
-          ? getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "email_consent")
-          : Promise.resolve(null as FieldDefMeta | null),
-      ]);
-
-    if (!locationSqftDef) {
-      console.error(
-        "[QUOTE_START_FIELD_VALUES] field definition not found: org_id=%s entity_type=location field_key=square_footage",
-        orgIdForWrites
-      );
-      console.error(
-        "[QUOTE_START] CRITICAL: No active field_definition for org_id + entity_type=location + field_key=square_footage. Cannot persist square_footage to field_values."
-      );
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Server misconfiguration: location field square_footage is not defined for this org",
-        },
-        { status: 500 }
-      );
-    }
+    const [opportunityFreqDef, opportunityPromoDef, personSmsConsentDef, personEmailConsentDef] = await Promise.all([
+      getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "cleaning_frequency"),
+      promoRaw
+        ? getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "promo_campaign")
+        : Promise.resolve(null as FieldDefMeta | null),
+      body.sms_consent
+        ? getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "sms_consent")
+        : Promise.resolve(null as FieldDefMeta | null),
+      body.email_consent
+        ? getFieldDefinitionMeta(supabase, orgIdForWrites, "person", "email_consent")
+        : Promise.resolve(null as FieldDefMeta | null),
+    ]);
 
     if (!opportunityFreqDef) {
       console.error(
@@ -469,6 +465,12 @@ export async function POST(request: NextRequest) {
       }
       locationId = created;
     }
+
+    await supabase
+      .from("locations")
+      .update(quoteStartNativeLocationPatch(body as Record<string, unknown>, squareFootageOption))
+      .eq("id", locationId)
+      .eq("org_id", orgIdForWrites);
 
     if (shouldReuse && existingOppRow) {
       opportunityId = existingOppRow.id;
@@ -570,11 +572,9 @@ export async function POST(request: NextRequest) {
     }
 
     const cleaningFrequencyValue = body.cleaning_frequency ?? optionToApiKey(cleaning_frequency);
-    const squareFootageFieldValue = squareFootageStored;
 
     console.log("[QUOTE_START_FIELD_VALUES] normalized quote input", {
       square_footage: squareFootageStored,
-      squareFootageFieldValue,
       cleaning_frequency: body.cleaning_frequency,
       cleaningFrequencyValue,
       promo_campaign: body.promo_campaign ?? null,
@@ -582,24 +582,11 @@ export async function POST(request: NextRequest) {
       opportunityId,
     });
     console.log("[QUOTE_START_FIELD_VALUES] resolved field definition ids", {
-      location_square_footage: locationSqftDef?.id ?? null,
       opportunity_cleaning_frequency: opportunityFreqDef?.id ?? null,
       opportunity_promo_campaign: opportunityPromoDef?.id ?? null,
     });
 
-    await upsertTypedFieldValue(
-      supabase,
-      orgIdForWrites,
-      "location",
-      locationId,
-      locationSqftDef,
-      squareFootageFieldValue
-    );
-
     const optionalLocationWrites: { key: keyof QuoteStartBody; value: unknown }[] = [
-      { key: "home_type", value: body.home_type },
-      { key: "bedrooms", value: body.bedrooms ?? body.beds },
-      { key: "bathrooms", value: body.bathrooms ?? body.baths },
       { key: "pets", value: body.pets },
       { key: "gate_code", value: body.gate_code },
       { key: "parking_notes", value: body.parking_notes },

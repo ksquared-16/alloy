@@ -19,6 +19,11 @@ const ALLOWED_KEYS = [
     "postal_code",
     "country",
     "access_method_id",
+    "access_method_key",
+    "beds",
+    "baths",
+    "home_type_key",
+    "square_footage_tier_key",
     "access_code",
     "has_pets",
     "access_notes",
@@ -81,6 +86,27 @@ export async function PATCH(
         }
         if (key === "access_method_id" || key === "access_notes" || key === "access_code") {
             updates[key] = body[key] === "" || body[key] == null ? null : body[key];
+            continue;
+        }
+        if (key === "access_method_key") {
+            const v = body.access_method_key;
+            updates.access_method_key = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : String(v);
+            if (updates.access_method_key != null) updates.access_method_id = null;
+            continue;
+        }
+        if (key === "beds" || key === "baths") {
+            const v = body[key];
+            if (v === "" || v == null) {
+                updates[key] = null;
+            } else {
+                const n = typeof v === "number" ? v : parseFloat(String(v));
+                updates[key] = Number.isFinite(n) ? n : null;
+            }
+            continue;
+        }
+        if (key === "home_type_key" || key === "square_footage_tier_key") {
+            const v = body[key];
+            updates[key] = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : String(v);
             continue;
         }
         if (key === "has_pets") {

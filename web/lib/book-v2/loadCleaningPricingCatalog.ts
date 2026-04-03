@@ -1,47 +1,63 @@
 import type { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-import { serializeSquareFootageForFieldValue } from "@/lib/bookV2/fieldValueUpsert";
+import type { FieldOption } from "@/lib/fields/fieldDefinitionConfig";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
-export type SqftTierRow = { sqft_key: string; sqft_label: string | null; sort_order: number };
-
-/** Used when pricing_square_footage_tiers has no rows (must match get_quote_pricing / historical UI). */
-export const FALLBACK_SQFT_TIERS: SqftTierRow[] = [
-    { sqft_key: "Under 1500 sq ft", sqft_label: "Under 1,500 sq ft", sort_order: 0 },
-    { sqft_key: "1501–2,000 sq ft", sqft_label: "1,501 – 2,000 sq ft", sort_order: 1 },
-    { sqft_key: "2,001-2,600 sq ft", sqft_label: "2,001 – 2,600 sq ft", sort_order: 2 },
-    { sqft_key: "2,601-3,200 sq ft", sqft_label: "2,601 – 3,200 sq ft", sort_order: 3 },
-    { sqft_key: "3,201-4,000 sq ft", sqft_label: "3,201 – 4,000 sq ft", sort_order: 4 },
-    { sqft_key: "4,001-5,500 sq ft", sqft_label: "4,001 – 5,500 sq ft", sort_order: 5 },
-    { sqft_key: "Over 5,500 sq ft", sqft_label: "Over 5,500 sq ft", sort_order: 6 },
+/** Canonical square footage tiers (stable keys aligned with option_set + pricing_square_footage_tiers.tier_key). */
+export const CANONICAL_SQFT_TIER_OPTIONS: FieldOption[] = [
+    { value: "0_1499", label: "Under 1,500 sq ft" },
+    { value: "1500_1999", label: "1,500 – 1,999 sq ft" },
+    { value: "2000_2599", label: "2,000 – 2,599 sq ft" },
+    { value: "2600_3199", label: "2,600 – 3,199 sq ft" },
+    { value: "3200_3999", label: "3,200 – 3,999 sq ft" },
+    { value: "4000_5499", label: "4,000 – 5,499 sq ft" },
+    { value: "5500_plus", label: "5,500+ sq ft" },
 ];
 
-function legacyNumericSqftToKey(sqft: number): string {
-    const thresholds = [1500, 2000, 2600, 3200, 4000, 5500, Infinity];
-    const keys = FALLBACK_SQFT_TIERS.map((t) => t.sqft_key);
-    for (let i = 0; i < thresholds.length; i++) {
-        if (sqft <= thresholds[i]!) return keys[i] ?? keys[0]!;
+export type SqftTierRow = { tier_key: string; tier_label: string | null; sort_order: number };
+
+/** @deprecated Use CANONICAL_SQFT_TIER_OPTIONS / tier_key-based rows */
+export const FALLBACK_SQFT_TIERS: { sqft_key: string; sqft_label: string | null; sort_order: number }[] =
+    CANONICAL_SQFT_TIER_OPTIONS.map((o, i) => ({
+        sqft_key: o.value,
+        sqft_label: o.label,
+        sort_order: i,
+    }));
+
+const LEGACY_LABEL_OR_KEY_TO_TIER: Record<string, string> = (() => {
+    const m: Record<string, string> = {};
+    for (const o of CANONICAL_SQFT_TIER_OPTIONS) {
+        m[o.value.toLowerCase()] = o.value;
+        m[o.label.toLowerCase().replace(/\s+/g, " ")] = o.value;
     }
-    return keys[keys.length - 1]!;
+    const legacy: [string, string][] = [
+        ["Under 1500 sq ft", "0_1499"],
+        ["under 1500 sq ft", "0_1499"],
+        ["1501–2,000 sq ft", "1500_1999"],
+        ["1501-2,000 sq ft", "1500_1999"],
+        ["2,001-2,600 sq ft", "2000_2599"],
+        ["2,601-3,200 sq ft", "2600_3199"],
+        ["3,201-4,000 sq ft", "3200_3999"],
+        ["4,001-5,500 sq ft", "4000_5499"],
+        ["Over 5,500 sq ft", "5500_plus"],
+    ];
+    for (const [k, v] of legacy) {
+        m[k.toLowerCase()] = v;
+    }
+    return m;
+})();
+
+function legacyNumericSqftToTierKey(sqft: number): string {
+    if (sqft <= 1499) return "0_1499";
+    if (sqft <= 1999) return "1500_1999";
+    if (sqft <= 2599) return "2000_2599";
+    if (sqft <= 3199) return "2600_3199";
+    if (sqft <= 3999) return "3200_3999";
+    if (sqft <= 5499) return "4000_5499";
+    return "5500_plus";
 }
 
 export type DbAddonRow = { key: string; label: string; price: number; sort_order: number };
-
-/** Bedroom/bath select options — single source until a DB catalog exists. */
-export const BOOK_V2_BEDROOM_OPTIONS: { value: string; label: string }[] = [
-    { value: "1", label: "1" },
-    { value: "2", label: "2" },
-    { value: "3", label: "3" },
-    { value: "4", label: "4" },
-    { value: "5+", label: "5+" },
-];
-
-export const BOOK_V2_BATHROOM_OPTIONS: { value: string; label: string }[] = [
-    { value: "1", label: "1" },
-    { value: "2", label: "2" },
-    { value: "3", label: "3" },
-    { value: "4+", label: "4+" },
-];
 
 export async function resolveCleaningVerticalId(
     supabase: Supabase,
@@ -60,7 +76,7 @@ export async function resolveCleaningVerticalId(
 export async function loadSqftTiersForVertical(supabase: Supabase, verticalId: string): Promise<SqftTierRow[]> {
     const { data, error } = await supabase
         .from("pricing_square_footage_tiers")
-        .select("sqft_key, sqft_label, sort_order")
+        .select("tier_key, sort_order")
         .eq("vertical_id", verticalId)
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
@@ -68,49 +84,45 @@ export async function loadSqftTiersForVertical(supabase: Supabase, verticalId: s
         console.error("[BOOKING_CATALOG] pricing_square_footage_tiers", error.message);
         return [];
     }
-    return (data ?? []) as SqftTierRow[];
+    return ((data ?? []) as { tier_key: string; sort_order: number }[]).map((r) => ({
+        tier_key: String(r.tier_key).trim(),
+        tier_label: null,
+        sort_order: typeof r.sort_order === "number" ? r.sort_order : 0,
+    }));
 }
 
-/** Normalize quote body / UI value to a pricing sqft_key present in tiers (fallback: first tier). */
-export function normalizeSqftKeyInput(
-    val: string | number | null | undefined,
-    tiers: SqftTierRow[]
-): string {
-    const tierList = tiers.length ? tiers : FALLBACK_SQFT_TIERS;
-    const keys = new Set(tierList.map((t) => t.sqft_key.trim()));
-    const labels = new Map<string, string>();
-    for (const t of tierList) {
-        if (t.sqft_label?.trim()) labels.set(t.sqft_label.trim().toLowerCase(), t.sqft_key);
-    }
-    if (val == null) return tierList[0]!.sqft_key;
+/** Normalize quote/UI value to a tier_key present in tiers (fallback: first canonical tier). */
+export function normalizeSqftKeyInput(val: string | number | null | undefined, tiers: SqftTierRow[]): string {
+    const tierList = tiers.length
+        ? tiers
+        : CANONICAL_SQFT_TIER_OPTIONS.map((o, i) => ({
+              tier_key: o.value,
+              tier_label: o.label,
+              sort_order: i,
+          }));
+    const keys = new Set(tierList.map((t) => t.tier_key.trim()));
+    if (val == null) return tierList[0]!.tier_key;
     const s = typeof val === "string" ? val.trim() : String(val);
     if (keys.has(s)) return s;
-    const byLabel = labels.get(s.toLowerCase());
-    if (byLabel) return byLabel;
-    const num = typeof val === "number" ? val : parseInt(s, 10);
+    const mapped = LEGACY_LABEL_OR_KEY_TO_TIER[s.toLowerCase().replace(/\u2013/g, "-")];
+    if (mapped && keys.has(mapped)) return mapped;
+    const loose = LEGACY_LABEL_OR_KEY_TO_TIER[s.toLowerCase().replace(/\s+/g, " ")];
+    if (loose && keys.has(loose)) return loose;
+    const num = typeof val === "number" ? val : parseInt(s.replace(/,/g, ""), 10);
     if (!Number.isNaN(num) && num > 0) {
-        const legacy = legacyNumericSqftToKey(num);
-        if (keys.has(legacy)) return legacy;
+        const byNum = legacyNumericSqftToTierKey(num);
+        if (keys.has(byNum)) return byNum;
     }
-    return tierList[0]!.sqft_key;
+    return tierList[0]!.tier_key;
 }
 
-/**
- * Canonical string for `quote_input.square_footage` and location `field_values` for square_footage.
- * Pricing can still normalize a tier when raw is missing/blank; without this, `upsertTypedFieldValue`
- * receives "" and persists all-null typed columns.
- */
+/** Persist canonical tier_key (quote_input, location.square_footage_tier_key). */
 export function resolveSquareFootageStorageString(
-    raw: string | number | null | undefined,
-    normalizedSqftKey: string,
-    tiers: SqftTierRow[]
+    _raw: string | number | null | undefined,
+    normalizedTierKey: string,
+    _tiers: SqftTierRow[]
 ): string {
-    const fromClient = serializeSquareFootageForFieldValue(raw);
-    if (fromClient) return fromClient;
-    const tierList = tiers.length ? tiers : FALLBACK_SQFT_TIERS;
-    const row = tierList.find((t) => t.sqft_key === normalizedSqftKey);
-    if (row?.sqft_label?.trim()) return row.sqft_label.trim();
-    return normalizedSqftKey;
+    return normalizedTierKey;
 }
 
 type AddonTypeRow = { key: string; label: string; position: number };
@@ -166,9 +178,6 @@ export async function loadCleaningAddonsFromDb(
     return { available_addons, addonPriceMap };
 }
 
-/**
- * Normalize client add-on tokens to keys present in addonPriceMap (DB is source of truth).
- */
 export type PricingFrequencyRow = {
     frequency_key: string;
     frequency_label: string;
@@ -193,6 +202,7 @@ export async function loadPricingFrequenciesForVertical(
 
 export type HomeTypeRow = { key: string; label: string; position: number };
 
+/** @deprecated Prefer option_sets (home_type) per org; kept for transitional admin paths. */
 export async function loadActiveHomeTypes(supabase: Supabase): Promise<HomeTypeRow[]> {
     const { data, error } = await supabase
         .from("home_types")

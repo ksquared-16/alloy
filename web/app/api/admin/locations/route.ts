@@ -155,7 +155,30 @@ export async function POST(request: NextRequest) {
         typeof body.access_method_id === "string" && (body.access_method_id as string).trim()
             ? (body.access_method_id as string).trim()
             : null;
+    const access_method_key =
+        typeof body.access_method_key === "string" && (body.access_method_key as string).trim()
+            ? (body.access_method_key as string).trim()
+            : null;
+    const access_code = typeof body.access_code === "string" ? (body.access_code as string).trim() || null : null;
     const access_notes = typeof body.access_notes === "string" ? (body.access_notes as string).trim() || null : null;
+    const home_type_key =
+        typeof body.home_type_key === "string" && (body.home_type_key as string).trim()
+            ? (body.home_type_key as string).trim()
+            : null;
+    const square_footage_tier_key =
+        typeof body.square_footage_tier_key === "string" && (body.square_footage_tier_key as string).trim()
+            ? (body.square_footage_tier_key as string).trim()
+            : null;
+    let beds: number | null = null;
+    if (body.beds !== undefined && body.beds !== null && body.beds !== "") {
+        const n = typeof body.beds === "number" ? body.beds : parseFloat(String(body.beds));
+        beds = Number.isFinite(n) ? n : null;
+    }
+    let baths: number | null = null;
+    if (body.baths !== undefined && body.baths !== null && body.baths !== "") {
+        const n = typeof body.baths === "number" ? body.baths : parseFloat(String(body.baths));
+        baths = Number.isFinite(n) ? n : null;
+    }
     const metadata = body.metadata != null && typeof body.metadata === "object" ? body.metadata : {};
 
     let status_key: string | null = null;
@@ -189,8 +212,14 @@ export async function POST(request: NextRequest) {
         state,
         postal_code,
         country,
-        access_method_id: access_method_id ?? null,
+        access_method_id: access_method_key ? null : access_method_id ?? null,
+        access_method_key: access_method_key ?? null,
+        access_code,
         access_notes,
+        home_type_key: home_type_key ?? null,
+        square_footage_tier_key: square_footage_tier_key ?? null,
+        beds: beds ?? null,
+        baths: baths ?? null,
         metadata,
     };
     if (body.status_key !== undefined) {
