@@ -106,7 +106,6 @@ const BOOKING_IDENTITY_SIG_KEY = "alloy_booking_identity_sig";
 
 const BOOKING_IDENTITY_KEYS = [
     "alloy_person_id",
-    "alloy_contact_id",
     "alloy_customer_id",
     "alloy_opportunity_id",
     BOOKING_IDENTITY_SIG_KEY,
@@ -141,7 +140,7 @@ function persistBookingIdentitySnapshot(identity: {
     }
 }
 
-/** Clear only booking identity keys so a new quote-start cannot reuse stale person/contact/customer/opportunity ids. */
+/** Clear only booking identity keys so a new quote-start cannot reuse stale person/customer/opportunity ids. */
 function clearBookingIdentityKeys(): void {
     if (typeof window === "undefined") return;
     for (const key of BOOKING_IDENTITY_KEYS) {
@@ -151,6 +150,12 @@ function clearBookingIdentityKeys(): void {
         } catch {
             // ignore
         }
+    }
+    try {
+        localStorage.removeItem("alloy_contact_id");
+        sessionStorage.removeItem("alloy_contact_id");
+    } catch {
+        // ignore
     }
 }
 
@@ -334,7 +339,6 @@ async function maybeCreateLeadFromPrefill(params: {
         const hasStoredIds = !!(
             localStorage.getItem("alloy_opportunity_id") ||
             localStorage.getItem("alloy_person_id") ||
-            localStorage.getItem("alloy_contact_id") ||
             localStorage.getItem("alloy_customer_id")
         );
         if (hasStoredIds) {
@@ -391,7 +395,6 @@ async function maybeCreateLeadFromPrefill(params: {
         const data = await res.json();
         if (res.ok && data.ok && data.opportunity_id) {
             try {
-                if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
                 if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
                 persistBookingIdentitySnapshot({
@@ -747,7 +750,6 @@ export default function BookV2Client() {
             hasStoredIds = !!(
                 localStorage.getItem("alloy_opportunity_id") ||
                 localStorage.getItem("alloy_person_id") ||
-                localStorage.getItem("alloy_contact_id") ||
                 localStorage.getItem("alloy_customer_id")
             );
             prevSig = localStorage.getItem(BOOKING_IDENTITY_SIG_KEY);
@@ -1443,7 +1445,6 @@ export default function BookV2Client() {
                 return;
             }
             try {
-                if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
                 if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                 if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
                 persistBookingIdentitySnapshot({
@@ -1625,7 +1626,6 @@ export default function BookV2Client() {
                 const hasAnyStoredId = !!(
                     localStorage.getItem("alloy_opportunity_id") ||
                     localStorage.getItem("alloy_person_id") ||
-                    localStorage.getItem("alloy_contact_id") ||
                     localStorage.getItem("alloy_customer_id")
                 );
                 if (!sigAfter && hasAnyStoredId) {
@@ -1634,7 +1634,7 @@ export default function BookV2Client() {
                 }
             }
             const hasIds = typeof window !== "undefined" &&
-                (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_contact_id") || localStorage.getItem("alloy_customer_id"));
+                (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_customer_id"));
             if (!hasIds) {
                 clearBookingIdentityKeys();
                 let paymentIdentityQuoteStartFreq: "one_time" | "weekly" | "biweekly" | "monthly" = "one_time";
@@ -1663,7 +1663,6 @@ export default function BookV2Client() {
                 const data = await res.json();
                 if (res.ok && data.ok) {
                     try {
-                        if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
                         if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
                         if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
                         persistBookingIdentitySnapshot(identityForSig);
@@ -1926,7 +1925,6 @@ export default function BookV2Client() {
                 const hasAnyStoredId = !!(
                     localStorage.getItem("alloy_opportunity_id") ||
                     localStorage.getItem("alloy_person_id") ||
-                    localStorage.getItem("alloy_contact_id") ||
                     localStorage.getItem("alloy_customer_id")
                 );
                 if (!sigAfter && hasAnyStoredId) {
@@ -1935,8 +1933,7 @@ export default function BookV2Client() {
                 }
             }
 
-            // Step 0 (person-first): If we have person_id but no customer_id, ensure customer via customer_persons (contact_id optional).
-            let setupContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
+            // Step 0: If we have person_id but no customer_id, ensure customer via customer_persons.
             let setupCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
             const setupPersonId = typeof window !== "undefined" ? localStorage.getItem("alloy_person_id") : null;
             if (setupPersonId && !setupCustomerId) {
@@ -1951,13 +1948,7 @@ export default function BookV2Client() {
                     perfLog("ensure_customer", tEnsure);
                     if (ensureRes.ok && ensureData.ok && ensureData.customer_id) {
                         setupCustomerId = ensureData.customer_id;
-                        if (ensureData.contact_id) {
-                            setupContactId = ensureData.contact_id;
-                        }
                         try {
-                            if (ensureData.contact_id) {
-                                localStorage.setItem("alloy_contact_id", ensureData.contact_id);
-                            }
                             localStorage.setItem("alloy_customer_id", ensureData.customer_id);
                             persistBookingIdentitySnapshot({
                                 email: resolvedEmail || prefillData.email,
@@ -1980,7 +1971,7 @@ export default function BookV2Client() {
                 }
             }
 
-            // Step 1: Create SetupIntent (pass quote contact_id/customer_id so backend can reuse existing lead)
+            // Step 1: Create SetupIntent (person_id + customer_id for person-native quote path)
             const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
             const createSetupIntentOnce = async (): Promise<string> => {
@@ -1992,8 +1983,8 @@ export default function BookV2Client() {
                         email: resolvedEmail || prefillData.email,
                         ghl_contact_id: prefillData.ghl_contact_id || null,
                         booking_attempt_id: attemptId,
-                        contact_id: setupContactId || undefined,
                         customer_id: setupCustomerId || undefined,
+                        person_id: setupPersonId || undefined,
                     }),
                 });
                 const setupIntentData = await setupIntentResponse.json();
@@ -2090,7 +2081,6 @@ export default function BookV2Client() {
             if (process.env.NODE_ENV !== "production") {
                 console.log("[BOOK_V2_FLOW] about_to_call_confirm booking_attempt_id=", attemptId);
             }
-            const storedContactId = typeof window !== "undefined" ? localStorage.getItem("alloy_contact_id") : null;
             const storedPersonId = typeof window !== "undefined" ? localStorage.getItem("alloy_person_id") : null;
             const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("alloy_customer_id") : null;
             const storedOpportunityId = typeof window !== "undefined" ? localStorage.getItem("alloy_opportunity_id") : null;
@@ -2141,7 +2131,6 @@ export default function BookV2Client() {
             };
             if (storedOpportunityId) confirmPayload.opportunity_id = storedOpportunityId;
             if (storedPersonId) confirmPayload.person_id = storedPersonId;
-            if (storedContactId) confirmPayload.contact_id = storedContactId;
             if (storedCustomerId) confirmPayload.customer_id = storedCustomerId;
             if (stripePaymentMethodId) confirmPayload.stripe_payment_method_id = stripePaymentMethodId;
             if (stripeSetupIntentId) confirmPayload.stripe_setup_intent_id = stripeSetupIntentId;

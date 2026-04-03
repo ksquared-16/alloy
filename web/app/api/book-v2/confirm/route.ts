@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
-import { ensureContactLinkedToPerson, ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
-import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
+import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
+import { ensureCustomerForPersonNative, resolveOrCreatePersonCustomerForBooking } from "@/lib/bookingPersonCustomerResolve";
 import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
 import {
     parseBathroomsForCjd,
@@ -52,7 +52,7 @@ function bookV2PerfLog(phase: string, start: number, bookingAttemptId: string | 
     );
 }
 
-const CONFIRM_SAFE_PAYLOAD_KEYS = ["org_id", "person_id", "customer_id", "first_name", "last_name", "email", "phone", "status", "name", "vertical_id", "primary_contact_id", "metadata", "contact_id"] as const;
+const CONFIRM_SAFE_PAYLOAD_KEYS = ["org_id", "person_id", "customer_id", "first_name", "last_name", "email", "phone", "status", "name", "vertical_id", "metadata"] as const;
 
 function confirmSafePayload(obj: Record<string, unknown>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
@@ -126,9 +126,9 @@ type ConfirmIdentityRow = {
 };
 
 /**
- * True when the person/contact row linked to the quote matches what the user submitted.
+ * True when the person row linked to the quote matches what the user submitted.
  * If the browser sends stale person_id/opportunity_id after the user edits name/email/phone,
- * this returns false so confirm falls back to resolve_or_create_contact_and_customer.
+ * this returns false so confirm falls back to person-native resolution.
  */
 function identityRowMatchesSubmission(row: ConfirmIdentityRow, submitted: { email: string; phone: string; first: string; last: string }): boolean {
     const se = normConfirmEmail(submitted.email);
@@ -154,14 +154,13 @@ async function quoteLinkedIdentityMatchesSubmission(
     supabase: Supabase,
     params: {
         person_id: string | null | undefined;
-        contact_id: string | null | undefined;
         contact_email: unknown;
         contact_phone: unknown;
         contact_first_name: unknown;
         contact_last_name: unknown;
     }
 ): Promise<boolean> {
-    const { person_id, contact_id, contact_email, contact_phone, contact_first_name, contact_last_name } = params;
+    const { person_id, contact_email, contact_phone, contact_first_name, contact_last_name } = params;
     const submitted = {
         email: String(contact_email ?? "").trim(),
         phone: String(contact_phone ?? "").trim(),
@@ -169,17 +168,12 @@ async function quoteLinkedIdentityMatchesSubmission(
         last: String(contact_last_name ?? "").trim(),
     };
 
-    let row: ConfirmIdentityRow | null = null;
-    if (person_id && typeof person_id === "string") {
-        const { data: p } = await supabase.from("persons").select("email, phone, first_name, last_name").eq("id", person_id).maybeSingle();
-        row = (p as ConfirmIdentityRow | null) ?? null;
-    } else if (contact_id && typeof contact_id === "string") {
-        const { data: c } = await supabase.from("contacts").select("email, phone, first_name, last_name").eq("id", contact_id).maybeSingle();
-        row = (c as ConfirmIdentityRow | null) ?? null;
-    } else {
+    if (!person_id || typeof person_id !== "string") {
         return true;
     }
 
+    const { data: p } = await supabase.from("persons").select("email, phone, first_name, last_name").eq("id", person_id).maybeSingle();
+    const row = (p as ConfirmIdentityRow | null) ?? null;
     if (!row) return false;
     return identityRowMatchesSubmission(row, submitted);
 }
@@ -280,7 +274,6 @@ async function runDeferredBookingEffects(params: {
     opportunityId: string;
     scheduleId: string;
     customerId: string;
-    contactId: string | null;
     personIdFromQuote: string | null;
     slot_start: string;
     slot_end: string;
@@ -292,7 +285,6 @@ async function runDeferredBookingEffects(params: {
         opportunityId,
         scheduleId,
         customerId,
-        contactId,
         personIdFromQuote,
         slot_start,
         slot_end,
@@ -325,12 +317,11 @@ async function runDeferredBookingEffects(params: {
         }
 
         const tHydrate = typeof performance !== "undefined" ? performance.now() : Date.now();
-        const [jobRes, oppRes, customerRes, scheduleRes, contactRes, personRes, cjdRes] = await Promise.all([
+        const [jobRes, oppRes, customerRes, scheduleRes, personRes, cjdRes] = await Promise.all([
             supa.from("jobs").select("*").eq("id", jobId).single(),
             supa.from("opportunities").select("*").eq("id", opportunityId).single(),
             supa.from("customers").select("*").eq("id", customerId).single(),
             supa.from("schedules").select("*").eq("id", scheduleId).single(),
-            contactId ? supa.from("contacts").select("*").eq("id", contactId).maybeSingle() : Promise.resolve({ data: null as null }),
             personIdFromQuote
                 ? supa.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle()
                 : Promise.resolve({ data: null as null }),
@@ -342,17 +333,7 @@ async function runDeferredBookingEffects(params: {
         const oppRow = oppRes.data;
         const customerRow = customerRes.data;
         const scheduleRow = scheduleRes.data;
-        const contactRow = (contactRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
         let personRow = (personRes as { data: Record<string, unknown> | null }).data as Record<string, unknown> | null;
-
-        if (!personRow && contactRow && (contactRow as { person_id?: string | null }).person_id) {
-            const { data: p } = await supa
-                .from("persons")
-                .select("id, first_name, last_name, email, phone")
-                .eq("id", (contactRow as { person_id: string }).person_id)
-                .maybeSingle();
-            personRow = p as Record<string, unknown> | null;
-        }
 
         const jobPrimaryPersonId = (jobRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null;
         if (!personRow && jobPrimaryPersonId) {
@@ -375,7 +356,7 @@ async function runDeferredBookingEffects(params: {
                 created_at: new Date().toISOString(),
             } as Record<string, unknown>);
 
-        /** Canonical SMS identity for book-v2: same as `person` when resolved (prefer person over contact for templates). */
+        /** Person is canonical for workflows; `contact` is legacy-only (always null for book-v2). */
         const eventPayload: Record<string, unknown> = {
             event_type: "booking_confirmed",
             /** Required for event-driven workflow validation (normalizeEntityType → jobs). */
@@ -385,7 +366,7 @@ async function runDeferredBookingEffects(params: {
             org_id: orgIdForWorkflows,
             booked_stage_id: bookedStageIdForEvent,
             job: jobRow ?? null,
-            contact: contactRow ?? null,
+            contact: null,
             person: personRow ?? null,
             customer_booking_person: personRow ?? null,
             customer: customerRow ?? null,
@@ -396,7 +377,7 @@ async function runDeferredBookingEffects(params: {
         const schedForSms = normalizedSchedule as { id?: string; start_at?: string | null; timezone?: string | null };
         const smsTz = resolveBookingSmsTimeZone({
             scheduleTimezone: schedForSms.timezone,
-            contactTimezone: (contactRow as { timezone?: string | null } | null)?.timezone,
+            contactTimezone: null,
         });
         const startIsoForSms = (schedForSms.start_at as string | undefined) ?? slot_start;
         eventPayload.formatted_start_at = formatBookingStartForSms(startIsoForSms, smsTz);
@@ -437,8 +418,6 @@ async function runDeferredBookingEffects(params: {
             schedule_status_key: s?.status_key ?? null,
             has_person: !!personRow,
             person_phone_set: !!(personRow && String((personRow as { phone?: string }).phone ?? "").trim()),
-            has_contact: !!contactRow,
-            contact_phone_set: !!(contactRow && String((contactRow as { phone?: string }).phone ?? "").trim()),
         });
 
         const tEmit = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -483,250 +462,12 @@ async function runDeferredBookingEffects(params: {
 }
 
 /**
- * Ensure person has a customer and customer_persons link. Optionally create a compatibility Contact for downstream (discount_redemptions, workflows).
- * Returns { customerId, contactId }. contactId is set when a compatibility contact is created or when person is already linked to a contact-backed customer.
- */
-async function ensureCustomerForPersonInConfirm(
-    supabase: Supabase,
-    personId: string,
-    params: { vertical_id: string; org_id: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null },
-    createCompatibilityContact: boolean
-): Promise<{ customerId: string; contactId: string | null }> {
-    const { data: person } = await supabase
-        .from("persons")
-        .select("id, first_name, last_name, email, phone, org_id")
-        .eq("id", personId)
-        .single();
-    if (!person) throw new Error("Person not found");
-    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; org_id?: string | null };
-    const contactOrgId = p.org_id ?? params.org_id;
-
-    // Existing customer via customer_persons?
-    const { data: cp } = await supabase
-        .from("customer_persons")
-        .select("customer_id")
-        .eq("person_id", personId)
-        .limit(1)
-        .maybeSingle();
-    console.log("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm path: person_id=%s contactOrgId=%s customer_persons=%s", personId, contactOrgId ?? null, cp?.customer_id ?? "none");
-    if (cp?.customer_id) {
-        const customerId = (cp as { customer_id: string }).customer_id;
-        if (contactOrgId) {
-            await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: contactOrgId });
-        }
-        const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
-        const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
-        if (primaryContactId && contactOrgId) {
-            await ensureContactLinkedToPerson(supabase, {
-                contactId: primaryContactId,
-                personId,
-                orgId: contactOrgId,
-            });
-        }
-        return { customerId, contactId: primaryContactId };
-    }
-
-    // Reuse existing contact/customer when contact already linked (e.g. from ensure-customer at payment)
-    if (contactOrgId) {
-        const email = params.email ?? p.email ?? null;
-        const phone = params.phone ?? p.phone ?? null;
-        let existingContact: { id: string; customer_id?: string | null } | null = null;
-        if (email && String(email).trim()) {
-            const { data: byEmail } = await supabase
-                .from("contacts")
-                .select("id, customer_id")
-                .eq("org_id", contactOrgId)
-                .ilike("email", String(email).trim())
-                .limit(1)
-                .maybeSingle();
-            if (byEmail?.id) existingContact = byEmail as { id: string; customer_id?: string | null };
-        }
-        if (!existingContact && phone && String(phone).trim()) {
-            const { data: byPhone } = await supabase
-                .from("contacts")
-                .select("id, customer_id")
-                .eq("org_id", contactOrgId)
-                .eq("phone", String(phone).trim())
-                .limit(1)
-                .maybeSingle();
-            if (byPhone?.id) existingContact = byPhone as { id: string; customer_id?: string | null };
-        }
-        if (existingContact?.id) {
-            let customerId: string | null = existingContact.customer_id ?? null;
-            if (!customerId) {
-                const { data: custByContact } = await supabase.from("customers").select("id").eq("primary_contact_id", existingContact.id).limit(1).maybeSingle();
-                customerId = (custByContact as { id: string } | null)?.id ?? null;
-            }
-            console.log("[BOOK_V2_CONFIRM] Existing contact reuse: contact_id=%s contact.customer_id=%s resolved_customerId=%s", existingContact.id, existingContact.customer_id ?? "null", customerId ?? "null");
-            if (customerId) {
-                if (contactOrgId) {
-                    await ensureContactLinkedToPerson(supabase, { contactId: existingContact.id, personId, orgId: contactOrgId });
-                    await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: contactOrgId });
-                }
-                return { customerId, contactId: existingContact.id };
-            }
-        }
-    }
-
-    const name = [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
-        || (params.email ?? p.email) || (params.phone ?? p.phone) || "New Customer";
-
-    let contactId: string | null = null;
-    if (createCompatibilityContact) {
-        const contactInsert: Record<string, unknown> = {
-            first_name: params.first_name ?? p.first_name,
-            last_name: params.last_name ?? p.last_name,
-            email: params.email ?? p.email ?? null,
-            phone: params.phone ?? p.phone ?? null,
-            person_id: personId,
-            contact_type: "lead",
-        };
-        if (params.org_id) contactInsert.org_id = params.org_id;
-        console.log("[BOOK_V2_CONFIRM] Compatibility contact insert attempt", confirmSafePayload(contactInsert as Record<string, unknown>));
-        const { data: newContact, error: contactErr } = await supabase
-            .from("contacts")
-            .insert(contactInsert)
-            .select("id")
-            .single();
-        if (contactErr) {
-            console.error("[BOOK_V2_CONFIRM] compatibility contact insert failed", {
-                error_message: (contactErr as { message?: string }).message,
-                error_code: (contactErr as { code?: string }).code,
-                error_details: (contactErr as { details?: string }).details,
-                error_hint: (contactErr as { hint?: string }).hint,
-                payload: confirmSafePayload(contactInsert as Record<string, unknown>),
-            });
-            throw new Error(`Compatibility contact insert failed: ${(contactErr as { message?: string }).message ?? contactErr} (code: ${(contactErr as { code?: string }).code ?? "unknown"})`);
-        }
-        if (newContact) contactId = (newContact as { id: string }).id;
-    }
-
-    const payload: Record<string, unknown> = {
-        name,
-        status: "active",
-        vertical_id: params.vertical_id,
-        metadata: { source: "book-v2-confirm", email: params.email ?? p.email ?? undefined, phone: params.phone ?? p.phone ?? undefined },
-    };
-    if (params.org_id) payload.org_id = params.org_id;
-    if (contactId) payload.primary_contact_id = contactId;
-
-    console.log("[BOOK_V2_CONFIRM] customer insert (ensureCustomerForPersonInConfirm)", confirmSafePayload({ ...payload, person_id: personId }));
-    const { data: newCustomer, error: insErr } = await supabase
-        .from("customers")
-        .insert(payload)
-        .select("id")
-        .single();
-    if (insErr || !newCustomer) {
-        if (insErr?.code === "23505" && contactId) {
-            const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
-            if (existing?.id) {
-                console.log("[BOOK_V2_CONFIRM] Reusing customer after 23505", { existing_customer_id: existing.id, contact_id: contactId });
-                await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
-                if (params.org_id) {
-                    await ensureCustomerPersonsPrimaryLink(supabase, {
-                        customerId: (existing as { id: string }).id,
-                        personId,
-                        orgId: params.org_id,
-                    });
-                }
-                return { customerId: (existing as { id: string }).id, contactId };
-            }
-        }
-        logAndThrowConfirmError("customer insert (ensureCustomerForPersonInConfirm)", insErr, payload as Record<string, unknown>);
-    }
-    const customerId = (newCustomer as { id: string }).id;
-    if (contactId) {
-        await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-    }
-    if (params.org_id) {
-        await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: params.org_id });
-    }
-    return { customerId, contactId };
-}
-
-/**
- * Ensure contact has a customer; create and link if missing. When contact has person_id, create customer_persons link.
- * Used at confirm when quote path has no customer yet (Pass 1 lifecycle) and we have a contact (legacy path).
- */
-async function ensureCustomerForContactInConfirm(
-    supabase: Supabase,
-    contactId: string,
-    params: { vertical_id: string; org_id: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }
-): Promise<string> {
-    const { data: contact } = await supabase
-        .from("contacts")
-        .select("id, customer_id, person_id, first_name, last_name, email, phone")
-        .eq("id", contactId)
-        .single();
-    if (!contact) throw new Error("Contact not found");
-    const c = contact as { customer_id?: string | null; person_id?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null };
-    if (c.customer_id) {
-        if (c.person_id && params.org_id) {
-            await ensureCustomerPersonsPrimaryLink(supabase, {
-                customerId: c.customer_id,
-                personId: c.person_id,
-                orgId: params.org_id,
-            });
-        }
-        return c.customer_id;
-    }
-
-    const name = [params.first_name ?? c.first_name, params.last_name ?? c.last_name].filter(Boolean).join(" ").trim()
-        || (params.email ?? c.email) || (params.phone ?? c.phone) || "New Customer";
-    const payload: Record<string, unknown> = {
-        name,
-        primary_contact_id: contactId,
-        status: "active",
-        vertical_id: params.vertical_id,
-        metadata: { source: "book-v2-confirm", email: params.email ?? c.email ?? undefined, phone: params.phone ?? c.phone ?? undefined },
-    };
-    if (params.org_id) payload.org_id = params.org_id;
-
-    console.log("[BOOK_V2_CONFIRM] customer insert (ensureCustomerForContactInConfirm)", confirmSafePayload({ ...payload, contact_id: contactId }));
-    const { data: newCustomer, error: insErr } = await supabase
-        .from("customers")
-        .insert(payload)
-        .select("id")
-        .single();
-    if (insErr || !newCustomer) {
-        if (insErr?.code === "23505") {
-            const { data: existing } = await supabase.from("customers").select("id").eq("primary_contact_id", contactId).limit(1).maybeSingle();
-            if (existing?.id) {
-                console.log("[BOOK_V2_CONFIRM] Reusing customer after 23505 (contact path)", { existing_customer_id: existing.id, contact_id: contactId });
-                await supabase.from("contacts").update({ customer_id: existing.id }).eq("id", contactId);
-                if (c.person_id && params.org_id) {
-                    await ensureCustomerPersonsPrimaryLink(supabase, {
-                        customerId: existing.id,
-                        personId: c.person_id,
-                        orgId: params.org_id,
-                    });
-                }
-                return existing.id;
-            }
-        }
-        logAndThrowConfirmError("customer insert (ensureCustomerForContactInConfirm)", insErr, payload as Record<string, unknown>);
-    }
-    const customerId = (newCustomer as { id: string }).id;
-    await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-
-    if (c.person_id && params.org_id) {
-        await ensureCustomerPersonsPrimaryLink(supabase, {
-            customerId,
-            personId: c.person_id,
-            orgId: params.org_id,
-        });
-    }
-    return customerId;
-}
-
-/**
- * Single place to recover the booking's canonical person id when the client omits person_id or
- * contacts.person_id is null (e.g. ensure-customer returned an existing primary contact without backfilling person_id).
- * Order: body person → customer_persons (by customer) → opportunity.primary_person_id → contact.person_id.
+ * Recover canonical person id: body person → customer_persons (by customer) → opportunity.primary_person_id.
+ * Booking does not use contacts for this path.
  */
 async function resolvePrimaryPersonIdForConfirm(
     supabase: Supabase,
-    params: { personId: string | null; contactId: string | null; customerId: string; opportunityId: string }
+    params: { personId: string | null; customerId: string; opportunityId: string }
 ): Promise<string | null> {
     const trim = (s: string | null | undefined): string | null =>
         typeof s === "string" && s.trim() ? s.trim() : null;
@@ -753,12 +494,6 @@ async function resolvePrimaryPersonIdForConfirm(
         .maybeSingle();
     pid = trim((oppRow as { primary_person_id?: string | null } | null)?.primary_person_id ?? null);
     if (pid) return pid;
-
-    if (params.contactId) {
-        const { data: row } = await supabase.from("contacts").select("person_id").eq("id", params.contactId).maybeSingle();
-        pid = trim((row as { person_id?: string | null } | null)?.person_id ?? null);
-        if (pid) return pid;
-    }
 
     return null;
 }
@@ -883,8 +618,6 @@ export async function POST(request: NextRequest) {
 
         let opportunity_id_from_quote =
             typeof body.opportunity_id === "string" && body.opportunity_id.trim() ? body.opportunity_id.trim() : null;
-        let contact_id_from_quote =
-            typeof body.contact_id === "string" && body.contact_id.trim() ? body.contact_id.trim() : null;
         let person_id_from_quote =
             typeof body.person_id === "string" && body.person_id.trim() ? body.person_id.trim() : null;
         let customer_id_from_quote =
@@ -975,12 +708,11 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
-        const hasContactId = !!contact_id_from_quote;
         const hasPersonId = !!person_id_from_quote;
         const hasEmailAndPhone = !!(contact_email?.trim() && contact_phone?.trim());
-        if (!hasContactId && !hasPersonId && !hasEmailAndPhone) {
+        if (!hasPersonId && !hasEmailAndPhone) {
             return NextResponse.json(
-                { ok: false, message: "Provide person_id or contact_id (from quote) or both contact_email and contact_phone", booking_attempt_id: booking_attempt_id ?? null },
+                { ok: false, message: "Provide person_id (from quote) or both contact_email and contact_phone", booking_attempt_id: booking_attempt_id ?? null },
                 { status: 400 }
             );
         }
@@ -1014,10 +746,9 @@ export async function POST(request: NextRequest) {
         const confirmRouteT0 = typeof performance !== "undefined" ? performance.now() : Date.now();
         bookV2PerfLog("confirm_route_entry", confirmRouteT0, booking_attempt_id ?? null);
 
-        if (opportunity_id_from_quote && (person_id_from_quote || contact_id_from_quote)) {
+        if (opportunity_id_from_quote && person_id_from_quote) {
             const linkedOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
                 person_id: person_id_from_quote,
-                contact_id: person_id_from_quote ? undefined : contact_id_from_quote,
                 contact_email,
                 contact_phone,
                 contact_first_name,
@@ -1025,19 +756,16 @@ export async function POST(request: NextRequest) {
             });
             if (!linkedOk) {
                 console.warn(
-                    "[BOOK_V2_CONFIRM] Dropping quote opportunity/person/contact/customer ids — submission does not match linked identity"
+                    "[BOOK_V2_CONFIRM] Dropping quote opportunity/person/customer ids — submission does not match linked identity"
                 );
                 opportunity_id_from_quote = null;
                 person_id_from_quote = null;
-                contact_id_from_quote = null;
                 customer_id_from_quote = null;
             }
         }
 
-        const useQuoteIds =
-            !!(opportunity_id_from_quote && (person_id_from_quote || contact_id_from_quote));
+        const useQuoteIds = !!(opportunity_id_from_quote && person_id_from_quote);
 
-        let contactId: string | null = null;
         let customerId!: string;
         let opportunityId!: string;
         let verticalId!: string;
@@ -1048,7 +776,7 @@ export async function POST(request: NextRequest) {
         if (useQuoteIds) {
             const { data: opp, error: oppVerifyErr } = await supabase
                 .from("opportunities")
-                .select("id, primary_person_id, primary_contact_id, customer_id, vertical_id, org_id")
+                .select("id, primary_person_id, customer_id, vertical_id, org_id")
                 .eq("id", opportunity_id_from_quote)
                 .single();
             if (oppVerifyErr || !opp) {
@@ -1064,268 +792,90 @@ export async function POST(request: NextRequest) {
                 );
             }
             const oppPrimaryPersonId = (opp as { primary_person_id?: string | null }).primary_person_id ?? null;
-            const oppPrimaryContactId = (opp as { primary_contact_id?: string | null }).primary_contact_id ?? null;
+            const trimmedPersonFromBody = person_id_from_quote!.trim();
+            if (oppPrimaryPersonId != null && oppPrimaryPersonId !== trimmedPersonFromBody) {
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        error: "QUOTE_ID_MISMATCH",
+                        message: "Invalid or mismatched opportunity/person from quote. Please refresh your quote and try again.",
+                        action: "CLEAR_QUOTE_AND_RESTART",
+                        booking_attempt_id: booking_attempt_id ?? null,
+                    },
+                    { status: 409 }
+                );
+            }
+            if (oppPrimaryPersonId == null && trimmedPersonFromBody) {
+                await supabase.from("opportunities").update({ primary_person_id: trimmedPersonFromBody }).eq("id", opportunity_id_from_quote);
+            }
+            opportunityId = opportunity_id_from_quote!;
+            verticalId = opp.vertical_id ?? "";
+            if (!verticalId) {
+                const { data: vert } = await supabase
+                    .from("verticals")
+                    .select("id")
+                    .eq("slug", "cleaning")
+                    .eq("is_active", true)
+                    .limit(1)
+                    .maybeSingle();
+                verticalId = vert?.id ?? "";
+            }
+            if (!verticalId) {
+                return NextResponse.json(
+                    { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
+                    { status: 500 }
+                );
+            }
+            const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
+            const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+            const quotePersonId: string = trimmedPersonFromBody;
+            personIdFromQuote = quotePersonId;
 
-            // Person-first path: validate by primary_person_id
-            if (person_id_from_quote) {
-                const trimmedPersonFromBody = person_id_from_quote.trim();
-                if (oppPrimaryPersonId != null && oppPrimaryPersonId !== trimmedPersonFromBody) {
-                    return NextResponse.json(
-                        {
-                            ok: false,
-                            error: "QUOTE_ID_MISMATCH",
-                            message: "Invalid or mismatched opportunity/person from quote. Please refresh your quote and try again.",
-                            action: "CLEAR_QUOTE_AND_RESTART",
-                            booking_attempt_id: booking_attempt_id ?? null,
-                        },
-                        { status: 409 }
-                    );
+            if (oppCustomerId) {
+                customerId = oppCustomerId;
+                const orgForLink = (oppOrgId ?? publicOrgIdForStages ?? "").trim();
+                if (orgForLink) {
+                    await ensureCustomerPersonsPrimaryLink(supabase, {
+                        customerId,
+                        personId: quotePersonId,
+                        orgId: orgForLink,
+                    });
                 }
-                if (oppPrimaryPersonId == null && trimmedPersonFromBody) {
+                await supabase
+                    .from("opportunities")
+                    .update({ primary_person_id: quotePersonId, customer_id: customerId })
+                    .eq("id", opportunityId);
+            } else {
+                try {
+                    const { customer_id } = await ensureCustomerForPersonNative(supabase, quotePersonId, {
+                        vertical_id: verticalId,
+                        org_id: oppOrgId,
+                        first_name: contact_first_name ?? null,
+                        last_name: contact_last_name ?? null,
+                        email: contact_email ?? null,
+                        phone: contact_phone ?? null,
+                    });
+                    customerId = customer_id;
                     await supabase
                         .from("opportunities")
-                        .update({ primary_person_id: trimmedPersonFromBody })
-                        .eq("id", opportunity_id_from_quote);
-                }
-                opportunityId = opportunity_id_from_quote;
-                verticalId = opp.vertical_id ?? "";
-                if (!verticalId) {
-                    const { data: vert } = await supabase
-                        .from("verticals")
-                        .select("id")
-                        .eq("slug", "cleaning")
-                        .eq("is_active", true)
-                        .limit(1)
-                        .maybeSingle();
-                    verticalId = vert?.id ?? "";
-                }
-                if (!verticalId) {
-                    return NextResponse.json(
-                        { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
-                        { status: 500 }
-                    );
-                }
-                const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
-                const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-                if (oppCustomerId) {
-                    customerId = oppCustomerId;
-                    const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
-                    contactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
-                    if (person_id_from_quote?.trim()) {
-                        await supabase
-                            .from("opportunities")
-                            .update({ primary_person_id: person_id_from_quote.trim() })
-                            .eq("id", opportunityId);
-                    }
-                } else {
-                    try {
-                        const result = await ensureCustomerForPersonInConfirm(supabase, person_id_from_quote, {
-                            vertical_id: verticalId,
-                            org_id: oppOrgId,
-                            first_name: contact_first_name ?? undefined,
-                            last_name: contact_last_name ?? undefined,
-                            email: contact_email ?? undefined,
-                            phone: contact_phone ?? undefined,
-                        }, true);
-                        customerId = result.customerId;
-                        contactId = result.contactId;
-                        await supabase
-                            .from("opportunities")
-                            .update({
-                                customer_id: customerId,
-                                ...(contactId && { primary_contact_id: contactId }),
-                                ...(person_id_from_quote?.trim() && { primary_person_id: person_id_from_quote.trim() }),
-                            })
-                            .eq("id", opportunityId);
-                    } catch (err) {
-                        const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
-                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm failed", msg, err);
-                        const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
-                        return NextResponse.json(
-                            {
-                                ok: false,
-                                message: msg,
-                                booking_attempt_id: booking_attempt_id ?? null,
-                                ...(codeMatch && { error_code: codeMatch[1] }),
-                            },
-                            { status: 500 }
-                        );
-                    }
-                }
-            } else {
-                // Legacy contact path: validate by primary_contact_id
-                if (oppPrimaryContactId !== contact_id_from_quote) {
+                        .update({
+                            customer_id: customerId,
+                            primary_person_id: quotePersonId,
+                        })
+                        .eq("id", opportunityId);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
+                    console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonNative (quote path) failed", msg, err);
+                    const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
                     return NextResponse.json(
                         {
                             ok: false,
-                            error: "QUOTE_ID_MISMATCH",
-                            message: "Invalid or mismatched opportunity/contact from quote. Please refresh your quote and try again.",
-                            action: "CLEAR_QUOTE_AND_RESTART",
+                            message: msg,
                             booking_attempt_id: booking_attempt_id ?? null,
+                            ...(codeMatch && { error_code: codeMatch[1] }),
                         },
-                        { status: 409 }
-                    );
-                }
-                contactId = contact_id_from_quote;
-                opportunityId = opportunity_id_from_quote;
-                verticalId = opp.vertical_id ?? "";
-                if (!verticalId) {
-                    const { data: vert } = await supabase
-                        .from("verticals")
-                        .select("id")
-                        .eq("slug", "cleaning")
-                        .eq("is_active", true)
-                        .limit(1)
-                        .maybeSingle();
-                    verticalId = vert?.id ?? "";
-                }
-                if (!verticalId) {
-                    return NextResponse.json(
-                        { ok: false, message: "Vertical not found", booking_attempt_id: booking_attempt_id ?? null },
                         { status: 500 }
                     );
-                }
-                const oppCustomerId = (opp as { customer_id?: string | null }).customer_id ?? null;
-                const oppOrgId = (opp as { org_id?: string | null }).org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-                if (oppCustomerId) {
-                    customerId = oppCustomerId;
-                } else {
-                    try {
-                        customerId = await ensureCustomerForContactInConfirm(supabase, contact_id_from_quote, {
-                            vertical_id: verticalId,
-                            org_id: oppOrgId,
-                            first_name: contact_first_name ?? undefined,
-                            last_name: contact_last_name ?? undefined,
-                            email: contact_email ?? undefined,
-                            phone: contact_phone ?? undefined,
-                        });
-                        await supabase.from("opportunities").update({ customer_id: customerId }).eq("id", opportunityId);
-                    } catch (err) {
-                        const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
-                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed", msg, err);
-                        const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
-                        return NextResponse.json(
-                            {
-                                ok: false,
-                                message: msg,
-                                booking_attempt_id: booking_attempt_id ?? null,
-                                ...(codeMatch && { error_code: codeMatch[1] }),
-                            },
-                            { status: 500 }
-                        );
-                    }
-                }
-            }
-
-            if (!personIdFromQuote && contactId) {
-                const { data: contactRow } = await supabase.from("contacts").select("person_id").eq("id", contactId).maybeSingle();
-                const pid = (contactRow as { person_id?: string | null } | null)?.person_id?.trim();
-                if (pid) {
-                    personIdFromQuote = pid;
-                    await supabase.from("opportunities").update({ primary_person_id: pid }).eq("id", opportunityId);
-                }
-            }
-
-            // Person path: ensure we have a compatibility contact for downstream (discount_redemptions, job.primary_contact_id, etc.)
-            if (personIdFromQuote && !contactId) {
-                const { data: person } = await supabase.from("persons").select("id, first_name, last_name, email, phone, org_id").eq("id", personIdFromQuote).single();
-                if (person) {
-                    const p = person as { first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; org_id?: string | null };
-                    const oppOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-                    const contactOrgId = p.org_id ?? oppOrgId;
-                    if (contactOrgId) {
-                        const personEmail = contact_email ?? p.email ?? null;
-                        const personPhone = contact_phone ?? p.phone ?? null;
-                        let existingContactId: string | null = null;
-                        if (personEmail && String(personEmail).trim()) {
-                            const { data: byEmail } = await supabase
-                                .from("contacts")
-                                .select("id")
-                                .eq("org_id", contactOrgId)
-                                .ilike("email", String(personEmail).trim())
-                                .limit(1)
-                                .maybeSingle();
-                            if (byEmail?.id) existingContactId = (byEmail as { id: string }).id;
-                        }
-                        if (!existingContactId && personPhone && String(personPhone).trim()) {
-                            const { data: byPhone } = await supabase
-                                .from("contacts")
-                                .select("id")
-                                .eq("org_id", contactOrgId)
-                                .eq("phone", String(personPhone).trim())
-                                .limit(1)
-                                .maybeSingle();
-                            if (byPhone?.id) existingContactId = (byPhone as { id: string }).id;
-                        }
-                        if (existingContactId) {
-                            contactId = existingContactId;
-                            const contactUpdate: Record<string, unknown> = {
-                                person_id: personIdFromQuote,
-                                customer_id: customerId,
-                                org_id: contactOrgId,
-                                status: "active",
-                            };
-                            await supabase.from("contacts").update(contactUpdate).eq("id", contactId);
-                            const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
-                            const primaryContactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
-                            if (!primaryContactId) await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-                            await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
-                            await ensureCustomerPersonsPrimaryLink(supabase, {
-                                customerId,
-                                personId: personIdFromQuote,
-                                orgId: contactOrgId,
-                            });
-                        } else {
-                            const contactInsert: Record<string, unknown> = {
-                                org_id: contactOrgId,
-                                first_name: contact_first_name ?? p.first_name,
-                                last_name: contact_last_name ?? p.last_name,
-                                email: contact_email ?? p.email ?? null,
-                                phone: contact_phone ?? p.phone ?? null,
-                                person_id: personIdFromQuote,
-                                contact_type: "lead",
-                                status: "active",
-                            };
-                            const { data: newContact, error: contactErr } = await supabase.from("contacts").insert(contactInsert).select("id").single();
-                            if (contactErr || !newContact) {
-                                const e = contactErr as { message?: string; code?: string; details?: string; hint?: string } | null;
-                                const errMsg = e?.message ?? "unknown";
-                                const errCode = e?.code ?? "unknown";
-                                console.error("[BOOK_V2_CONFIRM] Compatibility contact insert failed", {
-                                    error_message: e?.message,
-                                    error_code: e?.code,
-                                    error_details: e?.details,
-                                    error_hint: e?.hint,
-                                    payload: {
-                                        org_id: contactOrgId,
-                                        person_id: personIdFromQuote,
-                                        first_name: contact_first_name ?? p.first_name,
-                                        last_name: contact_last_name ?? p.last_name,
-                                        email: contact_email ?? p.email ?? null,
-                                        phone: contact_phone ?? p.phone ?? null,
-                                        status: "active",
-                                    },
-                                });
-                                return NextResponse.json(
-                                    {
-                                        ok: false,
-                                        message: `Compatibility contact insert failed: ${errMsg} (code: ${errCode})`,
-                                        booking_attempt_id: booking_attempt_id ?? null,
-                                    },
-                                    { status: 500 }
-                                );
-                            }
-                            contactId = (newContact as { id: string }).id;
-                            await supabase.from("contacts").update({ customer_id: customerId }).eq("id", contactId);
-                            await supabase.from("customers").update({ primary_contact_id: contactId }).eq("id", customerId);
-                            await supabase.from("opportunities").update({ primary_contact_id: contactId }).eq("id", opportunityId);
-                            await ensureCustomerPersonsPrimaryLink(supabase, {
-                                customerId,
-                                personId: personIdFromQuote,
-                                orgId: contactOrgId,
-                            });
-                        }
-                    }
                 }
             }
 
@@ -1423,34 +973,19 @@ export async function POST(request: NextRequest) {
             }
             console.log(`[BOOK_V2_CONFIRM] Reused quote opportunity opportunity_id=${opportunityId} set to Booked`);
         } else {
-        // Browser may send person/contact ids without a usable opportunity (or after partial clears). Validate against submission before trusting them.
-        if (contact_id_from_quote || person_id_from_quote) {
-            let orphanOk = true;
-            if (person_id_from_quote) {
-                orphanOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
-                    person_id: person_id_from_quote,
-                    contact_id: undefined,
-                    contact_email,
-                    contact_phone,
-                    contact_first_name,
-                    contact_last_name,
-                });
-            }
-            if (orphanOk && contact_id_from_quote) {
-                orphanOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
-                    person_id: undefined,
-                    contact_id: contact_id_from_quote,
-                    contact_email,
-                    contact_phone,
-                    contact_first_name,
-                    contact_last_name,
-                });
-            }
+        // Orphan person/customer ids without a usable opportunity: validate person against submission.
+        if (person_id_from_quote) {
+            const orphanOk = await quoteLinkedIdentityMatchesSubmission(supabase, {
+                person_id: person_id_from_quote,
+                contact_email,
+                contact_phone,
+                contact_first_name,
+                contact_last_name,
+            });
             if (!orphanOk) {
                 console.warn(
-                    "[BOOK_V2_CONFIRM] else_branch: dropping orphan contact/person ids (identity mismatch vs submission); resolver path"
+                    "[BOOK_V2_CONFIRM] else_branch: dropping orphan person/customer ids (identity mismatch vs submission); resolver path"
                 );
-                contact_id_from_quote = null;
                 person_id_from_quote = null;
                 customer_id_from_quote = null;
                 personIdFromQuote = null;
@@ -1494,41 +1029,44 @@ export async function POST(request: NextRequest) {
         }
         const verticalIdElse = verticalElse.id;
 
-        // Step 1: Use provided contact_id if valid, otherwise resolve or create contact and customer
-        let contactResolved = false;
-        if (contact_id_from_quote) {
-            const { data: contactRow, error: contactFetchErr } = await supabase
-                .from("contacts")
-                .select("*")
-                .eq("id", contact_id_from_quote)
-                .single();
-            if (!contactFetchErr && contactRow) {
-                const linkedCustomerId = (contactRow as { customer_id?: string | null }).customer_id ?? customer_id_from_quote ?? null;
-                if (linkedCustomerId) {
-                    contactId = contact_id_from_quote;
-                    customerId = linkedCustomerId;
-                    contactResolved = true;
-                    console.log(
-                        `[BOOK_V2_CONFIRM] Using contact_id from quote booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId}`
-                    );
-                } else {
-                    contactId = contact_id_from_quote;
-                    try {
-                        customerId = await ensureCustomerForContactInConfirm(supabase, contact_id_from_quote, {
-                            vertical_id: verticalIdElse,
-                            org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
-                            first_name: contact_first_name ?? undefined,
-                            last_name: contact_last_name ?? undefined,
-                            email: contact_email ?? undefined,
-                            phone: contact_phone ?? undefined,
+        const publicOrgIdElse = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+        const emailForResolver = contact_email?.trim() ?? "";
+        const phoneRawForResolver = contact_phone?.trim() ?? "";
+
+        if (personIdFromQuote?.trim()) {
+            const pid = personIdFromQuote.trim();
+            const cidStored = customer_id_from_quote?.trim() ?? null;
+            if (cidStored) {
+                const { data: linkRow } = await supabase
+                    .from("customer_persons")
+                    .select("id")
+                    .eq("person_id", pid)
+                    .eq("customer_id", cidStored)
+                    .maybeSingle();
+                if (linkRow) {
+                    customerId = cidStored;
+                    const orgForLink = (publicOrgIdElse ?? "").trim();
+                    if (orgForLink) {
+                        await ensureCustomerPersonsPrimaryLink(supabase, {
+                            customerId,
+                            personId: pid,
+                            orgId: orgForLink,
                         });
-                        contactResolved = true;
-                        console.log(
-                            `[BOOK_V2_CONFIRM] Created customer for quote contact booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId}`
-                        );
+                    }
+                } else {
+                    try {
+                        const { customer_id } = await ensureCustomerForPersonNative(supabase, pid, {
+                            vertical_id: verticalIdElse,
+                            org_id: publicOrgIdElse,
+                            first_name: contact_first_name ?? null,
+                            last_name: contact_last_name ?? null,
+                            email: contact_email ?? null,
+                            phone: contact_phone ?? null,
+                        });
+                        customerId = customer_id;
                     } catch (err) {
                         const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
-                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForContactInConfirm failed (else branch)", msg, err);
+                        console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonNative (else branch) failed", msg, err);
                         const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
                         return NextResponse.json(
                             {
@@ -1541,68 +1079,64 @@ export async function POST(request: NextRequest) {
                         );
                     }
                 }
+            } else {
+                try {
+                    const { customer_id } = await ensureCustomerForPersonNative(supabase, pid, {
+                        vertical_id: verticalIdElse,
+                        org_id: publicOrgIdElse,
+                        first_name: contact_first_name ?? null,
+                        last_name: contact_last_name ?? null,
+                        email: contact_email ?? null,
+                        phone: contact_phone ?? null,
+                    });
+                    customerId = customer_id;
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
+                    console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonNative (else branch, no stored customer) failed", msg, err);
+                    const codeMatch = msg.match(/\(code:\s*([^)]+)\)/);
+                    return NextResponse.json(
+                        {
+                            ok: false,
+                            message: msg,
+                            booking_attempt_id: booking_attempt_id ?? null,
+                            ...(codeMatch && { error_code: codeMatch[1] }),
+                        },
+                        { status: 500 }
+                    );
+                }
             }
-        }
-
-        if (!contactResolved) {
-            const emailPresent = !!(contact_email?.trim());
-            const phonePresent = !!(contact_phone?.trim());
-            const emailForResolver = contact_email?.trim() ?? "";
-            const phoneRawForResolver = contact_phone?.trim() ?? "";
-            const digits = phoneRawForResolver.replace(/\D/g, "");
-            const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
-            console.log("[BOOK_V2_CONFIRM] Resolver fallback entry", {
-                booking_attempt_id: booking_attempt_id ?? null,
-                email_present: emailPresent,
-                phone_present: phonePresent,
-                email_len: emailForResolver.length,
-                phone_raw_digits_len: digits.length,
-                org_id_configured: !!publicOrgId,
-                contact_id_from_quote_cleared: !contact_id_from_quote,
-                resolver_phone_path: "raw_to_bookingResolver_normalize",
-            });
+            personIdFromQuote = pid;
+            console.log(
+                `[BOOK_V2_CONFIRM] Person-native else path booking_attempt_id=${booking_attempt_id ?? "None"} person_id=${personIdFromQuote} customer_id=${customerId}`
+            );
+        } else {
             try {
-                const resolverResult = await resolve_or_create_contact_and_customer(supabase, {
-                    first_name: contact_first_name,
-                    last_name: contact_last_name,
+                const resolverResult = await resolveOrCreatePersonCustomerForBooking(supabase, {
+                    org_id: publicOrgIdElse,
+                    vertical_id: verticalIdElse,
+                    booking_attempt_id: booking_attempt_id ?? null,
+                    person_id: null,
+                    first_name: contact_first_name ?? null,
+                    last_name: contact_last_name ?? null,
                     email: emailForResolver,
                     phone: phoneRawForResolver,
-                    postal_code: undefined,
-                    timezone: timezone,
-                    address: address,
-                    city: city,
-                    state: undefined,
-                    vertical_key: "cleaning",
-                    vertical_id: verticalIdElse,
-                    org_id: publicOrgId,
-                    booking_attempt_id: booking_attempt_id ?? null,
-                    person_id: personIdFromQuote ?? undefined,
                 });
-
-                contactId = resolverResult.contact_id;
+                personIdFromQuote = resolverResult.person_id;
                 customerId = resolverResult.customer_id;
-
                 console.log(
-                    `[BOOK_V2_CONFIRM] Resolver fallback success booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} resolution_path=${resolverResult.resolution_path} customer_resolution_path=${resolverResult.customer_resolution_path}`
+                    `[BOOK_V2_CONFIRM] Person-native resolver booking_attempt_id=${booking_attempt_id ?? "None"} person_id=${personIdFromQuote} customer_id=${customerId} resolution_path=${resolverResult.resolution_path}`
                 );
             } catch (error: unknown) {
                 const errMsg = error instanceof Error ? error.message : String(error);
-                const errStack = error instanceof Error ? error.stack : undefined;
                 const pgCodeMatch = errMsg.match(/\(pg:\s*([^)]+)\)/);
-                console.error("[BOOK_V2_CONFIRM] Resolver fallback failed", {
+                console.error("[BOOK_V2_CONFIRM] Person-native resolver failed", {
                     booking_attempt_id: booking_attempt_id ?? null,
                     error_message: errMsg,
-                    error_stack: errStack,
-                    pg_code: pgCodeMatch ? pgCodeMatch[1] : null,
-                    email_present: emailPresent,
-                    phone_present: phonePresent,
-                    phone_raw_digits_len: digits.length,
-                    hint: "grep server logs for [BOOKING_RESOLVER] booking_attempt_id=" + String(booking_attempt_id ?? ""),
                 });
                 return NextResponse.json(
                     {
                         ok: false,
-                        message: `Could not resolve or create contact. ${errMsg}`,
+                        message: `Could not resolve booking person and customer. ${errMsg}`,
                         booking_attempt_id: booking_attempt_id ?? null,
                         ...(pgCodeMatch && { error_code: pgCodeMatch[1] }),
                     },
@@ -1626,12 +1160,13 @@ export async function POST(request: NextRequest) {
         verticalId = verticalIdElse;
 
         // Step 4: Find or create opportunity
-        // Prefer: (1) idempotent retry same booking_attempt_id, (2) reuse recent "Quote Started" + web_quote for this contact (last 30 min), (3) create new.
+        // Prefer: (1) idempotent retry same booking_attempt_id, (2) reuse recent "Quote Started" + web_quote for this person+customer (last 30 min), (3) create new.
         const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
         const { data: recentOpps, error: oppSearchError } = await supabase
             .from("opportunities")
-            .select("id, customer_id, primary_contact_id, metadata, pipeline_stage_id")
-            .eq("primary_contact_id", contactId)
+            .select("id, customer_id, primary_person_id, metadata, pipeline_stage_id")
+            .eq("customer_id", customerId)
+            .eq("primary_person_id", personIdFromQuote)
             .eq("status", "open")
             .gte("created_at", thirtyMinutesAgo)
             .order("created_at", { ascending: false })
@@ -1681,7 +1216,7 @@ export async function POST(request: NextRequest) {
 
             const { data: existingOppData } = await supabase
                 .from("opportunities")
-                .select("vertical_id, customer_id, primary_contact_id, monetary_value_cents, metadata")
+                .select("vertical_id, customer_id, primary_person_id, monetary_value_cents, metadata")
                 .eq("id", opportunityId)
                 .single();
 
@@ -1720,7 +1255,6 @@ export async function POST(request: NextRequest) {
                 estimated_price_cents: estimatedPriceCentsElse,
                 monetary_value_cents: estimatedPriceCentsElse ?? undefined,
                 customer_id: customerId,
-                ...(contactId != null && { primary_contact_id: contactId }),
                 ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
                     ? { primary_person_id: personIdFromQuote.trim() }
                     : {}),
@@ -1775,7 +1309,6 @@ export async function POST(request: NextRequest) {
             const insertPayload: Record<string, unknown> = {
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 vertical_id: verticalId,
-                ...(contactId != null && { primary_contact_id: contactId }),
                 ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
                     ? { primary_person_id: personIdFromQuote.trim() }
                     : {}),
@@ -1822,7 +1355,6 @@ export async function POST(request: NextRequest) {
 
         const resolvedPrimaryPersonId = await resolvePrimaryPersonIdForConfirm(supabase, {
             personId: personIdFromQuote,
-            contactId,
             customerId,
             opportunityId,
         });
@@ -1830,6 +1362,17 @@ export async function POST(request: NextRequest) {
             personIdFromQuote = resolvedPrimaryPersonId;
             await supabase.from("opportunities").update({ primary_person_id: resolvedPrimaryPersonId }).eq("id", opportunityId);
         }
+        if (!personIdFromQuote?.trim()) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    message: "Missing primary person for booking; refresh and try again.",
+                    booking_attempt_id: booking_attempt_id ?? null,
+                },
+                { status: 500 }
+            );
+        }
+        personIdFromQuote = personIdFromQuote.trim();
 
         // Step 4b: Canonical location — reuse opportunity.location_id when present (quote stage), else create/link
         const orgIdForLocation = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
@@ -1960,7 +1503,7 @@ export async function POST(request: NextRequest) {
         const tJobSchedBlock = typeof performance !== "undefined" ? performance.now() : Date.now();
         const { data: existingJobRow, error: jobSearchError } = await supabase
             .from("jobs")
-            .select("id, customer_id, primary_contact_id, metadata, vertical_id, estimated_total_cents, gross_price_cents, service_frequency_key")
+            .select("id, customer_id, primary_person_id, metadata, vertical_id, estimated_total_cents, gross_price_cents, service_frequency_key")
             .eq("opportunity_id", opportunityId)
             .limit(1)
             .maybeSingle();
@@ -2001,7 +1544,6 @@ export async function POST(request: NextRequest) {
                 ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
                     ? { primary_person_id: personIdFromQuote.trim() }
                     : {}),
-                ...(contactId != null && { primary_contact_id: contactId }),
                 is_recurring: is_recurring,
                 service_key: "cleaning",
                 service_frequency_key: service_frequency_key,
@@ -2055,7 +1597,6 @@ export async function POST(request: NextRequest) {
                 ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
                     ? { primary_person_id: personIdFromQuote.trim() }
                     : {}),
-                ...(contactId != null && { primary_contact_id: contactId }),
                 vertical_id: verticalId,
                 job_status_id: bookingJobStatusId,
                 status_key: bookingJobStatusKey,
@@ -2207,12 +1748,12 @@ export async function POST(request: NextRequest) {
         // Step 5b: Persist discount redemption immediately after job creation
         if (discount_code_id || discount_program_id) {
             console.log(
-                "[BOOK_V2_CONFIRM_REDEMPTION_INSERT_BEFORE] booking_attempt_id=%s discount_code_id=%s discount_program_id=%s customer_id=%s contact_id=%s opportunity_id=%s job_id=%s",
+                "[BOOK_V2_CONFIRM_REDEMPTION_INSERT_BEFORE] booking_attempt_id=%s discount_code_id=%s discount_program_id=%s customer_id=%s person_id=%s opportunity_id=%s job_id=%s",
                 booking_attempt_id ?? "None",
                 discount_code_id ?? "None",
                 discount_program_id ?? "None",
                 customerId,
-                contactId ?? "null",
+                personIdFromQuote ?? "null",
                 opportunityId,
                 jobId
             );
@@ -2255,7 +1796,7 @@ export async function POST(request: NextRequest) {
                         discount_program_id: discount_program_id ?? null,
                         discount_code: discount_code ?? null,
                         customer_id: customerId,
-                        contact_id: contactId ?? null,
+                        contact_id: null,
                         opportunity_id: opportunityId,
                         job_id: jobId,
                         quote_subtotal: quote_subtotal ?? null,
@@ -2410,7 +1951,6 @@ export async function POST(request: NextRequest) {
                         .insert({
                             org_id: orgIdSub,
                             customer_id: customerId,
-                            ...(contactId != null && { primary_contact_id: contactId }),
                             vertical_id: verticalId,
                             cadence,
                             interval,
@@ -2578,7 +2118,6 @@ export async function POST(request: NextRequest) {
                 jobs!inner(
                     id,
                     customer_id,
-                    primary_contact_id,
                     primary_person_id,
                     opportunity_id,
                     vertical_id,
@@ -2586,7 +2125,6 @@ export async function POST(request: NextRequest) {
                     opportunities!inner(
                         id,
                         customer_id,
-                        primary_contact_id,
                         primary_person_id,
                         vertical_id,
                         location_id
@@ -2609,25 +2147,16 @@ export async function POST(request: NextRequest) {
         const job = integrityCheck.jobs as any;
         const opportunity = job?.opportunities as any;
 
-        // Verify linkages: primary_person_id is required for book-v2 correctness; primary_contact_id is optional (compat only).
+        // primary_person_id is required for book-v2 correctness.
         const integrityIssues: string[] = [];
         if (job?.customer_id !== customerId) {
             integrityIssues.push(`job.customer_id mismatch: expected=${customerId} actual=${job?.customer_id}`);
         }
-        if (personIdFromQuote) {
-            if ((job as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
-                integrityIssues.push(`job.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(job as { primary_person_id?: string | null })?.primary_person_id}`);
-            }
-            if ((opportunity as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
-                integrityIssues.push(`opportunity.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(opportunity as { primary_person_id?: string | null })?.primary_person_id}`);
-            }
+        if ((job as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
+            integrityIssues.push(`job.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(job as { primary_person_id?: string | null })?.primary_person_id}`);
         }
-        if (contactId != null) {
-            if (job?.primary_contact_id !== contactId || opportunity?.primary_contact_id !== contactId) {
-                console.warn(
-                    `[BOOK_V2_CONFIRM_INTEGRITY] primary_contact_id optional mismatch (non-blocking) expected=${contactId} job=${job?.primary_contact_id} opp=${opportunity?.primary_contact_id} booking_attempt_id=${booking_attempt_id ?? "None"}`
-                );
-            }
+        if ((opportunity as { primary_person_id?: string | null })?.primary_person_id !== personIdFromQuote) {
+            integrityIssues.push(`opportunity.primary_person_id mismatch: expected=${personIdFromQuote} actual=${(opportunity as { primary_person_id?: string | null })?.primary_person_id}`);
         }
         if (job?.opportunity_id !== opportunityId) {
             integrityIssues.push(`job.opportunity_id mismatch: expected=${opportunityId} actual=${job?.opportunity_id}`);
@@ -2658,7 +2187,7 @@ export async function POST(request: NextRequest) {
 
         if (integrityIssues.length > 0) {
             console.error(
-                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} issues=${JSON.stringify(integrityIssues)}`
+                `[BOOK_V2_CONFIRM_INTEGRITY_FAIL] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} person_id=${personIdFromQuote} customer_id=${customerId} issues=${JSON.stringify(integrityIssues)}`
             );
             return NextResponse.json(
                 { ok: false, message: `Booking integrity check failed: ${integrityIssues.join("; ")}`, booking_attempt_id: booking_attempt_id ?? null },
@@ -2668,7 +2197,7 @@ export async function POST(request: NextRequest) {
 
         // Log integrity success
         console.log(
-            `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} contact_id=${contactId} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
+            `[BOOK_V2_CONFIRM_INTEGRITY_OK] booking_attempt_id=${booking_attempt_id ?? "None"} schedule_id=${scheduleId} job_id=${jobId} opportunity_id=${opportunityId} person_id=${personIdFromQuote} customer_id=${customerId} start_at=${integrityCheck.start_at} end_at=${integrityCheck.end_at} timezone=${integrityCheck.timezone} duration_minutes=${integrityCheck.duration_minutes}`
         );
         bookV2PerfLog("integrity_check", tIntegrity, booking_attempt_id ?? null);
 
@@ -2718,7 +2247,6 @@ export async function POST(request: NextRequest) {
                 opportunityId,
                 scheduleId,
                 customerId,
-                contactId,
                 personIdFromQuote,
                 slot_start,
                 slot_end,
@@ -2728,14 +2256,13 @@ export async function POST(request: NextRequest) {
 
         // Structured logging
         console.log(
-            `[BOOK_V2_CONFIRM_SUCCESS] booking_attempt_id=${booking_attempt_id ?? "None"} contact_id=${contactId} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
+            `[BOOK_V2_CONFIRM_SUCCESS] booking_attempt_id=${booking_attempt_id ?? "None"} person_id=${personIdFromQuote} customer_id=${customerId} opportunity_id=${opportunityId} job_id=${jobId} schedule_id=${scheduleId} slot_start=${slot_start} slot_end=${slot_end} timezone=${timezone} job_date=${jobDate} job_time_window=${jobTimeWindow} quote_subtotal=${quote_subtotal} discount_amount=${discount_amount} quote_total=${quote_total} has_saved_payment_method=${hasSavedPaymentMethod}`
         );
         bookV2PerfLog("confirm_total_to_response", confirmRouteT0, booking_attempt_id ?? null);
 
         return NextResponse.json({
             ok: true,
-            ...(contactId != null && { contact_id: contactId }),
-            ...(personIdFromQuote != null && { person_id: personIdFromQuote }),
+            person_id: personIdFromQuote,
             customer_id: customerId,
             opportunity_id: opportunityId,
             job_id: jobId,

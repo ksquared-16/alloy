@@ -1088,6 +1088,7 @@ def link_stripe_customer_to_supabase(
     *,
     ghl_contact_id: Optional[str] = None,
     supabase_contact_id: Optional[str] = None,
+    direct_supabase_customer_id: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
     setup_intent_id: Optional[str] = None,
@@ -1131,11 +1132,53 @@ def link_stripe_customer_to_supabase(
         phone[:4] + "***" if phone else "None",
         stripe_customer_id[:8] + "***" if len(stripe_customer_id) > 8 else stripe_customer_id
     )
-    
+
     try:
         base_url = _get_base_url()
         headers = _get_headers()
-        
+
+        # Person-native book-v2: link Stripe customer directly to customers row (no contacts).
+        if direct_supabase_customer_id and str(direct_supabase_customer_id).strip():
+            cid = str(direct_supabase_customer_id).strip()
+            cust_check = get_customer_by_id(cid)
+            if not cust_check:
+                logger.warning(
+                    "SUPA_STRIPE_LINK_FAILED reason=direct_customer_not_found booking_attempt_id=%s customer_id=%s",
+                    booking_attempt_id or "None",
+                    cid[:8] + "***" if len(cid) > 8 else cid,
+                )
+                return None
+            update_payload: Dict[str, Any] = {"stripe_customer_id": stripe_customer_id}
+            if setup_intent_id:
+                update_payload["setup_intent_id"] = setup_intent_id
+            if payment_method_id:
+                update_payload["default_payment_method_id"] = payment_method_id
+            if payment_method_brand:
+                update_payload["payment_method_brand"] = payment_method_brand
+            if payment_method_last4:
+                update_payload["payment_method_last4"] = payment_method_last4
+            patch_url = f"{base_url}/customers?id=eq.{cid}"
+            patch_resp = requests.patch(patch_url, headers=headers, json=update_payload, timeout=30)
+            if not patch_resp.ok:
+                logger.warning(
+                    "SUPA_STRIPE_LINK_FAILED reason=direct_customer_patch_failed booking_attempt_id=%s customer_id=%s status=%s",
+                    booking_attempt_id or "None",
+                    cid[:8] + "***" if len(cid) > 8 else cid,
+                    patch_resp.status_code,
+                )
+                return None
+            logger.info(
+                "SUPA_STRIPE_LINK_SUCCESS path=direct_customer booking_attempt_id=%s supa_customer_id=%s stripe_customer_id=%s",
+                booking_attempt_id or "None",
+                cid[:8] + "***" if len(cid) > 8 else cid,
+                stripe_customer_id[:8] + "***" if len(stripe_customer_id) > 8 else stripe_customer_id,
+            )
+            return {
+                "contact_id": None,
+                "customer_id": cid,
+                "stripe_customer_id": stripe_customer_id,
+            }
+
         # 1. Resolve Supabase contact_id using deterministic order
         resolved_supabase_contact_id = None
         contact_resolution_path = None

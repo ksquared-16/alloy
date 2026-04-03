@@ -76,6 +76,7 @@ SETUP_INTENT_ALLOY_CORRELATION_KEYS = (
     "supabase_contact_id",
     "contact_id",
     "ghl_contact_id",
+    "person_id",
 )
 
 
@@ -774,6 +775,7 @@ async def create_setup_intent(request: Request):
     booking_attempt_id = body.get("booking_attempt_id")
     contact_id_from_quote = body.get("contact_id")
     customer_id_from_quote = body.get("customer_id")
+    person_id_from_body = body.get("person_id")
     raw_org = body.get("org_id")
     public_org_id = str(raw_org).strip() if raw_org is not None and str(raw_org).strip() else None
     env_org_set = bool(os.getenv("ALLOY_PUBLIC_ORG_ID", "").strip())
@@ -785,24 +787,33 @@ async def create_setup_intent(request: Request):
         env_org_set,
     )
 
-    # Require either (contact_id from quote) or (phone and email)
-    has_quote_ids = bool(contact_id_from_quote and str(contact_id_from_quote).strip())
-    has_phone_email = phone and email
-    if not has_quote_ids and not has_phone_email:
+    cust_stripped = customer_id_from_quote.strip() if isinstance(customer_id_from_quote, str) and customer_id_from_quote.strip() else None
+    contact_stripped = contact_id_from_quote.strip() if isinstance(contact_id_from_quote, str) and contact_id_from_quote.strip() else None
+    person_stripped = person_id_from_body.strip() if isinstance(person_id_from_body, str) and person_id_from_body.strip() else None
+
+    has_quote_contact = bool(contact_stripped)
+    has_quote_customer_only = bool(cust_stripped) and not has_quote_contact
+    has_phone_email = bool(phone and email)
+    if not has_quote_contact and not has_phone_email and not has_quote_customer_only:
         logger.error(
-            "create_setup_intent: missing required fields booking_attempt_id=%s (contact_id=%s, phone=%s, email=%s)",
+            "create_setup_intent: missing required fields booking_attempt_id=%s (contact_id=%s, customer_id=%s, phone=%s, email=%s)",
             booking_attempt_id or "None",
-            bool(contact_id_from_quote),
+            bool(contact_stripped),
+            bool(cust_stripped),
             bool(phone),
             bool(email),
         )
         raise HTTPException(
             status_code=400,
-            detail="Provide either contact_id (from quote) or both phone and email.",
+            detail="Provide contact_id, or customer_id (person-native quote), or both phone and email.",
         )
 
     # Step 1: Normalize and resolve or create Supabase contact + customer (idempotent, Supabase-first)
-    from ..supabase_client import resolve_or_create_contact_and_customer, normalize_phone as normalize_phone_supa
+    from ..supabase_client import (
+        resolve_or_create_contact_and_customer,
+        normalize_phone as normalize_phone_supa,
+        get_customer_by_id,
+    )
 
     normalized_email = email.strip().lower() if email else None
     normalized_phone = normalize_phone_supa(phone) if phone else None
@@ -815,15 +826,31 @@ async def create_setup_intent(request: Request):
             if first_name or last_name:
                 name = f"{first_name} {last_name}".strip()
 
-    supabase_contact_id, supa_customer_id, resolution_path = resolve_or_create_contact_and_customer(
-        email=normalized_email,
-        phone=normalized_phone,
-        name=name,
-        contact_id=contact_id_from_quote.strip() if isinstance(contact_id_from_quote, str) and contact_id_from_quote.strip() else None,
-        customer_id=customer_id_from_quote.strip() if isinstance(customer_id_from_quote, str) and customer_id_from_quote.strip() else None,
-        booking_attempt_id=booking_attempt_id,
-        public_org_id=public_org_id,
-    )
+    supabase_contact_id: Optional[str] = None
+    supa_customer_id: Optional[str] = None
+    resolution_path = "missing"
+
+    if has_quote_customer_only:
+        cust_row = get_customer_by_id(cust_stripped)
+        if not cust_row:
+            logger.error(
+                "create_setup_intent: invalid customer_id booking_attempt_id=%s",
+                booking_attempt_id or "None",
+            )
+            raise HTTPException(status_code=400, detail="Invalid customer_id; refresh quote and try again.")
+        supa_customer_id = cust_stripped
+        supabase_contact_id = None
+        resolution_path = "quote_customer_id"
+    else:
+        supabase_contact_id, supa_customer_id, resolution_path = resolve_or_create_contact_and_customer(
+            email=normalized_email,
+            phone=normalized_phone,
+            name=name,
+            contact_id=contact_stripped,
+            customer_id=cust_stripped,
+            booking_attempt_id=booking_attempt_id,
+            public_org_id=public_org_id,
+        )
 
     if resolution_path == "missing_org":
         logger.error(
@@ -846,9 +873,9 @@ async def create_setup_intent(request: Request):
             detail="Contact has no linked customer; refresh quote and try again.",
         )
 
-    if not supabase_contact_id or not supa_customer_id:
+    if not supa_customer_id:
         logger.error(
-            "create_setup_intent: could not resolve or create contact/customer booking_attempt_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+            "create_setup_intent: could not resolve customer booking_attempt_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
             booking_attempt_id or "None",
             resolution_path,
             supabase_contact_id or "None",
@@ -856,14 +883,14 @@ async def create_setup_intent(request: Request):
         )
         raise HTTPException(
             status_code=400,
-            detail="Could not resolve or create contact; check email and phone.",
+            detail="Could not resolve or create customer; check email and phone.",
         )
 
     logger.info(
-        "create_setup_intent: contact+customer ready booking_attempt_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
+        "create_setup_intent: customer ready booking_attempt_id=%s resolution_path=%s supa_contact_id=%s supa_customer_id=%s",
         booking_attempt_id or "None",
         resolution_path,
-        supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+        (supabase_contact_id[:8] + "***") if supabase_contact_id and len(supabase_contact_id) > 8 else (supabase_contact_id or "None"),
         supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
     )
 
@@ -903,6 +930,8 @@ async def create_setup_intent(request: Request):
         metadata["supabase_contact_id"] = str(supabase_contact_id).strip()
     if supa_customer_id:
         metadata["customer_id"] = str(supa_customer_id).strip()
+    if person_stripped:
+        metadata["person_id"] = person_stripped
     if public_org_id:
         metadata["org_id"] = str(public_org_id).strip()
 
@@ -948,16 +977,17 @@ async def create_setup_intent(request: Request):
             booking_attempt_id or "None",
             setup_intent.id,
             resolution_path,
-            supabase_contact_id[:8] + "***" if len(supabase_contact_id) > 8 else supabase_contact_id,
+            (supabase_contact_id[:8] + "***") if supabase_contact_id and len(supabase_contact_id) > 8 else (supabase_contact_id or "None"),
             supa_customer_id[:8] + "***" if len(supa_customer_id) > 8 else supa_customer_id,
             stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
         )
 
         response_data = {
             "client_secret": setup_intent.client_secret,
-            "supa_contact_id": supabase_contact_id,
             "supa_customer_id": supa_customer_id,
         }
+        if supabase_contact_id:
+            response_data["supa_contact_id"] = supabase_contact_id
         if stripe_customer_id:
             response_data["customer_id"] = stripe_customer_id  # Stripe cus_* for client use
 
@@ -968,6 +998,7 @@ async def create_setup_intent(request: Request):
                     stripe_customer_id,
                     ghl_contact_id=ghl_contact_id,
                     supabase_contact_id=supabase_contact_id,
+                    direct_supabase_customer_id=supa_customer_id if not supabase_contact_id else None,
                     email=normalized_email,
                     phone=normalized_phone,
                     setup_intent_id=setup_intent.id,
@@ -1046,7 +1077,11 @@ def _dispatch_verified_stripe_webhook_event(event: Dict[str, Any]) -> None:
             stripe_customer_id[:8] + "***" if stripe_customer_id else "None",
             payment_method_id[:8] + "***" if payment_method_id else "None"
         )
-        
+
+        payment_method_brand = None
+        payment_method_last4 = None
+        billing_address = None
+
         contact_id_to_tag = None
         resolution_path = None
         contact = None
@@ -1151,11 +1186,6 @@ def _dispatch_verified_stripe_webhook_event(event: Dict[str, Any]) -> None:
                     )
             
             # 3. Attach payment method to customer and set as default (idempotent)
-            # Initialize payment method details (will be populated if available)
-            payment_method_brand = None
-            payment_method_last4 = None
-            billing_address = None
-            
             if stripe_customer_id and payment_method_id:
                 try:
                     # Retrieve payment method to check if already attached and get details
@@ -1239,6 +1269,41 @@ def _dispatch_verified_stripe_webhook_event(event: Dict[str, Any]) -> None:
                         event_id
                     )
                     # Continue - webhook succeeds even if Supabase link fails
+        elif stripe_customer_id:
+            # Person-native book-v2: no GHL contact match; link Stripe customer using Supabase customer_id from metadata.
+            _meta_cust = metadata.get("customer_id")
+            supa_cust_meta = _meta_cust.strip() if isinstance(_meta_cust, str) and _meta_cust.strip() else None
+            if supa_cust_meta:
+                try:
+                    _ba = metadata.get("booking_attempt_id")
+                    booking_attempt_id_meta = _ba.strip() if isinstance(_ba, str) and _ba.strip() else None
+                    link_stripe_customer_to_supabase(
+                        stripe_customer_id,
+                        ghl_contact_id=ghl_contact_id,
+                        supabase_contact_id=None,
+                        direct_supabase_customer_id=supa_cust_meta,
+                        email=email,
+                        phone=phone,
+                        setup_intent_id=setup_intent_id,
+                        payment_method_id=payment_method_id,
+                        payment_method_brand=payment_method_brand,
+                        payment_method_last4=payment_method_last4,
+                        billing_address=billing_address,
+                        booking_attempt_id=booking_attempt_id_meta,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "stripe_webhook: Failed direct Supabase customer Stripe link (non-blocking): %s event_id=%s",
+                        str(e),
+                        event_id,
+                    )
+            else:
+                logger.warning(
+                    "stripe_webhook: could not find contact for setup_intent_id=%s metadata=%s event_id=%s (tried ghl_contact_id, phone, email; no customer_id in metadata)",
+                    setup_intent_id,
+                    metadata,
+                    event_id,
+                )
         else:
             logger.warning(
                 "stripe_webhook: could not find contact for setup_intent_id=%s metadata=%s event_id=%s (tried ghl_contact_id, phone, email)",
