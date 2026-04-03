@@ -1,4 +1,5 @@
 import type { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { serializeSquareFootageForFieldValue } from "@/lib/bookV2/fieldValueUpsert";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
@@ -92,6 +93,24 @@ export function normalizeSqftKeyInput(
         if (keys.has(legacy)) return legacy;
     }
     return tierList[0]!.sqft_key;
+}
+
+/**
+ * Canonical string for `quote_input.square_footage` and location `field_values` for square_footage.
+ * Pricing can still normalize a tier when raw is missing/blank; without this, `upsertTypedFieldValue`
+ * receives "" and persists all-null typed columns.
+ */
+export function resolveSquareFootageStorageString(
+    raw: string | number | null | undefined,
+    normalizedSqftKey: string,
+    tiers: SqftTierRow[]
+): string {
+    const fromClient = serializeSquareFootageForFieldValue(raw);
+    if (fromClient) return fromClient;
+    const tierList = tiers.length ? tiers : FALLBACK_SQFT_TIERS;
+    const row = tierList.find((t) => t.sqft_key === normalizedSqftKey);
+    if (row?.sqft_label?.trim()) return row.sqft_label.trim();
+    return normalizedSqftKey;
 }
 
 type AddonTypeRow = { key: string; label: string; position: number };

@@ -1312,8 +1312,8 @@ export async function POST(request: NextRequest) {
             };
             const normalizedQuoteInput =
                 quote_input != null && typeof quote_input === "object"
-                    ? { ...quote_input, cleaning_frequency: service_frequency_key }
-                    : { cleaning_frequency: service_frequency_key };
+                    ? { ...qiMeta, ...quote_input, cleaning_frequency: service_frequency_key }
+                    : { ...qiMeta, cleaning_frequency: service_frequency_key };
             mergedMetadata.quote_input = normalizedQuoteInput;
             if (quote_output != null && typeof quote_output === "object") mergedMetadata.quote_output = quote_output;
 
@@ -1634,8 +1634,8 @@ export async function POST(request: NextRequest) {
             };
             const normalizedQuoteInputElse =
                 quote_input != null && typeof quote_input === "object"
-                    ? { ...quote_input, cleaning_frequency: service_frequency_key }
-                    : { cleaning_frequency: service_frequency_key };
+                    ? { ...qiElse, ...quote_input, cleaning_frequency: service_frequency_key }
+                    : { ...qiElse, cleaning_frequency: service_frequency_key };
             mergedMetaElse.quote_input = normalizedQuoteInputElse;
             if (quote_output != null && typeof quote_output === "object") mergedMetaElse.quote_output = quote_output;
 

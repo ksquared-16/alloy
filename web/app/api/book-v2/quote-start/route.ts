@@ -10,7 +10,6 @@ import {
   type FieldDefMeta,
   getFieldDefinitionMeta,
   upsertTypedFieldValue,
-  serializeSquareFootageForFieldValue,
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
@@ -18,6 +17,7 @@ import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/
 import {
   loadSqftTiersForVertical,
   normalizeSqftKeyInput,
+  resolveSquareFootageStorageString,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
 
 const SERVICE_TYPE = "Standard Cleaning";
@@ -320,6 +320,11 @@ export async function POST(request: NextRequest) {
 
     const sqftTierRows = await loadSqftTiersForVertical(supabase, verticalId);
     const squareFootageOption = normalizeSqftKeyInput(square_footage_raw, sqftTierRows) as SquareFootageOption;
+    const squareFootageStored = resolveSquareFootageStorageString(
+      square_footage_raw,
+      squareFootageOption,
+      sqftTierRows
+    );
 
     if (!orgIdForWrites) {
       return NextResponse.json(
@@ -402,12 +407,12 @@ export async function POST(request: NextRequest) {
     const quoteOutput = await computeQuote(supabase, squareFootageOption, cleaning_frequency, []);
     const quote_input = {
       zip,
-      square_footage: body.square_footage ?? square_footage_raw,
       beds: body.beds,
       baths: body.baths,
       cleaning_frequency: optionToApiKey(cleaning_frequency),
       add_ons: Array.isArray(body.add_ons) ? body.add_ons : [],
       ...body.quote_context,
+      square_footage: squareFootageStored,
     };
     const quote_started_at = new Date().toISOString();
 
@@ -565,12 +570,10 @@ export async function POST(request: NextRequest) {
     }
 
     const cleaningFrequencyValue = body.cleaning_frequency ?? optionToApiKey(cleaning_frequency);
-    const squareFootageFieldValue = serializeSquareFootageForFieldValue(
-      body.square_footage ?? square_footage_raw
-    );
+    const squareFootageFieldValue = squareFootageStored;
 
     console.log("[QUOTE_START_FIELD_VALUES] normalized quote input", {
-      square_footage: body.square_footage ?? square_footage_raw,
+      square_footage: squareFootageStored,
       squareFootageFieldValue,
       cleaning_frequency: body.cleaning_frequency,
       cleaningFrequencyValue,
