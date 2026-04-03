@@ -6,6 +6,8 @@ export type BookV2CleaningJobDetailsInput = {
     square_footage?: number | null;
     bedrooms?: number | null;
     bathrooms?: number | null;
+    /** When set, stored on row metadata as `book_v2_bathrooms_key` (half-baths / plus tiers). */
+    bathrooms_booking_key?: string | null;
 };
 
 /**
@@ -18,9 +20,13 @@ export async function upsertCleaningJobDetailsFromBookV2(
 ): Promise<void> {
     const { data: existing } = await supabase.from("cleaning_job_details").select("metadata").eq("job_id", jobId).maybeSingle();
     const prevMeta = ((existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+    const metaNext: Record<string, unknown> = { ...prevMeta, source: "book-v2", book_v2_synced_at: new Date().toISOString() };
+    if (input.bathrooms_booking_key != null && String(input.bathrooms_booking_key).trim() !== "") {
+        metaNext.book_v2_bathrooms_key = String(input.bathrooms_booking_key).trim();
+    }
     const row: Record<string, unknown> = {
         job_id: jobId,
-        metadata: { ...prevMeta, source: "book-v2", book_v2_synced_at: new Date().toISOString() },
+        metadata: metaNext,
     };
     if (input.home_type_id != null) row.home_type_id = input.home_type_id;
     if (input.sqft_band_id != null) row.sqft_band_id = input.sqft_band_id;

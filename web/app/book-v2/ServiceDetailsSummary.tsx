@@ -22,9 +22,17 @@ function formatConfigurableLabel(fieldKey: string): string {
         .join(" ");
 }
 
-function formatConfigurableValue(value: string | boolean | string[]): string {
+function formatBedBathToken(raw: string): string {
+    const v = raw.trim();
+    if (!v) return v;
+    if (/_plus$/i.test(v)) return `${v.replace(/_plus$/i, "")}+`;
+    return v.replace(/_/g, ".");
+}
+
+function formatConfigurableValue(key: string, value: string | boolean | string[]): string {
     if (Array.isArray(value)) return value.join(", ");
     if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (typeof value === "string" && (key === "bedrooms" || key === "bathrooms")) return formatBedBathToken(value);
     return String(value);
 }
 
@@ -66,21 +74,29 @@ export default function ServiceDetailsSummary({
                                 </p>
                             )}
                             {(details.bedrooms || details.bathrooms) && (
-                                <div className="flex gap-4 text-sm text-alloy-midnight/70">
+                                <p className="text-sm text-alloy-midnight/70">
                                     {details.bedrooms ? (
-                                        <span>
-                                            <strong className="text-alloy-midnight">{details.bedrooms}</strong>{" "}
-                                            Bedroom{details.bedrooms !== "1" ? "s" : ""}
+                                        <span className="tabular-nums">
+                                            <span className="font-medium text-alloy-midnight">
+                                                {formatBedBathToken(details.bedrooms)}
+                                            </span>{" "}
+                                            BR
+                                        </span>
+                                    ) : null}
+                                    {details.bedrooms && details.bathrooms ? (
+                                        <span className="text-alloy-midnight/40 mx-2" aria-hidden>
+                                            ·
                                         </span>
                                     ) : null}
                                     {details.bathrooms ? (
-                                        <span>
-                                            <strong className="text-alloy-midnight">{details.bathrooms}</strong>{" "}
-                                            Bathroom
-                                            {details.bathrooms !== "1" && details.bathrooms !== "4+" ? "s" : ""}
+                                        <span className="tabular-nums">
+                                            <span className="font-medium text-alloy-midnight">
+                                                {formatBedBathToken(details.bathrooms)}
+                                            </span>{" "}
+                                            BA
                                         </span>
                                     ) : null}
-                                </div>
+                                </p>
                             )}
                         </>
                     )}
@@ -89,7 +105,7 @@ export default function ServiceDetailsSummary({
                         configurableEntries.map(([key, value]) => (
                             <p key={key} className="text-sm text-alloy-midnight/70">
                                 <strong className="text-alloy-midnight">{formatConfigurableLabel(key)}:</strong>{" "}
-                                {formatConfigurableValue(value)}
+                                {formatConfigurableValue(key, value)}
                             </p>
                         ))}
 

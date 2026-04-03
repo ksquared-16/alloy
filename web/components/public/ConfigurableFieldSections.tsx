@@ -54,6 +54,17 @@ function sectionLabel(sections: PublicSectionDef[], key: string): string {
     return key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
 }
 
+/** Compact book-v2 display: `1_5` → `1.5`, `5_plus` → `5+` (avoids verbose catalog labels in the dropdown). */
+export function bookingSelectOptionDisplayLabel(fieldKey: string, opt: { value: string; label: string }): string {
+    if (fieldKey === "bedrooms" || fieldKey === "bathrooms") {
+        const v = opt.value.trim();
+        if (!v) return opt.label;
+        if (/_plus$/i.test(v)) return `${v.replace(/_plus$/i, "")}+`;
+        return v.replace(/_/g, ".");
+    }
+    return opt.label;
+}
+
 export default function ConfigurableFieldSections({
     entityType,
     verticalSlug,
@@ -257,7 +268,7 @@ export function PublicFieldControl({
                 <option value="">{f.placeholder || "Select…"}</option>
                 {f.options.map((o) => (
                     <option key={o.value} value={o.value}>
-                        {o.label}
+                        {bookingSelectOptionDisplayLabel(f.field_key, o)}
                     </option>
                 ))}
             </select>

@@ -23,6 +23,12 @@ export type ServiceDetailsBody = {
   access_note?: string | null;
   /** @deprecated Ignored; access text uses access_note + native columns only. */
   additional_notes?: string | null;
+  /**
+   * Native `locations.has_pets` (boolean column) when this flag is sent.
+   * The same snapshot is mirrored into configurable `pets` field_values ("true"/"false") when that
+   * public field exists, so admin/registry can stay consistent. There is no separate “pets-only” custom path:
+   * checkbox + column stay in sync on this route.
+   */
   has_pets?: boolean | string | number | null;
   /** Public-booking field keys → raw values (aligned with field_definitions). */
   configurable_field_values?: Record<string, unknown> | null;

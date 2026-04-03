@@ -101,3 +101,29 @@ export function parseRoomCount(raw: string | null | undefined): number | null {
     if (m) return Math.min(99, parseInt(m[1]!, 10));
     return null;
 }
+
+/**
+ * Public booking bathroom option values use underscores for half-baths (`1_5`, `2_5`) and `_plus` for open-ended tiers.
+ * `cleaning_job_details.bathrooms` is an integer — we round halves to the nearest whole for that column and keep the
+ * exact booking key on the row metadata for display/reporting.
+ */
+export function parseBathroomsForCjd(raw: unknown): { cjdInteger: number | null; bookingKey: string | null } {
+    if (raw == null) return { cjdInteger: null, bookingKey: null };
+    const s = String(raw).trim();
+    if (!s) return { cjdInteger: null, bookingKey: null };
+    const key = s.toLowerCase().replace(/\s+/g, "_");
+    const map: Record<string, number> = {
+        "1": 1,
+        "1_5": 1.5,
+        "2": 2,
+        "2_5": 2.5,
+        "3": 3,
+        "4": 4,
+        "4_plus": 4,
+    };
+    const exact = map[key];
+    if (exact != null) {
+        return { cjdInteger: Math.round(exact), bookingKey: key };
+    }
+    return { cjdInteger: parseRoomCount(s), bookingKey: key };
+}

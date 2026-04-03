@@ -53,6 +53,7 @@ export default function CleaningQuickQuoteForm({
     phone: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [handoffVisible, setHandoffVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [smsConsent, setSmsConsent] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
@@ -85,8 +86,10 @@ export default function CleaningQuickQuoteForm({
       return;
     }
     setSubmitting(true);
+    setHandoffVisible(false);
     setError(null);
     setConsentError(null);
+    let succeeded = false;
     try {
       const identityKeys = ["alloy_person_id", "alloy_contact_id", "alloy_customer_id", "alloy_opportunity_id"];
       try {
@@ -116,6 +119,7 @@ export default function CleaningQuickQuoteForm({
         setError(data.message || "Could not save your quote. Please try again.");
         return;
       }
+      succeeded = true;
       try {
         if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
         if (data.contact_id) localStorage.setItem("alloy_contact_id", data.contact_id);
@@ -205,12 +209,16 @@ export default function CleaningQuickQuoteForm({
         console.warn("alloy_booking_prefill set failed:", e);
       }
 
-      onSuccess();
+      setSubmitting(false);
+      setHandoffVisible(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => onSuccess());
+      });
     } catch (err) {
       console.error("Quote start failed:", err);
       setError("Something went wrong. Please try again.");
     } finally {
-      setSubmitting(false);
+      if (!succeeded) setSubmitting(false);
     }
   };
 
@@ -218,7 +226,18 @@ export default function CleaningQuickQuoteForm({
     "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-0">
+    <form onSubmit={handleSubmit} className="relative space-y-0">
+      {(submitting || handoffVisible) && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-[inherit] bg-white/93 px-6 text-center backdrop-blur-[1px]"
+          aria-live="polite"
+        >
+          <div className="h-10 w-10 rounded-full border-[3px] border-alloy-juniper border-t-transparent animate-spin" />
+          <p className="text-sm font-medium text-alloy-midnight">
+            {handoffVisible ? "Quote saved — taking you to the next step…" : "Saving your quote…"}
+          </p>
+        </div>
+      )}
       {/* Contact — name & location */}
       <div className="space-y-4 pb-6 border-b border-alloy-stone/50">
         <p className="public-form-section-title">

@@ -1130,3 +1130,19 @@ body {
   background: linear-gradient(90deg, transparent, var(--home-forge-edge), transparent);
   pointer-events: none;
 }
+
+/* Book v2 — subtle step content entrance (keyed remount in BookV2Client) */
+@keyframes alloy-book-v2-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.alloy-book-v2-step-in {
+  animation: alloy-book-v2-step-in 0.3s ease-out;
+}

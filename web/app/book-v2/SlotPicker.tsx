@@ -371,7 +371,7 @@ export default function SlotPicker({
             {/* Desktop: left column = calendar + CTA (2 rows); right column = times list. Same total height. */}
             <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_220px] lg:gap-6 lg:items-stretch">
                 {/* Left column: calendar then CTA — CTA in-line with bottom of times list */}
-                <div className="flex flex-col lg:h-[520px] lg:min-h-[520px] lg:max-h-[520px]">
+                <div className="flex flex-col lg:min-h-[520px] lg:max-h-[580px]">
                     <div className="flex flex-col flex-1 min-h-0">
                         <h3 className="text-sm font-semibold text-alloy-midnight mb-2 shrink-0">Select a date</h3>
                         <div className="flex items-center justify-between mb-2 shrink-0">
@@ -406,7 +406,7 @@ export default function SlotPicker({
                                 </div>
                             ))}
                         </div>
-                        <div className="grid grid-cols-7 gap-1 flex-1 min-h-0 content-start">
+                        <div className="grid grid-cols-7 gap-1 flex-1 min-h-0 max-h-[340px] lg:max-h-[360px] overflow-y-auto overscroll-contain content-start pr-0.5">
                             {monthGridCells.map((cell, idx) => {
                                 if (cell.type === "blank") {
                                     return <div key={`blank-${idx}`} className="aspect-square" />;
@@ -444,8 +444,8 @@ export default function SlotPicker({
                     </div>
                     {/* CTA and selection summary — only visible when a time is selected */}
                     {onConfirmTime != null && selectedSlot != null && (
-                        <div className="shrink-0 pt-4 border-t border-alloy-stone/20 space-y-3">
-                            <div className="bg-alloy-stone/10 rounded-lg px-3 py-2 text-center">
+                        <div className="shrink-0 pt-4 mt-auto border-t border-alloy-stone/20 space-y-3">
+                            <div className="bg-alloy-stone/10 rounded-lg px-3 py-2.5 text-center">
                                 <p className="text-sm font-medium text-alloy-midnight">
                                     <strong>Selected:</strong> {selectedSlot.timeWindow}
                                 </p>
@@ -472,7 +472,7 @@ export default function SlotPicker({
                 </div>
 
                 {/* Right column: times list only — full height, scrolls inside */}
-                <div className="h-full lg:h-[520px] lg:min-h-[520px] lg:max-h-[520px] lg:overflow-hidden flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
+                <div className="h-full lg:min-h-[520px] lg:max-h-[580px] lg:overflow-hidden flex flex-col min-h-0 mt-4 lg:mt-0 lg:border-l lg:border-alloy-stone/20 lg:pl-6">
                     <h3 className="text-sm font-semibold text-alloy-midnight mb-1 shrink-0">
                         {selectedDateKey ? formatDateKeyDisplayLong(selectedDateKey, timezone) : "Select a date"}
                     </h3>

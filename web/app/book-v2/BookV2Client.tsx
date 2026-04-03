@@ -2389,7 +2389,7 @@ export default function BookV2Client() {
             <Section className="max-w-7xl">
                 {/* Step 1: Get a quote in 30 seconds (no quote yet) */}
                 {currentStep === "quote_start" && !debug && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full">
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full alloy-book-v2-step-in">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
                             Get a quote in 30 seconds
                         </h2>
@@ -2496,7 +2496,7 @@ export default function BookV2Client() {
 
                 {/* Your Quote step: focal step after details; inline frequency + add-ons, then confirm */}
                 {currentStep === "refine_quote" && hasQuote && quote && !debug && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full">
+                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full alloy-book-v2-step-in">
                         {quoteRefreshMessage && (
                             <div className="mb-6 p-4 bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg text-alloy-midnight">
                                 <p className="text-sm font-medium text-alloy-pine">{quoteRefreshMessage}</p>
@@ -2795,7 +2795,10 @@ export default function BookV2Client() {
 
                 {/* Single-column stacked layout: Quote → Time Slot → Service Details → Payment */}
                 {hasQuote && currentStep !== "confirmed" && currentStep !== "refine_quote" && (
-                    <div className="space-y-6 max-w-4xl mx-auto">
+                    <div
+                        key={currentStep}
+                        className="space-y-6 max-w-4xl mx-auto alloy-book-v2-step-in"
+                    >
                         {quoteJustSaved && (
                             <div className="bg-alloy-juniper/15 border border-alloy-juniper/30 rounded-lg px-4 py-3 text-alloy-midnight">
                                 <p className="text-sm font-medium text-alloy-pine">

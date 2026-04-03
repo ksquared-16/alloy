@@ -191,11 +191,15 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
 
       const bookPath = getBookingPath();
       const dest = `${bookPath}?campaign=${encodeURIComponent(FIRSTFREE4X120_CAMPAIGN_QUERY)}`;
-      onClose();
       router.push(dest);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          onClose();
+          setContinueBusy(false);
+        });
+      });
     } catch (e) {
       setTermsError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
-    } finally {
       setContinueBusy(false);
     }
   };
@@ -261,7 +265,7 @@ export default function FirstFreeTermsModal({ isOpen, onClose }: FirstFreeTermsM
             onClick={handleContinueToBook}
             className="w-full mt-6 home-quote-cta-pine quote-cta-bend-pine public-btn-primary !text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
           >
-            {continueBusy ? "Applying offer…" : "Continue to booking"}
+            {continueBusy ? "Taking you to booking…" : "Continue to booking"}
           </button>
         </div>
       </div>

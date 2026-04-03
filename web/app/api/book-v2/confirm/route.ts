@@ -2,7 +2,13 @@ import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolve_or_create_contact_and_customer } from "@/lib/bookingResolver";
 import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
-import { parseRoomCount, quoteSquareFootageToBandKey, splitBookV2LocationAccess, squareFootageMidpointForBandKey } from "@/lib/book-v2/bookingCanonicalMaps";
+import {
+    parseBathroomsForCjd,
+    parseRoomCount,
+    quoteSquareFootageToBandKey,
+    splitBookV2LocationAccess,
+    squareFootageMidpointForBandKey,
+} from "@/lib/book-v2/bookingCanonicalMaps";
 import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel, resolveSqftBandIdByKey } from "@/lib/book-v2/resolveBookV2CatalogIds";
 import { upsertCleaningJobDetailsFromBookV2 } from "@/lib/book-v2/upsertCleaningJobDetails";
 import {
@@ -1070,6 +1076,12 @@ export async function POST(request: NextRequest) {
                     customerId = oppCustomerId;
                     const { data: cust } = await supabase.from("customers").select("primary_contact_id").eq("id", customerId).single();
                     contactId = (cust as { primary_contact_id?: string | null } | null)?.primary_contact_id ?? null;
+                    if (person_id_from_quote?.trim()) {
+                        await supabase
+                            .from("opportunities")
+                            .update({ primary_person_id: person_id_from_quote.trim() })
+                            .eq("id", opportunityId);
+                    }
                 } else {
                     try {
                         const result = await ensureCustomerForPersonInConfirm(supabase, person_id_from_quote, {
@@ -1167,6 +1179,15 @@ export async function POST(request: NextRequest) {
                             { status: 500 }
                         );
                     }
+                }
+            }
+
+            if (!personIdFromQuote && contactId) {
+                const { data: contactRow } = await supabase.from("contacts").select("person_id").eq("id", contactId).maybeSingle();
+                const pid = (contactRow as { person_id?: string | null } | null)?.person_id?.trim();
+                if (pid) {
+                    personIdFromQuote = pid;
+                    await supabase.from("opportunities").update({ primary_person_id: pid }).eq("id", opportunityId);
                 }
             }
 
@@ -2140,12 +2161,14 @@ export async function POST(request: NextRequest) {
             supabase,
             home_type_eff != null ? String(home_type_eff) : null
         );
+        const bathParsed = parseBathroomsForCjd(bathrooms_eff);
         await upsertCleaningJobDetailsFromBookV2(supabase, jobId, {
             home_type_id: homeTypeIdResolved,
             sqft_band_id: sqftBandIdResolved,
             square_footage: squareFootageMidpointForBandKey(sqftBandKey),
             bedrooms: parseRoomCount(bedrooms_eff != null ? String(bedrooms_eff) : undefined),
-            bathrooms: parseRoomCount(bathrooms_eff != null ? String(bathrooms_eff) : undefined),
+            bathrooms: bathParsed.cjdInteger,
+            bathrooms_booking_key: bathParsed.bookingKey,
         });
 
         // Step 5b: Persist discount redemption immediately after job creation
