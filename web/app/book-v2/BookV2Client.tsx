@@ -8,7 +8,7 @@ import ActionLinkDetailsPanel from "@/components/action/ActionLinkDetailsPanel";
 import type { ActionLinkDisplayDetails } from "@/lib/actionLinkDisplayDetails";
 import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
-import ServiceDetailsForm, { ServiceDetails } from "./ServiceDetailsForm";
+import ServiceDetailsForm, { ServiceDetails, withoutExcludedConfigurableValues } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import { ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
@@ -1555,7 +1555,9 @@ export default function BookV2Client() {
                         access_method: serviceDetails.access_method,
                         access_note: serviceDetails.access_note?.trim() || null,
                         has_pets: serviceDetails.has_pets,
-                        configurable_field_values: serviceDetails.configurable_values,
+                        configurable_field_values: withoutExcludedConfigurableValues(
+                            serviceDetails.configurable_values
+                        ),
                     }),
                 });
                 const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
@@ -2123,7 +2125,7 @@ export default function BookV2Client() {
                 home_type: serviceDetails.home_type || undefined,
                 bedrooms: serviceDetails.bedrooms,
                 bathrooms: serviceDetails.bathrooms,
-                configurable_field_values: serviceDetails.configurable_values,
+                configurable_field_values: withoutExcludedConfigurableValues(serviceDetails.configurable_values),
                 access_method: serviceDetails.access_method,
                 access_note: serviceDetails.access_note,
                 has_pets: serviceDetails.has_pets,

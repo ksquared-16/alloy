@@ -1,6 +1,6 @@
 "use client";
 
-import { ServiceDetails } from "./ServiceDetailsForm";
+import { ServiceDetails, SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS } from "./ServiceDetailsForm";
 
 interface ServiceDetailsSummaryProps {
     details: ServiceDetails;
@@ -38,6 +38,7 @@ export default function ServiceDetailsSummary({
         Boolean(details.bathrooms?.trim());
 
     const configurableEntries = Object.entries(details.configurable_values ?? {}).filter(([key, v]) => {
+        if (SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS.has(key)) return false;
         if (key === "gate_code" && details.access_method !== "building") return false;
         return (
             v !== undefined &&

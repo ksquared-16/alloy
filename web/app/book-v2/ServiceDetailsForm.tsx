@@ -29,10 +29,23 @@ interface ServiceDetailsFormProps {
 
 const STORAGE_KEY = "alloy_book_v2_service_details";
 
+/** Field keys not shown or sent from the public Service Details step (admin/registry unchanged). */
+export const SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS = new Set(["alarm_notes"]);
+
 /** Service step: property + access only (exclude quote/sizing from public defs). */
 const SERVICE_STEP_SECTION_KEYS = new Set(["property", "access_notes"]);
 
 const emptyConfigurable = (): Record<string, string | boolean | string[]> => ({});
+
+export function withoutExcludedConfigurableValues(
+    values: Record<string, string | boolean | string[]>
+): Record<string, string | boolean | string[]> {
+    const o = { ...values };
+    for (const k of SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS) {
+        delete (o as Record<string, unknown>)[k];
+    }
+    return o;
+}
 
 const inputPad = "w-full px-3 py-2 border border-alloy-stone/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70";
 
@@ -47,7 +60,9 @@ export default function ServiceDetailsForm({
         access_method: initialData?.access_method || "home",
         access_note: initialData?.access_note || "",
         has_pets: initialData?.has_pets ?? false,
-        configurable_values: initialData?.configurable_values ?? emptyConfigurable(),
+        configurable_values: withoutExcludedConfigurableValues(
+            initialData?.configurable_values ?? emptyConfigurable()
+        ),
         home_type: initialData?.home_type,
         bedrooms: initialData?.bedrooms,
         bathrooms: initialData?.bathrooms,
@@ -89,6 +104,7 @@ export default function ServiceDetailsForm({
 
     const visibleServiceFields = useMemo(() => {
         return fieldsForServiceStep.filter((f) => {
+            if (SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS.has(f.field_key)) return false;
             if (f.section_key === "access_notes" && f.field_key === "gate_code") {
                 return formData.access_method === "building";
             }
@@ -119,15 +135,18 @@ export default function ServiceDetailsForm({
             if (stored) {
                 const parsed = JSON.parse(stored) as Partial<ServiceDetails> & { additional_notes?: string };
                 const { additional_notes: _drop, ...rest } = parsed;
-                setFormData((prev) => ({
-                    ...prev,
-                    ...rest,
-                    has_pets: rest.has_pets === true,
-                    configurable_values:
+                setFormData((prev) => {
+                    const mergedCfg =
                         rest.configurable_values && typeof rest.configurable_values === "object"
                             ? { ...prev.configurable_values, ...rest.configurable_values }
-                            : prev.configurable_values,
-                }));
+                            : prev.configurable_values;
+                    return {
+                        ...prev,
+                        ...rest,
+                        has_pets: rest.has_pets === true,
+                        configurable_values: withoutExcludedConfigurableValues(mergedCfg),
+                    };
+                });
             }
         } catch (e) {
             console.warn("Failed to load service details from storage:", e);
@@ -136,7 +155,13 @@ export default function ServiceDetailsForm({
 
     useEffect(() => {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+            localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({
+                    ...formData,
+                    configurable_values: withoutExcludedConfigurableValues(formData.configurable_values),
+                })
+            );
         } catch (e) {
             console.warn("Failed to save service details to storage:", e);
         }
