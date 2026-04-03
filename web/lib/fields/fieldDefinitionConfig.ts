@@ -20,13 +20,35 @@ function isOptionRow(x: unknown): x is FieldOption {
 /** Validate config for select / multiselect: require options array or catalog_key. */
 export function validateSelectLikeConfig(
     fieldType: string,
-    config: Record<string, unknown> | null | undefined
+    config: unknown | null | undefined
 ): { ok: true } | { ok: false; error: string } {
     const t = (fieldType || "").toLowerCase();
     if (t !== "select" && t !== "multiselect") return { ok: true };
 
     const c = config ?? {};
-    const catalogKey = typeof c.catalog_key === "string" ? c.catalog_key.trim() : "";
+
+    // Production may store options as a raw JSON array on `config` instead of `{ options: [...] }`.
+    if (Array.isArray(c)) {
+        if (c.length === 0) {
+            return {
+                ok: false,
+                error: "select/multiselect requires a non-empty options array or config.catalog_key",
+            };
+        }
+        for (const row of c) {
+            if (!isOptionRow(row)) {
+                return { ok: false, error: "Each options entry must be { value: string, label: string }" };
+            }
+        }
+        return { ok: true };
+    }
+
+    if (typeof c !== "object" || c === null) {
+        return { ok: false, error: "select/multiselect requires an object or array config" };
+    }
+
+    const obj = c as Record<string, unknown>;
+    const catalogKey = typeof obj.catalog_key === "string" ? obj.catalog_key.trim() : "";
     if (catalogKey) {
         if (!isCatalogKey(catalogKey)) {
             return {
@@ -37,7 +59,7 @@ export function validateSelectLikeConfig(
         return { ok: true };
     }
 
-    const raw = c.options;
+    const raw = obj.options;
     if (!Array.isArray(raw) || raw.length === 0) {
         return {
             ok: false,
@@ -52,8 +74,12 @@ export function validateSelectLikeConfig(
     return { ok: true };
 }
 
-export function normalizeOptionsFromConfig(config: Record<string, unknown> | null | undefined): FieldOption[] {
-    const raw = config?.options;
+/**
+ * Normalize stored `field_definitions.config` into select options.
+ * Supports `{ options: [...] }` (canonical) and a raw top-level `[...]` array (legacy / prod).
+ */
+export function normalizeOptionsFromConfig(config: unknown | null | undefined): FieldOption[] {
+    const raw = Array.isArray(config) ? config : config && typeof config === "object" ? (config as Record<string, unknown>).options : undefined;
     if (!Array.isArray(raw)) return [];
     const out: FieldOption[] = [];
     for (const row of raw) {

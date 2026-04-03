@@ -81,12 +81,18 @@ export async function GET(request: NextRequest) {
                 sort_order: number;
                 placeholder: string | null;
                 help_text: string | null;
-                config: Record<string, unknown> | null;
+                config: unknown;
                 is_required: boolean;
             };
-            const config = row.config ?? {};
-            let options: { value: string; label: string }[] = normalizeOptionsFromConfig(config);
-            const ck = typeof config.catalog_key === "string" ? config.catalog_key.trim() : "";
+            const cfg = row.config;
+            let options: { value: string; label: string }[] = normalizeOptionsFromConfig(cfg);
+            const ck =
+                cfg &&
+                typeof cfg === "object" &&
+                !Array.isArray(cfg) &&
+                typeof (cfg as Record<string, unknown>).catalog_key === "string"
+                    ? String((cfg as Record<string, unknown>).catalog_key).trim()
+                    : "";
             if (ck && isCatalogKey(ck)) {
                 options = await resolveCatalogOptions(supabase, ck, { verticalSlug });
             }
