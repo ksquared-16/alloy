@@ -390,10 +390,19 @@ async function runDeferredBookingEffects(params: {
             cjdRow != null && cjdRow.bedrooms != null && !Number.isNaN(Number(cjdRow.bedrooms)) ? String(cjdRow.bedrooms) : "";
         eventPayload.booking_bathrooms =
             cjdRow != null && cjdRow.bathrooms != null && !Number.isNaN(Number(cjdRow.bathrooms)) ? String(cjdRow.bathrooms) : "";
-        eventPayload.booking_square_footage =
-            cjdRow != null && cjdRow.square_footage != null && !Number.isNaN(Number(cjdRow.square_footage))
-                ? String(cjdRow.square_footage)
-                : "";
+        let bookingSqftStr = "";
+        if (cjdRow != null && cjdRow.square_footage != null && !Number.isNaN(Number(cjdRow.square_footage))) {
+            bookingSqftStr = String(cjdRow.square_footage);
+        } else {
+            const oppM = (oppRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+            const qi = (oppM.quote_input as Record<string, unknown> | undefined) ?? {};
+            const rawSq = qi.square_footage;
+            const rawStr = typeof rawSq === "string" ? rawSq : rawSq != null ? String(rawSq) : null;
+            const bk = quoteSquareFootageToBandKey(rawStr);
+            const mid = squareFootageMidpointForBandKey(bk);
+            if (mid != null) bookingSqftStr = String(mid);
+        }
+        eventPayload.booking_square_footage = bookingSqftStr;
 
         const j = jobRow as { status_key?: unknown; id?: string } | null;
         const s = normalizedSchedule as { status_key?: unknown; id?: string };
@@ -1296,9 +1305,7 @@ export async function POST(request: NextRequest) {
                 timezone,
                 address: address ?? null,
                 city: city ?? null,
-                home_type: pickServiceDetail(home_type, svcMeta.home_type_label, qiMeta.home_type),
-                bedrooms: pickServiceDetail(bedrooms, svcMeta.bedrooms, qiMeta.bedrooms),
-                bathrooms: pickServiceDetail(bathrooms, svcMeta.bathrooms, qiMeta.bathrooms),
+                // Property snapshot: book_v2_service_property + quote_input (avoid duplicating home_type/bed/bath at top level).
                 access_method: pickServiceDetail(access_method, svcMeta.access_method, undefined),
                 access_note: pickServiceDetail(access_note, svcMeta.access_note, undefined),
                 additional_notes: pickServiceDetail(additional_notes, svcMeta.additional_notes, undefined),
@@ -1621,9 +1628,6 @@ export async function POST(request: NextRequest) {
                 timezone,
                 address: address ?? null,
                 city: city ?? null,
-                home_type: pickServiceDetail(home_type, svcElse.home_type_label, qiElse.home_type),
-                bedrooms: pickServiceDetail(bedrooms, svcElse.bedrooms, qiElse.bedrooms),
-                bathrooms: pickServiceDetail(bathrooms, svcElse.bathrooms, qiElse.bathrooms),
                 access_method: pickServiceDetail(access_method, svcElse.access_method, undefined),
                 access_note: pickServiceDetail(access_note, svcElse.access_note, undefined),
                 additional_notes: pickServiceDetail(additional_notes, svcElse.additional_notes, undefined),
@@ -1683,9 +1687,6 @@ export async function POST(request: NextRequest) {
                 timezone,
                 address: address ?? null,
                 city: city ?? null,
-                home_type: home_type ?? null,
-                bedrooms: bedrooms ?? null,
-                bathrooms: bathrooms ?? null,
                 access_method: access_method ?? null,
                 access_note: access_note ?? null,
                 additional_notes: additional_notes ?? null,

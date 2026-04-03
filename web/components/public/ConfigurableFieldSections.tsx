@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type PublicFieldDef = {
     id: string;
@@ -35,6 +35,10 @@ export type ConfigurableFieldSectionsProps = {
     values: Record<string, string | boolean | string[]>;
     onChange: (fieldKey: string, value: string | boolean | string[]) => void;
     className?: string;
+    /** Tighter spacing and inputs (e.g. book-v2 service step). */
+    dense?: boolean;
+    /** When adjacent in the same section, render as one row (e.g. bedrooms + bathrooms). */
+    sameRowAdjacentKeys?: readonly [string, string] | null;
     /** When set, skips internal fetch (e.g. parent loaded once for summary + form). */
     prefetched?: { fields: PublicFieldDef[]; sections: PublicSectionDef[] } | null;
 };
@@ -56,6 +60,8 @@ export default function ConfigurableFieldSections({
     values,
     onChange,
     className = "",
+    dense = false,
+    sameRowAdjacentKeys = null,
     prefetched = null,
 }: ConfigurableFieldSectionsProps) {
     const [fields, setFields] = useState<PublicFieldDef[]>(prefetched?.fields ?? []);
@@ -121,29 +127,30 @@ export default function ConfigurableFieldSections({
         return null;
     }
 
+    const sectionGap = dense ? "space-y-4" : "space-y-6";
+    const fieldGap = dense ? "space-y-2" : "space-y-3";
+    const labelMb = dense ? "mb-0.5" : "mb-1";
+
     return (
-        <div className={`space-y-6 ${className}`}>
+        <div className={`${sectionGap} ${className}`}>
             {grouped.map(([sectionKey, sectionFields]) => (
-                <div key={sectionKey} className="space-y-3">
-                    <h4 className="text-sm font-semibold text-alloy-midnight border-b border-alloy-stone/20 pb-1">
+                <div key={sectionKey} className={fieldGap}>
+                    <h4
+                        className={`text-sm font-semibold text-alloy-midnight border-b border-alloy-stone/20 ${
+                            dense ? "pb-0.5" : "pb-1"
+                        }`}
+                    >
                         {sectionLabel(sections, sectionKey)}
                     </h4>
-                    <div className="space-y-3">
-                        {sectionFields.map((f) => (
-                            <div key={f.field_key}>
-                                <label className="block text-sm font-medium text-alloy-midnight mb-1">
-                                    {f.label}
-                                    {f.is_required ? <span className="text-red-500 ml-0.5">*</span> : null}
-                                </label>
-                                {f.description ? (
-                                    <p className="text-xs text-alloy-midnight/60 mb-1">{f.description}</p>
-                                ) : null}
-                                <FieldInput f={f} value={values[f.field_key]} onChange={onChange} />
-                                {f.help_text ? (
-                                    <p className="text-xs text-alloy-midnight/50 mt-1">{f.help_text}</p>
-                                ) : null}
-                            </div>
-                        ))}
+                    <div className={fieldGap}>
+                        {renderSectionFieldList({
+                            sectionFields,
+                            values,
+                            onChange,
+                            dense,
+                            sameRowAdjacentKeys,
+                            labelMb,
+                        })}
                     </div>
                 </div>
             ))}
@@ -151,16 +158,78 @@ export default function ConfigurableFieldSections({
     );
 }
 
-function FieldInput({
+function renderSectionFieldList(params: {
+    sectionFields: PublicFieldDef[];
+    values: Record<string, string | boolean | string[]>;
+    onChange: (fieldKey: string, value: string | boolean | string[]) => void;
+    dense: boolean;
+    sameRowAdjacentKeys: readonly [string, string] | null;
+    labelMb: string;
+}): ReactNode[] {
+    const { sectionFields, values, onChange, dense, sameRowAdjacentKeys, labelMb } = params;
+    const [pairA, pairB] = sameRowAdjacentKeys ?? [null, null];
+    const out: React.ReactNode[] = [];
+    for (let i = 0; i < sectionFields.length; i++) {
+        const f = sectionFields[i]!;
+        const next = sectionFields[i + 1];
+        if (pairA && pairB && f.field_key === pairA && next?.field_key === pairB) {
+            out.push(
+                <div key={`${pairA}-${pairB}`} className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className={`block text-sm font-medium text-alloy-midnight ${labelMb}`}>
+                            {f.label}
+                            {f.is_required ? <span className="text-red-500 ml-0.5">*</span> : null}
+                        </label>
+                        {f.description ? (
+                            <p className="text-xs text-alloy-midnight/60 mb-0.5">{f.description}</p>
+                        ) : null}
+                        <PublicFieldControl f={f} value={values[f.field_key]} onChange={onChange} dense={dense} />
+                    </div>
+                    <div>
+                        <label className={`block text-sm font-medium text-alloy-midnight ${labelMb}`}>
+                            {next.label}
+                            {next.is_required ? <span className="text-red-500 ml-0.5">*</span> : null}
+                        </label>
+                        {next.description ? (
+                            <p className="text-xs text-alloy-midnight/60 mb-0.5">{next.description}</p>
+                        ) : null}
+                        <PublicFieldControl f={next} value={values[next.field_key]} onChange={onChange} dense={dense} />
+                    </div>
+                </div>
+            );
+            i++;
+            continue;
+        }
+        out.push(
+            <div key={f.field_key}>
+                <label className={`block text-sm font-medium text-alloy-midnight ${labelMb}`}>
+                    {f.label}
+                    {f.is_required ? <span className="text-red-500 ml-0.5">*</span> : null}
+                </label>
+                {f.description ? <p className="text-xs text-alloy-midnight/60 mb-0.5">{f.description}</p> : null}
+                <PublicFieldControl f={f} value={values[f.field_key]} onChange={onChange} dense={dense} />
+                {f.help_text ? <p className="text-xs text-alloy-midnight/50 mt-0.5">{f.help_text}</p> : null}
+            </div>
+        );
+    }
+    return out;
+}
+
+/** Single public field control (select, text, boolean, etc.) — exported for custom layouts. */
+export function PublicFieldControl({
     f,
     value,
     onChange,
+    dense = false,
 }: {
     f: PublicFieldDef;
     value: string | boolean | string[] | undefined;
     onChange: (k: string, v: string | boolean | string[]) => void;
+    dense?: boolean;
 }) {
     const t = f.field_type.toLowerCase();
+    const pad = dense ? "px-3 py-2" : "px-4 py-3";
+    const focus = "focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70";
 
     if (t === "boolean") {
         const checked = value === true || value === "true";
@@ -183,7 +252,7 @@ function FieldInput({
             <select
                 value={v}
                 onChange={(e) => onChange(f.field_key, e.target.value)}
-                className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 bg-white"
+                className={`w-full ${pad} border border-alloy-stone/30 rounded-lg ${focus} bg-white text-sm`}
             >
                 <option value="">{f.placeholder || "Select…"}</option>
                 {f.options.map((o) => (
@@ -228,7 +297,7 @@ function FieldInput({
                 value={v}
                 placeholder={f.placeholder ?? undefined}
                 onChange={(e) => onChange(f.field_key, e.target.value)}
-                className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
+                className={`w-full ${pad} border border-alloy-stone/30 rounded-lg ${focus} text-sm`}
             />
         );
     }
@@ -243,7 +312,7 @@ function FieldInput({
             value={v}
             placeholder={f.placeholder ?? undefined}
             onChange={(e) => onChange(f.field_key, e.target.value)}
-            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
+            className={`w-full ${pad} border border-alloy-stone/30 rounded-lg ${focus} text-sm`}
         />
     );
 }

@@ -11,11 +11,10 @@ export interface ServiceDetails {
     city: string;
     access_method: "home" | "code" | "key" | "building";
     access_note: string;
-    additional_notes: string;
     has_pets: boolean;
     /** Values for org-defined public booking fields (field_key → value). */
     configurable_values: Record<string, string | boolean | string[]>;
-    /** When no public field defs exist, legacy property selects (optional). */
+    /** When no applicable public defs exist, legacy property selects (optional). */
     home_type?: string;
     bedrooms?: string;
     bathrooms?: string;
@@ -30,7 +29,12 @@ interface ServiceDetailsFormProps {
 
 const STORAGE_KEY = "alloy_book_v2_service_details";
 
+/** Service step: property + access only (exclude quote/sizing from public defs). */
+const SERVICE_STEP_SECTION_KEYS = new Set(["property", "access_notes"]);
+
 const emptyConfigurable = (): Record<string, string | boolean | string[]> => ({});
+
+const inputPad = "w-full px-3 py-2 border border-alloy-stone/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70";
 
 export default function ServiceDetailsForm({
     initialData,
@@ -42,7 +46,6 @@ export default function ServiceDetailsForm({
         city: initialData?.city || "",
         access_method: initialData?.access_method || "home",
         access_note: initialData?.access_note || "",
-        additional_notes: initialData?.additional_notes || "",
         has_pets: initialData?.has_pets ?? false,
         configurable_values: initialData?.configurable_values ?? emptyConfigurable(),
         home_type: initialData?.home_type,
@@ -79,30 +82,50 @@ export default function ServiceDetailsForm({
         };
     }, [verticalSlug]);
 
-    const prefetched = useMemo(
+    const fieldsForServiceStep = useMemo(
+        () => locationFields.filter((f) => SERVICE_STEP_SECTION_KEYS.has(f.section_key || "")),
+        [locationFields]
+    );
+
+    const visibleServiceFields = useMemo(() => {
+        return fieldsForServiceStep.filter((f) => {
+            if (f.section_key === "access_notes" && f.field_key === "gate_code") {
+                return formData.access_method === "building";
+            }
+            return true;
+        });
+    }, [fieldsForServiceStep, formData.access_method]);
+
+    const serviceSections = useMemo(
+        () => locationSections.filter((s) => SERVICE_STEP_SECTION_KEYS.has(s.section_key)),
+        [locationSections]
+    );
+
+    const prefetchedService = useMemo(
         () =>
-            locationFields.length > 0
-                ? { fields: locationFields, sections: locationSections }
+            visibleServiceFields.length > 0
+                ? { fields: visibleServiceFields, sections: serviceSections }
                 : null,
-        [locationFields, locationSections]
+        [visibleServiceFields, serviceSections]
     );
 
     const defsReady = !defsLoading;
-    const useLegacyPropertyFields = defsReady && locationFields.length === 0;
+    const useLegacyPropertyFields =
+        defsReady && (locationFields.length === 0 || visibleServiceFields.length === 0);
 
-    // Load from localStorage on mount
     useEffect(() => {
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) {
-                const parsed = JSON.parse(stored) as Partial<ServiceDetails>;
+                const parsed = JSON.parse(stored) as Partial<ServiceDetails> & { additional_notes?: string };
+                const { additional_notes: _drop, ...rest } = parsed;
                 setFormData((prev) => ({
                     ...prev,
-                    ...parsed,
-                    has_pets: parsed.has_pets === true,
+                    ...rest,
+                    has_pets: rest.has_pets === true,
                     configurable_values:
-                        parsed.configurable_values && typeof parsed.configurable_values === "object"
-                            ? { ...prev.configurable_values, ...parsed.configurable_values }
+                        rest.configurable_values && typeof rest.configurable_values === "object"
+                            ? { ...prev.configurable_values, ...rest.configurable_values }
                             : prev.configurable_values,
                 }));
             }
@@ -111,7 +134,6 @@ export default function ServiceDetailsForm({
         }
     }, []);
 
-    // Save to localStorage on change
     useEffect(() => {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
@@ -130,7 +152,7 @@ export default function ServiceDetailsForm({
                 if (!data.bathrooms?.trim()) return false;
             }
 
-            for (const f of locationFields) {
+            for (const f of visibleServiceFields) {
                 if (!f.is_required) continue;
                 const v = data.configurable_values[f.field_key];
                 if (v === undefined || v === null) return false;
@@ -140,7 +162,7 @@ export default function ServiceDetailsForm({
 
             return true;
         },
-        [locationFields, useLegacyPropertyFields]
+        [visibleServiceFields, useLegacyPropertyFields]
     );
 
     useEffect(() => {
@@ -178,20 +200,18 @@ export default function ServiceDetailsForm({
     const DEFAULT_BATH = ["1", "2", "3", "4+"].map((v) => ({ value: v, label: v }));
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             <div>
-                <h3 className="text-lg font-semibold text-alloy-midnight mb-1">
-                    A few details to round out your booking
-                </h3>
-                <p className="text-sm text-alloy-midnight/60">
-                    We&apos;ll use this information to prepare for your service
+                <h3 className="text-base font-semibold text-alloy-midnight">Service address & property</h3>
+                <p className="text-xs text-alloy-midnight/55 mt-0.5">
+                    We&apos;ll use this to prepare for your visit
                 </p>
             </div>
 
-            <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                        <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
                             Address <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -199,12 +219,12 @@ export default function ServiceDetailsForm({
                             value={formData.address}
                             onChange={(e) => handleChange("address", e.target.value)}
                             placeholder="123 Main Street"
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
+                            className={inputPad}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                        <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
                             City <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -212,7 +232,7 @@ export default function ServiceDetailsForm({
                             value={formData.city}
                             onChange={(e) => handleChange("city", e.target.value)}
                             placeholder="Los Angeles"
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 focus:border-transparent"
+                            className={inputPad}
                         />
                     </div>
                 </div>
@@ -220,13 +240,13 @@ export default function ServiceDetailsForm({
                 {useLegacyPropertyFields && (
                     <>
                         <div>
-                            <label className="block text-sm font-medium text-alloy-midnight mb-2">Home type</label>
+                            <label className="block text-xs font-medium text-alloy-midnight mb-0.5">Home type</label>
                             <select
                                 value={formData.home_type ?? ""}
                                 onChange={(e) =>
                                     setFormData((p) => ({ ...p, home_type: e.target.value }))
                                 }
-                                className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 bg-white"
+                                className={`${inputPad} bg-white`}
                             >
                                 <option value="">Select home type</option>
                                 {DEFAULT_HOME.map((opt) => (
@@ -236,9 +256,9 @@ export default function ServiceDetailsForm({
                                 ))}
                             </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                                <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
                                     Bedrooms <span className="text-red-500">*</span>
                                 </label>
                                 <select
@@ -246,7 +266,7 @@ export default function ServiceDetailsForm({
                                     onChange={(e) =>
                                         setFormData((p) => ({ ...p, bedrooms: e.target.value }))
                                     }
-                                    className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg bg-white"
+                                    className={`${inputPad} bg-white`}
                                 >
                                     <option value="">Select</option>
                                     {DEFAULT_BED.map((opt) => (
@@ -257,7 +277,7 @@ export default function ServiceDetailsForm({
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-alloy-midnight mb-2">
+                                <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
                                     Bathrooms <span className="text-red-500">*</span>
                                 </label>
                                 <select
@@ -265,7 +285,7 @@ export default function ServiceDetailsForm({
                                     onChange={(e) =>
                                         setFormData((p) => ({ ...p, bathrooms: e.target.value }))
                                     }
-                                    className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg bg-white"
+                                    className={`${inputPad} bg-white`}
                                 >
                                     <option value="">Select</option>
                                     {DEFAULT_BATH.map((opt) => (
@@ -280,28 +300,30 @@ export default function ServiceDetailsForm({
                 )}
 
                 {defsLoading && (
-                    <p className="text-sm text-alloy-midnight/50">Loading property fields…</p>
+                    <p className="text-xs text-alloy-midnight/50">Loading property fields…</p>
                 )}
-                {defsReady && locationFields.length > 0 && prefetched && (
+                {defsReady && visibleServiceFields.length > 0 && prefetchedService && (
                     <ConfigurableFieldSections
                         entityType="location"
                         verticalSlug={verticalSlug}
-                        prefetched={prefetched}
+                        prefetched={prefetchedService}
                         values={formData.configurable_values}
                         onChange={onConfigurableChange}
+                        dense
+                        sameRowAdjacentKeys={["bedrooms", "bathrooms"]}
                     />
                 )}
 
                 <div>
-                    <label className="block text-sm font-medium text-alloy-midnight mb-2">
-                        How will your cleaner get into your home? <span className="text-red-500">*</span>
+                    <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
+                        How will your cleaner get in? <span className="text-red-500">*</span>
                     </label>
                     <select
                         value={formData.access_method}
                         onChange={(e) =>
                             handleAccessMethodChange(e.target.value as ServiceDetails["access_method"])
                         }
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg bg-white"
+                        className={`${inputPad} bg-white`}
                     >
                         <option value="home">I will be home</option>
                         <option value="code">Door/Garage Code</option>
@@ -312,26 +334,31 @@ export default function ServiceDetailsForm({
 
                 {formData.access_method !== "home" && (
                     <div>
-                        <label className="block text-sm font-medium text-alloy-midnight mb-2">
-                            Access note <span className="text-red-500">*</span>
+                        <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
+                            {formData.access_method === "code"
+                                ? "Door or garage code"
+                                : formData.access_method === "key"
+                                  ? "Where to find the key"
+                                  : "Building access instructions"}{" "}
+                            <span className="text-red-500">*</span>
                         </label>
                         <textarea
                             value={formData.access_note}
                             onChange={(e) => handleChange("access_note", e.target.value)}
                             placeholder={
                                 formData.access_method === "code"
-                                    ? "Enter the door or garage code"
+                                    ? "Enter the code"
                                     : formData.access_method === "key"
                                       ? "Describe where the key is hidden"
-                                      : "Provide building access instructions"
+                                      : "e.g. gate, lobby, concierge"
                             }
-                            rows={3}
-                            className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg resize-none"
+                            rows={2}
+                            className={`${inputPad} resize-none`}
                         />
                     </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer pt-0.5">
                     <input
                         id="book-v2-has-pets"
                         type="checkbox"
@@ -341,23 +368,8 @@ export default function ServiceDetailsForm({
                         }
                         className="h-4 w-4 rounded border-alloy-stone/40 text-alloy-juniper"
                     />
-                    <label htmlFor="book-v2-has-pets" className="text-sm font-medium text-alloy-midnight">
-                        Pets at this address
-                    </label>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-alloy-midnight mb-2">
-                        Anything else we should know before we arrive?
-                    </label>
-                    <textarea
-                        value={formData.additional_notes}
-                        onChange={(e) => handleChange("additional_notes", e.target.value)}
-                        placeholder="Special instructions, parking info, pet details, etc."
-                        rows={3}
-                        className="w-full px-4 py-3 border border-alloy-stone/30 rounded-lg resize-none"
-                    />
-                </div>
+                    <span className="text-sm text-alloy-midnight">Pets at this address</span>
+                </label>
             </div>
         </div>
     );

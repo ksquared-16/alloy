@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ServiceDetails } from "./ServiceDetailsForm";
 
 interface ServiceDetailsSummaryProps {
@@ -33,21 +32,20 @@ export default function ServiceDetailsSummary({
     details,
     onEdit,
 }: ServiceDetailsSummaryProps) {
-    const [showFullNotes, setShowFullNotes] = useState(false);
-    const maxNotesLength = 100;
-
     const legacyProperty =
         Boolean(details.home_type?.trim()) ||
         Boolean(details.bedrooms?.trim()) ||
         Boolean(details.bathrooms?.trim());
 
-    const configurableEntries = Object.entries(details.configurable_values ?? {}).filter(
-        ([, v]) =>
+    const configurableEntries = Object.entries(details.configurable_values ?? {}).filter(([key, v]) => {
+        if (key === "gate_code" && details.access_method !== "building") return false;
+        return (
             v !== undefined &&
             v !== null &&
             !(typeof v === "string" && !v.trim()) &&
             !(Array.isArray(v) && v.length === 0)
-    );
+        );
+    });
 
     return (
         <div className="space-y-3">
@@ -112,25 +110,6 @@ export default function ServiceDetailsSummary({
                         )}
                     </div>
 
-                    {details.additional_notes && (
-                        <div>
-                            <p className="text-sm text-alloy-midnight/70">
-                                <strong className="text-alloy-midnight">Notes:</strong>{" "}
-                                {showFullNotes || details.additional_notes.length <= maxNotesLength
-                                    ? details.additional_notes
-                                    : `${details.additional_notes.substring(0, maxNotesLength)}...`}
-                            </p>
-                            {details.additional_notes.length > maxNotesLength && (
-                                <button
-                                    type="button"
-                                    onClick={() => setShowFullNotes(!showFullNotes)}
-                                    className="text-xs text-alloy-juniper hover:underline mt-1"
-                                >
-                                    {showFullNotes ? "Show less" : "Show more"}
-                                </button>
-                            )}
-                        </div>
-                    )}
                 </div>
             </div>
 

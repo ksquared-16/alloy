@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { parseRoomCount, splitBookV2LocationAccess } from "@/lib/book-v2/bookingCanonicalMaps";
 import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel } from "@/lib/book-v2/resolveBookV2CatalogIds";
+import {
+  getFieldDefinitionMeta,
+  serializeSquareFootageForFieldValue,
+  upsertTypedFieldValue,
+} from "@/lib/bookV2/fieldValueUpsert";
 import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
 import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
 
@@ -16,6 +21,7 @@ export type ServiceDetailsBody = {
   bathrooms?: string | null;
   access_method: string;
   access_note?: string | null;
+  /** @deprecated Ignored; access text uses access_note + native columns only. */
   additional_notes?: string | null;
   has_pets?: boolean | string | number | null;
   /** Public-booking field keys → raw values (aligned with field_definitions). */
@@ -49,7 +55,7 @@ export async function POST(request: NextRequest) {
     const { access_code: locAccessCode, access_notes: locAccessNotes } = splitBookV2LocationAccess({
       access_method: accessMethod,
       access_note: body.access_note,
-      additional_notes: body.additional_notes,
+      additional_notes: null,
     });
 
     const supabase = createServiceRoleClient();
@@ -134,6 +140,22 @@ export async function POST(request: NextRequest) {
     const meta = ((opp as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
     delete meta.service_details_preview;
 
+    const quoteInput = (meta.quote_input as Record<string, unknown> | undefined) ?? {};
+    const sqftFromQuote = quoteInput.square_footage;
+    if (sqftFromQuote != null && String(sqftFromQuote).trim() !== "") {
+      const sqDef = await getFieldDefinitionMeta(supabase, orgId, "location", "square_footage");
+      if (sqDef) {
+        await upsertTypedFieldValue(
+          supabase,
+          orgId,
+          "location",
+          locationId,
+          sqDef,
+          serializeSquareFootageForFieldValue(sqftFromQuote)
+        );
+      }
+    }
+
     const book_v2_service_property = {
       home_type_id: homeTypeId,
       home_type_label: homeTypeLabel,
@@ -142,7 +164,6 @@ export async function POST(request: NextRequest) {
       has_pets: hasPets,
       access_method: accessMethod,
       access_note: body.access_note ?? null,
-      additional_notes: body.additional_notes ?? null,
       address_line1: address,
       city,
       state,

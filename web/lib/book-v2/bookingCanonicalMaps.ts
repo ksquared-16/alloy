@@ -67,13 +67,15 @@ export function quoteSquareFootageToBandKey(raw: string | null | undefined): str
         .replace(/\u2013/g, "-")
         .replace(/\s+/g, " ");
     if (!s) return null;
-    if (s.includes("under") && s.includes("1500")) return "under_1500";
-    if (s.includes("1501") && s.includes("2000")) return "1501_2000";
-    if (s.includes("2001") && s.includes("2600")) return "2001_2600";
-    if (s.includes("2601") && s.includes("3200")) return "2601_3200";
-    if (s.includes("3201") && s.includes("4000")) return "3201_4000";
-    if (s.includes("4001") && s.includes("5500")) return "4001_5500";
-    if (s.includes("over") && s.includes("5500")) return "over_5500";
+    // Tier labels use thousands separators (e.g. "2,001-2,600 sq ft") — strip commas before numeric substring checks.
+    const n = s.replace(/,/g, "");
+    if (n.includes("under") && n.includes("1500")) return "under_1500";
+    if (n.includes("1501") && n.includes("2000")) return "1501_2000";
+    if (n.includes("2001") && n.includes("2600")) return "2001_2600";
+    if (n.includes("2601") && n.includes("3200")) return "2601_3200";
+    if (n.includes("3201") && n.includes("4000")) return "3201_4000";
+    if (n.includes("4001") && n.includes("5500")) return "4001_5500";
+    if (n.includes("over") && n.includes("5500")) return "over_5500";
     return null;
 }
 
