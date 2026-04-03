@@ -45,7 +45,7 @@ export async function ensureCustomerAddressLocation(
     .eq("customer_id", customer_id)
     .eq("location_type", "address");
 
-  const match = (list ?? []).find((row: { address1?: string | null; postal_code?: string | null; city?: string | null }) => {
+  const addressMatches = (row: { address1?: string | null; postal_code?: string | null; city?: string | null }) => {
     const rowA1 = (row.address1 ?? "").trim();
     const rowPc = (row.postal_code ?? "").trim();
     const rowCity = (row.city ?? "").trim();
@@ -53,7 +53,9 @@ export async function ensureCustomerAddressLocation(
       return rowA1 === a1 && rowPc === pc;
     }
     return rowA1 === a1 && rowCity === cityNorm;
-  });
+  };
+
+  const match = (list ?? []).find(addressMatches);
   if (match) {
     const existingId = (match as { id: string }).id;
     const patch: Record<string, unknown> = {};
@@ -72,6 +74,39 @@ export async function ensureCustomerAddressLocation(
       }
     }
     return existingId;
+  }
+
+  // Quote-stage rows often have customer_id null; without claiming them, confirm would insert a new
+  // location and leave field_values on the abandoned quote row.
+  const { data: unassigned } = await supabase
+    .from("locations")
+    .select("id, address1, postal_code, city")
+    .eq("org_id", org_id)
+    .eq("location_type", "address")
+    .is("customer_id", null);
+
+  const orphanMatch = (unassigned ?? []).find(addressMatches);
+  if (orphanMatch) {
+    const claimId = (orphanMatch as { id: string }).id;
+    const claimPatch: Record<string, unknown> = {
+      customer_id,
+      address1: a1 || null,
+      city: cityNorm || null,
+      state: (state ?? "").trim() || null,
+      postal_code: pc || null,
+    };
+    if (a1) claimPatch.label = a1;
+    if (access_method_id !== undefined) claimPatch.access_method_id = access_method_id;
+    if (access_code !== undefined) {
+      claimPatch.access_code = access_code != null && String(access_code).trim() !== "" ? String(access_code).trim() : null;
+    }
+    if (has_pets === true || has_pets === false) claimPatch.has_pets = has_pets;
+    if (access_notes !== undefined) {
+      claimPatch.access_notes = access_notes != null && String(access_notes).trim() !== "" ? String(access_notes).trim() : null;
+    }
+    const { error: claimErr } = await supabase.from("locations").update(claimPatch).eq("id", claimId);
+    if (!claimErr) return claimId;
+    console.error("[BOOKING_LOCATIONS] ensureCustomerAddressLocation claim orphan failed", claimErr);
   }
 
   // Is this the first address location for this customer? (then is_primary = true)

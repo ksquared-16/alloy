@@ -22,6 +22,13 @@ import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/booki
 import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
+import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
+import {
+    getFieldDefinitionMeta,
+    serializeSquareFootageForFieldValue,
+    upsertTypedFieldValue,
+} from "@/lib/bookV2/fieldValueUpsert";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
@@ -95,6 +102,13 @@ function pickServiceDetail(bodyVal: unknown, svcVal: unknown, quoteInputVal: unk
     }
     if (quoteInputVal != null && String(quoteInputVal).trim() !== "") return quoteInputVal;
     return null;
+}
+
+/** Configurable field bag from confirm body (property fields often live only here, not top-level). */
+function pickBookV2PropertyField(bodyVal: unknown, cfgVal: unknown, svcVal: unknown, quoteInputVal: unknown): unknown {
+    if (bodyVal != null && String(bodyVal).trim() !== "") return bodyVal;
+    if (cfgVal != null && String(cfgVal).trim() !== "") return cfgVal;
+    return pickServiceDetail(null, svcVal, quoteInputVal);
 }
 
 type ConfirmIdentityRow = {
@@ -817,6 +831,7 @@ export async function POST(request: NextRequest) {
             home_type,
             bedrooms,
             bathrooms,
+            configurable_field_values: configurable_field_values_body,
             access_method,
             access_note,
             additional_notes,
@@ -894,6 +909,10 @@ export async function POST(request: NextRequest) {
                 : has_pets_body === false || has_pets_body === "false" || has_pets_body === 0
                   ? false
                   : null;
+        const cfgBag: Record<string, unknown> =
+            configurable_field_values_body != null && typeof configurable_field_values_body === "object"
+                ? (configurable_field_values_body as Record<string, unknown>)
+                : {};
         console.log(
             "[BOOK_V2_CONFIRM_START] booking_attempt_id=%s email=%s phone=%s slot_start=%s slot_end=%s frequency_label=%s service_frequency_key=%s discount_code_id=%s discount_program_id=%s discount_code=%s discount_amount=%s",
             booking_attempt_id ?? "None",
@@ -1063,7 +1082,14 @@ export async function POST(request: NextRequest) {
                         }, true);
                         customerId = result.customerId;
                         contactId = result.contactId;
-                        await supabase.from("opportunities").update({ customer_id: customerId, ...(contactId && { primary_contact_id: contactId }) }).eq("id", opportunityId);
+                        await supabase
+                            .from("opportunities")
+                            .update({
+                                customer_id: customerId,
+                                ...(contactId && { primary_contact_id: contactId }),
+                                ...(person_id_from_quote?.trim() && { primary_person_id: person_id_from_quote.trim() }),
+                            })
+                            .eq("id", opportunityId);
                     } catch (err) {
                         const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
                         console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonInConfirm failed", msg, err);
@@ -1329,6 +1355,9 @@ export async function POST(request: NextRequest) {
                 pipeline_stage_id: bookedPipelineStageIdResolved,
                 status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
             };
+            if (typeof personIdFromQuote === "string" && personIdFromQuote.trim()) {
+                oppUpdate.primary_person_id = personIdFromQuote.trim();
+            }
             if (recurringCents != null) (oppUpdate as Record<string, unknown>).recurring_price_cents = recurringCents;
             if (discount_program_id != null) {
                 (oppUpdate as Record<string, unknown>).discount_program_id = discount_program_id;
@@ -1649,7 +1678,9 @@ export async function POST(request: NextRequest) {
                 monetary_value_cents: estimatedPriceCentsElse ?? undefined,
                 customer_id: customerId,
                 ...(contactId != null && { primary_contact_id: contactId }),
-                ...(personIdFromQuote != null && { primary_person_id: personIdFromQuote }),
+                ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                    ? { primary_person_id: personIdFromQuote.trim() }
+                    : {}),
                 metadata: mergedMetaElse,
                 pipeline_stage_id: bookedPipelineStageIdResolved,
                 status_key: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
@@ -1702,7 +1733,9 @@ export async function POST(request: NextRequest) {
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 vertical_id: verticalId,
                 ...(contactId != null && { primary_contact_id: contactId }),
-                ...(personIdFromQuote != null && { primary_person_id: personIdFromQuote }),
+                ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                    ? { primary_person_id: personIdFromQuote.trim() }
+                    : {}),
                 customer_id: customerId,
                 name: `${contact_first_name || ""} ${contact_last_name || ""} — Cleaning`.trim() || "Cleaning Service",
                 status: "open",
@@ -1817,6 +1850,46 @@ export async function POST(request: NextRequest) {
         }
         bookV2PerfLog("canonical_location", tCanonicalLoc, booking_attempt_id ?? null);
 
+        if (locationId && orgIdForLocation) {
+            try {
+                const mergedByKey: Record<string, unknown> = { ...cfgBag };
+                if (home_type != null && String(home_type).trim()) mergedByKey.home_type = home_type;
+                if (bedrooms != null && String(bedrooms).trim()) mergedByKey.bedrooms = bedrooms;
+                if (bathrooms != null && String(bathrooms).trim()) mergedByKey.bathrooms = bathrooms;
+                if (hasPetsResolved === true || hasPetsResolved === false) {
+                    mergedByKey.pets = hasPetsResolved ? "true" : "false";
+                }
+
+                const publicDefs = await loadPublicBookingFieldDefRows(supabase, orgIdForLocation, "location");
+                await upsertConfigurableFieldValuesForEntity(
+                    supabase,
+                    orgIdForLocation,
+                    "location",
+                    locationId,
+                    publicDefs,
+                    mergedByKey
+                );
+
+                const qiPeek = (oppMeta.quote_input as Record<string, unknown> | undefined) ?? {};
+                const sqftFromQuoteRow = qiPeek.square_footage;
+                if (sqftFromQuoteRow != null && String(sqftFromQuoteRow).trim() !== "") {
+                    const sqDef = await getFieldDefinitionMeta(supabase, orgIdForLocation, "location", "square_footage");
+                    if (sqDef) {
+                        await upsertTypedFieldValue(
+                            supabase,
+                            orgIdForLocation,
+                            "location",
+                            locationId,
+                            sqDef,
+                            serializeSquareFootageForFieldValue(sqftFromQuoteRow)
+                        );
+                    }
+                }
+            } catch (fvErr) {
+                console.warn("[BOOK_V2_CONFIRM] location field_values upsert failed", fvErr);
+            }
+        }
+
         const bookingOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
         const resolvedJobSt = await resolveBookingJobStatus(supabase, bookingOrgId, BOOKING_CONFIRM_JOB_STATUS_RESOLVE_KEYS);
         const bookingJobStatusId = resolvedJobSt?.id ?? BOOKING_CONFIRM_JOB_STATUS_ID;
@@ -1871,7 +1944,9 @@ export async function POST(request: NextRequest) {
             const jobUpdatePayload: Record<string, any> = {
                 scheduled_at: slot_start,
                 customer_id: customerId,
-                ...(personIdFromQuote && { primary_person_id: personIdFromQuote }),
+                ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                    ? { primary_person_id: personIdFromQuote.trim() }
+                    : {}),
                 ...(contactId != null && { primary_contact_id: contactId }),
                 is_recurring: is_recurring,
                 service_key: "cleaning",
@@ -1923,7 +1998,9 @@ export async function POST(request: NextRequest) {
                 org_id: process.env.ALLOY_PUBLIC_ORG_ID ?? null,
                 opportunity_id: opportunityId,
                 customer_id: customerId,
-                ...(personIdFromQuote && { primary_person_id: personIdFromQuote }),
+                ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                    ? { primary_person_id: personIdFromQuote.trim() }
+                    : {}),
                 ...(contactId != null && { primary_contact_id: contactId }),
                 vertical_id: verticalId,
                 job_status_id: bookingJobStatusId,
@@ -2041,9 +2118,24 @@ export async function POST(request: NextRequest) {
                   : null;
         const sqftBandKey = quoteSquareFootageToBandKey(sqftBucketRaw);
         const sqftBandIdResolved = sqftBandKey ? await resolveSqftBandIdByKey(supabase, sqftBandKey) : null;
-        const home_type_eff = pickServiceDetail(home_type, svcPropBook.home_type_label, quoteInputForDetails.home_type);
-        const bedrooms_eff = pickServiceDetail(bedrooms, svcPropBook.bedrooms, quoteInputForDetails.bedrooms);
-        const bathrooms_eff = pickServiceDetail(bathrooms, svcPropBook.bathrooms, quoteInputForDetails.bathrooms);
+        const home_type_eff = pickBookV2PropertyField(
+            home_type,
+            cfgBag.home_type,
+            svcPropBook.home_type_label,
+            quoteInputForDetails.home_type
+        );
+        const bedrooms_eff = pickBookV2PropertyField(
+            bedrooms,
+            cfgBag.bedrooms,
+            svcPropBook.bedrooms,
+            quoteInputForDetails.bedrooms
+        );
+        const bathrooms_eff = pickBookV2PropertyField(
+            bathrooms,
+            cfgBag.bathrooms,
+            svcPropBook.bathrooms,
+            quoteInputForDetails.bathrooms
+        );
         const homeTypeIdResolved = await resolveHomeTypeIdByLabel(
             supabase,
             home_type_eff != null ? String(home_type_eff) : null
