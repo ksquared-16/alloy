@@ -1,5 +1,6 @@
 import type { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import type { FieldOption } from "@/lib/fields/fieldDefinitionConfig";
+import { resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
 
@@ -14,6 +15,10 @@ export const CANONICAL_SQFT_TIER_OPTIONS: FieldOption[] = [
     { value: "5500_plus", label: "5,500+ sq ft" },
 ];
 
+/** Active sqft tiers from pricing_square_footage_tiers (keys + pricing dimension link). */
+export type SqftTierDbRow = { tier_key: string; sort_order: number; dimension_value_id: string | null };
+
+/** Tier row with display label resolved from option_sets or pricing_dimension_values. */
 export type SqftTierRow = { tier_key: string; tier_label: string | null; sort_order: number };
 
 /** @deprecated Use CANONICAL_SQFT_TIER_OPTIONS / tier_key-based rows */
@@ -73,10 +78,10 @@ export async function resolveCleaningVerticalId(
     return (data as { id?: string } | null)?.id ?? null;
 }
 
-export async function loadSqftTiersForVertical(supabase: Supabase, verticalId: string): Promise<SqftTierRow[]> {
+export async function loadSqftTiersForVertical(supabase: Supabase, verticalId: string): Promise<SqftTierDbRow[]> {
     const { data, error } = await supabase
         .from("pricing_square_footage_tiers")
-        .select("tier_key, sort_order")
+        .select("tier_key, sort_order, dimension_value_id")
         .eq("vertical_id", verticalId)
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
@@ -84,20 +89,73 @@ export async function loadSqftTiersForVertical(supabase: Supabase, verticalId: s
         console.error("[BOOKING_CATALOG] pricing_square_footage_tiers", error.message);
         return [];
     }
-    return ((data ?? []) as { tier_key: string; sort_order: number }[]).map((r) => ({
+    return ((data ?? []) as { tier_key: string; sort_order: number; dimension_value_id?: string | null }[]).map((r) => ({
         tier_key: String(r.tier_key).trim(),
-        tier_label: null,
         sort_order: typeof r.sort_order === "number" ? r.sort_order : 0,
+        dimension_value_id: r.dimension_value_id != null && String(r.dimension_value_id).trim() ? String(r.dimension_value_id).trim() : null,
     }));
 }
 
+/**
+ * Display labels for public booking: prefer org option_set `square_footage_tier` item labels,
+ * else pricing_dimension_values.value_label for the tier's dimension_value_id.
+ */
+export async function resolveSqftTierDisplayLabels(
+    supabase: Supabase,
+    orgId: string | null,
+    rows: SqftTierDbRow[]
+): Promise<SqftTierRow[]> {
+    const optionLabelByTierKey = new Map<string, string>();
+    if (orgId?.trim()) {
+        const opts = await resolveOptionSetOptions(supabase, orgId.trim(), "square_footage_tier");
+        for (const o of opts) {
+            const k = o.value.trim();
+            if (!k) continue;
+            const lab = (o.label && String(o.label).trim()) || k;
+            optionLabelByTierKey.set(k, lab);
+        }
+    }
+
+    const dimIds = [...new Set(rows.map((r) => r.dimension_value_id).filter((id): id is string => id != null && id !== ""))];
+    const dimLabelById = new Map<string, string>();
+    if (dimIds.length > 0) {
+        const { data: dimRows, error: dimErr } = await supabase
+            .from("pricing_dimension_values")
+            .select("id, value_label")
+            .in("id", dimIds);
+        if (dimErr) {
+            console.warn("[BOOKING_CATALOG] pricing_dimension_values", dimErr.message);
+        } else {
+            for (const d of (dimRows ?? []) as { id: string; value_label?: string | null }[]) {
+                const id = String(d.id).trim();
+                if (!id) continue;
+                const lab = (d.value_label != null && String(d.value_label).trim()) || id;
+                dimLabelById.set(id, lab);
+            }
+        }
+    }
+
+    return rows.map((r) => {
+        const tier_key = r.tier_key.trim();
+        const fromOption = optionLabelByTierKey.get(tier_key);
+        const fromDim = r.dimension_value_id ? dimLabelById.get(r.dimension_value_id) : undefined;
+        const tier_label =
+            (fromOption != null && String(fromOption).trim() !== "" ? String(fromOption).trim() : null) ??
+            (fromDim != null && String(fromDim).trim() !== "" ? String(fromDim).trim() : null);
+        return {
+            tier_key,
+            sort_order: r.sort_order,
+            tier_label,
+        };
+    });
+}
+
 /** Normalize quote/UI value to a tier_key present in tiers (fallback: first canonical tier). */
-export function normalizeSqftKeyInput(val: string | number | null | undefined, tiers: SqftTierRow[]): string {
+export function normalizeSqftKeyInput(val: string | number | null | undefined, tiers: SqftTierDbRow[] | SqftTierRow[]): string {
     const tierList = tiers.length
         ? tiers
         : CANONICAL_SQFT_TIER_OPTIONS.map((o, i) => ({
               tier_key: o.value,
-              tier_label: o.label,
               sort_order: i,
           }));
     const keys = new Set(tierList.map((t) => t.tier_key.trim()));
@@ -120,7 +178,7 @@ export function normalizeSqftKeyInput(val: string | number | null | undefined, t
 export function resolveSquareFootageStorageString(
     _raw: string | number | null | undefined,
     normalizedTierKey: string,
-    _tiers: SqftTierRow[]
+    _tiers: SqftTierDbRow[] | SqftTierRow[]
 ): string {
     return normalizedTierKey;
 }
