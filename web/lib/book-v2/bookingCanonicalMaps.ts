@@ -66,6 +66,28 @@ export function parseBedsFromBody(raw: unknown): number | null {
     return parseRoomCount(String(raw));
 }
 
+/**
+ * Book-v2 sends bedrooms/bathrooms on the top-level body for legacy UI, but public defs after the
+ * beds/baths cutover store values under configurable_field_values.beds / .baths (field_key on location).
+ * Merge both into one raw value for parseBedsFromBody / parseBathroomsForCjd.
+ */
+export function coalesceBookV2BedBathRaw(
+    bodyTop: unknown,
+    mergedCfg: Record<string, unknown>,
+    legacyKey: "bedrooms" | "bathrooms",
+    nativeKey: "beds" | "baths"
+): unknown {
+    if (typeof bodyTop === "number" && Number.isFinite(bodyTop)) return bodyTop;
+    if (bodyTop != null && String(bodyTop).trim() !== "") return bodyTop;
+    const leg = mergedCfg[legacyKey];
+    if (typeof leg === "number" && Number.isFinite(leg)) return leg;
+    if (leg != null && String(leg).trim() !== "") return leg;
+    const nat = mergedCfg[nativeKey];
+    if (typeof nat === "number" && Number.isFinite(nat)) return nat;
+    if (nat != null && String(nat).trim() !== "") return nat;
+    return undefined;
+}
+
 /** Parse bedrooms/bathrooms select values to integers (5+ → 5). */
 /**
  * access_code = gate/door code when method is `code`.

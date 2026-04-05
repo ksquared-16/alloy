@@ -4,6 +4,7 @@ import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLin
 import { ensureCustomerForPersonNative, resolveOrCreatePersonCustomerForBooking } from "@/lib/bookingPersonCustomerResolve";
 import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
 import {
+    coalesceBookV2BedBathRaw,
     homeTypeInputToStableKey,
     parseBathroomsForCjd,
     parseBedsFromBody,
@@ -1456,6 +1457,8 @@ export async function POST(request: NextRequest) {
                 const nativeLoc: Record<string, unknown> = {
                     access_method_key: accessMethodKeyForLocation,
                     access_method_id: null,
+                    access_code: locationAccessCode,
+                    access_notes: locationAccessNotes,
                     updated_at: new Date().toISOString(),
                 };
                 if (verticalId) {
@@ -1476,16 +1479,17 @@ export async function POST(request: NextRequest) {
                 );
                 const hkLoc = homeTypeInputToStableKey(home_type_for_loc);
                 if (hkLoc) nativeLoc.home_type_key = hkLoc;
+                const svcPropRec = svcPropBook as Record<string, unknown>;
                 const bedrooms_for_loc = pickBookV2PropertyField(
-                    bedrooms,
-                    mergedByKey.bedrooms,
-                    svcPropBook.bedrooms,
+                    coalesceBookV2BedBathRaw(bedrooms, mergedByKey, "bedrooms", "beds"),
+                    undefined,
+                    coalesceBookV2BedBathRaw(undefined, svcPropRec, "bedrooms", "beds"),
                     qiPeek.bedrooms
                 );
                 const bathrooms_for_loc = pickBookV2PropertyField(
-                    bathrooms,
-                    mergedByKey.bathrooms,
-                    svcPropBook.bathrooms,
+                    coalesceBookV2BedBathRaw(bathrooms, mergedByKey, "bathrooms", "baths"),
+                    undefined,
+                    coalesceBookV2BedBathRaw(undefined, svcPropRec, "bathrooms", "baths"),
                     qiPeek.bathrooms
                 );
                 const bedsNumLoc = parseBedsFromBody(bedrooms_for_loc);
@@ -1741,16 +1745,17 @@ export async function POST(request: NextRequest) {
             svcPropBook.home_type_label,
             quoteInputForDetails.home_type
         );
+        const svcPropRecEff = svcPropBook as Record<string, unknown>;
         const bedrooms_eff = pickBookV2PropertyField(
-            bedrooms,
-            cfgBag.bedrooms,
-            svcPropBook.bedrooms,
+            coalesceBookV2BedBathRaw(bedrooms, cfgBag, "bedrooms", "beds"),
+            undefined,
+            coalesceBookV2BedBathRaw(undefined, svcPropRecEff, "bedrooms", "beds"),
             quoteInputForDetails.bedrooms
         );
         const bathrooms_eff = pickBookV2PropertyField(
-            bathrooms,
-            cfgBag.bathrooms,
-            svcPropBook.bathrooms,
+            coalesceBookV2BedBathRaw(bathrooms, cfgBag, "bathrooms", "baths"),
+            undefined,
+            coalesceBookV2BedBathRaw(undefined, svcPropRecEff, "bathrooms", "baths"),
             quoteInputForDetails.bathrooms
         );
         const homeTypeKeyResolved = homeTypeInputToStableKey(
@@ -1765,6 +1770,7 @@ export async function POST(request: NextRequest) {
             beds: bedsResolved,
             baths: bathParsed.baths,
             bathrooms_booking_key: bathParsed.bookingKey,
+            access_notes: locationAccessNotes,
         });
 
         // Step 5b: Persist discount redemption immediately after job creation

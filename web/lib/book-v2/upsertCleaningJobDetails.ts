@@ -8,6 +8,8 @@ export type BookV2CleaningJobDetailsInput = {
     baths?: number | null;
     /** Stored on row metadata for display when UI used token keys like 2_5 */
     bathrooms_booking_key?: string | null;
+    /** Non-code access instructions (and lockbox / building notes); mirrors locations.access_notes for the job row. */
+    access_notes?: string | null;
 };
 
 /**
@@ -33,6 +35,12 @@ export async function upsertCleaningJobDetailsFromBookV2(
     if (input.square_footage_tier_key != null) row.square_footage_tier_key = input.square_footage_tier_key;
     if (input.beds != null && Number.isFinite(input.beds)) row.beds = input.beds;
     if (input.baths != null && Number.isFinite(input.baths)) row.baths = input.baths;
+    if (input.access_notes !== undefined) {
+        row.access_notes =
+            input.access_notes != null && String(input.access_notes).trim() !== ""
+                ? String(input.access_notes).trim()
+                : null;
+    }
 
     const { error } = await supabase.from("cleaning_job_details").upsert(row, { onConflict: "job_id" });
     if (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import {
+  coalesceBookV2BedBathRaw,
   homeTypeInputToStableKey,
   parseBathroomsForCjd,
   parseBedsFromBody,
@@ -121,14 +122,8 @@ export async function POST(request: NextRequest) {
         : typeof mergedByKey.home_type === "string"
           ? mergedByKey.home_type.trim() || null
           : null;
-    const bedRaw =
-      body.bedrooms != null && String(body.bedrooms).trim()
-        ? body.bedrooms
-        : mergedByKey.bedrooms;
-    const bathRaw =
-      body.bathrooms != null && String(body.bathrooms).trim()
-        ? body.bathrooms
-        : mergedByKey.bathrooms;
+    const bedRaw = coalesceBookV2BedBathRaw(body.bedrooms, mergedByKey, "bedrooms", "beds");
+    const bathRaw = coalesceBookV2BedBathRaw(body.bathrooms, mergedByKey, "bathrooms", "baths");
     const homeTypeKey = homeTypeInputToStableKey(homeTypeLabel);
     const bedsNum = parseBedsFromBody(bedRaw);
     const bathParsed = parseBathroomsForCjd(bathRaw);
