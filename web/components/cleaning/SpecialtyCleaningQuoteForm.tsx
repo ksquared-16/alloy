@@ -33,11 +33,10 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
     square_footage: "",
     street_address: "",
     city: "",
-    state: "",
     preferred_service_date: "",
     home_type: "",
-    bedrooms: "",
-    bathrooms: "",
+    beds: "",
+    baths: "",
     notes: "",
     email: "",
     phone: "",
@@ -86,12 +85,12 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
     );
   }, [locationFieldDefs]);
 
-  const bedroomOptions = useMemo(() => {
-    return fieldOptionsByKey(locationFieldDefs, "bedrooms") ?? BOOKING_BEDROOM_OPTIONS;
+  const bedOptions = useMemo(() => {
+    return fieldOptionsByKey(locationFieldDefs, "beds") ?? BOOKING_BEDROOM_OPTIONS;
   }, [locationFieldDefs]);
 
-  const bathroomOptions = useMemo(() => {
-    return fieldOptionsByKey(locationFieldDefs, "bathrooms") ?? BOOKING_BATHROOM_OPTIONS;
+  const bathOptions = useMemo(() => {
+    return fieldOptionsByKey(locationFieldDefs, "baths") ?? BOOKING_BATHROOM_OPTIONS;
   }, [locationFieldDefs]);
 
   const title =
@@ -136,8 +135,8 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
       setError("Home type is required.");
       return;
     }
-    if (!form.bedrooms?.trim() || !form.bathrooms?.trim()) {
-      setError("Bedrooms and bathrooms are required.");
+    if (!form.beds?.trim() || !form.baths?.trim()) {
+      setError("Beds and baths are required.");
       return;
     }
     if (!form.phone?.trim()) {
@@ -174,11 +173,10 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
         square_footage: form.square_footage.trim(),
         street_address: form.street_address.trim(),
         city: form.city.trim(),
-        state: form.state.trim() || undefined,
         preferred_service_date: form.preferred_service_date.trim(),
         home_type: form.home_type.trim(),
-        bedrooms: form.bedrooms.trim(),
-        bathrooms: form.bathrooms.trim(),
+        beds: form.beds.trim(),
+        baths: form.baths.trim(),
         notes: form.notes.trim() || undefined,
         email: form.email.trim(),
         phone: form.phone.trim(),
@@ -324,27 +322,24 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
             autoComplete="street-address"
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelBase}>City *</label>
-            <input
-              type="text"
-              value={form.city}
-              onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-              className="public-form-input"
-              autoComplete="address-level2"
-            />
-          </div>
-          <div>
-            <label className={labelBase}>State</label>
-            <input
-              type="text"
-              value={form.state}
-              onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
-              className="public-form-input"
-              autoComplete="address-level1"
-            />
-          </div>
+        <div>
+          <label className={labelBase}>City *</label>
+          <input
+            type="text"
+            value={form.city}
+            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+            className="public-form-input"
+            autoComplete="address-level2"
+          />
+        </div>
+        <div>
+          <label className={labelBase}>Preferred service date *</label>
+          <input
+            type="date"
+            value={form.preferred_service_date}
+            onChange={(e) => setForm((f) => ({ ...f, preferred_service_date: e.target.value }))}
+            className="public-form-input"
+          />
         </div>
         <div>
           <label className={labelBase}>Home type *</label>
@@ -363,14 +358,14 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelBase}>Bedrooms *</label>
+            <label className={labelBase}>Beds *</label>
             <select
-              value={form.bedrooms}
-              onChange={(e) => setForm((f) => ({ ...f, bedrooms: e.target.value }))}
+              value={form.beds}
+              onChange={(e) => setForm((f) => ({ ...f, beds: e.target.value }))}
               className="public-form-input"
             >
               <option value="">Select</option>
-              {bedroomOptions.map((o) => (
+              {bedOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -378,29 +373,20 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
             </select>
           </div>
           <div>
-            <label className={labelBase}>Bathrooms *</label>
+            <label className={labelBase}>Baths *</label>
             <select
-              value={form.bathrooms}
-              onChange={(e) => setForm((f) => ({ ...f, bathrooms: e.target.value }))}
+              value={form.baths}
+              onChange={(e) => setForm((f) => ({ ...f, baths: e.target.value }))}
               className="public-form-input"
             >
               <option value="">Select</option>
-              {bathroomOptions.map((o) => (
+              {bathOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </select>
           </div>
-        </div>
-        <div>
-          <label className={labelBase}>Preferred service date *</label>
-          <input
-            type="date"
-            value={form.preferred_service_date}
-            onChange={(e) => setForm((f) => ({ ...f, preferred_service_date: e.target.value }))}
-            className="public-form-input"
-          />
         </div>
         <div className="space-y-3">
           <p className={labelBase}>Photos * (one per room)</p>

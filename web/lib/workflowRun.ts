@@ -1164,16 +1164,16 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
 
     const sched = p.schedule as Record<string, unknown> | undefined;
     const j = p.job as Record<string, unknown> | undefined;
-    const hasJobOrSchedule =
-        (sched != null && typeof sched === "object") || (j != null && typeof j === "object");
-    if (!hasJobOrSchedule) {
-        return;
-    }
 
-    const locationId =
+    let locationId =
         (sched?.location_id != null ? String(sched.location_id).trim() : "") ||
         (j?.location_id != null ? String(j.location_id).trim() : "") ||
         "";
+
+    if (!locationId && p.opportunity != null && typeof p.opportunity === "object") {
+        const oppLoc = (p.opportunity as Record<string, unknown>).location_id;
+        if (oppLoc != null && String(oppLoc).trim() !== "") locationId = String(oppLoc).trim();
+    }
 
     if (!locationId) {
         return;

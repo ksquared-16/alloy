@@ -34,17 +34,62 @@ function pickStr(v: unknown): string | null {
     return s || null;
 }
 
-/** Readable lines from locations.metadata / jobs.metadata (best-effort). */
+function formatBedBathDisplay(v: unknown): string | null {
+    if (v == null) return null;
+    if (typeof v === "number" && Number.isFinite(v)) {
+        return v % 1 === 0 ? String(Math.round(v)) : String(v);
+    }
+    const s = String(v).trim();
+    return s || null;
+}
+
+function humanizeStableKey(key: unknown): string | null {
+    if (key == null || String(key).trim() === "") return null;
+    return String(key).replace(/_/g, " ");
+}
+
+/**
+ * Canonical location row fields (beds, baths, *_key, access columns).
+ * Prefer this over metadata-only snapshots for action links and summaries.
+ */
+export function houseDetailLinesFromLocationRow(loc: Record<string, unknown>): string[] {
+    const lines: string[] = [];
+    const bed = formatBedBathDisplay(loc.beds);
+    const bath = formatBedBathDisplay(loc.baths);
+    if (bed) lines.push(`${bed} bed${bed === "1" ? "" : "s"}`);
+    if (bath) lines.push(`${bath} bath${bath === "1" ? "" : "s"}`);
+    const hk = humanizeStableKey(loc.home_type_key);
+    if (hk) lines.push(hk);
+    const sq = humanizeStableKey(loc.square_footage_tier_key);
+    if (sq) lines.push(`Sq ft tier: ${sq}`);
+    const am = humanizeStableKey(loc.access_method_key);
+    if (am) lines.push(`Access: ${am}`);
+    const code = pickStr(loc.access_code);
+    if (code) lines.push(`Code: ${code}`);
+    const an = pickStr(loc.access_notes);
+    if (an) lines.push(an);
+    if (loc.has_pets === true) lines.push("Pets in home");
+    return lines;
+}
+
+/** Readable lines from locations.metadata / jobs.metadata (best-effort legacy). */
 export function houseDetailsFromMetadata(meta: unknown): string[] {
     const m = asRecord(meta);
     const lines: string[] = [];
-    const bed = m.bedrooms ?? m.bedroom_count ?? m.num_bedrooms;
-    const bath = m.bathrooms ?? m.bathroom_count ?? m.num_bathrooms;
-    const sqft = m.square_footage ?? m.sqft ?? m.square_feet;
-    const pets = m.has_pets;
+    const bed = m.beds ?? m.bedrooms ?? m.bedroom_count ?? m.num_bedrooms;
+    const bath = m.baths ?? m.bathrooms ?? m.bathroom_count ?? m.num_bathrooms;
     if (bed != null && String(bed).trim()) lines.push(`${bed} bed${String(bed) === "1" ? "" : "s"}`);
     if (bath != null && String(bath).trim()) lines.push(`${bath} bath${String(bath) === "1" ? "" : "s"}`);
-    if (sqft != null && String(sqft).trim()) lines.push(`${sqft} sq ft`);
+    const tierK = m.square_footage_tier_key ?? m.square_footage_tier;
+    if (tierK != null && String(tierK).trim()) {
+        const h = humanizeStableKey(tierK);
+        if (h) lines.push(`Sq ft tier: ${h}`);
+    }
+    const sqftLabel = m.square_footage ?? m.sqft ?? m.square_feet;
+    if (sqftLabel != null && String(sqftLabel).trim() && (tierK == null || String(tierK).trim() === "")) {
+        lines.push(`${sqftLabel} sq ft`);
+    }
+    const pets = m.has_pets;
     if (pets === true) lines.push("Pets in home");
     const notes = pickStr(m.access_notes ?? m.property_notes ?? m.cleaning_notes);
     if (notes) lines.push(notes);
@@ -75,6 +120,10 @@ function uuidish(v: unknown): string | null {
     const s = String(v).trim();
     return s || null;
 }
+
+/** Location columns for customer/vendor-facing summaries (canonical + legacy metadata fallback). */
+const ACTION_LINK_LOCATION_SELECT =
+    "label, address1, address2, city, state, postal_code, metadata, beds, baths, home_type_key, square_footage_tier_key, access_method_key, access_code, access_notes, has_pets";
 
 /**
  * Same schedule + location resolution as the vendor-accept action-link UI (`hydrateActionLinkDisplay` job branch):
@@ -112,7 +161,11 @@ export async function loadJobScheduleAndLocationForActionLink(
 
     let location: Record<string, unknown> | null = null;
     if (locId) {
-        const { data: loc } = await supabase.from("locations").select("*").eq("id", locId).maybeSingle();
+        const { data: loc } = await supabase
+            .from("locations")
+            .select(ACTION_LINK_LOCATION_SELECT)
+            .eq("id", locId)
+            .maybeSingle();
         location = (loc as Record<string, unknown>) ?? null;
     }
 
@@ -338,15 +391,16 @@ export async function hydrateActionLinkDisplay(
                     if (locId) {
                         const { data: loc } = await supabase
                             .from("locations")
-                            .select("label, address1, address2, city, state, postal_code, metadata")
+                            .select(ACTION_LINK_LOCATION_SELECT)
                             .eq("id", locId)
                             .maybeSingle();
                         if (loc) {
+                            const locRec = loc as Record<string, unknown>;
                             details.location_summary = buildLocationSummary(loc as Record<string, string | null>);
-                            const hl = houseDetailsFromMetadata(
-                                (loc as { metadata?: unknown }).metadata
-                            );
-                            if (hl.length) details.house_detail_lines = hl;
+                            const fromRow = houseDetailLinesFromLocationRow(locRec);
+                            const fromMeta = houseDetailsFromMetadata(locRec.metadata);
+                            details.house_detail_lines =
+                                fromRow.length > 0 ? fromRow : fromMeta.length > 0 ? fromMeta : [];
                         }
                     }
                     const jobHouse = houseDetailsFromMetadata(j.metadata);
@@ -399,9 +453,12 @@ export async function hydrateActionLinkDisplay(
                 }
 
                 if (ctx.location) {
+                    const locRec = ctx.location as Record<string, unknown>;
                     details.location_summary = buildLocationSummary(ctx.location as Record<string, string | null>);
-                    const hl = houseDetailsFromMetadata((ctx.location as { metadata?: unknown }).metadata);
-                    if (hl.length) details.house_detail_lines = hl;
+                    const fromRow = houseDetailLinesFromLocationRow(locRec);
+                    const fromMeta = houseDetailsFromMetadata(locRec.metadata);
+                    details.house_detail_lines =
+                        fromRow.length > 0 ? fromRow : fromMeta.length > 0 ? fromMeta : [];
                 }
 
                 if (sch) {

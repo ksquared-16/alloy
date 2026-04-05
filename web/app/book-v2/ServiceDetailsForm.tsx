@@ -18,7 +18,11 @@ export interface ServiceDetails {
     configurable_values: Record<string, string | boolean | string[]>;
     /** When no applicable public defs exist, legacy property selects (optional). */
     home_type?: string;
+    beds?: string;
+    baths?: string;
+    /** @deprecated Local storage / legacy; mapped to beds */
     bedrooms?: string;
+    /** @deprecated Mapped to baths */
     bathrooms?: string;
 }
 
@@ -41,6 +45,8 @@ export const SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS = new Set(["alarm_notes"
 const SERVICE_DETAILS_CONFIG_LAYOUT_EXCLUDED_KEYS = new Set([
     "access_method",
     "parking_notes",
+    "beds",
+    "baths",
     "bedrooms",
     "bathrooms",
     "home_type",
@@ -78,6 +84,8 @@ export default function ServiceDetailsForm({
             initialData?.configurable_values ?? emptyConfigurable()
         ),
         home_type: initialData?.home_type,
+        beds: initialData?.beds ?? initialData?.bedrooms,
+        baths: initialData?.baths ?? initialData?.bathrooms,
         bedrooms: initialData?.bedrooms,
         bathrooms: initialData?.bathrooms,
     });
@@ -170,25 +178,25 @@ export default function ServiceDetailsForm({
 
     const defsReady = !defsLoading;
 
-    const bedroomFieldDef = useMemo(
-        () => fieldsForServiceStep.find((f) => f.field_key === "bedrooms"),
+    const bedFieldDef = useMemo(
+        () => fieldsForServiceStep.find((f) => f.field_key === "beds"),
         [fieldsForServiceStep]
     );
-    const bathroomFieldDef = useMemo(
-        () => fieldsForServiceStep.find((f) => f.field_key === "bathrooms"),
+    const bathFieldDef = useMemo(
+        () => fieldsForServiceStep.find((f) => f.field_key === "baths"),
         [fieldsForServiceStep]
     );
     const homeTypeFieldDef = useMemo(
         () => fieldsForServiceStep.find((f) => f.field_key === "home_type"),
         [fieldsForServiceStep]
     );
-    const bedroomOptions =
-        bedroomFieldDef?.options?.length && bedroomFieldDef.options.length > 0
-            ? bedroomFieldDef.options
+    const bedOptions =
+        bedFieldDef?.options?.length && bedFieldDef.options.length > 0
+            ? bedFieldDef.options
             : BOOKING_BEDROOM_OPTIONS;
-    const bathroomOptions =
-        bathroomFieldDef?.options?.length && bathroomFieldDef.options.length > 0
-            ? bathroomFieldDef.options
+    const bathOptions =
+        bathFieldDef?.options?.length && bathFieldDef.options.length > 0
+            ? bathFieldDef.options
             : BOOKING_BATHROOM_OPTIONS;
     /** Documented fallback if `home_type` is missing from public defs (org misconfiguration). */
     const FALLBACK_HOME_TYPES = [
@@ -213,17 +221,25 @@ export default function ServiceDetailsForm({
                         rest.configurable_values && typeof rest.configurable_values === "object"
                             ? { ...prev.configurable_values, ...rest.configurable_values }
                             : prev.configurable_values;
-                    const bed = typeof rest.bedrooms === "string" && rest.bedrooms.trim() ? rest.bedrooms : undefined;
-                    const bath = typeof rest.bathrooms === "string" && rest.bathrooms.trim() ? rest.bathrooms : undefined;
+                    const bed =
+                        (typeof rest.beds === "string" && rest.beds.trim() ? rest.beds : undefined) ??
+                        (typeof rest.bedrooms === "string" && rest.bedrooms.trim() ? rest.bedrooms : undefined);
+                    const bath =
+                        (typeof rest.baths === "string" && rest.baths.trim() ? rest.baths : undefined) ??
+                        (typeof rest.bathrooms === "string" && rest.bathrooms.trim() ? rest.bathrooms : undefined);
                     const ht =
                         typeof rest.home_type === "string" && rest.home_type.trim() ? rest.home_type : undefined;
                     const cfgNext = { ...mergedCfg };
+                    if (bed && (cfgNext.beds === undefined || cfgNext.beds === "")) cfgNext.beds = bed;
+                    if (bath && (cfgNext.baths === undefined || cfgNext.baths === "")) cfgNext.baths = bath;
                     if (bed && (cfgNext.bedrooms === undefined || cfgNext.bedrooms === "")) cfgNext.bedrooms = bed;
                     if (bath && (cfgNext.bathrooms === undefined || cfgNext.bathrooms === "")) cfgNext.bathrooms = bath;
                     if (ht && (cfgNext.home_type === undefined || cfgNext.home_type === "")) cfgNext.home_type = ht;
                     return {
                         ...prev,
                         ...rest,
+                        beds: bed ?? prev.beds,
+                        baths: bath ?? prev.baths,
                         has_pets: rest.has_pets === true,
                         configurable_values: withoutExcludedConfigurableValues(cfgNext),
                     };
@@ -253,8 +269,9 @@ export default function ServiceDetailsForm({
             if (!data.address.trim() || !data.city.trim()) return false;
             if (data.access_method !== "home" && !data.access_note.trim()) return false;
 
-            const bedRaw = data.configurable_values.bedrooms ?? data.bedrooms;
-            const bathRaw = data.configurable_values.bathrooms ?? data.bathrooms;
+            const bedRaw = data.configurable_values.beds ?? data.beds ?? data.configurable_values.bedrooms ?? data.bedrooms;
+            const bathRaw =
+                data.configurable_values.baths ?? data.baths ?? data.configurable_values.bathrooms ?? data.bathrooms;
             if (!String(bedRaw ?? "").trim() || !String(bathRaw ?? "").trim()) return false;
 
             const homeRaw = data.configurable_values.home_type ?? data.home_type;
@@ -297,19 +314,19 @@ export default function ServiceDetailsForm({
         }));
     };
 
-    const setBedroomsSelection = (v: string) => {
+    const setBedsSelection = (v: string) => {
         setFormData((prev) => ({
             ...prev,
-            bedrooms: v,
-            configurable_values: { ...prev.configurable_values, bedrooms: v },
+            beds: v,
+            configurable_values: { ...prev.configurable_values, beds: v },
         }));
     };
 
-    const setBathroomsSelection = (v: string) => {
+    const setBathsSelection = (v: string) => {
         setFormData((prev) => ({
             ...prev,
-            bathrooms: v,
-            configurable_values: { ...prev.configurable_values, bathrooms: v },
+            baths: v,
+            configurable_values: { ...prev.configurable_values, baths: v },
         }));
     };
 
@@ -321,11 +338,15 @@ export default function ServiceDetailsForm({
         }));
     };
 
-    const bedroomSelectValue =
+    const bedSelectValue =
+        (typeof formData.configurable_values.beds === "string" && formData.configurable_values.beds) ||
+        formData.beds ||
         (typeof formData.configurable_values.bedrooms === "string" && formData.configurable_values.bedrooms) ||
         formData.bedrooms ||
         "";
-    const bathroomSelectValue =
+    const bathSelectValue =
+        (typeof formData.configurable_values.baths === "string" && formData.configurable_values.baths) ||
+        formData.baths ||
         (typeof formData.configurable_values.bathrooms === "string" && formData.configurable_values.bathrooms) ||
         formData.bathrooms ||
         "";
@@ -409,15 +430,15 @@ export default function ServiceDetailsForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
-                            Bedrooms <span className="text-red-500">*</span>
+                            Beds <span className="text-red-500">*</span>
                         </label>
                         <select
-                            value={bedroomSelectValue}
-                            onChange={(e) => setBedroomsSelection(e.target.value)}
+                            value={bedSelectValue}
+                            onChange={(e) => setBedsSelection(e.target.value)}
                             className={`${inputPad} bg-white`}
                         >
                             <option value="">Select</option>
-                            {bedroomOptions.map((opt) => (
+                            {bedOptions.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
                                     {opt.label}
                                 </option>
@@ -426,15 +447,15 @@ export default function ServiceDetailsForm({
                     </div>
                     <div>
                         <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
-                            Bathrooms <span className="text-red-500">*</span>
+                            Baths <span className="text-red-500">*</span>
                         </label>
                         <select
-                            value={bathroomSelectValue}
-                            onChange={(e) => setBathroomsSelection(e.target.value)}
+                            value={bathSelectValue}
+                            onChange={(e) => setBathsSelection(e.target.value)}
                             className={`${inputPad} bg-white`}
                         >
                             <option value="">Select</option>
-                            {bathroomOptions.map((opt) => (
+                            {bathOptions.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
                                     {opt.label}
                                 </option>

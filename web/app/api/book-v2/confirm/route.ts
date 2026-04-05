@@ -557,8 +557,10 @@ function getCadenceIntervalFromServiceFrequencyKey(
  * - contact_last_name: string (optional)
  * - address: string (optional)
  * - city: string (optional)
- * - bedrooms: string (optional)
- * - bathrooms: string (optional)
+ * - bedrooms: string (optional; legacy alias for beds)
+ * - bathrooms: string (optional; legacy alias for baths)
+ * - beds: string (optional; canonical booking select value)
+ * - baths: string (optional)
  * - access_method: string (optional)
  * - access_note: string (optional)
  * - additional_notes: string (optional)
@@ -596,6 +598,8 @@ export async function POST(request: NextRequest) {
             home_type,
             bedrooms,
             bathrooms,
+            beds: beds_body,
+            baths: baths_body,
             configurable_field_values: configurable_field_values_body,
             access_method,
             access_note,
@@ -1449,6 +1453,8 @@ export async function POST(request: NextRequest) {
                 if (home_type != null && String(home_type).trim()) mergedByKey.home_type = home_type;
                 if (bedrooms != null && String(bedrooms).trim()) mergedByKey.bedrooms = bedrooms;
                 if (bathrooms != null && String(bathrooms).trim()) mergedByKey.bathrooms = bathrooms;
+                if (beds_body != null && String(beds_body).trim()) mergedByKey.beds = beds_body;
+                if (baths_body != null && String(baths_body).trim()) mergedByKey.baths = baths_body;
                 if (hasPetsResolved === true || hasPetsResolved === false) {
                     mergedByKey.pets = hasPetsResolved ? "true" : "false";
                 }
@@ -1481,16 +1487,16 @@ export async function POST(request: NextRequest) {
                 if (hkLoc) nativeLoc.home_type_key = hkLoc;
                 const svcPropRec = svcPropBook as Record<string, unknown>;
                 const bedrooms_for_loc = pickBookV2PropertyField(
-                    coalesceBookV2BedBathRaw(bedrooms, mergedByKey, "bedrooms", "beds"),
+                    coalesceBookV2BedBathRaw(beds_body ?? bedrooms, mergedByKey, "bedrooms", "beds"),
                     undefined,
                     coalesceBookV2BedBathRaw(undefined, svcPropRec, "bedrooms", "beds"),
-                    qiPeek.bedrooms
+                    qiPeek.beds ?? qiPeek.bedrooms
                 );
                 const bathrooms_for_loc = pickBookV2PropertyField(
-                    coalesceBookV2BedBathRaw(bathrooms, mergedByKey, "bathrooms", "baths"),
+                    coalesceBookV2BedBathRaw(baths_body ?? bathrooms, mergedByKey, "bathrooms", "baths"),
                     undefined,
                     coalesceBookV2BedBathRaw(undefined, svcPropRec, "bathrooms", "baths"),
-                    qiPeek.bathrooms
+                    qiPeek.baths ?? qiPeek.bathrooms
                 );
                 const bedsNumLoc = parseBedsFromBody(bedrooms_for_loc);
                 const bathLoc = parseBathroomsForCjd(bathrooms_for_loc);
@@ -1732,11 +1738,14 @@ export async function POST(request: NextRequest) {
                 ? { ...qiOpp, ...(quote_input as Record<string, unknown>) }
                 : qiOpp;
         const sqftBucketRaw =
-            typeof quoteInputForDetails.square_footage === "string"
-                ? quoteInputForDetails.square_footage
-                : quoteInputForDetails.square_footage != null
-                  ? String(quoteInputForDetails.square_footage)
-                  : null;
+            quoteInputForDetails.square_footage_tier_key != null &&
+            String(quoteInputForDetails.square_footage_tier_key).trim() !== ""
+                ? String(quoteInputForDetails.square_footage_tier_key)
+                : typeof quoteInputForDetails.square_footage === "string"
+                  ? quoteInputForDetails.square_footage
+                  : quoteInputForDetails.square_footage != null
+                    ? String(quoteInputForDetails.square_footage)
+                    : null;
         const sqftTiersForJob = await loadSqftTiersForVertical(supabase, verticalId);
         const tierKeyResolved = normalizeSqftKeyInput(sqftBucketRaw, sqftTiersForJob);
         const home_type_eff = pickBookV2PropertyField(
@@ -1747,16 +1756,16 @@ export async function POST(request: NextRequest) {
         );
         const svcPropRecEff = svcPropBook as Record<string, unknown>;
         const bedrooms_eff = pickBookV2PropertyField(
-            coalesceBookV2BedBathRaw(bedrooms, cfgBag, "bedrooms", "beds"),
+            coalesceBookV2BedBathRaw(beds_body ?? bedrooms, cfgBag, "bedrooms", "beds"),
             undefined,
             coalesceBookV2BedBathRaw(undefined, svcPropRecEff, "bedrooms", "beds"),
-            quoteInputForDetails.bedrooms
+            quoteInputForDetails.beds ?? quoteInputForDetails.bedrooms
         );
         const bathrooms_eff = pickBookV2PropertyField(
-            coalesceBookV2BedBathRaw(bathrooms, cfgBag, "bathrooms", "baths"),
+            coalesceBookV2BedBathRaw(baths_body ?? bathrooms, cfgBag, "bathrooms", "baths"),
             undefined,
             coalesceBookV2BedBathRaw(undefined, svcPropRecEff, "bathrooms", "baths"),
-            quoteInputForDetails.bathrooms
+            quoteInputForDetails.baths ?? quoteInputForDetails.bathrooms
         );
         const homeTypeKeyResolved = homeTypeInputToStableKey(
             home_type_eff != null ? String(home_type_eff) : null

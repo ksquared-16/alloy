@@ -45,10 +45,13 @@ type SpecialtyBody = {
   square_footage?: string | number;
   street_address?: string;
   city?: string;
-  state?: string;
   preferred_service_date?: string;
   home_type?: string;
+  beds?: string;
+  baths?: string;
+  /** @deprecated Use beds */
   bedrooms?: string;
+  /** @deprecated Use baths */
   bathrooms?: string;
   notes?: string;
   sms_consent?: boolean;
@@ -152,8 +155,8 @@ export async function POST(request: NextRequest) {
     const city = body.city?.trim() || null;
     const preferred_service_date = body.preferred_service_date?.trim() || null;
     const home_type = body.home_type?.trim() || null;
-    const bedrooms = body.bedrooms?.trim() || null;
-    const bathrooms = body.bathrooms?.trim() || null;
+    const beds = (body.beds ?? body.bedrooms)?.trim() || null;
+    const baths = (body.baths ?? body.bathrooms)?.trim() || null;
 
     if (!street || !city) {
       return NextResponse.json(
@@ -170,9 +173,9 @@ export async function POST(request: NextRequest) {
     if (!home_type) {
       return NextResponse.json({ ok: false, message: "Home type is required" }, { status: 400 });
     }
-    if (!bedrooms || !bathrooms) {
+    if (!beds || !baths) {
       return NextResponse.json(
-        { ok: false, message: "Bedrooms and bathrooms are required" },
+        { ok: false, message: "Beds and baths are required" },
         { status: 400 }
       );
     }
@@ -250,6 +253,16 @@ export async function POST(request: NextRequest) {
       pipelineStageEnvFallback("quote_started") ??
       LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID;
 
+    const needsAQuoteStageId =
+      (await resolvePipelineStageIdByOrgKey(supabase, orgIdForWrites, "needs_a_quote")) ??
+      pipelineStageEnvFallback("needs_a_quote") ??
+      quoteStartedStageId;
+    if (needsAQuoteStageId === quoteStartedStageId) {
+      console.warn(
+        "[SPECIALTY_QUOTE_START] needs_a_quote pipeline stage not resolved; using quote_started stage id as fallback — run migration 20260404180000_needs_a_quote_stage_and_public_beds_baths.sql"
+      );
+    }
+
     const [opportunityFreqDef, personSmsConsentDef, personEmailConsentDef] = await Promise.all([
       getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "cleaning_frequency"),
       body.sms_consent
@@ -271,22 +284,23 @@ export async function POST(request: NextRequest) {
     }
 
     const quote_started_at = new Date().toISOString();
-    const state = body.state?.trim() || null;
     const notes = body.notes?.trim() || null;
+    /** Oregon-only service area; not collected from the client. */
+    const locationState = "OR";
 
     const quote_input: Record<string, unknown> = {
       zip,
+      square_footage_tier_key: squareFootageOption,
       square_footage: squareFootageStored,
       cleaning_type: cleaningType,
       cleaning_frequency: "one_time",
-      cleaning_frequency_key: null,
+      cleaning_frequency_key: "one_time",
       street_address: street,
       city,
-      state,
       preferred_service_date,
       home_type,
-      bedrooms,
-      bathrooms,
+      beds,
+      baths,
       notes,
       specialty_quote_notes: notes,
       specialty_request: true,
@@ -331,12 +345,12 @@ export async function POST(request: NextRequest) {
           label: quoteLocationLabel(personName, zip),
           address1: street,
           city,
-          state,
+          state: locationState,
           ...quoteStartNativeLocationPatch(
             {
               home_type,
-              bedrooms,
-              bathrooms,
+              beds,
+              baths,
             } as Record<string, unknown>,
             squareFootageOption
           ),
@@ -355,12 +369,12 @@ export async function POST(request: NextRequest) {
         .update({
           address1: street,
           city,
-          state,
+          state: locationState,
           ...quoteStartNativeLocationPatch(
             {
               home_type,
-              bedrooms,
-              bathrooms,
+              beds,
+              baths,
             } as Record<string, unknown>,
             squareFootageOption
           ),
@@ -378,8 +392,8 @@ export async function POST(request: NextRequest) {
         .from("opportunities")
         .update({
           location_id: locationId,
-          pipeline_stage_id: quoteStartedStageId,
-          status_key: "quote_started",
+          pipeline_stage_id: needsAQuoteStageId,
+          status_key: "needs_a_quote",
           status: "open",
           vertical_id: verticalId,
           estimated_price_cents: null,
@@ -407,8 +421,8 @@ export async function POST(request: NextRequest) {
           primary_contact_id: null,
           customer_id: null,
           location_id: locationId,
-          pipeline_stage_id: quoteStartedStageId,
-          status_key: "quote_started",
+          pipeline_stage_id: needsAQuoteStageId,
+          status_key: "needs_a_quote",
           name: opportunityName,
           status: "open",
           source: "website",
@@ -522,13 +536,13 @@ export async function POST(request: NextRequest) {
       await upsertTypedFieldValue(supabase, orgIdForWrites, "opportunity", opportunityId, specNotesDef, notes);
     }
 
-    const brDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "bedrooms");
-    if (brDef && bedrooms) {
-      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, brDef, bedrooms);
+    const bedsDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "beds");
+    if (bedsDef && beds) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, bedsDef, beds);
     }
-    const baDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "bathrooms");
-    if (baDef && bathrooms) {
-      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, baDef, bathrooms);
+    const bathsDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "baths");
+    if (bathsDef && baths) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, bathsDef, baths);
     }
     const htDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "home_type");
     if (htDef && home_type) {

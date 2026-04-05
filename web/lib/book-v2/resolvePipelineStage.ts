@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Resolve pipeline_stages.id by org + semantic key (Batch 3.7).
  * Configure rows: UPDATE pipeline_stages SET key = 'quote_started' WHERE …
- * Transitional env fallbacks: BOOK_V2_QUOTE_STARTED_STAGE_ID, BOOK_V2_BOOKED_STAGE_ID
+ * Transitional env fallbacks: BOOK_V2_QUOTE_STARTED_STAGE_ID, BOOK_V2_NEEDS_A_QUOTE_STAGE_ID, BOOK_V2_BOOKED_STAGE_ID
  */
 export async function resolvePipelineStageIdByOrgKey(
     supabase: SupabaseClient,
@@ -40,9 +40,13 @@ export async function resolvePipelineStageIdByOrgKey(
     return (anyRow as { id?: string } | null)?.id ?? null;
 }
 
-export function pipelineStageEnvFallback(stageKey: "quote_started" | "booked"): string | null {
+export function pipelineStageEnvFallback(stageKey: "quote_started" | "booked" | "needs_a_quote"): string | null {
     if (stageKey === "quote_started") {
         const v = process.env.BOOK_V2_QUOTE_STARTED_STAGE_ID?.trim();
+        return v || null;
+    }
+    if (stageKey === "needs_a_quote") {
+        const v = process.env.BOOK_V2_NEEDS_A_QUOTE_STAGE_ID?.trim();
         return v || null;
     }
     const v = process.env.BOOK_V2_BOOKED_STAGE_ID?.trim();

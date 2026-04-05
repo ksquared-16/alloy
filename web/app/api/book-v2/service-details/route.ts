@@ -23,7 +23,11 @@ export type ServiceDetailsBody = {
   state?: string | null;
   postal_code?: string | null;
   home_type?: string | null;
+  beds?: string | null;
+  baths?: string | null;
+  /** @deprecated Use beds */
   bedrooms?: string | null;
+  /** @deprecated Use baths */
   bathrooms?: string | null;
   access_method: string;
   access_note?: string | null;
@@ -114,6 +118,8 @@ export async function POST(request: NextRequest) {
     if (body.home_type != null && String(body.home_type).trim()) mergedByKey.home_type = body.home_type;
     if (body.bedrooms != null && String(body.bedrooms).trim()) mergedByKey.bedrooms = body.bedrooms;
     if (body.bathrooms != null && String(body.bathrooms).trim()) mergedByKey.bathrooms = body.bathrooms;
+    if (body.beds != null && String(body.beds).trim()) mergedByKey.beds = body.beds;
+    if (body.baths != null && String(body.baths).trim()) mergedByKey.baths = body.baths;
     if (hasPets === true || hasPets === false) mergedByKey.pets = hasPets ? "true" : "false";
 
     const homeTypeLabel =
@@ -122,8 +128,8 @@ export async function POST(request: NextRequest) {
         : typeof mergedByKey.home_type === "string"
           ? mergedByKey.home_type.trim() || null
           : null;
-    const bedRaw = coalesceBookV2BedBathRaw(body.bedrooms, mergedByKey, "bedrooms", "beds");
-    const bathRaw = coalesceBookV2BedBathRaw(body.bathrooms, mergedByKey, "bathrooms", "baths");
+    const bedRaw = coalesceBookV2BedBathRaw(body.beds ?? body.bedrooms, mergedByKey, "bedrooms", "beds");
+    const bathRaw = coalesceBookV2BedBathRaw(body.baths ?? body.bathrooms, mergedByKey, "bathrooms", "baths");
     const homeTypeKey = homeTypeInputToStableKey(homeTypeLabel);
     const bedsNum = parseBedsFromBody(bedRaw);
     const bathParsed = parseBathroomsForCjd(bathRaw);
@@ -156,8 +162,8 @@ export async function POST(request: NextRequest) {
     const book_v2_service_property = {
       home_type_key: homeTypeKey,
       home_type_label: homeTypeLabel,
-      bedrooms: bedsNum ?? parseRoomCount(bedRaw != null ? String(bedRaw) : undefined),
-      bathrooms: bathsNum,
+      beds: bedsNum ?? parseRoomCount(bedRaw != null ? String(bedRaw) : undefined),
+      baths: bathsNum,
       bathrooms_booking_key: bathParsed.bookingKey,
       has_pets: hasPets,
       access_method: accessMethod,
