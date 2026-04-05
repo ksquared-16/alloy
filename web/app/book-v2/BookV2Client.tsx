@@ -10,7 +10,6 @@ import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails, withoutExcludedConfigurableValues } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
-import GhlEmbed from "@/components/GhlEmbed";
 import { catalogFrequencyChoices } from "@/lib/book-v2/catalogFrequencyChoices";
 import { inferLegacyCleaningFrequencyApiKey, resolveRpcFrequencyKey } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 import { trackMetaEvent } from "@/lib/metaPixel";
@@ -84,7 +83,6 @@ function getFirstVisitGrossSubtotal(quote: QuoteResponse | null | undefined): nu
 
 type BookingStep =
     | "quote_start"
-    | "specialty_quote"
     | "refine_quote"
     | "slot_selection"
     | "service_details"
@@ -306,8 +304,6 @@ function addonTokenFromQuoteAddon(a: { id?: string; name?: string }): string | n
     return null;
 }
 
-const SPECIALTY_CLEANING_GHL_EMBED_SRC = "https://api.leadconnectorhq.com/widget/form/L8JC9XCbA0miUG3D7zIT";
-
 /**
  * Fire-and-forget: create contact/opportunity via quote-start when user lands with
  * prefill (e.g. query params) so we don't lose quote-only leads. Does not block UI.
@@ -455,7 +451,6 @@ export default function BookV2Client() {
         square_footage: "" as string,
         /** `one_time` or pricing_frequencies.frequency_key from booking-config */
         cleaning_frequency_key: "",
-        cleaning_type: "standard" as "standard" | "move_out" | "heavy_clean",
         email: "",
         phone: "",
     });
@@ -510,17 +505,6 @@ export default function BookV2Client() {
 
     const debug = searchParams?.get("debug") === "1";
     const campaignFirstFree4x120 = !debug && isFirstFree4x120CampaignQuery(searchParams?.get("campaign"));
-
-    const specialtyQuoteFromUrlAppliedRef = useRef(false);
-    useEffect(() => {
-        if (debug || specialtyQuoteFromUrlAppliedRef.current) return;
-        const ct = searchParams?.get("cleaning_type");
-        if (ct === "move_out" || ct === "heavy_clean") {
-            specialtyQuoteFromUrlAppliedRef.current = true;
-            setQuoteStartForm((f) => ({ ...f, cleaning_type: ct as "move_out" | "heavy_clean" }));
-            setCurrentStep("specialty_quote");
-        }
-    }, [debug, searchParams]);
 
     // Campaign /book-v2: default quote-start frequency to first recurring row when catalog loads.
     useEffect(() => {
@@ -1457,8 +1441,7 @@ export default function BookV2Client() {
 
     const handleQuoteStartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { first_name, last_name, zip, square_footage, cleaning_frequency_key, cleaning_type, email, phone } =
-            quoteStartForm;
+        const { first_name, last_name, zip, square_footage, cleaning_frequency_key, email, phone } = quoteStartForm;
         if (!first_name?.trim()) {
             setQuoteStartError("First name is required.");
             return;
@@ -1486,10 +1469,6 @@ export default function BookV2Client() {
         setQuoteStartSubmitting(true);
         setQuoteStartError(null);
         try {
-            if (cleaning_type !== "standard") {
-                setCurrentStep("specialty_quote");
-                return;
-            }
             clearBookingIdentityKeys();
             const freqSel = (cleaning_frequency_key && cleaning_frequency_key.trim()) || "one_time";
             // Send bucket key (e.g. "Under 1500 sq ft") — API accepts string or number
@@ -2523,23 +2502,6 @@ export default function BookV2Client() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Type of clean</label>
-                                <select
-                                    value={quoteStartForm.cleaning_type}
-                                    onChange={(e) =>
-                                        setQuoteStartForm((f) => ({
-                                            ...f,
-                                            cleaning_type: e.target.value as "standard" | "move_out" | "heavy_clean",
-                                        }))
-                                    }
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
-                                >
-                                    <option value="standard">Standard recurring / one-time home cleaning</option>
-                                    <option value="move_out">Move-out clean</option>
-                                    <option value="heavy_clean">Heavy / deep clean</option>
-                                </select>
-                            </div>
-                            <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Cleaning frequency</label>
                                 <select
                                     value={
@@ -2550,8 +2512,7 @@ export default function BookV2Client() {
                                     onChange={(e) =>
                                         setQuoteStartForm((f) => ({ ...f, cleaning_frequency_key: e.target.value }))
                                     }
-                                    disabled={quoteStartForm.cleaning_type !== "standard"}
-                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70 disabled:opacity-50"
+                                    className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
                                     {quoteStartFreqOptions.map((opt) => (
                                         <option key={opt.value} value={opt.value}>
@@ -2559,12 +2520,17 @@ export default function BookV2Client() {
                                         </option>
                                     ))}
                                 </select>
-                                {quoteStartForm.cleaning_type !== "standard" && (
-                                    <p className="text-xs text-alloy-midnight/60 mt-1">
-                                        Frequency applies to standard home cleaning only.
-                                    </p>
-                                )}
                             </div>
+                            <p className="text-xs text-alloy-midnight/60">
+                                Move-out or heavy / deep clean?{" "}
+                                <a
+                                    href="/services/cleaning/specialty-quote"
+                                    className="text-alloy-juniper font-medium underline"
+                                >
+                                    Request a specialty estimate
+                                </a>{" "}
+                                (separate from this booking flow).
+                            </p>
                             <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email (so we can save your quote)</label>
                                 <input
@@ -2596,39 +2562,6 @@ export default function BookV2Client() {
                                 {quoteStartSubmitting ? "Saving…" : "Get my quote"}
                             </button>
                         </form>
-                    </div>
-                )}
-
-                {currentStep === "specialty_quote" && !debug && (
-                    <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full alloy-book-v2-step-in">
-                        <h2 className="text-2xl font-bold text-alloy-midnight mb-2">
-                            {quoteStartForm.cleaning_type === "move_out"
-                                ? "Move-out clean estimate"
-                                : "Heavy / deep clean estimate"}
-                        </h2>
-                        <p className="text-sm text-alloy-midnight/80 mb-6">
-                            This clean type uses our detailed estimate form. Tell us about your space and timeline; we&apos;ll follow up with a transparent quote.
-                        </p>
-                        <div className="mb-6">
-                            <button
-                                type="button"
-                                onClick={() => setCurrentStep("quote_start")}
-                                className="text-sm text-alloy-juniper hover:underline"
-                            >
-                                ← Back to standard quote
-                            </button>
-                        </div>
-                        <div className="border border-alloy-stone/30 rounded-xl p-3 md:p-4 bg-alloy-stone/5">
-                            <GhlEmbed
-                                src={SPECIALTY_CLEANING_GHL_EMBED_SRC}
-                                title={
-                                    quoteStartForm.cleaning_type === "move_out"
-                                        ? "Move-out clean estimate"
-                                        : "Heavy / deep clean estimate"
-                                }
-                                height={792}
-                            />
-                        </div>
                     </div>
                 )}
 
@@ -2911,11 +2844,7 @@ export default function BookV2Client() {
                 )}
 
                 {/* Fallback message if no quote and not on quote_start step */}
-                {!hasQuote &&
-                    !debug &&
-                    currentStep !== "quote_start" &&
-                    currentStep !== "refine_quote" &&
-                    currentStep !== "specialty_quote" && (
+                {!hasQuote && !debug && currentStep !== "quote_start" && currentStep !== "refine_quote" && (
                     <div className="bg-white rounded-xl overflow-hidden border border-alloy-stone/20 shadow-sm p-6 md:p-8 mb-5 max-w-4xl mx-auto w-full text-center">
                         <h2 className="text-2xl font-bold text-alloy-midnight mb-3">
                             Please start your quote first

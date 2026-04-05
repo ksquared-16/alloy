@@ -61,7 +61,6 @@ export default function CleaningQuickQuoteForm({
     zip: "",
     square_footage: "",
     cleaning_frequency_key: isCampaignFirstFree ? "weekly" : "",
-    cleaning_type: "standard" as "standard" | "move_out" | "heavy_clean",
     email: "",
     phone: "",
   });
@@ -96,8 +95,7 @@ export default function CleaningQuickQuoteForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { first_name, last_name, zip, square_footage, cleaning_frequency_key, cleaning_type, email, phone } =
-      form;
+    const { first_name, last_name, zip, square_footage, cleaning_frequency_key, email, phone } = form;
     if (!first_name?.trim()) {
       setError("First name is required.");
       return;
@@ -128,25 +126,6 @@ export default function CleaningQuickQuoteForm({
     setConsentError(null);
     let succeeded = false;
     try {
-      if (cleaning_type !== "standard") {
-        try {
-          const prefillJson = JSON.stringify({
-            email: email?.trim() || undefined,
-            phone: phone?.trim() || undefined,
-            first_name: first_name?.trim() || undefined,
-            last_name: last_name?.trim() || undefined,
-            zip: zip?.trim() || undefined,
-            postal_code: zip?.trim() || undefined,
-          });
-          sessionStorage.setItem("alloy_booking_prefill", prefillJson);
-          localStorage.setItem("alloy_booking_prefill", prefillJson);
-        } catch {
-          // ignore
-        }
-        window.location.href = `/book-v2?cleaning_type=${encodeURIComponent(cleaning_type)}`;
-        return;
-      }
-
       const identityKeys = ["alloy_person_id", "alloy_contact_id", "alloy_customer_id", "alloy_opportunity_id"];
       try {
         identityKeys.forEach((k) => {
@@ -358,29 +337,11 @@ export default function CleaningQuickQuoteForm({
           </select>
         </div>
         <div>
-          <label className={labelBase}>Type of clean</label>
-          <select
-            value={form.cleaning_type}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                cleaning_type: e.target.value as "standard" | "move_out" | "heavy_clean",
-              }))
-            }
-            className="public-form-input"
-          >
-            <option value="standard">Standard recurring / one-time home cleaning</option>
-            <option value="move_out">Move-out clean</option>
-            <option value="heavy_clean">Heavy / deep clean</option>
-          </select>
-        </div>
-        <div>
           <label className={labelBase}>Cleaning frequency</label>
           <select
             value={form.cleaning_frequency_key || quickFreqOptions[0]?.value || "one_time"}
             onChange={(e) => setForm((f) => ({ ...f, cleaning_frequency_key: e.target.value }))}
-            disabled={form.cleaning_type !== "standard"}
-            className="public-form-input disabled:opacity-50"
+            className="public-form-input"
           >
             {quickFreqOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -388,10 +349,18 @@ export default function CleaningQuickQuoteForm({
               </option>
             ))}
           </select>
-          {form.cleaning_type !== "standard" && (
-            <p className="mt-1.5 text-xs text-alloy-midnight/55">Frequency applies to standard home cleaning only.</p>
-          )}
         </div>
+        <p className="text-xs text-alloy-midnight/60 leading-relaxed">
+          Move-out?{" "}
+          <a href="/services/cleaning/specialty-quote?cleaning_type=move_out" className="text-alloy-juniper underline font-medium">
+            Move-out estimate
+          </a>
+          . Heavy / deep clean?{" "}
+          <a href="/services/cleaning/specialty-quote?cleaning_type=heavy_clean" className="text-alloy-juniper underline font-medium">
+            Heavy clean estimate
+          </a>
+          . Those use a separate form (not this quick quote or /book-v2).
+        </p>
       </div>
 
       {/* Contact — email & phone */}
