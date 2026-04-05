@@ -1,60 +1,127 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import type { PublicFieldDef } from "@/components/public/ConfigurableFieldSections";
 import { catalogFrequencyChoices } from "@/lib/book-v2/catalogFrequencyChoices";
 import { FALLBACK_SQFT_TIERS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import type { PricingFrequencyRow } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import {
-    formatFrequencyRowDisplayLabel,
-    frequencyRowForRpcKey,
-    inferLegacyCleaningFrequencyApiKey,
-    resolveRpcFrequencyKey,
+  BOOKING_BATHROOM_OPTIONS,
+  BOOKING_BEDROOM_OPTIONS,
+} from "@/lib/book-v2/bookingBedBathOptions";
+import {
+  fetchPublicFieldDefinitions,
+  fieldOptionsByKey,
+  squareFootageSelectOptionsFromLocationFields,
+} from "@/lib/public/fetchPublicFieldDefinitions";
+import {
+  MAX_SPECIALTY_QUOTE_PHOTO_BYTES,
+  SPECIALTY_QUOTE_PHOTO_ACCEPT,
+  SPECIALTY_QUOTE_PHOTO_FORM_KEYS,
+  SPECIALTY_QUOTE_PHOTO_LABELS,
+  type SpecialtyQuotePhotoFormKey,
+} from "@/lib/book-v2/specialtyQuotePhotos";
+import {
+  formatFrequencyRowDisplayLabel,
+  frequencyRowForRpcKey,
+  inferLegacyCleaningFrequencyApiKey,
+  resolveRpcFrequencyKey,
 } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 
 export type QuickQuoteCampaignMode = {
   id: "firstfree4x120";
 };
 
+export type QuickQuoteCompleteDetail = { kind: "standard" } | { kind: "specialty" };
+
 interface CleaningQuickQuoteFormProps {
-  onSuccess: () => void;
+  onComplete: (detail: QuickQuoteCompleteDetail) => void;
   /** Recurring-only frequencies; standard cleaning implied (quote-start path). */
   campaignQuoteMode?: QuickQuoteCampaignMode;
 }
 
+type CleaningTypeKey = "standard" | "move_out" | "heavy_clean";
+
+/** If `specialty_cleaning_type` option set is missing from the org, keep these keys aligned with that set. */
+const DOCUMENTED_FALLBACK_SPECIALTY_CLEANING_TYPES: { value: CleaningTypeKey; label: string }[] = [
+  { value: "move_out", label: "Move-out cleaning" },
+  { value: "heavy_clean", label: "Heavy / deep cleaning" },
+];
+
 export default function CleaningQuickQuoteForm({
-  onSuccess,
+  onComplete,
   campaignQuoteMode,
 }: CleaningQuickQuoteFormProps) {
   const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
-  const [sqftTiers, setSqftTiers] = useState<Array<{ sqft_key: string; sqft_label: string }> | null>(null);
+  const [locationFieldDefs, setLocationFieldDefs] = useState<PublicFieldDef[]>([]);
+  const [opportunitySpecialtyFieldDefs, setOpportunitySpecialtyFieldDefs] = useState<PublicFieldDef[]>([]);
   const [pricingFreqRows, setPricingFreqRows] = useState<PricingFrequencyRow[]>([]);
+
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/public/booking-config")
-      .then((r) => r.json())
-      .then(
-        (data: {
-          ok?: boolean;
-          square_footage_tiers?: Array<{ sqft_key: string; sqft_label: string }>;
-          pricing_frequencies?: PricingFrequencyRow[];
-        }) => {
-          if (cancelled || !data?.ok) return;
-          if (data.square_footage_tiers?.length) setSqftTiers(data.square_footage_tiers);
-          if (data.pricing_frequencies?.length) setPricingFreqRows(data.pricing_frequencies);
+    Promise.all([
+      fetchPublicFieldDefinitions({ entityType: "location", verticalSlug: "cleaning" }),
+      fetchPublicFieldDefinitions({ entityType: "opportunity", sectionKeys: ["specialty_quote"] }),
+      fetch("/api/public/booking-config").then((r) => r.json()),
+    ])
+      .then(([loc, opp, cfg]) => {
+        if (cancelled) return;
+        if (loc?.ok && Array.isArray(loc.fields)) setLocationFieldDefs(loc.fields);
+        else setLocationFieldDefs([]);
+        if (opp?.ok && Array.isArray(opp.fields)) setOpportunitySpecialtyFieldDefs(opp.fields);
+        else setOpportunitySpecialtyFieldDefs([]);
+        const data = cfg as { ok?: boolean; pricing_frequencies?: PricingFrequencyRow[] };
+        if (data?.ok && data.pricing_frequencies?.length) setPricingFreqRows(data.pricing_frequencies);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocationFieldDefs([]);
+          setOpportunitySpecialtyFieldDefs([]);
         }
-      )
-      .catch(() => {});
+      });
     return () => {
       cancelled = true;
     };
   }, []);
+
   const squareFootageOptions = useMemo(() => {
-    const tiers =
-      sqftTiers && sqftTiers.length > 0
-        ? sqftTiers
-        : FALLBACK_SQFT_TIERS.map((t) => ({ sqft_key: t.sqft_key, sqft_label: t.sqft_label ?? t.sqft_key }));
-    return tiers.map((t) => ({ value: t.sqft_key, label: t.sqft_label }));
-  }, [sqftTiers]);
+    const fromDefs = squareFootageSelectOptionsFromLocationFields(locationFieldDefs);
+    if (fromDefs?.length) return fromDefs;
+    return FALLBACK_SQFT_TIERS.map((t) => ({
+      value: t.sqft_key,
+      label: t.sqft_label ?? t.sqft_key,
+    }));
+  }, [locationFieldDefs]);
+
+  const homeTypeOptions = useMemo(() => {
+    return (
+      fieldOptionsByKey(locationFieldDefs, "home_type") ?? [
+        { value: "house", label: "House" },
+        { value: "condo", label: "Condo" },
+        { value: "apartment", label: "Apartment" },
+        { value: "townhome", label: "Townhome" },
+      ]
+    );
+  }, [locationFieldDefs]);
+
+  const bedroomOptions = useMemo(() => {
+    return fieldOptionsByKey(locationFieldDefs, "bedrooms") ?? BOOKING_BEDROOM_OPTIONS;
+  }, [locationFieldDefs]);
+
+  const bathroomOptions = useMemo(() => {
+    return fieldOptionsByKey(locationFieldDefs, "bathrooms") ?? BOOKING_BATHROOM_OPTIONS;
+  }, [locationFieldDefs]);
+
+  const cleaningTypeSelectOptions = useMemo(() => {
+    const api = fieldOptionsByKey(opportunitySpecialtyFieldDefs, "specialty_cleaning_type");
+    const specialty =
+      api && api.length > 0
+        ? api.map((o) => ({ value: o.value as CleaningTypeKey, label: o.label }))
+        : DOCUMENTED_FALLBACK_SPECIALTY_CLEANING_TYPES;
+    return [{ value: "standard" as const, label: "Standard cleaning" }, ...specialty];
+  }, [opportunitySpecialtyFieldDefs]);
+
+  const [cleaningType, setCleaningType] = useState<CleaningTypeKey>("standard");
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -63,19 +130,36 @@ export default function CleaningQuickQuoteForm({
     cleaning_frequency_key: isCampaignFirstFree ? "weekly" : "",
     email: "",
     phone: "",
+    street_address: "",
+    city: "",
+    state: "",
+    preferred_service_date: "",
+    home_type: "",
+    bedrooms: "",
+    bathrooms: "",
+    specialty_notes: "",
   });
+
+  const [specialtyPhotos, setSpecialtyPhotos] = useState<
+    Partial<Record<SpecialtyQuotePhotoFormKey, File | null>>
+  >({});
 
   const quickFreqOptions = useMemo(
     () => catalogFrequencyChoices(pricingFreqRows, isCampaignFirstFree),
     [pricingFreqRows, isCampaignFirstFree]
   );
 
+  const isSpecialtyCleaning = cleaningType === "move_out" || cleaningType === "heavy_clean";
+
   useEffect(() => {
     if (!pricingFreqRows.length) return;
     setForm((f) => {
       if (f.cleaning_frequency_key && f.cleaning_frequency_key.trim()) return f;
       const opts = catalogFrequencyChoices(pricingFreqRows, isCampaignFirstFree);
-      return { ...f, cleaning_frequency_key: opts[0]?.value ?? "one_time" };
+      const next = isCampaignFirstFree
+        ? opts[0]?.value ?? "weekly"
+        : opts.find((o) => o.value === "one_time")?.value ?? opts[0]?.value ?? "one_time";
+      return { ...f, cleaning_frequency_key: next };
     });
   }, [pricingFreqRows, isCampaignFirstFree]);
 
@@ -87,15 +171,42 @@ export default function CleaningQuickQuoteForm({
       return { ...f, cleaning_frequency_key: firstRec?.frequency_key ?? "weekly" };
     });
   }, [isCampaignFirstFree, pricingFreqRows]);
+
+  useEffect(() => {
+    if (!isSpecialtyCleaning) return;
+    setForm((f) => ({ ...f, cleaning_frequency_key: "one_time" }));
+  }, [isSpecialtyCleaning, cleaningType]);
+
   const [submitting, setSubmitting] = useState(false);
   const [handoffVisible, setHandoffVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [smsConsent, setSmsConsent] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [specialtyDone, setSpecialtyDone] = useState(false);
+
+  const setSpecialtyPhoto = (key: SpecialtyQuotePhotoFormKey, file: File | null) => {
+    setSpecialtyPhotos((prev) => ({ ...prev, [key]: file }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { first_name, last_name, zip, square_footage, cleaning_frequency_key, email, phone } = form;
+    const {
+      first_name,
+      last_name,
+      zip,
+      square_footage,
+      cleaning_frequency_key,
+      email,
+      phone,
+      street_address,
+      city,
+      state,
+      preferred_service_date,
+      home_type,
+      bedrooms,
+      bathrooms,
+      specialty_notes,
+    } = form;
     if (!first_name?.trim()) {
       setError("First name is required.");
       return;
@@ -120,6 +231,41 @@ export default function CleaningQuickQuoteForm({
       setError("Please enter your email so we can save your quote.");
       return;
     }
+
+    if (isSpecialtyCleaning) {
+      if (!street_address.trim() || !city.trim()) {
+        setError("Street address and city are required.");
+        return;
+      }
+      if (!preferred_service_date.trim()) {
+        setError("Preferred service date is required.");
+        return;
+      }
+      if (!home_type.trim()) {
+        setError("Please select a home type.");
+        return;
+      }
+      if (!bedrooms.trim() || !bathrooms.trim()) {
+        setError("Bedrooms and bathrooms are required.");
+        return;
+      }
+      for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+        const f = specialtyPhotos[key];
+        if (!f || f.size <= 0) {
+          setError(`Please add a photo: ${SPECIALTY_QUOTE_PHOTO_LABELS[key]}.`);
+          return;
+        }
+        if (f.size > MAX_SPECIALTY_QUOTE_PHOTO_BYTES) {
+          setError("Each photo must be 10MB or smaller.");
+          return;
+        }
+        if (!f.type.startsWith("image/")) {
+          setError("Photos must be JPEG, PNG, or WebP.");
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
     setHandoffVisible(false);
     setError(null);
@@ -135,6 +281,58 @@ export default function CleaningQuickQuoteForm({
       } catch {
         // ignore
       }
+
+      if (isSpecialtyCleaning) {
+        const payload = {
+          cleaning_type: cleaningType,
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          zip: zip.trim(),
+          square_footage: square_footage.trim(),
+          street_address: street_address.trim(),
+          city: city.trim(),
+          state: state.trim() || undefined,
+          preferred_service_date: preferred_service_date.trim(),
+          home_type: home_type.trim(),
+          bedrooms: bedrooms.trim(),
+          bathrooms: bathrooms.trim(),
+          notes: specialty_notes.trim() || undefined,
+          sms_consent: smsConsent,
+          quote_context: {
+            source: "quick_quote_modal",
+            url: typeof window !== "undefined" ? window.location.href : "",
+          },
+        };
+        const fd = new FormData();
+        fd.set("payload", JSON.stringify(payload));
+        for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+          const file = specialtyPhotos[key];
+          if (file) fd.set(key, file);
+        }
+        const res = await fetch("/api/book-v2/specialty-quote-start", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setError(data.message || "Could not save your request. Please try again.");
+          return;
+        }
+        succeeded = true;
+        try {
+          if (data.person_id) localStorage.setItem("alloy_person_id", data.person_id);
+          if (data.opportunity_id) localStorage.setItem("alloy_opportunity_id", data.opportunity_id);
+        } catch (e) {
+          console.warn("localStorage set failed:", e);
+        }
+        setSubmitting(false);
+        setSpecialtyDone(true);
+        onComplete({ kind: "specialty" });
+        return;
+      }
+
       const freqSel = (cleaning_frequency_key && cleaning_frequency_key.trim()) || "one_time";
       const res = await fetch("/api/book-v2/quote-start", {
         method: "POST",
@@ -193,7 +391,6 @@ export default function CleaningQuickQuoteForm({
       localStorage.setItem("alloy_quote_v1", quoteJson);
       sessionStorage.setItem("alloy_quote_v1", quoteJson);
 
-      // Legacy /book (BookClient): reads cleaning_quote / alloy_cleaning_quote — keep in sync with quick quote
       try {
         localStorage.setItem("cleaning_quote", quoteJson);
         sessionStorage.setItem("alloy_cleaning_quote", quoteJson);
@@ -221,7 +418,6 @@ export default function CleaningQuickQuoteForm({
         console.warn("alloy_lead_form_data set failed:", e);
       }
 
-      // Persist contact for BookV2 (same key + shape as BookV2 reads: alloy_booking_prefill)
       const prefillData: Record<string, string | undefined> = {
         email: email?.trim() || undefined,
         phone: phone?.trim() || undefined,
@@ -246,7 +442,7 @@ export default function CleaningQuickQuoteForm({
       setSubmitting(false);
       setHandoffVisible(true);
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => onSuccess());
+        requestAnimationFrame(() => onComplete({ kind: "standard" }));
       });
     } catch (err) {
       console.error("Quote start failed:", err);
@@ -259,6 +455,22 @@ export default function CleaningQuickQuoteForm({
   const labelBase =
     "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
 
+  if (specialtyDone) {
+    return (
+      <div className="rounded-xl border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-alloy-midnight">
+        <p className="text-lg font-semibold text-alloy-pine mb-2">Thanks — we&apos;ve got your details</p>
+        <p className="text-sm text-alloy-midnight/80 leading-relaxed">
+          Our team will review your photos and property details and follow up with a personalized estimate. For instant
+          standard cleaning pricing, you can use{" "}
+          <a href="/book-v2" className="text-alloy-juniper font-medium underline">
+            book online
+          </a>
+          .
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="relative space-y-0">
       {(submitting || handoffVisible) && (
@@ -268,15 +480,17 @@ export default function CleaningQuickQuoteForm({
         >
           <div className="h-10 w-10 rounded-full border-[3px] border-alloy-juniper border-t-transparent animate-spin" />
           <p className="text-sm font-medium text-alloy-midnight">
-            {handoffVisible ? "Quote saved — taking you to the next step…" : "Saving your quote…"}
+            {handoffVisible
+              ? "Quote saved — opening booking…"
+              : isSpecialtyCleaning
+                ? "Sending your request…"
+                : "Saving your quote…"}
           </p>
         </div>
       )}
       {/* Contact — name & location */}
       <div className="space-y-4 pb-6 border-b border-alloy-stone/50">
-        <p className="public-form-section-title">
-          Your details
-        </p>
+        <p className="public-form-section-title">Your details</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelBase}>First name *</label>
@@ -318,9 +532,25 @@ export default function CleaningQuickQuoteForm({
 
       {/* Home & schedule */}
       <div className="space-y-4 py-6 border-b border-alloy-stone/50">
-        <p className="public-form-section-title">
-          Home & schedule
-        </p>
+        <p className="public-form-section-title">Home & schedule</p>
+        <div>
+          <label className={labelBase}>Cleaning type *</label>
+          <select
+            value={cleaningType}
+            onChange={(e) => setCleaningType(e.target.value as CleaningTypeKey)}
+            className="public-form-input"
+            disabled={isCampaignFirstFree}
+          >
+            {cleaningTypeSelectOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {isCampaignFirstFree ? (
+            <p className="mt-1.5 text-xs text-alloy-midnight/55">This offer applies to standard cleaning only.</p>
+          ) : null}
+        </div>
         <div>
           <label className={labelBase}>Approximate square footage *</label>
           <select
@@ -336,38 +566,156 @@ export default function CleaningQuickQuoteForm({
             ))}
           </select>
         </div>
-        <div>
-          <label className={labelBase}>Cleaning frequency</label>
-          <select
-            value={form.cleaning_frequency_key || quickFreqOptions[0]?.value || "one_time"}
-            onChange={(e) => setForm((f) => ({ ...f, cleaning_frequency_key: e.target.value }))}
-            className="public-form-input"
-          >
-            {quickFreqOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="text-xs text-alloy-midnight/60 leading-relaxed">
-          Move-out?{" "}
-          <a href="/services/cleaning/specialty-quote?cleaning_type=move_out" className="text-alloy-juniper underline font-medium">
-            Move-out estimate
-          </a>
-          . Heavy / deep clean?{" "}
-          <a href="/services/cleaning/specialty-quote?cleaning_type=heavy_clean" className="text-alloy-juniper underline font-medium">
-            Heavy clean estimate
-          </a>
-          . Those use a separate form (not this quick quote or /book-v2).
-        </p>
+        {!isSpecialtyCleaning && (
+          <div>
+            <label className={labelBase}>Cleaning frequency</label>
+            <select
+              value={form.cleaning_frequency_key || quickFreqOptions[0]?.value || "one_time"}
+              onChange={(e) => setForm((f) => ({ ...f, cleaning_frequency_key: e.target.value }))}
+              className="public-form-input"
+            >
+              {quickFreqOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-xs text-alloy-midnight/55">
+              Move-out and heavy cleans are priced as one-time jobs; choose those under Cleaning type to add details and
+              photos.
+            </p>
+          </div>
+        )}
+        {isSpecialtyCleaning ? (
+          <div className="space-y-4 pt-2 border-t border-alloy-stone/40">
+            <p className="text-sm font-medium text-alloy-midnight">Property & photos</p>
+            <div>
+              <label className={labelBase}>Street address *</label>
+              <input
+                type="text"
+                value={form.street_address}
+                onChange={(e) => setForm((f) => ({ ...f, street_address: e.target.value }))}
+                className="public-form-input"
+                autoComplete="street-address"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelBase}>City *</label>
+                <input
+                  type="text"
+                  value={form.city}
+                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                  className="public-form-input"
+                  autoComplete="address-level2"
+                />
+              </div>
+              <div>
+                <label className={labelBase}>State</label>
+                <input
+                  type="text"
+                  value={form.state}
+                  onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
+                  className="public-form-input"
+                  autoComplete="address-level1"
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelBase}>Preferred service date *</label>
+              <input
+                type="date"
+                value={form.preferred_service_date}
+                onChange={(e) => setForm((f) => ({ ...f, preferred_service_date: e.target.value }))}
+                className="public-form-input"
+              />
+            </div>
+            <div>
+              <label className={labelBase}>Home type *</label>
+              <select
+                value={form.home_type}
+                onChange={(e) => setForm((f) => ({ ...f, home_type: e.target.value }))}
+                className="public-form-input"
+              >
+                <option value="">Select</option>
+                {homeTypeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelBase}>Bedrooms *</label>
+                <select
+                  value={form.bedrooms}
+                  onChange={(e) => setForm((f) => ({ ...f, bedrooms: e.target.value }))}
+                  className="public-form-input"
+                >
+                  <option value="">Select</option>
+                  {bedroomOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelBase}>Bathrooms *</label>
+                <select
+                  value={form.bathrooms}
+                  onChange={(e) => setForm((f) => ({ ...f, bathrooms: e.target.value }))}
+                  className="public-form-input"
+                >
+                  <option value="">Select</option>
+                  {bathroomOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <p className={labelBase}>Photos * (one per room)</p>
+              <p className="text-xs text-alloy-midnight/60 -mt-1 mb-2">
+                JPEG, PNG, or WebP, up to 10MB each. These help us quote accurately.
+              </p>
+              {SPECIALTY_QUOTE_PHOTO_FORM_KEYS.map((key) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-alloy-midnight mb-1">
+                    {SPECIALTY_QUOTE_PHOTO_LABELS[key]} *
+                  </label>
+                  <input
+                    type="file"
+                    accept={SPECIALTY_QUOTE_PHOTO_ACCEPT}
+                    className="block w-full text-sm text-alloy-midnight file:mr-3 file:rounded-lg file:border-0 file:bg-alloy-juniper/15 file:px-3 file:py-2 file:text-sm file:font-medium file:text-alloy-pine"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setSpecialtyPhoto(key, file);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div>
+              <label className={labelBase}>Notes (optional)</label>
+              <textarea
+                value={form.specialty_notes}
+                onChange={(e) => setForm((f) => ({ ...f, specialty_notes: e.target.value }))}
+                rows={3}
+                className="public-form-input resize-none"
+                placeholder="Anything else we should know?"
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Contact — email & phone */}
       <div className="space-y-4 py-6 border-b border-alloy-stone/50">
-        <p className="public-form-section-title">
-          How we&apos;ll reach you
-        </p>
+        <p className="public-form-section-title">How we&apos;ll reach you</p>
         <div>
           <label className={labelBase}>Email (so we can save your quote)</label>
           <input
@@ -408,16 +756,15 @@ export default function CleaningQuickQuoteForm({
             className="mt-0.5 h-4 w-4 rounded border-alloy-stone/60 text-alloy-juniper focus:ring-2 focus:ring-alloy-juniper/25 focus:ring-offset-0 transition-colors"
           />
           <span className="leading-relaxed">
-            By checking this box, you agree to receive transactional SMS from Alloy about your quote and appointments. Message and data rates may apply. Reply STOP to opt out. Consent is not required to purchase.
+            By checking this box, you agree to receive transactional SMS from Alloy about your quote and appointments.
+            Message and data rates may apply. Reply STOP to opt out. Consent is not required to purchase.
           </span>
         </label>
         {consentError && <p className="mt-2 text-sm text-red-600">{consentError}</p>}
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {error}
-        </p>
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
       )}
 
       <button
@@ -425,7 +772,13 @@ export default function CleaningQuickQuoteForm({
         disabled={submitting}
         className="public-form-cta public-btn-primary mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {submitting ? "Saving…" : isCampaignFirstFree ? "Get my recurring quote" : "Get my quote"}
+        {submitting
+          ? "Saving…"
+          : isCampaignFirstFree
+            ? "Get my recurring quote"
+            : isSpecialtyCleaning
+              ? "Submit for estimate"
+              : "Get my quote"}
       </button>
     </form>
   );

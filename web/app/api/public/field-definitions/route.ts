@@ -22,6 +22,12 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const entityType = searchParams.get("entity_type")?.trim();
         const verticalSlug = searchParams.get("vertical_slug")?.trim() || null;
+        const sectionKeysFilter =
+            searchParams
+                .get("section_keys")
+                ?.split(",")
+                .map((s) => s.trim())
+                .filter(Boolean) ?? null;
 
         const allowed = ["location", "opportunity", "person", "customer", "job", "vendor", "schedule"];
         if (!entityType || !allowed.includes(entityType)) {
@@ -84,6 +90,10 @@ export async function GET(request: NextRequest) {
                 config: unknown;
                 is_required: boolean;
             };
+            if (sectionKeysFilter?.length) {
+                const sk = (row.section_key ?? "").trim();
+                if (!sectionKeysFilter.includes(sk)) continue;
+            }
             const cfg = row.config;
             let options: { value: string; label: string }[] = normalizeOptionsFromConfig(cfg);
             const optSetKey = optionSetKeyFromFieldConfig(cfg);

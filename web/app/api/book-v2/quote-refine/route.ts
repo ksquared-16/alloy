@@ -22,6 +22,7 @@ import {
   inferLegacyCleaningFrequencyApiKey,
   resolveRpcFrequencyKey,
 } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
+import { standardCleaningFrequencyCatalog } from "@/lib/book-v2/catalogFrequencyChoices";
 
 const SERVICE_TYPE = "Standard Cleaning";
 
@@ -191,10 +192,11 @@ export async function POST(request: NextRequest) {
 
     const sqftTiers = await loadSqftTiersForVertical(supabase, verticalId);
     const squareFootageOption = normalizeSqftKeyInput(square_footage, sqftTiers) as SquareFootageOption;
+    const effectiveFreqRows = standardCleaningFrequencyCatalog(pricingFrequencies);
     const rawFreq = String(body.cleaning_frequency ?? "one_time").trim() || "one_time";
-    const rpcFreqKey = resolveRpcFrequencyKey(rawFreq, pricingFrequencies);
-    const freqRowPick = frequencyRowForRpcKey(rpcFreqKey, pricingFrequencies);
-    const legacyFreqApi = inferLegacyCleaningFrequencyApiKey(rpcFreqKey, pricingFrequencies);
+    const rpcFreqKey = resolveRpcFrequencyKey(rawFreq, effectiveFreqRows);
+    const freqRowPick = frequencyRowForRpcKey(rpcFreqKey, effectiveFreqRows);
+    const legacyFreqApi = inferLegacyCleaningFrequencyApiKey(rpcFreqKey, effectiveFreqRows);
     const selectedKeys = filterExcludedCustomerAddonKeys(
       normalizeAddonKeysAgainstMap(body.add_ons ?? [], addonPriceMap)
     );
@@ -396,7 +398,7 @@ export async function POST(request: NextRequest) {
     const available_addons = dbAvailableAddons
       .filter((a) => !EXCLUDED_CUSTOMER_SELECTABLE_ADDON_KEYS.has(a.key))
       .map((a) => ({ id: a.key, label: a.label, price: a.price }));
-    const available_frequencies = pricingFrequencies.map((f) => ({
+    const available_frequencies = effectiveFreqRows.map((f) => ({
       frequency_key: f.frequency_key,
       frequency_label: f.frequency_label,
       discount_label: f.discount_label ?? null,

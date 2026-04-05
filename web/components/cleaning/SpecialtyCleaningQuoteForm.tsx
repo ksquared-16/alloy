@@ -1,8 +1,21 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import type { PublicFieldDef } from "@/components/public/ConfigurableFieldSections";
 import { FALLBACK_SQFT_TIERS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { BOOKING_BATHROOM_OPTIONS, BOOKING_BEDROOM_OPTIONS } from "@/lib/book-v2/bookingBedBathOptions";
+import {
+  fetchPublicFieldDefinitions,
+  fieldOptionsByKey,
+  squareFootageSelectOptionsFromLocationFields,
+} from "@/lib/public/fetchPublicFieldDefinitions";
+import {
+  MAX_SPECIALTY_QUOTE_PHOTO_BYTES,
+  SPECIALTY_QUOTE_PHOTO_ACCEPT,
+  SPECIALTY_QUOTE_PHOTO_FORM_KEYS,
+  SPECIALTY_QUOTE_PHOTO_LABELS,
+  type SpecialtyQuotePhotoFormKey,
+} from "@/lib/book-v2/specialtyQuotePhotos";
 
 export type SpecialtyCleaningType = "move_out" | "heavy_clean";
 
@@ -11,16 +24,8 @@ interface SpecialtyCleaningQuoteFormProps {
   onSuccess?: () => void;
 }
 
-const DEFAULT_HOME = [
-  { value: "Single-Family Home", label: "Single-Family Home" },
-  { value: "Apartment / Condo", label: "Apartment / Condo" },
-  { value: "Townhome", label: "Townhome" },
-  { value: "Duplex", label: "Duplex" },
-  { value: "Other", label: "Other" },
-];
-
 export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: SpecialtyCleaningQuoteFormProps) {
-  const [sqftTiers, setSqftTiers] = useState<Array<{ sqft_key: string; sqft_label: string }> | null>(null);
+  const [locationFieldDefs, setLocationFieldDefs] = useState<PublicFieldDef[]>([]);
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -41,28 +46,53 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [specialtyPhotos, setSpecialtyPhotos] = useState<
+    Partial<Record<SpecialtyQuotePhotoFormKey, File | null>>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/public/booking-config")
-      .then((r) => r.json())
-      .then((data: { ok?: boolean; square_footage_tiers?: Array<{ sqft_key: string; sqft_label: string }> }) => {
-        if (cancelled || !data?.ok || !data.square_footage_tiers?.length) return;
-        setSqftTiers(data.square_footage_tiers);
+    fetchPublicFieldDefinitions({ entityType: "location", verticalSlug: "cleaning" })
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.ok && Array.isArray(res.fields)) setLocationFieldDefs(res.fields);
+        else setLocationFieldDefs([]);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLocationFieldDefs([]);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
   const squareFootageOptions = useMemo(() => {
-    const tiers =
-      sqftTiers && sqftTiers.length > 0
-        ? sqftTiers
-        : FALLBACK_SQFT_TIERS.map((t) => ({ sqft_key: t.sqft_key, sqft_label: t.sqft_label ?? t.sqft_key }));
-    return tiers.map((t) => ({ value: t.sqft_key, label: t.sqft_label }));
-  }, [sqftTiers]);
+    const fromDefs = squareFootageSelectOptionsFromLocationFields(locationFieldDefs);
+    if (fromDefs?.length) return fromDefs;
+    return FALLBACK_SQFT_TIERS.map((t) => ({
+      value: t.sqft_key,
+      label: t.sqft_label ?? t.sqft_key,
+    }));
+  }, [locationFieldDefs]);
+
+  const homeTypeOptions = useMemo(() => {
+    return (
+      fieldOptionsByKey(locationFieldDefs, "home_type") ?? [
+        { value: "house", label: "House" },
+        { value: "condo", label: "Condo" },
+        { value: "apartment", label: "Apartment" },
+        { value: "townhome", label: "Townhome" },
+      ]
+    );
+  }, [locationFieldDefs]);
+
+  const bedroomOptions = useMemo(() => {
+    return fieldOptionsByKey(locationFieldDefs, "bedrooms") ?? BOOKING_BEDROOM_OPTIONS;
+  }, [locationFieldDefs]);
+
+  const bathroomOptions = useMemo(() => {
+    return fieldOptionsByKey(locationFieldDefs, "bathrooms") ?? BOOKING_BATHROOM_OPTIONS;
+  }, [locationFieldDefs]);
 
   const title =
     cleaningType === "move_out" ? "Move-out clean estimate" : "Heavy / deep clean estimate";
@@ -102,6 +132,14 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
       setError("Preferred service date is required.");
       return;
     }
+    if (!form.home_type?.trim()) {
+      setError("Home type is required.");
+      return;
+    }
+    if (!form.bedrooms?.trim() || !form.bathrooms?.trim()) {
+      setError("Bedrooms and bathrooms are required.");
+      return;
+    }
     if (!form.phone?.trim()) {
       setError("Phone number is required.");
       return;
@@ -110,34 +148,55 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
       setError("Email is required.");
       return;
     }
+    for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+      const f = specialtyPhotos[key];
+      if (!f || f.size <= 0) {
+        setError(`Please add a photo: ${SPECIALTY_QUOTE_PHOTO_LABELS[key]}.`);
+        return;
+      }
+      if (f.size > MAX_SPECIALTY_QUOTE_PHOTO_BYTES) {
+        setError("Each photo must be 10MB or smaller.");
+        return;
+      }
+      if (!f.type.startsWith("image/")) {
+        setError("Photos must be JPEG, PNG, or WebP.");
+        return;
+      }
+    }
 
     setSubmitting(true);
     try {
+      const payload = {
+        cleaning_type: cleaningType,
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        zip: form.zip.trim(),
+        square_footage: form.square_footage.trim(),
+        street_address: form.street_address.trim(),
+        city: form.city.trim(),
+        state: form.state.trim() || undefined,
+        preferred_service_date: form.preferred_service_date.trim(),
+        home_type: form.home_type.trim(),
+        bedrooms: form.bedrooms.trim(),
+        bathrooms: form.bathrooms.trim(),
+        notes: form.notes.trim() || undefined,
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        sms_consent: smsConsent,
+        quote_context: {
+          source: "specialty_native_form",
+          url: typeof window !== "undefined" ? window.location.href : "",
+        },
+      };
+      const fd = new FormData();
+      fd.set("payload", JSON.stringify(payload));
+      for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+        const file = specialtyPhotos[key];
+        if (file) fd.set(key, file);
+      }
       const res = await fetch("/api/book-v2/specialty-quote-start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cleaning_type: cleaningType,
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
-          zip: form.zip.trim(),
-          square_footage: form.square_footage.trim(),
-          street_address: form.street_address.trim(),
-          city: form.city.trim(),
-          state: form.state.trim() || undefined,
-          preferred_service_date: form.preferred_service_date.trim(),
-          home_type: form.home_type.trim() || undefined,
-          bedrooms: form.bedrooms.trim() || undefined,
-          bathrooms: form.bathrooms.trim() || undefined,
-          notes: form.notes.trim() || undefined,
-          email: form.email.trim(),
-          phone: form.phone.trim(),
-          sms_consent: smsConsent,
-          quote_context: {
-            source: "specialty_native_form",
-            url: typeof window !== "undefined" ? window.location.href : "",
-          },
-        }),
+        body: fd,
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -288,14 +347,14 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
           </div>
         </div>
         <div>
-          <label className={labelBase}>Home type</label>
+          <label className={labelBase}>Home type *</label>
           <select
             value={form.home_type}
             onChange={(e) => setForm((f) => ({ ...f, home_type: e.target.value }))}
             className="public-form-input"
           >
-            <option value="">Select (optional)</option>
-            {DEFAULT_HOME.map((o) => (
+            <option value="">Select</option>
+            {homeTypeOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -304,14 +363,14 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelBase}>Bedrooms</label>
+            <label className={labelBase}>Bedrooms *</label>
             <select
               value={form.bedrooms}
               onChange={(e) => setForm((f) => ({ ...f, bedrooms: e.target.value }))}
               className="public-form-input"
             >
-              <option value="">Select (optional)</option>
-              {BOOKING_BEDROOM_OPTIONS.map((o) => (
+              <option value="">Select</option>
+              {bedroomOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -319,14 +378,14 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
             </select>
           </div>
           <div>
-            <label className={labelBase}>Bathrooms</label>
+            <label className={labelBase}>Bathrooms *</label>
             <select
               value={form.bathrooms}
               onChange={(e) => setForm((f) => ({ ...f, bathrooms: e.target.value }))}
               className="public-form-input"
             >
-              <option value="">Select (optional)</option>
-              {BOOKING_BATHROOM_OPTIONS.map((o) => (
+              <option value="">Select</option>
+              {bathroomOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -342,6 +401,28 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
             onChange={(e) => setForm((f) => ({ ...f, preferred_service_date: e.target.value }))}
             className="public-form-input"
           />
+        </div>
+        <div className="space-y-3">
+          <p className={labelBase}>Photos * (one per room)</p>
+          <p className="text-xs text-alloy-midnight/60 -mt-1 mb-1">
+            JPEG, PNG, or WebP, up to 10MB each.
+          </p>
+          {SPECIALTY_QUOTE_PHOTO_FORM_KEYS.map((key) => (
+            <div key={key}>
+              <label className="block text-xs font-medium text-alloy-midnight mb-1">
+                {SPECIALTY_QUOTE_PHOTO_LABELS[key]} *
+              </label>
+              <input
+                type="file"
+                accept={SPECIALTY_QUOTE_PHOTO_ACCEPT}
+                className="block w-full text-sm text-alloy-midnight file:mr-3 file:rounded-lg file:border-0 file:bg-alloy-juniper/15 file:px-3 file:py-2 file:text-sm file:font-medium file:text-alloy-pine"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setSpecialtyPhotos((prev) => ({ ...prev, [key]: file }));
+                }}
+              />
+            </div>
+          ))}
         </div>
         <div>
           <label className={labelBase}>Anything else we should know?</label>

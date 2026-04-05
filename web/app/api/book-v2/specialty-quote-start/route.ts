@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import { emitEvent } from "@/lib/emitEvent";
@@ -22,6 +23,15 @@ import {
   quoteStartNativeLocationPatch,
   upsertPersonLocationForQuote,
 } from "@/lib/book-v2/quoteStartLocationHelpers";
+import {
+  MAX_SPECIALTY_QUOTE_PHOTO_BYTES,
+  SPECIALTY_QUOTE_PHOTO_DOC_TYPE,
+  SPECIALTY_QUOTE_PHOTO_FORM_KEYS,
+  SPECIALTY_QUOTE_PHOTO_SEMANTIC_SLOT_BY_FORM_KEY,
+  SPECIALTY_QUOTE_PHOTO_SLOT_METADATA_KEY,
+  type SpecialtyQuotePhotoFormKey,
+} from "@/lib/book-v2/specialtyQuotePhotos";
+import { ORG_DOCUMENTS_STORAGE_BUCKET } from "@/lib/storage/orgDocumentsBucket";
 
 const SPECIALTY_SOURCE = "specialty_web_quote";
 
@@ -46,6 +56,52 @@ type SpecialtyBody = {
   quote_context?: Record<string, unknown>;
 };
 
+async function parseSpecialtyRequest(
+  request: NextRequest
+): Promise<
+  | { ok: true; body: SpecialtyBody; photoFiles: Partial<Record<SpecialtyQuotePhotoFormKey, File>> }
+  | { ok: false; response: NextResponse }
+> {
+  const ct = request.headers.get("content-type") || "";
+  if (ct.includes("multipart/form-data")) {
+    let fd: FormData;
+    try {
+      fd = await request.formData();
+    } catch {
+      return {
+        ok: false,
+        response: NextResponse.json({ ok: false, message: "Invalid multipart form data" }, { status: 400 }),
+      };
+    }
+    const payload = fd.get("payload");
+    if (typeof payload !== "string") {
+      return {
+        ok: false,
+        response: NextResponse.json({ ok: false, message: "Missing form field payload (JSON)" }, { status: 400 }),
+      };
+    }
+    let body: SpecialtyBody;
+    try {
+      body = JSON.parse(payload) as SpecialtyBody;
+    } catch {
+      return {
+        ok: false,
+        response: NextResponse.json({ ok: false, message: "Invalid JSON in payload" }, { status: 400 }),
+      };
+    }
+    const photoFiles: Partial<Record<SpecialtyQuotePhotoFormKey, File>> = {};
+    for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+      const v = fd.get(key);
+      if (v instanceof File && v.size > 0) {
+        photoFiles[key] = v;
+      }
+    }
+    return { ok: true, body, photoFiles };
+  }
+  const body = (await request.json()) as SpecialtyBody;
+  return { ok: true, body, photoFiles: {} };
+}
+
 /**
  * POST /api/book-v2/specialty-quote-start
  * Move-out / heavy clean: person + location + opportunity with metadata only (no standard pricing RPC).
@@ -56,7 +112,10 @@ export async function POST(request: NextRequest) {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY environment variable is not set");
     }
 
-    const body = (await request.json()) as SpecialtyBody;
+    const parsed = await parseSpecialtyRequest(request);
+    if (!parsed.ok) return parsed.response;
+    const { body, photoFiles } = parsed;
+
     const cleaningType = String(body.cleaning_type ?? "").trim();
     if (cleaningType !== "move_out" && cleaningType !== "heavy_clean") {
       return NextResponse.json(
@@ -87,6 +146,62 @@ export async function POST(request: NextRequest) {
         { ok: false, message: "Approximate square footage is required" },
         { status: 400 }
       );
+    }
+
+    const street = body.street_address?.trim() || null;
+    const city = body.city?.trim() || null;
+    const preferred_service_date = body.preferred_service_date?.trim() || null;
+    const home_type = body.home_type?.trim() || null;
+    const bedrooms = body.bedrooms?.trim() || null;
+    const bathrooms = body.bathrooms?.trim() || null;
+
+    if (!street || !city) {
+      return NextResponse.json(
+        { ok: false, message: "Street address and city are required" },
+        { status: 400 }
+      );
+    }
+    if (!preferred_service_date) {
+      return NextResponse.json(
+        { ok: false, message: "Preferred service date is required" },
+        { status: 400 }
+      );
+    }
+    if (!home_type) {
+      return NextResponse.json({ ok: false, message: "Home type is required" }, { status: 400 });
+    }
+    if (!bedrooms || !bathrooms) {
+      return NextResponse.json(
+        { ok: false, message: "Bedrooms and bathrooms are required" },
+        { status: 400 }
+      );
+    }
+
+    for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+      const f = photoFiles[key];
+      if (!f) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message:
+              "Please upload all four photos: living room, kitchen, master bedroom, and master bathroom.",
+          },
+          { status: 400 }
+        );
+      }
+      if (f.size > MAX_SPECIALTY_QUOTE_PHOTO_BYTES) {
+        return NextResponse.json(
+          { ok: false, message: "Each photo must be 10MB or smaller." },
+          { status: 400 }
+        );
+      }
+      const mime = f.type || "";
+      if (!mime.startsWith("image/")) {
+        return NextResponse.json(
+          { ok: false, message: "Photos must be image files (JPEG, PNG, or WebP)." },
+          { status: 400 }
+        );
+      }
     }
 
     const supabase = createServiceRoleClient();
@@ -156,13 +271,7 @@ export async function POST(request: NextRequest) {
     }
 
     const quote_started_at = new Date().toISOString();
-    const street = body.street_address?.trim() || null;
-    const city = body.city?.trim() || null;
     const state = body.state?.trim() || null;
-    const preferred_service_date = body.preferred_service_date?.trim() || null;
-    const home_type = body.home_type?.trim() || null;
-    const bedrooms = body.bedrooms?.trim() || null;
-    const bathrooms = body.bathrooms?.trim() || null;
     const notes = body.notes?.trim() || null;
 
     const quote_input: Record<string, unknown> = {
@@ -179,6 +288,7 @@ export async function POST(request: NextRequest) {
       bedrooms,
       bathrooms,
       notes,
+      specialty_quote_notes: notes,
       specialty_request: true,
       ...body.quote_context,
     };
@@ -377,6 +487,148 @@ export async function POST(request: NextRequest) {
 
     await upsertPersonLocationForQuote(supabase, orgIdForWrites, personId, locationId);
 
+    const specCleanDef = await getFieldDefinitionMeta(
+      supabase,
+      orgIdForWrites,
+      "opportunity",
+      "specialty_cleaning_type"
+    );
+    if (specCleanDef) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "opportunity", opportunityId, specCleanDef, cleaningType);
+    }
+    const prefDateDef = await getFieldDefinitionMeta(
+      supabase,
+      orgIdForWrites,
+      "opportunity",
+      "preferred_service_date"
+    );
+    if (prefDateDef && preferred_service_date) {
+      await upsertTypedFieldValue(
+        supabase,
+        orgIdForWrites,
+        "opportunity",
+        opportunityId,
+        prefDateDef,
+        preferred_service_date
+      );
+    }
+    const specNotesDef = await getFieldDefinitionMeta(
+      supabase,
+      orgIdForWrites,
+      "opportunity",
+      "specialty_quote_notes"
+    );
+    if (specNotesDef && notes) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "opportunity", opportunityId, specNotesDef, notes);
+    }
+
+    const brDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "bedrooms");
+    if (brDef && bedrooms) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, brDef, bedrooms);
+    }
+    const baDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "bathrooms");
+    if (baDef && bathrooms) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, baDef, bathrooms);
+    }
+    const htDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "home_type");
+    if (htDef && home_type) {
+      await upsertTypedFieldValue(supabase, orgIdForWrites, "location", locationId, htDef, home_type);
+    }
+    const sqTierDef = await getFieldDefinitionMeta(supabase, orgIdForWrites, "location", "square_footage_tier");
+    if (sqTierDef) {
+      await upsertTypedFieldValue(
+        supabase,
+        orgIdForWrites,
+        "location",
+        locationId,
+        sqTierDef,
+        String(squareFootageStored)
+      );
+    }
+
+    const bucket = ORG_DOCUMENTS_STORAGE_BUCKET;
+    const specialty_quote_photo_documents: Array<{
+      specialty_quote_photo_slot: string;
+      document_id: string;
+    }> = [];
+
+    for (const key of SPECIALTY_QUOTE_PHOTO_FORM_KEYS) {
+      const file = photoFiles[key]!;
+      const semanticSlot = SPECIALTY_QUOTE_PHOTO_SEMANTIC_SLOT_BY_FORM_KEY[key];
+      const buf = Buffer.from(await file.arrayBuffer());
+      const mime = file.type || "image/jpeg";
+      const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+      const storagePath = `${orgIdForWrites}/opportunity/${opportunityId}/${randomUUID()}-${semanticSlot}.${ext}`;
+      const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, buf, {
+        contentType: mime,
+        upsert: false,
+      });
+      if (upErr) {
+        console.error("[SPECIALTY_QUOTE_START_UPLOAD]", key, upErr);
+        return NextResponse.json(
+          { ok: false, message: "Could not upload photos. Please try again." },
+          { status: 500 }
+        );
+      }
+      const origName = file instanceof File && file.name ? file.name : "upload";
+      const title = `Specialty quote photo (${semanticSlot.replace(/_/g, " ")})`;
+      const { data: docRow, error: docErr } = await supabase
+        .from("documents")
+        .insert({
+          org_id: orgIdForWrites,
+          entity_type: "opportunity",
+          entity_id: opportunityId,
+          doc_type: SPECIALTY_QUOTE_PHOTO_DOC_TYPE,
+          title,
+          original_filename: origName !== "upload" ? origName : `${semanticSlot}.${ext}`,
+          mime_type: mime,
+          byte_size: buf.length,
+          bucket,
+          storage_path: storagePath,
+          status: "uploaded",
+          metadata: {
+            [SPECIALTY_QUOTE_PHOTO_SLOT_METADATA_KEY]: semanticSlot,
+            intake_source: SPECIALTY_SOURCE,
+          },
+        })
+        .select("id")
+        .single();
+      if (docErr || !docRow) {
+        console.error("[SPECIALTY_QUOTE_START_DOCUMENT]", key, docErr);
+        return NextResponse.json(
+          { ok: false, message: "Could not save photo records. Please try again." },
+          { status: 500 }
+        );
+      }
+      specialty_quote_photo_documents.push({
+        specialty_quote_photo_slot: semanticSlot,
+        document_id: (docRow as { id: string }).id,
+      });
+    }
+
+    const { data: mdRow } = await supabase
+      .from("opportunities")
+      .select("metadata")
+      .eq("id", opportunityId)
+      .maybeSingle();
+    const existingMeta = (mdRow?.metadata as Record<string, unknown> | null) ?? {};
+    const prevQi = (existingMeta.quote_input as Record<string, unknown> | undefined) ?? {};
+    const { error: metaErr } = await supabase
+      .from("opportunities")
+      .update({
+        metadata: {
+          ...existingMeta,
+          quote_input: {
+            ...prevQi,
+            specialty_quote_photo_documents,
+          },
+        },
+      })
+      .eq("id", opportunityId);
+    if (metaErr) {
+      console.error("[SPECIALTY_QUOTE_START_METADATA]", metaErr);
+    }
+
     console.log(
       "[SPECIALTY_QUOTE_START] person_id=%s created_new=%s opportunity_id=%s type=%s",
       personId,
@@ -390,6 +642,7 @@ export async function POST(request: NextRequest) {
       person_id: personId,
       opportunity_id: opportunityId,
       quote_output,
+      specialty_quote_photo_documents,
     });
   } catch (err) {
     console.error("[SPECIALTY_QUOTE_START_ERROR]", err);

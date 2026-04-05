@@ -26,6 +26,7 @@ import {
   inferLegacyCleaningFrequencyApiKey,
   resolveRpcFrequencyKey,
 } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
+import { standardCleaningFrequencyCatalog } from "@/lib/book-v2/catalogFrequencyChoices";
 import {
     createQuoteLocation,
     quoteLocationLabel,
@@ -241,10 +242,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [sqftTierRows, pricingFrequencyRows] = await Promise.all([
+    const [sqftTierRows, pricingFrequencyRowsRaw] = await Promise.all([
       loadSqftTiersForVertical(supabase, verticalId),
       loadPricingFrequenciesForVertical(supabase, verticalId),
     ]);
+    const pricingFrequencyRows = standardCleaningFrequencyCatalog(pricingFrequencyRowsRaw);
     const rawCleaningFreq =
       body.cleaning_frequency != null && String(body.cleaning_frequency).trim() !== ""
         ? String(body.cleaning_frequency).trim()

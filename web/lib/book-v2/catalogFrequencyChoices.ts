@@ -1,6 +1,23 @@
 import type { PricingFrequencyRow } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { formatFrequencyRowDisplayLabel, resolveRpcFrequencyKey } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 
+/** When the DB only has recurring `pricing_frequencies` rows, quote/refine still need a one-time option. */
+function withSyntheticOneTimeRow(rows: PricingFrequencyRow[]): PricingFrequencyRow[] {
+    if (!rows.length || rows.some((r) => !r.is_recurring)) return rows;
+    const synthetic: PricingFrequencyRow = {
+        frequency_key: "synthetic_one_time",
+        frequency_label: "One-time",
+        discount_label: null,
+        is_recurring: false,
+    };
+    return [synthetic, ...rows];
+}
+
+/** DB rows plus a synthetic one-time row when the catalog is recurring-only (standard cleaning). */
+export function standardCleaningFrequencyCatalog(rows: PricingFrequencyRow[] | undefined): PricingFrequencyRow[] {
+    return withSyntheticOneTimeRow(rows ?? []);
+}
+
 function frequencySelectionLabel(selection: string, rows: PricingFrequencyRow[] | null | undefined): string {
     if (!rows?.length) {
         const m: Record<string, string> = {
@@ -26,21 +43,23 @@ export function catalogFrequencyChoices(
     rows: PricingFrequencyRow[] | undefined,
     campaignRecurringOnly: boolean
 ): { value: string; label: string }[] {
-    const list = rows ?? [];
-    if (!list.length) {
+    const raw = rows ?? [];
+    const base = campaignRecurringOnly ? raw.filter((r) => r.is_recurring) : standardCleaningFrequencyCatalog(raw);
+    if (!base.length) {
         const keys = campaignRecurringOnly
             ? (["weekly", "biweekly", "monthly"] as const)
             : (["one_time", "weekly", "biweekly", "monthly"] as const);
         return keys.map((value) => ({ value, label: frequencySelectionLabel(value, []) }));
     }
-    const filtered = campaignRecurringOnly ? list.filter((r) => r.is_recurring) : list;
     const seen = new Set<string>();
     const out: { value: string; label: string }[] = [];
-    for (const r of filtered) {
+    for (const r of base) {
         const value = r.is_recurring ? r.frequency_key : "one_time";
         if (seen.has(value)) continue;
         seen.add(value);
         out.push({ value, label: formatFrequencyRowDisplayLabel(r) });
     }
-    return out;
+    const oneTime = out.filter((o) => o.value === "one_time");
+    const recurring = out.filter((o) => o.value !== "one_time");
+    return [...oneTime, ...recurring];
 }

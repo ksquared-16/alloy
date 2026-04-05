@@ -43,6 +43,7 @@ const SERVICE_DETAILS_CONFIG_LAYOUT_EXCLUDED_KEYS = new Set([
     "parking_notes",
     "bedrooms",
     "bathrooms",
+    "home_type",
 ]);
 
 /** Service step: property + access only (exclude quote/sizing from public defs). */
@@ -91,10 +92,15 @@ export default function ServiceDetailsForm({
         if (verticalSlug?.trim()) q.set("vertical_slug", verticalSlug.trim());
         fetch(`/api/public/field-definitions?${q.toString()}`)
             .then((r) => r.json())
-            .then((data: { ok?: boolean; fields?: PublicFieldDef[]; sections?: PublicSectionDef[] }) => {
-                if (cancelled || !data?.ok) return;
-                setLocationFields(data.fields ?? []);
-                setLocationSections(data.sections ?? []);
+            .then((defsData: { ok?: boolean; fields?: PublicFieldDef[]; sections?: PublicSectionDef[] }) => {
+                if (cancelled) return;
+                if (defsData?.ok) {
+                    setLocationFields(defsData.fields ?? []);
+                    setLocationSections(defsData.sections ?? []);
+                } else {
+                    setLocationFields([]);
+                    setLocationSections([]);
+                }
             })
             .catch(() => {
                 if (!cancelled) {
@@ -163,8 +169,38 @@ export default function ServiceDetailsForm({
     );
 
     const defsReady = !defsLoading;
-    const useLegacyPropertyFields =
-        defsReady && (locationFields.length === 0 || propertyConfigurableFields.length === 0);
+
+    const bedroomFieldDef = useMemo(
+        () => fieldsForServiceStep.find((f) => f.field_key === "bedrooms"),
+        [fieldsForServiceStep]
+    );
+    const bathroomFieldDef = useMemo(
+        () => fieldsForServiceStep.find((f) => f.field_key === "bathrooms"),
+        [fieldsForServiceStep]
+    );
+    const homeTypeFieldDef = useMemo(
+        () => fieldsForServiceStep.find((f) => f.field_key === "home_type"),
+        [fieldsForServiceStep]
+    );
+    const bedroomOptions =
+        bedroomFieldDef?.options?.length && bedroomFieldDef.options.length > 0
+            ? bedroomFieldDef.options
+            : BOOKING_BEDROOM_OPTIONS;
+    const bathroomOptions =
+        bathroomFieldDef?.options?.length && bathroomFieldDef.options.length > 0
+            ? bathroomFieldDef.options
+            : BOOKING_BATHROOM_OPTIONS;
+    /** Documented fallback if `home_type` is missing from public defs (org misconfiguration). */
+    const FALLBACK_HOME_TYPES = [
+        { value: "house", label: "House" },
+        { value: "condo", label: "Condo" },
+        { value: "apartment", label: "Apartment" },
+        { value: "townhome", label: "Townhome" },
+    ];
+    const homeTypeOptions =
+        homeTypeFieldDef?.options?.length && homeTypeFieldDef.options.length > 0
+            ? homeTypeFieldDef.options
+            : FALLBACK_HOME_TYPES;
 
     useEffect(() => {
         try {
@@ -179,9 +215,12 @@ export default function ServiceDetailsForm({
                             : prev.configurable_values;
                     const bed = typeof rest.bedrooms === "string" && rest.bedrooms.trim() ? rest.bedrooms : undefined;
                     const bath = typeof rest.bathrooms === "string" && rest.bathrooms.trim() ? rest.bathrooms : undefined;
+                    const ht =
+                        typeof rest.home_type === "string" && rest.home_type.trim() ? rest.home_type : undefined;
                     const cfgNext = { ...mergedCfg };
                     if (bed && (cfgNext.bedrooms === undefined || cfgNext.bedrooms === "")) cfgNext.bedrooms = bed;
                     if (bath && (cfgNext.bathrooms === undefined || cfgNext.bathrooms === "")) cfgNext.bathrooms = bath;
+                    if (ht && (cfgNext.home_type === undefined || cfgNext.home_type === "")) cfgNext.home_type = ht;
                     return {
                         ...prev,
                         ...rest,
@@ -218,9 +257,8 @@ export default function ServiceDetailsForm({
             const bathRaw = data.configurable_values.bathrooms ?? data.bathrooms;
             if (!String(bedRaw ?? "").trim() || !String(bathRaw ?? "").trim()) return false;
 
-            if (useLegacyPropertyFields) {
-                if (!data.home_type?.trim()) return false;
-            }
+            const homeRaw = data.configurable_values.home_type ?? data.home_type;
+            if (!String(homeRaw ?? "").trim()) return false;
 
             for (const f of visibleServiceFields) {
                 if (!f.is_required) continue;
@@ -232,7 +270,7 @@ export default function ServiceDetailsForm({
 
             return true;
         },
-        [visibleServiceFields, useLegacyPropertyFields]
+        [visibleServiceFields]
     );
 
     useEffect(() => {
@@ -275,6 +313,14 @@ export default function ServiceDetailsForm({
         }));
     };
 
+    const setHomeTypeSelection = (v: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            home_type: v,
+            configurable_values: { ...prev.configurable_values, home_type: v },
+        }));
+    };
+
     const bedroomSelectValue =
         (typeof formData.configurable_values.bedrooms === "string" && formData.configurable_values.bedrooms) ||
         formData.bedrooms ||
@@ -284,13 +330,11 @@ export default function ServiceDetailsForm({
         formData.bathrooms ||
         "";
 
-    const DEFAULT_HOME = [
-        { value: "Single-Family Home", label: "Single-Family Home" },
-        { value: "Apartment / Condo", label: "Apartment / Condo" },
-        { value: "Townhome", label: "Townhome" },
-        { value: "Duplex", label: "Duplex" },
-        { value: "Other", label: "Other" },
-    ];
+    const homeTypeSelectValue =
+        (typeof formData.configurable_values.home_type === "string" && formData.configurable_values.home_type) ||
+        formData.home_type ||
+        "";
+
     return (
         <div className="space-y-3">
             <div>
@@ -329,27 +373,23 @@ export default function ServiceDetailsForm({
                     </div>
                 </div>
 
-                {useLegacyPropertyFields && (
-                    <>
-                        <div>
-                            <label className="block text-xs font-medium text-alloy-midnight mb-0.5">Home type</label>
-                            <select
-                                value={formData.home_type ?? ""}
-                                onChange={(e) =>
-                                    setFormData((p) => ({ ...p, home_type: e.target.value }))
-                                }
-                                className={`${inputPad} bg-white`}
-                            >
-                                <option value="">Select home type</option>
-                                {DEFAULT_HOME.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </>
-                )}
+                <div>
+                    <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
+                        Home type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                        value={homeTypeSelectValue}
+                        onChange={(e) => setHomeTypeSelection(e.target.value)}
+                        className={`${inputPad} bg-white`}
+                    >
+                        <option value="">Select</option>
+                        {homeTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
 
                 {defsLoading && (
                     <p className="text-xs text-alloy-midnight/50">Loading property fields…</p>
@@ -377,7 +417,7 @@ export default function ServiceDetailsForm({
                             className={`${inputPad} bg-white`}
                         >
                             <option value="">Select</option>
-                            {BOOKING_BEDROOM_OPTIONS.map((opt) => (
+                            {bedroomOptions.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
                                     {opt.label}
                                 </option>
@@ -394,7 +434,7 @@ export default function ServiceDetailsForm({
                             className={`${inputPad} bg-white`}
                         >
                             <option value="">Select</option>
-                            {BOOKING_BATHROOM_OPTIONS.map((opt) => (
+                            {bathroomOptions.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
                                     {opt.label}
                                 </option>

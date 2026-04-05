@@ -332,18 +332,23 @@ export default function QuoteModal({
                     </p>
                     <CleaningQuickQuoteForm
                       campaignQuoteMode={campaignQuoteFlow === "firstfree4x120" ? { id: "firstfree4x120" } : undefined}
-                      onSuccess={() => {
+                      onComplete={(detail) => {
                         const isCampaign = campaignQuoteFlow === "firstfree4x120";
+                        if (detail.kind === "specialty") {
+                          return;
+                        }
                         if (isCampaign) {
-                          // MUST run before onClose(): closeModal() clears onCampaignQuoteCompleteRef — a microtask would fire too late.
                           if (invokeCampaignQuoteComplete) {
                             invokeCampaignQuoteComplete();
                           }
                           onClose();
                           return;
                         }
-                        onClose();
-                        router.push("/book-v2");
+                        router.prefetch("/book-v2");
+                        window.setTimeout(() => {
+                          router.push("/book-v2");
+                          window.setTimeout(() => onClose(), 380);
+                        }, 120);
                       }}
                     />
                   </div>
