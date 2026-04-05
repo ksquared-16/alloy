@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import ConfigurableFieldSections, {
+    PublicFieldControl,
     type PublicFieldDef,
     type PublicSectionDef,
 } from "@/components/public/ConfigurableFieldSections";
@@ -31,6 +32,9 @@ const STORAGE_KEY = "alloy_book_v2_service_details";
 
 /** Field keys not shown or sent from the public Service Details step (admin/registry unchanged). */
 export const SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS = new Set(["alarm_notes"]);
+
+/** Duplicates native “How will your cleaner get in?” or is rendered below access (parking). */
+const SERVICE_DETAILS_CONFIG_LAYOUT_EXCLUDED_KEYS = new Set(["access_method", "parking_notes"]);
 
 /** Service step: property + access only (exclude quote/sizing from public defs). */
 const SERVICE_STEP_SECTION_KEYS = new Set(["property", "access_notes"]);
@@ -112,22 +116,46 @@ export default function ServiceDetailsForm({
         });
     }, [fieldsForServiceStep, formData.access_method]);
 
-    const serviceSections = useMemo(
-        () => locationSections.filter((s) => SERVICE_STEP_SECTION_KEYS.has(s.section_key)),
+    const propertyConfigurableFields = useMemo(
+        () =>
+            visibleServiceFields.filter(
+                (f) => f.section_key === "property" && !SERVICE_DETAILS_CONFIG_LAYOUT_EXCLUDED_KEYS.has(f.field_key)
+            ),
+        [visibleServiceFields]
+    );
+
+    const propertyConfigurableSections = useMemo(
+        () => locationSections.filter((s) => s.section_key === "property"),
         [locationSections]
     );
 
-    const prefetchedService = useMemo(
+    const accessNotesAfterNativeFields = useMemo(
         () =>
-            visibleServiceFields.length > 0
-                ? { fields: visibleServiceFields, sections: serviceSections }
+            visibleServiceFields.filter((f) => {
+                if (f.section_key !== "access_notes") return false;
+                if (SERVICE_DETAILS_CONFIG_LAYOUT_EXCLUDED_KEYS.has(f.field_key)) return false;
+                if (f.field_key === "gate_code" && formData.access_method !== "building") return false;
+                return true;
+            }),
+        [visibleServiceFields, formData.access_method]
+    );
+
+    const parkingFieldDef = useMemo(
+        () => visibleServiceFields.find((f) => f.field_key === "parking_notes"),
+        [visibleServiceFields]
+    );
+
+    const prefetchedPropertyOnly = useMemo(
+        () =>
+            propertyConfigurableFields.length > 0
+                ? { fields: propertyConfigurableFields, sections: propertyConfigurableSections }
                 : null,
-        [visibleServiceFields, serviceSections]
+        [propertyConfigurableFields, propertyConfigurableSections]
     );
 
     const defsReady = !defsLoading;
     const useLegacyPropertyFields =
-        defsReady && (locationFields.length === 0 || visibleServiceFields.length === 0);
+        defsReady && (locationFields.length === 0 || propertyConfigurableFields.length === 0);
 
     useEffect(() => {
         try {
@@ -221,8 +249,11 @@ export default function ServiceDetailsForm({
         { value: "Duplex", label: "Duplex" },
         { value: "Other", label: "Other" },
     ];
-    const DEFAULT_BED = ["1", "2", "3", "4", "5+"].map((v) => ({ value: v, label: v }));
-    const DEFAULT_BATH = ["1", "2", "3", "4+"].map((v) => ({ value: v, label: v }));
+    const DEFAULT_BED = ["1", "2", "3", "4", "5", "6+"].map((v) => ({ value: v, label: v }));
+    const DEFAULT_BATH = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"].map((v) => ({
+        value: v,
+        label: v,
+    }));
 
     return (
         <div className="space-y-3">
@@ -281,7 +312,7 @@ export default function ServiceDetailsForm({
                                 ))}
                             </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
                                     Bedrooms <span className="text-red-500">*</span>
@@ -327,11 +358,11 @@ export default function ServiceDetailsForm({
                 {defsLoading && (
                     <p className="text-xs text-alloy-midnight/50">Loading property fields…</p>
                 )}
-                {defsReady && visibleServiceFields.length > 0 && prefetchedService && (
+                {defsReady && prefetchedPropertyOnly && (
                     <ConfigurableFieldSections
                         entityType="location"
                         verticalSlug={verticalSlug}
-                        prefetched={prefetchedService}
+                        prefetched={prefetchedPropertyOnly}
                         values={formData.configurable_values}
                         onChange={onConfigurableChange}
                         dense
@@ -339,7 +370,7 @@ export default function ServiceDetailsForm({
                     />
                 )}
 
-                <div>
+                <div className="pt-1">
                     <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
                         How will your cleaner get in? <span className="text-red-500">*</span>
                     </label>
@@ -383,18 +414,63 @@ export default function ServiceDetailsForm({
                     </div>
                 )}
 
-                <label className="flex items-center gap-2 cursor-pointer pt-0.5">
-                    <input
-                        id="book-v2-has-pets"
-                        type="checkbox"
-                        checked={formData.has_pets}
-                        onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, has_pets: e.target.checked }))
-                        }
-                        className="h-4 w-4 rounded border-alloy-stone/40 text-alloy-juniper"
-                    />
-                    <span className="text-sm text-alloy-midnight">Pets at this address</span>
-                </label>
+                {defsReady &&
+                    accessNotesAfterNativeFields.map((f) => (
+                        <div key={f.field_key} className="space-y-0.5">
+                            <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
+                                {f.label}
+                                {f.is_required ? <span className="text-red-500"> *</span> : null}
+                            </label>
+                            {f.description ? (
+                                <p className="text-xs text-alloy-midnight/60 mb-0.5">{f.description}</p>
+                            ) : null}
+                            <PublicFieldControl
+                                f={f}
+                                value={formData.configurable_values[f.field_key]}
+                                onChange={onConfigurableChange}
+                                dense
+                            />
+                            {f.help_text ? (
+                                <p className="text-xs text-alloy-midnight/50 mt-0.5">{f.help_text}</p>
+                            ) : null}
+                        </div>
+                    ))}
+
+                {parkingFieldDef && (
+                    <div className="space-y-0.5">
+                        <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
+                            {parkingFieldDef.label}
+                            {parkingFieldDef.is_required ? <span className="text-red-500"> *</span> : null}
+                        </label>
+                        {parkingFieldDef.description ? (
+                            <p className="text-xs text-alloy-midnight/60 mb-0.5">{parkingFieldDef.description}</p>
+                        ) : null}
+                        <PublicFieldControl
+                            f={parkingFieldDef}
+                            value={formData.configurable_values[parkingFieldDef.field_key]}
+                            onChange={onConfigurableChange}
+                            dense
+                        />
+                        {parkingFieldDef.help_text ? (
+                            <p className="text-xs text-alloy-midnight/50 mt-0.5">{parkingFieldDef.help_text}</p>
+                        ) : null}
+                    </div>
+                )}
+
+                <div className="pt-3 mt-2 border-t border-alloy-stone/20">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                            id="book-v2-has-pets"
+                            type="checkbox"
+                            checked={formData.has_pets}
+                            onChange={(e) =>
+                                setFormData((prev) => ({ ...prev, has_pets: e.target.checked }))
+                            }
+                            className="h-4 w-4 rounded border-alloy-stone/40 text-alloy-juniper"
+                        />
+                        <span className="text-sm text-alloy-midnight">Pets at this address</span>
+                    </label>
+                </div>
             </div>
         </div>
     );

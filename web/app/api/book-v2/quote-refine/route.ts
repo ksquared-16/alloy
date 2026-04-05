@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
-import { mapServiceTypeToKey, mapFrequencyToKey } from "@/lib/pricing/supabasePricing";
+import type { SquareFootageOption } from "@/lib/pricing/cleaningPricing";
+import { mapServiceTypeToKey } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import { getFieldDefinitionMeta, upsertTypedFieldValue } from "@/lib/bookV2/fieldValueUpsert";
 import {
@@ -17,27 +17,18 @@ import {
   type DbAddonRow,
   type PricingFrequencyRow,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import {
+  frequencyRowForRpcKey,
+  inferLegacyCleaningFrequencyApiKey,
+  resolveRpcFrequencyKey,
+} from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 
 const SERVICE_TYPE = "Standard Cleaning";
 
-function mapApiFrequencyToOption(
-  freq: "one_time" | "weekly" | "biweekly" | "monthly" | null | undefined
-): CleaningFrequencyOption {
-  switch (freq) {
-    case "weekly":
-      return "Weekly (30% Off)";
-    case "biweekly":
-      return "Bi-Weekly (20% Off)";
-    case "monthly":
-      return "Monthly (10% Off)";
-    default:
-      return "One-time";
-  }
-}
-
 export interface QuoteRefineBody {
   square_footage: string;
-  cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
+  /** Legacy keys or pricing_frequencies.frequency_key */
+  cleaning_frequency?: string;
   add_ons?: string[];
   opportunity_id?: string;
   zip?: string;
@@ -89,9 +80,10 @@ function buildAddonsFromDb(
 async function computeQuote(
   supabase: ReturnType<typeof createServiceRoleClient>,
   squareFootageOption: SquareFootageOption,
-  frequencyOption: CleaningFrequencyOption,
+  rpcFrequencyKey: string,
   selectedAddonKeys: string[],
-  addonPriceMap: Record<string, { label: string; price: number }>
+  addonPriceMap: Record<string, { label: string; price: number }>,
+  freqRow: PricingFrequencyRow | null
 ): Promise<{
   estimated_price: number | null;
   first_clean_price: number | null;
@@ -102,16 +94,17 @@ async function computeQuote(
   addons_total: number;
 }> {
   const serviceKey = mapServiceTypeToKey(SERVICE_TYPE);
-  const frequencyKey = mapFrequencyToKey(frequencyOption) ?? "";
   const { addons, addons_total } = buildAddonsFromDb(selectedAddonKeys, addonPriceMap);
 
   const { data, error } = await supabase.rpc("get_quote_pricing", {
     p_vertical_slug: "cleaning",
     p_service_key: serviceKey,
     p_sqft_key: squareFootageOption,
-    p_frequency_key: frequencyKey,
+    p_frequency_key: rpcFrequencyKey,
     p_addon_keys: selectedAddonKeys,
   });
+
+  const shortLabel = (): string => freqRow?.frequency_label ?? (rpcFrequencyKey ? "Recurring" : "One-time");
 
   if (error || !data) {
     console.warn("[QUOTE_REFINE] RPC get_quote_pricing failed:", error?.message);
@@ -120,9 +113,9 @@ async function computeQuote(
     return {
       estimated_price: totalFirst,
       first_clean_price: firstClean,
-      recurring_price: frequencyOption !== "One-time" ? 120 : null,
-      frequency_label: frequencyOption === "One-time" ? "One-time" : frequencyOption,
-      discount_label: null,
+      recurring_price: rpcFrequencyKey ? 120 : null,
+      frequency_label: shortLabel(),
+      discount_label: freqRow?.discount_label ?? null,
       addons,
       addons_total,
     };
@@ -146,21 +139,13 @@ async function computeQuote(
   const firstCleanPrice = (row.first_clean_cents ?? 0) / 100;
   const recurringPrice = row.recurring_cents != null ? row.recurring_cents / 100 : null;
   const estimatedPrice = firstCleanPrice + addons_total;
-  const frequencyLabel =
-    frequencyOption === "One-time"
-      ? "One-time"
-      : frequencyOption.startsWith("Weekly")
-        ? "Weekly"
-        : frequencyOption.startsWith("Bi-Weekly")
-          ? "Bi-Weekly"
-          : "Monthly";
 
   return {
     estimated_price: estimatedPrice,
     first_clean_price: firstCleanPrice,
     recurring_price: recurringPrice,
-    frequency_label: frequencyLabel,
-    discount_label: null,
+    frequency_label: freqRow?.frequency_label ?? shortLabel(),
+    discount_label: freqRow?.discount_label ?? null,
     addons,
     addons_total,
   };
@@ -206,7 +191,10 @@ export async function POST(request: NextRequest) {
 
     const sqftTiers = await loadSqftTiersForVertical(supabase, verticalId);
     const squareFootageOption = normalizeSqftKeyInput(square_footage, sqftTiers) as SquareFootageOption;
-    const frequencyOption = mapApiFrequencyToOption(body.cleaning_frequency ?? "one_time");
+    const rawFreq = String(body.cleaning_frequency ?? "one_time").trim() || "one_time";
+    const rpcFreqKey = resolveRpcFrequencyKey(rawFreq, pricingFrequencies);
+    const freqRowPick = frequencyRowForRpcKey(rpcFreqKey, pricingFrequencies);
+    const legacyFreqApi = inferLegacyCleaningFrequencyApiKey(rpcFreqKey, pricingFrequencies);
     const selectedKeys = filterExcludedCustomerAddonKeys(
       normalizeAddonKeysAgainstMap(body.add_ons ?? [], addonPriceMap)
     );
@@ -214,13 +202,13 @@ export async function POST(request: NextRequest) {
     let quoteOutput = await computeQuote(
       supabase,
       squareFootageOption,
-      frequencyOption,
+      rpcFreqKey,
       selectedKeys,
-      addonPriceMap
+      addonPriceMap,
+      freqRowPick
     );
 
-    const freqByKey = new Map(pricingFrequencies.map((f) => [f.frequency_key, f]));
-    const dbFreq = freqByKey.get(frequencyOption);
+    const dbFreq = freqRowPick;
     if (dbFreq) {
       quoteOutput = {
         ...quoteOutput,
@@ -261,13 +249,13 @@ export async function POST(request: NextRequest) {
           location_id?: string | null;
         };
         const meta = (row.metadata as Record<string, unknown>) ?? {};
-        const apiKeyFromFreq = dbFreq?.frequency_key ?? body.cleaning_frequency ?? "one_time";
-        const cleaningFreqApiKey =
-          typeof body.cleaning_frequency === "string" ? body.cleaning_frequency : "one_time";
+        const priorQi = (meta.quote_input as Record<string, unknown> | undefined) ?? {};
         const quote_input = {
-          zip: body.zip ?? (meta.quote_input as Record<string, unknown>)?.zip,
+          ...priorQi,
+          zip: body.zip ?? priorQi.zip,
           square_footage: squareFootageOption,
-          cleaning_frequency: typeof apiKeyFromFreq === "string" ? apiKeyFromFreq : "one_time",
+          cleaning_frequency: legacyFreqApi,
+          cleaning_frequency_key: rpcFreqKey || null,
           add_ons: selectedKeys,
         };
         const estRaw = quoteOutput.estimated_price;
@@ -380,7 +368,7 @@ export async function POST(request: NextRequest) {
               "opportunity",
               opportunityId,
               freqDef,
-              String(cleaningFreqApiKey)
+              String(legacyFreqApi)
             );
           }
           const svcDef = await getFieldDefinitionMeta(supabase, orgId, "opportunity", "requested_service_type");

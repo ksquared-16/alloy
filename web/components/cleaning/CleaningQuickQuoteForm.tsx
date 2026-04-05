@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { catalogFrequencyChoices } from "@/lib/book-v2/catalogFrequencyChoices";
 import { FALLBACK_SQFT_TIERS } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import type { PricingFrequencyRow } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import {
+    formatFrequencyRowDisplayLabel,
+    frequencyRowForRpcKey,
+    inferLegacyCleaningFrequencyApiKey,
+    resolveRpcFrequencyKey,
+} from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 
 export type QuickQuoteCampaignMode = {
   id: "firstfree4x120";
@@ -19,14 +27,22 @@ export default function CleaningQuickQuoteForm({
 }: CleaningQuickQuoteFormProps) {
   const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
   const [sqftTiers, setSqftTiers] = useState<Array<{ sqft_key: string; sqft_label: string }> | null>(null);
+  const [pricingFreqRows, setPricingFreqRows] = useState<PricingFrequencyRow[]>([]);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/public/booking-config")
       .then((r) => r.json())
-      .then((data: { ok?: boolean; square_footage_tiers?: Array<{ sqft_key: string; sqft_label: string }> }) => {
-        if (cancelled || !data?.ok || !data.square_footage_tiers?.length) return;
-        setSqftTiers(data.square_footage_tiers);
-      })
+      .then(
+        (data: {
+          ok?: boolean;
+          square_footage_tiers?: Array<{ sqft_key: string; sqft_label: string }>;
+          pricing_frequencies?: PricingFrequencyRow[];
+        }) => {
+          if (cancelled || !data?.ok) return;
+          if (data.square_footage_tiers?.length) setSqftTiers(data.square_footage_tiers);
+          if (data.pricing_frequencies?.length) setPricingFreqRows(data.pricing_frequencies);
+        }
+      )
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -44,14 +60,34 @@ export default function CleaningQuickQuoteForm({
     last_name: "",
     zip: "",
     square_footage: "",
-    cleaning_frequency: (isCampaignFirstFree ? "weekly" : "one_time") as
-      | "one_time"
-      | "weekly"
-      | "biweekly"
-      | "monthly",
+    cleaning_frequency_key: isCampaignFirstFree ? "weekly" : "",
+    cleaning_type: "standard" as "standard" | "move_out" | "heavy_clean",
     email: "",
     phone: "",
   });
+
+  const quickFreqOptions = useMemo(
+    () => catalogFrequencyChoices(pricingFreqRows, isCampaignFirstFree),
+    [pricingFreqRows, isCampaignFirstFree]
+  );
+
+  useEffect(() => {
+    if (!pricingFreqRows.length) return;
+    setForm((f) => {
+      if (f.cleaning_frequency_key && f.cleaning_frequency_key.trim()) return f;
+      const opts = catalogFrequencyChoices(pricingFreqRows, isCampaignFirstFree);
+      return { ...f, cleaning_frequency_key: opts[0]?.value ?? "one_time" };
+    });
+  }, [pricingFreqRows, isCampaignFirstFree]);
+
+  useEffect(() => {
+    if (!isCampaignFirstFree || !pricingFreqRows.length) return;
+    setForm((f) => {
+      if (f.cleaning_frequency_key && f.cleaning_frequency_key !== "one_time") return f;
+      const firstRec = pricingFreqRows.find((r) => r.is_recurring);
+      return { ...f, cleaning_frequency_key: firstRec?.frequency_key ?? "weekly" };
+    });
+  }, [isCampaignFirstFree, pricingFreqRows]);
   const [submitting, setSubmitting] = useState(false);
   const [handoffVisible, setHandoffVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +96,8 @@ export default function CleaningQuickQuoteForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { first_name, last_name, zip, square_footage, cleaning_frequency, email, phone } = form;
+    const { first_name, last_name, zip, square_footage, cleaning_frequency_key, cleaning_type, email, phone } =
+      form;
     if (!first_name?.trim()) {
       setError("First name is required.");
       return;
@@ -91,6 +128,25 @@ export default function CleaningQuickQuoteForm({
     setConsentError(null);
     let succeeded = false;
     try {
+      if (cleaning_type !== "standard") {
+        try {
+          const prefillJson = JSON.stringify({
+            email: email?.trim() || undefined,
+            phone: phone?.trim() || undefined,
+            first_name: first_name?.trim() || undefined,
+            last_name: last_name?.trim() || undefined,
+            zip: zip?.trim() || undefined,
+            postal_code: zip?.trim() || undefined,
+          });
+          sessionStorage.setItem("alloy_booking_prefill", prefillJson);
+          localStorage.setItem("alloy_booking_prefill", prefillJson);
+        } catch {
+          // ignore
+        }
+        window.location.href = `/book-v2?cleaning_type=${encodeURIComponent(cleaning_type)}`;
+        return;
+      }
+
       const identityKeys = ["alloy_person_id", "alloy_contact_id", "alloy_customer_id", "alloy_opportunity_id"];
       try {
         identityKeys.forEach((k) => {
@@ -100,6 +156,7 @@ export default function CleaningQuickQuoteForm({
       } catch {
         // ignore
       }
+      const freqSel = (cleaning_frequency_key && cleaning_frequency_key.trim()) || "one_time";
       const res = await fetch("/api/book-v2/quote-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,7 +165,8 @@ export default function CleaningQuickQuoteForm({
           last_name: last_name.trim(),
           zip: zip.trim(),
           square_footage: square_footage.trim(),
-          cleaning_frequency: isCampaignFirstFree ? cleaning_frequency || "weekly" : cleaning_frequency || "one_time",
+          cleaning_frequency: freqSel,
+          cleaning_type: "standard",
           email: email?.trim() || undefined,
           phone: phone.trim(),
           sms_consent: smsConsent,
@@ -128,6 +186,8 @@ export default function CleaningQuickQuoteForm({
         console.warn("localStorage set failed:", e);
       }
       const qo = data.quote_output;
+      const rpcK = resolveRpcFrequencyKey(freqSel, pricingFreqRows);
+      const legacyK = inferLegacyCleaningFrequencyApiKey(rpcK, pricingFreqRows);
       const storedQuote = {
         status: "ready",
         source: "local_pricing",
@@ -141,7 +201,9 @@ export default function CleaningQuickQuoteForm({
         quote_input: {
           zip: zip.trim(),
           square_footage: square_footage.trim(),
-          cleaning_frequency: isCampaignFirstFree ? cleaning_frequency || "weekly" : cleaning_frequency || "one_time",
+          cleaning_frequency: legacyK,
+          cleaning_frequency_key: rpcK || null,
+          cleaning_type: "standard",
         },
         email: email?.trim() || undefined,
         phone: phone?.trim() || undefined,
@@ -161,15 +223,8 @@ export default function CleaningQuickQuoteForm({
         console.warn("legacy quote storage set failed:", e);
       }
 
-      const freqKey = isCampaignFirstFree ? cleaning_frequency || "weekly" : cleaning_frequency || "one_time";
-      const cleaningFrequencyLabel =
-        freqKey === "weekly"
-          ? "Weekly (30% Off)"
-          : freqKey === "biweekly"
-            ? "Bi-Weekly (20% Off)"
-            : freqKey === "monthly"
-              ? "Monthly (10% Off)"
-              : "One-time";
+      const row = frequencyRowForRpcKey(rpcK, pricingFreqRows);
+      const cleaningFrequencyLabel = row ? formatFrequencyRowDisplayLabel(row) : "One-time";
       const leadFormPayload = {
         first_name: first_name.trim(),
         last_name: last_name.trim(),
@@ -303,22 +358,39 @@ export default function CleaningQuickQuoteForm({
           </select>
         </div>
         <div>
-          <label className={labelBase}>Cleaning frequency</label>
+          <label className={labelBase}>Type of clean</label>
           <select
-            value={form.cleaning_frequency}
+            value={form.cleaning_type}
             onChange={(e) =>
               setForm((f) => ({
                 ...f,
-                cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly",
+                cleaning_type: e.target.value as "standard" | "move_out" | "heavy_clean",
               }))
             }
             className="public-form-input"
           >
-            {!isCampaignFirstFree && <option value="one_time">One-time</option>}
-            <option value="weekly">Weekly</option>
-            <option value="biweekly">Every 2 weeks</option>
-            <option value="monthly">Monthly</option>
+            <option value="standard">Standard recurring / one-time home cleaning</option>
+            <option value="move_out">Move-out clean</option>
+            <option value="heavy_clean">Heavy / deep clean</option>
           </select>
+        </div>
+        <div>
+          <label className={labelBase}>Cleaning frequency</label>
+          <select
+            value={form.cleaning_frequency_key || quickFreqOptions[0]?.value || "one_time"}
+            onChange={(e) => setForm((f) => ({ ...f, cleaning_frequency_key: e.target.value }))}
+            disabled={form.cleaning_type !== "standard"}
+            className="public-form-input disabled:opacity-50"
+          >
+            {quickFreqOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          {form.cleaning_type !== "standard" && (
+            <p className="mt-1.5 text-xs text-alloy-midnight/55">Frequency applies to standard home cleaning only.</p>
+          )}
         </div>
       </div>
 

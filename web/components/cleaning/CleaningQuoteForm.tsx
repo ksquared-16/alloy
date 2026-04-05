@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { REDIRECT_DELAY_MS } from "@/lib/ui";
 import { trackMetaEvent } from "@/lib/metaPixel";
@@ -14,7 +14,9 @@ import {
     type AddOnFrequencyOption,
     type ServiceHomeType,
 } from "@/lib/pricing/cleaningPricing";
-import { cleaningFrequencyOptionToApi } from "@/lib/campaigns/cleaningFrequencyApi";
+import { catalogFrequencyChoices } from "@/lib/book-v2/catalogFrequencyChoices";
+import type { PricingFrequencyRow } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { inferLegacyCleaningFrequencyApiKey, resolveRpcFrequencyKey } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 import {
     getQuotePricingFromSupabase,
     convertSupabaseResultToQuoteResult,
@@ -32,7 +34,8 @@ type FormState = {
     homeType: ServiceHomeType | "";
     serviceType: ServiceType | "";
     squareFootage: SquareFootageOption | "";
-    cleaningFrequency: CleaningFrequencyOption | "";
+    /** `one_time` or `pricing_frequencies.frequency_key` from booking-config */
+    cleaningFrequencyKey: string;
     preferredServiceDate: string;
     addOns: AddOnId[];
     addOnFrequency: AddOnFrequencyOption | "";
@@ -51,7 +54,7 @@ const INITIAL_FORM: FormState = {
     homeType: "",
     serviceType: "",
     squareFootage: "",
-    cleaningFrequency: "",
+    cleaningFrequencyKey: "",
     preferredServiceDate: "",
     addOns: [],
     addOnFrequency: "",
@@ -59,7 +62,7 @@ const INITIAL_FORM: FormState = {
     photos: [],
 };
 
-function validate(form: FormState): ValidationErrors {
+function validate(form: FormState, pricingFrequencyRows: PricingFrequencyRow[] = []): ValidationErrors {
     const errors: ValidationErrors = {};
 
     if (!form.firstName.trim()) errors.firstName = "First name is required.";
@@ -88,8 +91,8 @@ function validate(form: FormState): ValidationErrors {
     const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
 
     // Frequency is only required for Standard Cleaning
-    if (!isMoveOut && !form.cleaningFrequency) {
-        errors.cleaningFrequency = "Cleaning frequency is required.";
+    if (!isMoveOut && !form.cleaningFrequencyKey.trim()) {
+        errors.cleaningFrequencyKey = "Cleaning frequency is required.";
     }
 
     // Move-Out specific requirements
@@ -116,20 +119,13 @@ function validate(form: FormState): ValidationErrors {
     }
 
     // Add-ons frequency only required if add-ons are selected (and not Move-Out, and not One-time)
-    const isOneTime = form.cleaningFrequency === "One-time";
+    const isOneTime = resolveRpcFrequencyKey(form.cleaningFrequencyKey.trim(), pricingFrequencyRows) === "";
     if (!isMoveOut && !isOneTime && form.addOns.length > 0 && !form.addOnFrequency) {
         errors.addOnFrequency = "Please select how often you want add-ons.";
     }
 
     return errors;
 }
-
-/** Recurring-only frequencies (excludes one-time) for constrained campaign flows. */
-const RECURRING_CLEANING_FREQUENCIES: CleaningFrequencyOption[] = [
-    "Weekly (30% Off)",
-    "Bi-Weekly (20% Off)",
-    "Monthly (10% Off)",
-];
 
 export type CampaignQuoteModeConfig = {
     /** First Service Free — 4 visits in 120 days (recurring standard cleaning) */
@@ -143,10 +139,22 @@ function buildInitialFormState(campaign?: CampaignQuoteModeConfig | undefined): 
         return {
             ...INITIAL_FORM,
             serviceType: "Standard Cleaning",
-            cleaningFrequency: "Weekly (30% Off)",
+            cleaningFrequencyKey: "weekly",
         };
     }
     return { ...INITIAL_FORM };
+}
+
+function cleaningFrequencyOptionFromSelection(
+    sel: string,
+    rows: PricingFrequencyRow[]
+): CleaningFrequencyOption {
+    const rpc = resolveRpcFrequencyKey(sel, rows);
+    if (!rpc) return "One-time";
+    const legacy = inferLegacyCleaningFrequencyApiKey(rpc, rows);
+    if (legacy === "weekly") return "Weekly (30% Off)";
+    if (legacy === "biweekly") return "Bi-Weekly (20% Off)";
+    return "Monthly (10% Off)";
 }
 
 interface CleaningQuoteFormProps {
@@ -173,10 +181,39 @@ export default function CleaningQuoteForm({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showMoveOutSuccess, setShowMoveOutSuccess] = useState(false);
     const [isCalculatingQuote, setIsCalculatingQuote] = useState(false);
+    const [pricingFrequencyRows, setPricingFrequencyRows] = useState<PricingFrequencyRow[]>([]);
 
     const isDark = variant === "dark";
     const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
     const isMoveOut = !isCampaignFirstFree && form.serviceType === "Move-Out / Heavy Clean";
+
+    const quoteFrequencyOptions = useMemo(
+        () => catalogFrequencyChoices(pricingFrequencyRows, isCampaignFirstFree),
+        [pricingFrequencyRows, isCampaignFirstFree]
+    );
+
+    useEffect(() => {
+        let cancelled = false;
+        fetch("/api/public/booking-config")
+            .then((r) => r.json())
+            .then((data: { ok?: boolean; pricing_frequencies?: PricingFrequencyRow[] }) => {
+                if (cancelled || !data?.ok || !data.pricing_frequencies?.length) return;
+                setPricingFrequencyRows(data.pricing_frequencies);
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!pricingFrequencyRows.length) return;
+        setForm((f) => {
+            if (f.cleaningFrequencyKey && f.cleaningFrequencyKey.trim()) return f;
+            const opts = catalogFrequencyChoices(pricingFrequencyRows, isCampaignFirstFree);
+            return { ...f, cleaningFrequencyKey: opts[0]?.value ?? "one_time" };
+        });
+    }, [pricingFrequencyRows, isCampaignFirstFree]);
 
     // Calculate quote when relevant form fields change (for Standard Cleaning only)
     useEffect(() => {
@@ -184,11 +221,14 @@ export default function CleaningQuoteForm({
             isMoveOut ||
             !form.serviceType ||
             !form.squareFootage ||
-            !form.cleaningFrequency
+            !form.cleaningFrequencyKey.trim()
         ) {
             setQuote(null);
             return;
         }
+
+        const freqOpt = cleaningFrequencyOptionFromSelection(form.cleaningFrequencyKey, pricingFrequencyRows);
+        const rpcK = resolveRpcFrequencyKey(form.cleaningFrequencyKey, pricingFrequencyRows);
 
         // Debounce quote calculation
         const timeoutId = setTimeout(async () => {
@@ -197,13 +237,14 @@ export default function CleaningQuoteForm({
                 const supabaseResult = await getQuotePricingFromSupabase(
                     form.serviceType as ServiceType,
                     form.squareFootage as SquareFootageOption,
-                    form.cleaningFrequency as CleaningFrequencyOption,
-                    form.addOns as AddOnId[]
+                    freqOpt,
+                    form.addOns as AddOnId[],
+                    { rpcFrequencyKey: rpcK }
                 );
                 const result = convertSupabaseResultToQuoteResult(
                     supabaseResult,
                     form.serviceType as ServiceType,
-                    form.cleaningFrequency as CleaningFrequencyOption,
+                    freqOpt,
                     form.addOns as AddOnId[]
                 );
                 setQuote(result);
@@ -219,7 +260,7 @@ export default function CleaningQuoteForm({
                         homeType: form.homeType as ServiceHomeType,
                         serviceType: form.serviceType as ServiceType,
                         squareFootage: form.squareFootage as SquareFootageOption,
-                        cleaningFrequency: form.cleaningFrequency as CleaningFrequencyOption,
+                        cleaningFrequency: freqOpt,
                         addOns: form.addOns as AddOnId[],
                         addOnFrequency: form.addOnFrequency as AddOnFrequencyOption | undefined,
                     };
@@ -239,10 +280,12 @@ export default function CleaningQuoteForm({
     }, [
         form.serviceType,
         form.squareFootage,
-        form.cleaningFrequency,
+        form.cleaningFrequencyKey,
         form.addOns,
         isMoveOut,
         onQuoteCalculated,
+        mode,
+        pricingFrequencyRows,
     ]);
 
     const labelClass =
@@ -273,7 +316,7 @@ export default function CleaningQuoteForm({
             // If service type changes to Move-Out, clear frequency (it's auto-set to One-time)
             // Also clear add-ons and add-on frequency (not used for Move-Out)
             if (field === "serviceType" && value === "Move-Out / Heavy Clean") {
-                updated.cleaningFrequency = "";
+                updated.cleaningFrequencyKey = "";
                 updated.addOns = [];
                 updated.addOnFrequency = "";
             }
@@ -369,7 +412,7 @@ export default function CleaningQuoteForm({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const nextErrors = validate(form);
+        const nextErrors = validate(form, pricingFrequencyRows);
 
         if (Object.keys(nextErrors).length > 0) {
             setErrors(nextErrors);
@@ -380,8 +423,13 @@ export default function CleaningQuoteForm({
         try {
             const isMoveOut = form.serviceType === "Move-Out / Heavy Clean";
 
+            const rpcKStd = resolveRpcFrequencyKey(form.cleaningFrequencyKey.trim(), pricingFrequencyRows);
+            const cleaningFreqIsOneTime = rpcKStd === "";
+
             // For Move-Out, auto-set frequency to One-time
-            const cleaningFrequency = isMoveOut ? "One-time" : (form.cleaningFrequency as CleaningFrequencyOption);
+            const cleaningFrequency = isMoveOut
+                ? "One-time"
+                : cleaningFrequencyOptionFromSelection(form.cleaningFrequencyKey, pricingFrequencyRows);
 
             // Type assertion needed since form allows empty strings but CleaningQuoteInput doesn't
             // Validation ensures these are not empty before submission
@@ -400,7 +448,7 @@ export default function CleaningQuoteForm({
                 addOns: isMoveOut ? [] : form.addOns,
                 addOnFrequency: isMoveOut
                     ? undefined
-                    : (form.cleaningFrequency === "One-time" && form.addOns.length > 0
+                    : (cleaningFreqIsOneTime && form.addOns.length > 0
                         ? "First cleaning only"
                         : (form.addOnFrequency || undefined)),
             };
@@ -419,7 +467,8 @@ export default function CleaningQuoteForm({
                         cleanInput.serviceType,
                         cleanInput.squareFootage,
                         cleaningFrequency,
-                        cleanInput.addOns
+                        cleanInput.addOns,
+                        { rpcFrequencyKey: rpcKStd }
                     );
 
                     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -479,7 +528,9 @@ export default function CleaningQuoteForm({
                             quote_input: {
                                 zip: cleanInput.postalCode,
                                 square_footage: cleanInput.squareFootage,
-                                cleaning_frequency: cleaningFrequencyOptionToApi(cleaningFrequency),
+                                cleaning_frequency: inferLegacyCleaningFrequencyApiKey(rpcKStd, pricingFrequencyRows),
+                                cleaning_frequency_key: rpcKStd || null,
+                                cleaning_type: "standard",
                             },
                         };
                         const enhancedQuoteJson = JSON.stringify(enhancedQuote);
@@ -505,7 +556,7 @@ export default function CleaningQuoteForm({
                             extras_add_ons: isMoveOut ? undefined : (cleanInput.addOns.length > 0 ? JSON.stringify(cleanInput.addOns) : undefined),
                             addons__frequency: isMoveOut
                                 ? undefined
-                                : (cleanInput.cleaningFrequency === "One-time" && cleanInput.addOns.length > 0
+                                : (cleaningFreqIsOneTime && cleanInput.addOns.length > 0
                                     ? "First cleaning only"
                                     : (cleanInput.addOnFrequency || undefined)),
                             street_address: form.streetAddress.trim() || undefined,
@@ -583,7 +634,7 @@ export default function CleaningQuoteForm({
             formData.append("home_type", cleanInput.homeType);
             formData.append("service_type", cleanInput.serviceType);
             formData.append("approximate_square_footage", cleanInput.squareFootage);
-            formData.append("cleaning_frequency", cleaningFrequency);
+            formData.append("cleaning_frequency", String(cleaningFrequency));
             if (cleanInput.preferredServiceDate) {
                 formData.append("preferred_service_date", cleanInput.preferredServiceDate);
             }
@@ -593,9 +644,7 @@ export default function CleaningQuoteForm({
             }
             if (!isMoveOut && cleanInput.addOns.length > 0) {
                 // For one-time cleaning, set to "First cleaning only"; otherwise use selected value
-                const addonFreq = cleanInput.cleaningFrequency === "One-time"
-                    ? "First cleaning only"
-                    : cleanInput.addOnFrequency;
+                const addonFreq = cleaningFreqIsOneTime ? "First cleaning only" : cleanInput.addOnFrequency;
                 if (addonFreq) {
                     formData.append("addons__frequency", addonFreq);
                 }
@@ -949,30 +998,19 @@ export default function CleaningQuoteForm({
                             Cleaning Frequency<span className="text-alloy-ember ml-0.5">*</span>
                         </label>
                         <select
-                            value={form.cleaningFrequency}
-                            onChange={(e) =>
-                                handleChange("cleaningFrequency", e.target.value as CleaningFrequencyOption)
-                            }
+                            value={form.cleaningFrequencyKey}
+                            onChange={(e) => handleChange("cleaningFrequencyKey", e.target.value)}
                             className={selectClass}
                         >
-                            {isCampaignFirstFree ? (
-                                RECURRING_CLEANING_FREQUENCIES.map((freq) => (
-                                    <option key={freq} value={freq}>
-                                        {freq}
-                                    </option>
-                                ))
-                            ) : (
-                                <>
-                                    <option value="">Select a frequency</option>
-                                    <option value="One-time">One-time</option>
-                                    <option value="Weekly (30% Off)">Weekly (30% Off)</option>
-                                    <option value="Bi-Weekly (20% Off)">Bi-Weekly (20% Off)</option>
-                                    <option value="Monthly (10% Off)">Monthly (10% Off)</option>
-                                </>
-                            )}
+                            {!isCampaignFirstFree && <option value="">Select a frequency</option>}
+                            {quoteFrequencyOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
                         </select>
-                        {errors.cleaningFrequency && (
-                            <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequency}</p>
+                        {errors.cleaningFrequencyKey && (
+                            <p className="mt-1 text-xs text-alloy-ember">{errors.cleaningFrequencyKey}</p>
                         )}
                     </div>
                 )}
@@ -1096,7 +1134,9 @@ export default function CleaningQuoteForm({
                         </div>
 
                         {/* Add-on Frequency – only when add-ons selected AND not One-time */}
-                        {form.addOns.length > 0 && form.cleaningFrequency !== "One-time" && (
+                        {form.addOns.length > 0 &&
+                            resolveRpcFrequencyKey(form.cleaningFrequencyKey.trim(), pricingFrequencyRows) !==
+                                "" && (
                             <div>
                                 <label className={labelClass}>
                                     Add-ons Frequency<span className="text-alloy-ember ml-0.5">*</span>

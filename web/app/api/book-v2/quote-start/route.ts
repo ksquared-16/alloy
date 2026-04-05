@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-import type { CleaningFrequencyOption, SquareFootageOption } from "@/lib/pricing/cleaningPricing";
-import { mapServiceTypeToKey, mapFrequencyToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
+import type { SquareFootageOption } from "@/lib/pricing/cleaningPricing";
+import { mapServiceTypeToKey, mapAddOnsToKeys } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
 import {
@@ -15,36 +15,20 @@ import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
 import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/book-v2/resolvePipelineStage";
 import {
+  loadPricingFrequenciesForVertical,
   loadSqftTiersForVertical,
   normalizeSqftKeyInput,
   resolveSquareFootageStorageString,
+  type PricingFrequencyRow,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import {
+  frequencyRowForRpcKey,
+  inferLegacyCleaningFrequencyApiKey,
+  resolveRpcFrequencyKey,
+} from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 import { homeTypeInputToStableKey, parseBathroomsForCjd, parseBedsFromBody } from "@/lib/book-v2/bookingCanonicalMaps";
 
 const SERVICE_TYPE = "Standard Cleaning";
-
-function mapApiFrequencyToOption(
-  freq: "one_time" | "weekly" | "biweekly" | "monthly" | null | undefined
-): CleaningFrequencyOption {
-  switch (freq) {
-    case "weekly":
-      return "Weekly (30% Off)";
-    case "biweekly":
-      return "Bi-Weekly (20% Off)";
-    case "monthly":
-      return "Monthly (10% Off)";
-    default:
-      return "One-time";
-  }
-}
-
-/** Map display option to API key so quote_input.cleaning_frequency matches the quote we computed. */
-function optionToApiKey(option: CleaningFrequencyOption): "one_time" | "weekly" | "biweekly" | "monthly" {
-  if (option === "Weekly (30% Off)") return "weekly";
-  if (option === "Bi-Weekly (20% Off)") return "biweekly";
-  if (option === "Monthly (10% Off)") return "monthly";
-  return "one_time";
-}
 
 /** Normalize request keys: sqft/frequency variants -> square_footage, cleaning_frequency. Leaves other keys as-is. */
 function normalizeQuoteStartBody(raw: Record<string, unknown>): QuoteStartBody {
@@ -58,16 +42,21 @@ function normalizeQuoteStartBody(raw: Record<string, unknown>): QuoteStartBody {
           : undefined;
   const cleaning_frequency =
     raw.cleaning_frequency != null && raw.cleaning_frequency !== ""
-      ? (raw.cleaning_frequency as "one_time" | "weekly" | "biweekly" | "monthly")
+      ? String(raw.cleaning_frequency).trim()
       : raw.frequency != null && raw.frequency !== ""
-        ? (raw.frequency as "one_time" | "weekly" | "biweekly" | "monthly")
+        ? String(raw.frequency).trim()
         : raw.cleaning_freq != null && raw.cleaning_freq !== ""
-          ? (raw.cleaning_freq as "one_time" | "weekly" | "biweekly" | "monthly")
+          ? String(raw.cleaning_freq).trim()
           : undefined;
+  const cleaning_type =
+    typeof raw.cleaning_type === "string" && raw.cleaning_type.trim()
+      ? raw.cleaning_type.trim()
+      : undefined;
   return {
     ...raw,
     square_footage: square_footage as string | number | undefined,
-    cleaning_frequency: cleaning_frequency ?? (raw.cleaning_frequency as "one_time" | "weekly" | "biweekly" | "monthly" | undefined),
+    cleaning_frequency,
+    cleaning_type,
     bedrooms: (raw.bedrooms ?? raw.beds) as number | undefined,
     bathrooms: (raw.bathrooms ?? raw.baths) as number | undefined,
   } as QuoteStartBody;
@@ -75,24 +64,37 @@ function normalizeQuoteStartBody(raw: Record<string, unknown>): QuoteStartBody {
 
 /**
  * Compute initial quote using Supabase RPC (admin client).
+ * @param rpcFrequencyKey empty string = one-time; else pricing_frequencies.frequency_key
  */
 async function computeQuote(
   supabase: ReturnType<typeof createServiceRoleClient>,
   squareFootageOption: SquareFootageOption,
-  frequencyOption: CleaningFrequencyOption,
-  addOns: AddOnId[] = []
-): Promise<{ estimated_price: number | null; first_clean_price: number | null; recurring_price: number | null; frequency_label: string }> {
+  rpcFrequencyKey: string,
+  addOns: AddOnId[] = [],
+  freqRow: PricingFrequencyRow | null
+): Promise<{
+  estimated_price: number | null;
+  first_clean_price: number | null;
+  recurring_price: number | null;
+  frequency_label: string;
+  discount_label: string | null;
+}> {
   const serviceKey = mapServiceTypeToKey(SERVICE_TYPE);
-  const frequencyKey = mapFrequencyToKey(frequencyOption) ?? "";
   const addonKeys = mapAddOnsToKeys(addOns);
 
   const { data, error } = await supabase.rpc("get_quote_pricing", {
     p_vertical_slug: "cleaning",
     p_service_key: serviceKey,
     p_sqft_key: squareFootageOption,
-    p_frequency_key: frequencyKey,
+    p_frequency_key: rpcFrequencyKey,
     p_addon_keys: addonKeys ?? [],
   });
+
+  const shortLabelFromRow = (): string => {
+    if (freqRow?.frequency_label) return freqRow.frequency_label;
+    if (!rpcFrequencyKey) return "One-time";
+    return "Recurring";
+  };
 
   if (error || !data) {
     console.warn("[QUOTE_START] RPC get_quote_pricing failed, using fallback:", error?.message);
@@ -100,8 +102,9 @@ async function computeQuote(
     return {
       estimated_price: firstClean,
       first_clean_price: firstClean,
-      recurring_price: frequencyOption !== "One-time" ? 120 : null,
-      frequency_label: frequencyOption === "One-time" ? "One-time" : frequencyOption,
+      recurring_price: rpcFrequencyKey ? 120 : null,
+      frequency_label: shortLabelFromRow(),
+      discount_label: freqRow?.discount_label ?? null,
     };
   }
 
@@ -112,6 +115,7 @@ async function computeQuote(
       first_clean_price: 180,
       recurring_price: null,
       frequency_label: "One-time",
+      discount_label: null,
     };
   }
 
@@ -119,20 +123,13 @@ async function computeQuote(
   const estimatedPrice =
     (row.total_first_visit_cents ?? (row.first_clean_cents ?? 0) + (row.addons_total_cents ?? 0)) / 100;
   const recurringPrice = row.recurring_cents != null ? row.recurring_cents / 100 : null;
-  const frequencyLabel =
-    frequencyOption === "One-time"
-      ? "One-time"
-      : frequencyOption.startsWith("Weekly")
-        ? "Weekly"
-        : frequencyOption.startsWith("Bi-Weekly")
-          ? "Bi-Weekly"
-          : "Monthly";
 
   return {
     estimated_price: estimatedPrice,
     first_clean_price: firstCleanPrice,
     recurring_price: recurringPrice,
-    frequency_label: frequencyLabel,
+    frequency_label: freqRow?.frequency_label ?? shortLabelFromRow(),
+    discount_label: freqRow?.discount_label ?? null,
   };
 }
 
@@ -241,7 +238,10 @@ export interface QuoteStartBody {
   square_footage?: number;
   beds?: number;
   baths?: number;
-  cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
+  /** Legacy API keys (one_time, weekly, …) or pricing_frequencies.frequency_key from booking-config */
+  cleaning_frequency?: string;
+  /** standard | move_out | heavy_clean — stored on quote_input; book-v2 routes specialty types client-side */
+  cleaning_type?: string;
   vertical_id?: string;
   add_ons?: string[];
   quote_context?: Record<string, unknown>;
@@ -290,7 +290,6 @@ export async function POST(request: NextRequest) {
     const last_name = body.last_name?.trim() || null;
     const zip = body.zip?.trim() || null;
     const square_footage_raw = body.square_footage ?? (body.beds != null ? (body.beds as number) * 400 : null);
-    const cleaning_frequency = mapApiFrequencyToOption(body.cleaning_frequency);
 
     const supabase = createServiceRoleClient();
     const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
@@ -333,7 +332,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sqftTierRows = await loadSqftTiersForVertical(supabase, verticalId);
+    const [sqftTierRows, pricingFrequencyRows] = await Promise.all([
+      loadSqftTiersForVertical(supabase, verticalId),
+      loadPricingFrequenciesForVertical(supabase, verticalId),
+    ]);
+    const rawCleaningFreq =
+      body.cleaning_frequency != null && String(body.cleaning_frequency).trim() !== ""
+        ? String(body.cleaning_frequency).trim()
+        : "one_time";
+    const rpcFreqKey = resolveRpcFrequencyKey(rawCleaningFreq, pricingFrequencyRows);
+    const freqRowForQuote = frequencyRowForRpcKey(rpcFreqKey, pricingFrequencyRows);
+    const legacyCleaningApiKey = inferLegacyCleaningFrequencyApiKey(rpcFreqKey, pricingFrequencyRows);
+
     const squareFootageOption = normalizeSqftKeyInput(square_footage_raw, sqftTierRows) as SquareFootageOption;
     const squareFootageStored = resolveSquareFootageStorageString(
       square_footage_raw,
@@ -400,12 +410,16 @@ export async function POST(request: NextRequest) {
     }
 
     // 3) Compute quote (before location/dedupe so inputs are stable)
-    const quoteOutput = await computeQuote(supabase, squareFootageOption, cleaning_frequency, []);
+    const quoteOutput = await computeQuote(supabase, squareFootageOption, rpcFreqKey, [], freqRowForQuote);
+    const cleaningTypeStored =
+      body.cleaning_type === "move_out" || body.cleaning_type === "heavy_clean" ? body.cleaning_type : "standard";
     const quote_input = {
       zip,
       beds: body.beds,
       baths: body.baths,
-      cleaning_frequency: optionToApiKey(cleaning_frequency),
+      cleaning_frequency: legacyCleaningApiKey,
+      cleaning_frequency_key: rpcFreqKey || null,
+      cleaning_type: cleaningTypeStored,
       add_ons: Array.isArray(body.add_ons) ? body.add_ons : [],
       ...body.quote_context,
       square_footage: squareFootageStored,
@@ -571,11 +585,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const cleaningFrequencyValue = body.cleaning_frequency ?? optionToApiKey(cleaning_frequency);
+    const cleaningFrequencyValue = rawCleaningFreq;
 
     console.log("[QUOTE_START_FIELD_VALUES] normalized quote input", {
       square_footage: squareFootageStored,
       cleaning_frequency: body.cleaning_frequency,
+      cleaning_frequency_key: rpcFreqKey,
       cleaningFrequencyValue,
       promo_campaign: body.promo_campaign ?? null,
       locationId,
