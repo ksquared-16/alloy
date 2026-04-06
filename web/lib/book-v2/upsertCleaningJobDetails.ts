@@ -1,13 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BookV2CleaningJobDetailsInput = {
-    home_type_id?: string | null;
-    sqft_band_id?: string | null;
-    square_footage?: number | null;
-    bedrooms?: number | null;
-    bathrooms?: number | null;
-    /** When set, stored on row metadata as `book_v2_bathrooms_key` (half-baths / plus tiers). */
+    home_type_key?: string | null;
+    access_method_key?: string | null;
+    square_footage_tier_key?: string | null;
+    beds?: number | null;
+    baths?: number | null;
+    /** Stored on row metadata for display when UI used token keys like 2_5 */
     bathrooms_booking_key?: string | null;
+    /** Non-code access instructions (and lockbox / building notes); mirrors locations.access_notes for the job row. */
+    access_notes?: string | null;
 };
 
 /**
@@ -28,13 +30,17 @@ export async function upsertCleaningJobDetailsFromBookV2(
         job_id: jobId,
         metadata: metaNext,
     };
-    if (input.home_type_id != null) row.home_type_id = input.home_type_id;
-    if (input.sqft_band_id != null) row.sqft_band_id = input.sqft_band_id;
-    if (input.square_footage != null && Number.isFinite(input.square_footage)) {
-        row.square_footage = Math.round(Number(input.square_footage));
+    if (input.home_type_key != null) row.home_type_key = input.home_type_key;
+    if (input.access_method_key != null) row.access_method_key = input.access_method_key;
+    if (input.square_footage_tier_key != null) row.square_footage_tier_key = input.square_footage_tier_key;
+    if (input.beds != null && Number.isFinite(input.beds)) row.beds = input.beds;
+    if (input.baths != null && Number.isFinite(input.baths)) row.baths = input.baths;
+    if (input.access_notes !== undefined) {
+        row.access_notes =
+            input.access_notes != null && String(input.access_notes).trim() !== ""
+                ? String(input.access_notes).trim()
+                : null;
     }
-    if (input.bedrooms != null && Number.isFinite(input.bedrooms)) row.bedrooms = Math.round(Number(input.bedrooms));
-    if (input.bathrooms != null && Number.isFinite(input.bathrooms)) row.bathrooms = Math.round(Number(input.bathrooms));
 
     const { error } = await supabase.from("cleaning_job_details").upsert(row, { onConflict: "job_id" });
     if (error) {

@@ -6,7 +6,7 @@ import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
 import { buildVendorIdToLabelMap, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
-import { fetchJobStatusKeyByFk, effectiveJobStatusKey } from "@/lib/admin/jobEffectiveStatusKey";
+import { fetchJobStatusKeyByFk, effectiveJobStatusKey, resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { computeJobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
 
@@ -352,10 +352,19 @@ export async function POST(request: NextRequest) {
     discounted = resolved.value.discounted;
   }
 
+  const jobStatusRow = await resolveJobStatusRowByOrgAndKey(supabase, ctx.orgId, status_key);
+  if (!jobStatusRow) {
+    console.warn("[ADMIN_POST_JOB] no job_statuses row for status_key; job_status_id will be null", {
+      org_id: ctx.orgId,
+      status_key,
+    });
+  }
+
   const row: Record<string, unknown> = {
     org_id: ctx.orgId,
     customer_id,
     status_key,
+    job_status_id: jobStatusRow?.id ?? null,
     is_recurring,
     service_frequency_key: service_frequency_key ?? null,
     gross_price_cents: gross_price_cents ?? null,

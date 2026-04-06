@@ -67,17 +67,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (copyAssignment) {
         const { data: oldAssignment } = await supabase
             .from("assignments")
-            .select("vendor_id, assignment_status_id")
+            .select("vendor_id, assignment_status_id, status_key")
             .eq("schedule_id", oldScheduleId)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
         if (oldAssignment) {
             const now = new Date().toISOString();
+            const oa = oldAssignment as { vendor_id: string; assignment_status_id?: string | null; status_key?: string | null };
+            let copyKey = oa.status_key != null && String(oa.status_key).trim() ? String(oa.status_key).trim() : null;
+            if (!copyKey && oa.assignment_status_id) {
+                const { data: st } = await supabase
+                    .from("assignment_statuses")
+                    .select("key")
+                    .eq("id", oa.assignment_status_id)
+                    .maybeSingle();
+                const k = (st as { key?: string | null } | null)?.key;
+                if (k && String(k).trim()) copyKey = String(k).trim();
+            }
             await supabase.from("assignments").insert({
                 schedule_id: newId,
                 job_id: jobId,
-                vendor_id: (oldAssignment as { vendor_id: string }).vendor_id,
-                assignment_status_id: (oldAssignment as { assignment_status_id?: string }).assignment_status_id ?? null,
+                vendor_id: oa.vendor_id,
+                assignment_status_id: oa.assignment_status_id ?? null,
+                status_key: copyKey,
                 org_id: orgId,
                 updated_at: now,
             });

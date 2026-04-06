@@ -10,6 +10,8 @@ import Accordion from "@/components/Accordion";
 import SlotPicker, { TimeSlot } from "./SlotPicker";
 import ServiceDetailsForm, { ServiceDetails, withoutExcludedConfigurableValues } from "./ServiceDetailsForm";
 import ServiceDetailsSummary from "./ServiceDetailsSummary";
+import { catalogFrequencyChoices } from "@/lib/book-v2/catalogFrequencyChoices";
+import { inferLegacyCleaningFrequencyApiKey, resolveRpcFrequencyKey } from "@/lib/book-v2/resolveCleaningFrequencyRpc";
 import { trackMetaEvent } from "@/lib/metaPixel";
 import { ADDON_ID_TO_KEY } from "@/lib/pricing/supabasePricing";
 import type { AddOnId } from "@/lib/pricing/cleaningPricing";
@@ -27,6 +29,9 @@ interface QuoteInputStored {
     postal_code?: string;
     square_footage?: string;
     cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly";
+    /** pricing_frequencies.frequency_key when known */
+    cleaning_frequency_key?: string | null;
+    cleaning_type?: string;
     /** Present only for backward compat (e.g. existing metadata); not set by quote form */
     home_type?: string;
     /** Add-on keys from pricing_addons (e.g. fridge, oven); legacy quotes may still use display names resolved server-side */
@@ -76,7 +81,14 @@ function getFirstVisitGrossSubtotal(quote: QuoteResponse | null | undefined): nu
     return 0;
 }
 
-type BookingStep = "quote_start" | "refine_quote" | "slot_selection" | "service_details" | "payment" | "confirmed" | "error";
+type BookingStep =
+    | "quote_start"
+    | "refine_quote"
+    | "slot_selection"
+    | "service_details"
+    | "payment"
+    | "confirmed"
+    | "error";
 
 const QUOTE_STORAGE_KEYS = [
     "alloy_quote_v1",
@@ -292,27 +304,6 @@ function addonTokenFromQuoteAddon(a: { id?: string; name?: string }): string | n
     return null;
 }
 
-/** Map API frequency key to DB frequency_key (pricing_frequencies) for label lookup */
-const REFINE_FREQ_TO_DB_KEY: Record<"one_time" | "weekly" | "biweekly" | "monthly", string | null> = {
-  one_time: null,
-  weekly: "Weekly (30% Off)",
-  biweekly: "Bi-Weekly (20% Off)",
-  monthly: "Monthly (10% Off)",
-};
-
-function getFrequencyDisplayLabel(
-  freq: "one_time" | "weekly" | "biweekly" | "monthly",
-  availableFrequencies: Array<{ frequency_key: string; frequency_label: string; discount_label: string | null }> | null
-): string {
-  if (freq === "one_time") return "One-time";
-  const dbKey = REFINE_FREQ_TO_DB_KEY[freq];
-  const row = availableFrequencies?.find((f) => f.frequency_key === dbKey);
-  if (row) {
-    return row.discount_label ? `${row.frequency_label} — ${row.discount_label}` : row.frequency_label;
-  }
-  return freq === "weekly" ? "Weekly" : freq === "biweekly" ? "Bi-Weekly" : "Monthly";
-}
-
 /**
  * Fire-and-forget: create contact/opportunity via quote-start when user lands with
  * prefill (e.g. query params) so we don't lose quote-only leads. Does not block UI.
@@ -328,7 +319,8 @@ async function maybeCreateLeadFromPrefill(params: {
     last_name?: string | null;
     zip?: string | null;
     square_footage?: number | string | null;
-    cleaning_frequency?: "one_time" | "weekly" | "biweekly" | "monthly" | null;
+    /** Legacy API key or pricing_frequencies.frequency_key */
+    cleaning_frequency?: string | null;
 }): Promise<void> {
     const email = params.email?.trim() || null;
     const phone = params.phone?.trim() || null;
@@ -380,7 +372,7 @@ async function maybeCreateLeadFromPrefill(params: {
         phone: phone || undefined,
         zip: params.zip?.trim() || undefined,
         square_footage: sqft != null && !Number.isNaN(sqft) ? sqft : undefined,
-        cleaning_frequency: params.cleaning_frequency || "one_time",
+        cleaning_frequency: (params.cleaning_frequency && String(params.cleaning_frequency).trim()) || "one_time",
         quote_context: { source: "prefill", url: window.location.href },
     };
 
@@ -457,7 +449,8 @@ export default function BookV2Client() {
         last_name: "",
         zip: "",
         square_footage: "" as string,
-        cleaning_frequency: "one_time" as "one_time" | "weekly" | "biweekly" | "monthly",
+        /** `one_time` or pricing_frequencies.frequency_key from booking-config */
+        cleaning_frequency_key: "",
         email: "",
         phone: "",
     });
@@ -472,7 +465,7 @@ export default function BookV2Client() {
     const [paymentIdentityError, setPaymentIdentityError] = useState<string | null>(null);
 
     // Refine quote step: frequency and add-ons (optimistic UI; selectedAddonKeys = source of truth for checkboxes)
-    const [refineFrequency, setRefineFrequency] = useState<"one_time" | "weekly" | "biweekly" | "monthly">("one_time");
+    const [refineFrequencySel, setRefineFrequencySel] = useState<string>("one_time");
     const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
     const [refineLoading, setRefineLoading] = useState(false);
     const [refineError, setRefineError] = useState<string | null>(null);
@@ -513,13 +506,24 @@ export default function BookV2Client() {
     const debug = searchParams?.get("debug") === "1";
     const campaignFirstFree4x120 = !debug && isFirstFree4x120CampaignQuery(searchParams?.get("campaign"));
 
-    // Campaign /book-v2: default quote-start frequency to recurring (not one-time).
+    // Campaign /book-v2: default quote-start frequency to first recurring row when catalog loads.
     useEffect(() => {
-        if (!campaignFirstFree4x120) return;
-        setQuoteStartForm((f) =>
-            f.cleaning_frequency === "one_time" ? { ...f, cleaning_frequency: "weekly" } : f
-        );
-    }, [campaignFirstFree4x120]);
+        if (!campaignFirstFree4x120 || !bookingCatalog?.pricing_frequencies?.length) return;
+        setQuoteStartForm((f) => {
+            if (f.cleaning_frequency_key && f.cleaning_frequency_key !== "one_time") return f;
+            const firstRec = bookingCatalog.pricing_frequencies.find((r) => r.is_recurring);
+            return { ...f, cleaning_frequency_key: firstRec?.frequency_key ?? "weekly" };
+        });
+    }, [campaignFirstFree4x120, bookingCatalog]);
+
+    // Default frequency for non-campaign when config loads.
+    useEffect(() => {
+        if (campaignFirstFree4x120 || !bookingCatalog?.pricing_frequencies?.length) return;
+        setQuoteStartForm((f) => {
+            if (f.cleaning_frequency_key) return f;
+            return { ...f, cleaning_frequency_key: "one_time" };
+        });
+    }, [campaignFirstFree4x120, bookingCatalog]);
 
     // Reschedule-via-action-link: token from URL, resolve result, and confirm result
     const [rescheduleResolve, setRescheduleResolve] = useState<{
@@ -820,9 +824,19 @@ export default function BookV2Client() {
             last_name: resolvedLastName,
             zip,
             square_footage: quoteStartForm.square_footage || undefined,
-            cleaning_frequency: quoteStartForm.cleaning_frequency,
+            cleaning_frequency: quoteStartForm.cleaning_frequency_key || "one_time",
         });
-    }, [mounted, debug, resolvedEmail, resolvedPhone, resolvedFirstName, resolvedLastName, searchParams, quoteStartForm.square_footage, quoteStartForm.cleaning_frequency]);
+    }, [
+        mounted,
+        debug,
+        resolvedEmail,
+        resolvedPhone,
+        resolvedFirstName,
+        resolvedLastName,
+        searchParams,
+        quoteStartForm.square_footage,
+        quoteStartForm.cleaning_frequency_key,
+    ]);
 
     // Load quote from storage
     useEffect(() => {
@@ -1183,19 +1197,43 @@ export default function BookV2Client() {
         };
     }, [mounted, cardNumber, cardExpiry, cardCvc, isPaymentUnlocked]);
 
+    const deriveRefineFrequencySelection = useCallback(
+        (q: QuoteResponse): string => {
+            const qi = q.quote_input;
+            let sel = "one_time";
+            if (typeof qi?.cleaning_frequency_key === "string" && qi.cleaning_frequency_key.trim()) {
+                sel = qi.cleaning_frequency_key.trim();
+            } else if (qi?.cleaning_frequency) {
+                sel = String(qi.cleaning_frequency);
+            }
+            if (campaignFirstFree4x120 && sel === "one_time") {
+                const rows = bookingCatalog?.pricing_frequencies ?? [];
+                const fr = rows.find((r) => r.is_recurring);
+                sel = fr?.frequency_key ?? "weekly";
+            }
+            return sel;
+        },
+        [campaignFirstFree4x120, bookingCatalog]
+    );
+
+    const quoteStartFreqOptions = useMemo(
+        () => catalogFrequencyChoices(bookingCatalog?.pricing_frequencies, campaignFirstFree4x120),
+        [bookingCatalog, campaignFirstFree4x120]
+    );
+
+    const refineFreqChoices = useMemo(
+        () =>
+            catalogFrequencyChoices(
+                availableFrequencies?.length ? availableFrequencies : bookingCatalog?.pricing_frequencies,
+                campaignFirstFree4x120
+            ),
+        [availableFrequencies, bookingCatalog, campaignFirstFree4x120]
+    );
+
     // Sync refine step state from quote when entering refine_quote (selectedAddonKeys = source of truth for checkboxes)
     useEffect(() => {
         if (!quote || currentStep !== "refine_quote") return;
-        const freqLabel = (quote.frequency_label || "").toLowerCase();
-        let nextFreq: "one_time" | "weekly" | "biweekly" | "monthly" =
-            freqLabel.includes("weekly") && !freqLabel.includes("bi") ? "weekly"
-                : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
-                : freqLabel.includes("monthly") ? "monthly"
-                : "one_time";
-        if (campaignFirstFree4x120 && nextFreq === "one_time") {
-            nextFreq = "weekly";
-        }
-        setRefineFrequency(nextFreq);
+        setRefineFrequencySel(deriveRefineFrequencySelection(quote));
         const addonsList = quote.addons ?? [];
         const fromStoredKeys = Array.isArray(quote.quote_input?.add_ons)
             ? (quote.quote_input!.add_ons as unknown[])
@@ -1210,7 +1248,7 @@ export default function BookV2Client() {
         const keys: string[] =
             keysFromAddons.length > 0 ? keysFromAddons : filterExcludedCustomerAddonKeys(fromStoredKeys);
         setSelectedAddonKeys(keys);
-    }, [quote, currentStep, campaignFirstFree4x120]);
+    }, [quote, currentStep, deriveRefineFrequencySelection]);
 
     // Check if service details changed after confirmation (re-lock payment if changed)
     useEffect(() => {
@@ -1224,11 +1262,7 @@ export default function BookV2Client() {
     }, [serviceDetails, serviceDetailsConfirmed, serviceDetailsSnapshot]);
 
     const applyRefineAndPersist = useCallback(
-        async (
-            frequency: "one_time" | "weekly" | "biweekly" | "monthly",
-            addonKeys: string[],
-            options?: { revertKeys?: string[] }
-        ) => {
+        async (frequencySel: string, addonKeys: string[], options?: { revertKeys?: string[] }) => {
             const quoteInput = quote?.quote_input;
             const squareFootage =
                 quoteInput?.square_footage ||
@@ -1248,7 +1282,7 @@ export default function BookV2Client() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         square_footage: squareFootage.trim(),
-                        cleaning_frequency: frequency,
+                        cleaning_frequency: frequencySel,
                         add_ons: addonKeys,
                         opportunity_id: opportunityId || undefined,
                         zip: quoteInput?.zip,
@@ -1286,9 +1320,17 @@ export default function BookV2Client() {
                     addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
                 };
                 setQuote(normalizeQuote(updated));
+                const freqRows = bookingCatalog?.pricing_frequencies ?? [];
+                const rpcK = resolveRpcFrequencyKey(frequencySel, freqRows);
+                const legacyK = inferLegacyCleaningFrequencyApiKey(rpcK, freqRows);
                 const toStore = {
                     ...updated,
-                    quote_input: { ...quoteInput, cleaning_frequency: frequency, add_ons: addonKeys },
+                    quote_input: {
+                        ...quoteInput,
+                        cleaning_frequency: legacyK,
+                        cleaning_frequency_key: rpcK || null,
+                        add_ons: addonKeys,
+                    },
                 };
                 try {
                     const json = JSON.stringify(toStore);
@@ -1301,19 +1343,25 @@ export default function BookV2Client() {
                 if (requestId === refineRequestIdRef.current) setRefineLoading(false);
             }
         },
-        [quote]
+        [quote, bookingCatalog]
     );
 
     // FIRSTFREE4X120: ensure stored quote is recurring (quote-refine) if it was one-time.
     useEffect(() => {
         if (!campaignFirstFree4x120 || debug || !quote || !hasQuote || currentStep !== "refine_quote") return;
         if (firstFreeCampaignRecurringBootstrapRef.current) return;
-        const qi = quote.quote_input?.cleaning_frequency;
+        const qi = quote.quote_input;
+        const freqRows = bookingCatalog?.pricing_frequencies ?? [];
+        const rawSel =
+            typeof qi?.cleaning_frequency_key === "string" && qi.cleaning_frequency_key.trim()
+                ? qi.cleaning_frequency_key.trim()
+                : typeof qi?.cleaning_frequency === "string"
+                  ? qi.cleaning_frequency.trim()
+                  : "";
+        const rpcK = resolveRpcFrequencyKey(rawSel, freqRows);
         const label = (quote.frequency_label || "").toLowerCase();
         const looksOneTime =
-            qi === "one_time" ||
-            label.includes("one-time") ||
-            label.includes("one time");
+            rpcK === "" || label.includes("one-time") || label.includes("one time");
         if (!looksOneTime) return;
         firstFreeCampaignRecurringBootstrapRef.current = true;
         const addonsList = quote.addons ?? [];
@@ -1327,20 +1375,17 @@ export default function BookV2Client() {
         );
         const keysFromQuote: string[] =
             keysFromAddons.length > 0 ? keysFromAddons : filterExcludedCustomerAddonKeys(fromStoredKeys);
-        void applyRefineAndPersist("weekly", keysFromQuote);
-    }, [campaignFirstFree4x120, debug, quote, hasQuote, currentStep, applyRefineAndPersist]);
+        const rows = bookingCatalog?.pricing_frequencies ?? [];
+        const fr = rows.find((r) => r.is_recurring);
+        void applyRefineAndPersist(fr?.frequency_key ?? "weekly", keysFromQuote);
+    }, [campaignFirstFree4x120, debug, quote, hasQuote, currentStep, applyRefineAndPersist, bookingCatalog]);
 
     // Fetch available_addons once when entering refine step (so prices show before user toggles)
     useEffect(() => {
         if (currentStep !== "refine_quote" || !quote || availableAddons !== null) return;
         const squareFootage = quote.quote_input?.square_footage?.trim();
         if (!squareFootage) return;
-        const freqLabel = (quote.frequency_label || "").toLowerCase();
-        const freq: "one_time" | "weekly" | "biweekly" | "monthly" =
-            freqLabel.includes("weekly") && !freqLabel.includes("bi") ? "weekly"
-                : freqLabel.includes("bi") || freqLabel.includes("2 week") ? "biweekly"
-                : freqLabel.includes("monthly") ? "monthly"
-                : "one_time";
+        const freqSel = deriveRefineFrequencySelection(quote);
         const addonsList = quote.addons ?? [];
         const fromStoredKeys = Array.isArray(quote.quote_input?.add_ons)
             ? (quote.quote_input!.add_ons as unknown[])
@@ -1352,14 +1397,14 @@ export default function BookV2Client() {
         );
         const keys =
             keysFromAddons.length > 0 ? keysFromAddons : filterExcludedCustomerAddonKeys(fromStoredKeys);
-        applyRefineAndPersist(freq, keys);
-    }, [currentStep, quote, availableAddons, applyRefineAndPersist]);
+        applyRefineAndPersist(freqSel, keys);
+    }, [currentStep, quote, availableAddons, applyRefineAndPersist, deriveRefineFrequencySelection]);
 
-    const handleRefineFrequencyChange = (freq: "one_time" | "weekly" | "biweekly" | "monthly") => {
-        if (campaignFirstFree4x120 && freq === "one_time") return;
-        setRefineFrequency(freq);
+    const handleRefineFrequencyChange = (freqSel: string) => {
+        if (campaignFirstFree4x120 && freqSel === "one_time") return;
+        setRefineFrequencySel(freqSel);
         setRefineError(null);
-        applyRefineAndPersist(freq, selectedAddonKeys);
+        applyRefineAndPersist(freqSel, selectedAddonKeys);
     };
 
     const handleRefineAddOnToggle = (addonKey: string) => {
@@ -1373,7 +1418,7 @@ export default function BookV2Client() {
         }
         refineDebounceRef.current = setTimeout(() => {
             refineDebounceRef.current = null;
-            applyRefineAndPersist(refineFrequency, next, { revertKeys: prev });
+            applyRefineAndPersist(refineFrequencySel, next, { revertKeys: prev });
         }, 250);
     };
 
@@ -1396,7 +1441,7 @@ export default function BookV2Client() {
 
     const handleQuoteStartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { first_name, last_name, zip, square_footage, cleaning_frequency, email, phone } = quoteStartForm;
+        const { first_name, last_name, zip, square_footage, cleaning_frequency_key, email, phone } = quoteStartForm;
         if (!first_name?.trim()) {
             setQuoteStartError("First name is required.");
             return;
@@ -1425,6 +1470,7 @@ export default function BookV2Client() {
         setQuoteStartError(null);
         try {
             clearBookingIdentityKeys();
+            const freqSel = (cleaning_frequency_key && cleaning_frequency_key.trim()) || "one_time";
             // Send bucket key (e.g. "Under 1500 sq ft") — API accepts string or number
             const res = await fetch("/api/book-v2/quote-start", {
                 method: "POST",
@@ -1434,7 +1480,8 @@ export default function BookV2Client() {
                     last_name: last_name.trim(),
                     zip: zip.trim(),
                     square_footage: square_footage.trim(),
-                    cleaning_frequency: cleaning_frequency || "one_time",
+                    cleaning_frequency: freqSel,
+                    cleaning_type: "standard",
                     email: email?.trim() || undefined,
                     phone: phone?.trim() || undefined,
                 }),
@@ -1457,6 +1504,9 @@ export default function BookV2Client() {
                 console.warn("localStorage set failed:", e);
             }
             const qo = data.quote_output;
+            const freqRows = bookingCatalog?.pricing_frequencies ?? [];
+            const rpcK = resolveRpcFrequencyKey(freqSel, freqRows);
+            const legacyK = inferLegacyCleaningFrequencyApiKey(rpcK, freqRows);
             const storedQuote: QuoteResponse = {
                 status: "ready",
                 source: "local_pricing",
@@ -1467,7 +1517,13 @@ export default function BookV2Client() {
                 service: "Standard Cleaning",
                 price_breakdown: undefined,
                 addons: qo?.addons ?? [],
-                quote_input: { zip: quoteStartForm.zip.trim(), square_footage: quoteStartForm.square_footage, cleaning_frequency: quoteStartForm.cleaning_frequency },
+                quote_input: {
+                    zip: quoteStartForm.zip.trim(),
+                    square_footage: quoteStartForm.square_footage,
+                    cleaning_frequency: legacyK,
+                    cleaning_frequency_key: rpcK || null,
+                    cleaning_type: "standard",
+                },
             };
             const quoteJson = JSON.stringify(storedQuote);
             localStorage.setItem("alloy_quote_v1", quoteJson);
@@ -1551,8 +1607,10 @@ export default function BookV2Client() {
                         state: stateVal,
                         postal_code: postal,
                         home_type: serviceDetails.home_type?.trim() || null,
-                        bedrooms: serviceDetails.bedrooms || null,
-                        bathrooms: serviceDetails.bathrooms || null,
+                        beds: serviceDetails.beds ?? serviceDetails.bedrooms ?? null,
+                        baths: serviceDetails.baths ?? serviceDetails.bathrooms ?? null,
+                        bedrooms: serviceDetails.bedrooms ?? null,
+                        bathrooms: serviceDetails.bathrooms ?? null,
                         access_method: serviceDetails.access_method,
                         access_note: serviceDetails.access_note?.trim() || null,
                         has_pets: serviceDetails.has_pets,
@@ -1637,11 +1695,17 @@ export default function BookV2Client() {
                 (localStorage.getItem("alloy_opportunity_id") || localStorage.getItem("alloy_person_id") || localStorage.getItem("alloy_customer_id"));
             if (!hasIds) {
                 clearBookingIdentityKeys();
-                let paymentIdentityQuoteStartFreq: "one_time" | "weekly" | "biweekly" | "monthly" = "one_time";
-                if (campaignFirstFree4x120) {
-                    const qi = quote?.quote_input?.cleaning_frequency;
-                    paymentIdentityQuoteStartFreq =
-                        qi === "monthly" || qi === "biweekly" || qi === "weekly" ? qi : "weekly";
+                const freqRows = bookingCatalog?.pricing_frequencies ?? [];
+                let paymentIdentityFreqSel = "one_time";
+                const qi = quote?.quote_input;
+                if (typeof qi?.cleaning_frequency_key === "string" && qi.cleaning_frequency_key.trim()) {
+                    paymentIdentityFreqSel = qi.cleaning_frequency_key.trim();
+                } else if (typeof qi?.cleaning_frequency === "string" && qi.cleaning_frequency.trim()) {
+                    paymentIdentityFreqSel = qi.cleaning_frequency.trim();
+                }
+                if (campaignFirstFree4x120 && resolveRpcFrequencyKey(paymentIdentityFreqSel, freqRows) === "") {
+                    const fr = freqRows.find((r) => r.is_recurring);
+                    paymentIdentityFreqSel = fr?.frequency_key ?? "weekly";
                 }
                 const res = await fetch("/api/book-v2/quote-start", {
                     method: "POST",
@@ -1652,7 +1716,7 @@ export default function BookV2Client() {
                         first_name: (resolvedFirstName ?? (prefillData.first_name as string))?.trim() || undefined,
                         last_name: (resolvedLastName ?? (prefillData.last_name as string))?.trim() || undefined,
                         zip: (prefillData.zip as string)?.trim() || (prefillData.postal_code as string)?.trim() || undefined,
-                        cleaning_frequency: paymentIdentityQuoteStartFreq,
+                        cleaning_frequency: paymentIdentityFreqSel,
                         quote_context: {
                             source: "book_v2_payment_identity",
                             url: typeof window !== "undefined" ? window.location.href : "",
@@ -2116,8 +2180,10 @@ export default function BookV2Client() {
                 postal_code: quote?.quote_input?.postal_code ?? quote?.quote_input?.zip ?? prefillData.postal_code ?? prefillData.zip ?? undefined,
                 state: prefillData.state ?? undefined,
                 home_type: serviceDetails.home_type || undefined,
-                bedrooms: serviceDetails.bedrooms,
-                bathrooms: serviceDetails.bathrooms,
+                beds: serviceDetails.beds ?? serviceDetails.bedrooms ?? null,
+                baths: serviceDetails.baths ?? serviceDetails.bathrooms ?? null,
+                bedrooms: serviceDetails.bedrooms ?? null,
+                bathrooms: serviceDetails.bathrooms ?? null,
                 configurable_field_values: withoutExcludedConfigurableValues(serviceDetails.configurable_values),
                 access_method: serviceDetails.access_method,
                 access_note: serviceDetails.access_note,
@@ -2442,16 +2508,33 @@ export default function BookV2Client() {
                             <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Cleaning frequency</label>
                                 <select
-                                    value={quoteStartForm.cleaning_frequency}
-                                    onChange={(e) => setQuoteStartForm((f) => ({ ...f, cleaning_frequency: e.target.value as "one_time" | "weekly" | "biweekly" | "monthly" }))}
+                                    value={
+                                        quoteStartForm.cleaning_frequency_key ||
+                                        quoteStartFreqOptions[0]?.value ||
+                                        "one_time"
+                                    }
+                                    onChange={(e) =>
+                                        setQuoteStartForm((f) => ({ ...f, cleaning_frequency_key: e.target.value }))
+                                    }
                                     className="w-full px-3 py-2 border border-alloy-stone/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70"
                                 >
-                                    {!campaignFirstFree4x120 && <option value="one_time">One-time</option>}
-                                    <option value="weekly">Weekly</option>
-                                    <option value="biweekly">Every 2 weeks</option>
-                                    <option value="monthly">Monthly</option>
+                                    {quoteStartFreqOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
+                            <p className="text-xs text-alloy-midnight/60">
+                                Move-out or heavy / deep clean?{" "}
+                                <a
+                                    href="/services/cleaning/specialty-quote"
+                                    className="text-alloy-juniper font-medium underline"
+                                >
+                                    Request a specialty estimate
+                                </a>{" "}
+                                (separate from this booking flow).
+                            </p>
                             <div>
                                 <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email (so we can save your quote)</label>
                                 <input
@@ -2591,22 +2674,19 @@ export default function BookV2Client() {
                         <div className="mb-6">
                             <p className="text-sm font-semibold text-alloy-midnight mb-3">Cleaning frequency</p>
                             <div className="flex flex-wrap gap-2">
-                                {(campaignFirstFree4x120
-                                    ? (["weekly", "biweekly", "monthly"] as const)
-                                    : (["one_time", "weekly", "biweekly", "monthly"] as const)
-                                ).map((freq) => (
+                                {refineFreqChoices.map(({ value, label }) => (
                                     <button
-                                        key={freq}
+                                        key={value}
                                         type="button"
-                                        onClick={() => handleRefineFrequencyChange(freq)}
+                                        onClick={() => handleRefineFrequencyChange(value)}
                                         disabled={refineLoading}
                                         className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-normal break-words text-left ${
-                                            refineFrequency === freq
+                                            refineFrequencySel === value
                                                 ? "bg-alloy-juniper text-white shadow-sm"
                                                 : "bg-alloy-stone/20 text-alloy-midnight hover:bg-alloy-stone/30"
                                         } disabled:opacity-50`}
                                     >
-                                        {getFrequencyDisplayLabel(freq, availableFrequencies)}
+                                        {label}
                                     </button>
                                 ))}
                             </div>

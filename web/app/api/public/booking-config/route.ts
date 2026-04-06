@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import {
-    BOOK_V2_BATHROOM_OPTIONS,
-    BOOK_V2_BEDROOM_OPTIONS,
-    FALLBACK_SQFT_TIERS,
     loadActiveHomeTypes,
     loadCleaningAddonsFromDb,
     loadPricingFrequenciesForVertical,
     loadSqftTiersForVertical,
     resolveCleaningVerticalId,
+    resolveSqftTierDisplayLabels,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
+import { resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
 
 /**
  * GET /api/public/booking-config
@@ -22,23 +21,47 @@ export async function GET() {
             return NextResponse.json({ ok: false, message: "Server misconfiguration" }, { status: 500 });
         }
         const supabase = createServiceRoleClient();
+        const orgId = process.env.ALLOY_PUBLIC_ORG_ID?.trim() || null;
         const verticalId = await resolveCleaningVerticalId(supabase, "cleaning");
         if (!verticalId) {
             return NextResponse.json({ ok: false, message: "Cleaning vertical not found" }, { status: 500 });
         }
 
-        const [tiersRaw, homeTypes, freqRows, addonBundle] = await Promise.all([
+        const [tiersRaw, homeTypesFromSet, homeTypesLegacy, freqRows, addonBundle] = await Promise.all([
             loadSqftTiersForVertical(supabase, verticalId),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "home_type") : Promise.resolve([]),
             loadActiveHomeTypes(supabase),
             loadPricingFrequenciesForVertical(supabase, verticalId),
             loadCleaningAddonsFromDb(supabase, verticalId),
         ]);
 
-        const square_footage_tiers = (tiersRaw.length ? tiersRaw : FALLBACK_SQFT_TIERS).map((t) => ({
-            sqft_key: t.sqft_key,
-            sqft_label: t.sqft_label ?? t.sqft_key,
-            sort_order: t.sort_order,
-        }));
+        const tierRows =
+            tiersRaw.length > 0 ? await resolveSqftTierDisplayLabels(supabase, orgId, tiersRaw) : [];
+
+        const square_footage_tiers = tierRows.map((t) => {
+            const tier_key = t.tier_key.trim();
+            const label = (t.tier_label && String(t.tier_label).trim()) || tier_key;
+            return {
+                tier_key,
+                label,
+                sort_order: t.sort_order,
+                sqft_key: tier_key,
+                sqft_label: label,
+            };
+        });
+
+        const home_types =
+            homeTypesFromSet.length > 0
+                ? homeTypesFromSet.map((h, i) => ({
+                      key: h.value,
+                      label: h.label,
+                      position: i,
+                  }))
+                : homeTypesLegacy.map((h) => ({
+                      key: h.key,
+                      label: h.label,
+                      position: h.position,
+                  }));
 
         const addons = filterExcludedCustomerAddonKeys(addonBundle.available_addons.map((a) => a.key)).map((key) => {
             const row = addonBundle.available_addons.find((x) => x.key === key);
@@ -53,13 +76,9 @@ export async function GET() {
             ok: true,
             vertical_id: verticalId,
             square_footage_tiers,
-            home_types: homeTypes.map((h) => ({
-                key: h.key,
-                label: h.label,
-                position: h.position,
-            })),
-            bedroom_options: BOOK_V2_BEDROOM_OPTIONS,
-            bathroom_options: BOOK_V2_BATHROOM_OPTIONS,
+            home_types,
+            beds_input: { min: 0, max: 20, step: 1 },
+            baths_input: { min: 0, max: 15, step: 0.5 },
             pricing_frequencies: freqRows,
             addons,
         });

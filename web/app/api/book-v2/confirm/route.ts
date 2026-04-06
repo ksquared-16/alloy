@@ -4,13 +4,15 @@ import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLin
 import { ensureCustomerForPersonNative, resolveOrCreatePersonCustomerForBooking } from "@/lib/bookingPersonCustomerResolve";
 import { ensureCanonicalBookingLocation } from "@/lib/bookingLocations";
 import {
+    coalesceBookV2BedBathRaw,
+    homeTypeInputToStableKey,
     parseBathroomsForCjd,
+    parseBedsFromBody,
     parseRoomCount,
-    quoteSquareFootageToBandKey,
     splitBookV2LocationAccess,
-    squareFootageMidpointForBandKey,
+    uiAccessMethodToStableKey,
 } from "@/lib/book-v2/bookingCanonicalMaps";
-import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel, resolveSqftBandIdByKey } from "@/lib/book-v2/resolveBookV2CatalogIds";
+import { loadSqftTiersForVertical, normalizeSqftKeyInput } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { upsertCleaningJobDetailsFromBookV2 } from "@/lib/book-v2/upsertCleaningJobDetails";
 import {
     BOOKED_PIPELINE_STAGE_ID,
@@ -31,11 +33,6 @@ import { emitEvent } from "@/lib/emitEvent";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
 import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
-import {
-    getFieldDefinitionMeta,
-    serializeSquareFootageForFieldValue,
-    upsertTypedFieldValue,
-} from "@/lib/bookV2/fieldValueUpsert";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
@@ -325,7 +322,7 @@ async function runDeferredBookingEffects(params: {
             personIdFromQuote
                 ? supa.from("persons").select("id, first_name, last_name, email, phone").eq("id", personIdFromQuote).maybeSingle()
                 : Promise.resolve({ data: null as null }),
-            supa.from("cleaning_job_details").select("bedrooms, bathrooms, square_footage").eq("job_id", jobId).maybeSingle(),
+            supa.from("cleaning_job_details").select("beds, baths, square_footage_tier_key").eq("job_id", jobId).maybeSingle(),
         ]);
         bookV2PerfLog("deferred_payload_hydrate_parallel", tHydrate, booking_attempt_id);
 
@@ -382,27 +379,26 @@ async function runDeferredBookingEffects(params: {
         const startIsoForSms = (schedForSms.start_at as string | undefined) ?? slot_start;
         eventPayload.formatted_start_at = formatBookingStartForSms(startIsoForSms, smsTz);
 
-        const cjdRow = (cjdRes as { data: { bedrooms?: number | null; bathrooms?: number | null; square_footage?: number | null } | null })
-            .data;
+        const cjdRow = (cjdRes as {
+            data: { beds?: number | null; baths?: number | null; square_footage_tier_key?: string | null } | null;
+        }).data;
         const jobForPrice = jobRow as { gross_price_cents?: number | null; estimated_total_cents?: number | null } | null;
         const priceCents = jobForPrice?.gross_price_cents ?? jobForPrice?.estimated_total_cents ?? null;
         eventPayload.booking_price =
             priceCents != null && typeof priceCents === "number" && !Number.isNaN(priceCents) ? formatMoneyFromCents(priceCents) : "";
         eventPayload.booking_bedrooms =
-            cjdRow != null && cjdRow.bedrooms != null && !Number.isNaN(Number(cjdRow.bedrooms)) ? String(cjdRow.bedrooms) : "";
+            cjdRow != null && cjdRow.beds != null && !Number.isNaN(Number(cjdRow.beds)) ? String(cjdRow.beds) : "";
         eventPayload.booking_bathrooms =
-            cjdRow != null && cjdRow.bathrooms != null && !Number.isNaN(Number(cjdRow.bathrooms)) ? String(cjdRow.bathrooms) : "";
+            cjdRow != null && cjdRow.baths != null && !Number.isNaN(Number(cjdRow.baths)) ? String(cjdRow.baths) : "";
         let bookingSqftStr = "";
-        if (cjdRow != null && cjdRow.square_footage != null && !Number.isNaN(Number(cjdRow.square_footage))) {
-            bookingSqftStr = String(cjdRow.square_footage);
+        if (cjdRow != null && cjdRow.square_footage_tier_key != null && String(cjdRow.square_footage_tier_key).trim() !== "") {
+            bookingSqftStr = String(cjdRow.square_footage_tier_key).trim();
         } else {
             const oppM = (oppRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
             const qi = (oppM.quote_input as Record<string, unknown> | undefined) ?? {};
             const rawSq = qi.square_footage;
-            const rawStr = typeof rawSq === "string" ? rawSq : rawSq != null ? String(rawSq) : null;
-            const bk = quoteSquareFootageToBandKey(rawStr);
-            const mid = squareFootageMidpointForBandKey(bk);
-            if (mid != null) bookingSqftStr = String(mid);
+            bookingSqftStr =
+                typeof rawSq === "string" ? rawSq.trim() : rawSq != null ? String(rawSq).trim() : "";
         }
         eventPayload.booking_square_footage = bookingSqftStr;
 
@@ -561,8 +557,10 @@ function getCadenceIntervalFromServiceFrequencyKey(
  * - contact_last_name: string (optional)
  * - address: string (optional)
  * - city: string (optional)
- * - bedrooms: string (optional)
- * - bathrooms: string (optional)
+ * - bedrooms: string (optional; legacy alias for beds)
+ * - bathrooms: string (optional; legacy alias for baths)
+ * - beds: string (optional; canonical booking select value)
+ * - baths: string (optional)
  * - access_method: string (optional)
  * - access_note: string (optional)
  * - additional_notes: string (optional)
@@ -600,6 +598,8 @@ export async function POST(request: NextRequest) {
             home_type,
             bedrooms,
             bathrooms,
+            beds: beds_body,
+            baths: baths_body,
             configurable_field_values: configurable_field_values_body,
             access_method,
             access_note,
@@ -1424,7 +1424,7 @@ export async function POST(request: NextRequest) {
             access_note: accessNoteMerged != null ? String(accessNoteMerged) : undefined,
             additional_notes: additionalNotesMerged != null ? String(additionalNotesMerged) : undefined,
         });
-        const accessMethodIdForLocation = await resolveAccessMethodIdByUiKey(supabase, accessMethodUi);
+        const accessMethodKeyForLocation = uiAccessMethodToStableKey(accessMethodUi);
         let locationId: string | null = null;
         const tCanonicalLoc = typeof performance !== "undefined" ? performance.now() : Date.now();
         try {
@@ -1437,7 +1437,7 @@ export async function POST(request: NextRequest) {
                 city: city ?? null,
                 state: locationState,
                 postal_code: locationPostalCode,
-                access_method_id: accessMethodIdForLocation,
+                access_method_key: accessMethodKeyForLocation,
                 access_code: locationAccessCode,
                 has_pets: effectiveHasPetsForLocation,
                 access_notes: locationAccessNotes,
@@ -1453,9 +1453,57 @@ export async function POST(request: NextRequest) {
                 if (home_type != null && String(home_type).trim()) mergedByKey.home_type = home_type;
                 if (bedrooms != null && String(bedrooms).trim()) mergedByKey.bedrooms = bedrooms;
                 if (bathrooms != null && String(bathrooms).trim()) mergedByKey.bathrooms = bathrooms;
+                if (beds_body != null && String(beds_body).trim()) mergedByKey.beds = beds_body;
+                if (baths_body != null && String(baths_body).trim()) mergedByKey.baths = baths_body;
                 if (hasPetsResolved === true || hasPetsResolved === false) {
                     mergedByKey.pets = hasPetsResolved ? "true" : "false";
                 }
+
+                const qiPeek = (oppMeta.quote_input as Record<string, unknown> | undefined) ?? {};
+                const nativeLoc: Record<string, unknown> = {
+                    access_method_key: accessMethodKeyForLocation,
+                    access_method_id: null,
+                    access_code: locationAccessCode,
+                    access_notes: locationAccessNotes,
+                    updated_at: new Date().toISOString(),
+                };
+                if (verticalId) {
+                    const sqftFromQuoteRow = qiPeek.square_footage;
+                    if (sqftFromQuoteRow != null && String(sqftFromQuoteRow).trim() !== "") {
+                        const tiers = await loadSqftTiersForVertical(supabase, verticalId);
+                        nativeLoc.square_footage_tier_key = normalizeSqftKeyInput(
+                            sqftFromQuoteRow as string | number,
+                            tiers
+                        );
+                    }
+                }
+                const home_type_for_loc = pickBookV2PropertyField(
+                    home_type,
+                    mergedByKey.home_type,
+                    svcPropBook.home_type_label,
+                    qiPeek.home_type
+                );
+                const hkLoc = homeTypeInputToStableKey(home_type_for_loc);
+                if (hkLoc) nativeLoc.home_type_key = hkLoc;
+                const svcPropRec = svcPropBook as Record<string, unknown>;
+                const bedrooms_for_loc = pickBookV2PropertyField(
+                    coalesceBookV2BedBathRaw(beds_body ?? bedrooms, mergedByKey, "bedrooms", "beds"),
+                    undefined,
+                    coalesceBookV2BedBathRaw(undefined, svcPropRec, "bedrooms", "beds"),
+                    qiPeek.beds ?? qiPeek.bedrooms
+                );
+                const bathrooms_for_loc = pickBookV2PropertyField(
+                    coalesceBookV2BedBathRaw(baths_body ?? bathrooms, mergedByKey, "bathrooms", "baths"),
+                    undefined,
+                    coalesceBookV2BedBathRaw(undefined, svcPropRec, "bathrooms", "baths"),
+                    qiPeek.baths ?? qiPeek.bathrooms
+                );
+                const bedsNumLoc = parseBedsFromBody(bedrooms_for_loc);
+                const bathLoc = parseBathroomsForCjd(bathrooms_for_loc);
+                if (bedsNumLoc != null) nativeLoc.beds = bedsNumLoc;
+                if (bathLoc.baths != null) nativeLoc.baths = bathLoc.baths;
+
+                await supabase.from("locations").update(nativeLoc).eq("id", locationId).eq("org_id", orgIdForLocation);
 
                 const publicDefs = await loadPublicBookingFieldDefRows(supabase, orgIdForLocation, "location");
                 await upsertConfigurableFieldValuesForEntity(
@@ -1466,22 +1514,6 @@ export async function POST(request: NextRequest) {
                     publicDefs,
                     mergedByKey
                 );
-
-                const qiPeek = (oppMeta.quote_input as Record<string, unknown> | undefined) ?? {};
-                const sqftFromQuoteRow = qiPeek.square_footage;
-                if (sqftFromQuoteRow != null && String(sqftFromQuoteRow).trim() !== "") {
-                    const sqDef = await getFieldDefinitionMeta(supabase, orgIdForLocation, "location", "square_footage");
-                    if (sqDef) {
-                        await upsertTypedFieldValue(
-                            supabase,
-                            orgIdForLocation,
-                            "location",
-                            locationId,
-                            sqDef,
-                            serializeSquareFootageForFieldValue(sqftFromQuoteRow)
-                        );
-                    }
-                }
             } catch (fvErr) {
                 console.warn("[BOOK_V2_CONFIRM] location field_values upsert failed", fvErr);
             }
@@ -1706,43 +1738,48 @@ export async function POST(request: NextRequest) {
                 ? { ...qiOpp, ...(quote_input as Record<string, unknown>) }
                 : qiOpp;
         const sqftBucketRaw =
-            typeof quoteInputForDetails.square_footage === "string"
-                ? quoteInputForDetails.square_footage
-                : quoteInputForDetails.square_footage != null
-                  ? String(quoteInputForDetails.square_footage)
-                  : null;
-        const sqftBandKey = quoteSquareFootageToBandKey(sqftBucketRaw);
-        const sqftBandIdResolved = sqftBandKey ? await resolveSqftBandIdByKey(supabase, sqftBandKey) : null;
+            quoteInputForDetails.square_footage_tier_key != null &&
+            String(quoteInputForDetails.square_footage_tier_key).trim() !== ""
+                ? String(quoteInputForDetails.square_footage_tier_key)
+                : typeof quoteInputForDetails.square_footage === "string"
+                  ? quoteInputForDetails.square_footage
+                  : quoteInputForDetails.square_footage != null
+                    ? String(quoteInputForDetails.square_footage)
+                    : null;
+        const sqftTiersForJob = await loadSqftTiersForVertical(supabase, verticalId);
+        const tierKeyResolved = normalizeSqftKeyInput(sqftBucketRaw, sqftTiersForJob);
         const home_type_eff = pickBookV2PropertyField(
             home_type,
             cfgBag.home_type,
             svcPropBook.home_type_label,
             quoteInputForDetails.home_type
         );
+        const svcPropRecEff = svcPropBook as Record<string, unknown>;
         const bedrooms_eff = pickBookV2PropertyField(
-            bedrooms,
-            cfgBag.bedrooms,
-            svcPropBook.bedrooms,
-            quoteInputForDetails.bedrooms
+            coalesceBookV2BedBathRaw(beds_body ?? bedrooms, cfgBag, "bedrooms", "beds"),
+            undefined,
+            coalesceBookV2BedBathRaw(undefined, svcPropRecEff, "bedrooms", "beds"),
+            quoteInputForDetails.beds ?? quoteInputForDetails.bedrooms
         );
         const bathrooms_eff = pickBookV2PropertyField(
-            bathrooms,
-            cfgBag.bathrooms,
-            svcPropBook.bathrooms,
-            quoteInputForDetails.bathrooms
+            coalesceBookV2BedBathRaw(baths_body ?? bathrooms, cfgBag, "bathrooms", "baths"),
+            undefined,
+            coalesceBookV2BedBathRaw(undefined, svcPropRecEff, "bathrooms", "baths"),
+            quoteInputForDetails.baths ?? quoteInputForDetails.bathrooms
         );
-        const homeTypeIdResolved = await resolveHomeTypeIdByLabel(
-            supabase,
+        const homeTypeKeyResolved = homeTypeInputToStableKey(
             home_type_eff != null ? String(home_type_eff) : null
         );
         const bathParsed = parseBathroomsForCjd(bathrooms_eff);
+        const bedsResolved = parseBedsFromBody(bedrooms_eff);
         await upsertCleaningJobDetailsFromBookV2(supabase, jobId, {
-            home_type_id: homeTypeIdResolved,
-            sqft_band_id: sqftBandIdResolved,
-            square_footage: squareFootageMidpointForBandKey(sqftBandKey),
-            bedrooms: parseRoomCount(bedrooms_eff != null ? String(bedrooms_eff) : undefined),
-            bathrooms: bathParsed.cjdInteger,
+            home_type_key: homeTypeKeyResolved,
+            access_method_key: accessMethodKeyForLocation,
+            square_footage_tier_key: tierKeyResolved,
+            beds: bedsResolved,
+            baths: bathParsed.baths,
             bathrooms_booking_key: bathParsed.bookingKey,
+            access_notes: locationAccessNotes,
         });
 
         // Step 5b: Persist discount redemption immediately after job creation

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import CleaningQuickQuoteForm from "@/components/cleaning/CleaningQuickQuoteForm";
@@ -14,6 +14,12 @@ type ModalStep = "picker" | "form" | "submitted";
 interface QuoteModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Re-open modal after campaign exit (standard cleaning quote, no campaign). */
+  openModal: (options?: {
+    defaultService?: "cleaning" | "gutters";
+    campaignQuoteFlow?: CampaignQuoteFlowId | null;
+    onCampaignQuoteComplete?: () => void;
+  }) => void;
   defaultService?: "cleaning" | "gutters" | null;
   campaignQuoteFlow?: CampaignQuoteFlowId | null;
   invokeCampaignQuoteComplete?: () => void;
@@ -22,11 +28,30 @@ interface QuoteModalProps {
 export default function QuoteModal({
   isOpen,
   onClose,
+  openModal,
   defaultService,
   campaignQuoteFlow = null,
   invokeCampaignQuoteComplete,
 }: QuoteModalProps) {
   const router = useRouter();
+
+  const handleSwitchToStandardQuote = useCallback(() => {
+    onClose();
+    if (typeof window !== "undefined") {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("campaign");
+        const search = u.searchParams.toString();
+        const next = `${u.pathname}${search ? `?${search}` : ""}${u.hash}`;
+        window.history.replaceState(null, "", next);
+      } catch {
+        /* ignore */
+      }
+    }
+    const run = () => openModal({ defaultService: "cleaning", campaignQuoteFlow: null });
+    if (typeof queueMicrotask === "function") queueMicrotask(run);
+    else void Promise.resolve().then(run);
+  }, [onClose, openModal]);
   const [selectedVertical, setSelectedVertical] = useState<SelectedVertical>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("picker");
   const [mounted, setMounted] = useState(false);
@@ -332,18 +357,26 @@ export default function QuoteModal({
                     </p>
                     <CleaningQuickQuoteForm
                       campaignQuoteMode={campaignQuoteFlow === "firstfree4x120" ? { id: "firstfree4x120" } : undefined}
-                      onSuccess={() => {
+                      onSwitchToStandardQuote={
+                        campaignQuoteFlow === "firstfree4x120" ? handleSwitchToStandardQuote : undefined
+                      }
+                      onComplete={(detail) => {
                         const isCampaign = campaignQuoteFlow === "firstfree4x120";
+                        if (detail.kind === "specialty") {
+                          return;
+                        }
                         if (isCampaign) {
-                          // MUST run before onClose(): closeModal() clears onCampaignQuoteCompleteRef — a microtask would fire too late.
                           if (invokeCampaignQuoteComplete) {
                             invokeCampaignQuoteComplete();
                           }
                           onClose();
                           return;
                         }
-                        onClose();
-                        router.push("/book-v2");
+                        router.prefetch("/book-v2");
+                        window.setTimeout(() => {
+                          router.push("/book-v2");
+                          window.setTimeout(() => onClose(), 380);
+                        }, 120);
                       }}
                     />
                   </div>

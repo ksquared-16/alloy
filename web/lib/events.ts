@@ -6,6 +6,8 @@
 export const EVENT_TYPES = [
     "action_link_consumed",
     "booking_confirmed",
+    /** Specialty cleaning intake; does not run standard `quote_started` workflows. */
+    "specialty_quote_started",
     "quote_started",
     "schedule_created",
     "schedule_vendor_assigned",

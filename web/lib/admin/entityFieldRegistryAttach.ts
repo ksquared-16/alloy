@@ -26,6 +26,8 @@ export function hasMeaningfulNativeFieldValue(v: unknown): boolean {
 /**
  * Loads field_definitions for the drawer entity and merges custom (non-system) field_values into `out`.
  * System fields must come from native columns on `out`; field_values rows tied to system definitions are ignored.
+ * Locations: beds, baths, home_type_key, access_method_key, square_footage_tier_key are native columns;
+ * matching system field_definitions are display-only via the row payload (not field_values).
  */
 export async function attachFieldDefinitionsAndValues(
     supabase: AdminClient,

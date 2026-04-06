@@ -122,11 +122,15 @@ function isDrawerFieldValueBlank(v: unknown): boolean {
 /** Custom defs that mirror canonical location / job / schedule API fields; hide when hydrated canonical should win (incl. non-blank UUID defs that duplicate native columns). */
 const LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL = new Set([
     "access_method_id",
+    "access_method_key",
     "gate_code",
     "home_type",
     "square_footage",
+    "square_footage_tier",
     "bedrooms",
+    "beds",
     "bathrooms",
+    "baths",
     "pets",
 ]);
 
@@ -134,8 +138,11 @@ const JOB_OR_SCHEDULE_SERVICE_SHADOW_DEF_KEYS = new Set([
     "gate_code",
     "home_type",
     "square_footage",
+    "square_footage_tier",
     "bedrooms",
+    "beds",
     "bathrooms",
+    "baths",
     "pets",
 ]);
 
@@ -143,21 +150,29 @@ function locationCustomDefShadowedByCanonical(fieldKey: string, record: Record<s
     if (!LOCATION_CUSTOM_DEF_KEYS_SHADOWED_BY_CANONICAL.has(fieldKey)) return false;
     switch (fieldKey) {
         case "access_method_id":
-            return !!String(record._access_method_label ?? "").trim();
+            return !!String(record._access_method_label ?? "").trim() || !isDrawerFieldValueBlank(record.access_method_key);
+        case "access_method_key":
+            return !isDrawerFieldValueBlank(record.access_method_key) || !!String(record._access_method_label ?? "").trim();
         case "gate_code":
             if (!isDrawerFieldValueBlank(record.access_code)) return true;
             if (!isDrawerFieldValueBlank(record[fieldKey])) return false;
             return !!String(record._access_method_label ?? "").trim();
         case "home_type":
-            return !!String(record._service_home_type_label ?? "").trim();
+            return !isDrawerFieldValueBlank(record.home_type_key) || !!String(record._service_home_type_label ?? "").trim();
         case "square_footage":
-            return !!String(record._service_square_footage_display ?? "").trim();
-        case "bedrooms": {
-            const n = record._service_bedrooms;
+        case "square_footage_tier":
+            return (
+                !isDrawerFieldValueBlank(record.square_footage_tier_key) ||
+                !!String(record._service_square_footage_display ?? "").trim()
+            );
+        case "bedrooms":
+        case "beds": {
+            const n = record.beds ?? record._service_bedrooms;
             return n != null && n !== "" && !Number.isNaN(Number(n));
         }
-        case "bathrooms": {
-            const n = record._service_bathrooms;
+        case "bathrooms":
+        case "baths": {
+            const n = record.baths ?? record._service_bathrooms;
             return n != null && n !== "" && !Number.isNaN(Number(n));
         }
         case "pets":
@@ -175,12 +190,15 @@ function jobOrScheduleServiceDefShadowedByCanonical(fieldKey: string, record: Re
         case "home_type":
             return !!String(record._service_home_type_label ?? "").trim();
         case "square_footage":
+        case "square_footage_tier":
             return !!String(record._service_square_footage_display ?? "").trim();
-        case "bedrooms": {
+        case "bedrooms":
+        case "beds": {
             const n = record._service_bedrooms;
             return n != null && n !== "" && !Number.isNaN(Number(n));
         }
-        case "bathrooms": {
+        case "bathrooms":
+        case "baths": {
             const n = record._service_bathrooms;
             return n != null && n !== "" && !Number.isNaN(Number(n));
         }
@@ -2090,6 +2108,12 @@ export default function AdminEntityDrawer() {
                 postal_code: locData.postal_code ?? "",
                 country: locData.country ?? "",
                 access_notes: locData.access_notes ?? "",
+                access_code: locData.access_code ?? "",
+                access_method_key: (locData.access_method_key as string) ?? "",
+                beds: locData.beds ?? "",
+                baths: locData.baths ?? "",
+                home_type_key: (locData.home_type_key as string) ?? "",
+                square_footage_tier_key: (locData.square_footage_tier_key as string) ?? "",
                 status_key: (locData.status_key as string) ?? "",
             };
             mergeConfiguredFieldFormValues(locBase, locData, (data._field_definitions as FieldDefRow[] | undefined) ?? []);
@@ -2524,6 +2548,12 @@ export default function AdminEntityDrawer() {
                 postal_code: (locData.postal_code as string) ?? "",
                 country: (locData.country as string) ?? "",
                 access_notes: (locData.access_notes as string) ?? "",
+                access_code: (locData.access_code as string) ?? "",
+                access_method_key: (locData.access_method_key as string) ?? "",
+                beds: locData.beds ?? "",
+                baths: locData.baths ?? "",
+                home_type_key: (locData.home_type_key as string) ?? "",
+                square_footage_tier_key: (locData.square_footage_tier_key as string) ?? "",
                 status_key: (locData.status_key as string) ?? "",
             };
             const locDefs = (data._field_definitions as FieldDefRow[] | undefined) ?? [];
@@ -2750,7 +2780,28 @@ export default function AdminEntityDrawer() {
             /** Locations: handle first so this path never shares payload/url logic with vendors or other entities. */
             if (drawer.type === "locations") {
                 const locPayload: Record<string, unknown> = {};
-                const keys = ["label", "customer_id", "location_type_id", "location_type", "is_active", "is_primary", "address1", "address2", "city", "state", "postal_code", "country", "access_notes", "status_key"] as const;
+                const keys = [
+                    "label",
+                    "customer_id",
+                    "location_type_id",
+                    "location_type",
+                    "is_active",
+                    "is_primary",
+                    "address1",
+                    "address2",
+                    "city",
+                    "state",
+                    "postal_code",
+                    "country",
+                    "access_notes",
+                    "access_code",
+                    "access_method_key",
+                    "beds",
+                    "baths",
+                    "home_type_key",
+                    "square_footage_tier_key",
+                    "status_key",
+                ] as const;
                 for (const k of keys) {
                     if (formData[k] === undefined) continue;
                     if (k === "customer_id") {
@@ -2761,6 +2812,29 @@ export default function AdminEntityDrawer() {
                     if (k === "status_key") {
                         const v = formData.status_key;
                         locPayload.status_key = typeof v === "string" && v.trim() ? v.trim() : null;
+                        continue;
+                    }
+                    if (k === "beds" || k === "baths") {
+                        const v = formData[k];
+                        if (v === "" || v == null) {
+                            locPayload[k] = null;
+                        } else if (typeof v === "number" && Number.isFinite(v)) {
+                            locPayload[k] = v;
+                        } else {
+                            const n = parseFloat(String(v).replace(/,/g, ""));
+                            locPayload[k] = Number.isFinite(n) ? n : null;
+                        }
+                        continue;
+                    }
+                    if (
+                        k === "access_method_key" ||
+                        k === "home_type_key" ||
+                        k === "square_footage_tier_key" ||
+                        k === "access_code"
+                    ) {
+                        const v = formData[k];
+                        locPayload[k] =
+                            typeof v === "string" ? (v as string).trim() || null : v == null ? null : String(v).trim() || null;
                         continue;
                     }
                     if (k === "label" || k === "address1" || k === "address2" || k === "city" || k === "state" || k === "postal_code" || k === "country" || k === "access_notes") {
@@ -8043,6 +8117,14 @@ export default function AdminEntityDrawer() {
                                             <div className="grid grid-cols-3 gap-2"><input value={String(formData.city ?? "")} onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))} placeholder="City" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.state ?? "")} onChange={(e) => setFormData((f) => ({ ...f, state: e.target.value }))} placeholder="State" className="px-2 py-1.5 border rounded text-sm" /><input value={String(formData.postal_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, postal_code: e.target.value }))} placeholder="ZIP" className="px-2 py-1.5 border rounded text-sm" /></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Country</label><input value={String(formData.country ?? "")} onChange={(e) => setFormData((f) => ({ ...f, country: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                             <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Access notes</label><textarea value={String(formData.access_notes ?? "")} onChange={(e) => setFormData((f) => ({ ...f, access_notes: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" rows={2} /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Access code</label><input value={String(formData.access_code ?? "")} onChange={(e) => setFormData((f) => ({ ...f, access_code: e.target.value }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Access method key</label><input value={String(formData.access_method_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, access_method_key: e.target.value }))} placeholder="lockbox, front_desk, …" className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Beds</label><input type="number" step="1" value={formData.beds === "" || formData.beds == null ? "" : String(formData.beds)} onChange={(e) => setFormData((f) => ({ ...f, beds: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                                <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Baths</label><input type="number" step="0.1" value={formData.baths === "" || formData.baths == null ? "" : String(formData.baths)} onChange={(e) => setFormData((f) => ({ ...f, baths: e.target.value === "" ? "" : Number(e.target.value) }))} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            </div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Home type key</label><input value={String(formData.home_type_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, home_type_key: e.target.value }))} placeholder="house, condo, …" className="w-full px-2 py-1.5 border rounded text-sm" /></div>
+                                            <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Sq ft tier key</label><input value={String(formData.square_footage_tier_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, square_footage_tier_key: e.target.value }))} placeholder="0_1499, …" className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                         </>
                                     ) : (
                                         <>
@@ -8056,6 +8138,12 @@ export default function AdminEntityDrawer() {
                                             <Field label="Primary" value={data.is_primary ? "Yes" : "No"} />
                                             <Field label="Active" value={data.is_active ? "Yes" : "No"} />
                                             <Field label="Access notes" value={String(data?.access_notes ?? "")} />
+                                            <Field label="Access code" value={String(data?.access_code ?? "")} />
+                                            <Field label="Access method key" value={String(data?.access_method_key ?? "")} />
+                                            <Field label="Beds" value={data?.beds != null && data.beds !== "" ? String(data.beds) : "—"} />
+                                            <Field label="Baths" value={data?.baths != null && data.baths !== "" ? String(data.baths) : "—"} />
+                                            <Field label="Home type key" value={String(data?.home_type_key ?? "")} />
+                                            <Field label="Sq ft tier key" value={String(data?.square_footage_tier_key ?? "")} />
                                             <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />
                                         </>
                                     )}

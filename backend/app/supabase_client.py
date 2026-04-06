@@ -1801,7 +1801,7 @@ def get_payment_row_by_id(payment_id: str) -> Optional[Dict[str, Any]]:
         url = f"{base_url}/payments"
         params = {
             "id": f"eq.{payment_id}",
-            "select": "id,org_id,job_id,amount_cents,customer_id,status,provider_payment_id,processor_transaction_id",
+            "select": "id,org_id,job_id,amount_cents,customer_id,status,status_key,provider_payment_id,processor_transaction_id",
             "limit": "1",
         }
         resp = requests.get(url, headers=headers, params=params, timeout=10)
@@ -2394,6 +2394,10 @@ def update_payment_by_id(
         payload["provider_payment_id"] = provider_payment_id
     if payment_status_id is not None:
         payload["payment_status_id"] = payment_status_id
+        if "status_key" not in payload:
+            sk = get_payment_status_key_by_id(payment_status_id)
+            if sk:
+                payload["status_key"] = sk
     if paid_at is not None:
         payload["paid_at"] = paid_at
     if metadata is not None:
@@ -2447,7 +2451,7 @@ def get_payment_row_by_provider_payment_id(provider_payment_id: str) -> Optional
         url = f"{base_url}/payments"
         params = {
             "provider_payment_id": f"eq.{provider_payment_id}",
-            "select": "id,org_id,job_id,amount_cents,payment_status_id,provider_payment_id,processor_transaction_id,paid_at,metadata,status",
+            "select": "id,org_id,job_id,amount_cents,payment_status_id,provider_payment_id,processor_transaction_id,paid_at,metadata,status,status_key",
             "limit": "1",
         }
         resp = requests.get(url, headers=headers, params=params, timeout=10)
@@ -2459,6 +2463,32 @@ def get_payment_row_by_provider_payment_id(provider_payment_id: str) -> Optional
         return None
     except Exception as e:
         logger.warning("get_payment_row_by_provider_payment_id: exception %s", e)
+        return None
+
+
+def get_payment_status_key_by_id(payment_status_id: str) -> Optional[str]:
+    """Return payment_statuses.key for a row id (keeps payments.status_key aligned when only FK is patched)."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not payment_status_id:
+        return None
+    base_url = _get_base_url()
+    headers = _get_headers()
+    try:
+        url = f"{base_url}/payment_statuses"
+        params = {
+            "select": PAYMENT_STATUS_LOOKUP_COLUMN,
+            "id": f"eq.{payment_status_id}",
+            "limit": "1",
+        }
+        resp = requests.get(url, headers=headers, params=params, timeout=10)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            v = data[0].get(PAYMENT_STATUS_LOOKUP_COLUMN)
+            return str(v).strip() if v is not None else None
+        return None
+    except Exception as e:
+        logger.warning("get_payment_status_key_by_id: exception %s", e)
         return None
 
 

@@ -14,6 +14,7 @@ import {
     type JobPriceInput,
 } from "@/lib/admin/jobDisplayPrice";
 import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
 import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 import { buildOverrideLinesFromAdminJobRow, overrideJobPricing } from "@/lib/pricing/overrideJobPricing";
@@ -337,6 +338,18 @@ export async function PATCH(
                 if (!check.ok) {
                     return NextResponse.json({ error: check.message }, { status: 400 });
                 }
+            }
+            if (newSk) {
+                const st = await resolveJobStatusRowByOrgAndKey(supabase, ctx.orgId, newSk);
+                updates.job_status_id = st?.id ?? null;
+                if (!st) {
+                    console.warn("[ADMIN_PATCH_JOB] status_key has no matching job_statuses row", {
+                        jobId: id,
+                        status_key: newSk,
+                    });
+                }
+            } else {
+                updates.job_status_id = null;
             }
         }
 

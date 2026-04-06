@@ -3,7 +3,17 @@ import { createHash } from "node:crypto";
 import { createActionLink, buildShortActionLinkUrl } from "@/lib/actionLinks";
 import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
+import {
+    computePayoutPercent,
+    resolveVendorPayoutPolicy,
+    type OrgSettingsRow,
+    type VendorRow,
+} from "@/lib/admin/vendorPayoutPolicy";
+import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
+import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
+import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -47,6 +57,71 @@ function readMetadataRecord(entity: Record<string, unknown> | undefined): Record
     }
     if (typeof m === "object") return m as Record<string, unknown>;
     return null;
+}
+
+/** SMS/templates: human-readable sqft tier (org option_set label → canonical catalog → key). */
+async function resolveSquareFootageTierDisplayLabel(
+    supabase: SupabaseClient,
+    orgId: string | null | undefined,
+    tierKey: string | null | undefined
+): Promise<string | null> {
+    const k = String(tierKey ?? "").trim();
+    if (!k) return null;
+    const oid = orgId != null ? String(orgId).trim() : "";
+    if (oid) {
+        const { data: setRow } = await supabase
+            .from("option_sets")
+            .select("id")
+            .eq("org_id", oid)
+            .eq("set_key", "square_footage_tier")
+            .maybeSingle();
+        const sid = (setRow as { id?: string } | null)?.id;
+        if (sid) {
+            const { data: it } = await supabase
+                .from("option_set_items")
+                .select("label")
+                .eq("option_set_id", sid)
+                .eq("item_key", k)
+                .maybeSingle();
+            const lab = (it as { label?: string } | null)?.label;
+            if (lab != null && String(lab).trim() !== "") return String(lab).trim();
+        }
+    }
+    return CANONICAL_SQFT_TIER_OPTIONS.find((o) => o.value === k)?.label ?? null;
+}
+
+function resolveJobNetAmountCentsForVendorPayout(job: Record<string, unknown> | null | undefined): number | null {
+    if (!job) return null;
+    const est = job.estimated_total_cents;
+    if (typeof est === "number" && !Number.isNaN(est) && est > 0) return Math.round(est);
+    const gross = job.gross_price_cents;
+    if (typeof gross === "number" && !Number.isNaN(gross) && gross > 0) return Math.round(gross);
+    const meta = readMetadataRecord(job);
+    const qt = meta?.quote_total;
+    if (typeof qt === "number" && !Number.isNaN(qt)) return Math.max(0, Math.round(qt * 100));
+    if (typeof qt === "string" && qt.trim()) {
+        const n = parseFloat(qt);
+        if (!Number.isNaN(n)) return Math.max(0, Math.round(n * 100));
+    }
+    return null;
+}
+
+function vendorRowToVendorPayoutPolicyInput(row: Record<string, unknown> | null): VendorRow | null {
+    if (!row) return null;
+    let ot = row.payout_override_type as string | null | undefined;
+    let ov = row.payout_override_value as number | null | undefined;
+    const hasOverride =
+        (ot != null && String(ot).trim() !== "") || (typeof ov === "number" && !Number.isNaN(ov));
+    if (!hasOverride && typeof row.payout_percent === "number" && !Number.isNaN(row.payout_percent)) {
+        const pp = row.payout_percent;
+        ot = "percentage";
+        ov = pp >= 0 && pp <= 1 ? pp * 100 : pp;
+    }
+    return {
+        payout_override_type: ot ?? null,
+        payout_override_value: ov ?? null,
+        metadata: row.metadata as VendorRow["metadata"],
+    };
 }
 
 /** Book-v2 stores service ZIP under metadata.quote_input.zip (not opportunity.postal_code). */
@@ -113,6 +188,8 @@ const ENTITY_TABLES: Record<string, string> = {
     schedules: "schedules",
     vendor: "vendors",
     vendors: "vendors",
+    location: "locations",
+    locations: "locations",
     assignment: "assignments",
     assignments: "assignments",
 };
@@ -127,24 +204,87 @@ type ConditionRow = {
     enabled?: boolean | null;
 };
 
-/** Normalize legacy field_path: for vendor entity, strip "vendor." prefix so path is relative to payload.vendor. */
+/** Normalize legacy field_path: strip redundant entity prefix when path is relative to target entity row. */
 function normalizeFieldPathForEntity(entityType: string, path: string): string {
     const p = path.trim();
     if (!p) return p;
     if ((entityType === "vendor" || entityType === "vendors") && p.startsWith("vendor.")) {
         return p.slice("vendor.".length).trim() || p;
     }
+    const locEt = entityType === "locations" ? "location" : entityType;
+    if ((locEt === "location") && p.startsWith("location.")) {
+        return p.slice("location.".length).trim() || p;
+    }
     return p;
 }
 
+/** booking_* root keys → enriched location columns (stable option / numeric keys). */
+const BOOKING_ROOT_TO_LOCATION: Record<string, string> = {
+    booking_bedrooms: "location.beds",
+    booking_bathrooms: "location.baths",
+    booking_square_footage: "location.square_footage_tier_key",
+};
+
+/** Old job/schedule-scoped semantic names → location.* (after enrichWorkflowEventPayloadEntities). */
+const WORKFLOW_LEGACY_SEMANTIC_TO_LOCATION: Record<string, string> = {
+    bedrooms: "location.beds",
+    bathrooms: "location.baths",
+    square_footage: "location.square_footage_tier_key",
+    home_type: "location.home_type_key",
+    access_method: "location.access_method_key",
+};
+
 function getConditionActual(payload: Record<string, unknown>, defaultEntityType: string | null, c: ConditionRow): unknown {
-    const entityType = (c.target_entity ?? defaultEntityType ?? "job").trim() || "job";
+    let entityType = (c.target_entity ?? defaultEntityType ?? "job").trim() || "job";
+    if (entityType === "locations") entityType = "location";
     const entity = payload[entityType];
     const rawPath = (c.field_path ?? c.field ?? "").trim();
     const path = normalizeFieldPathForEntity(entityType, rawPath);
-    if (path && entity != null && typeof entity === "object") {
-        return getByPath(entity, path);
+
+    if (!path) {
+        if (c.field && typeof c.field === "string" && c.field.trim()) {
+            return getByPath(payload, c.field.trim());
+        }
+        return undefined;
     }
+
+    // Dot-paths that address a top-level payload entity (e.g. location.beds, job.id)
+    if (
+        path.startsWith("location.") ||
+        path.startsWith("customer.") ||
+        path.startsWith("opportunity.") ||
+        path.startsWith("schedule.") ||
+        path.startsWith("job.") ||
+        path.startsWith("contact.") ||
+        path.startsWith("vendor.")
+    ) {
+        const cross = getByPath(payload, path);
+        if (cross !== undefined) return cross;
+    }
+
+    if (entity != null && typeof entity === "object") {
+        const v = getByPath(entity as Record<string, unknown>, path);
+        if (v !== undefined) return v;
+    }
+
+    if (path === "formatted_start_at" || path === "booking_price" || path.startsWith("booking_")) {
+        const root = getByPath(payload, path);
+        if (root !== undefined) return root;
+        const locPath = BOOKING_ROOT_TO_LOCATION[path];
+        if (locPath) {
+            const v = getByPath(payload, locPath);
+            if (v !== undefined) return v;
+        }
+    }
+
+    if (entityType === "job" || entityType === "schedule" || entityType === "opportunity") {
+        const locPath = WORKFLOW_LEGACY_SEMANTIC_TO_LOCATION[path];
+        if (locPath) {
+            const v = getByPath(payload, locPath);
+            if (v !== undefined) return v;
+        }
+    }
+
     if (c.field && typeof c.field === "string" && c.field.trim()) {
         return getByPath(payload, c.field.trim());
     }
@@ -273,6 +413,77 @@ function maskPhoneForLog(phone: string | null | undefined): string {
 
 function isProbableUuid(s: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
+/** Coerce `update_entity` patches so jobs carry aligned `status_key` + `job_status_id` (legacy templates sometimes used a key string as `job_status_id`). */
+async function alignJobsPatchForStatusConvergence(
+    supabase: SupabaseClient,
+    orgId: string | null,
+    patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+    const out = { ...patch };
+    if (out.job_status_id != null && typeof out.job_status_id === "string") {
+        const raw = String(out.job_status_id).trim();
+        if (raw && !isProbableUuid(raw)) {
+            out.status_key = raw;
+            const row = await resolveJobStatusRowByOrgAndKey(supabase, orgId, raw);
+            out.job_status_id = row?.id ?? null;
+            return out;
+        }
+    }
+    if (out.status_key != null) {
+        const sk = String(out.status_key).trim();
+        if (sk && out.job_status_id === undefined) {
+            const row = await resolveJobStatusRowByOrgAndKey(supabase, orgId, sk);
+            out.job_status_id = row?.id ?? null;
+        }
+    }
+    if (
+        out.job_status_id != null &&
+        typeof out.job_status_id === "string" &&
+        isProbableUuid(out.job_status_id) &&
+        out.status_key === undefined
+    ) {
+        const { data } = await supabase.from("job_statuses").select("key").eq("id", out.job_status_id).maybeSingle();
+        const k = (data as { key?: string | null } | null)?.key;
+        if (k && String(k).trim()) out.status_key = String(k).trim();
+    }
+    return out;
+}
+
+/** Coerce `update_entity` patches so schedules carry aligned `status_key` + `schedule_status_id`. */
+async function alignSchedulesPatchForStatusConvergence(
+    supabase: SupabaseClient,
+    patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+    const out = { ...patch };
+    if (out.schedule_status_id != null && typeof out.schedule_status_id === "string") {
+        const raw = String(out.schedule_status_id).trim();
+        if (raw && !isProbableUuid(raw)) {
+            out.status_key = raw;
+            const row = await resolveScheduleStatusRowByKey(supabase, raw);
+            out.schedule_status_id = row?.id ?? null;
+            return out;
+        }
+    }
+    if (out.status_key != null) {
+        const sk = String(out.status_key).trim();
+        if (sk && out.schedule_status_id === undefined) {
+            const row = await resolveScheduleStatusRowByKey(supabase, sk);
+            out.schedule_status_id = row?.id ?? null;
+        }
+    }
+    if (
+        out.schedule_status_id != null &&
+        typeof out.schedule_status_id === "string" &&
+        isProbableUuid(out.schedule_status_id) &&
+        out.status_key === undefined
+    ) {
+        const { data } = await supabase.from("schedule_statuses").select("key").eq("id", out.schedule_status_id).maybeSingle();
+        const k = (data as { key?: string | null } | null)?.key;
+        if (k && String(k).trim()) out.status_key = String(k).trim();
+    }
+    return out;
 }
 
 /** E.164-ish for SMS: preserve leading +, default US +1 for 10-digit national. */
@@ -897,10 +1108,51 @@ async function createVendorOfferAcceptLinkAndBody(args: {
         args.payload.vendor != null && typeof args.payload.vendor === "object"
             ? (args.payload.vendor as Record<string, unknown>)
             : {};
+    const jobObj = args.payload.job;
+    const jobRec = jobObj != null && typeof jobObj === "object" ? (jobObj as Record<string, unknown>) : null;
+    const orgIdResolved =
+        (args.linkOrgId != null ? String(args.linkOrgId).trim() : "") ||
+        (args.payload.org_id != null ? String(args.payload.org_id).trim() : "") ||
+        (jobRec?.org_id != null ? String(jobRec.org_id).trim() : "");
+
+    let bookingVendorPayoutDisplay = "";
+    const netCents = resolveJobNetAmountCentsForVendorPayout(jobRec);
+    if (netCents != null && netCents > 0 && orgIdResolved) {
+        const [{ data: orgS }, { data: vend }] = await Promise.all([
+            args.supabase
+                .from("org_settings")
+                .select("payout_type, payout_value, metadata")
+                .eq("org_id", orgIdResolved)
+                .maybeSingle(),
+            args.supabase
+                .from("vendors")
+                .select("payout_override_type, payout_override_value, metadata, payout_percent")
+                .eq("id", args.vendorId)
+                .maybeSingle(),
+        ]);
+        const { policy } = resolveVendorPayoutPolicy({
+            orgSettings: (orgS ?? null) as OrgSettingsRow | null,
+            vendor: vendorRowToVendorPayoutPolicyInput(vend as Record<string, unknown> | null),
+        });
+        const pct = computePayoutPercent({ policy, completedOccurrences: 0 });
+        const payoutCents = Math.round((netCents * pct) / 100);
+        if (payoutCents > 0) bookingVendorPayoutDisplay = formatMoneyFromCents(payoutCents);
+    }
+
+    const bookingPriceDisplay = String(getByPath(args.payload, "booking_price") ?? "").trim();
+    let bookingPayAndVendorPayout = "";
+    if (bookingPriceDisplay) {
+        bookingPayAndVendorPayout = bookingVendorPayoutDisplay
+            ? `Pay: ${bookingPriceDisplay} (${bookingVendorPayoutDisplay} payout)`
+            : `Pay: ${bookingPriceDisplay}`;
+    }
+
     const pv: Record<string, unknown> = {
         ...args.payload,
         vendor_accept_url: actionLinkUrl,
         vendor: { ...prevVendor, id: args.vendorId },
+        booking_vendor_payout: bookingVendorPayoutDisplay,
+        booking_pay_and_vendor_payout: bookingPayAndVendorPayout,
     };
     const body = renderTemplate(args.template, pv);
     const hash = createHash("sha1").update(body ?? "").digest("hex").slice(0, 16);
@@ -1026,16 +1278,16 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
 
     const sched = p.schedule as Record<string, unknown> | undefined;
     const j = p.job as Record<string, unknown> | undefined;
-    const hasJobOrSchedule =
-        (sched != null && typeof sched === "object") || (j != null && typeof j === "object");
-    if (!hasJobOrSchedule) {
-        return;
-    }
 
-    const locationId =
+    let locationId =
         (sched?.location_id != null ? String(sched.location_id).trim() : "") ||
         (j?.location_id != null ? String(j.location_id).trim() : "") ||
         "";
+
+    if (!locationId && p.opportunity != null && typeof p.opportunity === "object") {
+        const oppLoc = (p.opportunity as Record<string, unknown>).location_id;
+        if (oppLoc != null && String(oppLoc).trim() !== "") locationId = String(oppLoc).trim();
+    }
 
     if (!locationId) {
         return;
@@ -1054,6 +1306,13 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
     if (loc.address_line2 == null || String(loc.address_line2).trim() === "") {
         const a2 = loc.address2;
         if (a2 != null && String(a2).trim() !== "") loc.address_line2 = a2;
+    }
+    const tierKeyRaw = loc.square_footage_tier_key;
+    if (tierKeyRaw != null && String(tierKeyRaw).trim() !== "") {
+        const tierK = String(tierKeyRaw).trim();
+        const orgForTier = (loc.org_id ?? p.org_id) as string | null | undefined;
+        const tierLabel = await resolveSquareFootageTierDisplayLabel(supabase, orgForTier, tierK);
+        loc.square_footage_tier_label = tierLabel ?? tierK.replace(/_/g, " ");
     }
     p.location = loc;
 
@@ -1134,6 +1393,8 @@ const ENTITY_TYPE_ALIASES: Record<string, string> = {
     customer: "customers",
     vendor: "vendors",
     vendors: "vendors",
+    location: "locations",
+    locations: "locations",
     customer_member: "customer_members",
     customer_members: "customer_members",
 };
@@ -1805,9 +2066,20 @@ export async function executeWorkflowRun(
                         patchResolved[k] = typeof v === "string" ? renderTemplate(v, payload) : v;
                     }
 
+                    let patchToApply = patchResolved;
+                    if (table === "jobs") {
+                        patchToApply = await alignJobsPatchForStatusConvergence(
+                            supabase,
+                            orgIdResolved != null ? String(orgIdResolved) : null,
+                            patchResolved
+                        );
+                    } else if (table === "schedules") {
+                        patchToApply = await alignSchedulesPatchForStatusConvergence(supabase, patchResolved);
+                    }
+
                     const { data, error: updErr } = await supabase
                         .from(table)
-                        .update(patchResolved)
+                        .update(patchToApply)
                         .eq("id", entityId)
                         .eq("org_id", orgIdResolved)
                         .select("id")
@@ -1851,8 +2123,13 @@ export async function executeWorkflowRun(
                         skipReason = "missing schedule_id or vendor_id";
                         break;
                     }
-                    const { data: statusRow } = await supabase.from("assignment_statuses").select("id").eq("key", statusKey).maybeSingle();
+                    const { data: statusRow } = await supabase
+                        .from("assignment_statuses")
+                        .select("id, key")
+                        .eq("key", statusKey)
+                        .maybeSingle();
                     const statusId = (statusRow as { id?: string } | null)?.id ?? null;
+                    const resolvedAssignmentKey = (statusRow as { key?: string } | null)?.key ?? statusKey;
                     if (!statusId) {
                         logs.push(`create_assignment: assignment_status key "${statusKey}" not found; skipping`);
                         actionSkipped = true;
@@ -1873,7 +2150,15 @@ export async function executeWorkflowRun(
                     const { data: existing } = await supabase.from("assignments").select("id").eq("schedule_id", scheduleId).maybeSingle();
                     const now = new Date().toISOString();
                     if (existing?.id) {
-                        const { error: uErr } = await supabase.from("assignments").update({ vendor_id: vendorId, assignment_status_id: statusId, updated_at: now }).eq("id", (existing as { id: string }).id);
+                        const { error: uErr } = await supabase
+                            .from("assignments")
+                            .update({
+                                vendor_id: vendorId,
+                                assignment_status_id: statusId,
+                                status_key: resolvedAssignmentKey,
+                                updated_at: now,
+                            })
+                            .eq("id", (existing as { id: string }).id);
                         if (uErr) throw new Error(`create_assignment update: ${uErr.message}`);
                         logs.push(`create_assignment: updated assignment for schedule ${scheduleId}`);
                     } else {
@@ -1883,6 +2168,7 @@ export async function executeWorkflowRun(
                             schedule_id: scheduleId,
                             org_id: orgId,
                             assignment_status_id: statusId,
+                            status_key: resolvedAssignmentKey,
                             updated_at: now,
                         });
                         if (iErr) throw new Error(`create_assignment insert: ${iErr.message}`);
@@ -1910,8 +2196,9 @@ export async function executeWorkflowRun(
                         break;
                     }
                     const now = new Date().toISOString();
-                    const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id").eq("key", "offered").maybeSingle();
+                    const { data: offeredStatus } = await supabase.from("assignment_statuses").select("id, key").eq("key", "offered").maybeSingle();
                     const offeredStatusId = (offeredStatus as { id?: string } | null)?.id ?? null;
+                    const offeredKey = (offeredStatus as { key?: string } | null)?.key ?? "offered";
                     if (!offeredStatusId) {
                         logs.push(`apply_job_vendor_to_upcoming: assignment status 'offered' not found; skipping`);
                         actionSkipped = true;
@@ -1949,6 +2236,7 @@ export async function executeWorkflowRun(
                                 vendor_id: vendorId,
                                 org_id: orgId,
                                 assignment_status_id: offeredStatusId,
+                                status_key: offeredKey,
                                 updated_at: now,
                             });
                             if (!iErr) created++;

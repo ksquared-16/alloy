@@ -48,6 +48,11 @@ export function validateSelectLikeConfig(
     }
 
     const obj = c as Record<string, unknown>;
+    const optionSetKey = typeof obj.option_set_key === "string" ? obj.option_set_key.trim() : "";
+    if (optionSetKey) {
+        return { ok: true };
+    }
+
     const catalogKey = typeof obj.catalog_key === "string" ? obj.catalog_key.trim() : "";
     if (catalogKey) {
         if (!isCatalogKey(catalogKey)) {
@@ -63,7 +68,7 @@ export function validateSelectLikeConfig(
     if (!Array.isArray(raw) || raw.length === 0) {
         return {
             ok: false,
-            error: "select/multiselect requires config.options (non-empty array of { value, label }) or config.catalog_key",
+            error: "select/multiselect requires config.options, config.option_set_key, or config.catalog_key",
         };
     }
     for (const row of raw) {

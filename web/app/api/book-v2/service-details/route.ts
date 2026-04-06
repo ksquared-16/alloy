@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
-import { parseRoomCount, splitBookV2LocationAccess } from "@/lib/book-v2/bookingCanonicalMaps";
-import { resolveAccessMethodIdByUiKey, resolveHomeTypeIdByLabel } from "@/lib/book-v2/resolveBookV2CatalogIds";
 import {
-  getFieldDefinitionMeta,
-  serializeSquareFootageForFieldValue,
-  upsertTypedFieldValue,
-} from "@/lib/bookV2/fieldValueUpsert";
+  coalesceBookV2BedBathRaw,
+  homeTypeInputToStableKey,
+  parseBathroomsForCjd,
+  parseBedsFromBody,
+  parseRoomCount,
+  splitBookV2LocationAccess,
+  uiAccessMethodToStableKey,
+} from "@/lib/book-v2/bookingCanonicalMaps";
 import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
 import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
+import {
+  loadSqftTiersForVertical,
+  normalizeSqftKeyInput,
+} from "@/lib/book-v2/loadCleaningPricingCatalog";
 
 export type ServiceDetailsBody = {
   opportunity_id: string;
@@ -17,7 +23,11 @@ export type ServiceDetailsBody = {
   state?: string | null;
   postal_code?: string | null;
   home_type?: string | null;
+  beds?: string | null;
+  baths?: string | null;
+  /** @deprecated Use beds */
   bedrooms?: string | null;
+  /** @deprecated Use baths */
   bathrooms?: string | null;
   access_method: string;
   access_note?: string | null;
@@ -65,10 +75,10 @@ export async function POST(request: NextRequest) {
     });
 
     const supabase = createServiceRoleClient();
-    const accessMethodId = await resolveAccessMethodIdByUiKey(supabase, accessMethod);
+    const accessMethodKey = uiAccessMethodToStableKey(accessMethod);
     const { data: opp, error: oppErr } = await supabase
       .from("opportunities")
-      .select("id, org_id, location_id, metadata")
+      .select("id, org_id, location_id, metadata, vertical_id")
       .eq("id", opportunityId)
       .maybeSingle();
 
@@ -78,6 +88,7 @@ export async function POST(request: NextRequest) {
 
     const orgId = (opp as { org_id?: string | null }).org_id ?? null;
     const locationId = (opp as { location_id?: string | null }).location_id ?? null;
+    const verticalId = (opp as { vertical_id?: string | null }).vertical_id ?? null;
     if (!locationId) {
       return NextResponse.json({ ok: false, message: "Opportunity has no location" }, { status: 400 });
     }
@@ -92,19 +103,13 @@ export async function POST(request: NextRequest) {
       city,
       state,
       postal_code: postal,
-      access_method_id: accessMethodId,
+      access_method_key: accessMethodKey,
+      access_method_id: null,
       access_notes: locAccessNotes,
       access_code: locAccessCode,
       updated_at: new Date().toISOString(),
     };
     if (hasPets === true || hasPets === false) locUpdate.has_pets = hasPets;
-
-    const { error: locErr } = await supabase.from("locations").update(locUpdate).eq("id", locationId).eq("org_id", orgId);
-
-    if (locErr) {
-      console.error("[BOOK_V2_SERVICE_DETAILS] location update failed", locErr.message);
-      return NextResponse.json({ ok: false, message: "Failed to update location" }, { status: 500 });
-    }
 
     const cfgBag = (body.configurable_field_values && typeof body.configurable_field_values === "object"
       ? body.configurable_field_values
@@ -113,17 +118,9 @@ export async function POST(request: NextRequest) {
     if (body.home_type != null && String(body.home_type).trim()) mergedByKey.home_type = body.home_type;
     if (body.bedrooms != null && String(body.bedrooms).trim()) mergedByKey.bedrooms = body.bedrooms;
     if (body.bathrooms != null && String(body.bathrooms).trim()) mergedByKey.bathrooms = body.bathrooms;
+    if (body.beds != null && String(body.beds).trim()) mergedByKey.beds = body.beds;
+    if (body.baths != null && String(body.baths).trim()) mergedByKey.baths = body.baths;
     if (hasPets === true || hasPets === false) mergedByKey.pets = hasPets ? "true" : "false";
-
-    const publicDefs = await loadPublicBookingFieldDefRows(supabase, orgId, "location");
-    await upsertConfigurableFieldValuesForEntity(
-      supabase,
-      orgId,
-      "location",
-      locationId,
-      publicDefs,
-      mergedByKey
-    );
 
     const homeTypeLabel =
       body.home_type != null && String(body.home_type).trim()
@@ -131,44 +128,46 @@ export async function POST(request: NextRequest) {
         : typeof mergedByKey.home_type === "string"
           ? mergedByKey.home_type.trim() || null
           : null;
-    const bedRaw =
-      body.bedrooms != null && String(body.bedrooms).trim()
-        ? body.bedrooms
-        : mergedByKey.bedrooms;
-    const bathRaw =
-      body.bathrooms != null && String(body.bathrooms).trim()
-        ? body.bathrooms
-        : mergedByKey.bathrooms;
-    const homeTypeId = await resolveHomeTypeIdByLabel(supabase, homeTypeLabel);
-    const bedroomsNum = parseRoomCount(bedRaw != null ? String(bedRaw) : undefined);
-    const bathroomsNum = parseRoomCount(bathRaw != null ? String(bathRaw) : undefined);
+    const bedRaw = coalesceBookV2BedBathRaw(body.beds ?? body.bedrooms, mergedByKey, "bedrooms", "beds");
+    const bathRaw = coalesceBookV2BedBathRaw(body.baths ?? body.bathrooms, mergedByKey, "bathrooms", "baths");
+    const homeTypeKey = homeTypeInputToStableKey(homeTypeLabel);
+    const bedsNum = parseBedsFromBody(bedRaw);
+    const bathParsed = parseBathroomsForCjd(bathRaw);
+    const bathsNum = bathParsed.baths;
+
+    if (homeTypeKey) locUpdate.home_type_key = homeTypeKey;
+    if (bedsNum != null) locUpdate.beds = bedsNum;
+    if (bathsNum != null) locUpdate.baths = bathsNum;
 
     const meta = ((opp as { metadata?: Record<string, unknown> }).metadata ?? {}) as Record<string, unknown>;
-    delete meta.service_details_preview;
-
     const quoteInput = (meta.quote_input as Record<string, unknown> | undefined) ?? {};
-    const sqftFromQuote = quoteInput.square_footage;
-    if (sqftFromQuote != null && String(sqftFromQuote).trim() !== "") {
-      const sqDef = await getFieldDefinitionMeta(supabase, orgId, "location", "square_footage");
-      if (sqDef) {
-        await upsertTypedFieldValue(
-          supabase,
-          orgId,
-          "location",
-          locationId,
-          sqDef,
-          serializeSquareFootageForFieldValue(sqftFromQuote)
-        );
-      }
+    const sqftRaw = quoteInput.square_footage;
+    if (verticalId && sqftRaw != null && String(sqftRaw).trim() !== "") {
+      const tiers = await loadSqftTiersForVertical(supabase, verticalId);
+      locUpdate.square_footage_tier_key = normalizeSqftKeyInput(sqftRaw as string | number, tiers);
     }
 
+    const { error: locErr } = await supabase.from("locations").update(locUpdate).eq("id", locationId).eq("org_id", orgId);
+
+    if (locErr) {
+      console.error("[BOOK_V2_SERVICE_DETAILS] location update failed", locErr.message);
+      return NextResponse.json({ ok: false, message: "Failed to update location" }, { status: 500 });
+    }
+
+    const publicDefs = await loadPublicBookingFieldDefRows(supabase, orgId, "location");
+    await upsertConfigurableFieldValuesForEntity(supabase, orgId, "location", locationId, publicDefs, mergedByKey);
+
+    delete meta.service_details_preview;
+
     const book_v2_service_property = {
-      home_type_id: homeTypeId,
+      home_type_key: homeTypeKey,
       home_type_label: homeTypeLabel,
-      bedrooms: bedroomsNum,
-      bathrooms: bathroomsNum,
+      beds: bedsNum ?? parseRoomCount(bedRaw != null ? String(bedRaw) : undefined),
+      baths: bathsNum,
+      bathrooms_booking_key: bathParsed.bookingKey,
       has_pets: hasPets,
       access_method: accessMethod,
+      access_method_key: accessMethodKey,
       access_note: body.access_note ?? null,
       address_line1: address,
       city,

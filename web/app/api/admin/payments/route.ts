@@ -9,6 +9,7 @@ import {
     getPaymentIdsForJob,
     type PaymentAllocationState,
 } from "@/lib/admin/jobPaymentBalances";
+import { paymentAppStatusFromStatusKey } from "@/lib/admin/paymentStatusSync";
 
 export type PaymentListItem = {
     id: string;
@@ -197,11 +198,13 @@ export async function GET(request: NextRequest) {
 
     let payments: PaymentListItem[] = list.map((r) => {
         const id = (r as { id: string }).id;
-        const statusCanon =
-            (r as { status?: string | null }).status != null && String((r as { status?: string | null }).status).trim() !== ""
-                ? String((r as { status: string }).status).trim().toLowerCase()
-                : "pending";
         const statusKeyVal = (r as { status_key?: string | null }).status_key ?? null;
+        const statusCanon =
+            statusKeyVal != null && String(statusKeyVal).trim() !== ""
+                ? paymentAppStatusFromStatusKey(String(statusKeyVal).trim())
+                : (r as { status?: string | null }).status != null && String((r as { status?: string | null }).status).trim() !== ""
+                  ? String((r as { status: string }).status).trim().toLowerCase()
+                  : "pending";
         const canonicalLabel = CANONICAL_STATUS_LABEL[statusCanon] ?? statusCanon;
         const legacyLabel =
             statusKeyVal && paymentStatusLabelByOrg.size

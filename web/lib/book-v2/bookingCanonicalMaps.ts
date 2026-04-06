@@ -1,22 +1,41 @@
 /**
- * Maps book-v2 UI values to reference table keys (access_methods, home_types, sqft_bands).
+ * Maps book-v2 UI values to stable option_set item keys (access_method, home_type).
  */
 
-/** ServiceDetailsForm access_method → access_methods.key */
-export const BOOK_V2_ACCESS_METHOD_TO_DB_KEY: Record<string, string> = {
-    home: "home",
-    code: "code",
-    key: "hidden_key",
+/** ServiceDetailsForm UI access_method → option_set access_method item_key */
+export const BOOK_V2_ACCESS_METHOD_UI_TO_STABLE: Record<string, string> = {
+    home: "on_file",
+    code: "door_code",
+    key: "lockbox",
     building: "front_desk",
 };
 
-/** ServiceDetails home type option label → home_types.key */
+/** @deprecated Use BOOK_V2_ACCESS_METHOD_UI_TO_STABLE + uiAccessMethodToStableKey */
+export const BOOK_V2_ACCESS_METHOD_TO_DB_KEY: Record<string, string> = {
+    home: "on_file",
+    code: "door_code",
+    key: "lockbox",
+    building: "front_desk",
+};
+
+export function uiAccessMethodToStableKey(ui: string | null | undefined): string {
+    const u = String(ui ?? "home").trim() || "home";
+    return BOOK_V2_ACCESS_METHOD_UI_TO_STABLE[u] ?? "on_file";
+}
+
+const ALLOWED_HOME_TYPE_KEYS = new Set(["house", "condo", "apartment", "townhome"]);
+
+/** ServiceDetails / quote home type label or key → option_set home_type item_key */
 export const BOOK_V2_HOME_TYPE_LABEL_TO_KEY: Record<string, string> = {
-    "single-family home": "single_family",
-    "apartment / condo": "apartment_condo",
+    "single-family home": "house",
+    "single family home": "house",
+    house: "house",
+    condo: "condo",
+    "apartment / condo": "apartment",
+    apartment: "apartment",
     townhome: "townhome",
-    duplex: "other",
-    other: "other",
+    duplex: "house",
+    other: "apartment",
 };
 
 export function normalizeHomeTypeLabel(label: string | null | undefined): string {
@@ -26,9 +45,47 @@ export function normalizeHomeTypeLabel(label: string | null | undefined): string
 }
 
 export function homeTypeLabelToDbKey(label: string | null | undefined): string | null {
-    const k = normalizeHomeTypeLabel(label);
+    return homeTypeInputToStableKey(label);
+}
+
+/** Normalize free-text or UI home type to stable option key (house, condo, apartment, townhome). */
+export function homeTypeInputToStableKey(raw: unknown): string | null {
+    const k = normalizeHomeTypeLabel(raw == null ? undefined : typeof raw === "string" ? raw : String(raw));
     if (!k) return null;
-    return BOOK_V2_HOME_TYPE_LABEL_TO_KEY[k] ?? null;
+    if (ALLOWED_HOME_TYPE_KEYS.has(k)) return k;
+    const mapped = BOOK_V2_HOME_TYPE_LABEL_TO_KEY[k];
+    if (mapped && ALLOWED_HOME_TYPE_KEYS.has(mapped)) return mapped;
+    return null;
+}
+
+export function parseBedsFromBody(raw: unknown): number | null {
+    if (raw == null || raw === "") return null;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+        return Math.min(99, Math.max(0, raw));
+    }
+    return parseRoomCount(String(raw));
+}
+
+/**
+ * Book-v2 sends bedrooms/bathrooms on the top-level body for legacy UI, but public defs after the
+ * beds/baths cutover store values under configurable_field_values.beds / .baths (field_key on location).
+ * Merge both into one raw value for parseBedsFromBody / parseBathroomsForCjd.
+ */
+export function coalesceBookV2BedBathRaw(
+    bodyTop: unknown,
+    mergedCfg: Record<string, unknown>,
+    legacyKey: "bedrooms" | "bathrooms",
+    nativeKey: "beds" | "baths"
+): unknown {
+    if (typeof bodyTop === "number" && Number.isFinite(bodyTop)) return bodyTop;
+    if (bodyTop != null && String(bodyTop).trim() !== "") return bodyTop;
+    const leg = mergedCfg[legacyKey];
+    if (typeof leg === "number" && Number.isFinite(leg)) return leg;
+    if (leg != null && String(leg).trim() !== "") return leg;
+    const nat = mergedCfg[nativeKey];
+    if (typeof nat === "number" && Number.isFinite(nat)) return nat;
+    if (nat != null && String(nat).trim() !== "") return nat;
+    return undefined;
 }
 
 /** Parse bedrooms/bathrooms select values to integers (5+ → 5). */
@@ -59,7 +116,7 @@ export function splitBookV2LocationAccess(params: {
     };
 }
 
-/** Map quote UI / quote_input.square_footage string to sqft_bands.key */
+/** @deprecated Legacy band keys; prefer tier_key / normalizeSqftKeyInput. */
 export function quoteSquareFootageToBandKey(raw: string | null | undefined): string | null {
     const s = String(raw ?? "")
         .trim()
@@ -107,10 +164,11 @@ export function parseRoomCount(raw: string | null | undefined): number | null {
  * `cleaning_job_details.bathrooms` is an integer — we round halves to the nearest whole for that column and keep the
  * exact booking key on the row metadata for display/reporting.
  */
-export function parseBathroomsForCjd(raw: unknown): { cjdInteger: number | null; bookingKey: string | null } {
-    if (raw == null) return { cjdInteger: null, bookingKey: null };
+/** Half-baths supported on cleaning_job_details.baths / locations.baths */
+export function parseBathroomsForCjd(raw: unknown): { baths: number | null; bookingKey: string | null } {
+    if (raw == null) return { baths: null, bookingKey: null };
     const s = String(raw).trim();
-    if (!s) return { cjdInteger: null, bookingKey: null };
+    if (!s) return { baths: null, bookingKey: null };
     const key = s.toLowerCase().replace(/\s+/g, "_");
     const map: Record<string, number> = {
         "1": 1,
@@ -123,7 +181,12 @@ export function parseBathroomsForCjd(raw: unknown): { cjdInteger: number | null;
     };
     const exact = map[key];
     if (exact != null) {
-        return { cjdInteger: Math.round(exact), bookingKey: key };
+        return { baths: exact, bookingKey: key };
     }
-    return { cjdInteger: parseRoomCount(s), bookingKey: key };
+    const n = parseFloat(s.replace(/,/g, ""));
+    if (Number.isFinite(n)) {
+        return { baths: n, bookingKey: key };
+    }
+    const pr = parseRoomCount(s);
+    return { baths: pr, bookingKey: key };
 }

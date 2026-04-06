@@ -109,7 +109,8 @@ export async function getQuotePricingFromSupabase(
   serviceType: ServiceType,
   squareFootage: SquareFootageOption,
   frequency: CleaningFrequencyOption,
-  addOns: AddOnId[]
+  addOns: AddOnId[],
+  options?: { /** When set, sent to RPC as `p_frequency_key` (empty string = one-time). */ rpcFrequencyKey?: string | null }
 ): Promise<SupabaseQuoteResult> {
   const supabase = createClient();
   const isStaging = process.env.NEXT_PUBLIC_APP_ENV === "staging";
@@ -120,7 +121,10 @@ export async function getQuotePricingFromSupabase(
   const addonKeys = mapAddOnsToKeys(addOns) ?? [];
 
   // Ensure p_frequency_key is always a string ("" for one-time, never undefined/null)
-  const frequencyKeyParam = frequencyKey ?? "";
+  const useRpcOverride = options != null && Object.prototype.hasOwnProperty.call(options, "rpcFrequencyKey");
+  const frequencyKeyParam = useRpcOverride
+    ? String((options as { rpcFrequencyKey?: string | null }).rpcFrequencyKey ?? "").trim()
+    : (frequencyKey ?? "");
 
   const rpcParams = {
     p_vertical_slug: "cleaning",

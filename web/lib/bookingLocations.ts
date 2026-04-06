@@ -12,7 +12,9 @@ export type EnsureCustomerAddressLocationParams = {
   city: string | null;
   state: string | null;
   postal_code: string | null;
-  /** FK to access_methods.id */
+  /** Stable key; matches option_set access_method */
+  access_method_key?: string | null;
+  /** @deprecated Prefer access_method_key */
   access_method_id?: string | null;
   access_code?: string | null;
   has_pets?: boolean | null;
@@ -27,7 +29,19 @@ export async function ensureCustomerAddressLocation(
   supabase: SupabaseClient,
   params: EnsureCustomerAddressLocationParams
 ): Promise<string | null> {
-  const { org_id, customer_id, address_line1, city, state, postal_code, access_method_id, access_code, has_pets, access_notes } = params;
+  const {
+    org_id,
+    customer_id,
+    address_line1,
+    city,
+    state,
+    postal_code,
+    access_method_key,
+    access_method_id,
+    access_code,
+    has_pets,
+    access_notes,
+  } = params;
   const a1 = (address_line1 ?? "").trim();
   const pc = (postal_code ?? "").trim();
   const cityNorm = (city ?? "").trim();
@@ -59,7 +73,12 @@ export async function ensureCustomerAddressLocation(
   if (match) {
     const existingId = (match as { id: string }).id;
     const patch: Record<string, unknown> = {};
-    if (access_method_id !== undefined) patch.access_method_id = access_method_id;
+    if (access_method_key !== undefined) {
+      patch.access_method_key = access_method_key;
+      patch.access_method_id = null;
+    } else if (access_method_id !== undefined) {
+      patch.access_method_id = access_method_id;
+    }
     if (access_code !== undefined) {
       patch.access_code = access_code != null && String(access_code).trim() !== "" ? String(access_code).trim() : null;
     }
@@ -96,7 +115,12 @@ export async function ensureCustomerAddressLocation(
       postal_code: pc || null,
     };
     if (a1) claimPatch.label = a1;
-    if (access_method_id !== undefined) claimPatch.access_method_id = access_method_id;
+    if (access_method_key !== undefined) {
+      claimPatch.access_method_key = access_method_key;
+      claimPatch.access_method_id = null;
+    } else if (access_method_id !== undefined) {
+      claimPatch.access_method_id = access_method_id;
+    }
     if (access_code !== undefined) {
       claimPatch.access_code = access_code != null && String(access_code).trim() !== "" ? String(access_code).trim() : null;
     }
@@ -133,7 +157,12 @@ export async function ensureCustomerAddressLocation(
     postal_code: pc || null,
     metadata: {},
   };
-  if (access_method_id != null) insert.access_method_id = access_method_id;
+  if (access_method_key != null) {
+    insert.access_method_key = access_method_key;
+    insert.access_method_id = null;
+  } else if (access_method_id != null) {
+    insert.access_method_id = access_method_id;
+  }
   if (access_code != null && String(access_code).trim() !== "") insert.access_code = String(access_code).trim();
   if (has_pets === true || has_pets === false) insert.has_pets = has_pets;
   if (access_notes != null && String(access_notes).trim() !== "") insert.access_notes = String(access_notes).trim();
@@ -178,7 +207,18 @@ export async function ensureCanonicalBookingLocation(
       .maybeSingle();
     existingId = (opp as { location_id?: string | null } | null)?.location_id ?? null;
   }
-  const { address_line1, city, state, postal_code, customer_id, access_method_id, access_code, has_pets, access_notes } = locParams;
+  const {
+    address_line1,
+    city,
+    state,
+    postal_code,
+    customer_id,
+    access_method_key,
+    access_method_id,
+    access_code,
+    has_pets,
+    access_notes,
+  } = locParams;
   const a1 = (address_line1 ?? "").trim();
   const pc = (postal_code ?? "").trim();
   const cityNorm = (city ?? "").trim();
@@ -192,7 +232,12 @@ export async function ensureCanonicalBookingLocation(
       postal_code: pc || null,
     };
     if (a1) patch.label = a1;
-    if (access_method_id !== undefined) patch.access_method_id = access_method_id;
+    if (access_method_key !== undefined) {
+      patch.access_method_key = access_method_key;
+      patch.access_method_id = null;
+    } else if (access_method_id !== undefined) {
+      patch.access_method_id = access_method_id;
+    }
     if (access_code !== undefined) patch.access_code = access_code != null && String(access_code).trim() !== "" ? String(access_code).trim() : null;
     if (has_pets === true || has_pets === false) patch.has_pets = has_pets;
     if (access_notes !== undefined) patch.access_notes = access_notes != null && String(access_notes).trim() !== "" ? String(access_notes).trim() : null;

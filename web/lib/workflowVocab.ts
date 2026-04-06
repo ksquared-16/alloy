@@ -1,13 +1,14 @@
 /**
  * Single source of truth for workflow editor vocabulary (V1).
- * Canonical entity types: customer, contact, job, schedule, opportunity, vendor.
+ * Canonical entity types: customer, contact, job, schedule, opportunity, vendor, location.
  */
 
-export const WORKFLOW_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor"] as const;
+export const WORKFLOW_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor", "location"] as const;
 export type WorkflowEntityType = (typeof WORKFLOW_ENTITY_TYPES)[number];
 
 export const WORKFLOW_EVENT_TYPES = [
     "booking_confirmed",
+    "specialty_quote_started",
     "quote_started",
     "job_action",
     "job_default_vendor_applied",
@@ -50,11 +51,23 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "opportunity.job_date", label: "opportunity.job_date" },
         { value: "opportunity.job_time_window", label: "opportunity.job_time_window" },
         { value: "opportunity.pipeline_stage_id", label: "opportunity.pipeline_stage_id" },
+        { value: "location.beds", label: "location.beds" },
+        { value: "location.baths", label: "location.baths" },
+        { value: "location.home_type_key", label: "location.home_type_key" },
+        { value: "location.access_method_key", label: "location.access_method_key" },
+        { value: "location.square_footage_tier_key", label: "location.square_footage_tier_key" },
+        { value: "location.square_footage_tier_label", label: "location.square_footage_tier_label (human-readable tier)" },
+        { value: "location.postal_code", label: "location.postal_code" },
         { value: "formatted_start_at", label: "formatted_start_at (booking_confirmed SMS)" },
         { value: "booking_price", label: "booking_price (USD string)" },
-        { value: "booking_bedrooms", label: "booking_bedrooms" },
-        { value: "booking_bathrooms", label: "booking_bathrooms" },
-        { value: "booking_square_footage", label: "booking_square_footage" },
+        { value: "booking_vendor_payout", label: "booking_vendor_payout (vendor-offer SMS; USD string)" },
+        {
+            value: "booking_pay_and_vendor_payout",
+            label: "booking_pay_and_vendor_payout (Pay: price + payout; vendor-offer SMS)",
+        },
+        { value: "booking_bedrooms", label: "booking_bedrooms (legacy → resolves location.beds)" },
+        { value: "booking_bathrooms", label: "booking_bathrooms (legacy → resolves location.baths)" },
+        { value: "booking_square_footage", label: "booking_square_footage (legacy → tier key / location.square_footage_tier_key)" },
     ],
     opportunity: [
         { value: "opportunity.id", label: "opportunity.id" },
@@ -99,6 +112,17 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "vendor.vendor_status_id", label: "vendor.vendor_status_id" },
         { value: "vendor.primary_contact_id", label: "vendor.primary_contact_id" },
     ],
+    location: [
+        { value: "location.id", label: "location.id" },
+        { value: "location.postal_code", label: "location.postal_code" },
+        { value: "location.beds", label: "location.beds" },
+        { value: "location.baths", label: "location.baths" },
+        { value: "location.home_type_key", label: "location.home_type_key" },
+        { value: "location.access_method_key", label: "location.access_method_key" },
+        { value: "location.square_footage_tier_key", label: "location.square_footage_tier_key" },
+        { value: "location.city", label: "location.city" },
+        { value: "location.state", label: "location.state" },
+    ],
 };
 
 /** Condition operators (DB and UI). eq/equals and neq/not_equals both supported at runtime. */
@@ -112,4 +136,5 @@ export const WORKFLOW_ENTITY_ID_QUICK_FILL = [
     { value: "opportunity.id", label: "opportunity.id" },
     { value: "schedule.id", label: "schedule.id" },
     { value: "vendor.id", label: "vendor.id" },
+    { value: "location.id", label: "location.id" },
 ] as const;

@@ -8,14 +8,8 @@ export type CleaningFrequencyOption =
     | "Bi-Weekly (20% Off)"
     | "Monthly (10% Off)";
 
-export type SquareFootageOption =
-    | "Under 1500 sq ft"
-    | "1501–2,000 sq ft"
-    | "2,001-2,600 sq ft"
-    | "2,601-3,200 sq ft"
-    | "3,201-4,000 sq ft"
-    | "4,001-5,500 sq ft"
-    | "Over 5,500 sq ft";
+/** Stable tier_key from option_sets / pricing_square_footage_tiers (e.g. 0_1499). */
+export type SquareFootageOption = string;
 
 export type AddOnId = "Fridge" | "Oven" | "Cabinets" | "Pet Hair";
 
@@ -62,14 +56,14 @@ export interface CleaningQuoteResult {
 // Simple v1 pricing tables – safe to tweak later.
 // TODO(Phase 2/3): Keep this in sync with backend / GHL pricing.
 
-const BASE_FIRST_CLEAN_BY_SQFT: Record<SquareFootageOption, number> = {
-    "Under 1500 sq ft": 180,
-    "1501–2,000 sq ft": 210,
-    "2,001-2,600 sq ft": 240,
-    "2,601-3,200 sq ft": 280,
-    "3,201-4,000 sq ft": 320,
-    "4,001-5,500 sq ft": 380,
-    "Over 5,500 sq ft": 450,
+const BASE_FIRST_CLEAN_BY_SQFT: Record<string, number> = {
+    "0_1499": 180,
+    "1500_1999": 210,
+    "2000_2599": 240,
+    "2600_3199": 280,
+    "3200_3999": 320,
+    "4000_5499": 380,
+    "5500_plus": 450,
 };
 
 const FREQUENCY_CONFIG: Record<
@@ -95,45 +89,42 @@ const FREQUENCY_CONFIG: Record<
 };
 
 // Fixed recurring prices by frequency and square footage (no formula calculation)
-const RECURRING_PRICES: Record<
-    CleaningFrequencyOption,
-    Record<SquareFootageOption, number | null>
-> = {
+const RECURRING_PRICES: Record<CleaningFrequencyOption, Record<string, number | null>> = {
     "One-time": {
-        "Under 1500 sq ft": null,
-        "1501–2,000 sq ft": null,
-        "2,001-2,600 sq ft": null,
-        "2,601-3,200 sq ft": null,
-        "3,201-4,000 sq ft": null,
-        "4,001-5,500 sq ft": null,
-        "Over 5,500 sq ft": null,
+        "0_1499": null,
+        "1500_1999": null,
+        "2000_2599": null,
+        "2600_3199": null,
+        "3200_3999": null,
+        "4000_5499": null,
+        "5500_plus": null,
     },
     "Weekly (30% Off)": {
-        "Under 1500 sq ft": 120,
-        "1501–2,000 sq ft": 130,
-        "2,001-2,600 sq ft": 145,
-        "2,601-3,200 sq ft": 160,
-        "3,201-4,000 sq ft": 170,
-        "4,001-5,500 sq ft": 185,
-        "Over 5,500 sq ft": 210,
+        "0_1499": 120,
+        "1500_1999": 130,
+        "2000_2599": 145,
+        "2600_3199": 160,
+        "3200_3999": 170,
+        "4000_5499": 185,
+        "5500_plus": 210,
     },
     "Bi-Weekly (20% Off)": {
-        "Under 1500 sq ft": 140,
-        "1501–2,000 sq ft": 150,
-        "2,001-2,600 sq ft": 170,
-        "2,601-3,200 sq ft": 185,
-        "3,201-4,000 sq ft": 200,
-        "4,001-5,500 sq ft": 215,
-        "Over 5,500 sq ft": 245,
+        "0_1499": 140,
+        "1500_1999": 150,
+        "2000_2599": 170,
+        "2600_3199": 185,
+        "3200_3999": 200,
+        "4000_5499": 215,
+        "5500_plus": 245,
     },
     "Monthly (10% Off)": {
-        "Under 1500 sq ft": 160,
-        "1501–2,000 sq ft": 170,
-        "2,001-2,600 sq ft": 190,
-        "2,601-3,200 sq ft": 210,
-        "3,201-4,000 sq ft": 225,
-        "4,001-5,500 sq ft": 245,
-        "Over 5,500 sq ft": 280,
+        "0_1499": 160,
+        "1500_1999": 170,
+        "2000_2599": 190,
+        "2600_3199": 210,
+        "3200_3999": 225,
+        "4000_5499": 245,
+        "5500_plus": 280,
     },
 };
 

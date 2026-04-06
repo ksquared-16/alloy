@@ -32,7 +32,11 @@ function formatBedBathToken(raw: string): string {
 function formatConfigurableValue(key: string, value: string | boolean | string[]): string {
     if (Array.isArray(value)) return value.join(", ");
     if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (typeof value === "string" && (key === "bedrooms" || key === "bathrooms")) return formatBedBathToken(value);
+    if (
+        typeof value === "string" &&
+        (key === "beds" || key === "baths" || key === "bedrooms" || key === "bathrooms")
+    )
+        return formatBedBathToken(value);
     return String(value);
 }
 
@@ -40,10 +44,10 @@ export default function ServiceDetailsSummary({
     details,
     onEdit,
 }: ServiceDetailsSummaryProps) {
+    const bedSummary = details.beds?.trim() || details.bedrooms?.trim();
+    const bathSummary = details.baths?.trim() || details.bathrooms?.trim();
     const legacyProperty =
-        Boolean(details.home_type?.trim()) ||
-        Boolean(details.bedrooms?.trim()) ||
-        Boolean(details.bathrooms?.trim());
+        Boolean(details.home_type?.trim()) || Boolean(bedSummary) || Boolean(bathSummary);
 
     const configurableEntries = Object.entries(details.configurable_values ?? {}).filter(([key, v]) => {
         if (SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS.has(key)) return false;
@@ -73,27 +77,27 @@ export default function ServiceDetailsSummary({
                                     {details.home_type}
                                 </p>
                             )}
-                            {(details.bedrooms || details.bathrooms) && (
+                            {(bedSummary || bathSummary) && (
                                 <p className="text-sm text-alloy-midnight/70">
-                                    {details.bedrooms ? (
+                                    {bedSummary ? (
                                         <span className="tabular-nums">
                                             <span className="font-medium text-alloy-midnight">
-                                                {formatBedBathToken(details.bedrooms)}
+                                                {formatBedBathToken(bedSummary)}
                                             </span>{" "}
-                                            BR
+                                            bed{bedSummary === "1" ? "" : "s"}
                                         </span>
                                     ) : null}
-                                    {details.bedrooms && details.bathrooms ? (
+                                    {bedSummary && bathSummary ? (
                                         <span className="text-alloy-midnight/40 mx-2" aria-hidden>
                                             ·
                                         </span>
                                     ) : null}
-                                    {details.bathrooms ? (
+                                    {bathSummary ? (
                                         <span className="tabular-nums">
                                             <span className="font-medium text-alloy-midnight">
-                                                {formatBedBathToken(details.bathrooms)}
+                                                {formatBedBathToken(bathSummary)}
                                             </span>{" "}
-                                            BA
+                                            bath{bathSummary === "1" ? "" : "s"}
                                         </span>
                                     ) : null}
                                 </p>

@@ -24,6 +24,8 @@ const ENTITY_TABLE: Record<string, string> = {
     opportunities: "opportunities",
     schedule: "schedules",
     schedules: "schedules",
+    location: "locations",
+    locations: "locations",
 };
 
 /** Map PG data_type to condition operators for the UI. */
@@ -39,6 +41,20 @@ function operatorsForDataType(dataType: string): string[] {
     if (t === "array" || t.includes("[]")) return ["contains", "overlaps", "exists", "is_null", "not_null"];
     return ["eq", "neq", "exists", "is_null", "not_null"];
 }
+
+/** When RPC returns nothing, expose normalized service-location columns for conditions. */
+const LOCATION_FIELD_CATALOG_FALLBACK: FieldCatalogEntry[] = [
+    { key: "id", label: "id", data_type: "uuid", operators: operatorsForDataType("uuid"), source: "table" },
+    { key: "postal_code", label: "postal_code", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+    { key: "beds", label: "beds", data_type: "numeric", operators: operatorsForDataType("numeric"), source: "table" },
+    { key: "baths", label: "baths", data_type: "numeric", operators: operatorsForDataType("numeric"), source: "table" },
+    { key: "home_type_key", label: "home_type_key", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+    { key: "access_method_key", label: "access_method_key", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+    { key: "square_footage_tier_key", label: "square_footage_tier_key", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+    { key: "city", label: "city", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+    { key: "state", label: "state", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+    { key: "address1", label: "address1", data_type: "text", operators: operatorsForDataType("text"), source: "table" },
+];
 
 /** Relationship registry: derived/join fields for workflow conditions. vendor_statuses: id, key, label (no name); verticals: slug, name. */
 const VENDOR_RELATIONSHIP_FIELDS: FieldCatalogEntry[] = [
@@ -69,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     if (!tableName) {
         return NextResponse.json(
-            { error: "Missing or invalid entity_type. Use one of: vendor, job, contact, customer, opportunity, schedule" },
+            { error: "Missing or invalid entity_type. Use one of: vendor, job, contact, customer, opportunity, schedule, location" },
             { status: 400 }
         );
     }
@@ -98,6 +114,16 @@ export async function GET(request: NextRequest) {
     // Append relationship/join fields for vendor
     if (entityType === "vendor" || entityType === "vendors") {
         fields.push(...VENDOR_RELATIONSHIP_FIELDS);
+    }
+
+    if (entityType === "location" || entityType === "locations") {
+        const byKey = new Set(fields.map((f) => f.key));
+        for (const f of LOCATION_FIELD_CATALOG_FALLBACK) {
+            if (!byKey.has(f.key)) {
+                fields.push(f);
+                byKey.add(f.key);
+            }
+        }
     }
 
     return NextResponse.json({ fields });
