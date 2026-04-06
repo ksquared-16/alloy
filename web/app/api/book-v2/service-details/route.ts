@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
 
     const state = body.state != null ? String(body.state).trim() || null : null;
     const postal = body.postal_code != null ? String(body.postal_code).trim() || null : null;
+    // Native location columns are SoT for booking; access_method_id cleared; field_values exclude NATIVE_LOCATION_PUBLIC_FIELD_KEYS.
     const locUpdate: Record<string, unknown> = {
       address1: address,
       city,

@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type PublicBookingDefRow = { id: string; field_key: string; field_type: string };
 
-/** Location keys stored on native columns / option keys — not field_values */
+/**
+ * Location keys stored on native `locations` columns (and/or *_key denorm), not `field_values`.
+ * Public booking upserts field_values only for defs outside this set so the booking path has a
+ * single write/read surface for access, sqft tier, home type, beds/baths.
+ */
 export const NATIVE_LOCATION_PUBLIC_FIELD_KEYS = new Set([
     "beds",
     "baths",

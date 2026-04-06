@@ -104,6 +104,11 @@ describe.skipIf(!smokeEnvConfigured())("job pricing — integration (real Supaba
       const job = await fetchJobPricingColumns(supabase, jobId, orgId);
       expect(job?.total_cents).toBe(25_000);
       expect(job?.subtotal_cents).toBe(25_000);
+      if (typeof job?.contractor_split_bps === "number" && job.contractor_split_bps >= 0 && job.total_cents != null) {
+        const expectedContractor = Math.floor((job.total_cents * job.contractor_split_bps) / 10_000);
+        expect(job.contractor_payout_cents).toBe(expectedContractor);
+        expect(job.alloy_fee_cents).toBe(job.total_cents - expectedContractor);
+      }
     });
   });
 
@@ -280,6 +285,11 @@ describe.skipIf(!smokeEnvConfigured())("job pricing — integration (real Supaba
       expect(job?.discount_total_cents).toBe(999);
       expect(job?.total_cents).toBe(9_000);
       expect(job?.pricing_status).toBe("overridden");
+      if (typeof job?.contractor_split_bps === "number" && job.contractor_split_bps >= 0 && job.total_cents != null) {
+        const expectedContractor = Math.floor((job.total_cents * job.contractor_split_bps) / 10_000);
+        expect(job.contractor_payout_cents).toBe(expectedContractor);
+        expect(job.alloy_fee_cents).toBe(job.total_cents - expectedContractor);
+      }
     });
   });
 

@@ -1116,27 +1116,36 @@ async function createVendorOfferAcceptLinkAndBody(args: {
         (jobRec?.org_id != null ? String(jobRec.org_id).trim() : "");
 
     let bookingVendorPayoutDisplay = "";
-    const netCents = resolveJobNetAmountCentsForVendorPayout(jobRec);
-    if (netCents != null && netCents > 0 && orgIdResolved) {
-        const [{ data: orgS }, { data: vend }] = await Promise.all([
-            args.supabase
-                .from("org_settings")
-                .select("payout_type, payout_value, metadata")
-                .eq("org_id", orgIdResolved)
-                .maybeSingle(),
-            args.supabase
-                .from("vendors")
-                .select("payout_override_type, payout_override_value, metadata, payout_percent")
-                .eq("id", args.vendorId)
-                .maybeSingle(),
-        ]);
-        const { policy } = resolveVendorPayoutPolicy({
-            orgSettings: (orgS ?? null) as OrgSettingsRow | null,
-            vendor: vendorRowToVendorPayoutPolicyInput(vend as Record<string, unknown> | null),
-        });
-        const pct = computePayoutPercent({ policy, completedOccurrences: 0 });
-        const payoutCents = Math.round((netCents * pct) / 100);
-        if (payoutCents > 0) bookingVendorPayoutDisplay = formatMoneyFromCents(payoutCents);
+    const rawPersisted = jobRec != null ? jobRec.contractor_payout_cents : undefined;
+    const persistedContractorPayout =
+        rawPersisted != null && typeof rawPersisted === "number" && Number.isFinite(rawPersisted) && rawPersisted >= 0
+            ? Math.round(rawPersisted)
+            : null;
+    if (persistedContractorPayout != null) {
+        bookingVendorPayoutDisplay = formatMoneyFromCents(persistedContractorPayout);
+    } else {
+        const netCents = resolveJobNetAmountCentsForVendorPayout(jobRec);
+        if (netCents != null && netCents > 0 && orgIdResolved) {
+            const [{ data: orgS }, { data: vend }] = await Promise.all([
+                args.supabase
+                    .from("org_settings")
+                    .select("payout_type, payout_value, metadata")
+                    .eq("org_id", orgIdResolved)
+                    .maybeSingle(),
+                args.supabase
+                    .from("vendors")
+                    .select("payout_override_type, payout_override_value, metadata, payout_percent")
+                    .eq("id", args.vendorId)
+                    .maybeSingle(),
+            ]);
+            const { policy } = resolveVendorPayoutPolicy({
+                orgSettings: (orgS ?? null) as OrgSettingsRow | null,
+                vendor: vendorRowToVendorPayoutPolicyInput(vend as Record<string, unknown> | null),
+            });
+            const pct = computePayoutPercent({ policy, completedOccurrences: 0 });
+            const payoutCents = Math.round((netCents * pct) / 100);
+            if (payoutCents > 0) bookingVendorPayoutDisplay = formatMoneyFromCents(payoutCents);
+        }
     }
 
     const bookingPriceDisplay = String(getByPath(args.payload, "booking_price") ?? "").trim();

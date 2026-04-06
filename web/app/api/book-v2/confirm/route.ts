@@ -1447,6 +1447,8 @@ export async function POST(request: NextRequest) {
         }
         bookV2PerfLog("canonical_location", tCanonicalLoc, booking_attempt_id ?? null);
 
+        // Booking path: persist property/access/sqft on native `locations` columns (*_key + beds/baths).
+        // `access_method_id` is intentionally null; `field_values` only receives defs outside NATIVE_LOCATION_PUBLIC_FIELD_KEYS.
         if (locationId && orgIdForLocation) {
             try {
                 const mergedByKey: Record<string, unknown> = { ...cfgBag };
