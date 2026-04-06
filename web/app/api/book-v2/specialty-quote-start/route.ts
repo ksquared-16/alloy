@@ -462,17 +462,19 @@ export async function POST(request: NextRequest) {
       created_new_opportunity = true;
 
       const { executeWorkflowRun } = await import("@/lib/workflowRun");
+      /** Standard cleaning uses `quote_started`; specialty must not run those workflows (e.g. stage reset). */
+      const specialtyEventType = "specialty_quote_started";
       let wq = supabase
         .from("workflows")
         .select("id")
         .eq("enabled", true)
-        .eq("event_type", "quote_started")
+        .eq("event_type", specialtyEventType)
         .eq("entity_type", "opportunity");
       if (orgIdForWrites) wq = wq.or(`org_id.eq.${orgIdForWrites},org_id.is.null`);
       const { data: quoteWfs } = await wq;
       const { data: oppRow } = await supabase.from("opportunities").select("*").eq("id", opportunityId).single();
       const eventPayload: Record<string, unknown> = {
-        event_type: "quote_started",
+        event_type: specialtyEventType,
         occurred_at: new Date().toISOString(),
         org_id: orgIdForWrites ?? null,
         quote_started_stage_id: quoteStartedStageId,
@@ -484,7 +486,7 @@ export async function POST(request: NextRequest) {
       try {
         eventId = await emitEvent({
           org_id: orgIdForWrites ?? null,
-          event_type: "quote_started",
+          event_type: specialtyEventType,
           entity_type: "opportunity",
           entity_id: opportunityId ?? null,
           action_type: null,

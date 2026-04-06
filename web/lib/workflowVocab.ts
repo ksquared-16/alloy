@@ -8,6 +8,7 @@ export type WorkflowEntityType = (typeof WORKFLOW_ENTITY_TYPES)[number];
 
 export const WORKFLOW_EVENT_TYPES = [
     "booking_confirmed",
+    "specialty_quote_started",
     "quote_started",
     "job_action",
     "job_default_vendor_applied",
