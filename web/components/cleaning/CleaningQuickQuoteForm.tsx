@@ -581,30 +581,37 @@ export default function CleaningQuickQuoteForm({
               ))}
             </select>
             {isCampaignFirstFree ? (
-              <p className="mt-2 text-xs text-alloy-midnight/70 leading-relaxed">
-                <span className="font-medium text-alloy-midnight">Recurring cleaning only.</span> This offer applies to
-                weekly, every-two-weeks, or monthly standard service — not one-time visits. Looking for a{" "}
-                <span className="whitespace-nowrap">one-time</span> clean,{" "}
-                <span className="whitespace-nowrap">move-out</span>, or{" "}
-                <span className="whitespace-nowrap">heavy / deep</span> clean?{" "}
-                {onSwitchToStandardQuote ? (
-                  <button
-                    type="button"
-                    onClick={onSwitchToStandardQuote}
-                    className="text-alloy-juniper font-semibold underline underline-offset-2 hover:text-alloy-pine"
-                  >
-                    Use the regular quote form
-                  </button>
-                ) : (
-                  <a
-                    href="/"
-                    className="text-alloy-juniper font-semibold underline underline-offset-2 hover:text-alloy-pine"
-                  >
-                    Use the regular quote form
-                  </a>
-                )}{" "}
-                instead (same quick quote experience, without this promotion).
-              </p>
+              <div className="mt-2 space-y-2 text-xs text-alloy-midnight/70 leading-relaxed">
+                <p>
+                  <strong className="text-alloy-midnight">Recurring cleaning only.</strong>
+                </p>
+                <p>
+                  This offer applies to weekly, every-two-weeks, or monthly standard service — not one-time visits.
+                </p>
+                <p>
+                  <strong className="text-alloy-midnight">Looking for a one-time clean?</strong>
+                </p>
+                <p>
+                  Looking for a one-time clean, move-out, or heavy / deep clean?{" "}
+                  {onSwitchToStandardQuote ? (
+                    <button
+                      type="button"
+                      onClick={onSwitchToStandardQuote}
+                      className="text-alloy-juniper font-semibold underline underline-offset-2 hover:text-alloy-pine"
+                    >
+                      Use the regular quote form
+                    </button>
+                  ) : (
+                    <a
+                      href="/"
+                      className="text-alloy-juniper font-semibold underline underline-offset-2 hover:text-alloy-pine"
+                    >
+                      Use the regular quote form
+                    </a>
+                  )}{" "}
+                  instead (same quick quote experience, without this promotion).
+                </p>
+              </div>
             ) : (
               <p className="mt-1.5 text-xs text-alloy-midnight/55">
                 Move-out and heavy cleans are priced as one-time jobs; choose those under Cleaning type to add details

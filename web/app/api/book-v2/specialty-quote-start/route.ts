@@ -218,6 +218,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, message: "Server configuration error (org)" }, { status: 500 });
     }
 
+    const { data: needsStage, error: needsStageErr } = await supabase
+      .from("pipeline_stages")
+      .select("id")
+      .eq("org_id", orgIdForWrites)
+      .eq("key", "needs_a_quote")
+      .maybeSingle();
+
+    if (needsStageErr) {
+      throw new Error(`[SPECIALTY_QUOTE_START] needs_a_quote stage query failed: ${needsStageErr.message}`);
+    }
+    if (!needsStage?.id) {
+      throw new Error("[SPECIALTY_QUOTE_START] needs_a_quote stage not found for org");
+    }
+
+    const needsAQuoteStageId = needsStage.id as string;
+    const finalStageId = needsAQuoteStageId;
+
+    console.log("[SPECIALTY_QUOTE_START] stage assignment", {
+      orgId: orgIdForWrites,
+      needsAQuoteStageId,
+    });
+
     const personId = await findOrCreatePersonInOrg(supabase, {
       email: email || null,
       phone: phone || null,
@@ -256,25 +278,6 @@ export async function POST(request: NextRequest) {
       (await resolvePipelineStageIdByOrgKey(supabase, orgIdForWrites, "quote_started")) ??
       pipelineStageEnvFallback("quote_started") ??
       LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID;
-
-    const needsAQuoteResolved = await resolvePipelineStageIdByOrgKey(supabase, orgIdForWrites, "needs_a_quote");
-    const needsAQuoteStageId =
-      needsAQuoteResolved ?? pipelineStageEnvFallback("needs_a_quote") ?? quoteStartedStageId;
-    console.warn(
-      "[SPECIALTY_QUOTE_START] pipeline_stage_resolution",
-      JSON.stringify({
-        org_id: orgIdForWrites,
-        needs_a_quote_from_db: needsAQuoteResolved,
-        needs_a_quote_effective: needsAQuoteStageId,
-        quote_started_effective: quoteStartedStageId,
-        fell_back_to_quote_started: needsAQuoteStageId === quoteStartedStageId && !needsAQuoteResolved,
-      })
-    );
-    if (needsAQuoteStageId === quoteStartedStageId && !needsAQuoteResolved) {
-      console.warn(
-        "[SPECIALTY_QUOTE_START] needs_a_quote not found for org; using quote_started id — set BOOK_V2_NEEDS_A_QUOTE_STAGE_ID or ensure pipeline_stages.key + pipeline/org linkage"
-      );
-    }
 
     const [opportunityFreqDef, personSmsConsentDef, personEmailConsentDef] = await Promise.all([
       getFieldDefinitionMeta(supabase, orgIdForWrites, "opportunity", "cleaning_frequency"),
@@ -405,7 +408,7 @@ export async function POST(request: NextRequest) {
         .from("opportunities")
         .update({
           location_id: locationId,
-          pipeline_stage_id: needsAQuoteStageId,
+          pipeline_stage_id: finalStageId,
           status_key: "needs_a_quote",
           status: "open",
           vertical_id: verticalId,
@@ -434,7 +437,7 @@ export async function POST(request: NextRequest) {
           primary_contact_id: null,
           customer_id: null,
           location_id: locationId,
-          pipeline_stage_id: needsAQuoteStageId,
+          pipeline_stage_id: finalStageId,
           status_key: "needs_a_quote",
           name: opportunityName,
           status: "open",
