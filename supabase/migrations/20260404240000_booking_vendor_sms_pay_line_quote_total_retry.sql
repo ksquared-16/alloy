@@ -1,6 +1,4 @@
--- Surgical update: "Booking: Notify Vendor Assigned" send_message payload.
--- jsonb::text matching failed in some environments (escaping); use ->>'template' / ->>'body'.
--- booking_pay_and_vendor_payout is the full pay line including "Pay: " (workflowRun createVendorOfferAcceptLinkAndBody).
+-- Retry (staging already applied 20260404230000 with 0 rows or pre-fix SQL): same targeted jsonb_set fix.
 
 UPDATE public.workflow_actions wa
 SET payload = jsonb_set(wa.payload, '{template}', to_jsonb(
