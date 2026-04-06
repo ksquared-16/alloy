@@ -40,76 +40,122 @@ WHERE w.name = 'Quote started: Set opportunity stage'
 
 -- ---------------------------------------------------------------------------
 -- Phase 2: template token rewrites (send_message + create_message body/template)
+-- One legacy token per UPDATE (avoids fragile deeply nested replace()).
 -- ---------------------------------------------------------------------------
 
-UPDATE public.workflow_actions wa
-SET payload = (
-  replace(
-    replace(
-      replace(
-        replace(
-          replace(
-            replace(
-              replace(
-                replace(
-                  replace(
-                    replace(
-                      replace(
-                        replace(
-                          wa.payload::text,
-                          '{{opportunity.metadata.quote_input.square_footage}}',
-                          '{{location.square_footage_tier_key}}'
-                        ),
-                        '{{opportunity.metadata.bedrooms}}',
-                        '{{location.beds}}'
-                      ),
-                      '{{opportunity.metadata.bathrooms}}',
-                      '{{location.baths}}'
-                    ),
-                    '{{opportunity.metadata.access_method}}',
-                    '{{location.access_method_key}}'
-                  ),
-                  '{{opportunity.metadata.access_note}}',
-                  '{{location.access_notes}}'
-                ),
-                '{{location.address_line1}}',
-                '{{location.address1}}'
-              ),
-              '{{job.metadata.bedrooms}}',
-              '{{location.beds}}'
-            ),
-            '{{job.metadata.bathrooms}}',
-            '{{location.baths}}'
-          ),
-          '{{job.metadata.square_footage}}',
-          '{{location.square_footage_tier_key}}'
-        ),
-        '{{job.metadata.home_type}}',
-        '{{location.home_type_key}}'
-      ),
-      '{{job.metadata.access_method}}',
-      '{{location.access_method_key}}'
-    ),
-    '{{job.metadata.access_note}}',
-    '{{location.access_notes}}'
-  ),
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{opportunity.metadata.quote_input.square_footage}}',
+  '{{location.square_footage_tier_key}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{opportunity.metadata.quote_input.square_footage}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{opportunity.metadata.bedrooms}}',
+  '{{location.beds}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{opportunity.metadata.bedrooms}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{opportunity.metadata.bathrooms}}',
+  '{{location.baths}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{opportunity.metadata.bathrooms}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{opportunity.metadata.access_method}}',
+  '{{location.access_method_key}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{opportunity.metadata.access_method}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{opportunity.metadata.access_note}}',
+  '{{location.access_notes}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{opportunity.metadata.access_note}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{location.address_line1}}',
+  '{{location.address1}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{location.address_line1}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{job.metadata.bedrooms}}',
+  '{{location.beds}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.bedrooms}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{job.metadata.bathrooms}}',
+  '{{location.baths}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.bathrooms}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{job.metadata.square_footage}}',
+  '{{location.square_footage_tier_key}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.square_footage}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{job.metadata.home_type}}',
+  '{{location.home_type_key}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.home_type}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{job.metadata.access_method}}',
+  '{{location.access_method_key}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.access_method}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
+  '{{job.metadata.access_note}}',
+  '{{location.access_notes}}'
+)::jsonb
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.access_note}}%';
+
+UPDATE public.workflow_actions
+SET payload = replace(
+  payload::text,
   '{{job.metadata.address}}',
   '{{location.address1}}'
-)
 )::jsonb
-WHERE wa.action_type IN ('send_message', 'create_message')
-  AND (
-    wa.payload::text LIKE '%{{opportunity.metadata.quote_input.square_footage}}%'
-    OR wa.payload::text LIKE '%{{opportunity.metadata.bedrooms}}%'
-    OR wa.payload::text LIKE '%{{opportunity.metadata.bathrooms}}%'
-    OR wa.payload::text LIKE '%{{opportunity.metadata.access_method}}%'
-    OR wa.payload::text LIKE '%{{opportunity.metadata.access_note}}%'
-    OR wa.payload::text LIKE '%{{location.address_line1}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.bedrooms}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.bathrooms}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.square_footage}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.home_type}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.access_method}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.access_note}}%'
-    OR wa.payload::text LIKE '%{{job.metadata.address}}%'
-  );
+WHERE action_type IN ('send_message', 'create_message')
+  AND payload::text LIKE '%{{job.metadata.address}}%';
