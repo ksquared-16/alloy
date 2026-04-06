@@ -592,7 +592,7 @@ export default function CleaningQuickQuoteForm({
                   <strong className="text-alloy-midnight">Looking for a one-time clean?</strong>
                 </p>
                 <p>
-                  Looking for a one-time clean, move-out, or heavy / deep clean?{" "}
+                  We offer one-time, move-out, or heavy / deep clean services?{" "}
                   {onSwitchToStandardQuote ? (
                     <button
                       type="button"
