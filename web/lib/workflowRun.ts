@@ -3,6 +3,14 @@ import { createHash } from "node:crypto";
 import { createActionLink, buildShortActionLinkUrl } from "@/lib/actionLinks";
 import { getPublicAppOrigin } from "@/lib/publicAppUrl";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
+import {
+    computePayoutPercent,
+    resolveVendorPayoutPolicy,
+    type OrgSettingsRow,
+    type VendorRow,
+} from "@/lib/admin/vendorPayoutPolicy";
+import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
@@ -49,6 +57,71 @@ function readMetadataRecord(entity: Record<string, unknown> | undefined): Record
     }
     if (typeof m === "object") return m as Record<string, unknown>;
     return null;
+}
+
+/** SMS/templates: human-readable sqft tier (org option_set label → canonical catalog → key). */
+async function resolveSquareFootageTierDisplayLabel(
+    supabase: SupabaseClient,
+    orgId: string | null | undefined,
+    tierKey: string | null | undefined
+): Promise<string | null> {
+    const k = String(tierKey ?? "").trim();
+    if (!k) return null;
+    const oid = orgId != null ? String(orgId).trim() : "";
+    if (oid) {
+        const { data: setRow } = await supabase
+            .from("option_sets")
+            .select("id")
+            .eq("org_id", oid)
+            .eq("set_key", "square_footage_tier")
+            .maybeSingle();
+        const sid = (setRow as { id?: string } | null)?.id;
+        if (sid) {
+            const { data: it } = await supabase
+                .from("option_set_items")
+                .select("label")
+                .eq("option_set_id", sid)
+                .eq("item_key", k)
+                .maybeSingle();
+            const lab = (it as { label?: string } | null)?.label;
+            if (lab != null && String(lab).trim() !== "") return String(lab).trim();
+        }
+    }
+    return CANONICAL_SQFT_TIER_OPTIONS.find((o) => o.value === k)?.label ?? null;
+}
+
+function resolveJobNetAmountCentsForVendorPayout(job: Record<string, unknown> | null | undefined): number | null {
+    if (!job) return null;
+    const est = job.estimated_total_cents;
+    if (typeof est === "number" && !Number.isNaN(est) && est > 0) return Math.round(est);
+    const gross = job.gross_price_cents;
+    if (typeof gross === "number" && !Number.isNaN(gross) && gross > 0) return Math.round(gross);
+    const meta = readMetadataRecord(job);
+    const qt = meta?.quote_total;
+    if (typeof qt === "number" && !Number.isNaN(qt)) return Math.max(0, Math.round(qt * 100));
+    if (typeof qt === "string" && qt.trim()) {
+        const n = parseFloat(qt);
+        if (!Number.isNaN(n)) return Math.max(0, Math.round(n * 100));
+    }
+    return null;
+}
+
+function vendorRowToVendorPayoutPolicyInput(row: Record<string, unknown> | null): VendorRow | null {
+    if (!row) return null;
+    let ot = row.payout_override_type as string | null | undefined;
+    let ov = row.payout_override_value as number | null | undefined;
+    const hasOverride =
+        (ot != null && String(ot).trim() !== "") || (typeof ov === "number" && !Number.isNaN(ov));
+    if (!hasOverride && typeof row.payout_percent === "number" && !Number.isNaN(row.payout_percent)) {
+        const pp = row.payout_percent;
+        ot = "percentage";
+        ov = pp >= 0 && pp <= 1 ? pp * 100 : pp;
+    }
+    return {
+        payout_override_type: ot ?? null,
+        payout_override_value: ov ?? null,
+        metadata: row.metadata as VendorRow["metadata"],
+    };
 }
 
 /** Book-v2 stores service ZIP under metadata.quote_input.zip (not opportunity.postal_code). */
@@ -1035,10 +1108,51 @@ async function createVendorOfferAcceptLinkAndBody(args: {
         args.payload.vendor != null && typeof args.payload.vendor === "object"
             ? (args.payload.vendor as Record<string, unknown>)
             : {};
+    const jobObj = args.payload.job;
+    const jobRec = jobObj != null && typeof jobObj === "object" ? (jobObj as Record<string, unknown>) : null;
+    const orgIdResolved =
+        (args.linkOrgId != null ? String(args.linkOrgId).trim() : "") ||
+        (args.payload.org_id != null ? String(args.payload.org_id).trim() : "") ||
+        (jobRec?.org_id != null ? String(jobRec.org_id).trim() : "");
+
+    let bookingVendorPayoutDisplay = "";
+    const netCents = resolveJobNetAmountCentsForVendorPayout(jobRec);
+    if (netCents != null && netCents > 0 && orgIdResolved) {
+        const [{ data: orgS }, { data: vend }] = await Promise.all([
+            args.supabase
+                .from("org_settings")
+                .select("payout_type, payout_value, metadata")
+                .eq("org_id", orgIdResolved)
+                .maybeSingle(),
+            args.supabase
+                .from("vendors")
+                .select("payout_override_type, payout_override_value, metadata, payout_percent")
+                .eq("id", args.vendorId)
+                .maybeSingle(),
+        ]);
+        const { policy } = resolveVendorPayoutPolicy({
+            orgSettings: (orgS ?? null) as OrgSettingsRow | null,
+            vendor: vendorRowToVendorPayoutPolicyInput(vend as Record<string, unknown> | null),
+        });
+        const pct = computePayoutPercent({ policy, completedOccurrences: 0 });
+        const payoutCents = Math.round((netCents * pct) / 100);
+        if (payoutCents > 0) bookingVendorPayoutDisplay = formatMoneyFromCents(payoutCents);
+    }
+
+    const bookingPriceDisplay = String(getByPath(args.payload, "booking_price") ?? "").trim();
+    let bookingPayAndVendorPayout = "";
+    if (bookingPriceDisplay) {
+        bookingPayAndVendorPayout = bookingVendorPayoutDisplay
+            ? `Pay: ${bookingPriceDisplay} (${bookingVendorPayoutDisplay} payout)`
+            : `Pay: ${bookingPriceDisplay}`;
+    }
+
     const pv: Record<string, unknown> = {
         ...args.payload,
         vendor_accept_url: actionLinkUrl,
         vendor: { ...prevVendor, id: args.vendorId },
+        booking_vendor_payout: bookingVendorPayoutDisplay,
+        booking_pay_and_vendor_payout: bookingPayAndVendorPayout,
     };
     const body = renderTemplate(args.template, pv);
     const hash = createHash("sha1").update(body ?? "").digest("hex").slice(0, 16);
@@ -1192,6 +1306,13 @@ async function enrichWorkflowEventPayloadEntities(supabase: SupabaseClient, payl
     if (loc.address_line2 == null || String(loc.address_line2).trim() === "") {
         const a2 = loc.address2;
         if (a2 != null && String(a2).trim() !== "") loc.address_line2 = a2;
+    }
+    const tierKeyRaw = loc.square_footage_tier_key;
+    if (tierKeyRaw != null && String(tierKeyRaw).trim() !== "") {
+        const tierK = String(tierKeyRaw).trim();
+        const orgForTier = (loc.org_id ?? p.org_id) as string | null | undefined;
+        const tierLabel = await resolveSquareFootageTierDisplayLabel(supabase, orgForTier, tierK);
+        loc.square_footage_tier_label = tierLabel ?? tierK.replace(/_/g, " ");
     }
     p.location = loc;
 
