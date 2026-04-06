@@ -11,7 +11,11 @@ import {
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
-import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/book-v2/resolvePipelineStage";
+import {
+  normalizePipelineResolveOrgId,
+  pipelineStageEnvFallback,
+  resolvePipelineStageIdByOrgKey,
+} from "@/lib/book-v2/resolvePipelineStage";
 import {
   loadSqftTiersForVertical,
   normalizeSqftKeyInput,
@@ -208,7 +212,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceRoleClient();
-    const publicOrgId = process.env.ALLOY_PUBLIC_ORG_ID ?? null;
+    const publicOrgId = normalizePipelineResolveOrgId(process.env.ALLOY_PUBLIC_ORG_ID ?? null);
     const orgIdForWrites = publicOrgId;
     if (!orgIdForWrites) {
       return NextResponse.json({ ok: false, message: "Server configuration error (org)" }, { status: 500 });
@@ -253,13 +257,22 @@ export async function POST(request: NextRequest) {
       pipelineStageEnvFallback("quote_started") ??
       LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID;
 
+    const needsAQuoteResolved = await resolvePipelineStageIdByOrgKey(supabase, orgIdForWrites, "needs_a_quote");
     const needsAQuoteStageId =
-      (await resolvePipelineStageIdByOrgKey(supabase, orgIdForWrites, "needs_a_quote")) ??
-      pipelineStageEnvFallback("needs_a_quote") ??
-      quoteStartedStageId;
-    if (needsAQuoteStageId === quoteStartedStageId) {
+      needsAQuoteResolved ?? pipelineStageEnvFallback("needs_a_quote") ?? quoteStartedStageId;
+    console.warn(
+      "[SPECIALTY_QUOTE_START] pipeline_stage_resolution",
+      JSON.stringify({
+        org_id: orgIdForWrites,
+        needs_a_quote_from_db: needsAQuoteResolved,
+        needs_a_quote_effective: needsAQuoteStageId,
+        quote_started_effective: quoteStartedStageId,
+        fell_back_to_quote_started: needsAQuoteStageId === quoteStartedStageId && !needsAQuoteResolved,
+      })
+    );
+    if (needsAQuoteStageId === quoteStartedStageId && !needsAQuoteResolved) {
       console.warn(
-        "[SPECIALTY_QUOTE_START] needs_a_quote pipeline stage not resolved; using quote_started stage id as fallback — run migration 20260404180000_needs_a_quote_stage_and_public_beds_baths.sql"
+        "[SPECIALTY_QUOTE_START] needs_a_quote not found for org; using quote_started id — set BOOK_V2_NEEDS_A_QUOTE_STAGE_ID or ensure pipeline_stages.key + pipeline/org linkage"
       );
     }
 

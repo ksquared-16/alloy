@@ -38,6 +38,8 @@ interface CleaningQuickQuoteFormProps {
   onComplete: (detail: QuickQuoteCompleteDetail) => void;
   /** Recurring-only frequencies; standard cleaning implied (quote-start path). */
   campaignQuoteMode?: QuickQuoteCampaignMode;
+  /** From campaign modal: strip `campaign` query and reopen standard quote (one-time / specialty). */
+  onSwitchToStandardQuote?: () => void;
 }
 
 type CleaningTypeKey = "standard" | "move_out" | "heavy_clean";
@@ -51,6 +53,7 @@ const DOCUMENTED_FALLBACK_SPECIALTY_CLEANING_TYPES: { value: CleaningTypeKey; la
 export default function CleaningQuickQuoteForm({
   onComplete,
   campaignQuoteMode,
+  onSwitchToStandardQuote,
 }: CleaningQuickQuoteFormProps) {
   const isCampaignFirstFree = campaignQuoteMode?.id === "firstfree4x120";
   const [locationFieldDefs, setLocationFieldDefs] = useState<PublicFieldDef[]>([]);
@@ -577,14 +580,45 @@ export default function CleaningQuickQuoteForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1.5 text-xs text-alloy-midnight/55">
-              Move-out and heavy cleans are priced as one-time jobs; choose those under Cleaning type to add details and
-              photos.
-            </p>
+            {isCampaignFirstFree ? (
+              <p className="mt-2 text-xs text-alloy-midnight/70 leading-relaxed">
+                <span className="font-medium text-alloy-midnight">Recurring cleaning only.</span> This offer applies to
+                weekly, every-two-weeks, or monthly standard service — not one-time visits. Looking for a{" "}
+                <span className="whitespace-nowrap">one-time</span> clean,{" "}
+                <span className="whitespace-nowrap">move-out</span>, or{" "}
+                <span className="whitespace-nowrap">heavy / deep</span> clean?{" "}
+                {onSwitchToStandardQuote ? (
+                  <button
+                    type="button"
+                    onClick={onSwitchToStandardQuote}
+                    className="text-alloy-juniper font-semibold underline underline-offset-2 hover:text-alloy-pine"
+                  >
+                    Use the regular quote form
+                  </button>
+                ) : (
+                  <a
+                    href="/"
+                    className="text-alloy-juniper font-semibold underline underline-offset-2 hover:text-alloy-pine"
+                  >
+                    Use the regular quote form
+                  </a>
+                )}{" "}
+                instead (same quick quote experience, without this promotion).
+              </p>
+            ) : (
+              <p className="mt-1.5 text-xs text-alloy-midnight/55">
+                Move-out and heavy cleans are priced as one-time jobs; choose those under Cleaning type to add details
+                and photos.
+              </p>
+            )}
           </div>
         )}
         {isSpecialtyCleaning ? (
           <div className="space-y-4 pt-2 border-t border-alloy-stone/40">
+            <p className="rounded-lg border border-alloy-juniper/20 bg-alloy-juniper/5 px-3 py-2 text-xs text-alloy-midnight/80 leading-relaxed">
+              We need a little more information to give you an accurate quote — the next questions and photos help us
+              understand your home.
+            </p>
             <p className="text-sm font-medium text-alloy-midnight">Property & photos</p>
             <div>
               <label className={labelBase}>Street address *</label>

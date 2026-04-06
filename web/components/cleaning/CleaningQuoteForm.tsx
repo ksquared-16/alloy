@@ -1018,6 +1018,10 @@ export default function CleaningQuoteForm({
                 {/* Move-Out / Heavy Clean specific fields */}
                 {isMoveOut && (
                     <>
+                        <p className="text-sm text-alloy-midnight/75 leading-relaxed rounded-lg border border-alloy-juniper/20 bg-alloy-juniper/5 px-3 py-2.5">
+                            We need a little more information to ensure we give you an accurate quote — please complete
+                            the details below.
+                        </p>
                         {/* Preferred Service Date */}
                         <div>
                             <label className={labelClass}>
