@@ -43,9 +43,44 @@ export function discountableBaseCentsFromLineRows(lines: JobLineItemRow[]): numb
 }
 
 /**
+ * Split the locked job total into contractor payout and platform fee using contractor bps only.
+ *
+ * **Locked rule (pricing lock paths):** basis = `jobs.total_cents` (from `computeJobTotals` / line items).
+ * - `contractor_payout_cents = floor(total_cents * contractor_split_bps / 10000)`
+ * - `alloy_fee_cents = total_cents - contractor_payout_cents`
+ *
+ * Matches `trg_jobs_assign_pricing_tier` integer semantics on INSERT (floor + remainder).
+ */
+export function splitLockedTotalByContractorBps(totalCents: number, contractorSplitBps: number): {
+  contractor_payout_cents: number;
+  alloy_fee_cents: number;
+} {
+  const basis = Math.max(0, Math.round(Number(totalCents) || 0));
+  const bps = Math.round(Number(contractorSplitBps) || 0);
+  const contractor_payout_cents = Math.floor((basis * bps) / 10000);
+  const alloy_fee_cents = basis - contractor_payout_cents;
+  return { contractor_payout_cents, alloy_fee_cents };
+}
+
+/**
+ * Returns payout columns for a locked total, or `null` when `contractor_split_bps` is missing/invalid
+ * (callers should persist `null` for both columns so stale payouts are not left on the job).
+ */
+export function payoutColumnsForLockedJobTotal(
+  totalCents: number,
+  contractorSplitBps: number | null | undefined
+): { contractor_payout_cents: number; alloy_fee_cents: number } | null {
+  if (typeof contractorSplitBps !== "number" || !Number.isFinite(contractorSplitBps) || contractorSplitBps < 0) {
+    return null;
+  }
+  return splitLockedTotalByContractorBps(totalCents, contractorSplitBps);
+}
+
+/**
  * Aggregates job totals from line rows only. Does not infer or recompute discounts;
  * discount lines must already be present with negative (or conventionally negative) amounts.
  */
+
 export function computeJobTotals(lines: JobLineItemRow[]): ComputedPricingTotals {
   let subtotal = 0;
   let discount_total = 0;

@@ -6,6 +6,7 @@ import {
   discountableBaseCentsFromLineRows,
   insertJobPricingSnapshot,
   nextSnapshotVersion,
+  payoutColumnsForLockedJobTotal,
 } from "@/lib/pricing/jobPricingCore";
 import { applyPricingDeltaAdjustmentCharge } from "@/lib/pricing/pricingChangeAdjustmentCharge";
 import { upsertPrimaryDraftServiceCharge } from "@/lib/pricing/upsertPrimaryDraftServiceCharge";
@@ -309,7 +310,7 @@ export async function initializeJobPricing(params: InitializeJobPricingParams): 
   const lockedAt = new Date().toISOString();
   const { data: jobRow, error: jobFetchErr } = await supabase
     .from("jobs")
-    .select("pricing_version")
+    .select("pricing_version, contractor_split_bps")
     .eq("id", jobId)
     .eq("org_id", orgId)
     .maybeSingle();
@@ -318,6 +319,8 @@ export async function initializeJobPricing(params: InitializeJobPricingParams): 
   }
   const prevVersion = (jobRow as { pricing_version?: number } | null)?.pricing_version;
   const nextPv = typeof prevVersion === "number" && Number.isFinite(prevVersion) ? prevVersion + 1 : 1;
+  const contractorBps = (jobRow as { contractor_split_bps?: number | null } | null)?.contractor_split_bps;
+  const payout = payoutColumnsForLockedJobTotal(totals.total_cents, contractorBps);
 
   const jobUpdate: Record<string, unknown> = {
     subtotal_cents: totals.subtotal_cents,
@@ -334,6 +337,8 @@ export async function initializeJobPricing(params: InitializeJobPricingParams): 
     gross_price_cents: gross ?? (totals.subtotal_cents > 0 ? totals.subtotal_cents : null),
     estimated_total_cents: totals.total_cents,
     recurring_total_cents: recurring,
+    contractor_payout_cents: payout?.contractor_payout_cents ?? null,
+    alloy_fee_cents: payout?.alloy_fee_cents ?? null,
   };
 
   const { error: jobUpdErr } = await supabase.from("jobs").update(jobUpdate).eq("id", jobId).eq("org_id", orgId);
@@ -362,6 +367,9 @@ export async function initializeJobPricing(params: InitializeJobPricingParams): 
         netFirstVisitCents: totals.total_cents,
         recurringCents: recurring,
         source,
+        payout_basis: "locked_total_cents",
+        contractor_payout_cents: payout?.contractor_payout_cents ?? null,
+        alloy_fee_cents: payout?.alloy_fee_cents ?? null,
       },
       lineItems: lineRows.map((r) => ({
         line_type: r.line_type,

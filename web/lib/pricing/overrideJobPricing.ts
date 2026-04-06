@@ -5,6 +5,7 @@ import {
   computeJobTotals,
   insertJobPricingSnapshot,
   nextSnapshotVersion,
+  payoutColumnsForLockedJobTotal,
 } from "@/lib/pricing/jobPricingCore";
 import { computeJobGrossBasisCents, normalizeJobDiscountAmountToCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 import { applyPricingDeltaAdjustmentCharge } from "@/lib/pricing/pricingChangeAdjustmentCharge";
@@ -196,7 +197,7 @@ export async function overrideJobPricing(params: OverrideJobPricingParams): Prom
 
   const { data: jobRow, error: jobFetchErr } = await supabase
     .from("jobs")
-    .select("pricing_version, recurring_total_cents")
+    .select("pricing_version, recurring_total_cents, contractor_split_bps")
     .eq("id", jobId)
     .eq("org_id", orgId)
     .maybeSingle();
@@ -206,6 +207,8 @@ export async function overrideJobPricing(params: OverrideJobPricingParams): Prom
   const prevVersion = (jobRow as { pricing_version?: number } | null)?.pricing_version;
   const nextPv = typeof prevVersion === "number" && Number.isFinite(prevVersion) ? prevVersion + 1 : 1;
   const recurring = (jobRow as { recurring_total_cents?: number | null } | null)?.recurring_total_cents ?? null;
+  const contractorBps = (jobRow as { contractor_split_bps?: number | null } | null)?.contractor_split_bps;
+  const payout = payoutColumnsForLockedJobTotal(totals.total_cents, contractorBps);
 
   const gross = totals.subtotal_cents;
   const net = totals.total_cents;
@@ -225,6 +228,8 @@ export async function overrideJobPricing(params: OverrideJobPricingParams): Prom
     gross_price_cents: gross > 0 ? gross : null,
     estimated_total_cents: net,
     recurring_total_cents: recurring,
+    contractor_payout_cents: payout?.contractor_payout_cents ?? null,
+    alloy_fee_cents: payout?.alloy_fee_cents ?? null,
   };
 
   const { error: jobUpdErr } = await supabase.from("jobs").update(jobUpdate).eq("id", jobId).eq("org_id", orgId);
@@ -247,7 +252,13 @@ export async function overrideJobPricing(params: OverrideJobPricingParams): Prom
       jobId,
       snapshotType: "override",
       versionNumber: snapVer,
-      summary: { ...totals, reason },
+      summary: {
+        ...totals,
+        reason,
+        payout_basis: "locked_total_cents",
+        contractor_payout_cents: payout?.contractor_payout_cents ?? null,
+        alloy_fee_cents: payout?.alloy_fee_cents ?? null,
+      },
       lineItems: lineRows.map((r) => ({
         line_type: r.line_type,
         label: r.label,

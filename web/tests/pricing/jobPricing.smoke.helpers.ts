@@ -144,10 +144,15 @@ export async function fetchJobPricingColumns(
   subtotal_cents: number | null;
   discount_total_cents: number | null;
   pricing_status: string | null;
+  contractor_split_bps: number | null;
+  contractor_payout_cents: number | null;
+  alloy_fee_cents: number | null;
 } | null> {
   const { data, error } = await supabase
     .from("jobs")
-    .select("total_cents, subtotal_cents, discount_total_cents, pricing_status")
+    .select(
+      "total_cents, subtotal_cents, discount_total_cents, pricing_status, contractor_split_bps, contractor_payout_cents, alloy_fee_cents"
+    )
     .eq("id", jobId)
     .eq("org_id", orgId)
     .maybeSingle();
@@ -158,6 +163,9 @@ export async function fetchJobPricingColumns(
     subtotal_cents: number | null;
     discount_total_cents: number | null;
     pricing_status: string | null;
+    contractor_split_bps: number | null;
+    contractor_payout_cents: number | null;
+    alloy_fee_cents: number | null;
   } | null;
 }
 

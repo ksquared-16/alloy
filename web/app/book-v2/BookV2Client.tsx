@@ -1319,7 +1319,6 @@ export default function BookV2Client() {
                     addons: addonsForStore,
                     addons_total: typeof qo?.addons_total === "number" ? qo.addons_total : undefined,
                 };
-                setQuote(normalizeQuote(updated));
                 const freqRows = bookingCatalog?.pricing_frequencies ?? [];
                 const rpcK = resolveRpcFrequencyKey(frequencySel, freqRows);
                 const legacyK = inferLegacyCleaningFrequencyApiKey(rpcK, freqRows);
@@ -1332,6 +1331,8 @@ export default function BookV2Client() {
                         add_ons: addonKeys,
                     },
                 };
+                // Same source of truth as pricing + persistence: quote_input keys must match chip state (deriveRefineFrequencySelection).
+                setQuote(normalizeQuote(toStore));
                 try {
                     const json = JSON.stringify(toStore);
                     localStorage.setItem("alloy_quote_v1", json);
