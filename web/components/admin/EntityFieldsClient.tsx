@@ -6,8 +6,14 @@ import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import { sortFieldDefinitionsForAdminList } from "@/lib/admin/sortFieldDefinitions";
+import OptionSetKeyPicker from "@/components/admin/OptionSetKeyPicker";
+import {
+    buildConfigWithOptionSetKey,
+    getOptionSetKeyFromConfig,
+    isSelectLikeFieldType,
+} from "@/lib/admin/fieldDefinitionOptionSetConfig";
 
-const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
+const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
 const SECTION_OPTIONS = [
     { value: "basic", label: "Basic" },
     { value: "contact", label: "Contact" },
@@ -85,6 +91,7 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
     const [editSortOrder, setEditSortOrder] = useState(100);
     const [editPlaceholder, setEditPlaceholder] = useState("");
     const [editHelpText, setEditHelpText] = useState("");
+    const [editOptionSetKey, setEditOptionSetKey] = useState("");
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
 
@@ -103,6 +110,7 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
     const [createSortable, setCreateSortable] = useState(false);
     const [createPlaceholder, setCreatePlaceholder] = useState("");
     const [createHelpText, setCreateHelpText] = useState("");
+    const [createOptionSetKey, setCreateOptionSetKey] = useState("");
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
     const createKeyManuallyEditedRef = useRef(false);
@@ -147,6 +155,7 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
         setEditSortOrder(row.sort_order);
         setEditPlaceholder(row.placeholder ?? "");
         setEditHelpText(row.help_text ?? "");
+        setEditOptionSetKey(getOptionSetKeyFromConfig(row.config));
         setEditError(null);
         setEditOpen(true);
     };
@@ -156,24 +165,28 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
         setEditSaving(true);
         setEditError(null);
         try {
+            const body: Record<string, unknown> = {
+                label: editLabel.trim() || null,
+                description: editDescription.trim() || null,
+                is_required: editRequired,
+                is_active: editActive,
+                is_visible_in_form: editVisibleForm,
+                is_visible_in_drawer: editVisibleDrawer,
+                is_visible_in_table: editVisibleTable,
+                is_filterable: editFilterable,
+                is_sortable: editSortable,
+                section_key: editSectionKey.trim() || "custom",
+                sort_order: editSortOrder,
+                placeholder: editPlaceholder.trim() || null,
+                help_text: editHelpText.trim() || null,
+            };
+            if (isSelectLikeFieldType(editRow.field_type)) {
+                body.config = buildConfigWithOptionSetKey(editRow.config, editOptionSetKey);
+            }
             const res = await fetch(`/api/admin/field-definitions/${editRow.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    label: editLabel.trim() || null,
-                    description: editDescription.trim() || null,
-                    is_required: editRequired,
-                    is_active: editActive,
-                    is_visible_in_form: editVisibleForm,
-                    is_visible_in_drawer: editVisibleDrawer,
-                    is_visible_in_table: editVisibleTable,
-                    is_filterable: editFilterable,
-                    is_sortable: editSortable,
-                    section_key: editSectionKey.trim() || "custom",
-                    sort_order: editSortOrder,
-                    placeholder: editPlaceholder.trim() || null,
-                    help_text: editHelpText.trim() || null,
-                }),
+                body: JSON.stringify(body),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
@@ -219,6 +232,7 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
         setCreateSortable(false);
         setCreatePlaceholder("");
         setCreateHelpText("");
+        setCreateOptionSetKey("");
         setCreateError(null);
         createKeyManuallyEditedRef.current = false;
         setCreateOpen(true);
@@ -244,26 +258,30 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
         setCreateSaving(true);
         setCreateError(null);
         try {
+            const payload: Record<string, unknown> = {
+                entity_type: entityType,
+                field_key: key,
+                label: createLabel.trim() || key,
+                description: createDescription.trim() || null,
+                field_type: createFieldType,
+                section_key: createSectionKey.trim() || "custom",
+                sort_order: createSortOrder,
+                is_required: createRequired,
+                is_visible_in_form: createVisibleForm,
+                is_visible_in_drawer: createVisibleDrawer,
+                is_visible_in_table: createVisibleTable,
+                is_filterable: createFilterable,
+                is_sortable: createSortable,
+                placeholder: createPlaceholder.trim() || null,
+                help_text: createHelpText.trim() || null,
+            };
+            if (isSelectLikeFieldType(createFieldType)) {
+                payload.config = buildConfigWithOptionSetKey(null, createOptionSetKey);
+            }
             const res = await fetch("/api/admin/field-definitions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    entity_type: entityType,
-                    field_key: key,
-                    label: createLabel.trim() || key,
-                    description: createDescription.trim() || null,
-                    field_type: createFieldType,
-                    section_key: createSectionKey.trim() || "custom",
-                    sort_order: createSortOrder,
-                    is_required: createRequired,
-                    is_visible_in_form: createVisibleForm,
-                    is_visible_in_drawer: createVisibleDrawer,
-                    is_visible_in_table: createVisibleTable,
-                    is_filterable: createFilterable,
-                    is_sortable: createSortable,
-                    placeholder: createPlaceholder.trim() || null,
-                    help_text: createHelpText.trim() || null,
-                }),
+                body: JSON.stringify(payload),
             });
             const json = await res.json().catch(() => ({}));
             if (res.status === 409) {
@@ -485,6 +503,16 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {editRow && isSelectLikeFieldType(editRow.field_type) && (
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Option set</label>
+                                    <OptionSetKeyPicker
+                                        value={editOptionSetKey}
+                                        onChange={setEditOptionSetKey}
+                                        disabled={!canMutate || editSaving}
+                                    />
+                                </div>
+                            )}
                         </div>
                         {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                         <div className="mt-4 flex justify-end gap-2">
@@ -632,6 +660,16 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {isSelectLikeFieldType(createFieldType) && (
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Option set</label>
+                                    <OptionSetKeyPicker
+                                        value={createOptionSetKey}
+                                        onChange={setCreateOptionSetKey}
+                                        disabled={!canMutate || createSaving}
+                                    />
+                                </div>
+                            )}
                         </div>
                         {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
                         <div className="mt-4 flex justify-end gap-2">
