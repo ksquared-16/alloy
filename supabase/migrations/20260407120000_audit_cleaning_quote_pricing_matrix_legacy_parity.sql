@@ -36,13 +36,13 @@ AS $$
   ),
   prereq_service AS (
     SELECT
-      'prerequisite'::text,
-      NULL::text,
-      NULL::text,
-      NULL::text,
-      NULL::integer,
-      NULL::integer,
-      'no_active_standard_cleaning_pricing_service'::text
+      'prerequisite'::text AS slice_kind,
+      NULL::text AS service_key,
+      NULL::text AS tier_key,
+      NULL::text AS frequency_key,
+      NULL::integer AS legacy_cents,
+      NULL::integer AS matrix_cents,
+      'no_active_standard_cleaning_pricing_service'::text AS detail
     WHERE EXISTS (SELECT 1 FROM v)
       AND NOT EXISTS (
         SELECT 1
@@ -53,13 +53,13 @@ AS $$
   ),
   prereq_tiers AS (
     SELECT
-      'prerequisite'::text,
-      NULL::text,
-      NULL::text,
-      NULL::text,
-      NULL::integer,
-      NULL::integer,
-      'no_active_sqft_tiers_for_cleaning_vertical'::text
+      'prerequisite'::text AS slice_kind,
+      NULL::text AS service_key,
+      NULL::text AS tier_key,
+      NULL::text AS frequency_key,
+      NULL::integer AS legacy_cents,
+      NULL::integer AS matrix_cents,
+      'no_active_sqft_tiers_for_cleaning_vertical'::text AS detail
     WHERE EXISTS (SELECT 1 FROM v)
       AND EXISTS (
         SELECT 1
