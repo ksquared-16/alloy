@@ -31,8 +31,11 @@ type PricingOptions = {
 
 type MainPricingTab = "matrix" | "service-offerings" | "plan-templates" | "pricing-modes" | "pricing-dimensions" | "dimension-values" | "add-ons" | "discount-codes" | "legacy";
 
+/** Legacy first_clean / recurring tables are read-only in UI; live quotes use pricing_matrix via get_quote_pricing. */
+const LEGACY_PRICING_READ_ONLY = true;
+
 export default function PricingClient() {
-    const [mainTab, setMainTab] = useState<MainPricingTab>("legacy");
+    const [mainTab, setMainTab] = useState<MainPricingTab>("matrix");
     const [activeSection, setActiveSection] = useState<"first-clean" | "recurring" | "matrix">("first-clean");
     const [verticalId, setVerticalId] = useState("");
     const [serviceOfferingId, setServiceOfferingId] = useState("");
@@ -458,8 +461,12 @@ export default function PricingClient() {
             <header className="rounded-xl border border-admin-border border-l-4 border-l-alloy-pine bg-admin-surface-card px-6 py-4 shadow-sm">
                 <h1 className="text-2xl font-bold tracking-tight text-alloy-pine">Pricing</h1>
                 <p className="mt-1 text-sm text-alloy-midnight/70">
-                    Live website quotes use the Legacy tab (Initial and Recurring price tables). Pricing Matrix is a separate{" "}
-                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_matrix</code> surface and does not drive live quote pricing today.
+                    Public booking and <code className="rounded bg-alloy-stone/30 px-1 text-xs">get_quote_pricing</code> read base first-visit and recurring amounts from{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_matrix</code> (Pricing Matrix tab). Add-on line items still come from{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_addons</code>; frequency labels from{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_frequencies</code>. The Legacy tab shows the old{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_first_clean_prices</code> /{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_recurring_prices</code> tables for compatibility only (read-only).
                 </p>
             </header>
 
@@ -474,7 +481,7 @@ export default function PricingClient() {
                     ["dimension-values", "Dimension Values"],
                     ["add-ons", "Add-Ons"],
                     ["discount-codes", "Discount programs"],
-                    ["legacy", "Legacy"],
+                    ["legacy", "Legacy (read-only)"],
                 ] as const).map(([tab, label]) => (
                     <button
                         key={tab}
@@ -567,13 +574,18 @@ export default function PricingClient() {
             )}
 
             {mainTab === "legacy" && (
-                <div className="flex gap-2 border-b border-admin-border">
-                    <button type="button" onClick={() => setActiveSection("first-clean")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-pine text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10"}`}>
-                        Legacy: {initialLabel}
-                    </button>
-                    <button type="button" onClick={() => setActiveSection("recurring")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-pine text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10"}`}>
-                        Legacy: {recurringLabel}
-                    </button>
+                <div className="space-y-2 border-b border-admin-border pb-3">
+                    <p className="text-sm text-alloy-midnight/70">
+                        Compatibility view only — these rows are not used by live quotes. Edit amounts on <span className="font-medium text-alloy-midnight">Pricing Matrix</span>.
+                    </p>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => setActiveSection("first-clean")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "first-clean" ? "bg-alloy-pine text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10"}`}>
+                            Legacy: {initialLabel}
+                        </button>
+                        <button type="button" onClick={() => setActiveSection("recurring")} className={`px-4 py-2 text-sm font-medium rounded-t-md ${activeSection === "recurring" ? "bg-alloy-pine text-white" : "bg-alloy-stone/20 text-alloy-forge hover:bg-alloy-pine/10"}`}>
+                            Legacy: {recurringLabel}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -604,16 +616,20 @@ export default function PricingClient() {
             {mainTab === "legacy" && activeSection === "first-clean" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-alloy-pine">{initialLabel}</h2>
-                        <button type="button" onClick={openAddFirst} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">
-                            + Add {initialLabel.replace(/ Pricing$/, " Price")}
-                        </button>
+                        <h2 className="text-lg font-semibold text-alloy-pine">{initialLabel} (read-only)</h2>
+                        {!LEGACY_PRICING_READ_ONLY && (
+                            <button type="button" onClick={openAddFirst} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">
+                                + Add {initialLabel.replace(/ Pricing$/, " Price")}
+                            </button>
+                        )}
                     </div>
                     <div className="rounded-lg border border-admin-border bg-white overflow-hidden">
                         {loadingFirst ? (
                             <div className="p-8 text-center text-alloy-midnight/60">Loading…</div>
                         ) : firstCleanRows.length === 0 ? (
-                            <div className="p-8 text-center text-alloy-midnight/60">No first clean prices. Add pricing records or adjust filters.</div>
+                            <div className="p-8 text-center text-alloy-midnight/60">
+                                No legacy rows match filters. Live website pricing is edited on the Pricing Matrix tab.
+                            </div>
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
@@ -635,9 +651,10 @@ export default function PricingClient() {
                                             <td className="px-4 py-2">
                                                 <input
                                                     type="text"
-                                                    className="w-24 rounded border border-admin-border px-2 py-1 text-right"
+                                                    className="w-24 rounded border border-admin-border px-2 py-1 text-right disabled:bg-alloy-stone/20 disabled:text-alloy-midnight/60"
                                                     defaultValue={r.amount_cents != null ? (r.amount_cents / 100).toFixed(2) : ""}
                                                     onBlur={(e) => {
+                                                        if (LEGACY_PRICING_READ_ONLY) return;
                                                         const raw = e.target.value.trim();
                                                         if (raw === "") return;
                                                         const num = parseFloat(raw);
@@ -645,15 +662,17 @@ export default function PricingClient() {
                                                             patchFirstClean(r.id, { amount_cents: Math.round(num * 100) });
                                                         }
                                                     }}
-                                                    disabled={patchingFirstId === r.id}
+                                                    disabled={LEGACY_PRICING_READ_ONLY || patchingFirstId === r.id}
                                                 />
                                             </td>
                                             <td className="px-4 py-2">
                                                 <input
                                                     type="checkbox"
                                                     checked={!!r.is_active}
-                                                    onChange={(e) => patchFirstClean(r.id, { is_active: e.target.checked })}
-                                                    disabled={patchingFirstId === r.id}
+                                                    onChange={(e) => {
+                                                        if (!LEGACY_PRICING_READ_ONLY) patchFirstClean(r.id, { is_active: e.target.checked });
+                                                    }}
+                                                    disabled={LEGACY_PRICING_READ_ONLY || patchingFirstId === r.id}
                                                 />
                                             </td>
                                             <td className="px-4 py-2">{r._updated ? formatDateTime(r._updated) : "—"}</td>
@@ -669,16 +688,20 @@ export default function PricingClient() {
             {mainTab === "legacy" && activeSection === "recurring" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-alloy-pine">{recurringLabel}</h2>
-                        <button type="button" onClick={openAddRecurring} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">
-                            + Add {recurringLabel.replace(/ Pricing$/, " Price")}
-                        </button>
+                        <h2 className="text-lg font-semibold text-alloy-pine">{recurringLabel} (read-only)</h2>
+                        {!LEGACY_PRICING_READ_ONLY && (
+                            <button type="button" onClick={openAddRecurring} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">
+                                + Add {recurringLabel.replace(/ Pricing$/, " Price")}
+                            </button>
+                        )}
                     </div>
                     <div className="rounded-lg border border-admin-border bg-white overflow-hidden">
                         {loadingRecurring ? (
                             <div className="p-8 text-center text-alloy-midnight/60">Loading…</div>
                         ) : recurringRows.length === 0 ? (
-                            <div className="p-8 text-center text-alloy-midnight/60">No recurring prices. Add pricing records or adjust filters.</div>
+                            <div className="p-8 text-center text-alloy-midnight/60">
+                                No legacy rows match filters. Live website pricing is edited on the Pricing Matrix tab.
+                            </div>
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
@@ -702,9 +725,10 @@ export default function PricingClient() {
                                             <td className="px-4 py-2">
                                                 <input
                                                     type="text"
-                                                    className="w-24 rounded border border-admin-border px-2 py-1 text-right"
+                                                    className="w-24 rounded border border-admin-border px-2 py-1 text-right disabled:bg-alloy-stone/20 disabled:text-alloy-midnight/60"
                                                     defaultValue={r.amount_cents != null ? (r.amount_cents / 100).toFixed(2) : ""}
                                                     onBlur={(e) => {
+                                                        if (LEGACY_PRICING_READ_ONLY) return;
                                                         const raw = e.target.value.trim();
                                                         if (raw === "") return;
                                                         const num = parseFloat(raw);
@@ -712,15 +736,17 @@ export default function PricingClient() {
                                                             patchRecurring(r.id, { amount_cents: Math.round(num * 100) });
                                                         }
                                                     }}
-                                                    disabled={patchingRecurringId === r.id}
+                                                    disabled={LEGACY_PRICING_READ_ONLY || patchingRecurringId === r.id}
                                                 />
                                             </td>
                                             <td className="px-4 py-2">
                                                 <input
                                                     type="checkbox"
                                                     checked={!!r.is_active}
-                                                    onChange={(e) => patchRecurring(r.id, { is_active: e.target.checked })}
-                                                    disabled={patchingRecurringId === r.id}
+                                                    onChange={(e) => {
+                                                        if (!LEGACY_PRICING_READ_ONLY) patchRecurring(r.id, { is_active: e.target.checked });
+                                                    }}
+                                                    disabled={LEGACY_PRICING_READ_ONLY || patchingRecurringId === r.id}
                                                 />
                                             </td>
                                             <td className="px-4 py-2">{r._updated ? formatDateTime(r._updated) : "—"}</td>
@@ -736,23 +762,21 @@ export default function PricingClient() {
             {mainTab === "matrix" && (
                 <section>
                     <div
-                        className="mb-4 rounded-lg border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-alloy-midnight/90"
+                        className="mb-4 rounded-lg border border-alloy-pine/25 bg-alloy-pine/5 px-4 py-3 text-sm text-alloy-midnight/90"
                         role="note"
                     >
-                        <p className="font-medium text-alloy-midnight">Not the live quote editor</p>
+                        <p className="font-medium text-alloy-pine">Live website quote pricing</p>
                         <p className="mt-1">
-                            Public booking and <code className="rounded bg-white/80 px-1 text-xs">get_quote_pricing</code> read Legacy → {initialLabel} and Legacy →{" "}
-                            {recurringLabel} (<code className="rounded bg-white/80 px-1 text-xs">pricing_first_clean_prices</code>,{" "}
-                            <code className="rounded bg-white/80 px-1 text-xs">pricing_recurring_prices</code>). Edits on this tab only update{" "}
-                            <code className="rounded bg-white/80 px-1 text-xs">pricing_matrix</code> and do not change live quote amounts today.
+                            Base first-visit and recurring amounts on the public booking flow come from these <code className="rounded bg-white/80 px-1 text-xs">pricing_matrix</code>{" "}
+                            rows (via <code className="rounded bg-white/80 px-1 text-xs">get_quote_pricing</code>). Initial-mode rows use a null plan template; recurring rows match the
+                            plan template linked to each frequency. Add-ons are configured under Add-Ons.
                         </p>
                     </div>
                     <div className="flex items-center justify-between mb-3">
                         <div>
                             <h2 className="text-lg font-semibold text-alloy-pine">Pricing Matrix</h2>
                             <p className="mt-1 text-sm text-alloy-midnight/70">
-                                Service offering, plan template, pricing mode, and dimension value. You can edit amounts here for matrix records; that is separate from
-                                Legacy pricing above.
+                                Service offering, plan template, pricing mode, and dimension value. Edit amount and active inline to change what customers are quoted.
                             </p>
                         </div>
                         <button type="button" onClick={openAddRule} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">+ Add Pricing Rule</button>

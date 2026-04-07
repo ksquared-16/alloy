@@ -26,7 +26,7 @@ export type PricingMatrixRow = {
     _source_label: string | null;
 };
 
-/** GET: list pricing_matrix rows with joined display labels. Read-only parallel path. */
+/** GET: list pricing_matrix rows with joined display labels (live quote base amounts for get_quote_pricing). */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
