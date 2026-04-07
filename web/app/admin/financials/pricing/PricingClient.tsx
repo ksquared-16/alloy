@@ -32,8 +32,8 @@ type PricingOptions = {
 type MainPricingTab = "matrix" | "service-offerings" | "plan-templates" | "pricing-modes" | "pricing-dimensions" | "dimension-values" | "add-ons" | "discount-codes" | "legacy";
 
 export default function PricingClient() {
-    const [mainTab, setMainTab] = useState<MainPricingTab>("matrix");
-    const [activeSection, setActiveSection] = useState<"first-clean" | "recurring" | "matrix">("matrix");
+    const [mainTab, setMainTab] = useState<MainPricingTab>("legacy");
+    const [activeSection, setActiveSection] = useState<"first-clean" | "recurring" | "matrix">("first-clean");
     const [verticalId, setVerticalId] = useState("");
     const [serviceOfferingId, setServiceOfferingId] = useState("");
     const [pricingModeId, setPricingModeId] = useState("");
@@ -174,7 +174,9 @@ export default function PricingClient() {
             setLoadingMatrix(false);
         }
     }, [verticalId, serviceOfferingId, pricingModeId, planTemplateId, isActiveFilter]);
-    useEffect(() => { if (activeSection === "matrix") fetchMatrix(); }, [activeSection, fetchMatrix]);
+    useEffect(() => {
+        if (mainTab === "matrix") fetchMatrix();
+    }, [mainTab, fetchMatrix]);
 
     useEffect(() => {
         if (mainTab === "legacy" && activeSection === "matrix") setActiveSection("first-clean");
@@ -455,7 +457,10 @@ export default function PricingClient() {
         <div className="space-y-6">
             <header className="rounded-xl border border-admin-border border-l-4 border-l-alloy-pine bg-admin-surface-card px-6 py-4 shadow-sm">
                 <h1 className="text-2xl font-bold tracking-tight text-alloy-pine">Pricing</h1>
-                <p className="mt-1 text-sm text-alloy-midnight/70">Configure pricing by service offering, plan template, pricing mode, and dimension value.</p>
+                <p className="mt-1 text-sm text-alloy-midnight/70">
+                    Live website quotes use the Legacy tab (Initial and Recurring price tables). Pricing Matrix is a separate{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_matrix</code> surface and does not drive live quote pricing today.
+                </p>
             </header>
 
             {/* Main workspace tabs — Bend Pine active state */}
@@ -730,10 +735,25 @@ export default function PricingClient() {
 
             {mainTab === "matrix" && (
                 <section>
+                    <div
+                        className="mb-4 rounded-lg border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-alloy-midnight/90"
+                        role="note"
+                    >
+                        <p className="font-medium text-alloy-midnight">Not the live quote editor</p>
+                        <p className="mt-1">
+                            Public booking and <code className="rounded bg-white/80 px-1 text-xs">get_quote_pricing</code> read Legacy → {initialLabel} and Legacy →{" "}
+                            {recurringLabel} (<code className="rounded bg-white/80 px-1 text-xs">pricing_first_clean_prices</code>,{" "}
+                            <code className="rounded bg-white/80 px-1 text-xs">pricing_recurring_prices</code>). Edits on this tab only update{" "}
+                            <code className="rounded bg-white/80 px-1 text-xs">pricing_matrix</code> and do not change live quote amounts today.
+                        </p>
+                    </div>
                     <div className="flex items-center justify-between mb-3">
                         <div>
                             <h2 className="text-lg font-semibold text-alloy-pine">Pricing Matrix</h2>
-                            <p className="mt-1 text-sm text-alloy-midnight/70">Service offering, plan template, pricing mode, and dimension value. Edit amount and active inline.</p>
+                            <p className="mt-1 text-sm text-alloy-midnight/70">
+                                Service offering, plan template, pricing mode, and dimension value. You can edit amounts here for matrix records; that is separate from
+                                Legacy pricing above.
+                            </p>
                         </div>
                         <button type="button" onClick={openAddRule} className="px-3 py-1.5 text-sm font-medium bg-alloy-pine text-white rounded-md hover:opacity-90">+ Add Pricing Rule</button>
                     </div>
