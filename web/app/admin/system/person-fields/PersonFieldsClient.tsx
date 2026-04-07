@@ -12,16 +12,14 @@ import {
     getOptionSetKeyFromConfig,
     isSelectLikeFieldType,
 } from "@/lib/admin/fieldDefinitionOptionSetConfig";
+import {
+    fetchFieldSectionRegistry,
+    mergeFieldSectionSelectOptions,
+    sectionKeyInOptions,
+    type FieldSectionRegistryRow,
+} from "@/lib/admin/fieldSectionSelectOptions";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
-
-const PERSON_SECTION_OPTIONS = [
-    { value: "basic", label: "Basic" },
-    { value: "contact", label: "Contact" },
-    { value: "profile", label: "Profile" },
-    { value: "system", label: "System" },
-    { value: "custom", label: "Custom" },
-] as const;
 
 function slugifyLabel(label: string): string {
     return label
@@ -109,7 +107,24 @@ export default function PersonFieldsClient() {
     const [deleteSavingId, setDeleteSavingId] = useState<string | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
+    const [sectionRegistry, setSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
+
     const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
+
+    const inUseSectionKeys = useMemo(
+        () =>
+            new Set(
+                items
+                    .map((i) => i.section_key)
+                    .filter((k): k is string => typeof k === "string" && k.trim().length > 0)
+            ),
+        [items]
+    );
+
+    const sectionOptions = useMemo(
+        () => mergeFieldSectionSelectOptions(sectionRegistry, inUseSectionKeys),
+        [sectionRegistry, inUseSectionKeys]
+    );
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -131,6 +146,17 @@ export default function PersonFieldsClient() {
     useEffect(() => {
         fetchItems();
     }, [fetchItems]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const reg = await fetchFieldSectionRegistry("person");
+            if (!cancelled) setSectionRegistry(reg);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const openEdit = (row: FieldDef) => {
         setEditRow(row);
@@ -456,12 +482,18 @@ export default function PersonFieldsClient() {
                                 <div>
                                     <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
                                     <select
-                                        value={PERSON_SECTION_OPTIONS.some((o) => o.value === editSectionKey) ? editSectionKey : "custom"}
+                                        value={
+                                            sectionKeyInOptions(sectionOptions, editSectionKey)
+                                                ? editSectionKey
+                                                : (sectionOptions[0]?.value ?? "custom")
+                                        }
                                         onChange={(e) => setEditSectionKey(e.target.value)}
                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                     >
-                                        {PERSON_SECTION_OPTIONS.map((o) => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        {sectionOptions.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -587,12 +619,18 @@ export default function PersonFieldsClient() {
                                 <div>
                                     <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
                                     <select
-                                        value={PERSON_SECTION_OPTIONS.some((o) => o.value === createSectionKey) ? createSectionKey : "custom"}
+                                        value={
+                                            sectionKeyInOptions(sectionOptions, createSectionKey)
+                                                ? createSectionKey
+                                                : (sectionOptions[0]?.value ?? "custom")
+                                        }
                                         onChange={(e) => setCreateSectionKey(e.target.value)}
                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                     >
-                                        {PERSON_SECTION_OPTIONS.map((o) => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        {sectionOptions.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
