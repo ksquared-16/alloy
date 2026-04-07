@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
@@ -14,6 +14,15 @@ const SET_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 async function readApiError(res: Response): Promise<string> {
     const json = (await res.json().catch(() => ({}))) as { error?: string };
     return typeof json.error === "string" && json.error.trim() ? json.error.trim() : `Request failed (${res.status})`;
+}
+
+/** GET current item keys for an option set (source of truth after POST ambiguity). */
+async function fetchSetItemKeySet(setKey: string): Promise<Set<string> | null> {
+    const res = await fetch(`/api/admin/option-sets/${encodeURIComponent(setKey)}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const json = (await res.json().catch(() => ({}))) as { items?: { item_key?: unknown }[] };
+    const list = json.items ?? [];
+    return new Set(list.map((i) => String(i.item_key ?? "")).filter(Boolean));
 }
 
 function sanitizeSetKeyInput(raw: string): string {
@@ -44,6 +53,8 @@ type DraftItemRow = {
     status: "pending" | "ok" | "error";
     errorMessage: string;
     savedItemKey?: string;
+    /** Last `item_key` sent to POST (for server reconciliation when response is wrong). */
+    attemptedItemKey?: string;
 };
 
 function newDraftRow(sortOrder: number): DraftItemRow {
@@ -74,6 +85,16 @@ export default function OptionSetsClient() {
     const [modalError, setModalError] = useState<string | null>(null);
     const [partialBanner, setPartialBanner] = useState<string | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    /** Latest draft rows (avoids stale closure); synced every render. */
+    const draftRowsRef = useRef(draftRows);
+    draftRowsRef.current = draftRows;
+
+    /**
+     * Prevents overlapping create/retry runs (e.g. double-click). A second run used to POST the same
+     * keys while the first was still in flight → 409 / wrong per-row status while rows were persisted.
+     */
+    const optionSetCreateInFlightRef = useRef(false);
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -135,7 +156,10 @@ export default function OptionSetsClient() {
         row: DraftItemRow,
         reserved: Set<string>,
         useAdvancedItemKeys: boolean
-    ): Promise<{ ok: true; item_key: string } | { ok: false; message: string }> => {
+    ): Promise<
+        | { ok: true; item_key: string }
+        | { ok: false; message: string; attempted_item_key: string }
+    > => {
         let item_key: string;
         if (useAdvancedItemKeys && row.manualItemKeyOverride.trim()) {
             const manual = sanitizeItemKeyInput(row.manualItemKeyOverride);
@@ -143,6 +167,7 @@ export default function OptionSetsClient() {
                 return {
                     ok: false,
                     message: "Item key: 2–64 chars, lowercase letters, numbers, underscores.",
+                    attempted_item_key: "",
                 };
             }
             item_key = reserved.has(manual) ? uniqueAdminKey(manual, reserved) : manual;
@@ -159,12 +184,21 @@ export default function OptionSetsClient() {
                 sort_order: row.sort_order,
                 metadata: {},
             }),
+            cache: "no-store",
         });
 
         if (!res.ok) {
-            return { ok: false, message: await readApiError(res) };
+            const message = await readApiError(res);
+            const onServer = await fetchSetItemKeySet(setKeyForItems);
+            if (onServer?.has(item_key)) {
+                return { ok: true, item_key };
+            }
+            return { ok: false, message, attempted_item_key: item_key };
         }
-        return { ok: true, item_key };
+
+        const data = (await res.json().catch(() => ({}))) as { item_key?: unknown };
+        const serverKey = typeof data.item_key === "string" && data.item_key ? data.item_key : item_key;
+        return { ok: true, item_key: serverKey };
     };
 
     const runItemCreates = async (
@@ -182,33 +216,60 @@ export default function OptionSetsClient() {
             const result = await postOneDraftItem(setKeyForItems, row, reserved, advancedOpen);
             if (!result.ok) {
                 next = next.map((r) =>
-                    r.localId === row.localId ? { ...r, status: "error" as const, errorMessage: result.message } : r
+                    r.localId === row.localId
+                        ? {
+                              ...r,
+                              status: "error" as const,
+                              errorMessage: result.message,
+                              attemptedItemKey: result.attempted_item_key || undefined,
+                          }
+                        : r
                 );
             } else {
                 reserved.add(result.item_key);
                 next = next.map((r) =>
                     r.localId === row.localId
-                        ? { ...r, status: "ok" as const, errorMessage: "", savedItemKey: result.item_key }
+                        ? {
+                              ...r,
+                              status: "ok" as const,
+                              errorMessage: "",
+                              savedItemKey: result.item_key,
+                              attemptedItemKey: undefined,
+                          }
                         : r
                 );
             }
             setDraftRows(next);
         }
 
-        const errLabeled = next.filter((r) => r.label.trim() && r.status === "error");
-        if (errLabeled.length > 0) {
-            setPartialBanner(
-                `Option set was created. ${errLabeled.length} option${errLabeled.length === 1 ? "" : "s"} failed to save. Fix issues below or remove rows, then retry.`
-            );
-        } else {
-            setPartialBanner(null);
-        }
-
         return next;
+    };
+
+    /** If a row is marked error but that `item_key` exists in the DB, treat as saved (fixes false negatives). */
+    const reconcileRowsWithServer = async (setKeyForItems: string, rows: DraftItemRow[]): Promise<DraftItemRow[]> => {
+        const onServer = await fetchSetItemKeySet(setKeyForItems);
+        if (!onServer) return rows;
+
+        return rows.map((r) => {
+            if (r.status !== "error" || !r.label.trim()) return r;
+            const key = r.attemptedItemKey;
+            if (key && onServer.has(key)) {
+                return {
+                    ...r,
+                    status: "ok" as const,
+                    errorMessage: "",
+                    savedItemKey: key,
+                    attemptedItemKey: undefined,
+                };
+            }
+            return r;
+        });
     };
 
     const createOptionSetAndItems = async (onlyLocalId?: string) => {
         if (!canMutate) return;
+        if (optionSetCreateInFlightRef.current) return;
+
         setModalError(null);
         if (!onlyLocalId) setPartialBanner(null);
 
@@ -229,13 +290,14 @@ export default function OptionSetsClient() {
             return;
         }
 
-        let workingRows = draftRows;
+        let workingRows = draftRowsRef.current;
         const rowsToSubmit = workingRows.filter((r) => {
             if (!r.label.trim()) return false;
             if (onlyLocalId) return r.localId === onlyLocalId && r.status === "error";
             return r.status === "pending" || r.status === "error";
         });
 
+        optionSetCreateInFlightRef.current = true;
         setModalSaving(true);
         try {
             let setKeyForItems = createdSetKey;
@@ -249,6 +311,7 @@ export default function OptionSetsClient() {
                         label: modalLabel.trim(),
                         sort_order: modalSortOrder,
                     }),
+                    cache: "no-store",
                 });
                 if (!res.ok) {
                     setModalError(await readApiError(res));
@@ -274,8 +337,19 @@ export default function OptionSetsClient() {
                 return;
             }
 
-            const nextRows = await runItemCreates(setKeyForItems, rowsToSubmit, workingRows);
+            let nextRows = await runItemCreates(setKeyForItems, rowsToSubmit, workingRows);
+            nextRows = await reconcileRowsWithServer(setKeyForItems, nextRows);
+            setDraftRows(nextRows);
             workingRows = nextRows;
+
+            const errLabeled = workingRows.filter((r) => r.label.trim() && r.status === "error");
+            if (errLabeled.length > 0) {
+                setPartialBanner(
+                    `Option set was created. ${errLabeled.length} option${errLabeled.length === 1 ? "" : "s"} failed to save. Fix issues below or remove rows, then retry.`
+                );
+            } else {
+                setPartialBanner(null);
+            }
 
             const labeled = workingRows.filter((r) => r.label.trim());
             const allOk = labeled.length > 0 && labeled.every((r) => r.status === "ok");
@@ -286,6 +360,7 @@ export default function OptionSetsClient() {
             }
         } finally {
             setModalSaving(false);
+            optionSetCreateInFlightRef.current = false;
         }
     };
 
