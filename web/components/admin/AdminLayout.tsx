@@ -59,6 +59,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         icon: Database,
         items: [
             { href: "/admin/system/option-sets", label: "Option sets" },
+            { href: "/admin/system/field-sections", label: "Field sections" },
             {
                 label: "Fields",
                 subItems: [
@@ -172,6 +173,7 @@ function getLinkIcon(href: string, _label: string, nestedLabel?: string): IconCo
         "/admin/dashboard": LayoutDashboard,
         "/admin/system": Settings,
         "/admin/system/option-sets": LayoutGrid,
+        "/admin/system/field-sections": Layers,
         "/admin/system/pipelines": GitBranch,
         "/admin/opportunities": LayoutGrid,
         "/admin/jobs": Briefcase,
@@ -349,6 +351,7 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
         }
         const dataModelPaths = [
             "/admin/system/option-sets",
+            "/admin/system/field-sections",
             "/admin/system/statuses",
             "/admin/system/pipelines",
             ...customFieldPaths,

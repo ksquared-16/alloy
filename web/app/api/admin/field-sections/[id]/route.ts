@@ -74,6 +74,41 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const { data: row, error: loadErr } = await supabase
+        .from("field_section_definitions")
+        .select("entity_type, section_key")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (loadErr || !row) {
+        return NextResponse.json({ error: loadErr?.message ?? "Not found" }, { status: 404 });
+    }
+
+    const entity_type = String(row.entity_type);
+    const section_key = String(row.section_key);
+
+    const { count, error: countErr } = await supabase
+        .from("field_definitions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", ctx.orgId)
+        .eq("entity_type", entity_type)
+        .eq("section_key", section_key);
+
+    if (countErr) {
+        return NextResponse.json({ error: countErr.message }, { status: 500 });
+    }
+    const n = count ?? 0;
+    if (n > 0) {
+        return NextResponse.json(
+            {
+                error: `Cannot delete: ${n} field definition(s) still use section_key "${section_key}" for ${entity_type}.`,
+                field_definition_count: n,
+            },
+            { status: 409 }
+        );
+    }
+
     const { error } = await supabase.from("field_section_definitions").delete().eq("id", id).eq("org_id", ctx.orgId);
 
     if (error) {

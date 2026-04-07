@@ -9,6 +9,7 @@ const sections: HubSection[] = [
         description: "Field registry, option lists, statuses, and pipelines.",
         links: [
             { href: "/admin/system/option-sets", label: "Option sets" },
+            { href: "/admin/system/field-sections", label: "Field sections" },
             { href: "/admin/system/person-fields", label: "Person fields" },
             { href: "/admin/system/location-fields", label: "Location fields" },
             { href: "/admin/system/customer-fields", label: "Customer fields" },
