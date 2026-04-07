@@ -1,14 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import PrimaryButton from "@/components/PrimaryButton";
 import type { OptionSetUsageBlocker } from "@/lib/admin/collectOptionSetUsage";
+import { uniqueAdminKey } from "@/lib/admin/slugifyAdminKey";
 
 const ITEM_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
+
+function sanitizeItemKeyInput(raw: string): string {
+    return raw
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "");
+}
+
+async function readApiError(res: Response): Promise<string> {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return typeof json.error === "string" && json.error.trim() ? json.error.trim() : `Request failed (${res.status})`;
+}
 
 type SetRow = {
     id: string;
@@ -40,14 +56,22 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
 
     const [itemModalOpen, setItemModalOpen] = useState(false);
     const [itemModalId, setItemModalId] = useState<string | null>(null);
-    const [itemModalKey, setItemModalKey] = useState("");
+    const [itemModalKeyOverride, setItemModalKeyOverride] = useState("");
     const [itemModalLabel, setItemModalLabel] = useState("");
     const [itemModalSort, setItemModalSort] = useState(0);
     const [itemModalMeta, setItemModalMeta] = useState("{}");
+    const [itemModalAdvanced, setItemModalAdvanced] = useState(false);
     const [itemSaving, setItemSaving] = useState(false);
     const [itemError, setItemError] = useState<string | null>(null);
 
     const encodedKey = encodeURIComponent(setKey);
+
+    const reservedItemKeys = useMemo(() => new Set(items.map((i) => i.item_key)), [items]);
+
+    const previewCreateItemKey = useMemo(() => {
+        if (!itemModalLabel.trim()) return "";
+        return uniqueAdminKey(itemModalLabel, reservedItemKeys);
+    }, [itemModalLabel, reservedItemKeys]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -109,17 +133,18 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
 
     const openCreateItem = () => {
         setItemModalId(null);
-        setItemModalKey("");
+        setItemModalKeyOverride("");
         setItemModalLabel("");
         setItemModalSort(items.length ? Math.max(...items.map((i) => i.sort_order), 0) + 10 : 0);
         setItemModalMeta("{}");
+        setItemModalAdvanced(false);
         setItemError(null);
         setItemModalOpen(true);
     };
 
     const openEditItem = (row: ItemRow) => {
         setItemModalId(row.id);
-        setItemModalKey(row.item_key);
+        setItemModalKeyOverride("");
         setItemModalLabel(row.label);
         setItemModalSort(row.sort_order);
         try {
@@ -127,57 +152,89 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
         } catch {
             setItemModalMeta("{}");
         }
+        setItemModalAdvanced(false);
         setItemError(null);
         setItemModalOpen(true);
     };
 
-    const saveItem = async () => {
-        if (!canMutate) return;
-        let metadata: Record<string, unknown> = {};
-        try {
-            const parsed = JSON.parse(itemModalMeta.trim() || "{}");
-            if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-                metadata = parsed as Record<string, unknown>;
-            } else {
-                setItemError("metadata must be a JSON object.");
-                return;
+    const resolveCreateItemKey = (): { item_key: string } | { error: string } => {
+        if (!itemModalLabel.trim()) return { error: "Label is required." };
+
+        if (itemModalAdvanced && itemModalKeyOverride.trim()) {
+            const manual = sanitizeItemKeyInput(itemModalKeyOverride);
+            if (!ITEM_KEY_REGEX.test(manual)) {
+                return { error: "Item key: 2–64 chars, lowercase letters, numbers, underscores." };
             }
-        } catch {
-            setItemError("metadata must be valid JSON object.");
-            return;
+            return { item_key: manual };
         }
 
+        const key = uniqueAdminKey(itemModalLabel, reservedItemKeys);
+        if (!ITEM_KEY_REGEX.test(key)) {
+            return { error: "Could not derive a valid item key from the label." };
+        }
+        return { item_key: key };
+    };
+
+    const saveItem = async () => {
+        if (!canMutate) return;
         setItemSaving(true);
         setItemError(null);
         try {
             if (itemModalId) {
+                const patchBody: Record<string, unknown> = {
+                    label: itemModalLabel.trim(),
+                    sort_order: itemModalSort,
+                };
+                if (itemModalAdvanced) {
+                    try {
+                        const parsed = JSON.parse(itemModalMeta.trim() || "{}");
+                        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+                            patchBody.metadata = parsed as Record<string, unknown>;
+                        } else {
+                            setItemError("metadata must be a JSON object.");
+                            setItemSaving(false);
+                            return;
+                        }
+                    } catch {
+                        setItemError("metadata must be valid JSON object.");
+                        setItemSaving(false);
+                        return;
+                    }
+                }
+
                 const res = await fetch(`/api/admin/option-sets/${encodedKey}/items/${itemModalId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        label: itemModalLabel.trim(),
-                        sort_order: itemModalSort,
-                        metadata,
-                    }),
+                    body: JSON.stringify(patchBody),
                 });
-                const json = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+                if (!res.ok) throw new Error(await readApiError(res));
             } else {
-                const item_key = itemModalKey
-                    .trim()
-                    .toLowerCase()
-                    .replace(/\s+/g, "_")
-                    .replace(/[^a-z0-9_]/g, "");
-                if (!ITEM_KEY_REGEX.test(item_key)) {
-                    setItemError("Item key: 2–64 chars, lowercase letters, numbers, underscores.");
+                const keyRes = resolveCreateItemKey();
+                if ("error" in keyRes) {
+                    setItemError(keyRes.error);
                     setItemSaving(false);
                     return;
                 }
-                if (!itemModalLabel.trim()) {
-                    setItemError("Label is required.");
-                    setItemSaving(false);
-                    return;
+                const { item_key } = keyRes;
+
+                let metadata: Record<string, unknown> = {};
+                if (itemModalAdvanced) {
+                    try {
+                        const parsed = JSON.parse(itemModalMeta.trim() || "{}");
+                        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+                            metadata = parsed as Record<string, unknown>;
+                        } else {
+                            setItemError("metadata must be a JSON object.");
+                            setItemSaving(false);
+                            return;
+                        }
+                    } catch {
+                        setItemError("metadata must be valid JSON object.");
+                        setItemSaving(false);
+                        return;
+                    }
                 }
+
                 const res = await fetch(`/api/admin/option-sets/${encodedKey}/items`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -188,8 +245,7 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
                         metadata,
                     }),
                 });
-                const json = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+                if (!res.ok) throw new Error(await readApiError(res));
             }
             setItemModalOpen(false);
             await load();
@@ -207,8 +263,7 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
             const res = await fetch(`/api/admin/option-sets/${encodedKey}/items/${row.id}`, {
                 method: "DELETE",
             });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Delete failed");
+            if (!res.ok) throw new Error(await readApiError(res));
             await load();
         } catch (e) {
             setError((e as Error).message);
@@ -361,22 +416,10 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
                             {itemModalId ? "Edit item" : "New item"}
                         </h3>
                         <div className="space-y-3">
-                            {!itemModalId && (
-                                <div>
-                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Item key</label>
-                                    <input
-                                        type="text"
-                                        value={itemModalKey}
-                                        onChange={(e) => setItemModalKey(e.target.value)}
-                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
-                                    />
-                                    <p className="mt-0.5 text-xs text-[#59678b]">Immutable after create.</p>
-                                </div>
-                            )}
                             {itemModalId && (
                                 <div>
                                     <span className="text-xs text-[#59678b]">Item key</span>
-                                    <p className="font-mono text-sm text-[#31394d]">{itemModalKey}</p>
+                                    <p className="font-mono text-sm text-[#31394d]">{items.find((i) => i.id === itemModalId)?.item_key ?? ""}</p>
                                 </div>
                             )}
                             <div>
@@ -388,6 +431,12 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {!itemModalId && !itemModalAdvanced && itemModalLabel.trim() && (
+                                <p className="text-xs text-[#59678b]">
+                                    Item key will be{" "}
+                                    <span className="font-mono font-medium text-[#31394d]">{previewCreateItemKey}</span>
+                                </p>
+                            )}
                             <div>
                                 <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Sort order</label>
                                 <input
@@ -397,15 +446,39 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
-                            <div>
-                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Metadata (JSON)</label>
-                                <textarea
-                                    value={itemModalMeta}
-                                    onChange={(e) => setItemModalMeta(e.target.value)}
-                                    rows={5}
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-xs"
+                            <label className="flex cursor-pointer items-center gap-2 text-sm text-[#31394d]">
+                                <input
+                                    type="checkbox"
+                                    checked={itemModalAdvanced}
+                                    onChange={(e) => setItemModalAdvanced(e.target.checked)}
+                                    className="rounded border-[#c4c8cc]"
                                 />
-                            </div>
+                                Advanced (item key &amp; metadata)
+                            </label>
+                            {itemModalAdvanced && !itemModalId && (
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Item key override</label>
+                                    <input
+                                        type="text"
+                                        value={itemModalKeyOverride}
+                                        onChange={(e) => setItemModalKeyOverride(e.target.value)}
+                                        placeholder="Leave blank to auto-generate from label"
+                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
+                                    />
+                                    <p className="mt-0.5 text-xs text-[#59678b]">Immutable after create. Must be unique in this set.</p>
+                                </div>
+                            )}
+                            {itemModalAdvanced && (
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Metadata (JSON)</label>
+                                    <textarea
+                                        value={itemModalMeta}
+                                        onChange={(e) => setItemModalMeta(e.target.value)}
+                                        rows={5}
+                                        className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-xs"
+                                    />
+                                </div>
+                            )}
                         </div>
                         {itemError && <p className="mt-2 text-sm text-red-600">{itemError}</p>}
                         <div className="mt-4 flex justify-end gap-2">
