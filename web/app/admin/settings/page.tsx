@@ -1,7 +1,6 @@
-import SettingsClient from "./SettingsClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
-
-export default function AdminSettingsPage() {
-    return <SettingsClient />;
+/** Legacy URL: pipelines live under System → Data model. */
+export default function AdminLegacySettingsRedirectPage() {
+    redirect("/admin/system/pipelines");
 }
