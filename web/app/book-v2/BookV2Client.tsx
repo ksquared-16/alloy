@@ -274,6 +274,8 @@ type PublicBookingCatalog = {
     home_types: Array<{ key: string; label: string }>;
     bedroom_options: Array<{ value: string; label: string }>;
     bathroom_options: Array<{ value: string; label: string }>;
+    specialty_cleaning_type_options: Array<{ value: string; label: string }>;
+    access_method_booking_ui: Array<{ value: string; label: string }>;
     addons: Array<{ id: string; label: string; price: number }>;
     pricing_frequencies: Array<{
         frequency_key: string;
@@ -580,6 +582,8 @@ export default function BookV2Client() {
                     home_types: data.home_types ?? [],
                     bedroom_options: data.bedroom_options ?? [],
                     bathroom_options: data.bathroom_options ?? [],
+                    specialty_cleaning_type_options: data.specialty_cleaning_type_options ?? [],
+                    access_method_booking_ui: data.access_method_booking_ui ?? [],
                     addons: data.addons ?? [],
                     pricing_frequencies: data.pricing_frequencies ?? [],
                 });

@@ -9,6 +9,7 @@ import {
     resolveSqftTierDisplayLabels,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
+import { BOOK_V2_ACCESS_METHOD_STABLE_TO_UI } from "@/lib/book-v2/bookingCanonicalMaps";
 import { resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
 
 /**
@@ -27,13 +28,36 @@ export async function GET() {
             return NextResponse.json({ ok: false, message: "Cleaning vertical not found" }, { status: 500 });
         }
 
-        const [tiersRaw, homeTypesFromSet, homeTypesLegacy, freqRows, addonBundle] = await Promise.all([
+        const [
+            tiersRaw,
+            homeTypesFromSet,
+            homeTypesLegacy,
+            freqRows,
+            addonBundle,
+            bedroomOptions,
+            bathroomOptions,
+            specialtyCleaningTypeOptions,
+            accessMethodStableOptions,
+        ] = await Promise.all([
             loadSqftTiersForVertical(supabase, verticalId),
             orgId ? resolveOptionSetOptions(supabase, orgId, "home_type") : Promise.resolve([]),
             loadActiveHomeTypes(supabase),
             loadPricingFrequenciesForVertical(supabase, verticalId),
             loadCleaningAddonsFromDb(supabase, verticalId),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "bedrooms_booking") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "bathrooms_booking") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "specialty_cleaning_type") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptions(supabase, orgId, "access_method") : Promise.resolve([]),
         ]);
+
+        const access_method_booking_ui = accessMethodStableOptions.map((o) => {
+            const stable = String(o.value).trim();
+            const ui = BOOK_V2_ACCESS_METHOD_STABLE_TO_UI[stable] ?? stable;
+            return {
+                value: ui,
+                label: (o.label && String(o.label).trim()) || ui,
+            };
+        });
 
         const tierRows =
             tiersRaw.length > 0 ? await resolveSqftTierDisplayLabels(supabase, orgId, tiersRaw) : [];
@@ -77,6 +101,10 @@ export async function GET() {
             vertical_id: verticalId,
             square_footage_tiers,
             home_types,
+            bedroom_options: bedroomOptions,
+            bathroom_options: bathroomOptions,
+            specialty_cleaning_type_options: specialtyCleaningTypeOptions,
+            access_method_booking_ui,
             beds_input: { min: 0, max: 20, step: 1 },
             baths_input: { min: 0, max: 15, step: 0.5 },
             pricing_frequencies: freqRows,

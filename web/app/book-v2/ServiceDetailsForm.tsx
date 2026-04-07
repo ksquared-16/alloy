@@ -6,12 +6,24 @@ import ConfigurableFieldSections, {
     type PublicFieldDef,
     type PublicSectionDef,
 } from "@/components/public/ConfigurableFieldSections";
+import {
+    accessMethodIsFrontDeskFlow,
+    accessMethodIsHomeFlow,
+    accessMethodUsesDoorCodeField,
+    bookingAccessUiToken,
+} from "@/lib/book-v2/bookingCanonicalMaps";
 import { BOOKING_BATHROOM_OPTIONS, BOOKING_BEDROOM_OPTIONS } from "@/lib/book-v2/bookingBedBathOptions";
+import {
+    bookingBathroomSelectOptionsFromFields,
+    bookingBedroomSelectOptionsFromFields,
+    homeTypeSelectOptionsFromBookingConfig,
+} from "@/lib/public/fetchPublicFieldDefinitions";
 
 export interface ServiceDetails {
     address: string;
     city: string;
-    access_method: "home" | "code" | "key" | "building";
+    /** Book-v2 UI tokens (`home` | `code` | `key` | `building`) or legacy stable keys from storage. */
+    access_method: string;
     access_note: string;
     has_pets: boolean;
     /** Values for org-defined public booking fields (field_key → value). */
@@ -69,6 +81,21 @@ export function withoutExcludedConfigurableValues(
 
 const inputPad = "w-full px-3 py-2 border border-alloy-stone/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-alloy-juniper/70";
 
+/** Last-resort if `access_method` option set is empty (service misconfiguration). */
+const DEFAULT_ACCESS_METHOD_BOOKING_UI: { value: string; label: string }[] = [
+    { value: "home", label: "I will be home" },
+    { value: "code", label: "Door/Garage Code" },
+    { value: "key", label: "Hidden Key" },
+    { value: "building", label: "Building / Front Desk" },
+];
+
+type PublicBookingCfgSlice = {
+    bedroom_options?: { value: string; label: string }[];
+    bathroom_options?: { value: string; label: string }[];
+    home_types?: { key: string; label: string }[];
+    access_method_booking_ui?: { value: string; label: string }[];
+};
+
 export default function ServiceDetailsForm({
     initialData,
     onDataChange,
@@ -77,7 +104,7 @@ export default function ServiceDetailsForm({
     const [formData, setFormData] = useState<ServiceDetails>({
         address: initialData?.address || "",
         city: initialData?.city || "",
-        access_method: initialData?.access_method || "home",
+        access_method: bookingAccessUiToken(initialData?.access_method) || "home",
         access_note: initialData?.access_note || "",
         has_pets: initialData?.has_pets ?? false,
         configurable_values: withoutExcludedConfigurableValues(
@@ -93,27 +120,34 @@ export default function ServiceDetailsForm({
     const [locationFields, setLocationFields] = useState<PublicFieldDef[]>([]);
     const [locationSections, setLocationSections] = useState<PublicSectionDef[]>([]);
     const [defsLoading, setDefsLoading] = useState(true);
+    const [bookingCfg, setBookingCfg] = useState<PublicBookingCfgSlice | null>(null);
 
     useEffect(() => {
         let cancelled = false;
         const q = new URLSearchParams({ entity_type: "location" });
         if (verticalSlug?.trim()) q.set("vertical_slug", verticalSlug.trim());
-        fetch(`/api/public/field-definitions?${q.toString()}`)
-            .then((r) => r.json())
-            .then((defsData: { ok?: boolean; fields?: PublicFieldDef[]; sections?: PublicSectionDef[] }) => {
+        Promise.all([
+            fetch(`/api/public/field-definitions?${q.toString()}`).then((r) => r.json()),
+            fetch("/api/public/booking-config").then((r) => r.json()),
+        ])
+            .then(([defsData, cfgData]) => {
                 if (cancelled) return;
-                if (defsData?.ok) {
-                    setLocationFields(defsData.fields ?? []);
-                    setLocationSections(defsData.sections ?? []);
+                const defs = defsData as { ok?: boolean; fields?: PublicFieldDef[]; sections?: PublicSectionDef[] };
+                if (defs?.ok) {
+                    setLocationFields(defs.fields ?? []);
+                    setLocationSections(defs.sections ?? []);
                 } else {
                     setLocationFields([]);
                     setLocationSections([]);
                 }
+                const cfg = cfgData as { ok?: boolean } & PublicBookingCfgSlice;
+                setBookingCfg(cfg?.ok ? cfg : null);
             })
             .catch(() => {
                 if (!cancelled) {
                     setLocationFields([]);
                     setLocationSections([]);
+                    setBookingCfg(null);
                 }
             })
             .finally(() => {
@@ -133,7 +167,7 @@ export default function ServiceDetailsForm({
         return fieldsForServiceStep.filter((f) => {
             if (SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS.has(f.field_key)) return false;
             if (f.section_key === "access_notes" && f.field_key === "gate_code") {
-                return formData.access_method === "building";
+                return accessMethodIsFrontDeskFlow(formData.access_method);
             }
             return true;
         });
@@ -157,7 +191,7 @@ export default function ServiceDetailsForm({
             visibleServiceFields.filter((f) => {
                 if (f.section_key !== "access_notes") return false;
                 if (SERVICE_DETAILS_CONFIG_LAYOUT_EXCLUDED_KEYS.has(f.field_key)) return false;
-                if (f.field_key === "gate_code" && formData.access_method !== "building") return false;
+                if (f.field_key === "gate_code" && !accessMethodIsFrontDeskFlow(formData.access_method)) return false;
                 return true;
             }),
         [visibleServiceFields, formData.access_method]
@@ -179,26 +213,40 @@ export default function ServiceDetailsForm({
     const defsReady = !defsLoading;
 
     const bedFieldDef = useMemo(
-        () => fieldsForServiceStep.find((f) => f.field_key === "beds"),
+        () =>
+            fieldsForServiceStep.find((f) => f.field_key === "bedrooms" && f.options?.length) ??
+            fieldsForServiceStep.find((f) => f.field_key === "beds" && f.options?.length),
         [fieldsForServiceStep]
     );
     const bathFieldDef = useMemo(
-        () => fieldsForServiceStep.find((f) => f.field_key === "baths"),
+        () =>
+            fieldsForServiceStep.find((f) => f.field_key === "bathrooms" && f.options?.length) ??
+            fieldsForServiceStep.find((f) => f.field_key === "baths" && f.options?.length),
         [fieldsForServiceStep]
     );
     const homeTypeFieldDef = useMemo(
         () => fieldsForServiceStep.find((f) => f.field_key === "home_type"),
         [fieldsForServiceStep]
     );
+    const bedOptionsFromDefs = useMemo(
+        () => bookingBedroomSelectOptionsFromFields(fieldsForServiceStep),
+        [fieldsForServiceStep]
+    );
+    const bathOptionsFromDefs = useMemo(
+        () => bookingBathroomSelectOptionsFromFields(fieldsForServiceStep),
+        [fieldsForServiceStep]
+    );
     const bedOptions =
-        bedFieldDef?.options?.length && bedFieldDef.options.length > 0
-            ? bedFieldDef.options
-            : BOOKING_BEDROOM_OPTIONS;
+        (bedFieldDef?.options?.length ? bedFieldDef.options : null) ??
+        (bedOptionsFromDefs?.length ? bedOptionsFromDefs : null) ??
+        (bookingCfg?.bedroom_options?.length ? bookingCfg.bedroom_options : null) ??
+        BOOKING_BEDROOM_OPTIONS;
     const bathOptions =
-        bathFieldDef?.options?.length && bathFieldDef.options.length > 0
-            ? bathFieldDef.options
-            : BOOKING_BATHROOM_OPTIONS;
-    /** Documented fallback if `home_type` is missing from public defs (org misconfiguration). */
+        (bathFieldDef?.options?.length ? bathFieldDef.options : null) ??
+        (bathOptionsFromDefs?.length ? bathOptionsFromDefs : null) ??
+        (bookingCfg?.bathroom_options?.length ? bookingCfg.bathroom_options : null) ??
+        BOOKING_BATHROOM_OPTIONS;
+    /** Last resort if registry + booking-config both lack home types. */
     const FALLBACK_HOME_TYPES = [
         { value: "house", label: "House" },
         { value: "condo", label: "Condo" },
@@ -208,7 +256,13 @@ export default function ServiceDetailsForm({
     const homeTypeOptions =
         homeTypeFieldDef?.options?.length && homeTypeFieldDef.options.length > 0
             ? homeTypeFieldDef.options
-            : FALLBACK_HOME_TYPES;
+            : homeTypeSelectOptionsFromBookingConfig(bookingCfg?.home_types) ?? FALLBACK_HOME_TYPES;
+
+    const accessMethodSelectOptions = useMemo(() => {
+        const fromCfg = bookingCfg?.access_method_booking_ui?.filter((o) => o.value?.trim());
+        if (fromCfg && fromCfg.length > 0) return fromCfg;
+        return DEFAULT_ACCESS_METHOD_BOOKING_UI;
+    }, [bookingCfg]);
 
     useEffect(() => {
         try {
@@ -235,11 +289,16 @@ export default function ServiceDetailsForm({
                     if (bed && (cfgNext.bedrooms === undefined || cfgNext.bedrooms === "")) cfgNext.bedrooms = bed;
                     if (bath && (cfgNext.bathrooms === undefined || cfgNext.bathrooms === "")) cfgNext.bathrooms = bath;
                     if (ht && (cfgNext.home_type === undefined || cfgNext.home_type === "")) cfgNext.home_type = ht;
+                    const accessRaw =
+                        typeof rest.access_method === "string" && rest.access_method.trim()
+                            ? rest.access_method.trim()
+                            : prev.access_method;
                     return {
                         ...prev,
                         ...rest,
                         beds: bed ?? prev.beds,
                         baths: bath ?? prev.baths,
+                        access_method: bookingAccessUiToken(accessRaw),
                         has_pets: rest.has_pets === true,
                         configurable_values: withoutExcludedConfigurableValues(cfgNext),
                     };
@@ -267,7 +326,7 @@ export default function ServiceDetailsForm({
     const validateForm = useCallback(
         (data: ServiceDetails): boolean => {
             if (!data.address.trim() || !data.city.trim()) return false;
-            if (data.access_method !== "home" && !data.access_note.trim()) return false;
+            if (!accessMethodIsHomeFlow(data.access_method) && !data.access_note.trim()) return false;
 
             const bedRaw = data.configurable_values.beds ?? data.beds ?? data.configurable_values.bedrooms ?? data.bedrooms;
             const bathRaw =
@@ -299,11 +358,11 @@ export default function ServiceDetailsForm({
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
 
-    const handleAccessMethodChange = (method: ServiceDetails["access_method"]) => {
+    const handleAccessMethodChange = (method: string) => {
         setFormData((prev) => ({
             ...prev,
             access_method: method,
-            access_note: method === "home" ? "" : prev.access_note,
+            access_note: accessMethodIsHomeFlow(method) ? "" : prev.access_note,
         }));
     };
 
@@ -318,7 +377,8 @@ export default function ServiceDetailsForm({
         setFormData((prev) => ({
             ...prev,
             beds: v,
-            configurable_values: { ...prev.configurable_values, beds: v },
+            bedrooms: v,
+            configurable_values: { ...prev.configurable_values, beds: v, bedrooms: v },
         }));
     };
 
@@ -326,7 +386,8 @@ export default function ServiceDetailsForm({
         setFormData((prev) => ({
             ...prev,
             baths: v,
-            configurable_values: { ...prev.configurable_values, baths: v },
+            bathrooms: v,
+            configurable_values: { ...prev.configurable_values, baths: v, bathrooms: v },
         }));
     };
 
@@ -470,24 +531,23 @@ export default function ServiceDetailsForm({
                     </label>
                     <select
                         value={formData.access_method}
-                        onChange={(e) =>
-                            handleAccessMethodChange(e.target.value as ServiceDetails["access_method"])
-                        }
+                        onChange={(e) => handleAccessMethodChange(e.target.value)}
                         className={`${inputPad} bg-white`}
                     >
-                        <option value="home">I will be home</option>
-                        <option value="code">Door/Garage Code</option>
-                        <option value="key">Hidden Key</option>
-                        <option value="building">Building / Front Desk</option>
+                        {accessMethodSelectOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
-                {formData.access_method !== "home" && (
+                {!accessMethodIsHomeFlow(formData.access_method) && (
                     <div>
                         <label className="block text-xs font-medium text-alloy-midnight mb-0.5">
-                            {formData.access_method === "code"
+                            {accessMethodUsesDoorCodeField(formData.access_method)
                                 ? "Door or garage code"
-                                : formData.access_method === "key"
+                                : bookingAccessUiToken(formData.access_method) === "key"
                                   ? "Where to find the key"
                                   : "Building access instructions"}{" "}
                             <span className="text-red-500">*</span>
@@ -496,9 +556,9 @@ export default function ServiceDetailsForm({
                             value={formData.access_note}
                             onChange={(e) => handleChange("access_note", e.target.value)}
                             placeholder={
-                                formData.access_method === "code"
+                                accessMethodUsesDoorCodeField(formData.access_method)
                                     ? "Enter the code"
-                                    : formData.access_method === "key"
+                                    : bookingAccessUiToken(formData.access_method) === "key"
                                       ? "Describe where the key is hidden"
                                       : "e.g. gate, lobby, concierge"
                             }
