@@ -8,3 +8,4 @@ export type {
     WorkspaceQueueFilterIntent,
 } from "./types";
 export { getDepartmentWorkspaceLayout } from "./registry";
+export { partitionDepartmentBlocks } from "./partitionBlocks";

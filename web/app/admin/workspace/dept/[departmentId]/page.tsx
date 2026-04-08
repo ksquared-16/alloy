@@ -64,6 +64,7 @@ export default function WorkspaceDepartmentPage() {
 
     return (
         <WorkspaceChrome
+            variant="bridge"
             breadcrumbs={[
                 { href: "/admin/workspace", label: "Workspace" },
                 { href: `/admin/workspace/dept/${departmentId}`, label: title },
@@ -71,8 +72,15 @@ export default function WorkspaceDepartmentPage() {
             title={title}
             subtitle="Configurable operational surface — blocks are driven by workspace layout config, not hardcoded department pages."
         >
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <WorkspaceRenderer layout={layout} departmentId={departmentId} runtime={runtime} />
+            {error && <p className="text-sm text-red-600 px-1">{error}</p>}
+            <WorkspaceRenderer
+                layout={layout}
+                departmentId={departmentId}
+                runtime={runtime}
+                presentation="department_bridge"
+                bridgeBriefTitle={title}
+                bridgeBriefSubtitle="Blocks and metrics come from the workspace registry; queues link to real routes and APIs."
+            />
         </WorkspaceChrome>
     );
 }
