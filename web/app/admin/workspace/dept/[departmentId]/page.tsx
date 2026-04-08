@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
+import { WorkspaceRenderer } from "@/components/admin/workspace/WorkspaceRenderer";
+import { getDepartmentWorkspaceLayout, type WorkspaceRuntimeData } from "@/lib/workspace";
 
-type Dept = { id: string; name: string | null };
+type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
 
 export default function WorkspaceDepartmentPage() {
@@ -19,7 +20,15 @@ export default function WorkspaceDepartmentPage() {
 
     const title = useMemo(() => dept?.name?.trim() || "Department", [dept]);
 
-    const unassignedHref = `/admin/workspace/dept/${departmentId}/unassigned`;
+    const layout = useMemo(() => getDepartmentWorkspaceLayout(dept?.key ?? null), [dept?.key]);
+
+    const runtime: WorkspaceRuntimeData = useMemo(
+        () => ({
+            metrics: { "jobs.unassigned_count": unassignedTotal },
+            workUnits,
+        }),
+        [unassignedTotal, workUnits]
+    );
 
     useEffect(() => {
         if (!departmentId) return;
@@ -53,12 +62,6 @@ export default function WorkspaceDepartmentPage() {
         };
     }, [departmentId]);
 
-    const otherWorkUnits = workUnits.filter((wu) => {
-        const n = (wu.name ?? "").toLowerCase();
-        const k = (wu.key ?? "").toLowerCase();
-        return !n.includes("unassign") && k !== "unassigned";
-    });
-
     return (
         <WorkspaceChrome
             breadcrumbs={[
@@ -66,61 +69,10 @@ export default function WorkspaceDepartmentPage() {
                 { href: `/admin/workspace/dept/${departmentId}`, label: title },
             ]}
             title={title}
-            subtitle="Department surface — pick a work unit to open its queue. This slice focuses on navigation, not a full dashboard."
+            subtitle="Configurable operational surface — blocks are driven by workspace layout config, not hardcoded department pages."
         >
             {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <section className="rounded-xl border border-admin-border bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-alloy-midnight">Signals</h2>
-                <p className="text-xs text-alloy-midnight/60 mt-1">Light counts only (slice 1).</p>
-                <p className="mt-3 text-sm text-alloy-forge/90">
-                    Jobs with no work unit:{" "}
-                    <span className="font-medium text-alloy-midnight">
-                        {unassignedTotal === null ? "—" : unassignedTotal}
-                    </span>
-                </p>
-            </section>
-
-            <section className="rounded-xl border border-admin-border bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-alloy-midnight">Work units</h2>
-                <p className="text-xs text-alloy-midnight/60 mt-1">
-                    Primary entry points for queues in this department.
-                </p>
-                <ul className="mt-4 divide-y divide-admin-border border border-admin-border rounded-lg overflow-hidden">
-                    <li>
-                        <Link
-                            href={unassignedHref}
-                            className="block px-4 py-3 hover:bg-alloy-stone/30 transition-colors"
-                        >
-                            <span className="font-medium text-alloy-midnight">Unassigned jobs</span>
-                            <p className="text-xs text-alloy-midnight/55 mt-0.5">
-                                Triage queue — jobs where work unit is not set.
-                            </p>
-                        </Link>
-                    </li>
-                    {otherWorkUnits.map((wu) => (
-                        <li key={wu.id} className="px-4 py-3 bg-alloy-stone/10">
-                            <span className="text-sm text-alloy-midnight/70">{wu.name ?? "Work unit"}</span>
-                            <p className="text-xs text-alloy-midnight/45 mt-0.5">
-                                Queue UI deferred — use Unassigned jobs for the V2 proving path.
-                            </p>
-                        </li>
-                    ))}
-                </ul>
-            </section>
-
-            <section className="rounded-xl border border-dashed border-admin-border bg-alloy-stone/15 p-4 text-sm text-alloy-midnight/70">
-                <p className="font-medium text-alloy-midnight/85">KPIs</p>
-                <p className="mt-1">Placeholder strip for slice 1 — wire analytics later.</p>
-            </section>
-
-            <p className="text-xs text-alloy-midnight/50">
-                Manage hierarchy in{" "}
-                <Link href="/admin/system/work-units" className="text-alloy-blue hover:underline">
-                    Organization → Work units
-                </Link>
-                .
-            </p>
+            <WorkspaceRenderer layout={layout} departmentId={departmentId} runtime={runtime} />
         </WorkspaceChrome>
     );
 }
