@@ -132,7 +132,10 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
     {
         label: "Workspace",
         icon: LayoutTemplate,
-        items: [{ href: "/admin/system/entity-labels", label: "Entity labels" }],
+        items: [
+            { href: "/admin/workspace", label: "V2 workspace (cleaning slice)" },
+            { href: "/admin/system/entity-labels", label: "Entity labels" },
+        ],
     },
     {
         label: "Organization",
@@ -197,6 +200,7 @@ function getLinkIcon(href: string, _label: string, nestedLabel?: string): IconCo
         "/admin/system/access-control": Shield,
         "/admin/system/verticals-industries": LayoutGrid,
         "/admin/system/entity-labels": LayoutTemplate,
+        "/admin/workspace": LayoutTemplate,
         "/admin/system/statuses": Tag,
         "/admin/system/departments": Layers,
         "/admin/system/work-units": Layers,
@@ -267,6 +271,13 @@ function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boo
     return link.label;
 }
 
+/** Workspace V2 routes nest under `/admin/workspace/...`; treat as active for sidebar expansion. */
+function pathnameMatchesNavHref(href: string, pathname: string): boolean {
+    if (href === pathname) return true;
+    if (href === "/admin/workspace" && pathname.startsWith("/admin/workspace")) return true;
+    return false;
+}
+
 function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, "initialEntityLabels">) {
     const pathname = usePathname();
     const router = useRouter();
@@ -290,7 +301,7 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
         const group = navGroups.find((g) =>
             g.items.some((i) => {
                 if (isNestedNavItem(i)) return i.subItems.some((s) => s.href === pathname);
-                return (i as NavLink).href === pathname;
+                return pathnameMatchesNavHref((i as NavLink).href, pathname);
             })
         );
         if (group && collapsed[group.label]) {
@@ -360,7 +371,7 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
         if (dataModelPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
             setCollapsed((prev) => (prev["Data model"] === false ? prev : { ...prev, "Data model": false }));
         }
-        if (pathname === "/admin/system/entity-labels") {
+        if (pathname === "/admin/system/entity-labels" || pathnameMatchesNavHref("/admin/workspace", pathname)) {
             setCollapsed((prev) => (prev.Workspace === false ? prev : { ...prev, Workspace: false }));
         } else if (
             pathname !== "/admin/system/entity-labels" &&
@@ -576,7 +587,7 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
                                                     );
                                                 }
                                                 const link = item as NavLink;
-                                                const isActive = pathname === link.href;
+                                                const isActive = pathnameMatchesNavHref(link.href, pathname);
                                                 const LinkIcon = getLinkIcon(link.href, link.label);
                                                 const displayLabel = navLinkLabel(link, labels, labelsLoading);
                                                 return (

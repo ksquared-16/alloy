@@ -40,9 +40,14 @@ export type JobPrefill = {
     primary_contact_id?: string | null;
 };
 
+/** Resolver surface for job entity GET (`?surface=`). Only applied when type === "jobs". */
+export type JobRecordSurfaceParam = "drawer" | "overview" | "full";
+
 interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
     id: string | null;
+    /** When opening a job from V2 workspace, use "drawer" so `_rrs` matches triage; default entity behavior uses "full". */
+    jobRecordSurface?: JobRecordSurfaceParam;
     /** When opening workflows with id "new", default the entity_type field to this (e.g. "opportunity"). */
     defaultWorkflowEntityType?: string;
     /** When opening customer_members or contacts or locations with id "new", prefill customer_id. */
@@ -64,7 +69,16 @@ interface AdminDrawerContextValue {
     canGoBack: boolean;
     /** Top of stack (the drawer we would return to on Back). */
     previousDrawer: DrawerStackItem | null;
-    openDrawer: (params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultVendorId?: string; defaultSchedulePrefill?: SchedulePrefill; defaultJobPrefill?: JobPrefill }) => void;
+    openDrawer: (params: {
+        type: AdminDrawerEntityType;
+        id: string;
+        defaultWorkflowEntityType?: string;
+        defaultCustomerId?: string;
+        defaultVendorId?: string;
+        defaultSchedulePrefill?: SchedulePrefill;
+        defaultJobPrefill?: JobPrefill;
+        jobRecordSurface?: JobRecordSurfaceParam;
+    }) => void;
     goBack: () => void;
     closeDrawer: () => void;
 }
@@ -81,24 +95,37 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
     const [stack, setStack] = useState<DrawerStackItem[]>([]);
 
-    const openDrawer = useCallback((params: { type: AdminDrawerEntityType; id: string; defaultWorkflowEntityType?: string; defaultCustomerId?: string; defaultVendorId?: string; defaultSchedulePrefill?: SchedulePrefill; defaultJobPrefill?: JobPrefill }) => {
-        setDrawer((prev) => {
-            const prevType = prev.type;
-            const prevId = prev.id;
-            if (prevType != null && prevId != null) {
-                setStack((s) => [...s, { type: prevType, id: prevId }]);
-            }
-            return {
-                type: params.type,
-                id: params.id,
-                defaultWorkflowEntityType: params.defaultWorkflowEntityType,
-                defaultCustomerId: params.defaultCustomerId,
-                defaultVendorId: params.defaultVendorId,
-                defaultSchedulePrefill: params.defaultSchedulePrefill,
-                defaultJobPrefill: params.defaultJobPrefill,
-            };
-        });
-    }, []);
+    const openDrawer = useCallback(
+        (params: {
+            type: AdminDrawerEntityType;
+            id: string;
+            defaultWorkflowEntityType?: string;
+            defaultCustomerId?: string;
+            defaultVendorId?: string;
+            defaultSchedulePrefill?: SchedulePrefill;
+            defaultJobPrefill?: JobPrefill;
+            jobRecordSurface?: JobRecordSurfaceParam;
+        }) => {
+            setDrawer((prev) => {
+                const prevType = prev.type;
+                const prevId = prev.id;
+                if (prevType != null && prevId != null) {
+                    setStack((s) => [...s, { type: prevType, id: prevId }]);
+                }
+                return {
+                    type: params.type,
+                    id: params.id,
+                    defaultWorkflowEntityType: params.defaultWorkflowEntityType,
+                    defaultCustomerId: params.defaultCustomerId,
+                    defaultVendorId: params.defaultVendorId,
+                    defaultSchedulePrefill: params.defaultSchedulePrefill,
+                    defaultJobPrefill: params.defaultJobPrefill,
+                    jobRecordSurface: params.type === "jobs" ? params.jobRecordSurface : undefined,
+                };
+            });
+        },
+        []
+    );
 
     const goBack = useCallback(() => {
         setStack((s) => {

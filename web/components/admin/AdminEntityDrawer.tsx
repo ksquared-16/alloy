@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/admin/Drawer";
-import { useAdminDrawer, type AdminDrawerEntityType, type SchedulePrefill, type JobPrefill } from "@/contexts/AdminDrawerContext";
+import {
+    useAdminDrawer,
+    type AdminDrawerEntityType,
+    type JobRecordSurfaceParam,
+    type SchedulePrefill,
+    type JobPrefill,
+} from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
@@ -37,6 +43,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
+import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
 import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from "@/lib/admin/jobDiscountSelection";
@@ -617,6 +624,19 @@ function JobDrawerRelationshipsSection(props: {
     );
 }
 
+function buildAdminEntityFetchUrl(
+    type: AdminDrawerEntityType | null,
+    id: string | null,
+    jobRecordSurface: JobRecordSurfaceParam | undefined
+): string | null {
+    if (!type || !id) return null;
+    if (type === "jobs" && id !== "new") {
+        const surface = jobRecordSurface ?? "full";
+        return `/api/admin/entity/jobs/${encodeURIComponent(id)}?surface=${encodeURIComponent(surface)}`;
+    }
+    return `/api/admin/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+}
+
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer } = useAdminDrawer();
     const { canMutate, role: adminRole } = useAdminAuth();
@@ -973,8 +993,10 @@ export default function AdminEntityDrawer() {
     ];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
+        const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
+        if (!url) return;
         setLoading(true);
-        fetch(`/api/admin/entity/${drawer.type}/${drawer.id}`)
+        fetch(url)
             .then((res) => {
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 return res.json();
@@ -982,7 +1004,7 @@ export default function AdminEntityDrawer() {
             .then(setData)
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, [drawer.type, drawer.id]);
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
@@ -1040,7 +1062,9 @@ export default function AdminEntityDrawer() {
             setIsEditing(true);
             return;
         }
-        fetch(`/api/admin/entity/${drawer.type}/${drawer.id}`)
+        const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
+        if (!url) return;
+        fetch(url)
             .then((res) => {
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 return res.json();
@@ -1048,7 +1072,7 @@ export default function AdminEntityDrawer() {
             .then(setData)
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, [drawer.type, drawer.id]);
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
@@ -3488,7 +3512,17 @@ export default function AdminEntityDrawer() {
     const presentationConfig = presentationType ? getEntityPresentation(presentationType) : null;
     const configTabs = presentationConfig?.drawer?.tabs;
     const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
-    const tabLabels: Record<string, string> = { overview: "Overview", related: "Related", financials: "Financials", automation: "Automation", activity: "Activity", payments: "Payments", documents: "Documents", ledger: "Ledger" };
+    const tabLabels: Record<string, string> = {
+        overview: "Overview",
+        rrs_overview: "RRS overview",
+        related: "Related",
+        financials: "Financials",
+        automation: "Automation",
+        activity: "Activity",
+        payments: "Payments",
+        documents: "Documents",
+        ledger: "Ledger",
+    };
 
     const hasFieldDefsForOverview = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
@@ -6725,6 +6759,15 @@ export default function AdminEntityDrawer() {
                             )}
                         </div>
                     )}
+                    {drawerTab === "rrs_overview" &&
+                        drawer.type === "jobs" &&
+                        drawer.id &&
+                        drawer.id !== "new" &&
+                        !(data as { _create?: boolean })?._create && (
+                            <div className="space-y-0 pt-5" data-entity-drawer-rrs-overview>
+                                <JobRrsOverviewTab jobId={drawer.id} />
+                            </div>
+                        )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         <EntityDrawerOverview
                             entityType={presentationType}

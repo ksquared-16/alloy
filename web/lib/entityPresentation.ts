@@ -188,7 +188,16 @@ export function getJobOverviewBillingSummarySection(): EntityDrawerSectionConfig
 }
 
 /** Tab/section key in drawer. Overview content can be section-driven or entity-specific. */
-export type DrawerTabKey = "overview" | "related" | "financials" | "automation" | "activity" | "payments" | "documents" | "ledger";
+export type DrawerTabKey =
+    | "overview"
+    | "rrs_overview"
+    | "related"
+    | "financials"
+    | "automation"
+    | "activity"
+    | "payments"
+    | "documents"
+    | "ledger";
 
 /** Related record module: which related-entity tabs to show (e.g. jobs, schedules, contacts). */
 export interface RelatedModuleConfig {
@@ -613,7 +622,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "activity", "documents", "financials"],
+      tabs: ["overview", "rrs_overview", "related", "activity", "documents", "financials"],
       headerFields: [],
       layoutMode: 2,
       overviewSections: [
