@@ -8,6 +8,8 @@
 | **Terminology** | [`architecture/glossary.md`](./architecture/glossary.md) |
 | **What we are not building yet** | [`architecture/deferred-decisions.md`](./architecture/deferred-decisions.md) |
 | **Track A foundation plan** | [`implementation/foundation-implementation-plan.md`](./implementation/foundation-implementation-plan.md) |
+| **Track A execution plan** (concrete build order & slice) | [`implementation/track-a-execution-plan.md`](./implementation/track-a-execution-plan.md) |
+| **Track A Batch 1** (integrity, overview config, queue v1, resolver v0) | [`implementation/track-a-batch-1.md`](./implementation/track-a-batch-1.md) |
 | **GPT / project source pack file list** | [`architecture/source-pack-index.md`](./architecture/source-pack-index.md) |
 | **Where schema truth lives** | [`audits/schema-reference-guide.md`](./audits/schema-reference-guide.md) |
 | **How the app is wired today** (Next.js, Supabase, major flows) | [`implementation/ARCHITECTURE.md`](./implementation/ARCHITECTURE.md) |
