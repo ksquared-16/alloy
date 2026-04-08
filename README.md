@@ -121,13 +121,16 @@ pip install -r requirements.txt
 
 ## Docs
 
+**Index:** [docs/README.md](docs/README.md) — folder layout, canonical vs audits vs archive.
+
 | Doc | Purpose |
 |-----|--------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System overview, data flows, idempotency, where to add features |
-| [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) | Entities, relationships, assignment statuses, default vendor vs assignment |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy process, env, validation |
-| [docs/OPERATIONS.md](docs/OPERATIONS.md) | How admins run the business; checklists for demo/QA |
-| [docs/EVENTS.md](docs/EVENTS.md) | System events implied by code (workflows, action links); optional |
+| [docs/architecture/README.md](docs/architecture/README.md) | **Canonical** platform doctrine (records, identity, workspace, gap audit) |
+| [docs/implementation/ARCHITECTURE.md](docs/implementation/ARCHITECTURE.md) | System overview, data flows, idempotency, where to add features |
+| [docs/audits/DOMAIN_MODEL.md](docs/audits/DOMAIN_MODEL.md) | Entities, relationships, assignment statuses, default vendor vs assignment |
+| [docs/implementation/DEPLOYMENT.md](docs/implementation/DEPLOYMENT.md) | Deploy process, env, validation |
+| [docs/implementation/OPERATIONS.md](docs/implementation/OPERATIONS.md) | How admins run the business; checklists for demo/QA |
+| [docs/implementation/EVENTS.md](docs/implementation/EVENTS.md) | System events implied by code (workflows, action links); optional |
 
 ---
 

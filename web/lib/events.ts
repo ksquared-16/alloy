@@ -1,6 +1,6 @@
 /**
  * Canonical event vocabulary for Alloy (Sprint 2).
- * Use for type-safe event_type and entity_type references. See docs/events.md.
+ * Use for type-safe event_type and entity_type references. See docs/implementation/EVENTS.md.
  */
 
 export const EVENT_TYPES = [

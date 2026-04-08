@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     if (error) {
         if ((error as { code?: string }).code === "42P01") {
             return NextResponse.json(
-                { error: "work_units table not found — apply hierarchy migration (see docs/HIERARCHY_SCHEMA_V1.md)" },
+                { error: "work_units table not found — apply hierarchy migration (see docs/implementation/HIERARCHY_SCHEMA_V1.md)" },
                 { status: 503 }
             );
         }

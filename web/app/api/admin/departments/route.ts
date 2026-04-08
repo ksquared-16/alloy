@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         }
         if (code === "42P01") {
             return NextResponse.json(
-                { error: "departments table not found — apply hierarchy migration (see docs/HIERARCHY_SCHEMA_V1.md)" },
+                { error: "departments table not found — apply hierarchy migration (see docs/implementation/HIERARCHY_SCHEMA_V1.md)" },
                 { status: 503 }
             );
         }

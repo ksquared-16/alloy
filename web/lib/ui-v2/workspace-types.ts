@@ -260,7 +260,7 @@ export type DepartmentWorkspaceModel = {
   actionsRail: ActionsVm;
   /**
    * Relationship groups — **not rendered** in the department workspace shell for now (keeps work surface clear).
-   * Adapters may still populate for future use; see docs/WORKSPACE_SYSTEM_V1.md.
+   * Adapters may still populate for future use; see docs/implementation/WORKSPACE_SYSTEM_V1.md.
    */
   contextRail: ContextBlockVm;
 };
@@ -293,7 +293,7 @@ export type CompanyWorkspaceModel = {
   actionsRail: ActionsVm;
   /**
    * Relationship groups — **not rendered** in the company workspace shell for now.
-   * Adapters may still populate for future use; see docs/WORKSPACE_SYSTEM_V1.md.
+   * Adapters may still populate for future use; see docs/implementation/WORKSPACE_SYSTEM_V1.md.
    */
   contextRail: ContextBlockVm;
 };
@@ -325,7 +325,7 @@ export type WorkUnitWorkspaceModel = {
   actionsRail: ActionsVm;
   /**
    * Relationship groups — **not rendered** in the work unit workspace shell for now.
-   * Adapters may still populate for future use; see docs/WORKSPACE_SYSTEM_V1.md.
+   * Adapters may still populate for future use; see docs/implementation/WORKSPACE_SYSTEM_V1.md.
    */
   contextRail: ContextBlockVm;
 };
@@ -441,7 +441,7 @@ export type RecordWorkspaceModel = {
   actionsRail: ActionsVm;
   /**
    * Relationship / linked-entity groups for **main column** context on Record (embedded next to contact / related / activity).
-   * Not shown in the right command rail — see docs/WORKSPACE_SYSTEM_V1.md.
+   * Not shown in the right command rail — see docs/implementation/WORKSPACE_SYSTEM_V1.md.
    */
   contextRail: ContextBlockVm;
 };
