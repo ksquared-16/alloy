@@ -31,7 +31,12 @@ type PricingOptions = {
 
 type MainPricingTab = "matrix" | "service-offerings" | "plan-templates" | "pricing-modes" | "pricing-dimensions" | "dimension-values" | "add-ons" | "discount-codes" | "legacy";
 
-/** Legacy first_clean / recurring tables are read-only in UI; live quotes use pricing_matrix via get_quote_pricing. */
+/**
+ * When false: Legacy tab and legacy table UI are hidden (routes/hooks remain for a future removal pass).
+ * When true: shows Legacy tab; rows are read-only via LEGACY_PRICING_READ_ONLY.
+ */
+const LEGACY_PRICING_UI_ENABLED = false;
+/** Only used when LEGACY_PRICING_UI_ENABLED is true. */
 const LEGACY_PRICING_READ_ONLY = true;
 
 export default function PricingClient() {
@@ -158,8 +163,14 @@ export default function PricingClient() {
         }
     }, [verticalId, serviceOfferingId]);
 
-    useEffect(() => { fetchFirstClean(); }, [fetchFirstClean]);
-    useEffect(() => { fetchRecurring(); }, [fetchRecurring]);
+    useEffect(() => {
+        if (!LEGACY_PRICING_UI_ENABLED) return;
+        fetchFirstClean();
+    }, [fetchFirstClean]);
+    useEffect(() => {
+        if (!LEGACY_PRICING_UI_ENABLED) return;
+        fetchRecurring();
+    }, [fetchRecurring]);
 
     const fetchMatrix = useCallback(async () => {
         setLoadingMatrix(true);
@@ -182,6 +193,11 @@ export default function PricingClient() {
     }, [mainTab, fetchMatrix]);
 
     useEffect(() => {
+        if (!LEGACY_PRICING_UI_ENABLED && mainTab === "legacy") setMainTab("matrix");
+    }, [mainTab]);
+
+    useEffect(() => {
+        if (!LEGACY_PRICING_UI_ENABLED) return;
         if (mainTab === "legacy" && activeSection === "matrix") setActiveSection("first-clean");
     }, [mainTab]);
 
@@ -283,11 +299,11 @@ export default function PricingClient() {
     }, [verticalId, fetchOptions]);
 
     useEffect(() => {
-        if (addFirstOpen) fetchOptionsForModals(firstForm.vertical_id || verticalId);
+        if (LEGACY_PRICING_UI_ENABLED && addFirstOpen) fetchOptionsForModals(firstForm.vertical_id || verticalId);
     }, [addFirstOpen, firstForm.vertical_id, verticalId, fetchOptionsForModals]);
 
     useEffect(() => {
-        if (addRecurringOpen) fetchOptionsForModals(recurringForm.vertical_id || verticalId);
+        if (LEGACY_PRICING_UI_ENABLED && addRecurringOpen) fetchOptionsForModals(recurringForm.vertical_id || verticalId);
     }, [addRecurringOpen, recurringForm.vertical_id, verticalId, fetchOptionsForModals]);
 
     useEffect(() => {
@@ -461,28 +477,28 @@ export default function PricingClient() {
             <header className="rounded-xl border border-admin-border border-l-4 border-l-alloy-pine bg-admin-surface-card px-6 py-4 shadow-sm">
                 <h1 className="text-2xl font-bold tracking-tight text-alloy-pine">Pricing</h1>
                 <p className="mt-1 text-sm text-alloy-midnight/70">
-                    Public booking and <code className="rounded bg-alloy-stone/30 px-1 text-xs">get_quote_pricing</code> read base first-visit and recurring amounts from{" "}
-                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_matrix</code> (Pricing Matrix tab). Add-on line items still come from{" "}
-                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_addons</code>; frequency labels from{" "}
-                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_frequencies</code>. The Legacy tab shows the old{" "}
-                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_first_clean_prices</code> /{" "}
-                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_recurring_prices</code> tables for compatibility only (read-only).
+                    Configure offerings, dimensions, and matrix rules. Public booking uses <code className="rounded bg-alloy-stone/30 px-1 text-xs">get_quote_pricing</code>{" "}
+                    with base amounts from <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_matrix</code>, add-ons from{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_addons</code>, and frequency labels from{" "}
+                    <code className="rounded bg-alloy-stone/30 px-1 text-xs">pricing_frequencies</code>.
                 </p>
             </header>
 
             {/* Main workspace tabs — Bend Pine active state */}
             <div className="flex flex-wrap gap-1 border-b-2 border-alloy-pine/20">
-                {([
-                    ["matrix", "Pricing Matrix"],
-                    ["service-offerings", "Service Offerings"],
-                    ["plan-templates", "Plan Templates"],
-                    ["pricing-modes", "Pricing Modes"],
-                    ["pricing-dimensions", "Pricing Dimensions"],
-                    ["dimension-values", "Dimension Values"],
-                    ["add-ons", "Add-Ons"],
-                    ["discount-codes", "Discount programs"],
-                    ["legacy", "Legacy (read-only)"],
-                ] as const).map(([tab, label]) => (
+                {(
+                    [
+                        ["matrix", "Pricing Matrix"],
+                        ["service-offerings", "Service Offerings"],
+                        ["plan-templates", "Plan Templates"],
+                        ["pricing-modes", "Pricing Modes"],
+                        ["pricing-dimensions", "Pricing Dimensions"],
+                        ["dimension-values", "Dimension Values"],
+                        ["add-ons", "Add-Ons"],
+                        ["discount-codes", "Discount programs"],
+                        ...(LEGACY_PRICING_UI_ENABLED ? [["legacy", "Legacy (read-only)"] as const] : []),
+                    ] as const
+                ).map(([tab, label]) => (
                     <button
                         key={tab}
                         type="button"
@@ -494,7 +510,7 @@ export default function PricingClient() {
                 ))}
             </div>
 
-            {(mainTab === "matrix" || mainTab === "legacy") && (
+            {(mainTab === "matrix" || (LEGACY_PRICING_UI_ENABLED && mainTab === "legacy")) && (
                 <div className="flex items-center justify-end">
                     <div className="relative" ref={filterRef}>
                         <button
@@ -573,7 +589,7 @@ export default function PricingClient() {
                 </div>
             )}
 
-            {mainTab === "legacy" && (
+            {LEGACY_PRICING_UI_ENABLED && mainTab === "legacy" && (
                 <div className="space-y-2 border-b border-admin-border pb-3">
                     <p className="text-sm text-alloy-midnight/70">
                         Compatibility view only — these rows are not used by live quotes. Edit amounts on <span className="font-medium text-alloy-midnight">Pricing Matrix</span>.
@@ -613,7 +629,7 @@ export default function PricingClient() {
                 </section>
             )}
 
-            {mainTab === "legacy" && activeSection === "first-clean" && (
+            {LEGACY_PRICING_UI_ENABLED && mainTab === "legacy" && activeSection === "first-clean" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-lg font-semibold text-alloy-pine">{initialLabel} (read-only)</h2>
@@ -685,7 +701,7 @@ export default function PricingClient() {
                 </section>
             )}
 
-            {mainTab === "legacy" && activeSection === "recurring" && (
+            {LEGACY_PRICING_UI_ENABLED && mainTab === "legacy" && activeSection === "recurring" && (
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-lg font-semibold text-alloy-pine">{recurringLabel} (read-only)</h2>
@@ -761,17 +777,6 @@ export default function PricingClient() {
 
             {mainTab === "matrix" && (
                 <section>
-                    <div
-                        className="mb-4 rounded-lg border border-alloy-pine/25 bg-alloy-pine/5 px-4 py-3 text-sm text-alloy-midnight/90"
-                        role="note"
-                    >
-                        <p className="font-medium text-alloy-pine">Live website quote pricing</p>
-                        <p className="mt-1">
-                            Base first-visit and recurring amounts on the public booking flow come from these <code className="rounded bg-white/80 px-1 text-xs">pricing_matrix</code>{" "}
-                            rows (via <code className="rounded bg-white/80 px-1 text-xs">get_quote_pricing</code>). Initial-mode rows use a null plan template; recurring rows match the
-                            plan template linked to each frequency. Add-ons are configured under Add-Ons.
-                        </p>
-                    </div>
                     <div className="flex items-center justify-between mb-3">
                         <div>
                             <h2 className="text-lg font-semibold text-alloy-pine">Pricing Matrix</h2>
@@ -861,7 +866,7 @@ export default function PricingClient() {
                 </section>
             )}
 
-            {addFirstOpen && (
+            {LEGACY_PRICING_UI_ENABLED && addFirstOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !addFirstSaving && setAddFirstOpen(false)}>
                     <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add {initialLabel.replace(/ Pricing$/, " Price")}</h3>
@@ -936,7 +941,7 @@ export default function PricingClient() {
                 </div>
             )}
 
-            {addRecurringOpen && (
+            {LEGACY_PRICING_UI_ENABLED && addRecurringOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !addRecurringSaving && setAddRecurringOpen(false)}>
                     <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-semibold text-alloy-forge mb-4">Add {recurringLabel.replace(/ Pricing$/, " Price")}</h3>

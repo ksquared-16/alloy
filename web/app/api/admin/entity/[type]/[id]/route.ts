@@ -5,14 +5,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
-import { inferJobDiscountSelectionToken, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
-import {
-    computeJobDisplayTotalCents,
-    computeJobGrossBasisCents,
-    normalizeJobDiscountAmountToCents,
-    type JobPriceInput,
-} from "@/lib/admin/jobDisplayPrice";
-import { vendorRowToDisplayStub, type VendorRowForLabel } from "@/lib/admin/vendorOptionLabel";
+import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 import {
     fetchEffectiveStatusDefinitions,
     inferDocumentStatusFromStored,
@@ -21,43 +14,11 @@ import {
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
-import { attachJobWorkUnitDisplay } from "@/lib/admin/attachJobWorkUnitDisplay";
-import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineItems";
 import { getPaymentAllocationRollup } from "@/lib/admin/jobPaymentBalances";
-import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
-
-type AdminSupabase = ReturnType<typeof createAdminClient>;
-
-function canonicalSqftTierLabel(tierKey: string | null | undefined): string | null {
-    const k = String(tierKey ?? "").trim();
-    if (!k) return null;
-    return CANONICAL_SQFT_TIER_OPTIONS.find((o) => o.value === k)?.label ?? k;
-}
-
-async function optionItemLabelForOrg(
-    supabase: AdminSupabase,
-    orgId: string,
-    setKey: string,
-    itemKey: string | null | undefined
-): Promise<string | null> {
-    const k = String(itemKey ?? "").trim();
-    if (!k) return null;
-    const { data: setRow } = await supabase.from("option_sets").select("id").eq("org_id", orgId).eq("set_key", setKey).maybeSingle();
-    const sid = (setRow as { id?: string } | null)?.id;
-    if (!sid) {
-        if (setKey === "square_footage_tier") return canonicalSqftTierLabel(k) ?? k;
-        return k;
-    }
-    const { data: it } = await supabase
-        .from("option_set_items")
-        .select("label")
-        .eq("option_set_id", sid)
-        .eq("item_key", k)
-        .maybeSingle();
-    const lab = (it as { label?: string } | null)?.label;
-    if (lab != null && String(lab).trim() !== "") return String(lab).trim();
-    return canonicalSqftTierLabel(k) ?? k;
-}
+import { optionItemLabelForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import { hydrateVendorDisplayStub } from "@/lib/admin/hydrateVendorDisplayStub";
+import { resolveJobRecord } from "@/lib/rrs/entities/job";
+import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
 
 /**
  * Drawer entity org model:
@@ -90,32 +51,6 @@ async function assertDiscountRedemptionInOrg(
     return { ok: true, row: data as Record<string, unknown> };
 }
 
-async function hydrateVendorDisplayStub(
-    supabase: ReturnType<typeof createAdminClient>,
-    vendorId: string,
-    orgId: string
-): Promise<{ id: string; name: string } | null> {
-    const { data: row } = await supabase
-        .from("vendors")
-        .select("id, name, company_name, email, phone, primary_person_id")
-        .eq("id", vendorId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    if (!row) return null;
-    const r = row as VendorRowForLabel;
-    let person: { first_name?: string | null; last_name?: string | null } | null = null;
-    if (r.primary_person_id) {
-        const { data: p } = await supabase
-            .from("persons")
-            .select("first_name, last_name")
-            .eq("id", r.primary_person_id)
-            .eq("org_id", orgId)
-            .maybeSingle();
-        person = p;
-    }
-    return vendorRowToDisplayStub(r, person);
-}
-
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
 
 export async function GET(
@@ -138,210 +73,13 @@ export async function GET(
             if (id === "new") {
                 return NextResponse.json({ _create: true });
             }
-            const { data, error } = await supabase.from("jobs").select("*").eq("id", id).eq("org_id", orgId).single();
-            if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
-            const out: Record<string, unknown> = { ...data };
-            if ((data as { opportunity_id?: string }).opportunity_id) {
-                const opp = await supabase
-                    .from("opportunities")
-                    .select("name")
-                    .eq("id", (data as { opportunity_id: string }).opportunity_id)
-                    .eq("org_id", orgId)
-                    .single();
-                out._opportunity_name = opp.data?.name ?? null;
-            } else {
-                out._opportunity_name = null;
+            const surface = resolveRecordSurfaceParam(request.nextUrl.searchParams.get("surface"), "full");
+            const resolved = await resolveJobRecord(supabase, orgId, id, surface);
+            if (!resolved.ok) {
+                const status = resolved.notFound ? 404 : 500;
+                return NextResponse.json(resolved.message || "Not found", { status });
             }
-            const jobPrimaryPersonId = (data as { primary_person_id?: string | null }).primary_person_id;
-            const jobPrimaryContactId = (data as { primary_contact_id?: string }).primary_contact_id;
-            if (jobPrimaryPersonId) {
-                const { data: person } = await supabase
-                    .from("persons")
-                    .select("id, first_name, last_name")
-                    .eq("id", jobPrimaryPersonId)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
-                out._primary_person_id = p?.id ?? null;
-                out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
-                out._contact_name = out._primary_person_name;
-            } else if (jobPrimaryContactId) {
-                const contact = await supabase
-                    .from("contacts")
-                    .select("first_name, last_name, person_id")
-                    .eq("id", jobPrimaryContactId)
-                    .eq("org_id", orgId)
-                    .single();
-                const c = contact.data as { first_name?: string | null; last_name?: string | null; person_id?: string | null } | null;
-                out._contact_name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
-                if (c?.person_id) {
-                    const { data: person } = await supabase
-                        .from("persons")
-                        .select("id, first_name, last_name")
-                        .eq("id", c.person_id)
-                        .eq("org_id", orgId)
-                        .maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null } | null;
-                    out._primary_person_id = p?.id ?? null;
-                    out._primary_person_name = p ? [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null : null;
-                } else {
-                    out._primary_person_id = null;
-                    out._primary_person_name = null;
-                }
-            } else {
-                out._contact_name = null;
-                out._primary_person_id = null;
-                out._primary_person_name = null;
-            }
-            if (typeof out._primary_person_id === "string" && out._primary_person_id.trim()) {
-                out.primary_person_id = out._primary_person_id;
-            }
-            if ((data as { customer_id?: string }).customer_id) {
-                const customer = await supabase
-                    .from("customers")
-                    .select("name")
-                    .eq("id", (data as { customer_id: string }).customer_id)
-                    .eq("org_id", orgId)
-                    .single();
-                out._customer_name = customer.data?.name ?? null;
-            } else {
-                out._customer_name = null;
-            }
-            const assignedVendorId = (data as { assigned_vendor_id?: string | null }).assigned_vendor_id;
-            if (assignedVendorId) {
-                const stub = await hydrateVendorDisplayStub(supabase, assignedVendorId, orgId);
-                out._assigned_vendor = stub;
-                out._vendor_name = stub?.name ?? null;
-            } else {
-                out._assigned_vendor = null;
-                out._vendor_name = null;
-            }
-            const jobLocationId = (data as { location_id?: string | null }).location_id;
-            if (jobLocationId) {
-                const { data: loc } = await supabase
-                    .from("locations")
-                    .select("id, label, address1, city, state, postal_code")
-                    .eq("id", jobLocationId)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                if (loc) {
-                    const l = loc as { label?: string | null; address1?: string | null; city?: string | null; postal_code?: string | null };
-                    const label = l.label ?? ([l.address1, l.city, l.postal_code].filter(Boolean).join(", ") || null);
-                    out._location_label = label;
-                    out._location_name = label;
-                    out._location = loc;
-                } else {
-                    out._location_label = null;
-                    out._location_name = null;
-                    out._location = null;
-                }
-            } else {
-                out._location_label = null;
-                out._location_name = null;
-                out._location = null;
-            }
-            const verticalId = (data as { vertical_id?: string | null }).vertical_id;
-            if (verticalId) {
-                const { data: vert } = await supabase.from("verticals").select("slug, name").eq("id", verticalId).maybeSingle();
-                const vr = vert as { slug?: string | null; name?: string | null } | null;
-                out._vertical_slug = vr?.slug ?? null;
-                out._vertical_name = vr?.name ?? null;
-            } else {
-                out._vertical_slug = null;
-                out._vertical_name = null;
-            }
-            const orgIdJob = (data as { org_id?: string }).org_id;
-            let statusKey = (data as { status_key?: string | null }).status_key;
-            const jobStatusFk = (data as { job_status_id?: string | null }).job_status_id;
-            if ((!statusKey || !String(statusKey).trim()) && jobStatusFk) {
-                const { data: jst } = await supabase.from("job_statuses").select("key").eq("id", jobStatusFk).maybeSingle();
-                const k = (jst as { key?: string | null } | null)?.key;
-                if (k && String(k).trim()) {
-                    statusKey = String(k).trim();
-                    out.status_key = statusKey;
-                }
-            }
-            out._status_display = orgIdJob ? await resolveStatusLabel(supabase, orgIdJob, "jobs", statusKey) : (typeof statusKey === "string" && statusKey.trim() ? statusKey.trim() : null);
-            const grossBasis = computeJobGrossBasisCents(data as JobPriceInput) ?? 0;
-            out._discount_amount_cents = normalizeJobDiscountAmountToCents(
-                (data as { discount_amount?: number | string | null }).discount_amount,
-                grossBasis
-            );
-            const display_total_cents = computeJobDisplayTotalCents(data as JobPriceInput);
-            out.display_total_cents = display_total_cents;
-            out._price_display = display_total_cents != null ? display_total_cents / 100 : null;
-            const codeStr = String((data as { discount_code?: string | null }).discount_code ?? "").trim();
-            out._discount_applied =
-                Number(out._discount_amount_cents ?? 0) > 0 ||
-                !!codeStr ||
-                !!(data as { discount_code_id?: string | null }).discount_code_id ||
-                !!(data as { discount_program_id?: string | null }).discount_program_id;
-            const { data: nextSched } = await supabase
-                .from("schedules")
-                .select("start_at")
-                .eq("job_id", id)
-                .eq("org_id", orgId)
-                .is("canceled_at", null)
-                .gte("start_at", new Date().toISOString())
-                .order("start_at", { ascending: true })
-                .limit(1)
-                .maybeSingle();
-            out._next_schedule = (nextSched as { start_at?: string } | null)?.start_at ?? null;
-            out._discount_selection = await inferJobDiscountSelectionToken(supabase, {
-                discount_program_id: (data as { discount_program_id?: string | null }).discount_program_id ?? null,
-                discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
-            });
-            out._discount_label = await buildJobDiscountDisplayLabel(supabase, {
-                discount_program_id: (data as { discount_program_id?: string | null }).discount_program_id ?? null,
-                discount_code_id: (data as { discount_code_id?: string | null }).discount_code_id ?? null,
-                discount_code: (data as { discount_code?: string | null }).discount_code ?? null,
-            });
-            out._service_home_type_label = null;
-            out._service_sqft_band_label = null;
-            out._service_square_footage = null;
-            out._service_square_footage_display = null;
-            out._service_bedrooms = null;
-            out._service_bathrooms = null;
-            const { data: cjdJob } = await supabase.from("cleaning_job_details").select("*").eq("job_id", id).maybeSingle();
-            const jd = cjdJob as {
-                home_type_key?: string | null;
-                square_footage_tier_key?: string | null;
-                beds?: number | null;
-                baths?: number | null;
-            } | null;
-            if (jd) {
-                out._service_bedrooms = jd.beds ?? null;
-                out._service_bathrooms = jd.baths ?? null;
-                out._service_square_footage = null;
-                if (jd.home_type_key) {
-                    out._service_home_type_label = await optionItemLabelForOrg(supabase, orgId, "home_type", jd.home_type_key);
-                }
-                if (jd.square_footage_tier_key) {
-                    out._service_sqft_band_label = await optionItemLabelForOrg(
-                        supabase,
-                        orgId,
-                        "square_footage_tier",
-                        jd.square_footage_tier_key
-                    );
-                }
-                const bandLabel = out._service_sqft_band_label != null ? String(out._service_sqft_band_label).trim() : "";
-                out._service_square_footage_display = bandLabel || null;
-            }
-            const jobDprogId = (data as { discount_program_id?: string | null }).discount_program_id ?? null;
-            if (jobDprogId) {
-                const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", jobDprogId).maybeSingle();
-                out._discount_program_label = (dpr as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._discount_program_label = null;
-            }
-            const withWu = await attachJobWorkUnitDisplay(supabase, orgId, out);
-            out._work_unit_name = withWu._work_unit_name;
-            out._work_unit_department_name = withWu._work_unit_department_name;
-            out._work_unit_label = withWu._work_unit_label;
-            out._job_line_items = await fetchActiveJobLineItemsForAdmin(supabase, orgId, id);
-            await attachFieldDefinitionsAndValues(supabase, out, "jobs", id);
-            await attachDirectFkRelationshipDisplays(supabase, orgId, "jobs", out);
-            return NextResponse.json(out);
+            return NextResponse.json({ ...resolved.flat, _rrs: resolved.rrs });
         }
         if (type === "opportunities") {
             const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).eq("org_id", orgId).single();

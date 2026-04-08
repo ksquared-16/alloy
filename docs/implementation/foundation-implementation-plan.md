@@ -2,6 +2,8 @@
 
 **Purpose:** Practical sequence from [doctrine](../architecture/README.md) to shippable foundation **before** depending on full UI V2. **Industry-agnostic.** Not implementation code in this doc.
 
+**Concrete execution order & job slice detail:** [track-a-execution-plan.md](./track-a-execution-plan.md).
+
 **Evidence:** [implementation-gap-audit.md](../architecture/implementation-gap-audit.md) · schema map: [schema-reference-guide.md](../audits/schema-reference-guide.md).
 
 ---
