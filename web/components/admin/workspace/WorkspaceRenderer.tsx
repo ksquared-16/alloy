@@ -92,7 +92,13 @@ export function WorkspaceRenderer({
             parts.actions.length > 0 ? (
                 <>
                     {parts.actions.map((b) => (
-                        <ActionsBlock key={b.id} block={b} presentation="bridge" />
+                        <ActionsBlock
+                            key={b.id}
+                            block={b}
+                            presentation="bridge"
+                            departmentId={departmentId}
+                            workspaceBasePath={workspaceBasePath}
+                        />
                     ))}
                 </>
             ) : (
@@ -135,7 +141,14 @@ export function WorkspaceRenderer({
                     case "kpi":
                         return <KpiBlock key={block.id} block={block} />;
                     case "actions":
-                        return <ActionsBlock key={block.id} block={block} />;
+                        return (
+                            <ActionsBlock
+                                key={block.id}
+                                block={block}
+                                departmentId={departmentId}
+                                workspaceBasePath={workspaceBasePath}
+                            />
+                        );
                     case "context":
                         return <ContextBlock key={block.id} block={block} />;
                     default:

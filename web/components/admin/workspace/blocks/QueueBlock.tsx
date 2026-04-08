@@ -48,6 +48,34 @@ export function QueueBlock({
             {(hasEntries || showRemaining) && (
                 <ul className="adminv2-ws-queue-list" role="list">
                     {block.entries.map((entry, i) => {
+                        if (entry.kind === "department_workspace_route") {
+                            const href = `${base}/${entry.segment}`;
+                            return (
+                                <li key={`route-${entry.segment}-${i}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                    <Link
+                                        href={href}
+                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                                        data-ws-wu-urgency="standard"
+                                    >
+                                        <div className="adminv2-ws-wu-queue-card-compact-text">
+                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                {entry.label}
+                                            </div>
+                                            {entry.description ? (
+                                                <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                    {entry.description}
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
+                                                Open queue
+                                            </span>
+                                        </div>
+                                    </Link>
+                                </li>
+                            );
+                        }
                         if (entry.kind === "unassigned_jobs_triage") {
                             return (
                                 <li key={`triage-${i}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
@@ -157,6 +185,19 @@ export function QueueBlock({
             {(hasEntries || showRemaining) && (
                 <ul className="mt-4 divide-y divide-admin-border border border-admin-border rounded-lg overflow-hidden">
                     {block.entries.map((entry, i) => {
+                        if (entry.kind === "department_workspace_route") {
+                            const href = `${base}/${entry.segment}`;
+                            return (
+                                <li key={`route-${entry.segment}-${i}`}>
+                                    <Link href={href} className="block px-4 py-3 hover:bg-alloy-stone/30 transition-colors">
+                                        <span className="font-medium text-alloy-midnight">{entry.label}</span>
+                                        {entry.description ? (
+                                            <p className="text-xs text-alloy-midnight/55 mt-0.5">{entry.description}</p>
+                                        ) : null}
+                                    </Link>
+                                </li>
+                            );
+                        }
                         if (entry.kind === "unassigned_jobs_triage") {
                             return (
                                 <li key={`triage-${i}`}>

@@ -15,42 +15,94 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
         {
             id: "signals_primary",
             type: "signals",
-            title: "Signals",
-            subtitle: "Light operational counts (slice 2 — not a full alerting system).",
+            title: "What needs attention",
+            subtitle: "Live counts from your job data (samples capped per API — not full analytics).",
             signals: [
                 {
                     id: "unassigned_jobs",
-                    label: "Jobs with no work unit",
+                    eyebrow: "Triage",
+                    label: "No work unit",
                     metric: "jobs.unassigned_count",
+                },
+                {
+                    id: "scheduled_today",
+                    eyebrow: "Today",
+                    label: "Visits today",
+                    metric: "jobs.scheduled_today_count",
+                },
+                {
+                    id: "needs_attention",
+                    eyebrow: "Risk",
+                    label: "Money or overdue visit",
+                    metric: "jobs.needs_attention_count",
+                },
+                {
+                    id: "high_value",
+                    eyebrow: "Priority",
+                    label: "High-value open",
+                    metric: "jobs.high_value_attention_count",
                 },
             ],
         },
         {
             id: "queues_primary",
             type: "queue",
-            title: "Queues",
-            subtitle: "Entry points into work-unit queues. Unassigned triage uses the existing jobs API bridge.",
+            title: "Work queues",
+            subtitle: "Operational entry points — same APIs as the admin jobs list; drawer opens resolver-backed records.",
             entries: [
                 {
                     kind: "unassigned_jobs_triage",
-                    label: "Unassigned Jobs",
-                    description: "Triage queue — jobs where work unit is not set. Backed by GET /api/admin/jobs?unassigned_work_unit=true until the queue interpreter lands.",
+                    label: "Unassigned jobs",
+                    description: "Jobs with no work unit — triage before assignment.",
+                },
+                {
+                    kind: "department_workspace_route",
+                    segment: "scheduled-today",
+                    label: "Scheduled today",
+                    description: "Next visit is on today’s calendar (merged department + unassigned sample).",
+                },
+                {
+                    kind: "department_workspace_route",
+                    segment: "needs-attention",
+                    label: "Needs attention",
+                    description: "Overdue visits or outstanding receivables in the current sample.",
                 },
             ],
             list_remaining_work_units: true,
         },
         {
-            id: "kpi_strip",
-            type: "kpi",
-            title: "KPIs",
-            state: "placeholder",
-            message: "Placeholder strip — wire analytics when the metrics layer exists.",
-        },
-        {
             id: "actions_admin",
             type: "actions",
-            title: "Actions",
+            title: "What’s next",
             actions: [
+                {
+                    id: "open_unassigned",
+                    label: "Open unassigned queue",
+                    variant: "primary",
+                    deptRoute: "unassigned",
+                },
+                {
+                    id: "scheduled_today_action",
+                    label: "Today’s schedule lens",
+                    deptRoute: "scheduled-today",
+                },
+                {
+                    id: "needs_attention_action",
+                    label: "Attention lens",
+                    deptRoute: "needs-attention",
+                },
+                {
+                    id: "all_jobs",
+                    label: "All jobs",
+                    href: "/admin/jobs",
+                    variant: "secondary",
+                },
+                {
+                    id: "schedules",
+                    label: "Schedules",
+                    href: "/admin/schedules",
+                    variant: "secondary",
+                },
                 {
                     id: "manage_work_units",
                     label: "Manage work units",
@@ -62,10 +114,10 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
         {
             id: "context_surface",
             type: "context",
-            title: "About this surface",
+            title: "About Operations",
             paragraphs: [
-                "This department workspace is a configurable operational shell: blocks are driven by layout config, not one-off React pages.",
-                "Queues combine RRS-backed records in the drawer with list bridges (today) and structured queue definitions (next).",
+                "This surface is tuned for field operations: triage unassigned work, watch today’s visits, and clear money or schedule risk early.",
+                "Counts and queues use the same admin jobs APIs as the rest of Alloy — one registry drives both /admin/workspace and /adminV2/workspace.",
             ],
         },
     ],

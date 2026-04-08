@@ -9,13 +9,19 @@
 export type WorkspaceBlockType = "signals" | "queue" | "kpi" | "actions" | "context";
 
 /** Metric keys the client can resolve today; extend as new signal providers ship. */
-export type WorkspaceSignalMetricKey = "jobs.unassigned_count";
+export type WorkspaceSignalMetricKey =
+    | "jobs.unassigned_count"
+    | "jobs.scheduled_today_count"
+    | "jobs.needs_attention_count"
+    | "jobs.high_value_attention_count";
 
 export type WorkspaceSignalItem = {
     /** Stable id for React keys / future analytics. */
     id: string;
     label: string;
     metric: WorkspaceSignalMetricKey;
+    /** Small uppercase line above the label in bridge signals (e.g. "Volume", "Today"). */
+    eyebrow?: string;
 };
 
 export type WorkspaceSignalsBlock = {
@@ -34,6 +40,13 @@ export type WorkspaceSignalsBlock = {
 export type WorkspaceQueueEntry =
     | {
           kind: "unassigned_jobs_triage";
+          label: string;
+          description?: string;
+      }
+    | {
+          /** Deep link under `…/dept/:departmentId/:segment` (same base as `workspaceBasePath`). */
+          kind: "department_workspace_route";
+          segment: "scheduled-today" | "needs-attention";
           label: string;
           description?: string;
       }
@@ -65,12 +78,20 @@ export type WorkspaceKpiBlock = {
     message: string;
 };
 
-export type WorkspaceActionItem = {
-    id: string;
-    label: string;
-    href: string;
-    variant?: "primary" | "secondary";
-};
+/** Static admin link, or a department-scoped workspace path resolved at render time. */
+export type WorkspaceActionItem =
+    | {
+          id: string;
+          label: string;
+          href: string;
+          variant?: "primary" | "secondary";
+      }
+    | {
+          id: string;
+          label: string;
+          variant?: "primary" | "secondary";
+          deptRoute: "unassigned" | "scheduled-today" | "needs-attention";
+      };
 
 export type WorkspaceActionsBlock = {
     id: string;

@@ -9,3 +9,11 @@ export type {
 } from "./types";
 export { getDepartmentWorkspaceLayout } from "./registry";
 export { partitionDepartmentBlocks } from "./partitionBlocks";
+export {
+    mergeJobListsById,
+    computeOperationsSignalCounts,
+    filterJobsScheduledToday,
+    filterJobsNeedsAttention,
+    type JobRowForWorkspaceMetrics,
+} from "./deriveDepartmentJobMetrics";
+export { resolveWorkspaceActionHref } from "./resolveWorkspaceActionHref";

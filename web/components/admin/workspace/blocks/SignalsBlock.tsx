@@ -23,7 +23,9 @@ export function SignalsBlock({
                                 <div key={s.id} className="adminv2-ws-signal-card" data-severity="info">
                                     <div className="adminv2-ws-signal-card-row">
                                         <div className="adminv2-ws-signal-card-main">
-                                            <div className="adminv2-ws-signal-label">Signal</div>
+                                            {s.eyebrow ? (
+                                                <div className="adminv2-ws-signal-label">{s.eyebrow}</div>
+                                            ) : null}
                                             <div className="adminv2-ws-signal-title">{s.label}</div>
                                         </div>
                                         <div className="adminv2-ws-signal-actions">
@@ -53,7 +55,12 @@ export function SignalsBlock({
                     const v = runtime.metrics[s.metric];
                     return (
                         <li key={s.id} className="text-sm text-alloy-forge/90 flex justify-between gap-4">
-                            <span>{s.label}</span>
+                            <span>
+                                {s.eyebrow ? (
+                                    <span className="block text-[10px] font-semibold uppercase text-alloy-midnight/45">{s.eyebrow}</span>
+                                ) : null}
+                                {s.label}
+                            </span>
                             <span className="font-medium text-alloy-midnight tabular-nums">{v === null || v === undefined ? "—" : v}</span>
                         </li>
                     );
