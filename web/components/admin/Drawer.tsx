@@ -14,7 +14,9 @@ interface DrawerProps {
     statusBadge?: ReactNode;
     /** Optional: primary action buttons on second row (sticky) */
     headerActions?: ReactNode;
-    /** Optional: sticky content below title/actions (e.g. tabs). Only body scrolls. */
+    /** Optional: strip below actions row (e.g. workspace-style signal cards). Only body scrolls. */
+    headerSignals?: ReactNode;
+    /** Optional: sticky content below title/actions/signals (e.g. tabs). Only body scrolls. */
     headerExtra?: ReactNode;
     /** Optional: use higher z-index when stacking drawers (e.g. 60/70) */
     zIndexBackdrop?: number;
@@ -23,6 +25,8 @@ interface DrawerProps {
     accentColor?: string;
     /** Admin V2 workspace token surface (matches `WorkUnitWorkspace` / workspace.css variables). */
     variant?: "legacy" | "adminV2";
+    /** Panel width (Tailwind). Default `max-w-2xl`; use `max-w-3xl` for wider record drawers. */
+    panelClassName?: string;
 }
 
 export default function Drawer({
@@ -32,12 +36,14 @@ export default function Drawer({
     headerSubtitle,
     statusBadge,
     headerActions,
+    headerSignals,
     headerExtra,
     children,
     zIndexBackdrop = 40,
     zIndexPanel = 50,
     accentColor,
     variant = "legacy",
+    panelClassName,
 }: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
@@ -82,9 +88,9 @@ export default function Drawer({
             />
             <div
                 data-adminv2-drawer={isV2 ? "true" : undefined}
-                className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl shadow-xl flex flex-col border ${
-                    isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
-                }`}
+                className={`fixed right-0 top-0 bottom-0 w-full shadow-xl flex flex-col border ${
+                    panelClassName ?? "max-w-2xl"
+                } ${isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}`}
                 style={panelStyle}
             >
                 {/* Sticky header: white/light with subtle border (dashboard-style) */}
@@ -132,6 +138,14 @@ export default function Drawer({
                             ×
                         </button>
                     </div>
+                    {headerSignals != null && headerSignals !== false && (
+                        <div
+                            className="px-6 pb-3"
+                            style={isV2 ? { borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: derived.border } : undefined}
+                        >
+                            {headerSignals}
+                        </div>
+                    )}
                     {headerExtra != null && headerExtra !== false && (
                         <div
                             className={`px-6 pb-3 pt-2 border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}

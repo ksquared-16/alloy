@@ -51,6 +51,14 @@ import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from 
 import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOverviewLabels";
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
+import {
+    JobDrawerV2TabBar,
+    JobDrawerV2SignalsStrip,
+    deriveJobDrawerSignalLines,
+    JobDrawerV2PrimaryActions,
+    JobDrawerV2OverviewShell,
+    JobDrawerV2TimelineCard,
+} from "@/components/admin/drawer/JobDrawerV2";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { JobManualChargeForm } from "@/components/admin/JobManualChargeForm";
@@ -503,6 +511,8 @@ function LinkedRow({
 
 /** Job drawer: Relationships collapsible section (Customer, Primary contact, Location, Opportunity, Work unit, Default vendor). */
 function JobDrawerRelationshipsSection(props: {
+    /** Admin V2 drawer — token borders and typography (same behavior). */
+    uiVariant?: "legacy" | "adminV2";
     formData: Record<string, unknown>;
     setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
     canMutate: boolean;
@@ -529,14 +539,29 @@ function JobDrawerRelationshipsSection(props: {
     saveJobAssignedVendor: () => void;
 }) {
     const p = props;
+    const v2 = p.uiVariant === "adminV2";
     return (
-        <div className="border-b border-[#e6e8ec]">
-            <button type="button" onClick={() => p.setJobExpandedSections((s) => ({ ...s, relationships: !s.relationships }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
-                Relationships
-                <span className="text-alloy-midnight opacity-60">{p.jobExpandedSections.relationships ? "▼" : "▶"}</span>
+        <div
+            className={v2 ? "rounded-[10px] border border-solid pb-1" : "border-b border-[#e6e8ec]"}
+            style={v2 ? { borderColor: "rgba(39, 63, 82, 0.18)", backgroundColor: "#FFFFFF" } : undefined}
+        >
+            <button
+                type="button"
+                onClick={() => p.setJobExpandedSections((s) => ({ ...s, relationships: !s.relationships }))}
+                className={
+                    v2
+                        ? "w-full flex items-center justify-between px-3 py-2.5 text-left text-sm font-semibold"
+                        : "w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]"
+                }
+                style={v2 ? { color: "rgba(39, 63, 82, 0.65)" } : undefined}
+            >
+                {v2 ? "Customer & assignments" : "Relationships"}
+                <span className={v2 ? "text-alloy-midnight/50" : "text-alloy-midnight opacity-60"}>
+                    {p.jobExpandedSections.relationships ? "▼" : "▶"}
+                </span>
             </button>
             {p.jobExpandedSections.relationships && (
-                <div className="space-y-3 pb-3">
+                <div className={`space-y-3 pb-3 ${v2 ? "px-3" : ""}`}>
                     <div id="job-assign-vendor-section">
                         <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
                         <div className="flex flex-wrap items-center gap-2">
@@ -3301,6 +3326,7 @@ export default function AdminEntityDrawer() {
     const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
+    const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
     const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
     const paymentStatusLabel = hasServerJobPaymentSummary
         ? jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)
@@ -3437,6 +3463,19 @@ export default function AdminEntityDrawer() {
     const overviewData = dataMatchesDrawer ? data : null;
     const showDrawerBodyLoading =
         !!drawer.id && drawer.id !== "new" && (loading || (data != null && !dataMatchesDrawer));
+
+    const jobDrawerV2SignalsNode = useMemo(() => {
+        if (!isJobDrawerV2 || !overviewData) return null;
+        const pay = jobPaymentSummaryFromApi;
+        const lines = deriveJobDrawerSignalLines(
+            overviewData as Record<string, unknown>,
+            jobSchedules,
+            paymentStatusLabel,
+            pay?.payment_status_key === "paid",
+            pay?.payment_status_key === "failed"
+        );
+        return <JobDrawerV2SignalsStrip {...lines} />;
+    }, [isJobDrawerV2, overviewData, jobSchedules, paymentStatusLabel, jobPaymentSummaryFromApi]);
 
     const drawerHeaderRecordSubtitle = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
@@ -4841,19 +4880,33 @@ export default function AdminEntityDrawer() {
 
     const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
-            <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge
-                    label={
-                        String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
-                        getStatusLabel((overviewData as { status_key?: string }).status_key) ||
-                        String((overviewData as { status_key?: string }).status_key ?? "").trim() ||
-                        "—"
-                    }
-                    variant={getStatusVariant((overviewData as { status_key?: string }).status_key)}
-                />
-                <span className="text-xs text-alloy-midnight/55 whitespace-nowrap">Payment</span>
-                <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
-            </div>
+            isJobDrawerV2 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge
+                        label={
+                            String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                            getStatusLabel((overviewData as { status_key?: string }).status_key) ||
+                            String((overviewData as { status_key?: string }).status_key ?? "").trim() ||
+                            "—"
+                        }
+                        variant={getStatusVariant((overviewData as { status_key?: string }).status_key)}
+                    />
+                </div>
+            ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge
+                        label={
+                            String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
+                            getStatusLabel((overviewData as { status_key?: string }).status_key) ||
+                            String((overviewData as { status_key?: string }).status_key ?? "").trim() ||
+                            "—"
+                        }
+                        variant={getStatusVariant((overviewData as { status_key?: string }).status_key)}
+                    />
+                    <span className="text-xs text-alloy-midnight/55 whitespace-nowrap">Payment</span>
+                    <StatusBadge label={paymentStatusLabel} variant={paymentStatusVariant} />
+                </div>
+            )
         ) : drawer.type === "opportunities" &&
           (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
               (overviewData as { status_key?: string }).status_key) ? (
@@ -4919,7 +4972,30 @@ export default function AdminEntityDrawer() {
             )}
             {overviewData && !loading && canEditInDrawer(drawer.type) && (
                 <>
-            {drawer.type === "jobs" && isJobExistingView && jobQuickActionsNode}
+            {drawer.type === "jobs" && isJobExistingView &&
+                (isJobDrawerV2 ? (
+                    <JobDrawerV2PrimaryActions
+                        canMutate={!!canMutate}
+                        jobId={drawer.id as string}
+                        vendorSingular={vendorSingular}
+                        jobActionLoading={jobActionLoading}
+                        setJobActionLoading={setJobActionLoading}
+                        hasServerJobPaymentSummary={hasServerJobPaymentSummary}
+                        jobPaymentSummaryFromApi={jobPaymentSummaryFromApi}
+                        jobSchedulesLength={jobSchedules.length}
+                        openCollectPayment={openCollectPayment}
+                        clearPaymentToast={() => setPaymentToast(null)}
+                        setJobExpandedSections={setJobExpandedSections}
+                        openReschedule={openReschedule}
+                        firstSchedule={jobSchedules[0] ?? null}
+                        rescheduleFormActive={!!rescheduleForm}
+                        setData={setData}
+                        refetch={refetch}
+                        router={router}
+                    />
+                ) : (
+                    jobQuickActionsNode
+                ))}
             {drawer.type === "schedules" && isScheduleExistingView && scheduleHeaderQuickActionsNode}
                         {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
                             <>
@@ -4981,28 +5057,63 @@ export default function AdminEntityDrawer() {
                 </div>
     );
 
-    const drawerHeaderExtra = overviewData && !loading && ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) && !(overviewData as { _create?: boolean })?._create ? (
-        <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
-            {tabList.map((tab) => (
-                <button key={tab} type="button" onClick={() => setDrawerTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}>{tabLabels[tab] ?? tab}</button>
-            ))}
-            </div>
+    const drawerHeaderExtra =
+        overviewData &&
+        !loading &&
+        ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) &&
+        !(overviewData as { _create?: boolean })?._create ? (
+            isJobDrawerV2 && drawer.type === "jobs" ? (
+                <JobDrawerV2TabBar tabs={tabList} tabLabels={tabLabels} active={drawerTab} onSelect={setDrawerTab} />
+            ) : (
+                <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
+                    {tabList.map((tab) => (
+                        <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setDrawerTab(tab)}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                        >
+                            {tabLabels[tab] ?? tab}
+                        </button>
+                    ))}
+                </div>
+            )
         ) : undefined;
 
-    const drawerTitle = typeof title === "string" ? title : title != null ? String(title) : "—";
+    const jobV2MetaSubtitle =
+        isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
+            ? [
+                  String((overviewData as { _customer_name?: string })._customer_name ?? "").trim(),
+                  String((overviewData as { service_key?: string }).service_key ?? "").trim() ||
+                      String((overviewData as { job_type?: string }).job_type ?? "").trim(),
+              ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+            : undefined;
+    const drawerTitleResolved =
+        isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
+            ? String((overviewData as { title?: string }).title ?? "").trim() || "Job"
+            : typeof title === "string"
+              ? title
+              : title != null
+                ? String(title)
+                : "—";
+    const headerSubtitleResolved = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
     return (
         <Drawer
             isOpen
             onClose={closeDrawer}
-            title={drawerTitle}
-            headerSubtitle={drawerHeaderRecordSubtitle ?? undefined}
+            title={drawerTitleResolved}
+            headerSubtitle={headerSubtitleResolved}
             statusBadge={drawerStatusBadge}
             headerActions={drawerHeaderActions}
+            headerSignals={isJobDrawerV2 ? jobDrawerV2SignalsNode : undefined}
             headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
+            panelClassName={isJobDrawerV2 ? "max-w-3xl" : undefined}
         >
             {showDrawerBodyLoading && <p className="text-alloy-midnight/60">Loading…</p>}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
@@ -6278,7 +6389,7 @@ export default function AdminEntityDrawer() {
                                     <p className="text-xs text-alloy-midnight/55 mt-1 max-w-xl leading-relaxed">
                                         These totals sum <strong>gl_journal_lines</strong> for this job (mapped accounts only).{" "}
                                         <strong>Posted journal entries</strong> counts <strong>schedule_completed</strong>{" "}
-                                        entries for this job's schedules — not individual Stripe charges.
+                                        entries for this job&apos;s schedules — not individual Stripe charges.
                                     </p>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80 mt-3">
                                         <span>Revenue (credits)</span><span>{formatMoneyFromCents(jobFinancials.totals.total_revenue_credits)}</span>
@@ -6773,23 +6884,86 @@ export default function AdminEntityDrawer() {
                             </div>
                         )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
-                        <EntityDrawerOverview
-                            entityType={presentationType}
-                            data={entityDrawerOverviewData}
-                            customSectionContent={overviewCustomContent}
-                            overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
-                            selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
-                            isEditing={isEditing}
-                            formData={formData}
-                            onFieldChange={(key, value) => {
-                                setFormData((prev) => ({ ...prev, [key]: value }));
-                            }}
-                            onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
-                            canEdit={!!canMutate}
-                            statusDefs={statusDefsForDrawer}
-                            getStatusLabel={getStatusLabel}
-                            onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
-                        />
+                        isJobDrawerV2 && drawer.type === "jobs" ? (
+                            <JobDrawerV2OverviewShell
+                                primary={
+                                    <>
+                                        <div className="rounded-[10px] border border-solid border-[rgba(39,63,82,0.14)] bg-white p-3 shadow-sm sm:p-4">
+                                            <EntityDrawerOverview
+                                                entityType={presentationType}
+                                                data={entityDrawerOverviewData}
+                                                customSectionContent={overviewCustomContent}
+                                                overviewSectionsOverride={
+                                                    configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined
+                                                }
+                                                selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
+                                                isEditing={isEditing}
+                                                formData={formData}
+                                                onFieldChange={(key, value) => {
+                                                    setFormData((prev) => ({ ...prev, [key]: value }));
+                                                }}
+                                                onBlur={() => {
+                                                    if (drawer.type === "jobs" && jobFormDirty) saveEdit();
+                                                    else if (nonJobFormDirty) saveEdit();
+                                                }}
+                                                canEdit={!!canMutate}
+                                                statusDefs={statusDefsForDrawer}
+                                                getStatusLabel={getStatusLabel}
+                                                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+                                            />
+                                        </div>
+                                        <JobDrawerV2TimelineCard data={(entityDrawerOverviewData ?? null) as Record<string, unknown> | null} />
+                                    </>
+                                }
+                                rail={
+                                    <JobDrawerRelationshipsSection
+                                        uiVariant="adminV2"
+                                        formData={formData}
+                                        setFormData={setFormData}
+                                        canMutate={canMutate}
+                                        jobExpandedSections={jobExpandedSections}
+                                        setJobExpandedSections={setJobExpandedSections}
+                                        jobCustomerOptions={jobCustomerOptions}
+                                        jobContactOptions={jobContactOptions}
+                                        primaryContactDisabled={primaryContactDisabled}
+                                        jobLocationOptions={jobLocationOptions}
+                                        jobWorkUnitOptions={jobWorkUnitOptions}
+                                        jobOpportunityOptions={jobOpportunityOptions}
+                                        jobVendorOptions={jobVendorsForAssign}
+                                        jobAssignedVendorId={jobAssignedVendorId}
+                                        setJobAssignedVendorId={setJobAssignedVendorId}
+                                        jobAssignedVendorSaving={jobAssignedVendorSaving}
+                                        applyVendorToUpcoming={applyVendorToUpcoming}
+                                        setApplyVendorToUpcoming={setApplyVendorToUpcoming}
+                                        customerSingular={customerSingular}
+                                        contactSingular={contactSingular}
+                                        opportunitySingular={opportunitySingular}
+                                        vendorSingular={vendorSingular}
+                                        openDrawer={openDrawer}
+                                        openJobLocationChange={openJobLocationChange}
+                                        saveJobAssignedVendor={saveJobAssignedVendor}
+                                    />
+                                }
+                            />
+                        ) : (
+                            <EntityDrawerOverview
+                                entityType={presentationType}
+                                data={entityDrawerOverviewData}
+                                customSectionContent={overviewCustomContent}
+                                overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                                selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
+                                isEditing={isEditing}
+                                formData={formData}
+                                onFieldChange={(key, value) => {
+                                    setFormData((prev) => ({ ...prev, [key]: value }));
+                                }}
+                                onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
+                                canEdit={!!canMutate}
+                                statusDefs={statusDefsForDrawer}
+                                getStatusLabel={getStatusLabel}
+                                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+                            />
+                        )
                     )}
                     {drawerTab === "overview" && !useConfigDrivenOverview && (
                         <>
@@ -8715,7 +8889,7 @@ export default function AdminEntityDrawer() {
                         setDeleteSaving(false);
                     }
                 }}
-                recordLabel={drawerTitle}
+                recordLabel={drawerTitleResolved}
                 entityTypeLabel={getEntityLabel(labels, drawer.type, "singular") ?? drawer.type}
                 isLoading={deleteSaving}
             />
