@@ -37,7 +37,7 @@ export default function Sidebar({
             className="text-xs font-semibold hover:underline"
             style={{ color: brand.primary }}
           >
-            UI V2 workspace
+            Workspace
           </Link>
         </div>
       )}

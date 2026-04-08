@@ -14,13 +14,16 @@ export function QueueBlock({
     departmentId,
     runtime,
     presentation = "flat",
+    workspaceBasePath = "/admin/workspace",
 }: {
     block: WorkspaceQueueBlock;
     departmentId: string;
     runtime: WorkspaceRuntimeData;
     presentation?: "flat" | "bridge";
+    /** Must match the app route segment (e.g. `/adminV2/workspace` for product shell). */
+    workspaceBasePath?: string;
 }) {
-    const base = `/admin/workspace/dept/${departmentId}`;
+    const base = `${workspaceBasePath.replace(/\/$/, "")}/dept/${departmentId}`;
     const unassignedHref = `${base}/unassigned`;
 
     const coveredKeys = new Set<string>();

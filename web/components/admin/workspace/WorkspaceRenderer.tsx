@@ -22,6 +22,8 @@ export function WorkspaceRenderer({
     presentation = "flat",
     bridgeBriefTitle,
     bridgeBriefSubtitle,
+    /** Base path for workspace routes (e.g. `/admin/workspace` or `/adminV2/workspace`). Queue links resolve under `…/dept/:id/…`. */
+    workspaceBasePath = "/admin/workspace",
 }: {
     layout: DepartmentWorkspaceLayout;
     departmentId: string;
@@ -31,6 +33,7 @@ export function WorkspaceRenderer({
     bridgeBriefTitle?: string;
     /** Subline under the briefing headline when `presentation="department_bridge"`. */
     bridgeBriefSubtitle?: string;
+    workspaceBasePath?: string;
 }) {
     if (presentation === "department_bridge") {
         const parts = partitionDepartmentBlocks(layout.blocks);
@@ -65,6 +68,7 @@ export function WorkspaceRenderer({
                                 departmentId={departmentId}
                                 runtime={runtime}
                                 presentation="bridge"
+                                workspaceBasePath={workspaceBasePath}
                             />
                         </div>
                     ))}
@@ -120,7 +124,13 @@ export function WorkspaceRenderer({
                         return <SignalsBlock key={block.id} block={block} runtime={runtime} />;
                     case "queue":
                         return (
-                            <QueueBlock key={block.id} block={block} departmentId={departmentId} runtime={runtime} />
+                            <QueueBlock
+                                key={block.id}
+                                block={block}
+                                departmentId={departmentId}
+                                runtime={runtime}
+                                workspaceBasePath={workspaceBasePath}
+                            />
                         );
                     case "kpi":
                         return <KpiBlock key={block.id} block={block} />;
