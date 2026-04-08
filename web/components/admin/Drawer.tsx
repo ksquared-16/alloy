@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { type CSSProperties, type ReactNode, useEffect } from "react";
+import { neutral, derived, brand } from "@/styles/tokens/colors";
 
 interface DrawerProps {
     isOpen: boolean;
@@ -20,6 +21,8 @@ interface DrawerProps {
     zIndexPanel?: number;
     /** Optional: 4px left accent border color (e.g. "rgb(0,69,140)") */
     accentColor?: string;
+    /** Admin V2 workspace token surface (matches `WorkUnitWorkspace` / workspace.css variables). */
+    variant?: "legacy" | "adminV2";
 }
 
 export default function Drawer({
@@ -34,6 +37,7 @@ export default function Drawer({
     zIndexBackdrop = 40,
     zIndexPanel = 50,
     accentColor,
+    variant = "legacy",
 }: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
@@ -50,6 +54,25 @@ export default function Drawer({
 
     const titleText = typeof title === "string" ? title : title != null ? String(title) : "—";
 
+    const isV2 = variant === "adminV2";
+    const leftAccent = accentColor ?? (isV2 ? brand.primary : undefined);
+
+    const panelStyle: CSSProperties = {
+        zIndex: zIndexPanel,
+        ...(isV2
+            ? {
+                  backgroundColor: neutral.surface,
+                  color: neutral.textPrimary,
+                  borderColor: derived.border,
+                  borderLeftWidth: 4,
+                  borderLeftStyle: "solid",
+                  borderLeftColor: leftAccent ?? brand.primary,
+              }
+            : accentColor
+              ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor }
+              : {}),
+    };
+
     return (
         <>
             <div
@@ -58,18 +81,39 @@ export default function Drawer({
                 onClick={onClose}
             />
             <div
-                className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-admin-surface-card border border-admin-border shadow-xl flex flex-col ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}
-                style={{ zIndex: zIndexPanel, ...(accentColor ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor } : {}) }}
+                data-adminv2-drawer={isV2 ? "true" : undefined}
+                className={`fixed right-0 top-0 bottom-0 w-full max-w-2xl shadow-xl flex flex-col border ${
+                    isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
+                }`}
+                style={panelStyle}
             >
                 {/* Sticky header: white/light with subtle border (dashboard-style) */}
-                <div className="sticky top-0 z-10 shrink-0 border-b border-admin-border bg-admin-surface-card">
+                <div
+                    className={`sticky top-0 z-10 shrink-0 border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}
+                    style={
+                        isV2
+                            ? {
+                                  backgroundColor: neutral.surface,
+                                  borderBottomColor: derived.border,
+                              }
+                            : undefined
+                    }
+                >
                     {/* Row 1: full title only — no truncation */}
                     <div className="px-6 pt-4 pb-2">
-                        <h2 className="text-xl font-bold text-alloy-forge leading-snug break-words">
+                        <h2
+                            className={`text-xl font-bold leading-snug break-words ${isV2 ? "" : "text-alloy-forge"}`}
+                            style={isV2 ? { color: neutral.textPrimary } : undefined}
+                        >
                             {titleText}
                         </h2>
                         {headerSubtitle != null && headerSubtitle !== false && (
-                            <p className="mt-1 text-sm font-medium text-alloy-midnight/55">{headerSubtitle}</p>
+                            <p
+                                className={`mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`}
+                                style={isV2 ? { color: derived.textSecondary } : undefined}
+                            >
+                                {headerSubtitle}
+                            </p>
                         )}
                     </div>
                     {/* Row 2: status + actions + close */}
@@ -81,19 +125,28 @@ export default function Drawer({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="shrink-0 text-alloy-midnight/70 hover:text-alloy-forge text-2xl leading-none transition-colors p-1"
+                            className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
+                            style={isV2 ? { color: derived.textSecondary } : undefined}
                             aria-label="Close"
                         >
                             ×
                         </button>
                     </div>
                     {headerExtra != null && headerExtra !== false && (
-                        <div className="px-6 pb-3 pt-2 border-t border-admin-border border-t-alloy-blue/30">
+                        <div
+                            className={`px-6 pb-3 pt-2 border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}
+                            style={isV2 ? { borderTopColor: derived.border } : undefined}
+                        >
                             {headerExtra}
                         </div>
                     )}
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 bg-admin-surface-card">{children}</div>
+                <div
+                    className={`flex-1 overflow-y-auto p-6 ${isV2 ? "" : "bg-admin-surface-card"}`}
+                    style={isV2 ? { backgroundColor: neutral.background, color: neutral.textPrimary } : undefined}
+                >
+                    {children}
+                </div>
             </div>
         </>
     );

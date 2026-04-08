@@ -17,6 +17,7 @@ export type AdminJobListRow = JobRowForWorkspaceMetrics & {
     _customer_name?: string | null;
     _status_display?: string | null;
     _job_label?: string | null;
+    _price_display?: number | null;
 };
 
 export function useDepartmentQueueData(departmentId: string, mode: DepartmentJobsQueueMode) {

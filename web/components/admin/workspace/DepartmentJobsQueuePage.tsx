@@ -1,48 +1,26 @@
 "use client";
 
-import Link from "next/link";
+import { useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { formatDateTime } from "@/lib/adminFormatters";
-import {
-    useDepartmentQueueData,
-    type AdminJobListRow,
-    type DepartmentJobsQueueMode,
-} from "@/hooks/useDepartmentQueueData";
+import { buildRealWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromJobs";
+import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
+import { useDepartmentQueueData, type DepartmentJobsQueueMode } from "@/hooks/useDepartmentQueueData";
 
-const MODE_COPY: Record<
+const MODE_META: Record<
     DepartmentJobsQueueMode,
-    { title: string; subtitle: string; empty: string; hint: string; crumb: string; path: string }
+    { crumb: string; path: string }
 > = {
-    unassigned: {
-        title: "Unassigned jobs",
-        subtitle:
-            "Jobs with no work unit — from GET /api/admin/jobs?unassigned_work_unit=true. Row opens the resolver-backed drawer.",
-        empty: "No unassigned jobs.",
-        hint: "These jobs are not assigned to a work unit yet. Assign from the drawer or the full job page when needed.",
-        crumb: "Unassigned jobs",
-        path: "unassigned",
-    },
-    scheduled_today: {
-        title: "Scheduled today",
-        subtitle:
-            "Jobs whose next visit falls on today (local time), combining department work units and org-wide unassigned rows. Sample capped at 200 jobs per API request.",
-        empty: "No jobs with a visit scheduled for today in the current sample.",
-        hint: "Derived from merged lists — not a full-org rollup. Use All jobs in the rail for the full list.",
-        crumb: "Scheduled today",
-        path: "scheduled-today",
-    },
-    needs_attention: {
-        title: "Needs attention",
-        subtitle:
-            "Overdue next visits or outstanding receivables on the merged job sample (max 200 rows per source).",
-        empty: "Nothing flagged in the current sample.",
-        hint: "Triage lens only — open the drawer or full record to resolve.",
-        crumb: "Needs attention",
-        path: "needs-attention",
-    },
+    unassigned: { crumb: "Unassigned jobs", path: "unassigned" },
+    scheduled_today: { crumb: "Scheduled today", path: "scheduled-today" },
+    needs_attention: { crumb: "Needs attention", path: "needs-attention" },
 };
 
+/**
+ * Real work-unit lanes under workspace routes — uses the same `WorkUnitWorkspace` shell as the Admin V2 mock.
+ */
 export function DepartmentJobsQueuePage({
     workspaceBase,
     departmentId,
@@ -54,105 +32,64 @@ export function DepartmentJobsQueuePage({
     mode: DepartmentJobsQueueMode;
     deptName: string;
 }) {
+    const router = useRouter();
     const { openDrawer } = useAdminDrawer();
-    const copy = MODE_COPY[mode];
     const { jobs, loading, error } = useDepartmentQueueData(departmentId, mode);
+    const meta = MODE_META[mode];
 
-    const openJobDrawer = (id: string) => {
-        openDrawer({ type: "jobs", id, jobRecordSurface: "drawer" });
-    };
+    const model = useMemo(
+        () =>
+            buildRealWorkUnitWorkspaceModel({
+                departmentId,
+                deptName,
+                mode,
+                jobs,
+            }),
+        [departmentId, deptName, mode, jobs]
+    );
 
-    const showNextCol = mode !== "unassigned";
+    const onWorkspaceAction = useCallback(
+        (action: WorkspaceAction) => {
+            if (action.type === "queue.item.action" && action.actionId === "open_record") {
+                openDrawer({ type: "jobs", id: action.itemId, jobRecordSurface: "drawer" });
+                return;
+            }
+            if (action.type === "navigate" && action.href) {
+                router.push(action.href);
+                return;
+            }
+            if (action.type === "signal.action") {
+                if (action.actionId === "nav_jobs") router.push("/admin/jobs");
+                if (action.actionId === "nav_schedules") router.push("/admin/schedules");
+                return;
+            }
+            if (action.type === "actions.block") {
+                const id = action.actionId;
+                if (id === "back_department") router.push(`${workspaceBase}/dept/${departmentId}`);
+                else if (id === "open_admin_jobs") router.push("/admin/jobs");
+                else if (id === "open_schedules") router.push("/admin/schedules");
+                else if (id === "open_work_units") router.push("/admin/system/work-units");
+            }
+        },
+        [departmentId, openDrawer, router, workspaceBase]
+    );
 
     return (
         <WorkspaceChrome
+            variant="bridge"
             breadcrumbs={[
                 { href: workspaceBase, label: "Workspace" },
                 { href: `${workspaceBase}/dept/${departmentId}`, label: deptName },
-                {
-                    href: `${workspaceBase}/dept/${departmentId}/${copy.path}`,
-                    label: copy.crumb,
-                },
+                { href: `${workspaceBase}/dept/${departmentId}/${meta.path}`, label: meta.crumb },
             ]}
-            title={copy.title}
-            subtitle={copy.subtitle}
+            title={meta.crumb}
+            subtitle=""
         >
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <div className="rounded-lg border border-admin-border bg-alloy-stone/20 px-4 py-3 text-sm text-alloy-midnight/75">
-                {copy.hint}
-            </div>
-
+            {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
             {loading ? (
-                <p className="text-sm text-alloy-midnight/60">Loading queue…</p>
+                <p className="text-sm text-alloy-midnight/60 py-4">Loading lane…</p>
             ) : (
-                <div className="rounded-xl border border-admin-border bg-white overflow-hidden shadow-sm">
-                    <table className="min-w-full text-sm">
-                        <thead className="bg-alloy-stone/40 text-left text-xs font-semibold uppercase text-alloy-forge/80">
-                            <tr>
-                                <th className="px-4 py-2">Job</th>
-                                <th className="px-4 py-2">Customer</th>
-                                <th className="px-4 py-2">Status</th>
-                                {showNextCol ? <th className="px-4 py-2">Next visit</th> : null}
-                                <th className="px-4 py-2">Created</th>
-                                <th className="px-4 py-2 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {jobs.length === 0 ? (
-                                <tr>
-                                    <td
-                                        colSpan={showNextCol ? 6 : 5}
-                                        className="px-4 py-8 text-center text-alloy-midnight/55"
-                                    >
-                                        {copy.empty}
-                                    </td>
-                                </tr>
-                            ) : (
-                                jobs.map((j: AdminJobListRow) => (
-                                    <tr
-                                        key={j.id}
-                                        className="border-t border-admin-border hover:bg-alloy-stone/25 cursor-pointer"
-                                        onClick={() => openJobDrawer(j.id)}
-                                    >
-                                        <td className="px-4 py-2 font-medium text-alloy-midnight">
-                                            {(j._job_label ?? j.title)?.trim() || "—"}
-                                        </td>
-                                        <td className="px-4 py-2 text-alloy-forge/90">{j._customer_name ?? "—"}</td>
-                                        <td className="px-4 py-2">{j._status_display ?? j.status_key ?? "—"}</td>
-                                        {showNextCol ? (
-                                            <td className="px-4 py-2 text-alloy-midnight/80 whitespace-nowrap">
-                                                {j._next_schedule ? formatDateTime(j._next_schedule) : "—"}
-                                            </td>
-                                        ) : null}
-                                        <td className="px-4 py-2 text-alloy-midnight/70">
-                                            {j.created_at ? formatDateTime(j.created_at) : "—"}
-                                        </td>
-                                        <td className="px-4 py-2 text-right whitespace-nowrap">
-                                            <button
-                                                type="button"
-                                                className="text-xs text-alloy-blue font-medium hover:underline mr-3"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openJobDrawer(j.id);
-                                                }}
-                                            >
-                                                Drawer
-                                            </button>
-                                            <Link
-                                                href={`/admin/jobs/${j.id}`}
-                                                className="text-xs text-alloy-blue font-medium hover:underline"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                Full record
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                <WorkUnitWorkspace model={model} onAction={onWorkspaceAction} />
             )}
         </WorkspaceChrome>
     );

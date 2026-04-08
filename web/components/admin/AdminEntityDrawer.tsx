@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import "@/app/adminV2/components/workspace/workspace.css";
 import Drawer from "@/components/admin/Drawer";
 import {
     useAdminDrawer,
@@ -654,6 +655,8 @@ export default function AdminEntityDrawer() {
     const jobPlural = getEntityLabel(labels, "jobs", "plural");
     const subscriptionSingular = labels.subscriptions?.singular ?? "Subscription";
     const router = useRouter();
+    const pathname = usePathname();
+    const drawerShellVariant = pathname?.startsWith("/adminV2") ? "adminV2" : "legacy";
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -4999,6 +5002,7 @@ export default function AdminEntityDrawer() {
             zIndexBackdrop={60}
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
+            variant={drawerShellVariant}
         >
             {showDrawerBodyLoading && <p className="text-alloy-midnight/60">Loading…</p>}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
