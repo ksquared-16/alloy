@@ -20,7 +20,11 @@ import type {
     ResolvedRecordPayload,
     ResolvedRelationshipGroup,
 } from "@/lib/rrs/types";
-import { loadEffectiveOverviewLayoutConfig, type OverviewLayoutConfigV0 } from "@/lib/rrs/overview/overviewLayoutV0";
+import {
+    loadEffectiveOverviewLayoutConfig,
+    orderAndFilterOverviewFields,
+    type OverviewLayoutConfigV0,
+} from "@/lib/rrs/overview/overviewLayoutV0";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -142,14 +146,16 @@ const JOB_SYSTEM_FIELD_SPECS: JobSystemFieldSpec[] = [
     { key: "status_key", label: "Status", column: "status_key", editable: true },
     { key: "scheduled_at", label: "Scheduled at", column: "scheduled_at", editable: true },
     { key: "completed_at", label: "Completed at", column: "completed_at", editable: true },
+    { key: "service_key", label: "Service", column: "service_key", editable: true, surfaces: ["overview", "full"] },
     { key: "service_frequency_key", label: "Service frequency", column: "service_frequency_key", editable: true },
+    { key: "job_number", label: "Job number", column: "job_number", editable: false, surfaces: ["overview", "full"] },
     { key: "customer_id", label: "Customer", column: "customer_id", editable: true },
     { key: "location_id", label: "Location", column: "location_id", editable: true },
     { key: "work_unit_id", label: "Work unit", column: "work_unit_id", editable: true },
     { key: "assigned_vendor_id", label: "Assigned vendor", column: "assigned_vendor_id", editable: true },
     { key: "primary_person_id", label: "Primary person", column: "primary_person_id", editable: true },
     { key: "primary_contact_id", label: "Primary contact (legacy)", column: "primary_contact_id", editable: true, surfaces: ["full"] },
-    { key: "estimated_total_cents", label: "Estimated total (cents)", column: "estimated_total_cents", editable: true, surfaces: ["full"] },
+    { key: "estimated_total_cents", label: "Estimated total (cents)", column: "estimated_total_cents", editable: true, surfaces: ["full", "overview"] },
     { key: "recurring_total_cents", label: "Recurring total (cents)", column: "recurring_total_cents", editable: true, surfaces: ["full"] },
 ];
 
@@ -195,6 +201,12 @@ function buildJobComputedFields(flat: Record<string, unknown>, surface: RecordSu
         { key: "_contact_name", label: "Contact name" },
         { key: "_vendor_name", label: "Vendor name" },
         { key: "_opportunity_name", label: "Opportunity" },
+        { key: "_discount_applied", label: "Discount applied" },
+        { key: "_discount_label", label: "Discount" },
+        { key: "_service_home_type_label", label: "Home type" },
+        { key: "_service_sqft_band_label", label: "Size band" },
+        { key: "_service_bedrooms", label: "Bedrooms" },
+        { key: "_service_bathrooms", label: "Bathrooms" },
     ];
     const rows: ResolvedFieldDescriptor[] = [];
     for (const k of keys) {
@@ -235,22 +247,6 @@ function buildJobCustomFields(flat: Record<string, unknown>, surface: RecordSurf
         return rows.slice(0, 12);
     }
     return rows;
-}
-
-function collectOverviewFieldKeys(layout: OverviewLayoutConfigV0): Set<string> {
-    const s = new Set<string>(layout.header_keys);
-    for (const b of layout.bands) {
-        if (!b.enabled) continue;
-        for (const it of b.items) {
-            s.add(it.key);
-        }
-    }
-    return s;
-}
-
-function filterFieldsForOverview(fields: ResolvedFieldDescriptor[], layout: OverviewLayoutConfigV0): ResolvedFieldDescriptor[] {
-    const allow = collectOverviewFieldKeys(layout);
-    return fields.filter((f) => allow.has(f.key));
 }
 
 function buildRelationshipGroups(flat: Record<string, unknown>): ResolvedRelationshipGroup[] {
@@ -314,7 +310,7 @@ async function buildJobRrsPayload(
 
     let fields = [...systemFields, ...computedFields, ...customFields];
     if (surface === "overview") {
-        fields = filterFieldsForOverview(fields, overviewConfig);
+        fields = orderAndFilterOverviewFields(fields, overviewConfig);
     } else if (surface === "drawer") {
         fields = fields.filter((f) => !["description", "internal_notes"].includes(f.key) && !f.key.startsWith("custom:"));
         const drawerMax = 24;
@@ -326,7 +322,13 @@ async function buildJobRrsPayload(
         }
     }
 
-    const relationship_groups = surface === "drawer" ? buildRelationshipGroups(flat).slice(0, 1) : buildRelationshipGroups(flat);
+    let relationship_groups = buildRelationshipGroups(flat);
+    if (surface === "overview" && overviewConfig.relationship_group_keys?.length) {
+        const allowRg = new Set(overviewConfig.relationship_group_keys);
+        relationship_groups = relationship_groups.filter((g) => allowRg.has(g.group_key));
+    } else if (surface === "drawer") {
+        relationship_groups = relationship_groups.slice(0, 1);
+    }
 
     return {
         meta: {

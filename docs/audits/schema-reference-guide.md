@@ -62,7 +62,8 @@ For **RRS**, the important schema buckets are:
 2. **`field_definitions` / `field_values` / `field_section_definitions`** for custom data + section ordering.  
 3. **Join targets** for FK labels (customer, location, person, work unit).  
 4. **Financial** tables feeding computed/display fields.  
-5. **No** single table defines “relationship groups” — groups are **resolver logic** over 2–4.
+5. **No** single table defines “relationship groups” — groups are **resolver logic** over 2–4.  
+6. **`record_overview_layouts`** — org + `entity_type` + `surface` overview config (`template_key`, `config` jsonb). Cleaning-org job overview seed: migration `20260408170000_record_overview_layouts_cleaning_org_jobs.sql` (org id aligned with `20260402143000_public_booking_field_config_seed.sql`).
 
 ---
 
