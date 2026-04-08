@@ -10,6 +10,8 @@ type Props = {
     signalsSlot: ReactNode;
     kpiSlot: ReactNode;
     throughputSlot: ReactNode;
+    /** Secondary operational lane — exceptions / attention (matches mock `secondaryQueue` lane). */
+    attentionSlot?: ReactNode;
     contextSlot: ReactNode;
     railSlot: ReactNode;
 };
@@ -24,6 +26,7 @@ export function DepartmentWorkspaceBridgeShell({
     signalsSlot,
     kpiSlot,
     throughputSlot,
+    attentionSlot,
     contextSlot,
     railSlot,
 }: Props) {
@@ -32,6 +35,7 @@ export function DepartmentWorkspaceBridgeShell({
     const hasTopStack = hasBrief || hasSignals;
     const hasKpis = kpiSlot != null;
     const hasControlDeck = hasTopStack || hasKpis;
+    const hasAttentionLane = attentionSlot != null;
 
     return (
         <div
@@ -75,7 +79,11 @@ export function DepartmentWorkspaceBridgeShell({
                         ) : null}
 
                         <div
-                            className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double"
+                            className={`adminv2-ws-dept-v2-operational-row ${
+                                hasAttentionLane
+                                    ? "adminv2-ws-dept-v2-operational-row--triple"
+                                    : "adminv2-ws-dept-v2-operational-row--double"
+                            }`}
                             aria-label="Operational lanes"
                         >
                             <div
@@ -86,11 +94,16 @@ export function DepartmentWorkspaceBridgeShell({
                                     {throughputSlot}
                                 </div>
                             </div>
-                            <div
-                                className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention adminv2-ws-dept-v2-lane--attention--hidden"
-                                data-ws-lane-kind="attention"
-                                aria-hidden
-                            />
+                            {hasAttentionLane ? (
+                                <div
+                                    className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention"
+                                    data-ws-lane-kind="attention"
+                                >
+                                    <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-board-secondary-slot">
+                                        {attentionSlot}
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
 
                         {contextSlot ? <div data-workspace-zone="context-lower">{contextSlot}</div> : null}

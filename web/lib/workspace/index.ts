@@ -12,6 +12,7 @@ export { partitionDepartmentBlocks } from "./partitionBlocks";
 export {
     mergeJobListsById,
     computeOperationsSignalCounts,
+    computeAttentionCategoryRuntime,
     filterJobsScheduledToday,
     filterJobsNeedsAttention,
     type JobRowForWorkspaceMetrics,

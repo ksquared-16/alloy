@@ -1,6 +1,7 @@
 import type {
     WorkspaceBlock,
     WorkspaceActionsBlock,
+    WorkspaceAttentionBlock,
     WorkspaceContextBlock,
     WorkspaceKpiBlock,
     WorkspaceQueueBlock,
@@ -11,6 +12,7 @@ import type {
 export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
     const signals: WorkspaceSignalsBlock[] = [];
     const queues: WorkspaceQueueBlock[] = [];
+    const attentions: WorkspaceAttentionBlock[] = [];
     const kpis: WorkspaceKpiBlock[] = [];
     const actions: WorkspaceActionsBlock[] = [];
     const contexts: WorkspaceContextBlock[] = [];
@@ -22,6 +24,9 @@ export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
                 break;
             case "queue":
                 queues.push(b);
+                break;
+            case "attention":
+                attentions.push(b);
                 break;
             case "kpi":
                 kpis.push(b);
@@ -37,5 +42,5 @@ export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
         }
     }
 
-    return { signals, queues, kpis, actions, contexts };
+    return { signals, queues, attentions, kpis, actions, contexts };
 }

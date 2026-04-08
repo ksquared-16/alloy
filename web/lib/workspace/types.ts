@@ -6,7 +6,14 @@
  */
 
 /** Canonical block kinds rendered by WorkspaceRenderer. */
-export type WorkspaceBlockType = "signals" | "queue" | "kpi" | "actions" | "context";
+export type WorkspaceBlockType = "signals" | "queue" | "attention" | "kpi" | "actions" | "context";
+
+/** Keys for attention lane category rows — registry ids must match `WorkspaceRuntimeData.attention`. */
+export type WorkspaceAttentionCategoryKey =
+    | "overdue_next_visit"
+    | "outstanding_receivable"
+    | "high_value_unassigned"
+    | "ready_for_assignment";
 
 /** Metric keys the client can resolve today; extend as new signal providers ship. */
 export type WorkspaceSignalMetricKey =
@@ -107,9 +114,29 @@ export type WorkspaceContextBlock = {
     paragraphs: string[];
 };
 
+export type WorkspaceAttentionCategory = {
+    /** Must match `WorkspaceAttentionCategoryKey` for runtime lookup. */
+    id: WorkspaceAttentionCategoryKey;
+    label: string;
+    description?: string;
+    /** Existing department queue route (sample-limited lists). */
+    target: {
+        deptRoute: "unassigned" | "scheduled-today" | "needs-attention";
+    };
+};
+
+export type WorkspaceAttentionBlock = {
+    id: string;
+    type: "attention";
+    title?: string;
+    subtitle?: string;
+    categories: WorkspaceAttentionCategory[];
+};
+
 export type WorkspaceBlock =
     | WorkspaceSignalsBlock
     | WorkspaceQueueBlock
+    | WorkspaceAttentionBlock
     | WorkspaceKpiBlock
     | WorkspaceActionsBlock
     | WorkspaceContextBlock;
@@ -139,8 +166,16 @@ export type WorkspaceQueueDefinitionIntentV0 = {
     limit?: number;
 };
 
+/** Per-category counts + short previews for the attention lane (merged job sample). */
+export type WorkspaceAttentionCategoryRuntime = {
+    count: number;
+    previews: { id: string; label: string }[];
+};
+
 /** Runtime values fetched by the page and passed into blocks (keeps blocks mostly presentational). */
 export type WorkspaceRuntimeData = {
     metrics: Partial<Record<WorkspaceSignalMetricKey, number | null>>;
     workUnits: Array<{ id: string; name: string | null; key?: string | null; department_id: string }>;
+    /** Populated when layout includes an `attention` block — keyed by `WorkspaceAttentionCategoryKey`. */
+    attention?: Partial<Record<WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime>>;
 };

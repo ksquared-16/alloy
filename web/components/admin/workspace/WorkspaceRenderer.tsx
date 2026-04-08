@@ -4,6 +4,7 @@ import type { DepartmentWorkspaceLayout, WorkspaceRuntimeData } from "@/lib/work
 import { partitionDepartmentBlocks } from "@/lib/workspace/partitionBlocks";
 import { DepartmentWorkspaceBridgeShell } from "./DepartmentWorkspaceBridgeShell";
 import { ActionsBlock } from "./blocks/ActionsBlock";
+import { AttentionBlock } from "./blocks/AttentionBlock";
 import { ContextBlock } from "./blocks/ContextBlock";
 import { KpiBlock } from "./blocks/KpiBlock";
 import { QueueBlock } from "./blocks/QueueBlock";
@@ -79,6 +80,22 @@ export function WorkspaceRenderer({
                 </p>
             );
 
+        const attentionSlot =
+            parts.attentions.length > 0 ? (
+                <>
+                    {parts.attentions.map((b) => (
+                        <AttentionBlock
+                            key={b.id}
+                            block={b}
+                            runtime={runtime}
+                            departmentId={departmentId}
+                            workspaceBasePath={workspaceBasePath}
+                            presentation="bridge"
+                        />
+                    ))}
+                </>
+            ) : null;
+
         const contextSlot =
             parts.contexts.length > 0 ? (
                 <>
@@ -115,6 +132,7 @@ export function WorkspaceRenderer({
                     signalsSlot={signalsSlot}
                     kpiSlot={kpiSlot}
                     throughputSlot={throughputSlot}
+                    attentionSlot={attentionSlot}
                     contextSlot={contextSlot}
                     railSlot={railSlot}
                 />
@@ -136,6 +154,17 @@ export function WorkspaceRenderer({
                                 departmentId={departmentId}
                                 runtime={runtime}
                                 workspaceBasePath={workspaceBasePath}
+                            />
+                        );
+                    case "attention":
+                        return (
+                            <AttentionBlock
+                                key={block.id}
+                                block={block}
+                                runtime={runtime}
+                                departmentId={departmentId}
+                                workspaceBasePath={workspaceBasePath}
+                                presentation="flat"
                             />
                         );
                     case "kpi":

@@ -71,6 +71,38 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
             list_remaining_work_units: true,
         },
         {
+            id: "attention_exceptions",
+            type: "attention",
+            title: "Exceptions & attention",
+            subtitle: "Grouped risk — counts from the same merged job sample as signals (≤200 rows per API source).",
+            categories: [
+                {
+                    id: "overdue_next_visit",
+                    label: "Overdue visits",
+                    description: "Next visit time is already in the past.",
+                    target: { deptRoute: "needs-attention" },
+                },
+                {
+                    id: "outstanding_receivable",
+                    label: "Payment issues",
+                    description: "Outstanding receivable balance on the job.",
+                    target: { deptRoute: "needs-attention" },
+                },
+                {
+                    id: "high_value_unassigned",
+                    label: "High-value unassigned",
+                    description: "≥ $300 gross and no work unit yet.",
+                    target: { deptRoute: "unassigned" },
+                },
+                {
+                    id: "ready_for_assignment",
+                    label: "Ready for assignment",
+                    description: "Jobs in status ready_for_assignment.",
+                    target: { deptRoute: "unassigned" },
+                },
+            ],
+        },
+        {
             id: "actions_admin",
             type: "actions",
             title: "What’s next",

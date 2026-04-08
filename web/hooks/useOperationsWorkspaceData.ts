@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+    computeAttentionCategoryRuntime,
     computeOperationsSignalCounts,
     mergeJobListsById,
     type JobRowForWorkspaceMetrics,
 } from "@/lib/workspace/deriveDepartmentJobMetrics";
-import type { WorkspaceRuntimeData } from "@/lib/workspace/types";
+import type { WorkspaceAttentionCategoryKey, WorkspaceRuntimeData } from "@/lib/workspace/types";
 
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
@@ -20,6 +21,9 @@ export function useOperationsWorkspaceData(departmentId: string) {
     const [scheduledTodayCount, setScheduledTodayCount] = useState<number | null>(null);
     const [needsAttentionCount, setNeedsAttentionCount] = useState<number | null>(null);
     const [highTouchCount, setHighTouchCount] = useState<number | null>(null);
+    const [attention, setAttention] = useState<
+        Partial<Record<WorkspaceAttentionCategoryKey, { count: number; previews: { id: string; label: string }[] }>>
+    >({});
 
     const title = useMemo(() => dept?.name?.trim() || "Department", [dept]);
 
@@ -32,8 +36,9 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 "jobs.high_value_attention_count": highTouchCount,
             },
             workUnits,
+            attention,
         }),
-        [unassignedTotal, scheduledTodayCount, needsAttentionCount, highTouchCount, workUnits]
+        [unassignedTotal, scheduledTodayCount, needsAttentionCount, highTouchCount, workUnits, attention]
     );
 
     useEffect(() => {
@@ -74,11 +79,14 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 if (!cancelled) setDerivedError(mergeErr);
 
                 const mergedRows = mergeJobListsById(deptRows, unRows);
-                const counts = computeOperationsSignalCounts(mergedRows, new Date());
+                const now = new Date();
+                const counts = computeOperationsSignalCounts(mergedRows, now);
+                const att = computeAttentionCategoryRuntime(mergedRows, now);
                 if (!cancelled) {
                     setScheduledTodayCount(counts.scheduledToday);
                     setNeedsAttentionCount(counts.needsAttention);
                     setHighTouchCount(counts.highTouch);
+                    setAttention(att);
                 }
 
                 const depts = dj.items ?? [];
