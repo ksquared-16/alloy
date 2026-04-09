@@ -1,7 +1,7 @@
 "use client";
 
 import { type CSSProperties, type ReactNode, useEffect } from "react";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { neutral, derived, brand, palette } from "@/styles/tokens/colors";
 
 interface DrawerProps {
     isOpen: boolean;
@@ -94,6 +94,16 @@ export default function Drawer({
                     : {}),
           };
 
+    const modalBodyBg: CSSProperties | undefined =
+        isModal && isV2
+            ? {
+                  background: `linear-gradient(180deg, ${palette.riverStone} 0%, color-mix(in srgb, ${palette.riverStone} 88%, ${derived.canvasFieldDepth}) 100%)`,
+                  color: neutral.textPrimary,
+              }
+            : isV2
+              ? { backgroundColor: neutral.background, color: neutral.textPrimary }
+              : undefined;
+
     const headerBlock = (
         <>
             <div
@@ -165,8 +175,8 @@ export default function Drawer({
                 )}
             </div>
             <div
-                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? "px-5 py-5 sm:px-6 sm:py-6" : "p-6"} ${isV2 ? "" : "bg-admin-surface-card"}`}
-                style={isV2 ? { backgroundColor: neutral.background, color: neutral.textPrimary } : undefined}
+                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? "px-4 py-3 sm:px-5 sm:py-4" : "p-6"} ${isV2 ? "" : "bg-admin-surface-card"}`}
+                style={modalBodyBg}
             >
                 {children}
             </div>
@@ -177,7 +187,7 @@ export default function Drawer({
         return (
             <>
                 <div
-                    className="fixed inset-0 bg-black/45 transition-opacity duration-200"
+                    className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200"
                     style={{ zIndex: zIndexBackdrop }}
                     onClick={onClose}
                     aria-hidden
@@ -189,7 +199,7 @@ export default function Drawer({
                     <div
                         data-adminv2-drawer="true"
                         data-adminv2-record-modal="true"
-                        className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${panelClassName ?? "max-w-5xl"}`}
+                        className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${panelClassName ?? "max-w-5xl"}`}
                         style={panelStyle}
                         role="dialog"
                         aria-modal="true"

@@ -187,11 +187,11 @@ function formatServiceFrequencyReadLabel(k: unknown): string {
 }
 
 const primaryPanelFieldClass =
-    "w-full rounded border px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
-const primaryPanelLabelClass = "block text-[11px] font-semibold uppercase tracking-wide mb-0.5";
-const primaryPanelReadClass = "text-sm font-medium leading-snug break-words";
+    "adminv2-job-record-primary-input w-full rounded-lg border px-2 py-1.5 text-sm text-alloy-forge transition-colors duration-150 focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
+const primaryPanelLabelClass = "block text-[10px] font-semibold uppercase tracking-wide mb-0.5";
+const primaryPanelReadClass = "text-sm font-medium leading-snug break-words tabular-nums";
 
-/** High-signal editable block + read-only financial/service summary (Admin V2 job Record tab). */
+/** Top curated panel: editable ownership + read-only plan/pricing summary (Admin V2 cleaning job Record tab). */
 export function JobRecordPrimaryPanel(props: {
     record: Record<string, unknown> | null;
     formData: Record<string, unknown>;
@@ -201,11 +201,15 @@ export function JobRecordPrimaryPanel(props: {
     onBlur: () => void;
     jobCustomerOptions: { id: string; name: string | null }[];
     jobVendorOptions: { id: string; label: string }[];
-    jobWorkUnitOptions: { id: string; label: string }[];
+    jobContactOptions: { id: string; label: string }[];
+    jobLocationOptions: { id: string; label: string }[];
+    primaryContactDisabled: boolean;
     firstSchedule: { id: string; start_at: string; end_at: string; timezone: string } | null;
     rescheduleFormActive: boolean;
     openReschedule: (s: { id: string; start_at: string; end_at: string; timezone: string }) => void;
-    openDrawer: (params: { type: AdminDrawerEntityType; id: string }) => void;
+    openJobLocationChange: () => void;
+    /** Opens linked entity; nested views use Admin V2 modal stack when on /adminV2. */
+    openDrawer: (type: AdminDrawerEntityType, id: string) => void;
 }) {
     const r = props.record ?? {};
     const totalRaw = r.display_total_cents ?? r.total_cents ?? r.gross_price_cents ?? r.estimated_total_cents;
@@ -228,24 +232,29 @@ export function JobRecordPrimaryPanel(props: {
         String((r.service_key as string | undefined) ?? "").trim() ||
         String((r.job_type as string | undefined) ?? "").trim() ||
         "—";
+    const recurring =
+        r.is_recurring === true || r.is_recurring === "true" ? "Yes" : r.is_recurring === false || r.is_recurring === "false" ? "No" : "—";
     const statusOptions = props.statusDefs.filter((s) => s.is_active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     const sk = String(props.formData.status_key ?? r.status_key ?? "").trim();
     if (sk && !statusOptions.some((s) => s.status_key === sk)) {
         statusOptions.push({ status_key: sk, status_label: sk, sort_order: 9999, is_active: true });
     }
+    const vid = String(props.formData.assigned_vendor_id ?? "").trim();
+
+    const fieldStyle = { borderColor: derived.border, backgroundColor: neutral.surface } as CSSProperties;
 
     return (
         <div
-            className="rounded-[10px] border border-solid p-3 sm:p-4 shadow-sm"
-            style={{ borderColor: derived.border, backgroundColor: neutral.surface, ...shell }}
+            className="adminv2-job-record-primary-panel rounded-[10px] border border-solid p-3 shadow-sm sm:p-3.5"
+            style={{ borderColor: derived.border, backgroundColor: neutral.surface, boxShadow: derived.cardShadow, ...shell }}
             data-adminv2-job-primary-panel="true"
         >
-            <p className="text-[10px] font-semibold uppercase tracking-wide mb-3" style={{ color: derived.textSecondary }}>
-                Primary actions
+            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: derived.textSecondary }}>
+                Job summary
             </p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
-                <div className="min-w-0 space-y-3">
-                    <div>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,300px)] lg:gap-5">
+                <div className="min-w-0 grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
                         <label htmlFor="job-primary-status" className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
                             Status
                         </label>
@@ -256,7 +265,7 @@ export function JobRecordPrimaryPanel(props: {
                             onBlur={props.onBlur}
                             disabled={!props.canMutate}
                             className={primaryPanelFieldClass}
-                            style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
+                            style={fieldStyle}
                         >
                             <option value="">— None —</option>
                             {statusOptions.map((s) => (
@@ -266,72 +275,43 @@ export function JobRecordPrimaryPanel(props: {
                             ))}
                         </select>
                     </div>
-                    <div id="job-assign-vendor-section">
+                    <div className="sm:col-span-2" id="job-assign-vendor-section">
                         <span className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Assignment · vendor
+                            Assigned vendor
                         </span>
-                        <select
-                            value={String(props.formData.assigned_vendor_id ?? "")}
-                            onChange={(e) => props.setFormData((f) => ({ ...f, assigned_vendor_id: e.target.value || null }))}
-                            onBlur={props.onBlur}
-                            disabled={!props.canMutate}
-                            className={primaryPanelFieldClass}
-                            style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
-                        >
-                            <option value="">(none)</option>
-                            {props.jobVendorOptions.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                    {v.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label htmlFor="job-primary-wu" className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Work unit
-                        </label>
-                        <select
-                            id="job-primary-wu"
-                            value={String(props.formData.work_unit_id ?? "")}
-                            onChange={(e) => props.setFormData((f) => ({ ...f, work_unit_id: e.target.value || null }))}
-                            onBlur={props.onBlur}
-                            disabled={!props.canMutate}
-                            className={primaryPanelFieldClass}
-                            style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
-                        >
-                            <option value="">Unassigned</option>
-                            {props.jobWorkUnitOptions.map((o) => (
-                                <option key={o.id} value={o.id}>
-                                    {o.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <span className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Next schedule
-                        </span>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
-                                {nextLabel}
-                            </span>
-                            {props.firstSchedule && !props.rescheduleFormActive ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <select
+                                value={String(props.formData.assigned_vendor_id ?? "")}
+                                onChange={(e) => props.setFormData((f) => ({ ...f, assigned_vendor_id: e.target.value || null }))}
+                                onBlur={props.onBlur}
+                                disabled={!props.canMutate}
+                                className={`${primaryPanelFieldClass} min-w-[140px] flex-1`}
+                                style={fieldStyle}
+                            >
+                                <option value="">(none)</option>
+                                {props.jobVendorOptions.map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                        {v.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {vid ? (
                                 <button
                                     type="button"
-                                    onClick={() => props.openReschedule(props.firstSchedule!)}
-                                    className="text-xs font-medium px-2 py-1 rounded-md border"
+                                    onClick={() => props.openDrawer("vendors", vid)}
+                                    className="text-[11px] font-medium px-2 py-1 rounded-md border transition-colors shrink-0"
                                     style={{ borderColor: derived.border, color: brand.primary }}
                                 >
-                                    Reschedule
+                                    Open
                                 </button>
                             ) : null}
                         </div>
                     </div>
-                    <div>
+                    <div className="sm:col-span-2">
                         <label htmlFor="job-primary-customer" className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
                             Customer
                         </label>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                             <select
                                 id="job-primary-customer"
                                 value={String(props.formData.customer_id ?? "")}
@@ -345,8 +325,8 @@ export function JobRecordPrimaryPanel(props: {
                                 }
                                 onBlur={props.onBlur}
                                 disabled={!props.canMutate}
-                                className={`${primaryPanelFieldClass} flex-1 min-w-[160px]`}
-                                style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
+                                className={`${primaryPanelFieldClass} min-w-[160px] flex-1`}
+                                style={fieldStyle}
                             >
                                 <option value="">(none)</option>
                                 {props.jobCustomerOptions.map((c) => (
@@ -358,53 +338,152 @@ export function JobRecordPrimaryPanel(props: {
                             {String(props.formData.customer_id ?? "").trim() ? (
                                 <button
                                     type="button"
-                                    onClick={() => props.openDrawer({ type: "customers", id: String(props.formData.customer_id) })}
-                                    className="text-xs px-2 py-1 border rounded-md shrink-0"
-                                    style={{ borderColor: derived.border }}
+                                    onClick={() => props.openDrawer("customers", String(props.formData.customer_id))}
+                                    className="text-[11px] font-medium px-2 py-1 rounded-md border shrink-0 transition-colors"
+                                    style={{ borderColor: derived.border, color: brand.primary }}
                                 >
                                     Open
                                 </button>
                             ) : null}
                         </div>
                     </div>
+                    <div className="sm:col-span-2">
+                        <label htmlFor="job-primary-contact" className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                            Primary person
+                        </label>
+                        <select
+                            id="job-primary-contact"
+                            value={String(props.formData.primary_contact_id ?? "")}
+                            onChange={(e) => props.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
+                            onBlur={props.onBlur}
+                            disabled={!props.canMutate || props.primaryContactDisabled}
+                            className={primaryPanelFieldClass}
+                            style={fieldStyle}
+                        >
+                            <option value="">(none)</option>
+                            {props.jobContactOptions.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label htmlFor="job-primary-location" className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                            Service location
+                        </label>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <select
+                                id="job-primary-location"
+                                value={String(props.formData.location_id ?? "")}
+                                onChange={(e) => props.setFormData((f) => ({ ...f, location_id: e.target.value || null }))}
+                                onBlur={props.onBlur}
+                                disabled={!props.canMutate}
+                                className={`${primaryPanelFieldClass} min-w-[160px] flex-1`}
+                                style={fieldStyle}
+                            >
+                                <option value="">(none)</option>
+                                {props.jobLocationOptions.map((loc) => (
+                                    <option key={loc.id} value={loc.id}>
+                                        {loc.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {String(props.formData.location_id ?? "").trim() ? (
+                                <button
+                                    type="button"
+                                    onClick={() => props.openDrawer("locations", String(props.formData.location_id))}
+                                    className="text-[11px] font-medium px-2 py-1 rounded-md border shrink-0 transition-colors"
+                                    style={{ borderColor: derived.border, color: brand.primary }}
+                                >
+                                    Open
+                                </button>
+                            ) : null}
+                            {props.canMutate ? (
+                                <button
+                                    type="button"
+                                    onClick={props.openJobLocationChange}
+                                    className="text-[11px] font-medium px-2 py-1 rounded-md border shrink-0 transition-colors"
+                                    style={{ borderColor: derived.border, color: derived.textSecondary }}
+                                >
+                                    Change
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                        <span className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                            Next visit
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            <span className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
+                                {nextLabel}
+                            </span>
+                            {props.firstSchedule && !props.rescheduleFormActive ? (
+                                <button
+                                    type="button"
+                                    onClick={() => props.openReschedule(props.firstSchedule!)}
+                                    className="text-[11px] font-medium px-2 py-1 rounded-md border transition-colors"
+                                    style={{ borderColor: derived.border, color: brand.primary }}
+                                >
+                                    Reschedule
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
                 </div>
                 <div
-                    className="min-w-0 space-y-3 rounded-lg px-3 py-3"
-                    style={{ backgroundColor: derived.maskOverlay, borderWidth: 1, borderStyle: "solid", borderColor: derived.border }}
+                    className="min-w-0 space-y-2 rounded-lg px-3 py-2.5"
+                    style={{
+                        backgroundColor: derived.maskOverlay,
+                        borderWidth: 1,
+                        borderStyle: "solid",
+                        borderColor: derived.border,
+                    }}
                 >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: derived.textSecondary }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: derived.textSecondary }}>
                         Summary
                     </p>
-                    <div>
-                        <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Total price
+                    <div className="grid grid-cols-1 gap-y-1.5">
+                        <div>
+                            <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                                Total price
+                            </div>
+                            <div className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
+                                {Number.isFinite(totalCents) ? formatMoneyFromCents(totalCents) : "—"}
+                            </div>
                         </div>
-                        <div className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
-                            {Number.isFinite(totalCents) ? formatMoneyFromCents(totalCents) : "—"}
+                        <div>
+                            <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                                Outstanding balance
+                            </div>
+                            <div className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
+                                {Number.isFinite(balCents) ? formatMoneyFromCents(balCents) : "—"}
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Outstanding balance
+                        <div>
+                            <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                                Service
+                            </div>
+                            <div className={`${primaryPanelReadClass} font-normal`} style={{ color: neutral.textPrimary }}>
+                                {serviceType}
+                            </div>
                         </div>
-                        <div className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
-                            {Number.isFinite(balCents) ? formatMoneyFromCents(balCents) : "—"}
+                        <div>
+                            <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                                Frequency
+                            </div>
+                            <div className={`${primaryPanelReadClass} font-normal`} style={{ color: neutral.textPrimary }}>
+                                {formatServiceFrequencyReadLabel(r.service_frequency_key)}
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Service type
-                        </div>
-                        <div className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
-                            {serviceType}
-                        </div>
-                    </div>
-                    <div>
-                        <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
-                            Frequency
-                        </div>
-                        <div className={primaryPanelReadClass} style={{ color: neutral.textPrimary }}>
-                            {formatServiceFrequencyReadLabel(r.service_frequency_key)}
+                        <div>
+                            <div className={primaryPanelLabelClass} style={{ color: derived.textSecondary }}>
+                                Recurring
+                            </div>
+                            <div className={`${primaryPanelReadClass} font-normal`} style={{ color: neutral.textPrimary }}>
+                                {recurring}
+                            </div>
                         </div>
                     </div>
                 </div>

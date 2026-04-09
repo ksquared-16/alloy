@@ -5374,3 +5374,30 @@
 [data-adminv2-record-modal] .adminv2-job-record-fielddeck textarea:hover:not(:disabled) {
   border-color: color-mix(in srgb, #00458c 22%, rgba(39, 63, 82, 0.2));
 }
+
+/* Job record — primary panel inputs match field deck */
+[data-adminv2-record-modal] .adminv2-job-record-primary-input {
+  border-color: color-mix(in srgb, #273f52 18%, rgba(39, 63, 82, 0.12));
+  border-radius: 8px;
+}
+[data-adminv2-record-modal] .adminv2-job-record-primary-input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #00458c 22%, rgba(39, 63, 82, 0.2));
+}
+
+/* Job record — denser collapsible sections (Admin V2 system panels) */
+[data-adminv2-job-record-overview] section[data-entity-section] {
+  margin-bottom: 0.5rem;
+}
+[data-adminv2-job-record-overview] .entity-drawer-section-toggle {
+  border-radius: 8px;
+  margin-bottom: 0.25rem;
+  padding: 0.4rem 0.65rem;
+  background: color-mix(in srgb, #ffffff 92%, var(--d-surface, #ffffff));
+  border: 1px solid color-mix(in srgb, #273f52 12%, rgba(39, 63, 82, 0.1));
+  border-bottom: 1px solid color-mix(in srgb, #273f52 14%, rgba(39, 63, 82, 0.12));
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+[data-adminv2-job-record-overview] [data-entity-drawer-overview] {
+  padding-top: 0.25rem;
+}

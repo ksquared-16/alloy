@@ -281,7 +281,7 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 const DRAWER_ROW_SPACING = "space-y-4";
 
-/** Curated collapsible sections for Admin V2 job Record tab (replaces flat overview + field_definitions dump). */
+/** Curated collapsible sections for Admin V2 cleaning job Record tab (no RRS section; People & places = opportunity + work unit only). */
 function buildJobDrawerV2OverviewSections(): EntityDrawerSectionConfig[] {
     const pres = getEntityPresentation("jobs").drawer?.overviewSections ?? [];
     const ps = pres.find((s) => s.key === "property_service");
@@ -297,6 +297,17 @@ function buildJobDrawerV2OverviewSections(): EntityDrawerSectionConfig[] {
     const schedFields = (sched?.fields ?? []).filter((f) => f.key !== "_next_schedule");
     const pb = getJobPricingBreakdownSection();
     const bill = getJobOverviewBillingSummarySection();
+    const peoplePlacesFields: EntityDrawerFieldConfig[] = [
+        {
+            key: "opportunity_id",
+            label: "Opportunity",
+            span: 1,
+            renderHint: "link",
+            editable: true,
+            linkTarget: { idField: "opportunity_id", entityType: "opportunities" },
+        },
+        { key: "work_unit_id", label: "Work unit", span: 1, renderHint: "text", editable: true },
+    ];
     return [
         {
             key: "property_service_v2",
@@ -308,28 +319,28 @@ function buildJobDrawerV2OverviewSections(): EntityDrawerSectionConfig[] {
             locked: true,
         },
         {
-            key: "rrs_snapshot",
-            title: "Resolver context",
-            defaultExpanded: false,
-            collapsible: true,
-            gridCols: 1,
-            fields: [],
-            locked: true,
-        },
-        {
             key: "scheduling_v2",
-            title: sched?.title ?? "Scheduling",
+            title: "Scheduling",
             defaultExpanded: false,
             collapsible: true,
             gridCols: 2,
             fields: schedFields,
             locked: true,
         },
-        { ...pb, defaultExpanded: false },
+        { ...pb, key: "job_pricing_breakdown", title: "Pricing", defaultExpanded: false },
         { ...bill, defaultExpanded: false },
         {
-            key: "internal_metadata_v2",
-            title: "Internal / metadata",
+            key: "people_places_v2",
+            title: "People & places",
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: 2,
+            fields: peoplePlacesFields,
+            locked: true,
+        },
+        {
+            key: "internal_notes_record_v2",
+            title: "Internal notes & record details",
             defaultExpanded: false,
             collapsible: true,
             gridCols: 2,
@@ -735,7 +746,7 @@ function buildAdminEntityFetchUrl(
 }
 
 export default function AdminEntityDrawer() {
-    const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer } = useAdminDrawer();
+    const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer, stack } = useAdminDrawer();
     const { canMutate, role: adminRole } = useAdminAuth();
     const { labels } = useEntityLabels();
     const memberSingular = labels.customer_members?.singular ?? "Member";
@@ -3413,6 +3424,9 @@ export default function AdminEntityDrawer() {
         drawer.type === "jobs" &&
         !!drawer.id &&
         drawer.id !== "new";
+    /** Centered record modal for jobs and for linked entities opened from a job (same Admin V2 stack). */
+    const useAdminV2RecordModalPresentation =
+        drawerShellVariant === "adminV2" && (isJobRecordModalTarget || stack.length > 0);
     const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
     const paymentStatusLabel = hasServerJobPaymentSummary
         ? jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)
@@ -4412,13 +4426,9 @@ export default function AdminEntityDrawer() {
         }
         if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create && drawer.id && drawer.id !== "new") {
             const jobRec = entityDrawerOverviewData as Record<string, unknown>;
-            const base: Record<string, React.ReactNode> = {
+            return {
                 job_pricing_breakdown: <JobPricingBreakdown record={jobRec} />,
             };
-            if (isJobRecordModalTarget) {
-                base.rrs_snapshot = <JobRrsOverviewTab jobId={drawer.id} variant="adminV2" />;
-            }
-            return base;
         }
         return {};
     }, [
@@ -4439,7 +4449,6 @@ export default function AdminEntityDrawer() {
         statusDefsForDrawer,
         isEditing,
         refetch,
-        isJobRecordModalTarget,
     ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
@@ -5220,6 +5229,18 @@ export default function AdminEntityDrawer() {
                 ? String(title)
                 : "—";
     const headerSubtitleResolved = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+
+    const openEntityFromJobRecord = useCallback(
+        (entityType: AdminDrawerEntityType, id: string) => {
+            openDrawer({
+                type: entityType,
+                id,
+                ...(entityType === "jobs" ? { jobRecordSurface: "full" as const } : {}),
+            });
+        },
+        [openDrawer]
+    );
+
     return (
         <Drawer
             isOpen
@@ -5234,8 +5255,8 @@ export default function AdminEntityDrawer() {
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
-            presentation={isJobRecordModalTarget ? "modal" : "sidebar"}
-            panelClassName={isJobRecordModalTarget ? "max-w-6xl" : undefined}
+            presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
+            panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
         >
             {showDrawerBodyLoading &&
                 (isJobRecordModalTarget ? (
@@ -7025,7 +7046,7 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
                             <div
-                                className="space-y-3 [&_section[data-entity-section]]:mb-3 [&_[data-entity-drawer-overview]]:pt-2"
+                                className="space-y-2 [&_section[data-entity-section]]:mb-2 [&_[data-entity-drawer-overview]]:pt-1"
                                 data-adminv2-job-record-overview="true"
                             >
                                 <JobRecordPrimaryPanel
@@ -7039,60 +7060,37 @@ export default function AdminEntityDrawer() {
                                     }}
                                     jobCustomerOptions={jobCustomerOptions}
                                     jobVendorOptions={jobVendorsForAssign}
-                                    jobWorkUnitOptions={jobWorkUnitOptions}
+                                    jobContactOptions={jobContactOptions}
+                                    jobLocationOptions={jobLocationOptions}
+                                    primaryContactDisabled={primaryContactDisabled}
                                     firstSchedule={jobSchedules[0] ?? null}
                                     rescheduleFormActive={!!rescheduleForm}
                                     openReschedule={openReschedule}
-                                    openDrawer={openDrawer}
-                                />
-                                <EntityDrawerOverview
-                                    entityType={presentationType}
-                                    data={entityDrawerOverviewData}
-                                    customSectionContent={overviewCustomContent}
-                                    overviewSectionsOverride={JOB_DRAWER_V2_OVERVIEW_SECTIONS}
-                                    selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
-                                    isEditing={isEditing || drawer.type === "jobs"}
-                                    formData={formData}
-                                    onFieldChange={(key, value) => {
-                                        setFormData((prev) => ({ ...prev, [key]: value }));
-                                    }}
-                                    onBlur={() => {
-                                        if (drawer.type === "jobs" && jobFormDirty) saveEdit();
-                                        else if (nonJobFormDirty) saveEdit();
-                                    }}
-                                    canEdit={!!canMutate}
-                                    statusDefs={statusDefsForDrawer}
-                                    getStatusLabel={getStatusLabel}
-                                    onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
-                                />
-                                <JobDrawerRelationshipsSection
-                                    omitPrimaryAssignments
-                                    uiVariant="adminV2"
-                                    formData={formData}
-                                    setFormData={setFormData}
-                                    canMutate={canMutate}
-                                    jobExpandedSections={jobExpandedSections}
-                                    setJobExpandedSections={setJobExpandedSections}
-                                    jobCustomerOptions={jobCustomerOptions}
-                                    jobContactOptions={jobContactOptions}
-                                    primaryContactDisabled={primaryContactDisabled}
-                                    jobLocationOptions={jobLocationOptions}
-                                    jobWorkUnitOptions={jobWorkUnitOptions}
-                                    jobOpportunityOptions={jobOpportunityOptions}
-                                    jobVendorOptions={jobVendorsForAssign}
-                                    jobAssignedVendorId={jobAssignedVendorId}
-                                    setJobAssignedVendorId={setJobAssignedVendorId}
-                                    jobAssignedVendorSaving={jobAssignedVendorSaving}
-                                    applyVendorToUpcoming={applyVendorToUpcoming}
-                                    setApplyVendorToUpcoming={setApplyVendorToUpcoming}
-                                    customerSingular={customerSingular}
-                                    contactSingular={contactSingular}
-                                    opportunitySingular={opportunitySingular}
-                                    vendorSingular={vendorSingular}
-                                    openDrawer={openDrawer}
                                     openJobLocationChange={openJobLocationChange}
-                                    saveJobAssignedVendor={saveJobAssignedVendor}
+                                    openDrawer={openEntityFromJobRecord}
                                 />
+                                <div className="adminv2-job-record-fielddeck">
+                                    <EntityDrawerOverview
+                                        entityType={presentationType}
+                                        data={entityDrawerOverviewData}
+                                        customSectionContent={overviewCustomContent}
+                                        overviewSectionsOverride={JOB_DRAWER_V2_OVERVIEW_SECTIONS}
+                                        selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
+                                        isEditing={isEditing || drawer.type === "jobs"}
+                                        formData={formData}
+                                        onFieldChange={(key, value) => {
+                                            setFormData((prev) => ({ ...prev, [key]: value }));
+                                        }}
+                                        onBlur={() => {
+                                            if (drawer.type === "jobs" && jobFormDirty) saveEdit();
+                                            else if (nonJobFormDirty) saveEdit();
+                                        }}
+                                        canEdit={!!canMutate}
+                                        statusDefs={statusDefsForDrawer}
+                                        getStatusLabel={getStatusLabel}
+                                        onOpenDrawer={(type, id) => openEntityFromJobRecord(type as AdminDrawerEntityType, id)}
+                                    />
+                                </div>
                             </div>
                         ) : (
                             <EntityDrawerOverview

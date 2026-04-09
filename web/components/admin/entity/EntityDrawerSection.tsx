@@ -39,11 +39,11 @@ export default function EntityDrawerSection({
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className={`flex w-full items-center justify-between gap-2 text-left ${SECTION_HEADER_CLASS}`}
+          className={`entity-drawer-section-toggle flex w-full items-center justify-between gap-2 text-left transition-colors duration-150 ${SECTION_HEADER_CLASS}`}
           aria-expanded={expanded}
         >
           <span>{config.title}</span>
-          <span className="text-alloy-muted" aria-hidden>
+          <span className="text-alloy-muted transition-opacity duration-150" aria-hidden>
             {expanded ? "−" : "+"}
           </span>
         </button>
@@ -51,7 +51,7 @@ export default function EntityDrawerSection({
         <h3 className={SECTION_HEADER_CLASS}>{config.title}</h3>
       )}
       {showContent && (
-        <div className={`grid gap-x-6 gap-y-4 ${gridCols} ${isCollapsible ? "mt-2" : ""} mt-3`}>{children}</div>
+        <div className={`grid gap-x-4 gap-y-2 ${gridCols} ${isCollapsible ? "mt-2" : "mt-3"}`}>{children}</div>
       )}
     </section>
   );
