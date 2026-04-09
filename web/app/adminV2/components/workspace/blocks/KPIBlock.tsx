@@ -8,6 +8,8 @@ type Props = {
   /** Spec: 4–6 in top band max */
   maxVisible?: number;
   surface?: "default" | "department" | "company" | "work_unit" | "record";
+  /** When `surface` uses the dual strip, override default "Business metrics" / "AI metrics" headings. */
+  dualRailHeadings?: { business?: string; secondary?: string };
 };
 
 const KPI_DEPT_PER_RAIL = 3;
@@ -54,23 +56,30 @@ function KpiCells({ items, minCells = KPI_DEPT_PER_RAIL }: { items: KPIVm[]; min
   );
 }
 
-export default function KPIBlock({ kpis, maxVisible = 6, surface = "default" }: Props) {
+export default function KPIBlock({
+  kpis,
+  maxVisible = 6,
+  surface = "default",
+  dualRailHeadings,
+}: Props) {
   const items = kpis.slice(0, maxVisible);
   if (items.length === 0) return null;
 
   if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     const business = items.filter((k) => (k.lane ?? "business") === "business").slice(0, KPI_DEPT_PER_RAIL);
     const ai = items.filter((k) => k.lane === "ai").slice(0, KPI_DEPT_PER_RAIL);
+    const businessHeading = dualRailHeadings?.business ?? "Business metrics";
+    const secondaryHeading = dualRailHeadings?.secondary ?? "AI metrics";
 
     return (
       <div className="adminv2-ws-dept-v2-kpi-measurement-strip" role="group" aria-label="Key metrics">
         <div className="adminv2-ws-dept-v2-kpi-dual">
           <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--business">
-            <div className="adminv2-ws-dept-v2-kpi-rail-heading">Business metrics</div>
+            <div className="adminv2-ws-dept-v2-kpi-rail-heading">{businessHeading}</div>
             <KpiCells items={business} minCells={KPI_DEPT_PER_RAIL} />
           </div>
           <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--ai">
-            <div className="adminv2-ws-dept-v2-kpi-rail-heading">AI metrics</div>
+            <div className="adminv2-ws-dept-v2-kpi-rail-heading">{secondaryHeading}</div>
             <KpiCells items={ai} minCells={KPI_DEPT_PER_RAIL} />
           </div>
         </div>

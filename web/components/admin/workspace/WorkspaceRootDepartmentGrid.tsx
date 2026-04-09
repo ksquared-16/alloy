@@ -57,38 +57,59 @@ const companyRootStyle: CSSProperties = {
     ["--d-card-shadow" as string]: derived.cardShadow,
 };
 
+/** Per-department rollups for root tiles (from /api/admin/work-units, etc.). */
+export type WorkspaceRootDeptTileStats = Record<string, { workUnitCount: number }>;
+
 type Props = {
     workspaceBasePath: string;
     departments: WorkspaceRootDepartmentRow[];
+    deptTileStats?: WorkspaceRootDeptTileStats;
+    /** `workspaceRoot`: larger tiles + stats lines (org workspace index). */
+    tileVariant?: "default" | "workspaceRoot";
+    /** When true, render only the department section (parent must supply `data-ws-surface="company"` + company v2 classes). */
+    omitOuterChrome?: boolean;
 };
 
 /**
  * Org / company-level department entry — real rows from GET /api/admin/departments.
  * Reuses Admin V2 company workspace tile chrome (workspace.css) without rollup metrics.
  */
-export function WorkspaceRootDepartmentGrid({ workspaceBasePath, departments }: Props) {
+export function WorkspaceRootDepartmentGrid({
+    workspaceBasePath,
+    departments,
+    deptTileStats,
+    tileVariant = "default",
+    omitOuterChrome = false,
+}: Props) {
     const base = workspaceBasePath.replace(/\/$/, "");
+    const root = tileVariant === "workspaceRoot";
 
-    return (
+    const grid = (
         <div
-            data-ws-surface="company"
-            data-production-workspace-root="true"
-            className="adminv2-ws-root adminv2-ws-company adminv2-ws-company-v2"
-            style={companyRootStyle}
+            className={
+                root
+                    ? "adminv2-ws-company-v2-dept-grid adminv2-ws-company-v2-dept-grid--workspace-root"
+                    : "adminv2-ws-company-v2-dept-grid"
+            }
         >
-            <div className="adminv2-ws-dept-v2-contain">
-                <section className="adminv2-ws-company-v2-main" aria-label="Departments">
-                    <div className="adminv2-ws-company-v2-dept-grid">
-                        {departments.map((d) => {
+            {departments.map((d) => {
                             const tone = deptToneForKey(d.key);
                             const desc =
                                 (d.description && String(d.description).trim()) ||
                                 `Open the ${d.name} workspace — work units and queues live inside.`;
+                            const wu = deptTileStats?.[d.id]?.workUnitCount;
+                            const statsLine =
+                                wu != null && wu >= 0 ? `${wu} work unit${wu === 1 ? "" : "s"} in this department` : null;
                             return (
                                 <Link
                                     key={d.id}
                                     href={`${base}/dept/${encodeURIComponent(d.id)}`}
-                                    className="adminv2-ws-company-dept-tile block text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35"
+                                    className={[
+                                        "adminv2-ws-company-dept-tile block text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",
+                                        root ? "adminv2-ws-company-dept-tile--workspace-root" : "",
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" ")}
                                     data-ws-company-dept-key={d.key}
                                     data-ws-company-dept-tone={tone}
                                     aria-label={`Open ${d.name} department`}
@@ -97,13 +118,39 @@ export function WorkspaceRootDepartmentGrid({ workspaceBasePath, departments }: 
                                         <h3 className="adminv2-ws-company-dept-tile-name">{d.name}</h3>
                                     </div>
                                     <p className="adminv2-ws-company-dept-tile-desc">{desc}</p>
-                                    <p className="mt-3 text-xs font-medium" style={{ color: brand.primary }}>
+                                    {statsLine ? (
+                                        <p className="text-xs font-medium leading-snug" style={{ color: derived.textSecondary }}>
+                                            {statsLine}
+                                        </p>
+                                    ) : null}
+                                    <p className="mt-3 text-xs font-semibold" style={{ color: brand.primary }}>
                                         Open department →
                                     </p>
                                 </Link>
                             );
                         })}
-                    </div>
+        </div>
+    );
+
+    if (omitOuterChrome) {
+        return (
+            <section className="adminv2-ws-company-v2-main" aria-label="Departments" data-production-workspace-root="true">
+                {grid}
+            </section>
+        );
+    }
+
+    return (
+        <div
+            data-ws-surface="company"
+            data-production-workspace-root="true"
+            data-ws-root-tile-variant={root ? "workspaceRoot" : undefined}
+            className="adminv2-ws-root adminv2-ws-company adminv2-ws-company-v2"
+            style={companyRootStyle}
+        >
+            <div className={root ? "adminv2-ws-dept-v2-contain px-0" : "adminv2-ws-dept-v2-contain"}>
+                <section className="adminv2-ws-company-v2-main" aria-label="Departments">
+                    {grid}
                 </section>
             </div>
         </div>

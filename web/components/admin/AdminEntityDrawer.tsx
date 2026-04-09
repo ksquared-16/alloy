@@ -1081,11 +1081,7 @@ export default function AdminEntityDrawer() {
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
         if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
             entityDrawerTabInitKeyRef.current = entityOpenKey;
-            setDrawerTab(
-                drawer.type === "jobs" && pathname?.startsWith("/adminV2/workspace")
-                    ? "rrs_overview"
-                    : "overview"
-            );
+            setDrawerTab("overview");
         }
         setContactRelatedData(null);
         setCustomerRelatedData(null);
@@ -3579,19 +3575,17 @@ export default function AdminEntityDrawer() {
         ledger: "Ledger",
     };
 
-    /** Admin V2 job drawer: resolver-first tab order and clearer labels (legacy /admin unchanged). */
+    /** Admin V2 job record modal: drop resolver-only tab — RRS merges into Record (overview). Legacy /admin unchanged. */
     const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
         if (!isJobDrawerV2 || drawer.type !== "jobs") return tabList;
-        if (!tabList.includes("rrs_overview")) return tabList;
-        return ["rrs_overview", ...tabList.filter((t) => t !== "rrs_overview")];
+        return tabList.filter((t) => t !== "rrs_overview");
     }, [isJobDrawerV2, drawer.type, tabList]);
 
     const jobDrawerV2TabLabelsResolved = useMemo(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs") return tabLabels;
         return {
             ...tabLabels,
-            rrs_overview: "Overview",
-            overview: "Details & fields",
+            overview: "Record",
         };
     }, [isJobDrawerV2, drawer.type, tabLabels]);
 
@@ -3604,6 +3598,13 @@ export default function AdminEntityDrawer() {
             ledger: false,
         });
     }, [isJobDrawerV2, drawer.type, drawer.id]);
+
+    /** Removed RRS-only tab in V2 — migrate any stale selection. */
+    useEffect(() => {
+        if (isJobDrawerV2 && drawer.type === "jobs" && drawerTab === "rrs_overview") {
+            setDrawerTab("overview");
+        }
+    }, [isJobDrawerV2, drawer.type, drawerTab]);
 
     const hasFieldDefsForOverview = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
@@ -5157,6 +5158,7 @@ export default function AdminEntityDrawer() {
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
+            presentation={isJobDrawerV2 ? "modal" : "sidebar"}
             panelClassName={isJobDrawerV2 ? "max-w-5xl" : undefined}
         >
             {showDrawerBodyLoading && <p className="text-alloy-midnight/60">Loading…</p>}
@@ -6923,14 +6925,12 @@ export default function AdminEntityDrawer() {
                     )}
                     {drawerTab === "rrs_overview" &&
                         drawer.type === "jobs" &&
+                        !isJobDrawerV2 &&
                         drawer.id &&
                         drawer.id !== "new" &&
                         !(data as { _create?: boolean })?._create && (
-                            <div
-                                className={isJobDrawerV2 ? "space-y-0 pt-1" : "space-y-0 pt-5"}
-                                data-entity-drawer-rrs-overview
-                            >
-                                <JobRrsOverviewTab jobId={drawer.id} variant={isJobDrawerV2 ? "adminV2" : "legacy"} />
+                            <div className="space-y-0 pt-5" data-entity-drawer-rrs-overview>
+                                <JobRrsOverviewTab jobId={drawer.id} variant="legacy" />
                             </div>
                         )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
@@ -6938,7 +6938,15 @@ export default function AdminEntityDrawer() {
                             <JobDrawerV2OverviewShell
                                 primary={
                                     <>
-                                        <div className="rounded-[10px] border border-solid border-[rgba(39,63,82,0.14)] bg-white p-3 shadow-sm sm:p-4">
+                                        {drawer.id && drawer.id !== "new" && !(data as { _create?: boolean })?._create ? (
+                                            <div
+                                                className="space-y-3 pb-1"
+                                                data-entity-drawer-rrs-overview-embedded
+                                            >
+                                                <JobRrsOverviewTab jobId={drawer.id} variant="adminV2" />
+                                            </div>
+                                        ) : null}
+                                        <div className="adminv2-job-record-fielddeck rounded-[10px] border border-solid border-[rgba(39,63,82,0.14)] bg-white p-3 shadow-sm sm:p-4">
                                             <EntityDrawerOverview
                                                 entityType={presentationType}
                                                 data={entityDrawerOverviewData}

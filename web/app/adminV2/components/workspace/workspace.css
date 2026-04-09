@@ -4322,6 +4322,17 @@
   align-items: stretch;
 }
 
+/* Org workspace root — slightly larger tiles and room for stat lines */
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-v2-dept-grid--workspace-root {
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root {
+  min-height: 168px;
+  padding: 14px 14px 14px 13px;
+}
+
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile {
   appearance: none;
   -webkit-appearance: none;
@@ -5337,4 +5348,18 @@
   font-size: 9px;
   font-weight: 500;
   color: var(--d-muted);
+}
+
+/* Admin V2 job record modal — editable field deck reads as inputs, not ghost text */
+[data-adminv2-record-modal] .adminv2-job-record-fielddeck input:not([type="checkbox"]):not([type="radio"]),
+[data-adminv2-record-modal] .adminv2-job-record-fielddeck select,
+[data-adminv2-record-modal] .adminv2-job-record-fielddeck textarea {
+  border-color: color-mix(in srgb, #273f52 18%, rgba(39, 63, 82, 0.12));
+  border-radius: 8px;
+}
+
+[data-adminv2-record-modal] .adminv2-job-record-fielddeck input:hover:not(:disabled),
+[data-adminv2-record-modal] .adminv2-job-record-fielddeck select:hover:not(:disabled),
+[data-adminv2-record-modal] .adminv2-job-record-fielddeck textarea:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #00458c 22%, rgba(39, 63, 82, 0.2));
 }

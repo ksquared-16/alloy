@@ -24,7 +24,8 @@ export function JobDrawerV2TabBar(props: {
     const { tabs, tabLabels, active, onSelect } = props;
     return (
         <div
-            className="flex flex-wrap gap-1 rounded-lg p-1"
+            data-adminv2-job-record-nav="true"
+            className="flex flex-wrap gap-1 rounded-xl p-1"
             style={{
                 backgroundColor: derived.maskOverlay,
                 borderWidth: 1,
@@ -32,7 +33,7 @@ export function JobDrawerV2TabBar(props: {
                 borderColor: derived.border,
             }}
             role="tablist"
-            aria-label="Job sections"
+            aria-label="Record sections"
         >
             {tabs.map((tab) => {
                 const isOn = active === tab;
@@ -217,7 +218,7 @@ export function JobDrawerV2PrimaryActions(props: {
     };
     const p = props;
     return (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-adminv2-job-record-primary-actions="true">
             <button
                 type="button"
                 disabled={!p.canMutate}
@@ -226,7 +227,7 @@ export function JobDrawerV2PrimaryActions(props: {
                     p.openCollectPayment();
                 }}
                 style={primaryBtn}
-                className="disabled:opacity-50"
+                className="min-h-[36px] font-semibold shadow-sm disabled:opacity-50"
             >
                 Add payment
             </button>
@@ -244,7 +245,7 @@ export function JobDrawerV2PrimaryActions(props: {
                         color: brand.accent,
                         backgroundColor: "rgba(188, 67, 0, 0.06)",
                     }}
-                    className="disabled:opacity-50"
+                    className="min-h-[36px] font-semibold shadow-sm disabled:opacity-50"
                 >
                     Retry payment
                 </button>
@@ -273,7 +274,7 @@ export function JobDrawerV2PrimaryActions(props: {
                     }
                 }}
                 style={{ ...primaryBtn, backgroundColor: brand.secondary, borderColor: brand.secondary }}
-                className="disabled:opacity-50"
+                className="min-h-[36px] font-semibold shadow-sm disabled:opacity-50"
             >
                 {p.jobActionLoading === "mark_completed" ? "…" : "Mark complete"}
             </button>
@@ -290,12 +291,18 @@ export function JobDrawerV2PrimaryActions(props: {
                         });
                     }}
                     style={btnBase}
+                    className="min-h-[36px] font-medium shadow-sm"
                 >
                     Assign {p.vendorSingular}
                 </button>
             )}
             {p.jobSchedulesLength > 0 && !p.rescheduleFormActive && p.firstSchedule ? (
-                <button type="button" onClick={() => p.openReschedule(p.firstSchedule!)} style={btnBase}>
+                <button
+                    type="button"
+                    onClick={() => p.openReschedule(p.firstSchedule!)}
+                    style={btnBase}
+                    className="min-h-[36px] font-medium shadow-sm"
+                >
                     Reschedule
                 </button>
             ) : null}
