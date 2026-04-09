@@ -5401,3 +5401,14 @@
 [data-adminv2-job-record-overview] [data-entity-drawer-overview] {
   padding-top: 0.25rem;
 }
+
+/* Cleaning flagship — JobRecordModalV2 (tighter than generic job record deck) */
+[data-adminv2-record-modal] [data-adminv2-job-record-modal-v2="true"] .adminv2-job-record-modal-v2-input {
+  min-height: 2rem;
+}
+[data-adminv2-record-modal] [data-adminv2-job-record-modal-v2="true"] [data-adminv2-job-record-overview] section[data-entity-section] {
+  margin-bottom: 0.4rem;
+}
+[data-adminv2-record-modal] [data-adminv2-job-record-modal-v2="true"] [data-adminv2-job-record-overview] .entity-drawer-section-toggle {
+  padding: 0.35rem 0.55rem;
+}
