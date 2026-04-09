@@ -5450,33 +5450,109 @@
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75), 0 6px 20px rgba(39, 63, 82, 0.055);
 }
 
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-block="money-plan"] {
-  border: 1px solid color-mix(in srgb, rgba(39, 63, 82, 0.08) 80%, rgba(0, 69, 140, 0.06)) !important;
-  background: color-mix(in srgb, rgba(255, 255, 255, 0.7) 90%, rgba(0, 69, 140, 0.04));
-  box-shadow: 0 2px 8px rgba(39, 63, 82, 0.04);
+/* Snapshot row selects: inline record affordance — not form boxes */
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] select.adminv2-jrm-record-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, rgba(39, 63, 82, 0.45) 50%),
+    linear-gradient(135deg, rgba(39, 63, 82, 0.45) 50%, transparent 50%);
+  background-position: calc(100% - 14px) calc(50% + 2px), calc(100% - 10px) calc(50% + 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 1.5rem !important;
+  border: none !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(39, 63, 82, 0.1) !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  min-height: 1.75rem;
 }
 
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-block="money-plan"] .border-t {
-  border-color: color-mix(in srgb, rgba(39, 63, 82, 0.1) 85%, rgba(0, 162, 131, 0.08)) !important;
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] select.adminv2-jrm-record-select:hover:not(:disabled) {
+  border-bottom-color: rgba(0, 69, 140, 0.22) !important;
+  background-color: rgba(255, 255, 255, 0.35) !important;
 }
 
-/* Field deck + snapshot inputs: embedded, low-contrast chrome */
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-modal-v2-input,
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck input:not([type="checkbox"]):not([type="radio"]),
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck select,
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck textarea {
-  border-color: rgba(39, 63, 82, 0.08) !important;
-  background-color: rgba(255, 255, 255, 0.45) !important;
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] select.adminv2-jrm-record-select:focus {
+  outline: none !important;
+  border-bottom-color: rgba(0, 69, 140, 0.45) !important;
+  background-color: rgba(255, 255, 255, 0.55) !important;
+  box-shadow: none !important;
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-metadata-band] {
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.35) 92%, rgba(0, 69, 140, 0.03));
+  border-radius: 0 0 0.65rem 0.65rem;
+}
+
+/* Lower chapters: single-column inline record rows (label | control) */
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  [data-entity-field] {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 8.5rem) minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  align-items: start;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(39, 63, 82, 0.06);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  [data-entity-field]
+  label {
+  margin-bottom: 0 !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: rgba(39, 63, 82, 0.55) !important;
+  padding-top: 0.35rem;
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  [data-entity-field]
+  > div {
+  min-height: auto !important;
+}
+
+/* Field deck inputs (not snapshot underline selects): calm embedded */
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  input:not([type="checkbox"]):not([type="radio"]),
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  select:not(.adminv2-jrm-record-select),
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  textarea {
+  border-color: rgba(39, 63, 82, 0.09) !important;
+  background-color: rgba(255, 255, 255, 0.42) !important;
+  border-radius: 6px !important;
   box-shadow: inset 0 1px 1px rgba(39, 63, 82, 0.03);
 }
 
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-modal-v2-input:focus,
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck input:focus,
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck select:focus,
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck textarea:focus {
-  border-color: rgba(0, 69, 140, 0.28) !important;
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  box-shadow: 0 0 0 3px rgba(0, 69, 140, 0.06);
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  input:focus,
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  select:focus,
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .adminv2-jrm-fielddeck-chapters
+  textarea:focus {
+  border-color: rgba(0, 69, 140, 0.22) !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  box-shadow: 0 0 0 2px rgba(0, 69, 140, 0.06);
 }
 
 /* Sections: system rhythm — hairline + tint, not stacked boxes */

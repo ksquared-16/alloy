@@ -80,7 +80,7 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
             title: "Property & service details",
             defaultExpanded: true,
             collapsible: true,
-            gridCols: 2,
+            gridCols: 1,
             fields: propertyFields,
             locked: true,
         },
@@ -89,18 +89,18 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
             title: "Scheduling",
             defaultExpanded: false,
             collapsible: true,
-            gridCols: 2,
+            gridCols: 1,
             fields: schedFields,
             locked: true,
         },
         { ...pb, key: "job_pricing_breakdown", title: "Pricing", defaultExpanded: false },
-        { ...bill, defaultExpanded: false },
+        { ...bill, defaultExpanded: false, gridCols: 1 },
         {
             key: "people_places_v2",
             title: "People & places",
             defaultExpanded: false,
             collapsible: true,
-            gridCols: 2,
+            gridCols: 1,
             fields: peoplePlacesFields,
             locked: true,
         },
@@ -109,7 +109,7 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
             title: "Internal notes & record details",
             defaultExpanded: false,
             collapsible: true,
-            gridCols: 2,
+            gridCols: 1,
             fields: [...(notes?.fields ?? []), ...(rec?.fields ?? [])],
             locked: true,
         },
@@ -118,10 +118,36 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
 
 export const JOB_RECORD_MODAL_V2_OVERVIEW_SECTIONS = buildJobRecordModalV2OverviewSections();
 
-const inputClass =
-    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input w-full rounded-lg border border-alloy-stone/15 px-2 py-1 text-sm text-alloy-forge transition-colors duration-150 bg-white/50 focus:border-alloy-blue/50 focus:outline-none focus:ring-1 focus:ring-alloy-blue/15 disabled:opacity-60";
-const labelClass = "block text-[10px] font-semibold uppercase tracking-wide mb-0.5";
-const readClass = "text-sm font-medium leading-snug break-words tabular-nums";
+/** Minimal record controls — chrome from `.adminv2-jrm-record-select` (workspace.css) */
+const recordSelectClass =
+    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input adminv2-jrm-record-select w-full min-w-0 max-w-full sm:max-w-md text-sm font-medium text-alloy-forge disabled:opacity-60";
+const textActionClass =
+    "adminv2-jrm-text-action text-[11px] font-medium text-alloy-blue hover:underline underline-offset-2 decoration-alloy-blue/40 bg-transparent border-0 p-0 cursor-pointer shrink-0";
+const textActionMutedClass =
+    "adminv2-jrm-text-action text-[11px] font-medium text-alloy-midnight/55 hover:text-alloy-midnight/80 hover:underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer shrink-0";
+
+function JrmRecordRow(props: {
+    label: string;
+    children: React.ReactNode;
+    id?: string;
+    withDivider?: boolean;
+}) {
+    const { label, children, id, withDivider = true } = props;
+    return (
+        <div
+            id={id}
+            className={`adminv2-jrm-record-row flex flex-col gap-1 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6 ${withDivider ? "border-b border-solid border-[rgba(39,63,82,0.07)]" : ""}`}
+        >
+            <span
+                className="text-[10px] font-semibold uppercase tracking-[0.09em] shrink-0 pt-0.5 sm:w-[7.25rem]"
+                style={{ color: derived.textSecondary }}
+            >
+                {label}
+            </span>
+            <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-1 sm:justify-end">{children}</div>
+        </div>
+    );
+}
 
 export interface JobRecordModalV2Props {
     record: Record<string, unknown> | null;
@@ -189,12 +215,6 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
     const customerName = String((r as { _customer_name?: string | null })._customer_name ?? "").trim();
     const customerId = String(props.formData.customer_id ?? "").trim();
 
-    /** Soft embed — avoid harsh input chrome (cleaning modal only). */
-    const fieldStyle = {
-        borderColor: "rgba(39, 63, 82, 0.09)",
-        backgroundColor: "rgba(255, 255, 255, 0.5)",
-    } as CSSProperties;
-
     return (
         <div
             data-adminv2-job-record-modal-v2="true"
@@ -205,19 +225,14 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                 data-jrm-strip="account"
                 className="adminv2-jrm-account-strip flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl px-3 py-1.5"
             >
-                <span className="text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: brand.secondary }}>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: derived.textSecondary }}>
                     Account
                 </span>
-                <span className="text-sm font-semibold" style={{ color: neutral.textPrimary }}>
+                <span className="text-sm font-medium" style={{ color: neutral.textPrimary }}>
                     {customerName || "—"}
                 </span>
                 {customerId ? (
-                    <button
-                        type="button"
-                        onClick={() => props.openDrawer("customers", customerId)}
-                        className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border transition-colors"
-                        style={{ borderColor: derived.border, color: brand.primary }}
-                    >
+                    <button type="button" onClick={() => props.openDrawer("customers", customerId)} className={textActionClass}>
                         Open
                     </button>
                 ) : (
@@ -228,193 +243,148 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
             </div>
 
             <div
-                className="adminv2-jrm-snapshot-card rounded-2xl p-2.5 sm:p-3"
+                className="adminv2-jrm-snapshot-card rounded-2xl px-1 py-1 sm:px-2 sm:py-2"
                 data-adminv2-job-record-modal-v2-top="true"
                 style={shell}
             >
-                <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: derived.textSecondary }}>
-                        Job snapshot
-                    </p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] px-0.5 pb-2" style={{ color: derived.textSecondary }}>
+                    Record snapshot
+                </p>
+                <div className="adminv2-jrm-snapshot-rows px-0.5">
+                    <JrmRecordRow label="Status">
+                        <select
+                            id="job-modal-v2-status"
+                            value={sk}
+                            onChange={(e) => props.setFormData((f) => ({ ...f, status_key: e.target.value || null }))}
+                            onBlur={props.onBlurSave}
+                            disabled={!props.canMutate}
+                            className={recordSelectClass}
+                        >
+                            <option value="">— None —</option>
+                            {statusOptions.map((s) => (
+                                <option key={s.status_key} value={s.status_key}>
+                                    {s.status_label ?? s.status_key}
+                                </option>
+                            ))}
+                        </select>
+                    </JrmRecordRow>
+                    <JrmRecordRow label="Assigned vendor" id="job-assign-vendor-section">
+                        <select
+                            value={String(props.formData.assigned_vendor_id ?? "")}
+                            onChange={(e) => props.setFormData((f) => ({ ...f, assigned_vendor_id: e.target.value || null }))}
+                            onBlur={props.onBlurSave}
+                            disabled={!props.canMutate}
+                            className={recordSelectClass}
+                            aria-label="Assigned vendor"
+                        >
+                            <option value="">(none)</option>
+                            {props.jobVendorOptions.map((v) => (
+                                <option key={v.id} value={v.id}>
+                                    {v.label}
+                                </option>
+                            ))}
+                        </select>
+                        {vid ? (
+                            <button type="button" onClick={() => props.openDrawer("vendors", vid)} className={textActionClass}>
+                                Open
+                            </button>
+                        ) : null}
+                    </JrmRecordRow>
+                    <JrmRecordRow label="Primary person">
+                        <select
+                            id="job-modal-v2-contact"
+                            value={String(props.formData.primary_contact_id ?? "")}
+                            onChange={(e) => props.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
+                            onBlur={props.onBlurSave}
+                            disabled={!props.canMutate || props.primaryContactDisabled}
+                            className={recordSelectClass}
+                        >
+                            <option value="">(none)</option>
+                            {props.jobContactOptions.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.label}
+                                </option>
+                            ))}
+                        </select>
+                    </JrmRecordRow>
+                    <JrmRecordRow label="Service location">
+                        <select
+                            id="job-modal-v2-location"
+                            value={String(props.formData.location_id ?? "")}
+                            onChange={(e) => props.setFormData((f) => ({ ...f, location_id: e.target.value || null }))}
+                            onBlur={props.onBlurSave}
+                            disabled={!props.canMutate}
+                            className={recordSelectClass}
+                        >
+                            <option value="">(none)</option>
+                            {props.jobLocationOptions.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                    {loc.label}
+                                </option>
+                            ))}
+                        </select>
+                        {String(props.formData.location_id ?? "").trim() ? (
+                            <button
+                                type="button"
+                                onClick={() => props.openDrawer("locations", String(props.formData.location_id))}
+                                className={textActionClass}
+                            >
+                                Open
+                            </button>
+                        ) : null}
+                        {props.canMutate ? (
+                            <button type="button" onClick={props.openJobLocationChange} className={textActionMutedClass}>
+                                Change
+                            </button>
+                        ) : null}
+                    </JrmRecordRow>
+                    <JrmRecordRow label="Next visit" withDivider={false}>
+                        <span className="text-sm font-medium leading-snug tabular-nums" style={{ color: neutral.textPrimary }}>
+                            {nextLabel}
+                        </span>
+                        {props.firstSchedule && !props.rescheduleFormActive ? (
+                            <button type="button" onClick={() => props.openReschedule(props.firstSchedule!)} className={textActionClass}>
+                                Reschedule
+                            </button>
+                        ) : null}
+                    </JrmRecordRow>
                 </div>
-                <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(200px,260px)] lg:gap-3 lg:items-start">
-                    <div className="min-w-0 grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2">
-                        <div className="sm:col-span-1">
-                            <label htmlFor="job-modal-v2-status" className={labelClass} style={{ color: derived.textSecondary }}>
-                                Status
-                            </label>
-                            <select
-                                id="job-modal-v2-status"
-                                value={sk}
-                                onChange={(e) => props.setFormData((f) => ({ ...f, status_key: e.target.value || null }))}
-                                onBlur={props.onBlurSave}
-                                disabled={!props.canMutate}
-                                className={inputClass}
-                                style={fieldStyle}
-                            >
-                                <option value="">— None —</option>
-                                {statusOptions.map((s) => (
-                                    <option key={s.status_key} value={s.status_key}>
-                                        {s.status_label ?? s.status_key}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="sm:col-span-1" id="job-assign-vendor-section">
-                            <span className={labelClass} style={{ color: derived.textSecondary }}>
-                                Assigned vendor
+
+                <div
+                    data-jrm-metadata-band="true"
+                    className="adminv2-jrm-metadata-band mt-2 border-t border-solid border-[rgba(39,63,82,0.08)] px-0.5 pt-3"
+                >
+                    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm">
+                        <span style={{ color: neutral.textPrimary }}>
+                            <span className="mr-1.5 text-[11px] font-medium uppercase tracking-wide opacity-60">Total</span>
+                            <span className="font-semibold tabular-nums">
+                                {Number.isFinite(totalCents) ? formatMoneyFromCents(totalCents) : "—"}
                             </span>
-                            <div className="flex flex-wrap items-center gap-1">
-                                <select
-                                    value={String(props.formData.assigned_vendor_id ?? "")}
-                                    onChange={(e) => props.setFormData((f) => ({ ...f, assigned_vendor_id: e.target.value || null }))}
-                                    onBlur={props.onBlurSave}
-                                    disabled={!props.canMutate}
-                                    className={`${inputClass} min-w-[120px] flex-1`}
-                                    style={fieldStyle}
-                                >
-                                    <option value="">(none)</option>
-                                    {props.jobVendorOptions.map((v) => (
-                                        <option key={v.id} value={v.id}>
-                                            {v.label}
-                                        </option>
-                                    ))}
-                                </select>
-                                {vid ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => props.openDrawer("vendors", vid)}
-                                        className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border shrink-0"
-                                        style={{ borderColor: derived.border, color: brand.primary }}
-                                    >
-                                        Open
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="sm:col-span-2">
-                            <label htmlFor="job-modal-v2-contact" className={labelClass} style={{ color: derived.textSecondary }}>
-                                Primary person
-                            </label>
-                            <select
-                                id="job-modal-v2-contact"
-                                value={String(props.formData.primary_contact_id ?? "")}
-                                onChange={(e) => props.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
-                                onBlur={props.onBlurSave}
-                                disabled={!props.canMutate || props.primaryContactDisabled}
-                                className={inputClass}
-                                style={fieldStyle}
-                            >
-                                <option value="">(none)</option>
-                                {props.jobContactOptions.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="sm:col-span-2">
-                            <label htmlFor="job-modal-v2-location" className={labelClass} style={{ color: derived.textSecondary }}>
-                                Service location
-                            </label>
-                            <div className="flex flex-wrap items-center gap-1">
-                                <select
-                                    id="job-modal-v2-location"
-                                    value={String(props.formData.location_id ?? "")}
-                                    onChange={(e) => props.setFormData((f) => ({ ...f, location_id: e.target.value || null }))}
-                                    onBlur={props.onBlurSave}
-                                    disabled={!props.canMutate}
-                                    className={`${inputClass} min-w-[140px] flex-1`}
-                                    style={fieldStyle}
-                                >
-                                    <option value="">(none)</option>
-                                    {props.jobLocationOptions.map((loc) => (
-                                        <option key={loc.id} value={loc.id}>
-                                            {loc.label}
-                                        </option>
-                                    ))}
-                                </select>
-                                {String(props.formData.location_id ?? "").trim() ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => props.openDrawer("locations", String(props.formData.location_id))}
-                                        className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border shrink-0"
-                                        style={{ borderColor: derived.border, color: brand.primary }}
-                                    >
-                                        Open
-                                    </button>
-                                ) : null}
-                                {props.canMutate ? (
-                                    <button
-                                        type="button"
-                                        onClick={props.openJobLocationChange}
-                                        className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border shrink-0"
-                                        style={{ borderColor: derived.border, color: derived.textSecondary }}
-                                    >
-                                        Change
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="sm:col-span-2">
-                            <span className={labelClass} style={{ color: derived.textSecondary }}>
-                                Next visit
+                        </span>
+                        <span style={{ color: neutral.textPrimary }}>
+                            <span className="mr-1.5 text-[11px] font-medium uppercase tracking-wide opacity-60">Outstanding</span>
+                            <span className="font-semibold tabular-nums">
+                                {Number.isFinite(balCents) ? formatMoneyFromCents(balCents) : "—"}
                             </span>
-                            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                                <span className={readClass} style={{ color: neutral.textPrimary }}>
-                                    {nextLabel}
-                                </span>
-                                {props.firstSchedule && !props.rescheduleFormActive ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => props.openReschedule(props.firstSchedule!)}
-                                        className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border"
-                                        style={{ borderColor: derived.border, color: brand.primary }}
-                                    >
-                                        Reschedule
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
+                        </span>
                     </div>
-                    <div
-                        data-jrm-block="money-plan"
-                        className="adminv2-jrm-money-plan min-w-0 space-y-1 rounded-lg border border-solid px-2.5 py-2"
-                        style={{ borderColor: derived.border }}
-                    >
-                        <p className="text-[10px] font-bold uppercase tracking-[0.06em] mb-1" style={{ color: brand.secondary }}>
-                            Money & plan
-                        </p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                            <div>
-                                <span className="text-[10px] font-semibold uppercase block" style={{ color: derived.textSecondary }}>
-                                    Total
-                                </span>
-                                <span className="font-semibold tabular-nums" style={{ color: neutral.textPrimary }}>
-                                    {Number.isFinite(totalCents) ? formatMoneyFromCents(totalCents) : "—"}
-                                </span>
-                            </div>
-                            <div>
-                                <span className="text-[10px] font-semibold uppercase block" style={{ color: derived.textSecondary }}>
-                                    Outstanding
-                                </span>
-                                <span className="font-semibold tabular-nums" style={{ color: neutral.textPrimary }}>
-                                    {Number.isFinite(balCents) ? formatMoneyFromCents(balCents) : "—"}
-                                </span>
-                            </div>
-                        </div>
-                        <p className="text-xs leading-snug pt-1 border-t" style={{ borderColor: derived.border, color: neutral.textPrimary }}>
-                            <span className="font-medium">{serviceType}</span>
-                            <span style={{ color: derived.textSecondary }}> · </span>
-                            <span>{formatServiceFrequencyReadLabel(r.service_frequency_key)}</span>
-                            <span style={{ color: derived.textSecondary }}> · </span>
-                            <span>Recurring {recurring}</span>
-                        </p>
-                    </div>
+                    <p className="mt-2 text-[13px] leading-relaxed" style={{ color: derived.textSecondary }}>
+                        <span className="font-medium" style={{ color: neutral.textPrimary }}>
+                            {serviceType}
+                        </span>
+                        <span className="opacity-50"> · </span>
+                        {formatServiceFrequencyReadLabel(r.service_frequency_key)}
+                        <span className="opacity-50"> · </span>
+                        Recurring {recurring}
+                    </p>
                 </div>
             </div>
 
-            <div className="adminv2-job-record-fielddeck" data-adminv2-job-record-overview="true">
+            <div
+                className="adminv2-job-record-fielddeck adminv2-jrm-fielddeck-chapters"
+                data-adminv2-job-record-overview="true"
+                data-jrm-chapters="true"
+            >
                 <EntityDrawerOverview
                     entityType={props.presentationType}
                     data={props.entityDrawerOverviewData}
