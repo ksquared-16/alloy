@@ -119,7 +119,7 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
 export const JOB_RECORD_MODAL_V2_OVERVIEW_SECTIONS = buildJobRecordModalV2OverviewSections();
 
 const inputClass =
-    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input w-full rounded-lg border px-2 py-1 text-sm text-alloy-forge transition-colors duration-150 focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
+    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input w-full rounded-lg border border-alloy-stone/15 px-2 py-1 text-sm text-alloy-forge transition-colors duration-150 bg-white/50 focus:border-alloy-blue/50 focus:outline-none focus:ring-1 focus:ring-alloy-blue/15 disabled:opacity-60";
 const labelClass = "block text-[10px] font-semibold uppercase tracking-wide mb-0.5";
 const readClass = "text-sm font-medium leading-snug break-words tabular-nums";
 
@@ -189,17 +189,21 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
     const customerName = String((r as { _customer_name?: string | null })._customer_name ?? "").trim();
     const customerId = String(props.formData.customer_id ?? "").trim();
 
-    const fieldStyle = { borderColor: derived.border, backgroundColor: neutral.surface } as CSSProperties;
+    /** Soft embed — avoid harsh input chrome (cleaning modal only). */
+    const fieldStyle = {
+        borderColor: "rgba(39, 63, 82, 0.09)",
+        backgroundColor: "rgba(255, 255, 255, 0.5)",
+    } as CSSProperties;
 
     return (
         <div
             data-adminv2-job-record-modal-v2="true"
-            className="adminv2-jrm-root space-y-2.5"
+            className="adminv2-jrm-root space-y-2"
             style={{ ...shell, marginTop: -4 }}
         >
             <div
                 data-jrm-strip="account"
-                className="adminv2-jrm-account-strip flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-solid px-2.5 py-1.5"
+                className="adminv2-jrm-account-strip flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl px-3 py-1.5"
             >
                 <span className="text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: brand.secondary }}>
                     Account
@@ -224,16 +228,16 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
             </div>
 
             <div
-                className="adminv2-jrm-snapshot-card rounded-[10px] border border-solid p-2.5 sm:p-3"
+                className="adminv2-jrm-snapshot-card rounded-2xl p-2.5 sm:p-3"
                 data-adminv2-job-record-modal-v2-top="true"
                 style={shell}
             >
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: brand.secondary }}>
+                <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: derived.textSecondary }}>
                         Job snapshot
                     </p>
                 </div>
-                <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(200px,260px)] lg:gap-4 lg:items-start">
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(200px,260px)] lg:gap-3 lg:items-start">
                     <div className="min-w-0 grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2">
                         <div className="sm:col-span-1">
                             <label htmlFor="job-modal-v2-status" className={labelClass} style={{ color: derived.textSecondary }}>

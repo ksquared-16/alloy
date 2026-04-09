@@ -5413,94 +5413,130 @@
   padding: 0.35rem 0.55rem;
 }
 
-/* —— Admin V2 cleaning job record modal — tonal / depth alignment (visual only) —— */
+/* —— Admin V2 cleaning job record modal — premium minimal / cockpit (visual only) —— */
 
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-nav] {
-  background: color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.05));
-  border-color: color-mix(in srgb, #273f52 14%, rgba(0, 162, 131, 0.12));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-primary-actions] {
+  gap: 0.375rem 0.5rem;
 }
 
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-primary-actions] button {
+  min-height: 2rem;
+  border-radius: 0.5rem;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.06);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-nav] {
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.72) 88%, rgba(0, 69, 140, 0.04));
+  border: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 3px rgba(39, 63, 82, 0.05);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-nav] button[aria-selected="true"] {
+  box-shadow: 0 1px 3px rgba(39, 63, 82, 0.07);
+}
+
+/* Account + snapshot: surfaces, not boxed cards */
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-jrm-account-strip {
-  border-color: color-mix(in srgb, #00458c 24%, rgba(39, 63, 82, 0.12));
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, #ffffff 91%, rgba(0, 162, 131, 0.07)) 0%,
-    color-mix(in srgb, #ffffff 94%, rgba(0, 69, 140, 0.05)) 100%
-  );
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.75),
-    0 2px 8px rgba(39, 63, 82, 0.06);
+  border: none;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.65) 92%, rgba(0, 162, 131, 0.05));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 16px rgba(39, 63, 82, 0.05);
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-jrm-snapshot-card {
-  border-color: color-mix(in srgb, #273f52 16%, rgba(0, 162, 131, 0.14));
-  background: linear-gradient(
-    165deg,
-    color-mix(in srgb, #ffffff 93%, rgba(0, 162, 131, 0.055)) 0%,
-    color-mix(in srgb, #ffffff 96%, rgba(0, 69, 140, 0.035)) 100%
-  );
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.85),
-    0 4px 14px rgba(39, 63, 82, 0.07);
+  border: none;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.55) 94%, rgba(0, 69, 140, 0.03));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75), 0 6px 20px rgba(39, 63, 82, 0.055);
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-block="money-plan"] {
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, #ffffff 86%, rgba(0, 69, 140, 0.09)) 0%,
-    color-mix(in srgb, #ffffff 92%, rgba(0, 162, 131, 0.06)) 100%
-  );
-  border-color: color-mix(in srgb, rgba(0, 69, 140, 0.28) 55%, rgba(39, 63, 82, 0.12)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  border: 1px solid color-mix(in srgb, rgba(39, 63, 82, 0.08) 80%, rgba(0, 69, 140, 0.06)) !important;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.7) 90%, rgba(0, 69, 140, 0.04));
+  box-shadow: 0 2px 8px rgba(39, 63, 82, 0.04);
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-block="money-plan"] .border-t {
-  border-color: color-mix(in srgb, #273f52 12%, rgba(0, 69, 140, 0.12)) !important;
+  border-color: color-mix(in srgb, rgba(39, 63, 82, 0.1) 85%, rgba(0, 162, 131, 0.08)) !important;
 }
 
-/* Collapsible sections: collapsed vs expanded (clear active band) */
+/* Field deck + snapshot inputs: embedded, low-contrast chrome */
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-modal-v2-input,
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck input:not([type="checkbox"]):not([type="radio"]),
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck select,
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck textarea {
+  border-color: rgba(39, 63, 82, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.45) !important;
+  box-shadow: inset 0 1px 1px rgba(39, 63, 82, 0.03);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-modal-v2-input:focus,
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck input:focus,
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck select:focus,
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-job-record-fielddeck textarea:focus {
+  border-color: rgba(0, 69, 140, 0.28) !important;
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 0 0 3px rgba(0, 69, 140, 0.06);
+}
+
+/* Sections: system rhythm — hairline + tint, not stacked boxes */
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-adminv2-job-record-overview] section[data-entity-section] {
+  margin-bottom: 0.35rem !important;
+}
+
 [data-adminv2-record-modal-tone="cleaning-v2"]
   [data-adminv2-job-record-modal-v2]
   .entity-drawer-section-toggle[aria-expanded="false"] {
-  background: color-mix(in srgb, #ffffff 94%, rgba(39, 63, 82, 0.04)) !important;
-  border-color: color-mix(in srgb, #273f52 11%, rgba(39, 63, 82, 0.08)) !important;
-  color: rgba(39, 63, 82, 0.72);
+  border: none !important;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.4) 94%, rgba(39, 63, 82, 0.03)) !important;
+  border-bottom: 1px solid color-mix(in srgb, rgba(39, 63, 82, 0.1) 70%, transparent) !important;
+  color: rgba(39, 63, 82, 0.62) !important;
+  font-weight: 600;
+  padding: 0.35rem 0.45rem !important;
+  box-shadow: none;
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"]
   [data-adminv2-job-record-modal-v2]
   .entity-drawer-section-toggle[aria-expanded="true"] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.07)) 0%,
-    color-mix(in srgb, #ffffff 92%, rgba(0, 162, 131, 0.05)) 100%
-  ) !important;
-  border-color: color-mix(in srgb, rgba(0, 69, 140, 0.22) 45%, rgba(39, 63, 82, 0.1)) !important;
-  color: #00458c;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+  border: none !important;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.75) 90%, rgba(0, 69, 140, 0.04)) !important;
+  color: rgba(39, 63, 82, 0.88) !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.4rem 0.5rem !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"]
   [data-adminv2-job-record-modal-v2]
   section[data-entity-section]:has(.entity-drawer-section-toggle[aria-expanded="true"])
   > .grid {
-  padding: 0.5rem 0.65rem 0.65rem;
-  margin-top: 0.35rem !important;
-  border-radius: 0 0 8px 8px;
-  background: color-mix(in srgb, #ffffff 96%, rgba(0, 69, 140, 0.035));
-  border: 1px solid color-mix(in srgb, #273f52 10%, rgba(0, 162, 131, 0.08));
-  border-top: none;
+  padding: 0.45rem 0.5rem 0.55rem;
+  margin-top: 0 !important;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.5) 95%, rgba(0, 69, 140, 0.02));
+  border: none;
+  border-top: 1px solid color-mix(in srgb, rgba(39, 63, 82, 0.08) 85%, transparent);
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] section[data-entity-section] > h3.rounded-t-md {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #ffffff 90%, rgba(0, 162, 131, 0.06)) 0%,
-    color-mix(in srgb, #ffffff 94%, rgba(39, 63, 82, 0.04)) 100%
-  ) !important;
-  border-color: color-mix(in srgb, #273f52 12%, rgba(0, 69, 140, 0.1)) !important;
-  color: color-mix(in srgb, #00458c 75%, #273f52) !important;
+  border: none !important;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.55) 92%, rgba(0, 162, 131, 0.04)) !important;
+  color: rgba(39, 63, 82, 0.78) !important;
+  font-weight: 600;
+  padding: 0.4rem 0.5rem !important;
+  margin-bottom: 0.35rem !important;
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-entity-drawer-overview] {
+  padding-top: 0.15rem;
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-record-modal-scroll] {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }

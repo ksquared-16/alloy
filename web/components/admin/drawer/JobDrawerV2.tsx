@@ -163,6 +163,8 @@ export function JobDrawerV2SignalsStrip(props: {
         { kicker: "Assignment" as const, label: props.assignmentLabel, tone: props.assignmentTone },
     ];
     const cleaning = props.presentation === "cleaningRecordModal";
+    const signalShadow =
+        "0 1px 2px rgba(39, 63, 82, 0.04), 0 4px 14px rgba(39, 63, 82, 0.05)";
     return (
         <div className="adminv2-job-drawer-signals flex flex-wrap gap-2" style={shell}>
             {cards.map((c) => {
@@ -170,13 +172,13 @@ export function JobDrawerV2SignalsStrip(props: {
                 return (
                     <div
                         key={c.kicker}
-                        className="min-w-[140px] flex-1 rounded-lg px-3 py-2"
+                        className={`min-w-[140px] flex-1 rounded-xl px-3 py-2 ${cleaning ? "backdrop-blur-[2px]" : ""}`}
                         style={{
                             backgroundColor: t.bg,
-                            borderWidth: 1,
+                            borderWidth: cleaning ? 0 : 1,
                             borderStyle: "solid",
-                            borderColor: t.border,
-                            boxShadow: cleaning ? derived.cardShadow : undefined,
+                            borderColor: cleaning ? "transparent" : t.border,
+                            boxShadow: cleaning ? signalShadow : undefined,
                         }}
                     >
                         <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: t.kickerColor }}>

@@ -81,11 +81,15 @@ export default function Drawer({
         ? {
               zIndex: zIndexPanel,
               backgroundColor: cleaningRecordModalTone
-                  ? "color-mix(in srgb, #ffffff 94%, rgba(0, 69, 140, 0.035))"
+                  ? "color-mix(in srgb, #ffffff 96%, rgba(0, 69, 140, 0.028))"
                   : neutral.surface,
               color: neutral.textPrimary,
-              borderColor: derived.border,
-              boxShadow: cleaningRecordModalTone ? derived.nodeOnCanvasShadow : derived.cardShadow,
+              borderColor: cleaningRecordModalTone
+                  ? "color-mix(in srgb, rgba(39, 63, 82, 0.09) 70%, rgba(0, 69, 140, 0.08))"
+                  : derived.border,
+              boxShadow: cleaningRecordModalTone
+                  ? "0 12px 40px rgba(39, 63, 82, 0.1), 0 2px 8px rgba(39, 63, 82, 0.04)"
+                  : derived.cardShadow,
           }
         : {
               zIndex: zIndexPanel,
@@ -107,7 +111,7 @@ export default function Drawer({
         isModal && isV2
             ? cleaningRecordModalTone
                 ? {
-                      background: `linear-gradient(180deg, color-mix(in srgb, ${palette.riverStone} 96%, rgba(0, 162, 131, 0.04)) 0%, color-mix(in srgb, ${palette.riverStone} 82%, ${derived.canvasFieldActive}) 55%, color-mix(in srgb, ${palette.riverStone} 88%, rgba(0, 69, 140, 0.04)) 100%)`,
+                      background: `radial-gradient(ellipse 120% 80% at 50% -10%, color-mix(in srgb, ${palette.riverStone} 92%, rgba(0, 69, 140, 0.04)) 0%, transparent 55%), linear-gradient(180deg, color-mix(in srgb, ${palette.riverStone} 97%, rgba(0, 162, 131, 0.025)) 0%, color-mix(in srgb, ${palette.riverStone} 91%, ${derived.canvasFieldDepth}) 48%, color-mix(in srgb, ${palette.riverStone} 94%, rgba(0, 69, 140, 0.03)) 100%)`,
                       color: neutral.textPrimary,
                   }
                 : {
@@ -121,37 +125,56 @@ export default function Drawer({
     const headerBlock = (
         <>
             <div
-                className={`sticky top-0 z-10 shrink-0 border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}
+                className={`sticky top-0 z-10 shrink-0 ${cleaningRecordModalTone ? "border-b border-solid" : `border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}`}
                 style={
                     isV2
                         ? {
                               backgroundColor: cleaningRecordModalTone
-                                  ? "color-mix(in srgb, #ffffff 93%, rgba(0, 69, 140, 0.045))"
+                                  ? "color-mix(in srgb, #ffffff 97%, rgba(0, 69, 140, 0.03))"
                                   : neutral.surface,
-                              borderBottomColor: derived.border,
+                              borderBottomColor: cleaningRecordModalTone
+                                  ? "color-mix(in srgb, rgba(39, 63, 82, 0.08) 85%, rgba(0, 162, 131, 0.06))"
+                                  : derived.border,
                           }
                         : undefined
                 }
             >
-                <div className="px-6 pt-4 pb-2">
+                <div className={cleaningRecordModalTone ? "px-6 pt-5 pb-1.5" : "px-6 pt-4 pb-2"}>
                     <h2
                         id={isModal ? "admin-drawer-title" : undefined}
-                        className={`text-xl font-bold leading-snug break-words ${isV2 ? "" : "text-alloy-forge"}`}
-                        style={isV2 ? { color: neutral.textPrimary } : undefined}
+                        className={
+                            cleaningRecordModalTone
+                                ? "text-[1.375rem] sm:text-2xl font-semibold tracking-tight leading-[1.2] break-words text-[rgb(39,63,82)]"
+                                : `text-xl font-bold leading-snug break-words ${isV2 ? "" : "text-alloy-forge"}`
+                        }
+                        style={isV2 && !cleaningRecordModalTone ? { color: neutral.textPrimary } : undefined}
                     >
                         {titleText}
                     </h2>
                     {headerSubtitle != null && headerSubtitle !== false && (
                         <p
-                            className={`mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`}
-                            style={isV2 ? { color: derived.textSecondary } : undefined}
+                            className={
+                                cleaningRecordModalTone
+                                    ? "mt-1.5 text-[13px] font-normal leading-snug"
+                                    : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`
+                            }
+                            style={
+                                isV2
+                                    ? {
+                                          color: derived.textSecondary,
+                                          ...(cleaningRecordModalTone ? { opacity: 0.88 } : {}),
+                                      }
+                                    : undefined
+                            }
                         >
                             {headerSubtitle}
                         </p>
                     )}
                 </div>
-                <div className="px-6 pb-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
+                <div
+                    className={`px-6 flex items-center justify-between ${cleaningRecordModalTone ? "pb-3 gap-3" : "pb-4 gap-4"}`}
+                >
+                    <div className={`flex items-center min-w-0 ${cleaningRecordModalTone ? "gap-2" : "gap-3"}`}>
                         {statusBadge != null && statusBadge !== false && statusBadge}
                         {headerActions}
                     </div>
@@ -168,15 +191,15 @@ export default function Drawer({
                 {headerSignals != null && headerSignals !== false && (
                     <div
                         data-adminv2-record-modal-signals-wrap
-                        className="px-6 pb-3"
+                        className={`px-6 ${cleaningRecordModalTone ? "pb-2.5 pt-0" : "pb-3"}`}
                         style={
                             isV2
                                 ? {
-                                      borderBottomWidth: 1,
+                                      borderBottomWidth: cleaningRecordModalTone ? 0 : 1,
                                       borderBottomStyle: "solid",
                                       borderBottomColor: derived.border,
                                       backgroundColor: cleaningRecordModalTone
-                                          ? "color-mix(in srgb, #ffffff 91%, rgba(0, 162, 131, 0.035))"
+                                          ? "transparent"
                                           : undefined,
                                   }
                                 : undefined
@@ -188,13 +211,15 @@ export default function Drawer({
                 {headerExtra != null && headerExtra !== false && (
                     <div
                         data-adminv2-record-modal-tabs-wrap
-                        className={`px-6 pb-3 pt-2 border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}
+                        className={`px-6 pb-2.5 pt-2 ${cleaningRecordModalTone ? "border-t border-solid" : `border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}`}
                         style={
                             isV2
                                 ? {
-                                      borderTopColor: derived.border,
+                                      borderTopColor: cleaningRecordModalTone
+                                          ? "color-mix(in srgb, rgba(39, 63, 82, 0.09) 80%, rgba(0, 69, 140, 0.06))"
+                                          : derived.border,
                                       backgroundColor: cleaningRecordModalTone
-                                          ? "color-mix(in srgb, #ffffff 94%, rgba(39, 63, 82, 0.04))"
+                                          ? "color-mix(in srgb, #ffffff 97%, rgba(39, 63, 82, 0.02))"
                                           : undefined,
                                   }
                                 : undefined
@@ -206,7 +231,7 @@ export default function Drawer({
             </div>
             <div
                 data-adminv2-record-modal-scroll
-                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? "px-4 py-3 sm:px-5 sm:py-4" : "p-6"} ${isV2 ? "" : "bg-admin-surface-card"}`}
+                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "" : "bg-admin-surface-card"}`}
                 style={modalBodyBg}
             >
                 {children}
