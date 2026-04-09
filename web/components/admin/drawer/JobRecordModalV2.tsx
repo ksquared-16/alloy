@@ -165,6 +165,8 @@ export interface JobRecordModalV2Props {
     statusDefs: StatusDefOption[];
     onBlurSave: () => void;
     jobVendorOptions: { id: string; label: string }[];
+    /** Department · work unit labels — same source as JobRecordPrimaryPanel / overview selects. */
+    jobWorkUnitOptions: { id: string; label: string }[];
     jobContactOptions: { id: string; label: string }[];
     jobLocationOptions: { id: string; label: string }[];
     primaryContactDisabled: boolean;
@@ -262,7 +264,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                     Record snapshot
                 </p>
                 <div data-jrm-snapshot-grid="true" className="adminv2-jrm-snapshot-grid space-y-1.5 px-0.5">
-                    <div className="grid grid-cols-1 gap-x-2.5 gap-y-1.5 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-x-2.5 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-4">
                         <JrmSnapCell label="Status">
                             <select
                                 id="job-modal-v2-status"
@@ -304,6 +306,23 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                                 ) : null}
                             </JrmSnapCell>
                         </div>
+                        <JrmSnapCell label="Work unit">
+                            <select
+                                value={String(props.formData.work_unit_id ?? "")}
+                                onChange={(e) => props.setFormData((f) => ({ ...f, work_unit_id: e.target.value || null }))}
+                                onBlur={props.onBlurSave}
+                                disabled={!props.canMutate}
+                                className={recordSelectClass}
+                                aria-label="Work unit"
+                            >
+                                <option value="">Unassigned (inbox)</option>
+                                {props.jobWorkUnitOptions.map((o) => (
+                                    <option key={o.id} value={o.id}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </JrmSnapCell>
                         <JrmSnapCell label="Primary person">
                             <select
                                 id="job-modal-v2-contact"

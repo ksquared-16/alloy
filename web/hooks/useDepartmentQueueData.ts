@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     filterJobsNeedsAttention,
     filterJobsScheduledToday,
@@ -18,12 +18,20 @@ export type AdminJobListRow = JobRowForWorkspaceMetrics & {
     _status_display?: string | null;
     _job_label?: string | null;
     _price_display?: number | null;
+    _location_label?: string | null;
+    _vendor_name?: string | null;
+    _assigned_vendor_name?: string | null;
+    receivable_outstanding_cents?: number | null;
 };
 
 export function useDepartmentQueueData(departmentId: string, mode: DepartmentJobsQueueMode) {
     const [jobs, setJobs] = useState<AdminJobListRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    /** Bumps to force reload (e.g. after closing job drawer). */
+    const [reloadToken, setReloadToken] = useState(0);
+
+    const refetch = useCallback(() => setReloadToken((t) => t + 1), []);
 
     useEffect(() => {
         if (!departmentId) return;
@@ -69,7 +77,7 @@ export function useDepartmentQueueData(departmentId: string, mode: DepartmentJob
         return () => {
             cancelled = true;
         };
-    }, [departmentId, mode]);
+    }, [departmentId, mode, reloadToken]);
 
-    return { jobs, loading, error };
+    return { jobs, loading, error, refetch };
 }

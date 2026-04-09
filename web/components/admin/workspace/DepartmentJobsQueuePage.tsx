@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
@@ -33,8 +33,17 @@ export function DepartmentJobsQueuePage({
     deptName: string;
 }) {
     const router = useRouter();
-    const { openDrawer } = useAdminDrawer();
-    const { jobs, loading, error } = useDepartmentQueueData(departmentId, mode);
+    const { openDrawer, drawer } = useAdminDrawer();
+    const { jobs, loading, error, refetch } = useDepartmentQueueData(departmentId, mode);
+    const drawerWasOpen = useRef(false);
+
+    useEffect(() => {
+        const isOpen = drawer.type != null && drawer.id != null;
+        if (drawerWasOpen.current && !isOpen) {
+            refetch();
+        }
+        drawerWasOpen.current = isOpen;
+    }, [drawer.type, drawer.id, refetch]);
     const meta = MODE_META[mode];
 
     const model = useMemo(

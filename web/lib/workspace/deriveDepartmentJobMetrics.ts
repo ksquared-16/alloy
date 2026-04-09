@@ -16,6 +16,9 @@ export type JobRowForWorkspaceMetrics = {
     status_key?: string | null;
     title?: string | null;
     _job_label?: string | null;
+    _location_label?: string | null;
+    _vendor_name?: string | null;
+    _assigned_vendor_name?: string | null;
 };
 
 function localDayKey(d: Date): string {

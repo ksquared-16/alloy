@@ -22,7 +22,16 @@ function jobToQueueItem(j: AdminJobListRow): QueueItemVm {
     let urgencyTier: QueueItemVm["urgencyTier"] = "standard";
     if (money || overdue) urgencyTier = "warning";
 
+    const vendorLabel = (j._vendor_name ?? j._assigned_vendor_name ?? "").trim();
+
     const metaLines: { label: string; value: string }[] = [];
+    const loc = (j._location_label ?? "").trim();
+    if (loc) {
+        metaLines.push({ label: "Location", value: loc });
+    }
+    if (vendorLabel) {
+        metaLines.push({ label: "Vendor", value: vendorLabel });
+    }
     if (j._next_schedule) {
         metaLines.push({ label: "Next visit", value: formatDateTime(j._next_schedule) });
     }
@@ -116,7 +125,10 @@ export function buildRealWorkUnitWorkspaceModel(input: {
         },
         laneInterpretation: {
             laneStatusLine: `Department ${deptName.trim() || departmentId} — ${headline.toLowerCase()}.`,
-            recommendedActionLine: "Select a row to triage in the drawer, or jump to All jobs from the rail.",
+            recommendedActionLine:
+                mode === "unassigned"
+                    ? "Open a job, set Work unit in the snapshot (or overview), save — closing the drawer refreshes the list."
+                    : "Select a row to triage in the drawer, or jump to All jobs from the rail.",
         },
         signals,
         kpis,

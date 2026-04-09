@@ -7066,6 +7066,7 @@ export default function AdminEntityDrawer() {
                                         else if (nonJobFormDirty) saveEdit();
                                     }}
                                     jobVendorOptions={jobVendorsForAssign}
+                                    jobWorkUnitOptions={jobWorkUnitOptions}
                                     jobContactOptions={jobContactOptions}
                                     jobLocationOptions={jobLocationOptions}
                                     primaryContactDisabled={primaryContactDisabled}

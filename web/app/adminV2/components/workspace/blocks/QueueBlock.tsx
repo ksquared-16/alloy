@@ -221,6 +221,23 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                   {item.subtitle?.trim() ? (
                     <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">{item.subtitle.trim()}</div>
                   ) : null}
+                  {item.metaLines && item.metaLines.length > 0 ? (
+                    <ul
+                      className="adminv2-ws-wu-queue-card-meta mt-1 space-y-0.5 list-none pl-0 m-0"
+                      aria-label="Job details"
+                    >
+                      {item.metaLines.map((line) => (
+                        <li
+                          key={`${item.id}-${line.label}`}
+                          className="flex flex-wrap gap-x-1.5 gap-y-0 text-[11px] leading-snug"
+                          style={{ color: "var(--d-muted, rgba(55,65,81,0.85))" }}
+                        >
+                          <span className="font-medium shrink-0">{line.label}</span>
+                          <span className="min-w-0 break-words">{line.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 <div className="adminv2-ws-wu-queue-card-compact-aside">
                   {hasValue ? (
