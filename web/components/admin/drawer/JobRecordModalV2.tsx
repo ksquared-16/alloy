@@ -40,6 +40,21 @@ export function isCleaningJobRecord(record: Record<string, unknown> | null | und
     return false;
 }
 
+/**
+ * Per-section column density for the cleaning job record modal.
+ * Maps 1:1 to `EntityDrawerSectionConfig.gridCols` — intended as the template hook for future configurable section presentation.
+ */
+export const JOB_RECORD_MODAL_V2_SECTION_GRID = {
+    property_service_v2: 2,
+    /** Paired date fields — reads well at 2 columns from `md` up (EntityDrawerSection). */
+    scheduling_v2: 2,
+    job_pricing_breakdown: 1,
+    /** Subsections (Plan / Totals) — 2 columns balances density vs. scanability. */
+    pricing: 2,
+    people_places_v2: 2,
+    internal_notes_record_v2: 1,
+} as const satisfies Record<string, 1 | 2>;
+
 function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
     const pres = getEntityPresentation("jobs").drawer?.overviewSections ?? [];
     const ps = pres.find((s) => s.key === "property_service");
@@ -74,13 +89,14 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
         },
         { key: "work_unit_id", label: "Work unit", span: 1, renderHint: "text", editable: true },
     ];
+    const g = JOB_RECORD_MODAL_V2_SECTION_GRID;
     return [
         {
             key: "property_service_v2",
             title: "Property & service details",
             defaultExpanded: true,
             collapsible: true,
-            gridCols: 1,
+            gridCols: g.property_service_v2,
             fields: propertyFields,
             locked: true,
         },
@@ -89,18 +105,18 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
             title: "Scheduling",
             defaultExpanded: false,
             collapsible: true,
-            gridCols: 1,
+            gridCols: g.scheduling_v2,
             fields: schedFields,
             locked: true,
         },
-        { ...pb, key: "job_pricing_breakdown", title: "Pricing", defaultExpanded: false },
-        { ...bill, defaultExpanded: false, gridCols: 1 },
+        { ...pb, key: "job_pricing_breakdown", title: "Pricing", defaultExpanded: false, gridCols: g.job_pricing_breakdown },
+        { ...bill, defaultExpanded: false, gridCols: g.pricing },
         {
             key: "people_places_v2",
             title: "People & places",
             defaultExpanded: false,
             collapsible: true,
-            gridCols: 1,
+            gridCols: g.people_places_v2,
             fields: peoplePlacesFields,
             locked: true,
         },
@@ -109,7 +125,7 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
             title: "Internal notes & record details",
             defaultExpanded: false,
             collapsible: true,
-            gridCols: 1,
+            gridCols: g.internal_notes_record_v2,
             fields: [...(notes?.fields ?? []), ...(rec?.fields ?? [])],
             locked: true,
         },
@@ -120,7 +136,7 @@ export const JOB_RECORD_MODAL_V2_OVERVIEW_SECTIONS = buildJobRecordModalV2Overvi
 
 /** Minimal record controls — chrome from `.adminv2-jrm-record-select` (workspace.css) */
 const recordSelectClass =
-    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input adminv2-jrm-record-select w-full min-w-0 max-w-full sm:max-w-md text-sm font-medium text-alloy-forge disabled:opacity-60";
+    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input adminv2-jrm-record-select w-full min-w-0 max-w-full text-sm font-medium text-alloy-forge disabled:opacity-60";
 const textActionClass =
     "adminv2-jrm-text-action text-[11px] font-medium text-alloy-blue hover:underline underline-offset-2 decoration-alloy-blue/40 bg-transparent border-0 p-0 cursor-pointer shrink-0";
 const textActionMutedClass =
@@ -218,7 +234,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
     return (
         <div
             data-adminv2-job-record-modal-v2="true"
-            className="adminv2-jrm-root space-y-2"
+            className="adminv2-jrm-root w-full max-w-none space-y-2"
             style={{ ...shell, marginTop: -4 }}
         >
             <div
