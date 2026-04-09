@@ -190,25 +190,16 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
     const customerId = String(props.formData.customer_id ?? "").trim();
 
     const fieldStyle = { borderColor: derived.border, backgroundColor: neutral.surface } as CSSProperties;
-    const cardSurface: CSSProperties = {
-        borderColor: derived.border,
-        backgroundColor: "color-mix(in srgb, #ffffff 94%, rgba(0, 162, 131, 0.04))",
-        boxShadow: derived.cardShadow,
-        ...shell,
-    };
 
     return (
         <div
             data-adminv2-job-record-modal-v2="true"
-            className="space-y-2.5"
+            className="adminv2-jrm-root space-y-2.5"
             style={{ ...shell, marginTop: -4 }}
         >
             <div
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-solid px-2.5 py-1.5"
-                style={{
-                    borderColor: "color-mix(in srgb, var(--d-brand, #00458c) 22%, rgba(39, 63, 82, 0.12))",
-                    backgroundColor: "color-mix(in srgb, #ffffff 96%, rgba(0, 162, 131, 0.06))",
-                }}
+                data-jrm-strip="account"
+                className="adminv2-jrm-account-strip flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-solid px-2.5 py-1.5"
             >
                 <span className="text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: brand.secondary }}>
                     Account
@@ -233,9 +224,9 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
             </div>
 
             <div
-                className="rounded-[10px] border border-solid p-2.5 sm:p-3"
-                style={cardSurface}
+                className="adminv2-jrm-snapshot-card rounded-[10px] border border-solid p-2.5 sm:p-3"
                 data-adminv2-job-record-modal-v2-top="true"
+                style={shell}
             >
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <p className="text-[10px] font-bold uppercase tracking-[0.07em]" style={{ color: brand.secondary }}>
@@ -383,13 +374,9 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                         </div>
                     </div>
                     <div
-                        className="min-w-0 space-y-1 rounded-lg px-2.5 py-2"
-                        style={{
-                            backgroundColor: "color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.05))",
-                            borderWidth: 1,
-                            borderStyle: "solid",
-                            borderColor: derived.border,
-                        }}
+                        data-jrm-block="money-plan"
+                        className="adminv2-jrm-money-plan min-w-0 space-y-1 rounded-lg border border-solid px-2.5 py-2"
+                        style={{ borderColor: derived.border }}
                     >
                         <p className="text-[10px] font-bold uppercase tracking-[0.06em] mb-1" style={{ color: brand.secondary }}>
                             Money & plan

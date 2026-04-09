@@ -32,6 +32,11 @@ interface DrawerProps {
     presentation?: "sidebar" | "modal";
     /** Panel width (Tailwind). Default `max-w-2xl`; use `max-w-3xl` for wider record drawers. */
     panelClassName?: string;
+    /**
+     * Optional ambient styling for Admin V2 centered record modal only (visual system alignment).
+     * Does not affect sidebar drawers or behavior.
+     */
+    recordModalTone?: "cleaning-v2";
 }
 
 export default function Drawer({
@@ -50,6 +55,7 @@ export default function Drawer({
     variant = "legacy",
     presentation = "sidebar",
     panelClassName,
+    recordModalTone,
 }: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
@@ -68,15 +74,18 @@ export default function Drawer({
 
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
+    const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
     const leftAccent = accentColor ?? (isV2 ? brand.primary : undefined);
 
     const panelStyle: CSSProperties = isModal
         ? {
               zIndex: zIndexPanel,
-              backgroundColor: neutral.surface,
+              backgroundColor: cleaningRecordModalTone
+                  ? "color-mix(in srgb, #ffffff 94%, rgba(0, 69, 140, 0.035))"
+                  : neutral.surface,
               color: neutral.textPrimary,
               borderColor: derived.border,
-              boxShadow: derived.cardShadow,
+              boxShadow: cleaningRecordModalTone ? derived.nodeOnCanvasShadow : derived.cardShadow,
           }
         : {
               zIndex: zIndexPanel,
@@ -96,10 +105,15 @@ export default function Drawer({
 
     const modalBodyBg: CSSProperties | undefined =
         isModal && isV2
-            ? {
-                  background: `linear-gradient(180deg, ${palette.riverStone} 0%, color-mix(in srgb, ${palette.riverStone} 88%, ${derived.canvasFieldDepth}) 100%)`,
-                  color: neutral.textPrimary,
-              }
+            ? cleaningRecordModalTone
+                ? {
+                      background: `linear-gradient(180deg, color-mix(in srgb, ${palette.riverStone} 96%, rgba(0, 162, 131, 0.04)) 0%, color-mix(in srgb, ${palette.riverStone} 82%, ${derived.canvasFieldActive}) 55%, color-mix(in srgb, ${palette.riverStone} 88%, rgba(0, 69, 140, 0.04)) 100%)`,
+                      color: neutral.textPrimary,
+                  }
+                : {
+                      background: `linear-gradient(180deg, ${palette.riverStone} 0%, color-mix(in srgb, ${palette.riverStone} 88%, ${derived.canvasFieldDepth}) 100%)`,
+                      color: neutral.textPrimary,
+                  }
             : isV2
               ? { backgroundColor: neutral.background, color: neutral.textPrimary }
               : undefined;
@@ -111,7 +125,9 @@ export default function Drawer({
                 style={
                     isV2
                         ? {
-                              backgroundColor: neutral.surface,
+                              backgroundColor: cleaningRecordModalTone
+                                  ? "color-mix(in srgb, #ffffff 93%, rgba(0, 69, 140, 0.045))"
+                                  : neutral.surface,
                               borderBottomColor: derived.border,
                           }
                         : undefined
@@ -151,6 +167,7 @@ export default function Drawer({
                 </div>
                 {headerSignals != null && headerSignals !== false && (
                     <div
+                        data-adminv2-record-modal-signals-wrap
                         className="px-6 pb-3"
                         style={
                             isV2
@@ -158,6 +175,9 @@ export default function Drawer({
                                       borderBottomWidth: 1,
                                       borderBottomStyle: "solid",
                                       borderBottomColor: derived.border,
+                                      backgroundColor: cleaningRecordModalTone
+                                          ? "color-mix(in srgb, #ffffff 91%, rgba(0, 162, 131, 0.035))"
+                                          : undefined,
                                   }
                                 : undefined
                         }
@@ -167,14 +187,25 @@ export default function Drawer({
                 )}
                 {headerExtra != null && headerExtra !== false && (
                     <div
+                        data-adminv2-record-modal-tabs-wrap
                         className={`px-6 pb-3 pt-2 border-t ${isV2 ? "" : "border-admin-border border-t-alloy-blue/30"}`}
-                        style={isV2 ? { borderTopColor: derived.border } : undefined}
+                        style={
+                            isV2
+                                ? {
+                                      borderTopColor: derived.border,
+                                      backgroundColor: cleaningRecordModalTone
+                                          ? "color-mix(in srgb, #ffffff 94%, rgba(39, 63, 82, 0.04))"
+                                          : undefined,
+                                  }
+                                : undefined
+                        }
                     >
                         {headerExtra}
                     </div>
                 )}
             </div>
             <div
+                data-adminv2-record-modal-scroll
                 className={`flex-1 overflow-y-auto min-h-0 ${isModal ? "px-4 py-3 sm:px-5 sm:py-4" : "p-6"} ${isV2 ? "" : "bg-admin-surface-card"}`}
                 style={modalBodyBg}
             >
@@ -199,6 +230,7 @@ export default function Drawer({
                     <div
                         data-adminv2-drawer="true"
                         data-adminv2-record-modal="true"
+                        data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
                         className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${panelClassName ?? "max-w-5xl"}`}
                         style={panelStyle}
                         role="dialog"

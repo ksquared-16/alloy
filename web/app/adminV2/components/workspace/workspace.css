@@ -5412,3 +5412,95 @@
 [data-adminv2-record-modal] [data-adminv2-job-record-modal-v2="true"] [data-adminv2-job-record-overview] .entity-drawer-section-toggle {
   padding: 0.35rem 0.55rem;
 }
+
+/* —— Admin V2 cleaning job record modal — tonal / depth alignment (visual only) —— */
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-nav] {
+  background: color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.05));
+  border-color: color-mix(in srgb, #273f52 14%, rgba(0, 162, 131, 0.12));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-jrm-account-strip {
+  border-color: color-mix(in srgb, #00458c 24%, rgba(39, 63, 82, 0.12));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #ffffff 91%, rgba(0, 162, 131, 0.07)) 0%,
+    color-mix(in srgb, #ffffff 94%, rgba(0, 69, 140, 0.05)) 100%
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75),
+    0 2px 8px rgba(39, 63, 82, 0.06);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-jrm-snapshot-card {
+  border-color: color-mix(in srgb, #273f52 16%, rgba(0, 162, 131, 0.14));
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, #ffffff 93%, rgba(0, 162, 131, 0.055)) 0%,
+    color-mix(in srgb, #ffffff 96%, rgba(0, 69, 140, 0.035)) 100%
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85),
+    0 4px 14px rgba(39, 63, 82, 0.07);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-block="money-plan"] {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, #ffffff 86%, rgba(0, 69, 140, 0.09)) 0%,
+    color-mix(in srgb, #ffffff 92%, rgba(0, 162, 131, 0.06)) 100%
+  );
+  border-color: color-mix(in srgb, rgba(0, 69, 140, 0.28) 55%, rgba(39, 63, 82, 0.12)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-block="money-plan"] .border-t {
+  border-color: color-mix(in srgb, #273f52 12%, rgba(0, 69, 140, 0.12)) !important;
+}
+
+/* Collapsible sections: collapsed vs expanded (clear active band) */
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .entity-drawer-section-toggle[aria-expanded="false"] {
+  background: color-mix(in srgb, #ffffff 94%, rgba(39, 63, 82, 0.04)) !important;
+  border-color: color-mix(in srgb, #273f52 11%, rgba(39, 63, 82, 0.08)) !important;
+  color: rgba(39, 63, 82, 0.72);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  .entity-drawer-section-toggle[aria-expanded="true"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.07)) 0%,
+    color-mix(in srgb, #ffffff 92%, rgba(0, 162, 131, 0.05)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, rgba(0, 69, 140, 0.22) 45%, rgba(39, 63, 82, 0.1)) !important;
+  color: #00458c;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"]
+  [data-adminv2-job-record-modal-v2]
+  section[data-entity-section]:has(.entity-drawer-section-toggle[aria-expanded="true"])
+  > .grid {
+  padding: 0.5rem 0.65rem 0.65rem;
+  margin-top: 0.35rem !important;
+  border-radius: 0 0 8px 8px;
+  background: color-mix(in srgb, #ffffff 96%, rgba(0, 69, 140, 0.035));
+  border: 1px solid color-mix(in srgb, #273f52 10%, rgba(0, 162, 131, 0.08));
+  border-top: none;
+}
+
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] section[data-entity-section] > h3.rounded-t-md {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #ffffff 90%, rgba(0, 162, 131, 0.06)) 0%,
+    color-mix(in srgb, #ffffff 94%, rgba(39, 63, 82, 0.04)) 100%
+  ) !important;
+  border-color: color-mix(in srgb, #273f52 12%, rgba(0, 69, 140, 0.1)) !important;
+  color: color-mix(in srgb, #00458c 75%, #273f52) !important;
+}

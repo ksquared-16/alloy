@@ -3593,8 +3593,8 @@ export default function AdminEntityDrawer() {
             pay?.payment_status_key === "paid",
             pay?.payment_status_key === "failed"
         );
-        return <JobDrawerV2SignalsStrip {...lines} />;
-    }, [isJobDrawerV2, overviewData, jobSchedules, paymentStatusLabel, jobPaymentSummaryFromApi]);
+        return <JobDrawerV2SignalsStrip {...lines} presentation={showJobRecordModalV2 ? "cleaningRecordModal" : "default"} />;
+    }, [isJobDrawerV2, overviewData, jobSchedules, paymentStatusLabel, jobPaymentSummaryFromApi, showJobRecordModalV2]);
 
     const drawerHeaderRecordSubtitle = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
@@ -5265,6 +5265,7 @@ export default function AdminEntityDrawer() {
             variant={drawerShellVariant}
             presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
             panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
+            recordModalTone={showJobRecordModalV2 ? "cleaning-v2" : undefined}
         >
             {showDrawerBodyLoading &&
                 (isJobRecordModalTarget ? (

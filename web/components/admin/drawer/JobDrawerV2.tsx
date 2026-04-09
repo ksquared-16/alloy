@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentProps, CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { neutral, derived, brand, palette } from "@/styles/tokens/colors";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -78,6 +78,75 @@ function signalTone(tone: "neutral" | "info" | "warning" | "critical"): { bg: st
     }
 }
 
+/** Cleaning flagship modal: meaning-first tints (payment / schedule / assignment families). */
+function signalToneCleaningModal(
+    kicker: "Payment" | "Schedule" | "Assignment",
+    urgency: "neutral" | "info" | "warning" | "critical"
+): { bg: string; border: string; kickerColor: string } {
+    if (kicker === "Payment") {
+        if (urgency === "critical") {
+            return {
+                bg: "color-mix(in srgb, #ffffff 86%, rgba(188, 67, 0, 0.12))",
+                border: "color-mix(in srgb, rgba(188, 67, 0, 0.45) 70%, rgba(39, 63, 82, 0.2))",
+                kickerColor: "rgba(188, 67, 0, 0.92)",
+            };
+        }
+        if (urgency === "warning") {
+            return {
+                bg: "color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.09))",
+                border: "color-mix(in srgb, rgba(0, 69, 140, 0.38) 65%, rgba(39, 63, 82, 0.15))",
+                kickerColor: palette.alloyBlue,
+            };
+        }
+        if (urgency === "info") {
+            return {
+                bg: "color-mix(in srgb, #ffffff 88%, rgba(0, 162, 131, 0.1))",
+                border: "color-mix(in srgb, rgba(0, 162, 131, 0.38) 60%, rgba(39, 63, 82, 0.12))",
+                kickerColor: palette.bendPine,
+            };
+        }
+        return {
+            bg: "color-mix(in srgb, #ffffff 90%, rgba(0, 69, 140, 0.06))",
+            border: "color-mix(in srgb, rgba(0, 69, 140, 0.22) 70%, rgba(39, 63, 82, 0.12))",
+            kickerColor: derived.textSecondary,
+        };
+    }
+    if (kicker === "Schedule") {
+        if (urgency === "critical") {
+            return {
+                bg: "color-mix(in srgb, #ffffff 85%, rgba(188, 67, 0, 0.11))",
+                border: "color-mix(in srgb, rgba(188, 67, 0, 0.4) 65%, rgba(39, 63, 82, 0.18))",
+                kickerColor: "rgba(188, 67, 0, 0.92)",
+            };
+        }
+        if (urgency === "warning") {
+            return {
+                bg: "color-mix(in srgb, #ffffff 88%, rgba(0, 69, 140, 0.075))",
+                border: "color-mix(in srgb, rgba(0, 69, 140, 0.28) 60%, rgba(0, 162, 131, 0.2))",
+                kickerColor: palette.alloyBlue,
+            };
+        }
+        return {
+            bg: "color-mix(in srgb, #ffffff 88%, rgba(0, 162, 131, 0.085))",
+            border: "color-mix(in srgb, rgba(0, 162, 131, 0.32) 55%, rgba(39, 63, 82, 0.14))",
+            kickerColor: palette.bendPine,
+        };
+    }
+    // Assignment
+    if (urgency === "warning") {
+        return {
+            bg: "color-mix(in srgb, #ffffff 90%, rgba(0, 69, 140, 0.065))",
+            border: "color-mix(in srgb, rgba(0, 69, 140, 0.26) 55%, rgba(39, 63, 82, 0.16))",
+            kickerColor: palette.alloyBlue,
+        };
+    }
+    return {
+        bg: "color-mix(in srgb, #ffffff 91%, rgba(39, 63, 82, 0.055))",
+        border: "color-mix(in srgb, rgba(39, 63, 82, 0.2) 70%, rgba(0, 69, 140, 0.12))",
+        kickerColor: derived.textSecondary,
+    };
+}
+
 export function JobDrawerV2SignalsStrip(props: {
     paymentLabel: string;
     paymentTone: "neutral" | "info" | "warning" | "critical";
@@ -85,16 +154,19 @@ export function JobDrawerV2SignalsStrip(props: {
     scheduleTone: "neutral" | "info" | "warning" | "critical";
     assignmentLabel: string;
     assignmentTone: "neutral" | "info" | "warning" | "critical";
+    /** Visual-only: richer tonal cards for cleaning job record modal. */
+    presentation?: "default" | "cleaningRecordModal";
 }) {
     const cards = [
-        { kicker: "Payment", label: props.paymentLabel, tone: props.paymentTone },
-        { kicker: "Schedule", label: props.scheduleLabel, tone: props.scheduleTone },
-        { kicker: "Assignment", label: props.assignmentLabel, tone: props.assignmentTone },
-    ] as const;
+        { kicker: "Payment" as const, label: props.paymentLabel, tone: props.paymentTone },
+        { kicker: "Schedule" as const, label: props.scheduleLabel, tone: props.scheduleTone },
+        { kicker: "Assignment" as const, label: props.assignmentLabel, tone: props.assignmentTone },
+    ];
+    const cleaning = props.presentation === "cleaningRecordModal";
     return (
         <div className="adminv2-job-drawer-signals flex flex-wrap gap-2" style={shell}>
             {cards.map((c) => {
-                const t = signalTone(c.tone);
+                const t = cleaning ? signalToneCleaningModal(c.kicker, c.tone) : { ...signalTone(c.tone), kickerColor: derived.textSecondary };
                 return (
                     <div
                         key={c.kicker}
@@ -104,9 +176,10 @@ export function JobDrawerV2SignalsStrip(props: {
                             borderWidth: 1,
                             borderStyle: "solid",
                             borderColor: t.border,
+                            boxShadow: cleaning ? derived.cardShadow : undefined,
                         }}
                     >
-                        <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: derived.textSecondary }}>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: t.kickerColor }}>
                             {c.kicker}
                         </div>
                         <div className="mt-0.5 text-sm font-medium leading-snug" style={{ color: neutral.textPrimary }}>
